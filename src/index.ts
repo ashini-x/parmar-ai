@@ -184,7 +184,7 @@ async function handleTelegramWebhook(
     }
 
     await ctx.reply(
-      `Mila bhai. 👌\n\nTumne poocha:\n“${text}”\n\nAI engine abhi connect karna baaki hai — next step mein Gemini lagega.`,
+      `Mila bhai. 👌\n\nTumne poocha:\n“${text}”\n\nAI engine abhi connect karna baaki hai — karte hai kuch gazab.`,
     );
   });
 
