@@ -523,10 +523,7 @@ async function handleTelegramWebhook(
     await sendTelegramMessage(
       env,
       chatId,
-      "Namaste! 👋\n\n" +
-        "Main Parmar SSC Doubts hoon.\n\n" +
-        "Apna SSC ya Railway doubt bhejo. " +
-        "Main uska explanation Hindi/Hinglish mein dunga. 🚀",
+      "So Hello Everyone, umeed karta hoon aap sabhi thik honge! \n\nTHANKOO :)",
     );
 
     return new Response(
