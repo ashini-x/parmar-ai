@@ -4,12 +4,21 @@ import type {
 } from "@cloudflare/workers-types";
 
 import { Bot } from "grammy";
-import type { Update } from "grammy";
+import type { Context, Update } from "grammy";
 
-import { generateGeminiAnswer, GeminiError } from "./ai/gemini";
-import { getConfig, type Env } from "./config/env";
+import {
+  generateGeminiAnswer,
+  GeminiError,
+} from "./ai/gemini";
+import {
+  getConfig,
+  type Env,
+} from "./config/env";
 import { logger } from "./core/logger";
-import { addRequestId, getOrCreateRequestId } from "./core/request-id";
+import {
+  addRequestId,
+  getOrCreateRequestId,
+} from "./core/request-id";
 import {
   internalServerError,
   json,
@@ -62,6 +71,13 @@ function jsonResponse(
   });
 }
 
+/**
+ * Registers the current Telegram bot webhook.
+ *
+ * This endpoint is intended for initial setup/maintenance.
+ * The setup secret prevents arbitrary callers from changing
+ * the bot webhook.
+ */
 async function setupTelegramWebhook(
   request: Request,
   env: Env,
@@ -95,7 +111,10 @@ async function setupTelegramWebhook(
   if (
     !providedSecret ||
     !env.TELEGRAM_SETUP_SECRET ||
-    !safeEqual(providedSecret, env.TELEGRAM_SETUP_SECRET)
+    !safeEqual(
+      providedSecret,
+      env.TELEGRAM_SETUP_SECRET,
+    )
   ) {
     return jsonResponse(
       {
@@ -107,7 +126,8 @@ async function setupTelegramWebhook(
     );
   }
 
-  const webhookUrl = `${setupUrl.origin}/telegram/webhook`;
+  const webhookUrl =
+    `${setupUrl.origin}/telegram/webhook`;
 
   const telegramResponse = await fetch(
     `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setWebhook`,
@@ -134,7 +154,9 @@ async function setupTelegramWebhook(
       typeof telegramData === "object" &&
       telegramData !== null &&
       "ok" in telegramData
-        ? Boolean((telegramData as { ok?: unknown }).ok)
+        ? Boolean(
+            (telegramData as { ok?: unknown }).ok,
+          )
         : false,
   });
 
@@ -149,9 +171,14 @@ async function setupTelegramWebhook(
   );
 }
 
+/**
+ * Creates the Telegram bot and registers all handlers.
+ */
 function createBot(env: Env): Bot {
   if (!env.TELEGRAM_BOT_TOKEN) {
-    throw new Error("Telegram bot token is not configured.");
+    throw new Error(
+      "Telegram bot token is not configured.",
+    );
   }
 
   const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
@@ -171,7 +198,9 @@ function createBot(env: Env): Bot {
     }
 
     try {
-      await ctx.reply("Soch raha hoon ... 🤔");
+      await ctx.reply(
+        "Soch raha hoon... 🤔",
+      );
 
       const answer = await generateGeminiAnswer(
         env,
@@ -180,42 +209,63 @@ function createBot(env: Env): Bot {
 
       await sendTelegramAnswer(ctx, answer);
     } catch (error) {
-      const message = getUserFacingGeminiError(error);
+      const message =
+        getUserFacingGeminiError(error);
 
-      logger.error("gemini_generation_failed", {
-        chatId: String(ctx.chat.id),
-        error:
-          error instanceof Error ? error.message : String(error),
-      });
+      logger.error(
+        "gemini_generation_failed",
+        {
+          chatId: String(ctx.chat.id),
+          error:
+            error instanceof Error
+              ? error.message
+              : String(error),
+        },
+      );
 
       await ctx.reply(message);
     }
   });
 
   bot.catch((error) => {
-    logger.error("telegram_update_failed", {
-      error:
-        error.error instanceof Error
-          ? error.error.message
-          : String(error.error),
-    });
+    logger.error(
+      "telegram_update_failed",
+      {
+        error:
+          error.error instanceof Error
+            ? error.error.message
+            : String(error.error),
+      },
+    );
   });
 
   return bot;
 }
 
+/**
+ * Sends a Telegram message, splitting long answers when necessary.
+ *
+ * Telegram text messages are limited in length, so a long Gemini
+ * response is divided at sensible paragraph/line/word boundaries.
+ */
 async function sendTelegramAnswer(
-  ctx: Parameters<Bot["on"]>[2] extends never ? never : any,
+  ctx: Context,
   answer: string,
 ): Promise<void> {
   const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 
-  if (answer.length <= TELEGRAM_MAX_MESSAGE_LENGTH) {
+  if (
+    answer.length <=
+    TELEGRAM_MAX_MESSAGE_LENGTH
+  ) {
     await ctx.reply(answer);
     return;
   }
 
-  const chunks = splitMessage(answer, TELEGRAM_MAX_MESSAGE_LENGTH);
+  const chunks = splitMessage(
+    answer,
+    TELEGRAM_MAX_MESSAGE_LENGTH,
+  );
 
   for (const chunk of chunks) {
     await ctx.reply(chunk);
@@ -230,22 +280,39 @@ function splitMessage(
   let remaining = text;
 
   while (remaining.length > maxLength) {
-    let splitAt = remaining.lastIndexOf("\n\n", maxLength);
+    let splitAt =
+      remaining.lastIndexOf(
+        "\n\n",
+        maxLength,
+      );
 
     if (splitAt < 500) {
-      splitAt = remaining.lastIndexOf("\n", maxLength);
+      splitAt = remaining.lastIndexOf(
+        "\n",
+        maxLength,
+      );
     }
 
     if (splitAt < 500) {
-      splitAt = remaining.lastIndexOf(" ", maxLength);
+      splitAt = remaining.lastIndexOf(
+        " ",
+        maxLength,
+      );
     }
 
     if (splitAt < 1) {
       splitAt = maxLength;
     }
 
-    chunks.push(remaining.slice(0, splitAt).trim());
-    remaining = remaining.slice(splitAt).trim();
+    chunks.push(
+      remaining
+        .slice(0, splitAt)
+        .trim(),
+    );
+
+    remaining = remaining
+      .slice(splitAt)
+      .trim();
   }
 
   if (remaining) {
@@ -255,24 +322,49 @@ function splitMessage(
   return chunks;
 }
 
-function getUserFacingGeminiError(error: unknown): string {
+function getUserFacingGeminiError(
+  error: unknown,
+): string {
   if (error instanceof GeminiError) {
     if (error.status === 429) {
-      return "Abhi AI service par load zyada hai. Thodi der mein dobara try karo.";
+      return (
+        "Abhi AI system par load zyada hai. " +
+        "Thodi der mein doobara try karo."
+      );
     }
 
-    if (error.status === 401 || error.status === 403) {
-      return "AI service configuration mein problem aa gayi hai. Admin ko check karna hoga.";
+    if (
+      error.status === 401 ||
+      error.status === 403
+    ) {
+      return (
+        "AI system mein problem " +
+        "aa gayi hai. Admin ko check karna hoga."
+      );
     }
 
-    if (error.message.toLowerCase().includes("timed out")) {
-      return "Answer banane mein thoda zyada time lag gaya. Doobara try karo.";
+    if (
+      error.message
+        .toLowerCase()
+        .includes("timed out")
+    ) {
+      return (
+        "Answer banane mein thoda zyada time " +
+        "lag gaya. Doobara try karo."
+      );
     }
   }
 
-  return "Bhai, abhi answer generate nahi ho paaya. Doobara try karo.";
+  return (
+    "Bhai, abhi answer generate nahi ho paaya. " +
+    "Doobara try karo."
+  );
 }
 
+/**
+ * Validates the Telegram webhook request and hands
+ * the update to grammY.
+ */
 async function handleTelegramWebhook(
   request: Request,
   env: Env,
@@ -292,9 +384,10 @@ async function handleTelegramWebhook(
     );
   }
 
-  const receivedSecret = request.headers.get(
-    "X-Telegram-Bot-Api-Secret-Token",
-  );
+  const receivedSecret =
+    request.headers.get(
+      "X-Telegram-Bot-Api-Secret-Token",
+    );
 
   if (
     !receivedSecret ||
@@ -303,39 +396,44 @@ async function handleTelegramWebhook(
       env.TELEGRAM_WEBHOOK_SECRET,
     )
   ) {
-    return new Response("Unauthorized.", {
-      status: 401,
-    });
+    return new Response(
+      "Unauthorized.",
+      { status: 401 },
+    );
   }
 
   let update: Update;
 
   try {
-    update = (await request.json()) as Update;
+    update =
+      (await request.json()) as Update;
   } catch {
-    return new Response("Invalid webhook payload.", {
-      status: 400,
-    });
+    return new Response(
+      "Invalid webhook payload.",
+      { status: 400 },
+    );
   }
 
   const bot = createBot(env);
 
   /*
-   * Respond to Telegram immediately so webhook delivery is not held
-   * open while Gemini generates the answer.
-   *
-   * Cloudflare waitUntil keeps the background task alive after the
-   * response is returned.
+   * Acknowledge Telegram immediately.
+   * The actual Gemini processing continues through waitUntil().
    */
   ctx.waitUntil(
-    bot.handleUpdate(update).catch((error) => {
-      logger.error("telegram_background_update_failed", {
-        error:
-          error instanceof Error
-            ? error.message
-            : String(error),
-      });
-    }),
+    bot.handleUpdate(update).catch(
+      (error) => {
+        logger.error(
+          "telegram_background_update_failed",
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : String(error),
+          },
+        );
+      },
+    ),
   );
 
   return new Response("OK", {
@@ -349,44 +447,76 @@ export default {
     env: Env,
     ctx: ExecutionContext,
   ): Promise<Response> {
-    const requestId = getOrCreateRequestId(request);
+    const requestId =
+      getOrCreateRequestId(request);
+
     const url = new URL(request.url);
     const route = url.pathname;
 
     try {
-      if (request.method === "GET" && route === "/health") {
+      /**
+       * Health endpoint
+       */
+      if (
+        request.method === "GET" &&
+        route === "/health"
+      ) {
         const config = getConfig(env);
 
         const response = json({
           ok: true,
           service: "parmar-ai",
-          environment: config.environment,
+          environment:
+            config.environment,
           version: config.version,
-          timestamp: new Date().toISOString(),
-          telegram: Boolean(env.TELEGRAM_BOT_TOKEN),
-          gemini: Boolean(env.GEMINI_API_KEY),
+          timestamp:
+            new Date().toISOString(),
+          telegram:
+            Boolean(
+              env.TELEGRAM_BOT_TOKEN,
+            ),
+          gemini:
+            Boolean(
+              env.GEMINI_API_KEY,
+            ),
         });
 
-        logger.info("health_check", {
+        logger.info(
+          "health_check",
+          {
+            requestId,
+            route,
+          },
+        );
+
+        return withRequestId(
+          response,
           requestId,
-          route,
-        });
-
-        return withRequestId(response, requestId);
+        );
       }
 
-      if (request.method === "GET" && route === "/") {
+      /**
+       * Root endpoint
+       */
+      if (
+        request.method === "GET" &&
+        route === "/"
+      ) {
         return withRequestId(
           json({
             ok: true,
             service: "parmar-ai",
             phase: "C",
-            status: "gemini_text_answer_mvp",
+            status:
+              "gemini_text_answer_mvp",
           }),
           requestId,
         );
       }
 
+      /**
+       * Telegram webhook setup endpoint
+       */
       if (
         request.method === "GET" &&
         route === "/telegram/setup"
@@ -398,41 +528,60 @@ export default {
         );
       }
 
-      if (route === "/telegram/webhook") {
-        if (request.method !== "POST") {
+      /**
+       * Telegram webhook
+       */
+      if (
+        route === "/telegram/webhook"
+      ) {
+        if (
+          request.method !== "POST"
+        ) {
           return withRequestId(
             methodNotAllowed(["POST"]),
             requestId,
           );
         }
 
-        return await handleTelegramWebhook(
+        return handleTelegramWebhook(
           request,
           env,
           ctx,
         );
       }
 
-      if (route === "/health" || route === "/") {
+      /**
+       * Known endpoints with incorrect HTTP method
+       */
+      if (
+        route === "/health" ||
+        route === "/"
+      ) {
         return withRequestId(
           methodNotAllowed(["GET"]),
           requestId,
         );
       }
 
+      /**
+       * Everything else
+       */
       return withRequestId(
         notFound(),
         requestId,
       );
     } catch (error) {
-      logger.error("unhandled_request_error", {
-        requestId,
-        route,
-        error:
-          error instanceof Error
-            ? error.message
-            : String(error),
-      });
+      logger.error(
+        "unhandled_request_error",
+        {
+          requestId,
+          route,
+          error:
+            error instanceof Error
+              ? error.message
+              : String(error),
+        },
+      );
 
       return withRequestId(
         internalServerError(),
