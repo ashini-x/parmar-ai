@@ -2,7 +2,7 @@
   "name": "parmar-ai",
   "version": "0.1.0",
   "private": true,
-  "description": "Telegram-first backend foundation for Parmar AI.",
+  "description": "Authorized AI teacher for SSC and Railway aspirants.",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
@@ -12,6 +12,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "grammy": "1.46.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "latest",
