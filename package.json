@@ -1,0 +1,27 @@
+{
+  "name": "parmar-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telegram-first backend foundation for Parmar AI.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "latest",
+    "@cloudflare/workers-types": "latest",
+    "prettier": "latest",
+    "typescript": "latest",
+    "vitest": "^4.1.0",
+    "wrangler": "latest"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
