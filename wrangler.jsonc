@@ -8,7 +8,7 @@
     {
       "binding": "DB",
       "database_name": "sawalnewton-db",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+      "database_id": "d0d38950-83f8-4433-9e3a-72ed12a25fab"
     }
   ],
   "observability": {
