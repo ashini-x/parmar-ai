@@ -53,3 +53,24 @@ CREATE TABLE IF NOT EXISTS attempts (
   FOREIGN KEY (user_id)
     REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS attempt_questions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+  attempt_id INTEGER NOT NULL,
+  question_id INTEGER NOT NULL,
+
+  position INTEGER NOT NULL,
+
+  selected_option TEXT,
+  answered_at TEXT,
+
+  FOREIGN KEY (attempt_id)
+    REFERENCES attempts(id),
+
+  FOREIGN KEY (question_id)
+    REFERENCES questions(id),
+
+  UNIQUE (attempt_id, position),
+  UNIQUE (attempt_id, question_id)
+);
