@@ -5,6 +5,7 @@ import type {
 
 import type { Env } from "./config/env";
 import { generateGeminiAnswer, GeminiError } from "./ai/gemini";
+import { getMiniAppHtml } from "./mini-app";
 import { logger } from "./core/logger";
 import {
   addRequestId,
