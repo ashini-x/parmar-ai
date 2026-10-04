@@ -160,6 +160,7 @@ async function sendTelegramMessage(
   env: Env,
   chatId: number,
   text: string,
+  replyMarkup?: Record<string, unknown>,
 ): Promise<void> {
   const chunks = splitMessage(
     text,
@@ -171,6 +172,9 @@ async function sendTelegramMessage(
       chat_id: chatId,
       text: chunk,
       disable_web_page_preview: true,
+      ...(replyMarkup
+        ? { reply_markup: replyMarkup }
+        : {}),
     });
   }
 }
@@ -521,12 +525,30 @@ async function handleTelegramWebhook(
     text === "/start" ||
     text.startsWith("/start ")
   ) {
+    const miniAppUrl =
+      `${new URL(request.url).origin}/app`;
+  
     await sendTelegramMessage(
       env,
       chatId,
-      "So Hello Everyone, umeed karta hoon aap sabhi thik honge! \n\nTHANKOO :)",
+      "🧠 SawalNewton\n\n" +
+        "SSC questions. Random tests. " +
+        "Let's see kitna dum hai.\n\n" +
+        "Ready?",
+      {
+        inline_keyboard: [
+          [
+            {
+              text: "🧠 Start Test",
+              web_app: {
+                url: miniAppUrl,
+              },
+            },
+          ],
+        ],
+      },
     );
-
+  
     return new Response(
       "OK",
       { status: 200 },
@@ -628,6 +650,21 @@ export default {
             phase: "C",
             status:
               "gemini_text_answer_mvp",
+          }),
+          requestId,
+        );
+      }
+
+      if (
+        request.method === "GET" &&
+        route === "/app"
+      ) {
+        return withRequestId(
+          new Response(getMiniAppHtml(), {
+            status: 200,
+            headers: {
+              "content-type": "text/html; charset=UTF-8",
+            },
           }),
           requestId,
         );
