@@ -398,16 +398,15 @@ export async function processContentUpload(
   const existingBatch =
     await env.DB
       .prepare(
-        `SELECT id, status
+        `SELECT id
          FROM content_batches
          WHERE source_sha256 = ?
-         ORDER BY id DESC
          LIMIT 1`
       )
       .bind(sourceSha256)
-      .first<{ id: number; status: string }>();
+      .first<{ id: number }>();
 
-  if (existingBatch && existingBatch.status !== "failed") {
+  if (existingBatch) {
     throw new Error(
       `source_already_processed:${existingBatch.id}`
     );

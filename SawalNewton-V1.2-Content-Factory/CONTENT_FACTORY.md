@@ -35,10 +35,3 @@ New field:
 - one source processed at a time
 
 This is intentional for the first production-safe content pipeline. A later phase can move ingestion to R2/Queues for very large multi-paper backfills.
-
-
-## V1.2.1 reliability update
-
-The Content Factory retries transient Gemini API failures such as HTTP 408, 429, 500, 502, 503, and 504 with exponential backoff and jitter. It tries the primary `gemini-3.8-flash` model first and falls back to `gemini-3.7-flash` and `gemini-3.5-flash-lite` when a transient service error persists. The request timeout is 60 seconds.
-
-A failed batch now also displays the stored `error_message` in the Recent batches table.

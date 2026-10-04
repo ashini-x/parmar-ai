@@ -85,8 +85,3 @@ Everything else goes to `needs_review` or `duplicate`.
 ## Important content rule
 
 Only ingest sources you are allowed to use. The factory can automate processing, but it does not grant copyright or redistribution rights to source material.
-
-
-## V1.2.1 Gemini reliability
-
-Transient Gemini capacity errors such as HTTP 429 and 503 are retried with exponential backoff and jitter. The content factory uses `gemini-3.8-flash`, then `gemini-3.7-flash`, then `gemini-3.5-flash-lite` when transient service errors persist. Failed source uploads can be uploaded again; completed/non-failed sources remain protected from duplicate processing.

@@ -1,4 +1,4 @@
-SAWALNEWTON V1.2.1 — CONTENT FACTORY
+SAWALNEWTON V1.2 — CONTENT FACTORY
 
 1. Replace your GitHub repository with this folder.
 2. Keep the existing Cloudflare Telegram secrets.

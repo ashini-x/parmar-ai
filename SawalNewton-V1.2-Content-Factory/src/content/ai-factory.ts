@@ -1,25 +1,11 @@
 import type { Env } from "../config/env";
 import type { AiQuestionCandidate, ContentBatchInput, ContentSubject } from "./types";
 
-const GEMINI_MODELS = [
-  "gemini-3.8-flash",
-  "gemini-3.7-flash",
-  "gemini-3.5-flash-lite"
-] as const;
+const GEMINI_MODEL = "gemini-3.8-flash";
+const GEMINI_ENDPOINT =
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
-const GEMINI_ENDPOINT_BASE =
-  "https://generativelanguage.googleapis.com/v1beta/models";
-
-const REQUEST_TIMEOUT_MS = 60_000;
-const MAX_ATTEMPTS_PER_MODEL = 2;
-const TRANSIENT_STATUS_CODES = new Set([
-  408,
-  429,
-  500,
-  502,
-  503,
-  504
-]);
+const REQUEST_TIMEOUT_MS = 25_000;
 
 interface GeminiResponse {
   candidates?: Array<{
@@ -208,16 +194,6 @@ function extractGeminiText(data: GeminiResponse): string {
     .trim();
 }
 
-
-async function sleepWithJitter(
-  baseMs: number
-): Promise<void> {
-  const jitter = Math.floor(Math.random() * 500);
-  await new Promise((resolve) =>
-    setTimeout(resolve, baseMs + jitter)
-  );
-}
-
 function cleanJsonText(text: string): string {
   const trimmed = text.trim();
   if (trimmed.startsWith("```")) {
@@ -289,7 +265,9 @@ Be conservative. A candidate will be auto-ready only if later code finds a compl
   const contents =
     source.kind === "pdf"
       ? [
-          { parts: [{ text: prompt }] },
+          {
+            parts: [{ text: prompt }]
+          },
           {
             parts: [
               {
@@ -311,125 +289,73 @@ Be conservative. A candidate will be auto-ready only if later code finds a compl
           }
         ];
 
-  let lastTransientError = "gemini_unavailable";
-
-  for (const model of GEMINI_MODELS) {
-    const endpoint =
-      `${GEMINI_ENDPOINT_BASE}/${model}:generateContent`;
-
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_MODEL; attempt += 1) {
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        REQUEST_TIMEOUT_MS
-      );
-
-      try {
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-goog-api-key": apiKey
-          },
-          body: JSON.stringify({
-            contents,
-            generationConfig: {
-              responseMimeType: "application/json",
-              responseSchema: responseSchemaFor(input.subject),
-              temperature: 0.1,
-              maxOutputTokens: Math.min(
-                16_000,
-                Math.max(4_000, input.maxQuestions * 650)
-              )
-            }
-          }),
-          signal: controller.signal
-        });
-
-        const raw = await response.text();
-
-        let data: GeminiResponse;
-        try {
-          data = JSON.parse(raw) as GeminiResponse;
-        } catch {
-          throw new Error(
-            `gemini_invalid_json_response:${response.status}:${model}`
-          );
-        }
-
-        if (!response.ok) {
-          const message =
-            data.error?.message ?? `gemini_http_${response.status}`;
-
-          if (TRANSIENT_STATUS_CODES.has(response.status)) {
-            lastTransientError =
-              `gemini_transient_${response.status}:${model}:${message}`;
-          } else {
-            throw new Error(
-              `gemini_http_${response.status}:${model}:${message}`
-            );
-          }
-        } else {
-          const text = extractGeminiText(data);
-          if (!text) {
-            throw new Error(`gemini_empty_response:${model}`);
-          }
-
-          let parsed: {
-            questions?: AiQuestionCandidate[];
-          };
-
-          try {
-            parsed = JSON.parse(
-              cleanJsonText(text)
-            ) as {
-              questions?: AiQuestionCandidate[];
-            };
-          } catch {
-            throw new Error(
-              `gemini_invalid_structured_json:${model}`
-            );
-          }
-
-          if (!Array.isArray(parsed.questions)) {
-            throw new Error(
-              `gemini_questions_missing:${model}`
-            );
-          }
-
-          return parsed.questions.slice(
-            0,
-            input.maxQuestions
-          );
-        }
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          error.name === "AbortError"
-        ) {
-          lastTransientError =
-            `gemini_timeout_after_${REQUEST_TIMEOUT_MS}ms:${model}`;
-        } else if (
-          error instanceof Error &&
-          !error.message.startsWith("gemini_transient_")
-        ) {
-          throw error;
-        }
-      } finally {
-        clearTimeout(timeout);
-      }
-
-      if (attempt < MAX_ATTEMPTS_PER_MODEL) {
-        const baseDelay = 1000 * 2 ** (attempt - 1);
-        const jitter = Math.floor(Math.random() * 500);
-        await new Promise((resolve) =>
-          setTimeout(resolve, baseDelay + jitter)
-        );
-      }
-    }
-  }
-
-  throw new Error(
-    `gemini_all_models_unavailable:${lastTransientError}`
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    REQUEST_TIMEOUT_MS
   );
+
+  try {
+    const response = await fetch(GEMINI_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-goog-api-key": apiKey
+      },
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: responseSchemaFor(input.subject),
+          temperature: 0.1,
+          maxOutputTokens: Math.min(
+            16_000,
+            Math.max(4_000, input.maxQuestions * 650)
+          )
+        }
+      }),
+      signal: controller.signal
+    });
+
+    const raw = await response.text();
+
+    let data: GeminiResponse;
+    try {
+      data = JSON.parse(raw) as GeminiResponse;
+    } catch {
+      throw new Error(
+        `gemini_invalid_json_response:${response.status}`
+      );
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data.error?.message ?? `gemini_http_${response.status}`
+      );
+    }
+
+    const text = extractGeminiText(data);
+    if (!text) {
+      throw new Error("gemini_empty_response");
+    }
+
+    const parsed = JSON.parse(cleanJsonText(text)) as {
+      questions?: AiQuestionCandidate[];
+    };
+
+    if (!Array.isArray(parsed.questions)) {
+      throw new Error("gemini_questions_missing");
+    }
+
+    return parsed.questions.slice(0, input.maxQuestions);
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(
+        `gemini_timeout_after_${REQUEST_TIMEOUT_MS}ms`
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }

@@ -345,12 +345,6 @@ async function refreshBatches() {
   for (const batch of data.batches) {
     const row = document.createElement("tr");
 
-    const error = batch.error_message
-      ? "<div class='small' style='margin-top:6px;color:#b42318'>" +
-        escapeHtml(batch.error_message) +
-        "</div>"
-      : "";
-
     row.innerHTML =
       "<td>" + Number(batch.id) + "</td>" +
       "<td>" + escapeHtml(batch.source_name) + "</td>" +
@@ -361,7 +355,7 @@ async function refreshBatches() {
       " · " +
       escapeHtml(batch.subject) +
       "</td>" +
-      "<td><b>" + escapeHtml(batch.status) + "</b>" + error + "</td>" +
+      "<td>" + escapeHtml(batch.status) + "</td>" +
       "<td>" +
       "Extracted " +
       Number(batch.extracted_count || 0) +
