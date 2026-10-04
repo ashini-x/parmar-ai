@@ -2,17 +2,8 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "parmar-ai",
   "main": "src/index.ts",
-  "compatibility_date": "2026-10-02",
+  "compatibility_date": "2026-10-04",
   "workers_dev": true,
-
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "sawalnewton-db",
-      "database_id": "d0d38950-83f8-4433-9e3a-72ed12a25fab"
-    }
-  ],
-
   "observability": {
     "enabled": true
   }

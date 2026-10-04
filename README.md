@@ -1,114 +1,32 @@
-# Parmar AI — Phase A
+# SawalNewton V1
 
-Telegram-first backend foundation for the Parmar AI project.
+Telegram-first SSC test MVP built on Cloudflare Workers + D1.
 
-## Phase A goal
+## Current flow
 
-Establish a clean, production-oriented Cloudflare Worker foundation before adding Telegram, Gemini, voice, database, or R2 integrations.
+Telegram Bot -> Mini App -> D1 -> random 10-question Maths test -> server-side scoring -> result -> Telegram share.
 
-Current routes:
+## Required Cloudflare setup
 
-- `GET /` — foundation status
-- `GET /health` — health check
+1. Keep the Worker name as `parmar-ai` unless the Cloudflare dashboard Worker is renamed too.
+2. Bind the existing D1 database `sawalnewton-db` to the Worker with the variable name `DB`. The provided `wrangler.jsonc` deliberately leaves the binding out so your existing dashboard binding is preserved.
+3. Keep the existing Cloudflare secrets:
+   - `TELEGRAM_BOT_TOKEN`
+   - `TELEGRAM_WEBHOOK_SECRET`
+   - `TELEGRAM_SETUP_SECRET`
+4. Run the SQL in `schemas/schema.sql` against the existing D1 database if any of the four tables are missing.
 
-## Stack
+## Development seed
 
-- Cloudflare Workers
-- TypeScript
-- Wrangler
-- Vitest + Cloudflare Workers Vitest integration
-- Prettier
-- No website
-- No external API integrations yet
+`schemas/seed-dev.sql` contains ten clearly marked temporary Maths questions. Execute it only if you need a local/initial test bank. It first removes rows whose source is `SawalNewton DEV SEED`, so it can be safely re-run.
 
-Cloudflare recommends `wrangler.jsonc` for new Workers projects and its Workers-specific Vitest integration for testing. See the current docs for configuration, environment variables/secrets, and testing.
+## Notes
 
-## Requirements
+- The Mini App never receives `correct_option` or `explanation` during the test.
+- Telegram Mini App `initData` is validated server-side before user/test operations.
+- Test questions are selected randomly from active Maths questions.
+- A production-scale question generator will later replace the simple `ORDER BY RANDOM()` selection with balanced topic/difficulty rules and seen-question avoidance.
 
-- Node.js 22+
-- npm
-- A Cloudflare account for deployment
-- Git
+## Deployment checkpoint
 
-## Install
-
-```bash
-npm install
-npm run types
-npm run check
-npm test
-```
-
-## Local development
-
-```bash
-npm run dev
-```
-
-Wrangler will give you a local URL. Open:
-
-```text
-http://localhost:8787/health
-```
-
-Expected shape:
-
-```json
-{
-  "ok": true,
-  "service": "parmar-ai",
-  "environment": "development",
-  "version": "0.1.0",
-  "timestamp": "..."
-}
-```
-
-## Cloudflare login and deploy
-
-```bash
-npx wrangler login
-npm run deploy
-```
-
-Wrangler will publish the Worker to a `workers.dev` URL because `workers_dev` is enabled in this initial configuration.
-
-## Secrets policy
-
-Never put API keys in `wrangler.jsonc` or commit `.dev.vars`.
-
-Cloudflare's current documentation distinguishes ordinary variables from encrypted secrets. We will add production secrets only when the corresponding integration is implemented.
-
-For local development later:
-
-```bash
-copy .dev.vars.example .dev.vars
-```
-
-Then add secrets such as the Telegram bot token or Gemini API key. Keep `.dev.vars` uncommitted.
-
-## Project structure
-
-```text
-src/
-├── config/
-│   └── env.ts
-├── core/
-│   ├── logger.ts
-│   └── request-id.ts
-├── http/
-│   └── response.ts
-└── index.ts
-
-test/
-└── worker.test.ts
-
-wrangler.jsonc
-vitest.config.ts
-tsconfig.json
-```
-
-## Next phase
-
-Phase B will connect the Telegram Bot API to the Worker using a webhook, with request authentication and Telegram update parsing.
-
-Phase C will connect Gemini after the Telegram loop is proven.
+After deployment, open `/db-test`. It should return the D1 tables. If it returns `d1_binding_missing`, re-open the Worker's Bindings page and confirm the existing `sawalnewton-db` database is bound as `DB`.

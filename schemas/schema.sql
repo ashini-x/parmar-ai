@@ -27,50 +27,45 @@ CREATE TABLE IF NOT EXISTS questions (
   option_d TEXT NOT NULL,
 
   correct_option TEXT NOT NULL,
-
   explanation TEXT,
-
   source TEXT,
 
   is_active INTEGER NOT NULL DEFAULT 1,
-
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS attempts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-
   user_id INTEGER NOT NULL,
-
   started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   finished_at TEXT,
-
   score INTEGER,
   total_questions INTEGER NOT NULL,
-
   time_taken_seconds INTEGER,
-
-  FOREIGN KEY (user_id)
-    REFERENCES users(id)
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS attempt_questions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-
   attempt_id INTEGER NOT NULL,
   question_id INTEGER NOT NULL,
-
   position INTEGER NOT NULL,
-
   selected_option TEXT,
   answered_at TEXT,
-
-  FOREIGN KEY (attempt_id)
-    REFERENCES attempts(id),
-
-  FOREIGN KEY (question_id)
-    REFERENCES questions(id),
-
+  FOREIGN KEY (attempt_id) REFERENCES attempts(id),
+  FOREIGN KEY (question_id) REFERENCES questions(id),
   UNIQUE (attempt_id, position),
   UNIQUE (attempt_id, question_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_questions_subject_active
+  ON questions(subject, is_active);
+
+CREATE INDEX IF NOT EXISTS idx_questions_year_subject
+  ON questions(year, subject);
+
+CREATE INDEX IF NOT EXISTS idx_attempts_user
+  ON attempts(user_id, started_at);
+
+CREATE INDEX IF NOT EXISTS idx_attempt_questions_attempt
+  ON attempt_questions(attempt_id, position);
