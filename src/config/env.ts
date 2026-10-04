@@ -13,6 +13,8 @@ export interface Env {
 
   GEMINI_API_KEY?: string;
   ADMIN_SECRET?: string;
+
+  DB: D1Database;
 }
 
 export function getConfig(env: Env) {
