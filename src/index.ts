@@ -6,6 +6,7 @@ import type {
 import type { Env } from "./config/env";
 import { generateGeminiAnswer, GeminiError } from "./ai/gemini";
 import { getMiniAppHtml } from "./mini-app";
+import { startMathsTest } from "./tests/test-service";
 import { logger } from "./core/logger";
 import {
   addRequestId,
@@ -668,6 +669,80 @@ export default {
           }),
           requestId,
         );
+      }
+
+      if (
+        request.method === "POST" &&
+        route === "/api/test/start"
+      ) {
+        let body: {
+          initData?: string;
+        };
+
+        try {
+          body =
+            (await request.json()) as {
+              initData?: string;
+            };
+        } catch {
+          return withRequestId(
+            jsonResponse(
+              {
+                ok: false,
+                error:
+                  "invalid_json",
+              },
+              400,
+            ),
+            requestId,
+          );
+        }
+
+        try {
+          const result =
+            await startMathsTest(
+              env,
+              body.initData ?? "",
+            );
+
+          return withRequestId(
+            jsonResponse({
+              ok: true,
+              attemptId:
+                result.attemptId,
+              totalQuestions:
+                result.totalQuestions,
+              questions:
+                result.questions,
+            }),
+            requestId,
+          );
+        } catch (error) {
+          logger.error(
+            "test_start_failed",
+            {
+              requestId,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : String(error),
+            },
+          );
+
+          return withRequestId(
+            jsonResponse(
+              {
+                ok: false,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : "test_start_failed",
+              },
+              400,
+            ),
+            requestId,
+          );
+        }
       }
 
       if (
