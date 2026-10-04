@@ -221,12 +221,12 @@ export async function startMathsTest(
 
   return {
     attemptId,
-    startedAt:
-      attempt.started_at.replace(" ", "T") + "Z",
+    startedAt: `${attempt.started_at.replace(" ", "T")}Z`,
     durationSeconds: TEST_DURATION_SECONDS,
     totalQuestions: questions.length,
     questions: questions.map(mapQuestionForClient)
   };
+}
 
 export async function submitMathsTest(
   env: Env,

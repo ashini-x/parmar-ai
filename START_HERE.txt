@@ -1,22 +1,23 @@
-SAWALNEWTON V1 — REPLACEMENT
+SawalNewton V1
 
-Replace the contents of the current parmar-ai repository with this folder.
-
-Before the first Cloudflare deployment:
-1. Keep the existing Worker named parmar-ai.
-2. Open `wrangler.jsonc` and replace `REPLACE_WITH_YOUR_D1_DATABASE_ID` with your existing `sawalnewton-db` Database ID.
-3. Keep the existing Cloudflare D1 binding named DB pointing to sawalnewton-db.
-4. Keep the existing Telegram secrets:
+1. Replace the contents of your GitHub repository with the contents of this folder.
+2. Do NOT change or add Telegram tokens in the code. Keep existing Cloudflare secrets:
    TELEGRAM_BOT_TOKEN
    TELEGRAM_WEBHOOK_SECRET
    TELEGRAM_SETUP_SECRET
+3. The existing D1 database is already referenced as sawalnewton-db / DB. Do not create a new database.
+4. Let Cloudflare Workers Builds deploy the main branch.
+5. Open https://YOUR-WORKER-URL/health
+6. Open https://YOUR-WORKER-URL/db-test and confirm the tables are present.
+7. In Telegram send /start to the SawalNewton bot and tap Start Test.
 
-After deployment:
-1. Open https://YOUR-WORKER-URL/db-test
-2. Confirm it returns the D1 tables.
-3. Open the SawalNewton bot and send /start.
-4. Tap Start Test.
-
-The test needs at least 10 active Maths questions. The supplied schemas/seed-dev.sql contains 10 temporary DEV questions if needed.
-
-Do not commit Telegram tokens or other secrets.
+V1 includes:
+- Telegram webhook
+- SawalNewton Mini App
+- Telegram WebApp authentication
+- D1 users/questions/attempts/attempt_questions
+- 10-question random Maths test
+- 5-minute timer
+- server-side scoring
+- result screen
+- Telegram result sharing
