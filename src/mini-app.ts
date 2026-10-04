@@ -156,91 +156,90 @@ export function getMiniAppHtml(): string {
   </main>
 
   <script>
-    const telegram = window.Telegram?.WebApp;
+  const telegram = window.Telegram?.WebApp;
 
-    if (telegram) {
-      telegram.ready();
-      telegram.expand();
-    }
+  if (telegram) {
+    telegram.ready();
+    telegram.expand();
+  }
 
-    const startButton =
-      document.getElementById(
-        "start-button",
-      );
-    
-    startButton?.addEventListener(
-      "click",
-      async () => {
-        if (!telegram) {
-          alert(
-            "Please open SawalNewton inside Telegram.",
-          );
-          return;
-        }
-    
-        const originalText =
-          startButton.textContent ??
-          "Start Test";
-    
-        startButton.textContent =
-          "Loading...";
-        startButton.disabled = true;
-    
-        try {
-          const response =
-            await fetch(
-              "/api/test/start",
-              {
-                method: "POST",
-                headers: {
-                  "content-type":
-                    "application/json",
-                },
-                body: JSON.stringify({
-                  initData:
-                    telegram.initData,
-                }),
+  const startButton =
+    document.getElementById("start-button");
+
+  startButton?.addEventListener(
+    "click",
+    async () => {
+      if (!telegram) {
+        alert(
+          "Please open SawalNewton inside Telegram.",
+        );
+        return;
+      }
+
+      const originalText =
+        startButton.textContent ??
+        "Start Test";
+
+      startButton.textContent =
+        "Loading...";
+      startButton.disabled = true;
+
+      try {
+        const response =
+          await fetch(
+            "/api/test/start",
+            {
+              method: "POST",
+              headers: {
+                "content-type":
+                  "application/json",
               },
-            );
-    
-          const data =
-            await response.json();
-    
-          if (!response.ok || !data.ok) {
-            throw new Error(
-              data?.error ??
-                "Unable to start test.",
-            );
-          }
-    
-          console.log(
-            "SawalNewton test started:",
-            data,
+              body: JSON.stringify({
+                initData:
+                  telegram.initData,
+              }),
+            },
           );
-    
-          alert(
-            `Test started! ${data.totalQuestions} random questions loaded.`,
+
+        const data =
+          await response.json();
+
+        if (!response.ok || !data.ok) {
+          throw new Error(
+            data?.error ??
+              "Unable to start test.",
           );
-        } catch (error) {
-          console.error(
-            "Failed to start test:",
-            error,
-          );
-    
-          alert(
-            error instanceof Error
-              ? error.message
-              : "Unable to start test.",
-          );
-    
-          startButton.textContent =
-            originalText;
-          startButton.disabled =
-            false;
         }
-      },
-    );
-  </script>
+
+        console.log(
+          "SawalNewton test:",
+          data,
+        );
+
+        alert(
+          `Test started! ${data.totalQuestions} questions loaded.`,
+        );
+      } catch (error) {
+        console.error(
+          "SawalNewton test error:",
+          error,
+        );
+
+        alert(
+          error instanceof Error
+            ? error.message
+            : "Unable to start test.",
+        );
+
+        startButton.textContent =
+          originalText;
+
+        startButton.disabled =
+          false;
+      }
+    },
+  );
+</script>
 </body>
 </html>`;
 }
