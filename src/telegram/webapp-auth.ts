@@ -19,25 +19,44 @@ function bytesToHex(bytes: ArrayBuffer): string {
   ).join("");
 }
 
+function stringToArrayBuffer(
+  value: string,
+): ArrayBuffer {
+  const encoded =
+    new TextEncoder().encode(value);
+
+  const buffer =
+    new ArrayBuffer(
+      encoded.byteLength,
+    );
+
+  new Uint8Array(buffer).set(
+    encoded,
+  );
+
+  return buffer;
+}
+
 async function hmacSha256(
-  keyBytes: ArrayBuffer | Uint8Array,
+  keyBytes: ArrayBuffer,
   message: string,
 ): Promise<ArrayBuffer> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyBytes,
-    {
-      name: "HMAC",
-      hash: "SHA-256",
-    },
-    false,
-    ["sign"],
-  );
+  const key =
+    await crypto.subtle.importKey(
+      "raw",
+      keyBytes,
+      {
+        name: "HMAC",
+        hash: "SHA-256",
+      },
+      false,
+      ["sign"],
+    );
 
   return crypto.subtle.sign(
     "HMAC",
     key,
-    new TextEncoder().encode(message),
+    stringToArrayBuffer(message),
   );
 }
 
@@ -92,7 +111,7 @@ export async function validateTelegramInitData(
     .join("\n");
 
   const secretKey = await hmacSha256(
-    new TextEncoder().encode("WebAppData"),
+    stringToArrayBuffer("WebAppData"),
     botToken,
   );
 
