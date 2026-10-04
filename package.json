@@ -20,7 +20,7 @@
     "@cloudflare/vitest-plugin": "latest",
     "@cloudflare/workers-types": "latest",
     "prettier": "latest",
-    "typescript": "latest",
+    "typescript": "5.9.3",
     "vitest": "^4.1.0",
     "wrangler": "latest"
   },
