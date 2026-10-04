@@ -60,7 +60,7 @@ AI Enhancement is optional for Hindi translation, classification, explanations, 
 
 <div class="card">
 <h2>1. Process a source</h2>
-<form id="uploadForm">
+<div id="uploadForm">
 <div class="grid">
 <div>
 <label>Source file</label>
@@ -108,9 +108,9 @@ AI Enhancement is optional for Hindi translation, classification, explanations, 
 </div>
 </div>
 <div class="row" style="margin-top:14px">
-<button id="processBtn" type="submit">⚡ Import without AI</button>
+<button id="processBtn" type="button">⚡ Import without AI</button>
 </div>
-</form>
+</div>
 <div id="uploadStatus" class="status" style="display:none"></div>
 </div>
 
@@ -178,18 +178,40 @@ async function api(path, options = {}) {
   return fetch(path, { ...options, headers });
 }
 
-document.getElementById("uploadForm").onsubmit = async (event) => {
-  event.preventDefault();
+document.getElementById("processBtn").onclick = async () => {
+  const fileInput = document.getElementById("file");
+  const file = fileInput.files && fileInput.files[0];
+  const sourceName = document.getElementById("sourceName").value.trim();
+  const exam = document.getElementById("exam").value.trim();
+  const year = document.getElementById("year").value;
 
-  const file = document.getElementById("file").files[0];
-  if (!file) return;
+  if (!file) {
+    setStatus("uploadStatus", "Choose a source file first.", "bad");
+    fileInput.focus();
+    return;
+  }
+  if (!sourceName) {
+    setStatus("uploadStatus", "Enter a source label first.", "bad");
+    document.getElementById("sourceName").focus();
+    return;
+  }
+  if (!exam) {
+    setStatus("uploadStatus", "Enter the exam name first.", "bad");
+    document.getElementById("exam").focus();
+    return;
+  }
+  if (!year || Number(year) < 2016 || Number(year) > 2026) {
+    setStatus("uploadStatus", "Year must be between 2016 and 2026.", "bad");
+    document.getElementById("year").focus();
+    return;
+  }
 
   const form = new FormData();
   form.set("file", file);
-  form.set("source_name", document.getElementById("sourceName").value);
-  form.set("exam", document.getElementById("exam").value);
+  form.set("source_name", sourceName);
+  form.set("exam", exam);
   form.set("tier", document.getElementById("tier").value);
-  form.set("year", document.getElementById("year").value);
+  form.set("year", year);
   form.set("shift", document.getElementById("shift").value);
   form.set("subject", document.getElementById("subject").value);
   form.set("max_questions", document.getElementById("maxQuestions").value);
@@ -203,8 +225,8 @@ document.getElementById("uploadForm").onsubmit = async (event) => {
   setStatus(
     "uploadStatus",
     mode === "ai"
-      ? "Optional AI extraction is running. A Gemini outage does not affect Fast Import."
-      : "Fast Import is running in the Worker. No Gemini call is made.",
+      ? "AI extraction is running. Keep this tab open."
+      : "Fast Import is running. No Gemini call is made.",
     "warn"
   );
 
@@ -214,15 +236,26 @@ document.getElementById("uploadForm").onsubmit = async (event) => {
       { method: "POST", body: form }
     );
 
-    const data = await response.json();
+    const raw = await response.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new Error(
+        `Server returned HTTP ${response.status} with a non-JSON response.`
+      );
+    }
 
     if (!response.ok || !data.ok) {
-      throw new Error(data.error || "ingest_failed");
+      throw new Error(
+        `${data.error || "ingest_failed"} (HTTP ${response.status})`
+      );
     }
 
     setStatus(
       "uploadStatus",
-      JSON.stringify(data.summary, null, 2),
+      `Batch ${data.summary.batchId} completed\n` +
+        JSON.stringify(data.summary, null, 2),
       "ok"
     );
 
@@ -230,9 +263,7 @@ document.getElementById("uploadForm").onsubmit = async (event) => {
   } catch (error) {
     setStatus(
       "uploadStatus",
-      error instanceof Error
-        ? error.message
-        : String(error),
+      error instanceof Error ? error.message : String(error),
       "bad"
     );
   } finally {
@@ -242,7 +273,6 @@ document.getElementById("uploadForm").onsubmit = async (event) => {
       : "⚡ Import without AI";
   }
 };
-
 document.getElementById("mode").onchange = () => {
   const mode = document.getElementById("mode").value;
   document.getElementById("processBtn").textContent =
@@ -611,7 +641,13 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-refreshAll();
+refreshAll().catch((error) => {
+  setStatus(
+    "candidateStatus",
+    error instanceof Error ? error.message : String(error),
+    "bad"
+  );
+});
 </script>
 </body>
 </html>`;
