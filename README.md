@@ -77,6 +77,6 @@ For a bilingual auto-ready development example, use `data/content-factory-sample
 Do not ingest copyrighted third-party material unless you have the right to use and redistribute it.
 
 
-## V1.3.2 build fix
+## V1.3.3 build fix
 
 This version fixes an unescaped JavaScript template-literal issue inside the admin HTML template. It also keeps the deterministic import path independent of Gemini.

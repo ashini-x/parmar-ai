@@ -28,6 +28,7 @@ import {
   type SubmittedAnswer
 } from "./tests/test-service";
 import { getContentAdminHtml } from "./admin/content-page";
+import { getContentAdminScript } from "./admin/content-script";
 import {
   approveCandidates,
   backfillQuestionFingerprints,
@@ -593,6 +594,22 @@ export default {
         }
       }
 
+
+      if (
+        request.method === "GET" &&
+        route === "/admin/content.js"
+      ) {
+        return withRequestId(
+          new Response(getContentAdminScript(), {
+            status: 200,
+            headers: {
+              "content-type": "application/javascript; charset=UTF-8",
+              "cache-control": "no-store"
+            }
+          }),
+          requestId
+        );
+      }
 
       if (
         request.method === "GET" &&

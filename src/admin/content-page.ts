@@ -4,6 +4,7 @@ export function getContentAdminHtml(): string {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
 <title>SawalNewton Content Factory</title>
 <style>
 body{font-family:Inter,system-ui,sans-serif;background:#f5f6fa;color:#17191f;margin:0}
@@ -49,13 +50,14 @@ AI Enhancement is optional for Hindi translation, classification, explanations, 
 <div class="grid">
 <div>
 <label>Admin secret</label>
-<input id="secret" type="password" placeholder="Your ADMIN_SECRET" />
+<input id="secret" type="password" placeholder="Your ADMIN_SECRET" autocomplete="off" />
 </div>
 </div>
 <div class="row" style="margin-top:10px">
-<button class="secondary" id="saveSecret">Save secret</button>
+<button class="secondary" id="saveSecret" type="button">Save secret</button>
 <span class="small">Stored only in this browser tab.</span>
 </div>
+<div id="secretStatus" class="status" style="display:none"></div>
 </div>
 
 <div class="card">
@@ -64,15 +66,15 @@ AI Enhancement is optional for Hindi translation, classification, explanations, 
 <div class="grid">
 <div>
 <label>Source file</label>
-<input id="file" type="file" accept="application/pdf,text/plain,text/csv,application/json,.json" required />
+<input id="file" type="file" accept="application/pdf,text/plain,text/csv,application/json,.json" />
 </div>
 <div>
 <label>Source label</label>
-<input id="sourceName" placeholder="SSC CGL 2022 Shift 3 Maths" required />
+<input id="sourceName" placeholder="SSC CGL 2022 Shift 3 Maths" />
 </div>
 <div>
 <label>Exam</label>
-<input id="exam" value="SSC CGL" required />
+<input id="exam" value="SSC CGL" />
 </div>
 <div>
 <label>Tier</label>
@@ -80,7 +82,7 @@ AI Enhancement is optional for Hindi translation, classification, explanations, 
 </div>
 <div>
 <label>Year</label>
-<input id="year" type="number" min="2016" max="2026" value="2022" required />
+<input id="year" type="number" min="2016" max="2026" value="2022" />
 </div>
 <div>
 <label>Shift</label>
@@ -124,11 +126,11 @@ AI Enhancement is optional for Hindi translation, classification, explanations, 
 <option value="">All</option>
 <option value="approved">Approved</option>
 </select>
-<button class="secondary" id="refresh">Refresh</button>
-<button class="secondary" id="backfill">Backfill fingerprints</button>
-<button class="secondary" id="enhance">✨ AI Enhance selected</button>
-<button class="secondary" id="publishReady">Publish all auto-ready</button>
-<button id="approve">Publish selected</button>
+<button class="secondary" id="refresh" type="button">Refresh</button>
+<button class="secondary" id="backfill" type="button">Backfill fingerprints</button>
+<button class="secondary" id="enhance" type="button">✨ AI Enhance selected</button>
+<button class="secondary" id="publishReady" type="button">Publish all auto-ready</button>
+<button id="approve" type="button">Publish selected</button>
 </div>
 <div id="candidateStatus" class="status"></div>
 <div class="table-wrap">
@@ -151,504 +153,7 @@ AI Enhancement is optional for Hindi translation, classification, explanations, 
 </div>
 </div>
 </div>
-
-<script>
-const secretInput = document.getElementById("secret");
-secretInput.value = sessionStorage.getItem("sawal_admin_secret") || "";
-
-document.getElementById("saveSecret").onclick = () => {
-  sessionStorage.setItem("sawal_admin_secret", secretInput.value);
-  setStatus("candidateStatus", "Admin secret saved.", "ok");
-};
-
-const getSecret = () =>
-  secretInput.value ||
-  sessionStorage.getItem("sawal_admin_secret") ||
-  "";
-
-function setStatus(id, text, kind) {
-  const el = document.getElementById(id);
-  el.className = "status" + (kind ? " " + kind : "");
-  el.textContent = text;
-}
-
-async function api(path, options = {}) {
-  const headers = new Headers(options.headers || {});
-  headers.set("X-Admin-Secret", getSecret());
-  return fetch(path, { ...options, headers });
-}
-
-document.getElementById("processBtn").onclick = async () => {
-  const fileInput = document.getElementById("file");
-  const file = fileInput.files && fileInput.files[0];
-  const sourceName = document.getElementById("sourceName").value.trim();
-  const exam = document.getElementById("exam").value.trim();
-  const year = document.getElementById("year").value;
-
-  if (!file) {
-    setStatus("uploadStatus", "Choose a source file first.", "bad");
-    fileInput.focus();
-    return;
-  }
-  if (!sourceName) {
-    setStatus("uploadStatus", "Enter a source label first.", "bad");
-    document.getElementById("sourceName").focus();
-    return;
-  }
-  if (!exam) {
-    setStatus("uploadStatus", "Enter the exam name first.", "bad");
-    document.getElementById("exam").focus();
-    return;
-  }
-  if (!year || Number(year) < 2016 || Number(year) > 2026) {
-    setStatus("uploadStatus", "Year must be between 2016 and 2026.", "bad");
-    document.getElementById("year").focus();
-    return;
-  }
-
-  const form = new FormData();
-  form.set("file", file);
-  form.set("source_name", sourceName);
-  form.set("exam", exam);
-  form.set("tier", document.getElementById("tier").value);
-  form.set("year", year);
-  form.set("shift", document.getElementById("shift").value);
-  form.set("subject", document.getElementById("subject").value);
-  form.set("max_questions", document.getElementById("maxQuestions").value);
-  form.set("mode", document.getElementById("mode").value);
-
-  const mode = document.getElementById("mode").value;
-  const button = document.getElementById("processBtn");
-  button.disabled = true;
-  button.textContent = mode === "ai" ? "AI processing..." : "Importing...";
-
-  setStatus(
-    "uploadStatus",
-    mode === "ai"
-      ? "AI extraction is running. Keep this tab open."
-      : "Fast Import is running. No Gemini call is made.",
-    "warn"
-  );
-
-  try {
-    const response = await api(
-      "/api/admin/content/ingest",
-      { method: "POST", body: form }
-    );
-
-    const raw = await response.text();
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      throw new Error(
-        "Server returned HTTP " + response.status + " with a non-JSON response."
-      );
-    }
-
-    if (!response.ok || !data.ok) {
-      throw new Error(
-        (data.error || "ingest_failed") + " (HTTP " + response.status + ")"
-      );
-    }
-
-    setStatus(
-      "uploadStatus",
-      "Batch " + data.summary.batchId + " completed\n" +
-        JSON.stringify(data.summary, null, 2),
-      "ok"
-    );
-
-    await refreshAll();
-  } catch (error) {
-    setStatus(
-      "uploadStatus",
-      error instanceof Error ? error.message : String(error),
-      "bad"
-    );
-  } finally {
-    button.disabled = false;
-    button.textContent = document.getElementById("mode").value === "ai"
-      ? "🤖 Extract with AI"
-      : "⚡ Import without AI";
-  }
-};
-document.getElementById("mode").onchange = () => {
-  const mode = document.getElementById("mode").value;
-  document.getElementById("processBtn").textContent =
-    mode === "ai"
-      ? "🤖 Extract with AI"
-      : "⚡ Import without AI";
-};
-
-async function refreshCandidates() {
-  const status =
-    document.getElementById("statusFilter").value;
-
-  const response = await api(
-    "/api/admin/content/candidates?status=" +
-      encodeURIComponent(status)
-  );
-
-  const data = await response.json();
-
-  if (!response.ok || !data.ok) {
-    setStatus(
-      "candidateStatus",
-      data.error || "Unable to load candidates.",
-      "bad"
-    );
-    return;
-  }
-
-  const body =
-    document.getElementById("candidateBody");
-
-  body.replaceChildren();
-
-  for (const candidate of data.candidates) {
-    const row = document.createElement("tr");
-
-    const statusClass =
-      candidate.status === "auto_ready"
-        ? "ok"
-        : candidate.status === "needs_review"
-          ? "warn"
-          : candidate.status === "duplicate"
-            ? "bad"
-            : "";
-
-    row.innerHTML =
-      "<td><input class='check' type='checkbox' value='" +
-      Number(candidate.id) +
-      "'></td>" +
-
-      "<td><b>#"+ Number(candidate.id) +
-      "</b><div class='small'>" +
-      escapeHtml(candidate.exam) +
-      " · " +
-      escapeHtml(candidate.year) +
-      " · " +
-      escapeHtml(candidate.shift || "") +
-      "<br>" +
-      escapeHtml(candidate.subject) +
-      " · " +
-      escapeHtml(candidate.topic || "") +
-      " · " +
-      escapeHtml(candidate.difficulty || "") +
-      "</div></td>" +
-
-      "<td class='question'>" +
-      escapeHtml(candidate.english_question || "") +
-      "<div class='small'>" +
-      "A: " + escapeHtml(candidate.english_option_a || "") +
-      "<br>B: " + escapeHtml(candidate.english_option_b || "") +
-      "<br>C: " + escapeHtml(candidate.english_option_c || "") +
-      "<br>D: " + escapeHtml(candidate.english_option_d || "") +
-      "</div></td>" +
-
-      "<td class='question'>" +
-      escapeHtml(candidate.hindi_question || "") +
-      "</td>" +
-
-      "<td><b>" +
-      escapeHtml(candidate.source_correct_option || "—") +
-      "</b> / <b>" +
-      escapeHtml(candidate.verified_correct_option || "—") +
-      "</b><div class='small'>" +
-      escapeHtml(candidate.answer_verification || "") +
-      "</div></td>" +
-
-      "<td>" +
-      Number(candidate.confidence || 0).toFixed(2) +
-      "</td>" +
-
-      "<td><span class='pill " +
-      statusClass +
-      "'>" +
-      escapeHtml(candidate.status) +
-      "</span></td>";
-
-    body.appendChild(row);
-  }
-
-  setStatus(
-    "candidateStatus",
-    data.candidates.length +
-      " candidates loaded.",
-    "ok"
-  );
-}
-
-async function refreshBatches() {
-  const response = await api(
-    "/api/admin/content/batches"
-  );
-
-  const data = await response.json();
-
-  if (!response.ok || !data.ok) return;
-
-  const body =
-    document.getElementById("batchBody");
-
-  body.replaceChildren();
-
-  for (const batch of data.batches) {
-    const row = document.createElement("tr");
-
-    const error = batch.error_message
-      ? "<div class='small' style='margin-top:6px;color:#b42318'>" +
-        escapeHtml(batch.error_message) +
-        "</div>"
-      : "";
-
-    row.innerHTML =
-      "<td>" + Number(batch.id) + "</td>" +
-      "<td>" + escapeHtml(batch.source_name) + "</td>" +
-      "<td>" +
-      escapeHtml(batch.exam) +
-      " · " +
-      escapeHtml(batch.year) +
-      " · " +
-      escapeHtml(batch.subject) +
-      "</td>" +
-      "<td><b>" + escapeHtml(batch.status) + "</b>" + error + "</td>" +
-      "<td>" +
-      "Extracted " +
-      Number(batch.extracted_count || 0) +
-      " · Ready " +
-      Number(batch.auto_ready_count || 0) +
-      " · Review " +
-      Number(batch.needs_review_count || 0) +
-      " · Dup " +
-      Number(batch.duplicate_count || 0) +
-      "</td>";
-
-    body.appendChild(row);
-  }
-}
-
-async function refreshAll() {
-  await Promise.all([
-    refreshCandidates(),
-    refreshBatches()
-  ]);
-}
-
-document.getElementById("refresh").onclick =
-  refreshAll;
-
-document.getElementById("statusFilter").onchange =
-  refreshCandidates;
-
-
-document.getElementById("backfill").onclick =
-  async () => {
-    if (!confirm(
-      "Backfill exact fingerprints for the existing active question bank?"
-    )) return;
-
-    const response = await api(
-      "/api/admin/content/backfill",
-      { method: "POST" }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      setStatus(
-        "candidateStatus",
-        data.error || "Fingerprint backfill failed.",
-        "bad"
-      );
-      return;
-    }
-
-    setStatus(
-      "candidateStatus",
-      JSON.stringify(data.result, null, 2),
-      "ok"
-    );
-
-    await refreshAll();
-  };
-
-document.getElementById("enhance").onclick =
-  async () => {
-    const ids = [
-      ...document.querySelectorAll(".check:checked")
-    ].map((element) => Number(element.value));
-
-    if (!ids.length) {
-      setStatus(
-        "candidateStatus",
-        "Select at least one candidate to enhance.",
-        "warn"
-      );
-      return;
-    }
-
-    if (ids.length > 25) {
-      setStatus(
-        "candidateStatus",
-        "Select at most 25 candidates per AI enhancement run.",
-        "warn"
-      );
-      return;
-    }
-
-    if (!confirm(
-      "Use optional AI enhancement on " + ids.length + " candidate(s)?\n\nThis may use your configured Gemini API quota."
-    )) return;
-
-    setStatus(
-      "candidateStatus",
-      "AI enhancement is running. Import itself remains independent of AI.",
-      "warn"
-    );
-
-    const response = await api(
-      "/api/admin/content/enhance",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          candidateIds: ids
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      setStatus(
-        "candidateStatus",
-        data.error || "AI enhancement failed.",
-        "bad"
-      );
-      return;
-    }
-
-    setStatus(
-      "candidateStatus",
-      JSON.stringify(data.result, null, 2),
-      "ok"
-    );
-
-    await refreshAll();
-  };
-
-document.getElementById("publishReady").onclick =
-  async () => {
-    if (!confirm(
-      "Publish up to the first 100 auto-ready candidates?"
-    )) return;
-
-    const response = await api(
-      "/api/admin/content/publish-ready",
-      { method: "POST" }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      setStatus(
-        "candidateStatus",
-        data.error || "Auto-ready publication failed.",
-        "bad"
-      );
-      return;
-    }
-
-    setStatus(
-      "candidateStatus",
-      JSON.stringify(data.result, null, 2),
-      "ok"
-    );
-
-    await refreshAll();
-  };
-
-document.getElementById("approve").onclick =
-  async () => {
-    const ids = [
-      ...document.querySelectorAll(".check:checked")
-    ].map((element) =>
-      Number(element.value)
-    );
-
-    if (!ids.length) {
-      setStatus(
-        "candidateStatus",
-        "Select at least one candidate.",
-        "warn"
-      );
-      return;
-    }
-
-    if (
-      !confirm(
-        "Publish " +
-          ids.length +
-          " candidate(s) to the production question bank?"
-      )
-    ) {
-      return;
-    }
-
-    const response = await api(
-      "/api/admin/content/approve",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          candidateIds: ids
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      setStatus(
-        "candidateStatus",
-        data.error || "Publish failed.",
-        "bad"
-      );
-      return;
-    }
-
-    setStatus(
-      "candidateStatus",
-      JSON.stringify(data.result, null, 2),
-      "ok"
-    );
-
-    await refreshAll();
-  };
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-refreshAll().catch((error) => {
-  setStatus(
-    "candidateStatus",
-    error instanceof Error ? error.message : String(error),
-    "bad"
-  );
-});
-</script>
+<script src="/admin/content.js?v=1332" defer></script>
 </body>
 </html>`;
 }
