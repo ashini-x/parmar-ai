@@ -4,8 +4,9 @@ Replace the contents of the current parmar-ai repository with this folder.
 
 Before the first Cloudflare deployment:
 1. Keep the existing Worker named parmar-ai.
-2. Keep the existing D1 binding named DB pointing to sawalnewton-db.
-3. Keep the existing Telegram secrets:
+2. Open `wrangler.jsonc` and replace `REPLACE_WITH_YOUR_D1_DATABASE_ID` with your existing `sawalnewton-db` Database ID.
+3. Keep the existing Cloudflare D1 binding named DB pointing to sawalnewton-db.
+4. Keep the existing Telegram secrets:
    TELEGRAM_BOT_TOKEN
    TELEGRAM_WEBHOOK_SECRET
    TELEGRAM_SETUP_SECRET

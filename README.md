@@ -9,7 +9,7 @@ Telegram Bot -> Mini App -> D1 -> random 10-question Maths test -> server-side s
 ## Required Cloudflare setup
 
 1. Keep the Worker name as `parmar-ai` unless the Cloudflare dashboard Worker is renamed too.
-2. Bind the existing D1 database `sawalnewton-db` to the Worker with the variable name `DB`. The provided `wrangler.jsonc` deliberately leaves the binding out so your existing dashboard binding is preserved.
+2. Open `wrangler.jsonc` and replace `REPLACE_WITH_YOUR_D1_DATABASE_ID` with the Database ID of your existing `sawalnewton-db`. The binding name must remain `DB`. The dashboard binding should also remain attached to the Worker.
 3. Keep the existing Cloudflare secrets:
    - `TELEGRAM_BOT_TOKEN`
    - `TELEGRAM_WEBHOOK_SECRET`
