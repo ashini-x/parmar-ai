@@ -1,23 +1,31 @@
-SawalNewton V1
+SawalNewton V1.1 — LANGUAGE UPDATE
 
 1. Replace the contents of your GitHub repository with the contents of this folder.
-2. Do NOT change or add Telegram tokens in the code. Keep existing Cloudflare secrets:
+2. Keep the existing Cloudflare secrets exactly as they are:
    TELEGRAM_BOT_TOKEN
    TELEGRAM_WEBHOOK_SECRET
    TELEGRAM_SETUP_SECRET
-3. The existing D1 database is already referenced as sawalnewton-db / DB. Do not create a new database.
+3. Keep the existing D1 database: sawalnewton-db.
 4. Let Cloudflare Workers Builds deploy the main branch.
-5. Open https://YOUR-WORKER-URL/health
-6. Open https://YOUR-WORKER-URL/db-test and confirm the tables are present.
-7. In Telegram send /start to the SawalNewton bot and tap Start Test.
+5. In Cloudflare D1 Console, run this ONCE:
+   schemas/migrations/0001_language_and_translations.sql
+6. For the current development questions, run:
+   schemas/seed-dev-bilingual.sql
+   This adds Hindi + English translations without deleting your existing questions or attempts.
+7. Open:
+   https://YOUR-WORKER-URL/health
+8. Open:
+   https://YOUR-WORKER-URL/db-test
+   Confirm the tables include:
+   attempt_questions
+   attempts
+   question_translations
+   user_preferences
+   questions
+   users
+9. Open the SawalNewton bot and tap Start Test.
+10. First open: choose Hindi or English -> Continue -> home.
+11. Start a test and confirm questions appear in the selected language.
+12. Use Change language on the home screen to switch between Hindi and English.
 
-V1 includes:
-- Telegram webhook
-- SawalNewton Mini App
-- Telegram WebApp authentication
-- D1 users/questions/attempts/attempt_questions
-- 10-question random Maths test
-- 5-minute timer
-- server-side scoring
-- result screen
-- Telegram result sharing
+Do not put Telegram tokens in GitHub.

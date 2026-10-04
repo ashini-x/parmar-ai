@@ -18,6 +18,11 @@ import {
 } from "./http/response";
 import { getMiniAppHtml } from "./mini-app";
 import {
+  authenticateWebAppUser,
+  isLanguage,
+  setUserLanguage
+} from "./users/user-service";
+import {
   startMathsTest,
   submitMathsTest,
   type SubmittedAnswer
@@ -442,6 +447,124 @@ export default {
         );
       }
 
+      if (
+        request.method === "GET" &&
+        route === "/api/user/preferences"
+      ) {
+        const initData = request.headers.get("x-telegram-init-data") ?? "";
+
+        try {
+          const { user } = await authenticateWebAppUser(env, initData);
+
+          return withRequestId(
+            jsonResponse(
+              {
+                ok: true,
+                language: user.language
+              },
+              200,
+              requestId
+            ),
+            requestId
+          );
+        } catch (error) {
+          return withRequestId(
+            jsonResponse(
+              {
+                ok: false,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : "user_preferences_failed"
+              },
+              400,
+              requestId
+            ),
+            requestId
+          );
+        }
+      }
+
+      if (
+        request.method === "POST" &&
+        route === "/api/user/preferences"
+      ) {
+        let body: {
+          initData?: string;
+          language?: unknown;
+        };
+
+        try {
+          body = (await request.json()) as {
+            initData?: string;
+            language?: unknown;
+          };
+        } catch {
+          return withRequestId(
+            jsonResponse(
+              { ok: false, error: "invalid_json" },
+              400,
+              requestId
+            ),
+            requestId
+          );
+        }
+
+        if (!isLanguage(body.language)) {
+          return withRequestId(
+            jsonResponse(
+              {
+                ok: false,
+                error: "unsupported_language"
+              },
+              400,
+              requestId
+            ),
+            requestId
+          );
+        }
+
+        try {
+          const { user } = await authenticateWebAppUser(
+            env,
+            body.initData ?? ""
+          );
+
+          await setUserLanguage(
+            env,
+            user.id,
+            body.language
+          );
+
+          return withRequestId(
+            jsonResponse(
+              {
+                ok: true,
+                language: body.language
+              },
+              200,
+              requestId
+            ),
+            requestId
+          );
+        } catch (error) {
+          return withRequestId(
+            jsonResponse(
+              {
+                ok: false,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : "user_language_update_failed"
+              },
+              400,
+              requestId
+            ),
+            requestId
+          );
+        }
+      }
+
       if (request.method === "GET" && route === "/db-test") {
         if (!env.DB) {
           return withRequestId(
@@ -523,7 +646,10 @@ export default {
             error instanceof Error &&
             error.message.startsWith("not_enough_questions:")
               ? 409
-              : 400;
+              : error instanceof Error &&
+                  error.message === "language_not_set"
+                ? 409
+                : 400;
 
           return withRequestId(
             jsonResponse(
@@ -657,6 +783,7 @@ export default {
         route === "/" ||
         route === "/app" ||
         route.startsWith("/api/test/") ||
+        route.startsWith("/api/user/") ||
         route === "/telegram/setup"
       ) {
         return withRequestId(

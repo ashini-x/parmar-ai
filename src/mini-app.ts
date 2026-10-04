@@ -75,6 +75,46 @@ export function getMiniAppHtml(): string {
     h1 { margin-top: 7px; margin-bottom: 0; font-size: 26px; letter-spacing: -0.45px; }
     h2 { margin-top: 8px; margin-bottom: 0; font-size: 22px; }
 
+    .language-intro {
+      margin-top: 8px;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    .language-options {
+      display: grid;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .language-option {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #fff;
+      padding: 15px 16px;
+      cursor: pointer;
+    }
+
+    .language-option.selected {
+      border-color: #4f46e5;
+      background: var(--accent-soft);
+    }
+
+    .language-option strong {
+      display: block;
+      font-size: 18px;
+    }
+
+    .language-option span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
     .details {
       display: flex;
       gap: 8px;
@@ -110,6 +150,17 @@ export function getMiniAppHtml(): string {
     }
 
     .button:disabled { opacity: 0.6; cursor: default; }
+
+    .link-button {
+      width: 100%;
+      margin-top: 12px;
+      border: 0;
+      background: transparent;
+      color: #4f46e5;
+      font-weight: 750;
+      cursor: pointer;
+      padding: 7px 8px;
+    }
 
     .note {
       margin-top: 14px;
@@ -255,18 +306,46 @@ export function getMiniAppHtml(): string {
 <body>
   <main class="page">
     <div class="brand">SawalNewton</div>
-    <div class="tagline">Sawal karo. Solve karo. Dekho kitna dum hai.</div>
+    <div id="tagline" class="tagline">Sawal karo. Solve karo. Dekho kitna dum hai.</div>
 
-    <section id="home-screen" class="card">
-      <div class="eyebrow">First Test</div>
-      <h1>SSC Maths</h1>
-      <div class="details">
-        <div class="pill">10 Questions</div>
-        <div class="pill">Random</div>
-        <div class="pill">5 Minutes</div>
+    <section id="loading-screen" class="card">
+      <div class="eyebrow" id="loading-eyebrow">SawalNewton</div>
+      <h1 id="loading-title">Loading...</h1>
+      <div id="loading-message" class="note">Setting things up.</div>
+    </section>
+
+    <section id="language-screen" class="card hidden">
+      <div class="eyebrow" id="language-eyebrow">First step</div>
+      <h1 id="language-title">Choose your language</h1>
+      <p id="language-intro" class="language-intro">Questions, answers and results will follow this choice.</p>
+
+      <div class="language-options">
+        <button id="language-hi" class="language-option" type="button">
+          <strong>हिंदी</strong>
+          <span>हिंदी में सवाल हल करें</span>
+        </button>
+        <button id="language-en" class="language-option" type="button">
+          <strong>English</strong>
+          <span>Solve questions in English</span>
+        </button>
       </div>
-      <button id="start-button" class="button">Start Test</button>
-      <div class="note">A fresh set is selected from the active SawalNewton question bank.</div>
+
+      <button id="language-continue" class="button" type="button" disabled>Continue</button>
+      <div id="language-message" class="message hidden"></div>
+    </section>
+
+    <section id="home-screen" class="card hidden">
+      <div class="eyebrow" id="home-eyebrow">First Test</div>
+      <h1 id="home-title">SSC Maths</h1>
+      <div class="details">
+        <div id="questions-pill" class="pill">10 Questions</div>
+        <div id="random-pill" class="pill">Random</div>
+        <div id="time-pill" class="pill">5 Minutes</div>
+        <div id="language-pill" class="pill">English</div>
+      </div>
+      <button id="start-button" class="button" type="button">Start Test</button>
+      <button id="change-language-button" class="link-button" type="button">Change language</button>
+      <div id="home-note" class="note">A fresh set is selected from the active SawalNewton question bank.</div>
       <div id="home-message" class="message hidden"></div>
     </section>
 
@@ -280,27 +359,27 @@ export function getMiniAppHtml(): string {
       <div id="options" class="options"></div>
 
       <div class="test-actions">
-        <button id="prev-button" class="button secondary">Previous</button>
-        <button id="next-button" class="button">Next</button>
+        <button id="prev-button" class="button secondary" type="button">Previous</button>
+        <button id="next-button" class="button" type="button">Next</button>
       </div>
 
-      <button id="submit-button" class="button hidden">Submit Test</button>
+      <button id="submit-button" class="button hidden" type="button">Submit Test</button>
     </section>
 
     <section id="result-screen" class="card hidden">
-      <div class="eyebrow">Your Result</div>
+      <div class="eyebrow" id="result-eyebrow">Your Result</div>
       <div id="score" class="result-score">0/10</div>
       <div id="result-label" class="result-label">Newton is checking...</div>
 
       <div class="result-grid">
-        <div class="result-box"><strong id="correct">0</strong><span>Correct</span></div>
-        <div class="result-box"><strong id="wrong">0</strong><span>Wrong</span></div>
-        <div class="result-box"><strong id="unanswered">0</strong><span>Unanswered</span></div>
+        <div class="result-box"><strong id="correct">0</strong><span id="correct-label">Correct</span></div>
+        <div class="result-box"><strong id="wrong">0</strong><span id="wrong-label">Wrong</span></div>
+        <div class="result-box"><strong id="unanswered">0</strong><span id="unanswered-label">Unanswered</span></div>
       </div>
 
       <div id="result-message" class="message"></div>
-      <button id="share-button" class="button">Share Result</button>
-      <button id="again-button" class="button secondary">Take Another Test</button>
+      <button id="share-button" class="button" type="button">Share Result</button>
+      <button id="again-button" class="button secondary" type="button">Take Another Test</button>
     </section>
   </main>
 
@@ -315,20 +394,118 @@ export function getMiniAppHtml(): string {
       }
     }
 
-    const homeScreen = document.getElementById('home-screen');
-    const testScreen = document.getElementById('test-screen');
-    const resultScreen = document.getElementById('result-screen');
-    const startButton = document.getElementById('start-button');
-    const prevButton = document.getElementById('prev-button');
-    const nextButton = document.getElementById('next-button');
-    const submitButton = document.getElementById('submit-button');
-    const progress = document.getElementById('progress');
-    const timer = document.getElementById('timer');
-    const questionText = document.getElementById('question-text');
-    const optionsElement = document.getElementById('options');
-    const homeMessage = document.getElementById('home-message');
+    const COPY = {
+      en: {
+        tagline: 'Questions. Tests. Competition.',
+        loadingEyebrow: 'SawalNewton',
+        loadingTitle: 'Loading...',
+        loadingMessage: 'Setting things up.',
+        languageEyebrow: 'First step',
+        languageTitle: 'Choose your language',
+        languageIntro: 'Your questions, options and results will follow this choice.',
+        hindiSub: 'Solve questions in Hindi',
+        englishSub: 'Solve questions in English',
+        continue: 'Continue',
+        homeEyebrow: 'First Test',
+        homeTitle: 'SSC Maths',
+        questionsPill: '10 Questions',
+        randomPill: 'Random',
+        timePill: '5 Minutes',
+        languagePill: 'English',
+        start: 'Start Test',
+        changeLanguage: 'Change language',
+        homeNote: 'A fresh set is selected from the active SawalNewton question bank.',
+        previous: 'Previous',
+        next: 'Next',
+        submit: 'Submit Test',
+        submitting: 'Submitting...',
+        timeUp: 'Time Up...',
+        resultEyebrow: 'Your Result',
+        correct: 'Correct',
+        wrong: 'Wrong',
+        unanswered: 'Unanswered',
+        share: 'Share Result',
+        again: 'Take Another Test',
+        loadingTest: 'Loading test...',
+        pleaseTelegram: 'Please open SawalNewton from Telegram.',
+        noQuestions: 'No questions were returned.',
+        needsQuestions: 'SawalNewton needs at least 10 matching questions before a test can start.',
+        languageNeeded: 'Please choose a language first.',
+        languageSaved: 'Language saved.',
+        languageSaveFailed: 'Unable to save your language. Please try again.',
+        preferencesFailed: 'Unable to load your preferences. Please try again.',
+        testStartFailed: 'Unable to start the test.',
+        submitFailed: 'Unable to submit the test.',
+        timeRanOut: 'Time ran out. ',
+        accuracy: 'Accuracy: ',
+        time: ' Time: ',
+        minutes: 'm',
+        seconds: 's',
+        result90: 'Newton is impressed. 🔥',
+        result70: 'Good going. Keep pushing. 💪',
+        result50: 'Not bad. There is room to grow. 🧠',
+        resultLow: 'Newton says: practice more. 😈',
+        shareTextPrefix: 'I scored ',
+        shareTextMiddle: '/10 on SawalNewton. Can you beat me?'
+      },
+      hi: {
+        tagline: 'सवाल। टेस्ट। मुकाबला।',
+        loadingEyebrow: 'SawalNewton',
+        loadingTitle: 'लोड हो रहा है...',
+        loadingMessage: 'तैयार किया जा रहा है।',
+        languageEyebrow: 'पहला कदम',
+        languageTitle: 'अपनी भाषा चुनें',
+        languageIntro: 'सवाल, विकल्प और रिज़ल्ट इसी भाषा में दिखेंगे।',
+        hindiSub: 'हिंदी में सवाल हल करें',
+        englishSub: 'English में सवाल हल करें',
+        continue: 'आगे बढ़ें',
+        homeEyebrow: 'पहला टेस्ट',
+        homeTitle: 'SSC Maths',
+        questionsPill: '10 सवाल',
+        randomPill: 'रैंडम',
+        timePill: '5 मिनट',
+        languagePill: 'हिंदी',
+        start: 'टेस्ट शुरू करें',
+        changeLanguage: 'भाषा बदलें',
+        homeNote: 'हर बार SawalNewton question bank से नए सवाल चुने जाएंगे।',
+        previous: 'पिछला',
+        next: 'अगला',
+        submit: 'टेस्ट जमा करें',
+        submitting: 'जमा हो रहा है...',
+        timeUp: 'समय समाप्त...',
+        resultEyebrow: 'आपका रिज़ल्ट',
+        correct: 'सही',
+        wrong: 'गलत',
+        unanswered: 'छोड़े',
+        share: 'रिज़ल्ट शेयर करें',
+        again: 'एक और टेस्ट',
+        loadingTest: 'टेस्ट लोड हो रहा है...',
+        pleaseTelegram: 'SawalNewton को Telegram के अंदर खोलें।',
+        noQuestions: 'कोई सवाल नहीं मिला।',
+        needsQuestions: 'टेस्ट शुरू करने के लिए कम से कम 10 मिलते-जुलते सवाल चाहिए।',
+        languageNeeded: 'पहले अपनी भाषा चुनें।',
+        languageSaved: 'भाषा सेव हो गई।',
+        languageSaveFailed: 'भाषा सेव नहीं हो सकी। फिर से कोशिश करें।',
+        preferencesFailed: 'आपकी सेटिंग लोड नहीं हो सकी। फिर से कोशिश करें।',
+        testStartFailed: 'टेस्ट शुरू नहीं हो सका।',
+        submitFailed: 'टेस्ट जमा नहीं हो सका।',
+        timeRanOut: 'समय समाप्त। ',
+        accuracy: 'सटीकता: ',
+        time: ' समय: ',
+        minutes: 'मि',
+        seconds: 'से',
+        result90: 'Newton खुश है। 🔥',
+        result70: 'अच्छी शुरुआत। लगे रहो। 💪',
+        result50: 'बुरा नहीं। अभी और बेहतर कर सकते हो। 🧠',
+        resultLow: 'Newton कहता है: थोड़ा और अभ्यास करो। 😈',
+        shareTextPrefix: 'मैंने SawalNewton पर ',
+        shareTextMiddle: '/10 स्कोर किया। क्या तुम मुझे हरा सकते हो?'
+      }
+    };
 
     const state = {
+      language: null,
+      languageScreenMode: 'first',
       attemptId: null,
       startedAt: null,
       durationSeconds: 300,
@@ -340,11 +517,222 @@ export function getMiniAppHtml(): string {
       result: null
     };
 
+    const loadingScreen = document.getElementById('loading-screen');
+    const languageScreen = document.getElementById('language-screen');
+    const homeScreen = document.getElementById('home-screen');
+    const testScreen = document.getElementById('test-screen');
+    const resultScreen = document.getElementById('result-screen');
+
+    const loadingEyebrow = document.getElementById('loading-eyebrow');
+    const loadingTitle = document.getElementById('loading-title');
+    const loadingMessage = document.getElementById('loading-message');
+    const tagline = document.getElementById('tagline');
+
+    const languageEyebrow = document.getElementById('language-eyebrow');
+    const languageTitle = document.getElementById('language-title');
+    const languageIntro = document.getElementById('language-intro');
+    const languageHi = document.getElementById('language-hi');
+    const languageEn = document.getElementById('language-en');
+    const languageContinue = document.getElementById('language-continue');
+    const languageMessage = document.getElementById('language-message');
+
+    const homeEyebrow = document.getElementById('home-eyebrow');
+    const homeTitle = document.getElementById('home-title');
+    const questionsPill = document.getElementById('questions-pill');
+    const randomPill = document.getElementById('random-pill');
+    const timePill = document.getElementById('time-pill');
+    const languagePill = document.getElementById('language-pill');
+    const startButton = document.getElementById('start-button');
+    const changeLanguageButton = document.getElementById('change-language-button');
+    const homeNote = document.getElementById('home-note');
+    const homeMessage = document.getElementById('home-message');
+
+    const progress = document.getElementById('progress');
+    const timer = document.getElementById('timer');
+    const questionText = document.getElementById('question-text');
+    const optionsElement = document.getElementById('options');
+    const prevButton = document.getElementById('prev-button');
+    const nextButton = document.getElementById('next-button');
+    const submitButton = document.getElementById('submit-button');
+
+    const resultEyebrow = document.getElementById('result-eyebrow');
+    const correctLabel = document.getElementById('correct-label');
+    const wrongLabel = document.getElementById('wrong-label');
+    const unansweredLabel = document.getElementById('unanswered-label');
+    const shareButton = document.getElementById('share-button');
+    const againButton = document.getElementById('again-button');
+    const resultLabel = document.getElementById('result-label');
+    const resultMessage = document.getElementById('result-message');
+
+    function copy() {
+      return COPY[state.language || 'en'];
+    }
+
+    function currentLanguageName() {
+      return state.language === 'hi' ? 'हिंदी' : 'English';
+    }
+
     function show(section) {
+      loadingScreen.classList.add('hidden');
+      languageScreen.classList.add('hidden');
       homeScreen.classList.add('hidden');
       testScreen.classList.add('hidden');
       resultScreen.classList.add('hidden');
       section.classList.remove('hidden');
+    }
+
+    function setMessage(element, message, error) {
+      element.textContent = message;
+      element.classList.remove('hidden');
+      element.classList.toggle('error', Boolean(error));
+    }
+
+    function clearMessage(element) {
+      element.textContent = '';
+      element.classList.add('hidden');
+      element.classList.remove('error');
+    }
+
+    function applyCopy() {
+      const c = copy();
+      tagline.textContent = c.tagline;
+      loadingEyebrow.textContent = c.loadingEyebrow;
+      loadingTitle.textContent = c.loadingTitle;
+      loadingMessage.textContent = c.loadingMessage;
+      languageEyebrow.textContent = c.languageEyebrow;
+      languageTitle.textContent = c.languageTitle;
+      languageIntro.textContent = c.languageIntro;
+      languageHi.querySelector('span').textContent = c.hindiSub;
+      languageEn.querySelector('span').textContent = c.englishSub;
+      languageContinue.textContent = c.continue;
+      homeEyebrow.textContent = c.homeEyebrow;
+      homeTitle.textContent = c.homeTitle;
+      questionsPill.textContent = c.questionsPill;
+      randomPill.textContent = c.randomPill;
+      timePill.textContent = c.timePill;
+      languagePill.textContent = c.languagePill;
+      startButton.textContent = c.start;
+      changeLanguageButton.textContent = c.changeLanguage;
+      homeNote.textContent = c.homeNote;
+      prevButton.textContent = c.previous;
+      nextButton.textContent = c.next;
+      submitButton.textContent = c.submit;
+      resultEyebrow.textContent = c.resultEyebrow;
+      correctLabel.textContent = c.correct;
+      wrongLabel.textContent = c.wrong;
+      unansweredLabel.textContent = c.unanswered;
+      shareButton.textContent = c.share;
+      againButton.textContent = c.again;
+    }
+
+    function selectLanguage(language) {
+      state.language = language;
+      languageHi.classList.toggle('selected', language === 'hi');
+      languageEn.classList.toggle('selected', language === 'en');
+      languageContinue.disabled = false;
+      applyCopy();
+      clearMessage(languageMessage);
+    }
+
+    async function getPreferences() {
+      if (!telegram) {
+        throw new Error('Please open SawalNewton from Telegram.');
+      }
+
+      const response = await fetch('/api/user/preferences', {
+        method: 'GET',
+        headers: {
+          'x-telegram-init-data': telegram.initData
+        }
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data?.error || 'preferences_failed');
+      }
+
+      return data;
+    }
+
+    async function saveLanguage(language) {
+      if (!telegram) {
+        setMessage(languageMessage, copy().pleaseTelegram, true);
+        return false;
+      }
+
+      languageContinue.disabled = true;
+
+      try {
+        const response = await fetch('/api/user/preferences', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            initData: telegram.initData,
+            language
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+          throw new Error(data?.error || 'language_save_failed');
+        }
+
+        state.language = data.language;
+        applyCopy();
+        clearMessage(languageMessage);
+        renderHome();
+        return true;
+      } catch (error) {
+        setMessage(
+          languageMessage,
+          error instanceof Error ? error.message : copy().languageSaveFailed,
+          true
+        );
+        languageContinue.disabled = false;
+        return false;
+      }
+    }
+
+    function renderHome() {
+      applyCopy();
+      languagePill.textContent = currentLanguageName();
+      startButton.disabled = false;
+      show(homeScreen);
+    }
+
+    function openLanguageSelector(mode) {
+      state.languageScreenMode = mode;
+      if (state.language) {
+        selectLanguage(state.language);
+      } else {
+        languageHi.classList.remove('selected');
+        languageEn.classList.remove('selected');
+        languageContinue.disabled = true;
+      }
+      applyCopy();
+      clearMessage(languageMessage);
+      show(languageScreen);
+    }
+
+    async function continueLanguage() {
+      if (!state.language) return;
+
+      const originalText = languageContinue.textContent;
+      languageContinue.textContent = copy().loadingTest;
+
+      try {
+        const saved = await saveLanguage(state.language);
+        if (saved) {
+          languageContinue.textContent = originalText;
+          return;
+        }
+      } finally {
+        if (!languageScreen.classList.contains('hidden')) {
+          languageContinue.textContent = originalText;
+        }
+      }
     }
 
     function formatTime(totalSeconds) {
@@ -354,23 +742,16 @@ export function getMiniAppHtml(): string {
       return minutes + ':' + remaining;
     }
 
-    function setHomeMessage(message, error = false) {
-      homeMessage.textContent = message;
-      homeMessage.classList.remove('hidden');
-      homeMessage.classList.toggle('error', error);
-    }
-
-    function clearHomeMessage() {
-      homeMessage.textContent = '';
-      homeMessage.classList.add('hidden');
-      homeMessage.classList.remove('error');
-    }
-
     function renderQuestion() {
       const question = state.questions[state.currentIndex];
       if (!question) return;
 
-      progress.textContent = 'Question ' + (state.currentIndex + 1) + ' / ' + state.questions.length;
+      progress.textContent =
+        (state.language === 'hi' ? 'सवाल ' : 'Question ') +
+        (state.currentIndex + 1) +
+        ' / ' +
+        state.questions.length;
+
       questionText.textContent = question.question_text;
       optionsElement.replaceChildren();
 
@@ -405,8 +786,14 @@ export function getMiniAppHtml(): string {
       }
 
       prevButton.disabled = state.currentIndex === 0;
-      nextButton.classList.toggle('hidden', state.currentIndex === state.questions.length - 1);
-      submitButton.classList.toggle('hidden', state.currentIndex !== state.questions.length - 1);
+      nextButton.classList.toggle(
+        'hidden',
+        state.currentIndex === state.questions.length - 1
+      );
+      submitButton.classList.toggle(
+        'hidden',
+        state.currentIndex !== state.questions.length - 1
+      );
     }
 
     function stopTimer() {
@@ -419,7 +806,9 @@ export function getMiniAppHtml(): string {
     function updateTimer() {
       if (!state.startedAt) return;
 
-      const elapsed = Math.floor((Date.now() - new Date(state.startedAt).getTime()) / 1000);
+      const elapsed = Math.floor(
+        (Date.now() - new Date(state.startedAt).getTime()) / 1000
+      );
       const remaining = state.durationSeconds - elapsed;
 
       timer.textContent = formatTime(remaining);
@@ -438,13 +827,18 @@ export function getMiniAppHtml(): string {
 
     async function startTest() {
       if (!telegram) {
-        setHomeMessage('Please open SawalNewton from Telegram.', true);
+        setMessage(homeMessage, copy().pleaseTelegram, true);
         return;
       }
 
-      clearHomeMessage();
+      if (!state.language) {
+        openLanguageSelector('first');
+        return;
+      }
+
+      clearMessage(homeMessage);
       startButton.disabled = true;
-      startButton.textContent = 'Loading...';
+      startButton.textContent = copy().loadingTest;
 
       try {
         const response = await fetch('/api/test/start', {
@@ -456,7 +850,8 @@ export function getMiniAppHtml(): string {
         const data = await response.json();
 
         if (!response.ok || !data.ok) {
-          throw new Error(data?.error || 'Unable to start the test.');
+          const message = data?.error || copy().testStartFailed;
+          throw new Error(message);
         }
 
         state.attemptId = data.attemptId;
@@ -469,22 +864,23 @@ export function getMiniAppHtml(): string {
         state.result = null;
 
         if (state.questions.length === 0) {
-          throw new Error('No questions were returned.');
+          throw new Error(copy().noQuestions);
         }
 
         show(testScreen);
         renderQuestion();
         startTimer();
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to start the test.';
-        if (message.startsWith('not_enough_questions:')) {
-          setHomeMessage('SawalNewton needs at least 10 active Maths questions before a test can start.', true);
-        } else {
-          setHomeMessage(message, true);
-        }
+        const raw = error instanceof Error ? error.message : copy().testStartFailed;
+        const message = raw.startsWith('not_enough_questions:')
+          ? copy().needsQuestions
+          : raw === 'language_not_set'
+            ? copy().languageNeeded
+            : raw;
+        setMessage(homeMessage, message, true);
       } finally {
         startButton.disabled = false;
-        startButton.textContent = 'Start Test';
+        startButton.textContent = copy().start;
       }
     }
 
@@ -517,7 +913,7 @@ export function getMiniAppHtml(): string {
       submitButton.disabled = true;
       nextButton.disabled = true;
       prevButton.disabled = true;
-      submitButton.textContent = auto ? 'Time Up...' : 'Submitting...';
+      submitButton.textContent = auto ? copy().timeUp : copy().submitting;
 
       try {
         const response = await fetch('/api/test/submit', {
@@ -533,51 +929,59 @@ export function getMiniAppHtml(): string {
         const data = await response.json();
 
         if (!response.ok || !data.ok) {
-          throw new Error(data?.error || 'Unable to submit the test.');
+          throw new Error(data?.error || copy().submitFailed);
         }
 
         state.result = data;
         renderResult(data);
         show(resultScreen);
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unable to submit the test.';
+        const message = error instanceof Error ? error.message : copy().submitFailed;
         alert(message);
         state.submitting = false;
         submitButton.disabled = false;
         nextButton.disabled = false;
         prevButton.disabled = false;
-        submitButton.textContent = 'Submit Test';
+        submitButton.textContent = copy().submit;
         startTimer();
       }
     }
 
     function renderResult(data) {
-      document.getElementById('score').textContent = data.score + '/' + data.totalQuestions;
+      document.getElementById('score').textContent =
+        data.score + '/' + data.totalQuestions;
       document.getElementById('correct').textContent = data.correct;
       document.getElementById('wrong').textContent = data.wrong;
       document.getElementById('unanswered').textContent = data.unanswered;
 
-      const percentage = Math.round((data.correct / data.totalQuestions) * 100);
-      const resultLabel = document.getElementById('result-label');
-      const resultMessage = document.getElementById('result-message');
+      const percentage = data.totalQuestions > 0
+        ? Math.round((data.correct / data.totalQuestions) * 100)
+        : 0;
 
-      if (percentage >= 90) resultLabel.textContent = 'Newton is impressed. 🔥';
-      else if (percentage >= 70) resultLabel.textContent = 'Good going. Keep pushing. 💪';
-      else if (percentage >= 50) resultLabel.textContent = 'Not bad. There is room to grow. 🧠';
-      else resultLabel.textContent = 'Newton says: practice more. 😈';
+      const c = copy();
+
+      if (percentage >= 90) resultLabel.textContent = c.result90;
+      else if (percentage >= 70) resultLabel.textContent = c.result70;
+      else if (percentage >= 50) resultLabel.textContent = c.result50;
+      else resultLabel.textContent = c.resultLow;
 
       const mins = Math.floor(data.timeTakenSeconds / 60);
       const secs = data.timeTakenSeconds % 60;
+
       resultMessage.textContent =
-        (data.timedOut ? 'Time ran out. ' : '') +
-        'Accuracy: ' + percentage + '%. Time: ' + mins + 'm ' + secs + 's.';
+        (data.timedOut ? c.timeRanOut : '') +
+        c.accuracy + percentage + '%. ' +
+        c.time + mins + c.minutes + ' ' + secs + c.seconds + '.';
     }
 
     async function shareResult() {
       if (!state.result) return;
 
+      const c = copy();
       const scoreText =
-        'I scored ' + state.result.score + '/' + state.result.totalQuestions + ' on SawalNewton. Can you beat me?';
+        c.shareTextPrefix +
+        state.result.score +
+        c.shareTextMiddle;
       const shareUrl = window.location.origin + '/app';
       const telegramShareUrl =
         'https://t.me/share/url?url=' + encodeURIComponent(shareUrl) +
@@ -589,11 +993,19 @@ export function getMiniAppHtml(): string {
       }
 
       if (navigator.share) {
-        await navigator.share({ title: 'SawalNewton', text: scoreText, url: shareUrl });
+        await navigator.share({
+          title: 'SawalNewton',
+          text: scoreText,
+          url: shareUrl
+        });
         return;
       }
 
-      window.open(telegramShareUrl, '_blank', 'noopener,noreferrer');
+      window.open(
+        telegramShareUrl,
+        '_blank',
+        'noopener,noreferrer'
+      );
     }
 
     function resetToHome() {
@@ -608,17 +1020,54 @@ export function getMiniAppHtml(): string {
       submitButton.disabled = false;
       nextButton.disabled = false;
       prevButton.disabled = false;
-      submitButton.textContent = 'Submit Test';
-      show(homeScreen);
-      clearHomeMessage();
+      submitButton.textContent = copy().submit;
+      renderHome();
+      clearMessage(homeMessage);
     }
 
+    async function boot() {
+      if (!telegram) {
+        applyCopy();
+        show(languageScreen);
+        setMessage(languageMessage, copy().pleaseTelegram, true);
+        return;
+      }
+
+      try {
+        const preferences = await getPreferences();
+
+        if (preferences.language === 'en' || preferences.language === 'hi') {
+          state.language = preferences.language;
+          renderHome();
+        } else {
+          state.language = null;
+          applyCopy();
+          show(languageScreen);
+        }
+      } catch (error) {
+        applyCopy();
+        show(languageScreen);
+        setMessage(
+          languageMessage,
+          copy().preferencesFailed,
+          true
+        );
+      }
+    }
+
+    languageHi.addEventListener('click', () => selectLanguage('hi'));
+    languageEn.addEventListener('click', () => selectLanguage('en'));
+    languageContinue.addEventListener('click', continueLanguage);
     startButton.addEventListener('click', startTest);
+    changeLanguageButton.addEventListener('click', () => openLanguageSelector('change'));
     prevButton.addEventListener('click', goPrevious);
     nextButton.addEventListener('click', goNext);
     submitButton.addEventListener('click', () => submitTest(false));
-    document.getElementById('again-button').addEventListener('click', resetToHome);
-    document.getElementById('share-button').addEventListener('click', shareResult);
+    againButton.addEventListener('click', resetToHome);
+    shareButton.addEventListener('click', shareResult);
+
+    applyCopy();
+    boot();
   </script>
 </body>
 </html>`;

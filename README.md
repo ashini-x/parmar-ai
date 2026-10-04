@@ -1,32 +1,81 @@
-# SawalNewton V1
+# SawalNewton V1.1 — Language-aware test MVP
 
-Telegram-first SSC test MVP built on Cloudflare Workers + D1.
+Telegram-first SSC test MVP on Cloudflare Workers + D1.
 
-## Current flow
+## User flow
 
-Telegram Bot -> Mini App -> D1 -> random 10-question Maths test -> server-side scoring -> result -> Telegram share.
+Telegram Bot -> Mini App -> choose Hindi/English on first use -> SSC Maths -> random 10-question test -> server-side scoring -> result -> Telegram share.
 
-## Required Cloudflare setup
+The selected language is stored per Telegram user and is reused on later opens. A user can change language from the home screen.
 
-1. Keep the Worker name as `parmar-ai` unless the Cloudflare dashboard Worker is renamed too.
-2. Open `wrangler.jsonc` and replace `REPLACE_WITH_YOUR_D1_DATABASE_ID` with the Database ID of your existing `sawalnewton-db`. The binding name must remain `DB`. The dashboard binding should also remain attached to the Worker.
-3. Keep the existing Cloudflare secrets:
-   - `TELEGRAM_BOT_TOKEN`
-   - `TELEGRAM_WEBHOOK_SECRET`
-   - `TELEGRAM_SETUP_SECRET`
-4. Run the SQL in `schemas/schema.sql` against the existing D1 database if any of the four tables are missing.
+## Important database change
+
+This release adds two tables:
+
+- `user_preferences` for the selected UI/question language (`en` or `hi`)
+- `question_translations` for language-specific question and option text
+
+The canonical fields in `questions` remain useful as the English/base question record. For Hindi tests, a Hindi translation must exist. Questions without a Hindi translation are excluded from Hindi test selection.
+
+## Existing D1 database: one-time migration
+
+Your current database already contains `users`, `questions`, `attempts`, and `attempt_questions`.
+
+Run this file ONCE in the Cloudflare D1 Console:
+
+`schemas/migrations/0001_language_and_translations.sql`
+
+It creates only the new language-related tables and index. It does not delete existing users, questions, or attempts.
 
 ## Development seed
 
-`schemas/seed-dev.sql` contains ten clearly marked temporary Maths questions. Execute it only if you need a local/initial test bank. It first removes rows whose source is `SawalNewton DEV SEED`, so it can be safely re-run.
+After the migration, run:
 
-## Notes
+`schemas/seed-dev-bilingual.sql`
 
-- The Mini App never receives `correct_option` or `explanation` during the test.
-- Telegram Mini App `initData` is validated server-side before user/test operations.
-- Test questions are selected randomly from active Maths questions.
-- A production-scale question generator will later replace the simple `ORDER BY RANDOM()` selection with balanced topic/difficulty rules and seen-question avoidance.
+This adds Hindi and English translation rows for questions whose source is `SawalNewton DEV SEED`. It does not delete existing test attempts or questions.
 
-## Deployment checkpoint
+This seed is only for development. The production question bank will later use verified SSC question records and reviewed translations.
 
-After deployment, open `/db-test`. It should return the D1 tables. If it returns `d1_binding_missing`, re-open the Worker's Bindings page and confirm the existing `sawalnewton-db` database is bound as `DB`.
+## Cloudflare setup
+
+Keep the existing Worker name and D1 database. The repository's `wrangler.jsonc` references:
+
+- Worker: `parmar-ai`
+- D1 binding: `DB`
+- D1 database: `sawalnewton-db`
+
+Keep these secrets in Cloudflare only:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_SETUP_SECRET`
+
+## Current backend routes
+
+- `GET /health`
+- `GET /`
+- `GET /app`
+- `GET /db-test`
+- `GET /api/user/preferences`
+- `POST /api/user/preferences`
+- `POST /api/test/start`
+- `POST /api/test/submit`
+- `GET /telegram/setup`
+- `POST /telegram/webhook`
+
+`GET /api/user/preferences` expects the Telegram Mini App `initData` in the `x-telegram-init-data` header.
+
+## V1.1 behavior
+
+1. First Mini App open checks the user's saved preference.
+2. If none exists, the user must choose `हिंदी` or `English`.
+3. The choice is stored server-side.
+4. Test generation uses the stored language.
+5. Hindi tests require Hindi translations.
+6. English tests use an English translation when available, otherwise the canonical English fields in `questions`.
+7. The client never receives `correct_option` during the test.
+
+## Next phase
+
+The next major step is the production question-bank importer and validator for the 2016–2026 SSC bank, followed by balanced random test generation and seen-question avoidance.

@@ -7,6 +7,13 @@ CREATE TABLE IF NOT EXISTS users (
   last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id INTEGER PRIMARY KEY,
+  language TEXT NOT NULL CHECK (language IN ('en', 'hi')),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS questions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
 
@@ -26,12 +33,31 @@ CREATE TABLE IF NOT EXISTS questions (
   option_c TEXT NOT NULL,
   option_d TEXT NOT NULL,
 
-  correct_option TEXT NOT NULL,
+  correct_option TEXT NOT NULL CHECK (correct_option IN ('A', 'B', 'C', 'D')),
   explanation TEXT,
   source TEXT,
 
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS question_translations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  question_id INTEGER NOT NULL,
+  language TEXT NOT NULL CHECK (language IN ('en', 'hi')),
+
+  question_text TEXT NOT NULL,
+  option_a TEXT NOT NULL,
+  option_b TEXT NOT NULL,
+  option_c TEXT NOT NULL,
+  option_d TEXT NOT NULL,
+  explanation TEXT,
+
+  translation_status TEXT NOT NULL DEFAULT 'reviewed',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE,
+  UNIQUE (question_id, language)
 );
 
 CREATE TABLE IF NOT EXISTS attempts (
@@ -63,6 +89,9 @@ CREATE INDEX IF NOT EXISTS idx_questions_subject_active
 
 CREATE INDEX IF NOT EXISTS idx_questions_year_subject
   ON questions(year, subject);
+
+CREATE INDEX IF NOT EXISTS idx_question_translations_language
+  ON question_translations(language, question_id);
 
 CREATE INDEX IF NOT EXISTS idx_attempts_user
   ON attempts(user_id, started_at);

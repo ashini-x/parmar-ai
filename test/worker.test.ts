@@ -38,6 +38,8 @@ describe("SawalNewton Worker", () => {
 
     const body = await response.text();
     expect(body).toContain("SawalNewton");
+    expect(body).toContain("Choose your language");
+    expect(body).toContain("हिंदी");
     expect(body).toContain("Start Test");
   });
 

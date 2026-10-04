@@ -19,6 +19,6 @@ export interface Env {
 export function getConfig(env: Env) {
   return {
     environment: env.ENVIRONMENT ?? "development",
-    version: env.APP_VERSION ?? "0.2.0"
+    version: env.APP_VERSION ?? "0.3.0"
   } as const;
 }

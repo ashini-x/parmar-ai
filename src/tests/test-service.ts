@@ -1,8 +1,8 @@
 import type { Env } from "../config/env";
 import {
-  validateTelegramInitData,
-  type TelegramWebAppUser
-} from "../telegram/webapp-auth";
+  authenticateWebAppUser,
+  type Language
+} from "../users/user-service";
 
 export const TEST_DURATION_SECONDS = 5 * 60;
 export const TEST_QUESTION_COUNT = 10;
@@ -25,13 +25,6 @@ type QuestionRow = {
   option_d: string;
 };
 
-type UserRow = {
-  id: number;
-  telegram_id: number;
-  username: string | null;
-  first_name: string | null;
-};
-
 type AttemptRow = {
   id: number;
   user_id: number;
@@ -50,6 +43,7 @@ type StartTestResult = {
   startedAt: string;
   durationSeconds: number;
   totalQuestions: number;
+  language: Language;
   questions: QuestionRow[];
 };
 
@@ -69,51 +63,12 @@ export type SubmittedAnswer = {
   selectedOption: string | null;
 };
 
-async function getOrCreateUser(
-  env: Env,
-  telegramUser: TelegramWebAppUser
-): Promise<UserRow> {
-  await env.DB
-    .prepare(
-      `INSERT INTO users (
-        telegram_id,
-        username,
-        first_name,
-        last_seen_at
-      )
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(telegram_id)
-      DO UPDATE SET
-        username = excluded.username,
-        first_name = excluded.first_name,
-        last_seen_at = CURRENT_TIMESTAMP`
-    )
-    .bind(
-      telegramUser.id,
-      telegramUser.username ?? null,
-      telegramUser.first_name ?? null
-    )
-    .run();
-
-  const user = await env.DB
-    .prepare(
-      `SELECT
-        id,
-        telegram_id,
-        username,
-        first_name
-      FROM users
-      WHERE telegram_id = ?
-      LIMIT 1`
-    )
-    .bind(telegramUser.id)
-    .first<UserRow>();
-
-  if (!user) {
-    throw new Error("user_creation_failed");
+function requireLanguage(language: Language | null): Language {
+  if (!language) {
+    throw new Error("language_not_set");
   }
 
-  return user;
+  return language;
 }
 
 function mapQuestionForClient(
@@ -126,49 +81,66 @@ export async function startMathsTest(
   env: Env,
   initData: string
 ): Promise<StartTestResult> {
-  const botToken = env.TELEGRAM_BOT_TOKEN?.trim();
-
-  if (!botToken) {
-    throw new Error("telegram_bot_token_missing");
-  }
-
-  const validated = await validateTelegramInitData(
-    initData,
-    botToken
-  );
-
-  const user = await getOrCreateUser(env, validated.user);
+  const { user } = await authenticateWebAppUser(env, initData);
+  const language = requireLanguage(user.language);
 
   const questionResult = await env.DB
     .prepare(
       `SELECT
-        id,
-        exam,
-        tier,
-        year,
-        shift,
-        subject,
-        topic,
-        difficulty,
-        question_text,
-        option_a,
-        option_b,
-        option_c,
-        option_d
-      FROM questions
-      WHERE is_active = 1
-        AND subject = ?
+        q.id,
+        q.exam,
+        q.tier,
+        q.year,
+        q.shift,
+        q.subject,
+        q.topic,
+        q.difficulty,
+        COALESCE(
+          t.question_text,
+          q.question_text
+        ) AS question_text,
+        COALESCE(
+          t.option_a,
+          q.option_a
+        ) AS option_a,
+        COALESCE(
+          t.option_b,
+          q.option_b
+        ) AS option_b,
+        COALESCE(
+          t.option_c,
+          q.option_c
+        ) AS option_c,
+        COALESCE(
+          t.option_d,
+          q.option_d
+        ) AS option_d
+      FROM questions q
+      LEFT JOIN question_translations t
+        ON t.question_id = q.id
+        AND t.language = ?
+      WHERE q.is_active = 1
+        AND q.subject = ?
+        AND (
+          ? = 'en'
+          OR t.id IS NOT NULL
+        )
       ORDER BY RANDOM()
       LIMIT ?`
     )
-    .bind("Maths", TEST_QUESTION_COUNT)
+    .bind(
+      language,
+      "Maths",
+      language,
+      TEST_QUESTION_COUNT
+    )
     .all<QuestionRow>();
 
   const questions = questionResult.results;
 
   if (questions.length < TEST_QUESTION_COUNT) {
     throw new Error(
-      `not_enough_questions:${questions.length}`
+      `not_enough_questions:${questions.length}:${language}`
     );
   }
 
@@ -224,6 +196,7 @@ export async function startMathsTest(
     startedAt: `${attempt.started_at.replace(" ", "T")}Z`,
     durationSeconds: TEST_DURATION_SECONDS,
     totalQuestions: questions.length,
+    language,
     questions: questions.map(mapQuestionForClient)
   };
 }
@@ -234,18 +207,7 @@ export async function submitMathsTest(
   attemptId: number,
   answers: SubmittedAnswer[]
 ): Promise<SubmitResult> {
-  const botToken = env.TELEGRAM_BOT_TOKEN?.trim();
-
-  if (!botToken) {
-    throw new Error("telegram_bot_token_missing");
-  }
-
-  const validated = await validateTelegramInitData(
-    initData,
-    botToken
-  );
-
-  const user = await getOrCreateUser(env, validated.user);
+  const { user } = await authenticateWebAppUser(env, initData);
 
   const attempt = await env.DB
     .prepare(
@@ -313,10 +275,7 @@ export async function submitMathsTest(
   }
 
   const seen = new Set<number>();
-  const answerByQuestionId = new Map<
-    number,
-    string | null
-  >();
+  const answerByQuestionId = new Map<number, string | null>();
 
   for (const answer of answers) {
     if (!Number.isInteger(answer.questionId)) {
@@ -363,7 +322,8 @@ export async function submitMathsTest(
   let answered = 0;
 
   const updateStatements = assigned.results.map((question) => {
-    const selected = answerByQuestionId.get(question.id) ?? null;
+    const selected =
+      answerByQuestionId.get(question.id) ?? null;
 
     if (selected !== null) {
       answered += 1;
