@@ -31,6 +31,7 @@ export type AnswerVerification =
   | "match"
   | "conflict"
   | "source_missing"
+  | "source_only"
   | "ambiguous";
 
 export interface LocalizedQuestion {

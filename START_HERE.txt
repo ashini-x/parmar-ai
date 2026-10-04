@@ -1,29 +1,19 @@
-SAWALNEWTON V1.2.1 — CONTENT FACTORY
+SAWALNEWTON V1.3 — START HERE
 
-1. Replace your GitHub repository with this folder.
-2. Keep the existing Cloudflare Telegram secrets.
-3. Add a new Cloudflare Worker secret:
-   ADMIN_SECRET
-4. Deploy.
-5. Open:
-   https://YOUR-WORKER-URL/admin/content
-6. Enter ADMIN_SECRET.
-7. Upload a small PDF/TXT/CSV test source.
-8. Set exam/tier/year/shift/subject correctly.
-9. Let Gemini process it.
-10. Inspect the staging queue.
-11. Publish only the candidates you want in production.
+1. Replace the GitHub repository contents with this folder.
+2. Keep your existing Cloudflare secrets and D1 database.
+3. Deploy normally through your existing Cloudflare Workers Build.
+4. No new D1 migration is needed for V1.3.
+5. Open /admin/content.
+6. Leave Processing mode as: Fast import — no AI.
+7. Upload data/content-factory-sample.txt.
+8. Confirm the batch is COMPLETED and no Gemini call was needed.
+9. Upload data/content-factory-sample-bilingual.txt next if you want to test an auto-ready bilingual candidate.
+10. Select an auto-ready candidate and Publish selected.
 
-DATABASE:
-Run the CONTENT of:
-schemas/migrations/0002_content_factory.sql
-inside the D1 Console.
+Optional AI:
+- Choose AI extraction when you deliberately want Gemini to process a PDF or messy source.
+- Use AI Enhance selected only on staging candidates that need translation/classification/verification.
+- AI failure does not fail or remove a deterministic import.
 
-Do NOT paste the filename into the SQL console.
-
-FIRST TEST:
-Use a small source with roughly 5–20 questions.
-Do not start with hundreds of pages.
-
-The factory is designed to eliminate manual question transcription.
-It does not remove the need to use legitimate, reusable source material.
+The next major step after this package is the real SSC 2016–2026 content-ingestion workflow.

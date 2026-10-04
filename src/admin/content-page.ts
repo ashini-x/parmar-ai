@@ -40,8 +40,8 @@ th{font-size:11px;text-transform:uppercase;color:#667085}
 <div class="wrap">
 <h1>🧠 SawalNewton Content Factory</h1>
 <div class="muted">
-Upload an SSC source. AI extracts, bilingualizes, classifies, checks the answer,
-and puts candidates into a staging queue before publication.
+Upload an SSC source. Fast Import uses deterministic parsing and never calls Gemini.
+AI Enhancement is optional for Hindi translation, classification, explanations, and answer checks.
 </div>
 
 <div class="card">
@@ -64,7 +64,7 @@ and puts candidates into a staging queue before publication.
 <div class="grid">
 <div>
 <label>Source file</label>
-<input id="file" type="file" accept="application/pdf,text/plain,text/csv" required />
+<input id="file" type="file" accept="application/pdf,text/plain,text/csv,application/json,.json" required />
 </div>
 <div>
 <label>Source label</label>
@@ -96,12 +96,19 @@ and puts candidates into a staging queue before publication.
 </select>
 </div>
 <div>
+<label>Processing mode</label>
+<select id="mode">
+<option value="deterministic">⚡ Fast import — no AI</option>
+<option value="ai">🤖 AI extraction — optional</option>
+</select>
+</div>
+<div>
 <label>Max questions this run</label>
-<input id="maxQuestions" type="number" min="1" max="25" value="20" />
+<input id="maxQuestions" type="number" min="1" max="100" value="20" />
 </div>
 </div>
 <div class="row" style="margin-top:14px">
-<button id="processBtn" type="submit">🤖 Extract with AI</button>
+<button id="processBtn" type="submit">⚡ Import without AI</button>
 </div>
 </form>
 <div id="uploadStatus" class="status" style="display:none"></div>
@@ -119,6 +126,7 @@ and puts candidates into a staging queue before publication.
 </select>
 <button class="secondary" id="refresh">Refresh</button>
 <button class="secondary" id="backfill">Backfill fingerprints</button>
+<button class="secondary" id="enhance">✨ AI Enhance selected</button>
 <button class="secondary" id="publishReady">Publish all auto-ready</button>
 <button id="approve">Publish selected</button>
 </div>
@@ -185,14 +193,18 @@ document.getElementById("uploadForm").onsubmit = async (event) => {
   form.set("shift", document.getElementById("shift").value);
   form.set("subject", document.getElementById("subject").value);
   form.set("max_questions", document.getElementById("maxQuestions").value);
+  form.set("mode", document.getElementById("mode").value);
 
+  const mode = document.getElementById("mode").value;
   const button = document.getElementById("processBtn");
   button.disabled = true;
-  button.textContent = "Processing...";
+  button.textContent = mode === "ai" ? "AI processing..." : "Importing...";
 
   setStatus(
     "uploadStatus",
-    "Gemini is reading the source and preparing the staging queue. Keep this tab open.",
+    mode === "ai"
+      ? "Optional AI extraction is running. A Gemini outage does not affect Fast Import."
+      : "Fast Import is running in the Worker. No Gemini call is made.",
     "warn"
   );
 
@@ -225,8 +237,18 @@ document.getElementById("uploadForm").onsubmit = async (event) => {
     );
   } finally {
     button.disabled = false;
-    button.textContent = "🤖 Extract with AI";
+    button.textContent = document.getElementById("mode").value === "ai"
+      ? "🤖 Extract with AI"
+      : "⚡ Import without AI";
   }
+};
+
+document.getElementById("mode").onchange = () => {
+  const mode = document.getElementById("mode").value;
+  document.getElementById("processBtn").textContent =
+    mode === "ai"
+      ? "🤖 Extract with AI"
+      : "⚡ Import without AI";
 };
 
 async function refreshCandidates() {
@@ -408,6 +430,73 @@ document.getElementById("backfill").onclick =
       setStatus(
         "candidateStatus",
         data.error || "Fingerprint backfill failed.",
+        "bad"
+      );
+      return;
+    }
+
+    setStatus(
+      "candidateStatus",
+      JSON.stringify(data.result, null, 2),
+      "ok"
+    );
+
+    await refreshAll();
+  };
+
+document.getElementById("enhance").onclick =
+  async () => {
+    const ids = [
+      ...document.querySelectorAll(".check:checked")
+    ].map((element) => Number(element.value));
+
+    if (!ids.length) {
+      setStatus(
+        "candidateStatus",
+        "Select at least one candidate to enhance.",
+        "warn"
+      );
+      return;
+    }
+
+    if (ids.length > 25) {
+      setStatus(
+        "candidateStatus",
+        "Select at most 25 candidates per AI enhancement run.",
+        "warn"
+      );
+      return;
+    }
+
+    if (!confirm(
+      "Use optional AI enhancement on " + ids.length + " candidate(s)?\n\nThis may use your configured Gemini API quota."
+    )) return;
+
+    setStatus(
+      "candidateStatus",
+      "AI enhancement is running. Import itself remains independent of AI.",
+      "warn"
+    );
+
+    const response = await api(
+      "/api/admin/content/enhance",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          candidateIds: ids
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      setStatus(
+        "candidateStatus",
+        data.error || "AI enhancement failed.",
         "bad"
       );
       return;

@@ -433,3 +433,222 @@ Be conservative. A candidate will be auto-ready only if later code finds a compl
     `gemini_all_models_unavailable:${lastTransientError}`
   );
 }
+
+export interface CandidateForEnhancement {
+  english: AiQuestionCandidate["english"];
+  hindi: AiQuestionCandidate["hindi"];
+  topic: string;
+  difficulty: string;
+  source_correct_option: string;
+  verified_correct_option: string;
+  answer_verification: string;
+  confidence: number;
+  ambiguity_note: string;
+  subject: ContentSubject;
+}
+
+const AI_ENHANCE_MODELS = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.6-flash",
+  "gemini-3.8-flash"
+] as const;
+
+const ENHANCE_TIMEOUT_MS = 45_000;
+const ENHANCE_MAX_ATTEMPTS = 2;
+
+function enhancementSchema(subject: ContentSubject) {
+  return {
+    type: "OBJECT",
+    properties: {
+      english: {
+        type: "OBJECT",
+        properties: {
+          question_text: { type: "STRING" },
+          option_a: { type: "STRING" },
+          option_b: { type: "STRING" },
+          option_c: { type: "STRING" },
+          option_d: { type: "STRING" },
+          explanation: { type: "STRING" }
+        },
+        required: [
+          "question_text",
+          "option_a",
+          "option_b",
+          "option_c",
+          "option_d",
+          "explanation"
+        ]
+      },
+      hindi: {
+        type: "OBJECT",
+        properties: {
+          question_text: { type: "STRING" },
+          option_a: { type: "STRING" },
+          option_b: { type: "STRING" },
+          option_c: { type: "STRING" },
+          option_d: { type: "STRING" },
+          explanation: { type: "STRING" }
+        },
+        required: [
+          "question_text",
+          "option_a",
+          "option_b",
+          "option_c",
+          "option_d",
+          "explanation"
+        ]
+      },
+      topic: { type: "STRING" },
+      difficulty: { type: "STRING" },
+      verified_correct_option: { type: "STRING" },
+      answer_verification: { type: "STRING" },
+      confidence: { type: "NUMBER" },
+      ambiguity_note: { type: "STRING" }
+    },
+    required: [
+      "english",
+      "hindi",
+      "topic",
+      "difficulty",
+      "verified_correct_option",
+      "answer_verification",
+      "confidence",
+      "ambiguity_note"
+    ]
+  };
+}
+
+function cleanGeminiJson(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("```")) {
+    return trimmed
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+  }
+  return trimmed;
+}
+
+export async function enhanceCandidateWithGemini(
+  env: Env,
+  candidate: CandidateForEnhancement
+): Promise<AiQuestionCandidate> {
+  const apiKey = env.GEMINI_API_KEY?.trim();
+  if (!apiKey) throw new Error("gemini_api_key_missing");
+
+  const topicList = TOPIC_TAXONOMY[candidate.subject].join(", ");
+  const prompt = `
+You are an optional quality/enrichment service for SawalNewton.
+Do not invent a new question. Work only with the supplied candidate.
+
+GOALS
+1. Preserve the English question and options exactly unless correcting obvious formatting only.
+2. Produce a natural, exam-style Hindi translation of the SAME question.
+3. Preserve numbers, formulas, units, variable names, option values, dates, and proper nouns.
+4. Independently solve/check the question and return verified_correct_option as A, B, C, or D.
+5. Compare the verified answer with the source answer.
+6. Choose exactly one topic from the allowed list.
+7. Choose exactly one difficulty: Easy, Medium, Hard.
+8. Give concise explanations in both languages.
+9. Be conservative. If anything is ambiguous, lower confidence and explain it.
+
+ALLOWED TOPICS
+${topicList}
+
+CURRENT CANDIDATE
+English question: ${candidate.english.question_text}
+A: ${candidate.english.option_a}
+B: ${candidate.english.option_b}
+C: ${candidate.english.option_c}
+D: ${candidate.english.option_d}
+Existing English explanation: ${candidate.english.explanation}
+
+Existing Hindi question: ${candidate.hindi.question_text}
+A: ${candidate.hindi.option_a}
+B: ${candidate.hindi.option_b}
+C: ${candidate.hindi.option_c}
+D: ${candidate.hindi.option_d}
+Existing Hindi explanation: ${candidate.hindi.explanation}
+
+Source answer: ${candidate.source_correct_option || "not supplied"}
+Existing verified answer: ${candidate.verified_correct_option || "not supplied"}
+Existing topic: ${candidate.topic}
+Existing difficulty: ${candidate.difficulty}
+
+Return structured JSON only.
+`.trim();
+
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: enhancementSchema(candidate.subject),
+      temperature: 0.05,
+      maxOutputTokens: 4000
+    }
+  };
+
+  let lastError = "gemini_enhancement_unavailable";
+
+  for (const model of AI_ENHANCE_MODELS) {
+    const endpoint = `${GEMINI_ENDPOINT_BASE}/${model}:generateContent`;
+
+    for (let attempt = 1; attempt <= ENHANCE_MAX_ATTEMPTS; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), ENHANCE_TIMEOUT_MS);
+
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-goog-api-key": apiKey
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+
+        const raw = await response.text();
+        let data: GeminiResponse;
+        try {
+          data = JSON.parse(raw) as GeminiResponse;
+        } catch {
+          throw new Error(`gemini_invalid_json_response:${response.status}:${model}`);
+        }
+
+        if (!response.ok) {
+          const message = data.error?.message ?? `gemini_http_${response.status}`;
+          if (TRANSIENT_STATUS_CODES.has(response.status)) {
+            lastError = `gemini_transient_${response.status}:${model}:${message}`;
+          } else {
+            throw new Error(`gemini_http_${response.status}:${model}:${message}`);
+          }
+        } else {
+          const text = extractGeminiText(data);
+          if (!text) throw new Error(`gemini_empty_response:${model}`);
+
+          const parsed = JSON.parse(cleanGeminiJson(text)) as AiQuestionCandidate;
+          return parsed;
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          lastError = `gemini_timeout_after_${ENHANCE_TIMEOUT_MS}ms:${model}`;
+        } else if (
+          error instanceof Error &&
+          !error.message.startsWith("gemini_transient_")
+        ) {
+          throw error;
+        }
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      if (attempt < ENHANCE_MAX_ATTEMPTS) {
+        const delay = 800 * 2 ** (attempt - 1) + Math.floor(Math.random() * 400);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw new Error(`gemini_enhancement_unavailable:${lastError}`);
+}

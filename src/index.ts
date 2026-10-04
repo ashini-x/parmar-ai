@@ -31,6 +31,7 @@ import { getContentAdminHtml } from "./admin/content-page";
 import {
   approveCandidates,
   backfillQuestionFingerprints,
+  enhanceCandidatesWithGemini,
   listBatches,
   listCandidates,
   processContentUpload
@@ -768,7 +769,14 @@ export default {
                       "max_questions"
                     )
                   ),
-                  file
+                  file,
+                  mode:
+                    String(
+                      form.get("mode") ??
+                        "deterministic"
+                    ) === "ai"
+                      ? "ai"
+                      : "deterministic"
                 }
               );
 
@@ -812,6 +820,104 @@ export default {
           }
         }
 
+
+        if (
+          request.method === "POST" &&
+          route === "/api/admin/content/enhance"
+        ) {
+          let body: {
+            candidateIds?: unknown;
+          };
+
+          try {
+            body =
+              (await request.json()) as {
+                candidateIds?: unknown;
+              };
+          } catch {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error: "invalid_json"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+
+          if (!Array.isArray(body.candidateIds)) {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error: "candidate_ids_required"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+
+          const ids = body.candidateIds
+            .map(Number)
+            .filter(
+              (id) => Number.isInteger(id) && id > 0
+            )
+            .slice(0, 25);
+
+          if (!ids.length) {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error: "no_candidate_ids"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+
+          try {
+            const result =
+              await enhanceCandidatesWithGemini(
+                env,
+                ids
+              );
+
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: true,
+                  result
+                },
+                200,
+                requestId
+              ),
+              requestId
+            );
+          } catch (error) {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "content_enhancement_failed"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+        }
 
         if (
           request.method === "POST" &&

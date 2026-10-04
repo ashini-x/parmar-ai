@@ -1,92 +1,77 @@
-# SawalNewton V1.2 — Content Factory
+# SawalNewton V1.3 — AI-Optional Content Factory
 
-This version adds the first automated question-ingestion pipeline on top of the working SawalNewton Telegram Mini App.
+SawalNewton is a Telegram-first SSC test platform on Cloudflare Workers.
 
-## What it does
+This version keeps the working Telegram Mini App and bilingual test system while changing the content workflow so **structured TXT/CSV/JSON imports do not depend on Gemini**.
 
-Upload a source PDF, TXT, or CSV from:
+## Core content workflow
 
-`/admin/content`
+Fast Import:
 
-The AI pipeline then:
+`TXT / CSV / JSON -> deterministic parser -> validation -> exact duplicate check -> staging -> publish`
 
-1. extracts real MCQs from the source;
-2. creates clean English + Hindi versions;
-3. classifies the subject topic and estimates difficulty;
-4. compares the source answer key with an independent AI check;
-5. computes a deterministic question fingerprint;
-6. detects exact duplicates against the production bank and staging queue;
-7. places candidates in a staging queue;
-8. marks high-confidence answer-matched candidates as `auto_ready`;
-9. lets the admin publish selected candidates into the production D1 question bank.
+Optional AI:
 
-No question-by-question transcription is required.
+`PDF / messy source -> Gemini extraction`
 
-## Required Cloudflare secret
+or, after import:
 
-Add:
+`staging candidate -> AI Enhance selected -> updated staging candidate`
 
-`ADMIN_SECRET`
+A Gemini outage therefore does not block structured content ingestion.
 
-Keep it as a Cloudflare Worker secret; never commit it.
+## Current production pieces
 
-The existing:
+- Telegram webhook
+- Telegram Mini App
+- Hindi / English user preference
+- random Maths tests
+- five-minute test timer
+- server-side scoring
+- D1 question bank
+- bilingual question translations
+- staging content factory
+- deterministic TXT / CSV / JSON importer
+- exact duplicate fingerprints
+- optional AI extraction and enhancement
+- admin review/publish queue
 
-`TELEGRAM_BOT_TOKEN`
-`TELEGRAM_WEBHOOK_SECRET`
-`TELEGRAM_SETUP_SECRET`
-`GEMINI_API_KEY`
+## Required Cloudflare secrets
 
-remain unchanged.
+Keep these as Worker secrets:
 
-## Database migration
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_SETUP_SECRET`
+- `GEMINI_API_KEY` (only needed for optional AI operations)
+- `ADMIN_SECRET`
 
-In the D1 Console, run the contents of:
+## Database
 
-`schemas/migrations/0002_content_factory.sql`
+Use the existing `sawalnewton-db` D1 database and binding `DB`.
 
-Do not paste the filename itself into the console.
+V1.3 does not require a new migration. Existing content-factory tables from V1.2 are reused.
 
-The migration is non-destructive. It adds the staging/batch tables and the question fingerprint column/index.
+## Admin
 
-## Open the factory
-
-After deployment:
+Open:
 
 `https://YOUR-WORKER-URL/admin/content`
 
-Enter the `ADMIN_SECRET`.
+The default processing mode is **Fast import — no AI**.
 
-For the first test, use a small SSC source file containing a limited number of questions. Set the correct:
+Use AI extraction only when you specifically want AI to parse a PDF or messy text source.
 
-- Exam
-- Tier
-- Year
-- Shift
-- Subject
+## First test
 
-The factory currently accepts PDF, TXT, and CSV and caps one run at 25 questions.
+1. Deploy this version.
+2. Open `/admin/content`.
+3. Keep `Fast import — no AI` selected.
+4. Upload `data/content-factory-sample.txt`.
+5. Use the supplied development metadata.
+6. Confirm the batch completes without any Gemini request.
+7. Inspect the staging candidates.
 
-## Publication rule
+For a bilingual auto-ready development example, use `data/content-factory-sample-bilingual.txt`.
 
-Candidates with:
-
-- complete English + Hindi content,
-- a matching source answer and independent answer,
-- confidence >= 0.90,
-- and no exact duplicate
-
-are marked `auto_ready`.
-
-They are still not automatically published. You can select them and click `Publish selected`.
-
-Everything else goes to `needs_review` or `duplicate`.
-
-## Important content rule
-
-Only ingest sources you are allowed to use. The factory can automate processing, but it does not grant copyright or redistribution rights to source material.
-
-
-## V1.2.1 Gemini reliability
-
-Transient Gemini capacity errors such as HTTP 429 and 503 are retried with exponential backoff and jitter. The content factory uses `gemini-3.8-flash`, then `gemini-3.7-flash`, then `gemini-3.5-flash-lite` when transient service errors persist. Failed source uploads can be uploaded again; completed/non-failed sources remain protected from duplicate processing.
+Do not ingest copyrighted third-party material unless you have the right to use and redistribute it.
