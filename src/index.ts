@@ -27,6 +27,14 @@ import {
   submitMathsTest,
   type SubmittedAnswer
 } from "./tests/test-service";
+import { getContentAdminHtml } from "./admin/content-page";
+import {
+  approveCandidates,
+  backfillQuestionFingerprints,
+  listBatches,
+  listCandidates,
+  processContentUpload
+} from "./content/content-service";
 
 const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
 const TELEGRAM_REQUEST_TIMEOUT_MS = 8_000;
@@ -88,6 +96,25 @@ function jsonResponse(
     status,
     headers
   });
+}
+
+function isAdminAuthorized(
+  request: Request,
+  env: Env
+): boolean {
+  const configured =
+    env.ADMIN_SECRET?.trim();
+
+  if (!configured) return false;
+
+  const received =
+    request.headers.get("X-Admin-Secret") ??
+    "";
+
+  return safeEqual(
+    received,
+    configured
+  );
 }
 
 async function telegramApi<T = unknown>(
@@ -565,6 +592,440 @@ export default {
         }
       }
 
+
+      if (
+        request.method === "GET" &&
+        route === "/admin/content"
+      ) {
+        return withRequestId(
+          new Response(
+            getContentAdminHtml(),
+            {
+              status: 200,
+              headers: {
+                "content-type":
+                  "text/html; charset=UTF-8",
+                "cache-control":
+                  "no-store"
+              }
+            }
+          ),
+          requestId
+        );
+      }
+
+      if (
+        route.startsWith("/api/admin/content/")
+      ) {
+        if (!isAdminAuthorized(request, env)) {
+          return withRequestId(
+            jsonResponse(
+              {
+                ok: false,
+                error: "admin_unauthorized"
+              },
+              401,
+              requestId
+            ),
+            requestId
+          );
+        }
+
+        if (
+          request.method === "GET" &&
+          route === "/api/admin/content/candidates"
+        ) {
+          const status =
+            new URL(request.url)
+              .searchParams
+              .get("status");
+
+          const limit =
+            new URL(request.url)
+              .searchParams
+              .get("limit");
+
+          const result =
+            await listCandidates(
+              env,
+              status,
+              Number(limit || 100)
+            );
+
+          return withRequestId(
+            jsonResponse(
+              {
+                ok: true,
+                candidates:
+                  result.results
+              },
+              200,
+              requestId
+            ),
+            requestId
+          );
+        }
+
+        if (
+          request.method === "GET" &&
+          route === "/api/admin/content/batches"
+        ) {
+          const limit =
+            new URL(request.url)
+              .searchParams
+              .get("limit");
+
+          const result =
+            await listBatches(
+              env,
+              Number(limit || 50)
+            );
+
+          return withRequestId(
+            jsonResponse(
+              {
+                ok: true,
+                batches:
+                  result.results
+              },
+              200,
+              requestId
+            ),
+            requestId
+          );
+        }
+
+        if (
+          request.method === "POST" &&
+          route === "/api/admin/content/ingest"
+        ) {
+          let form: FormData;
+
+          try {
+            form =
+              await request.formData();
+          } catch {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error: "invalid_multipart_form"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+
+          const file =
+            form.get("file");
+
+          if (!(file instanceof File)) {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error: "file_missing"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+
+          try {
+            const result =
+              await processContentUpload(
+                env,
+                {
+                  sourceName: String(
+                    form.get("source_name") ??
+                      ""
+                  ),
+                  exam: String(
+                    form.get("exam") ??
+                      ""
+                  ),
+                  tier: String(
+                    form.get("tier") ??
+                      ""
+                  ),
+                  year: Number(
+                    form.get("year")
+                  ),
+                  shift: String(
+                    form.get("shift") ??
+                      ""
+                  ),
+                  subject: String(
+                    form.get("subject") ??
+                      ""
+                  ),
+                  maxQuestions: Number(
+                    form.get(
+                      "max_questions"
+                    )
+                  ),
+                  file
+                }
+              );
+
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: true,
+                  summary: result
+                },
+                200,
+                requestId
+              ),
+              requestId
+            );
+          } catch (error) {
+            logger.error(
+              "content_ingest_failed",
+              {
+                requestId,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : String(error)
+              }
+            );
+
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "content_ingest_failed"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+        }
+
+
+        if (
+          request.method === "POST" &&
+          route === "/api/admin/content/backfill"
+        ) {
+          try {
+            const result =
+              await backfillQuestionFingerprints(
+                env
+              );
+
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: true,
+                  result
+                },
+                200,
+                requestId
+              ),
+              requestId
+            );
+          } catch (error) {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "fingerprint_backfill_failed"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+        }
+
+        if (
+          request.method === "POST" &&
+          route === "/api/admin/content/publish-ready"
+        ) {
+          try {
+            const candidates =
+              await listCandidates(
+                env,
+                "auto_ready",
+                100
+              );
+
+            const ids = candidates.results
+              .map((candidate) =>
+                Number(
+                  (candidate as { id: number }).id
+                )
+              )
+              .filter(
+                (id) =>
+                  Number.isInteger(id) &&
+                  id > 0
+              );
+
+            if (ids.length === 0) {
+              return withRequestId(
+                jsonResponse(
+                  {
+                    ok: true,
+                    result: {
+                      approved: 0,
+                      duplicates: 0,
+                      failed: 0
+                    }
+                  },
+                  200,
+                  requestId
+                ),
+                requestId
+              );
+            }
+
+            const result =
+              await approveCandidates(
+                env,
+                ids
+              );
+
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: true,
+                  result,
+                  attempted: ids.length
+                },
+                200,
+                requestId
+              ),
+              requestId
+            );
+          } catch (error) {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "publish_ready_failed"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+        }
+
+        if (
+          request.method === "POST" &&
+          route === "/api/admin/content/approve"
+        ) {
+          let body: {
+            candidateIds?: unknown;
+          };
+
+          try {
+            body =
+              (await request.json()) as {
+                candidateIds?: unknown;
+              };
+          } catch {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error: "invalid_json"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+
+          if (
+            !Array.isArray(
+              body.candidateIds
+            )
+          ) {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error:
+                    "candidate_ids_required"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+
+          const ids = body.candidateIds
+            .map(Number)
+            .filter(
+              (id) =>
+                Number.isInteger(id) &&
+                id > 0
+            );
+
+          try {
+            const result =
+              await approveCandidates(
+                env,
+                ids
+              );
+
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: true,
+                  result
+                },
+                200,
+                requestId
+              ),
+              requestId
+            );
+          } catch (error) {
+            return withRequestId(
+              jsonResponse(
+                {
+                  ok: false,
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "content_approval_failed"
+                },
+                400,
+                requestId
+              ),
+              requestId
+            );
+          }
+        }
+
+        return withRequestId(
+          notFound(),
+          requestId
+        );
+      }
+
       if (request.method === "GET" && route === "/db-test") {
         if (!env.DB) {
           return withRequestId(
@@ -754,7 +1215,9 @@ export default {
 
       if (
         request.method === "GET" &&
-        route === "/telegram/setup"
+        route === "/telegram/setup" ||
+        route === "/admin/content" ||
+        route.startsWith("/api/admin/content/")
       ) {
         return setupTelegramWebhook(
           request,

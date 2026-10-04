@@ -1,31 +1,29 @@
-SawalNewton V1.1 — LANGUAGE UPDATE
+SAWALNEWTON V1.2 — CONTENT FACTORY
 
-1. Replace the contents of your GitHub repository with the contents of this folder.
-2. Keep the existing Cloudflare secrets exactly as they are:
-   TELEGRAM_BOT_TOKEN
-   TELEGRAM_WEBHOOK_SECRET
-   TELEGRAM_SETUP_SECRET
-3. Keep the existing D1 database: sawalnewton-db.
-4. Let Cloudflare Workers Builds deploy the main branch.
-5. In Cloudflare D1 Console, run this ONCE:
-   schemas/migrations/0001_language_and_translations.sql
-6. For the current development questions, run:
-   schemas/seed-dev-bilingual.sql
-   This adds Hindi + English translations without deleting your existing questions or attempts.
-7. Open:
-   https://YOUR-WORKER-URL/health
-8. Open:
-   https://YOUR-WORKER-URL/db-test
-   Confirm the tables include:
-   attempt_questions
-   attempts
-   question_translations
-   user_preferences
-   questions
-   users
-9. Open the SawalNewton bot and tap Start Test.
-10. First open: choose Hindi or English -> Continue -> home.
-11. Start a test and confirm questions appear in the selected language.
-12. Use Change language on the home screen to switch between Hindi and English.
+1. Replace your GitHub repository with this folder.
+2. Keep the existing Cloudflare Telegram secrets.
+3. Add a new Cloudflare Worker secret:
+   ADMIN_SECRET
+4. Deploy.
+5. Open:
+   https://YOUR-WORKER-URL/admin/content
+6. Enter ADMIN_SECRET.
+7. Upload a small PDF/TXT/CSV test source.
+8. Set exam/tier/year/shift/subject correctly.
+9. Let Gemini process it.
+10. Inspect the staging queue.
+11. Publish only the candidates you want in production.
 
-Do not put Telegram tokens in GitHub.
+DATABASE:
+Run the CONTENT of:
+schemas/migrations/0002_content_factory.sql
+inside the D1 Console.
+
+Do NOT paste the filename into the SQL console.
+
+FIRST TEST:
+Use a small source with roughly 5–20 questions.
+Do not start with hundreds of pages.
+
+The factory is designed to eliminate manual question transcription.
+It does not remove the need to use legitimate, reusable source material.
