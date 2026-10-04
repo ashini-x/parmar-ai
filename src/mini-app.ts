@@ -163,11 +163,83 @@ export function getMiniAppHtml(): string {
       telegram.expand();
     }
 
-    document
-      .getElementById("start-button")
-      ?.addEventListener("click", () => {
-        alert("Test engine coming next.");
-      });
+    const startButton =
+      document.getElementById(
+        "start-button",
+      );
+    
+    startButton?.addEventListener(
+      "click",
+      async () => {
+        if (!telegram) {
+          alert(
+            "Please open SawalNewton inside Telegram.",
+          );
+          return;
+        }
+    
+        const originalText =
+          startButton.textContent ??
+          "Start Test";
+    
+        startButton.textContent =
+          "Loading...";
+        startButton.disabled = true;
+    
+        try {
+          const response =
+            await fetch(
+              "/api/test/start",
+              {
+                method: "POST",
+                headers: {
+                  "content-type":
+                    "application/json",
+                },
+                body: JSON.stringify({
+                  initData:
+                    telegram.initData,
+                }),
+              },
+            );
+    
+          const data =
+            await response.json();
+    
+          if (!response.ok || !data.ok) {
+            throw new Error(
+              data?.error ??
+                "Unable to start test.",
+            );
+          }
+    
+          console.log(
+            "SawalNewton test started:",
+            data,
+          );
+    
+          alert(
+            `Test started! ${data.totalQuestions} random questions loaded.`,
+          );
+        } catch (error) {
+          console.error(
+            "Failed to start test:",
+            error,
+          );
+    
+          alert(
+            error instanceof Error
+              ? error.message
+              : "Unable to start test.",
+          );
+    
+          startButton.textContent =
+            originalText;
+          startButton.disabled =
+            false;
+        }
+      },
+    );
   </script>
 </body>
 </html>`;
