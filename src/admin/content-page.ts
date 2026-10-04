@@ -242,19 +242,19 @@ document.getElementById("processBtn").onclick = async () => {
       data = JSON.parse(raw);
     } catch {
       throw new Error(
-        `Server returned HTTP ${response.status} with a non-JSON response.`
+        "Server returned HTTP " + response.status + " with a non-JSON response."
       );
     }
 
     if (!response.ok || !data.ok) {
       throw new Error(
-        `${data.error || "ingest_failed"} (HTTP ${response.status})`
+        (data.error || "ingest_failed") + " (HTTP " + response.status + ")"
       );
     }
 
     setStatus(
       "uploadStatus",
-      `Batch ${data.summary.batchId} completed\n` +
+      "Batch " + data.summary.batchId + " completed\n" +
         JSON.stringify(data.summary, null, 2),
       "ok"
     );
