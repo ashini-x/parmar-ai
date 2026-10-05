@@ -1,2 +1,0 @@
-source_question_number,question_text,option_a,option_b,option_c,option_d,answer,verified_answer,answer_verification,confidence,topic,difficulty,explanation,hindi_question,hindi_option_a,hindi_option_b,hindi_option_c,hindi_option_d,hindi_explanation
-1,"A number is increased by 20%.",220,240,250,260,B,B,match,1,Percentage,Easy,"20% of 200 is 40, so the new number is 240.","एक संख्या में 20% की वृद्धि की जाती है।",220,240,250,260,"200 का 20% = 40, इसलिए नई संख्या 240 होगी।"
