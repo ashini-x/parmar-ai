@@ -97,7 +97,7 @@ export interface QuestionAnalyticsResult {
 export async function ensureAnalyticsSchema(env: Env): Promise<void> {
   if (!env.DB) return;
   if (!schemaPromise) {
-    schemaPromise = env.DB.prepareBatch([
+    schemaPromise = env.DB.batch([
       ...splitSchemaStatements().map((sql) => env.DB!.prepare(sql)),
     ]).then(() => undefined).catch((error) => {
       schemaPromise = null;

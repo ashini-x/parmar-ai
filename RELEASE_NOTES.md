@@ -1,3 +1,9 @@
+# Release 2.2.1
+
+- Fixed D1 schema initialization to use the supported `env.DB.batch()` API.
+- This resolves the admin dashboard Worker exception that occurred immediately after successful login.
+- Bumped APP_VERSION to 2.2.1.
+
 # Release 2.2.0 — Central Admin Analytics
 
 - Keeps Durable Object + Queue + Vertex AI user flow unchanged.
