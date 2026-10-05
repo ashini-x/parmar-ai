@@ -1,0 +1,57 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "parmar-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-05",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "APP_VERSION": "2.0.0",
+    "BURST_QUESTION_LIMIT": "5",
+    "BURST_WINDOW_SECONDS": "10",
+    "DAILY_QUESTION_LIMIT": "100",
+    "ENVIRONMENT": "production",
+    "GCP_PROJECT_ID": "project-90db7be4-619f-4ed7-89b",
+    "GEMINI_LOCATION": "global",
+    "GEMINI_THINKING_LEVEL": "HIGH",
+    "GEMINI_MODEL": "gemini-3.8-flash",
+    "MAX_OUTPUT_TOKENS": "1200",
+    "MAX_QUESTION_LENGTH": "4000",
+    "VERTEX_TIMEOUT_MS": "25000"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "JOB_DEDUPE",
+        "class_name": "JobDedupe"
+      }
+    ]
+  },
+  "exports": {
+    "JobDedupe": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "QUESTION_QUEUE",
+        "queue": "parmar-ai-questions-prod"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "parmar-ai-questions-prod",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 10,
+        "dead_letter_queue": "parmar-ai-questions-dlq",
+        "retry_delay": 15,
+        "max_concurrency": 50
+      }
+    ]
+  }
+}
