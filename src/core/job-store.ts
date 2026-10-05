@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "@cloudflare/workers-types";
-import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
+import type { AnswerPacket, ConversationTurn, Env, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
 import { sendTelegramChatAction } from "../telegram/api";
 
 const TYPING_HEARTBEAT_MS = 4_000;
@@ -9,6 +9,7 @@ const JOB_RETENTION_MS = 48 * 60 * 60 * 1_000;
 const PROCESSING_LEASE_MS = 15 * 60 * 1_000;
 const RATE_LIMIT_META_KEY = "meta:rate:v2";
 const PROFILE_KEY = "profile:v1";
+const CONVERSATION_RESET_KEY = "conversation:resetAt";
 
 interface RateMeta {
   burstWindowStart: number;
@@ -85,6 +86,7 @@ export class JobDedupe extends DurableObject {
       case "complete": return this.json(await this.complete(body));
       case "get_profile": return this.json({ ok: true, profile: await this.getProfile() });
       case "get_usage": return this.json({ ok: true, usage: await this.getUsage() });
+      case "get_conversation": return this.json({ ok: true, recentConversation: await this.getConversation(positiveNumber(body.updateId)) });
       case "update_profile": return this.json(await this.updateProfile(body));
       case "set_exam": return this.json(await this.setExam(body));
       case "reset_profile": return this.json(await this.resetProfile());
@@ -335,6 +337,29 @@ export class JobDedupe extends DurableObject {
     return { ok: true };
   }
 
+  private async getConversation(currentUpdateId: number): Promise<ConversationTurn[]> {
+    const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
+    const resetAt = (await this.ctx.storage.get<number>(CONVERSATION_RESET_KEY)) ?? 0;
+    const completed = [...jobs.values()]
+      .filter((record) =>
+        record.updateId !== currentUpdateId &&
+        record.state === "done" &&
+        record.answerPacket &&
+        record.answerPacket.answerScope !== "out_of_scope" &&
+        record.createdAt > resetAt &&
+        typeof record.question === "string" &&
+        record.question.trim().length > 0,
+      )
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 6)
+      .reverse();
+
+    return completed.map((record) => ({
+      question: clampConversationText(record.question, 650),
+      answer: clampConversationText(buildStoredAnswer(record.answerPacket), 1_200),
+    }));
+  }
+
   private async getProfile(): Promise<StudentProfile> {
     const profile = await this.ctx.storage.get<StudentProfile>(PROFILE_KEY);
     return profile ? normalizeProfile(profile) : { ...DEFAULT_PROFILE };
@@ -400,7 +425,9 @@ export class JobDedupe extends DurableObject {
   }
 
   private async resetProfile(): Promise<GenericResponse> {
-    await this.ctx.storage.put(PROFILE_KEY, { ...DEFAULT_PROFILE, lastUpdatedAt: Date.now() });
+    const now = Date.now();
+    await this.ctx.storage.put(PROFILE_KEY, { ...DEFAULT_PROFILE, lastUpdatedAt: now });
+    await this.ctx.storage.put(CONVERSATION_RESET_KEY, now);
     return { ok: true };
   }
 
@@ -434,13 +461,28 @@ export class JobDedupe extends DurableObject {
   }
 }
 
-export function buildProfileContext(profile: StudentProfile): ProfileContext {
+export function buildProfileContext(profile: StudentProfile, recentConversation: ConversationTurn[] = []): ProfileContext {
   return {
     profile,
     recentTopicHint: profile.recentTopics.slice(0, 6).join(", "),
     attentionTopicHint: profile.attentionTopics.slice(0, 5).join(", "),
     revisionHint: profile.revisionQueue.slice(0, 5).join(", "),
+    recentConversation: recentConversation.slice(-6),
   };
+}
+
+function buildStoredAnswer(packet?: AnswerPacket): string {
+  if (!packet) return "";
+  const takeaway = packet.sscTakeaway?.trim();
+  return takeaway ? `${packet.answer.trim()}
+SSC Focus: ${takeaway}` : packet.answer.trim();
+}
+
+function clampConversationText(value: string, maxLength: number): string {
+  const normalized = value.replace(/\r\n/g, "\n").replace(/\\n/g, "\n").replace(/\\r/g, "").replace(/\\t/g, "\t").trim();
+  if (normalized.length <= maxLength) return normalized;
+  const cut = normalized.lastIndexOf(" ", maxLength);
+  return normalized.slice(0, cut > maxLength * 0.7 ? cut : maxLength).trim() + "…";
 }
 
 function parseJob(body: Record<string, unknown>): QuestionJob {

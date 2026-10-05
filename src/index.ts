@@ -7,7 +7,7 @@ import type {
 } from "@cloudflare/workers-types";
 
 import { generateGeminiAnswer, GeminiError } from "./ai/gemini";
-import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile } from "./config/env";
+import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, ConversationTurn } from "./config/env";
 import { getConfig } from "./config/env";
 import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } from "./core/job-store";
 import { logger } from "./core/logger";
@@ -354,10 +354,18 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         receivedAt: job.createdAt,
       }));
       const profile = await getStudentProfile(env, job.chatId);
+      const conversationResult = await jobStoreRequest<{ ok: true; recentConversation: ConversationTurn[] }>(env, job.chatId, {
+        action: "get_conversation",
+        updateId: job.updateId,
+      });
       let packet = claim.record.answerPacket;
 
       if (!packet) {
-        packet = await generateGeminiAnswer(env, job.question, buildProfileContext(profile));
+        packet = await generateGeminiAnswer(
+          env,
+          job.question,
+          buildProfileContext(profile, conversationResult.recentConversation),
+        );
         await jobStoreRequest(env, job.chatId, {
           action: "set_answer_packet",
           updateId: job.updateId,
@@ -382,7 +390,8 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         });
       }
 
-      await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, profile));
+      const latestProfile = await getStudentProfile(env, job.chatId);
+      await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, latestProfile));
       await jobStoreRequest(env, job.chatId, { action: "complete", updateId: job.updateId });
       const completedAt = Date.now();
       ctx.waitUntil(recordQuestionResult(env, {
@@ -640,7 +649,7 @@ function buildHealth(env: Env) {
   return {
     ok: true,
     service: "parmar-ai",
-    phase: "G",
+    phase: "H",
     environment: config.environment,
     version: config.version,
     telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET),
@@ -734,7 +743,7 @@ const worker: ExportedHandler<Env, QuestionJob> = {
 
       if (url.pathname === "/") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
-        return withRequestId(json({ ok: true, service: "parmar-ai", phase: "G", status: "ssc_queue_vertex_ai_admin" }), requestId);
+        return withRequestId(json({ ok: true, service: "parmar-ai", phase: "H", status: "ssc_queue_vertex_ai_admin" }), requestId);
       }
 
       if (url.pathname === "/telegram/setup") {

@@ -34,3 +34,11 @@ The system is designed to absorb bursts instead of failing the webhook immediate
 - [ ] Add a Cloudflare Access application for `/admin*` (do not protect `/telegram/webhook`).
 - [ ] Confirm 90-day scheduled cleanup is configured.
 - [ ] Before a major public launch, monitor D1/Workers/Queue Free-plan limits and upgrade Cloudflare before limits become user-visible.
+
+
+## 2.3.0 behavior tests
+- Ask a fact question, then a contextual follow-up such as “iska main reason?”, then “simple mein samjha de”; verify the bot stays on the same topic.
+- Say “ryotwari se confuse ho raha hoon” after discussing Permanent Settlement; verify the answer directly contrasts the two rather than restarting the entire chapter.
+- Confirm no literal `\n` text appears in Telegram.
+- Confirm a partially generated/`MAX_TOKENS` response is never sent as a partial answer.
+- Run `/reset` and verify subsequent follow-ups do not use the pre-reset conversation.

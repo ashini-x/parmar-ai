@@ -27,7 +27,7 @@ describe("Parmar AI production worker", () => {
 
     expect(body.ok).toBe(true);
     expect(body.service).toBe("parmar-ai");
-    expect(body.phase).toBe("E");
+    expect(body.phase).toBe("H");
     expect(body.studentProfile).toBe(true);
     expect(body.thinkingPolicy).toContain("ADAPTIVE");
   });

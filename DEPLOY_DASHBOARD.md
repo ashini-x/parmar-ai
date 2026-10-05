@@ -204,3 +204,7 @@ D1 stores the Telegram identity fields available in the update, first-seen time,
 Raw question/event records are automatically deleted after `ANALYTICS_RAW_RETENTION_DAYS` (90 days by default) by the daily scheduled cleanup.
 
 The Durable Object remains the source of truth for real-time per-student rate limiting, deduplication, typing state, active jobs, and the learning profile.
+
+
+### Important when replacing the repository
+This release's `wrangler.jsonc` uses `REPLACE_WITH_D1_DATABASE_ID` as a safe placeholder if the real D1 UUID is not known to the package. Before committing the replacement, preserve the real `database_id` from your currently working GitHub `wrangler.jsonc`. Do not create a new D1 database just for this release.

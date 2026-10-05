@@ -76,11 +76,17 @@ export interface StudentProfile {
   lastUpdatedAt: number;
 }
 
+export interface ConversationTurn {
+  question: string;
+  answer: string;
+}
+
 export interface ProfileContext {
   profile: StudentProfile;
   recentTopicHint: string;
   attentionTopicHint: string;
   revisionHint: string;
+  recentConversation: ConversationTurn[];
 }
 
 export function getConfig(env: Env) {

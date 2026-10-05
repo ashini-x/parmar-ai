@@ -111,9 +111,15 @@ export async function recordUserSeen(env: Env, user: AnalyticsUser, now = Date.n
   if (!env.DB) return;
   await ensureAnalyticsSchema(env);
   await env.DB.prepare(
-    `INSERT OR IGNORE INTO users
+    `INSERT INTO users
       (telegram_user_id, chat_id, username, first_name, last_name, first_seen_at, target_exam, is_bot)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(telegram_user_id) DO UPDATE SET
+       chat_id = excluded.chat_id,
+       username = COALESCE(excluded.username, users.username),
+       first_name = COALESCE(excluded.first_name, users.first_name),
+       last_name = COALESCE(excluded.last_name, users.last_name),
+       is_bot = excluded.is_bot`
   ).bind(
     user.telegramUserId,
     user.chatId,
