@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "@cloudflare/workers-types";
-import type { AnswerPacket, ConversationTurn, Env, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
+import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
 import { sendTelegramChatAction } from "../telegram/api";
 
 const TYPING_HEARTBEAT_MS = 4_000;
@@ -54,12 +54,13 @@ export interface ClaimResponse {
 }
 
 const DEFAULT_PROFILE: StudentProfile = {
-  version: 1,
+  version: 2,
   targetExam: "SSC (not specified)",
   recentTopics: [],
   recentSubjects: [],
   attentionTopics: [],
   revisionQueue: [],
+  learningSignals: [],
   questionCount: 0,
   lastUpdatedAt: 0,
 };
@@ -375,6 +376,7 @@ export class JobDedupe extends DurableObject {
     const subject = cleanText(String(body.subject ?? ""), 40);
     const signal = cleanText(String(body.profileSignal ?? "neutral"), 20);
     const nextRevisionTopic = cleanText(String(body.nextRevisionTopic ?? ""), 100);
+    const questionMode = cleanText(String(body.questionMode ?? "fact"), 20);
     const detectedExam = cleanExam(String(body.detectedExam ?? ""));
     const answerScope = cleanText(String(body.answerScope ?? "ssc_ga_gs"), 20);
 
@@ -400,13 +402,41 @@ export class JobDedupe extends DurableObject {
       profile.recentSubjects = [subject, ...profile.recentSubjects.filter((item) => item.toLowerCase() !== subject.toLowerCase())].slice(0, 6);
     }
 
-    if ((signal === "confusion" || (signal === "weak" && wasRecentTopic)) && topic && topic !== "General SSC doubt") {
+    if (topic && topic !== "General SSC doubt" && (signal === "confusion" || signal === "weak")) {
       const normalized = topic.toLowerCase();
-      profile.attentionTopics = [topic, ...profile.attentionTopics.filter((item) => item.toLowerCase() !== normalized)].slice(0, 6);
+      const existingSignal = profile.learningSignals.find((item) => item.topic.toLowerCase() === normalized);
+      const nextSignal: LearningSignal = existingSignal
+        ? {
+            ...existingSignal,
+            confusionCount: existingSignal.confusionCount + (signal === "confusion" ? 1 : 0),
+            weakCount: existingSignal.weakCount + (signal === "weak" ? 1 : 0),
+            lastSeenAt: Date.now(),
+          }
+        : {
+            topic,
+            confusionCount: signal === "confusion" ? 1 : 0,
+            weakCount: signal === "weak" ? 1 : 0,
+            lastSeenAt: Date.now(),
+          };
+
+      profile.learningSignals = [
+        nextSignal,
+        ...profile.learningSignals.filter((item) => item.topic.toLowerCase() !== normalized),
+      ].slice(0, 12);
+
+      // One explicit confusion should influence the current answer, but we do not
+      // permanently label a student as weak until the pattern repeats.
+      if (nextSignal.confusionCount >= 2 || nextSignal.weakCount >= 2 || (nextSignal.confusionCount >= 1 && nextSignal.weakCount >= 1)) {
+        profile.attentionTopics = [topic, ...profile.attentionTopics.filter((item) => item.toLowerCase() !== normalized)].slice(0, 6);
+      }
     }
 
-    if (nextRevisionTopic) {
-      profile.revisionQueue = [nextRevisionTopic, ...profile.revisionQueue.filter((item) => item.toLowerCase() !== nextRevisionTopic.toLowerCase())].slice(0, 6);
+    const mayUpdateRevisionQueue = signal === "confusion" || signal === "weak" || questionMode === "revision";
+    const revisionTopic = (signal === "confusion" || signal === "weak" || questionMode === "revision") && topic && topic !== "General SSC doubt"
+      ? topic
+      : nextRevisionTopic;
+    if (mayUpdateRevisionQueue && revisionTopic) {
+      profile.revisionQueue = [revisionTopic, ...profile.revisionQueue.filter((item) => item.toLowerCase() !== revisionTopic.toLowerCase())].slice(0, 6);
     }
 
     await this.ctx.storage.put(PROFILE_KEY, profile);
@@ -501,8 +531,9 @@ function parseJob(body: Record<string, unknown>): QuestionJob {
 }
 
 function normalizeProfile(profile: StudentProfile): StudentProfile {
+  const rawSignals = Array.isArray(profile.learningSignals) ? profile.learningSignals : [];
   return {
-    version: 1,
+    version: 2,
     targetExam: profile.targetExam || DEFAULT_PROFILE.targetExam,
     recentTopics: Array.isArray(profile.recentTopics) ? profile.recentTopics.slice(0, 10) : [],
     recentSubjects: Array.isArray(profile.recentSubjects) ? profile.recentSubjects.slice(0, 6) : [],

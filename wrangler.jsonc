@@ -8,7 +8,7 @@
     "enabled": true
   },
   "vars": {
-    "APP_VERSION": "2.3.0",
+    "APP_VERSION": "2.4.0",
     "BURST_QUESTION_LIMIT": "5",
     "BURST_WINDOW_SECONDS": "10",
     "DAILY_QUESTION_LIMIT": "20",
@@ -42,7 +42,7 @@
     {
       "binding": "DB",
       "database_name": "parmar-ai-admin-prod",
-      "database_id": "1c033fb8-10aa-4bee-a294-4dbc899c09f7"
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
     }
   ],
   "triggers": {

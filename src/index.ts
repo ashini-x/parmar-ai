@@ -383,6 +383,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           nextRevisionTopic: packet.nextRevisionTopic,
           detectedExam: packet.detectedExam ?? "",
           answerScope: packet.answerScope,
+          questionMode: packet.questionMode,
         });
         await jobStoreRequest(env, job.chatId, {
           action: "mark_profile_updated",
@@ -456,14 +457,21 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
 function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile): string {
   let answer = packet.answer.trim();
 
-  // Make the personalization visible only when it is genuinely helpful.
   const isRepeatedArea = packet.topic && profile.recentTopics.some((topic) => topic.toLowerCase() === packet.topic.toLowerCase());
   const isAttentionArea = profile.attentionTopics.some((topic) => topic.toLowerCase() === packet.topic.toLowerCase());
+  const explicitPersonalSignal = packet.profileSignal === "confusion" || packet.profileSignal === "weak";
 
-  if (isAttentionArea && packet.profileSignal !== "neutral" && packet.answerScope !== "out_of_scope") {
-    answer += `\n\n🎯 Tumhare liye focus: ${packet.nextRevisionTopic || packet.topic} ko ek baar aur revise kar lena.`;
+  // A visible "your focus" recommendation is shown only when there is
+  // evidence for it. Generic/simple follow-ups must not manufacture a study priority.
+  if (explicitPersonalSignal && packet.answerScope !== "out_of_scope") {
+    const focusTopic = packet.topic || packet.nextRevisionTopic;
+    if (focusTopic) {
+      answer += `\n\n🎯 Abhi tumhara focus: ${focusTopic}. Pehle isko clear/strong karo, phir next topic par jao.`;
+    }
+  } else if (isAttentionArea && packet.questionMode === "comparison") {
+    answer += "\n\n🧠 Isko pichhle related topic ke saath pair mein yaad rakho—tumhari attention abhi isi distinction par hai.";
   } else if (isRepeatedArea && packet.questionMode === "comparison") {
-    answer += "\n\n🧠 Isko pichhle related topic ke saath pair mein yaad rakho—SSC mein confusion yahin hota hai.";
+    answer += "\n\n🧠 Isko pichhle related topic ke saath pair mein yaad rakho.";
   }
 
   return answer.slice(0, 3_900);
@@ -524,6 +532,10 @@ function buildProfileText(profile: StudentProfile, usage: { dayCount: number; da
   const recent = profile.recentTopics.slice(0, 5);
   const attention = profile.attentionTopics.slice(0, 5);
   const revision = profile.revisionQueue.slice(0, 5);
+  const signals = profile.learningSignals
+    .filter((item) => item.confusionCount + item.weakCount > 0)
+    .sort((a, b) => (b.confusionCount + b.weakCount) - (a.confusionCount + a.weakCount))
+    .slice(0, 3);
 
   return [
     "📚 Tumhari Parmar SSC Profile",
@@ -534,6 +546,7 @@ function buildProfileText(profile: StudentProfile, usage: { dayCount: number; da
     `Recent focus: ${recent.length ? recent.join(" • ") : "abhi nahi"}`,
     `Attention areas: ${attention.length ? attention.join(" • ") : "abhi koi clear weak area nahi"}`,
     `Revision queue: ${revision.length ? revision.join(" → ") : "abhi build ho rahi hai"}`,
+    `Learning signals: ${signals.length ? signals.map((item) => `${item.topic} (${item.confusionCount + item.weakCount})`).join(" • ") : "abhi enough evidence nahi"}`,
     "",
     "Ye profile sirf tumhare Parmar AI questions se banti hai.",
   ].join("\n");
