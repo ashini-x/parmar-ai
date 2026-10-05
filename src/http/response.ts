@@ -3,23 +3,13 @@ const JSON_HEADERS = {
   "cache-control": "no-store"
 };
 
-export function json<T>(
-  body: T,
-  status = 200,
-  extraHeaders?: HeadersInit
-): Response {
+export function json<T>(body: T, status = 200, extraHeaders?: HeadersInit): Response {
   const headers = new Headers(JSON_HEADERS);
-
   if (extraHeaders) {
-    new Headers(extraHeaders).forEach((value, key) => {
-      headers.set(key, value);
-    });
+    new Headers(extraHeaders).forEach((value, key) => headers.set(key, value));
   }
 
-  return new Response(JSON.stringify(body), {
-    status,
-    headers
-  });
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 export function methodNotAllowed(allowed: string[]): Response {

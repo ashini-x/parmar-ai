@@ -1,50 +1,41 @@
 import type {
   ExecutionContext,
-  ExportedHandler
+  ExportedHandler,
+  MessageBatch,
+  DurableObjectStub,
 } from "@cloudflare/workers-types";
 
-import type { Env } from "./config/env";
-import { getConfig } from "./config/env";
-import { logger } from "./core/logger";
+import { generateGeminiAnswer, GeminiError } from "./ai/gemini";
+import type { Env, QuestionJob } from "./config/env";
 import {
-  addRequestId,
-  getOrCreateRequestId
-} from "./core/request-id";
+  JobDedupe,
+} from "./core/job-store";
+import { logger } from "./core/logger";
+import { addRequestId, getOrCreateRequestId } from "./core/request-id";
+import {
+  editTelegramMessage,
+  sendTelegramMessage,
+  TelegramError,
+} from "./telegram/api";
 import {
   internalServerError,
   json,
   methodNotAllowed,
-  notFound
+  notFound,
 } from "./http/response";
-import { getMiniAppHtml } from "./mini-app";
-import {
-  authenticateWebAppUser,
-  isLanguage,
-  setUserLanguage
-} from "./users/user-service";
-import {
-  startMathsTest,
-  submitMathsTest,
-  type SubmittedAnswer
-} from "./tests/test-service";
-import { getContentAdminHtml } from "./admin/content-page";
-import { getContentAdminScript } from "./admin/content-script";
-import {
-  approveCandidates,
-  backfillQuestionFingerprints,
-  enhanceCandidatesWithGemini,
-  listBatches,
-  listCandidates,
-  processContentUpload
-} from "./content/content-service";
 
-const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
-const TELEGRAM_REQUEST_TIMEOUT_MS = 8_000;
+const QUEUE_MAX_RETRIES = 10;
+const TELEGRAM_STATUS_TEXT = "✅ Sawal receive ho gaya. Answer bana raha hoon... 🤔";
+const RATE_LIMIT_TEXT =
+  "Bhai, ek saath bahut saare questions aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
+const DAILY_LIMIT_TEXT =
+  "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
+const FINAL_FAILURE_TEXT =
+  "Bhai, is waqt AI service se answer nahi ban paaya. Tumhara sawal system mein retry hua hai; thodi der baad same doubt dobara bhej dena. 🙏";
 
 interface TelegramMessage {
-  chat?: {
-    id?: number;
-  };
+  message_id?: number;
+  chat?: { id?: number };
   text?: string;
 }
 
@@ -53,16 +44,24 @@ interface TelegramUpdate {
   message?: TelegramMessage;
 }
 
-interface TelegramApiResponse<T = unknown> {
-  ok: boolean;
-  result?: T;
-  description?: string;
+interface BeginJobResponse {
+  action: "new" | "duplicate" | "rate_limited" | "retry_ack" | "enqueue";
+  statusMessageId?: number;
+  notify?: boolean;
 }
 
-function withRequestId(
-  response: Response,
-  requestId: string
-): Response {
+interface ClaimResponse {
+  claimed: boolean;
+  record?: {
+    chatId: number;
+    question: string;
+    messageId: number;
+    statusMessageId?: number;
+    answer?: string;
+  };
+}
+
+function withRequestId(response: Response, requestId: string): Response {
   return addRequestId(response, requestId);
 }
 
@@ -74,1325 +73,556 @@ function safeEqual(a: string, b: string): boolean {
   if (aBytes.length !== bBytes.length) return false;
 
   let result = 0;
-
   for (let index = 0; index < aBytes.length; index += 1) {
     result |= aBytes[index] ^ bBytes[index];
   }
-
   return result === 0;
 }
 
-function jsonResponse(
-  body: unknown,
-  status = 200,
-  requestId?: string
-): Response {
-  const headers: Record<string, string> = {
-    "content-type": "application/json; charset=UTF-8",
-    "cache-control": "no-store"
-  };
-
-  if (requestId) headers["x-request-id"] = requestId;
-
-  return new Response(JSON.stringify(body), {
-    status,
-    headers
-  });
+function getJobStore(env: Env, chatId: number): DurableObjectStub {
+  const id = env.JOB_DEDUPE.idFromName(String(chatId));
+  return env.JOB_DEDUPE.get(id);
 }
 
-function isAdminAuthorized(
-  request: Request,
-  env: Env
-): boolean {
-  const configured =
-    env.ADMIN_SECRET?.trim();
-
-  if (!configured) return false;
-
-  const received =
-    request.headers.get("X-Admin-Secret") ??
-    "";
-
-  return safeEqual(
-    received,
-    configured
-  );
-}
-
-async function telegramApi<T = unknown>(
-  env: Env,
-  method: string,
-  payload: Record<string, unknown>
-): Promise<T> {
-  const token = env.TELEGRAM_BOT_TOKEN?.trim();
-
-  if (!token) {
-    throw new Error("Telegram bot token is not configured.");
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    TELEGRAM_REQUEST_TIMEOUT_MS
-  );
-
-  try {
-    const response = await fetch(
-      `https://api.telegram.org/bot${token}/${method}`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      }
-    );
-
-    const raw = await response.text();
-
-    let data: TelegramApiResponse<T>;
-
-    try {
-      data = JSON.parse(raw) as TelegramApiResponse<T>;
-    } catch {
-      throw new Error(
-        `Telegram returned invalid JSON (HTTP ${response.status}).`
-      );
-    }
-
-    if (!response.ok || !data.ok) {
-      throw new Error(
-        data.description ??
-          `Telegram API request failed (HTTP ${response.status}).`
-      );
-    }
-
-    return data.result as T;
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.name === "AbortError"
-    ) {
-      throw new Error(
-        `Telegram API timed out after ${TELEGRAM_REQUEST_TIMEOUT_MS}ms.`
-      );
-    }
-
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function sendTelegramMessage(
+async function jobStoreRequest<T>(
   env: Env,
   chatId: number,
-  text: string,
-  replyMarkup?: Record<string, unknown>
-): Promise<void> {
-  const chunks = splitMessage(text, TELEGRAM_MAX_MESSAGE_LENGTH);
+  body: Record<string, unknown>,
+): Promise<T> {
+  const response = await getJobStore(env, chatId).fetch("https://job-store/internal", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
-  for (const chunk of chunks) {
-    await telegramApi(env, "sendMessage", {
-      chat_id: chatId,
-      text: chunk,
-      disable_web_page_preview: true,
-      ...(replyMarkup ? { reply_markup: replyMarkup } : {})
-    });
+  if (!response.ok) {
+    throw new Error(`Job store returned HTTP ${response.status}.`);
   }
+
+  return (await response.json()) as T;
 }
 
-function splitMessage(
-  text: string,
-  maxLength: number
-): string[] {
-  const chunks: string[] = [];
-  let remaining = text.trim();
-
-  while (remaining.length > maxLength) {
-    let splitAt = remaining.lastIndexOf("\n\n", maxLength);
-
-    if (splitAt < 500) {
-      splitAt = remaining.lastIndexOf("\n", maxLength);
-    }
-
-    if (splitAt < 500) {
-      splitAt = remaining.lastIndexOf(" ", maxLength);
-    }
-
-    if (splitAt < 1) splitAt = maxLength;
-
-    chunks.push(remaining.slice(0, splitAt).trim());
-    remaining = remaining.slice(splitAt).trim();
+async function telegramSetup(request: Request, env: Env, requestId: string): Promise<Response> {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_WEBHOOK_SECRET || !env.TELEGRAM_SETUP_SECRET) {
+    return withRequestId(
+      json({ ok: false, error: "telegram_configuration_missing" }, 500),
+      requestId,
+    );
   }
 
-  if (remaining) chunks.push(remaining);
+  const url = new URL(request.url);
+  const supplied = url.searchParams.get("key");
 
-  return chunks;
+  if (!supplied || !safeEqual(supplied, env.TELEGRAM_SETUP_SECRET)) {
+    return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
+  }
+
+  const webhookUrl = `${url.origin}/telegram/webhook`;
+  const telegram = await telegramApiSetWebhook(env, webhookUrl);
+
+  logger.info("telegram_webhook_setup", { requestId, webhookUrl });
+
+  return withRequestId(
+    json({ ok: true, webhook: webhookUrl, telegram }),
+    requestId,
+  );
 }
 
-async function setupTelegramWebhook(
-  request: Request,
-  env: Env,
-  requestId: string
-): Promise<Response> {
-  if (!env.TELEGRAM_BOT_TOKEN) {
-    return jsonResponse(
-      { ok: false, error: "telegram_bot_token_missing" },
-      500,
-      requestId
-    );
-  }
-
-  if (!env.TELEGRAM_WEBHOOK_SECRET) {
-    return jsonResponse(
-      { ok: false, error: "telegram_webhook_secret_missing" },
-      500,
-      requestId
-    );
-  }
-
-  const setupUrl = new URL(request.url);
-  const providedSecret = setupUrl.searchParams.get("key");
-
-  if (
-    !providedSecret ||
-    !env.TELEGRAM_SETUP_SECRET ||
-    !safeEqual(providedSecret, env.TELEGRAM_SETUP_SECRET)
-  ) {
-    return jsonResponse(
-      { ok: false, error: "unauthorized" },
-      401,
-      requestId
-    );
-  }
-
-  const webhookUrl = `${setupUrl.origin}/telegram/webhook`;
-
-  const telegramData = await telegramApi(env, "setWebhook", {
+async function telegramApiSetWebhook(env: Env, webhookUrl: string): Promise<unknown> {
+  const response = await sendTelegramMethod(env, "setWebhook", {
     url: webhookUrl,
     secret_token: env.TELEGRAM_WEBHOOK_SECRET,
     allowed_updates: ["message"],
-    drop_pending_updates: false
+    drop_pending_updates: false,
+    max_connections: 100,
   });
 
-  logger.info("telegram_webhook_setup", {
-    requestId,
-    webhookUrl
+  return response;
+}
+
+async function sendTelegramMethod(
+  env: Env,
+  method: string,
+  payload: Record<string, unknown>,
+): Promise<unknown> {
+  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) throw new TelegramError("Telegram bot token is not configured.");
+
+  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
   });
 
-  return jsonResponse(
-    {
-      ok: true,
-      telegram: {
-        ok: true,
-        result: telegramData
-      },
-      webhook: webhookUrl
-    },
-    200,
-    requestId
-  );
+  const raw = await response.text();
+  let data: { ok: boolean; result?: unknown; description?: string };
+  try {
+    data = JSON.parse(raw) as { ok: boolean; result?: unknown; description?: string };
+  } catch {
+    throw new TelegramError(`Telegram returned invalid JSON (HTTP ${response.status}).`, response.status);
+  }
+
+  if (!response.ok || !data.ok) {
+    throw new TelegramError(
+      data.description ?? `Telegram request failed (HTTP ${response.status}).`,
+      response.status,
+      response.status >= 500 || response.status === 429,
+    );
+  }
+
+  return data.result;
+}
+
+async function enqueueQuestion(
+  env: Env,
+  job: QuestionJob,
+): Promise<void> {
+  await env.QUESTION_QUEUE.send(job, { contentType: "json" });
+  await jobStoreRequest(env, job.chatId, {
+    action: "mark_queued",
+    updateId: job.updateId,
+  });
 }
 
 async function handleTelegramWebhook(
   request: Request,
   env: Env,
-  requestId: string
+  requestId: string,
 ): Promise<Response> {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_WEBHOOK_SECRET) {
-    return new Response(
-      "Telegram configuration is incomplete.",
-      { status: 500 }
-    );
+    return withRequestId(json({ ok: false, error: "telegram_not_configured" }, 500), requestId);
   }
 
-  const receivedSecret = request.headers.get(
-    "X-Telegram-Bot-Api-Secret-Token"
-  );
-
-  if (
-    !receivedSecret ||
-    !safeEqual(receivedSecret, env.TELEGRAM_WEBHOOK_SECRET)
-  ) {
-    logger.error("telegram_webhook_unauthorized", {
-      requestId
-    });
-
-    return new Response("Unauthorized.", { status: 401 });
+  const receivedSecret = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
+  if (!receivedSecret || !safeEqual(receivedSecret, env.TELEGRAM_WEBHOOK_SECRET)) {
+    logger.warn("telegram_webhook_unauthorized", { requestId });
+    return withRequestId(json({ ok: false, error: "UNAUTHORIZED" }, 401), requestId);
   }
 
   let update: TelegramUpdate;
-
   try {
     update = (await request.json()) as TelegramUpdate;
   } catch {
-    return new Response("Invalid webhook payload.", {
-      status: 400
-    });
+    return withRequestId(json({ ok: false, error: "INVALID_JSON" }, 400), requestId);
   }
 
+  const updateId = update.update_id;
   const message = update.message;
+  const chatId = message?.chat?.id;
+  const messageId = message?.message_id;
 
-  if (!message?.chat?.id) {
-    return new Response("OK", { status: 200 });
+  if (!isSafeInteger(updateId) || !isSafeInteger(chatId) || !isSafeInteger(messageId)) {
+    return withRequestId(json({ ok: true }), requestId);
   }
 
-  const chatId = message.chat.id;
-  const text = message.text?.trim() ?? "";
+  const text = message?.text?.trim() ?? "";
+
+  const maxQuestionLength = positiveIntEnv(env.MAX_QUESTION_LENGTH, 4_000);
+  if (text.length > maxQuestionLength) {
+    try {
+      await sendTelegramMessage(
+        env,
+        chatId,
+        `Question thoda chhota bhejo. Maximum ${maxQuestionLength} characters hain. 🙂`,
+        messageId,
+      );
+    } catch (error) {
+      logger.warn("telegram_length_limit_reply_failed", {
+        requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return withRequestId(json({ ok: true, rejected: "question_too_long" }), requestId);
+  }
 
   logger.info("telegram_message_received", {
     requestId,
+    updateId,
     chatId: String(chatId),
-    updateId: update.update_id,
-    textLength: text.length
+    textLength: text.length,
   });
 
   if (!text) {
-    await sendTelegramMessage(
-      env,
-      chatId,
-      "🧠 SawalNewton abhi test mode mein hai. /start bhejo."
-    );
+    try {
+      await sendTelegramMessage(
+        env,
+        chatId,
+        "Abhi main text questions handle kar raha hoon. 📚",
+        messageId,
+      );
+    } catch (error) {
+      logger.error("telegram_non_text_reply_failed", {
+        requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return withRequestId(json({ ok: false }, 500), requestId);
+    }
 
-    return new Response("OK", { status: 200 });
+    return withRequestId(json({ ok: true }), requestId);
   }
 
   if (text === "/start" || text.startsWith("/start ")) {
-    const miniAppUrl = `${new URL(request.url).origin}/app`;
+    try {
+      await sendTelegramMessage(
+        env,
+        chatId,
+        "So Hello Everyone, umeed karta hoon aap sabhi thik honge!\n\nTHANKOO :)\n\nApna doubt bhejo. Main exam-focused answer dunga. 📚",
+      );
+    } catch (error) {
+      logger.error("telegram_start_reply_failed", {
+        requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return withRequestId(json({ ok: false }, 500), requestId);
+    }
 
-    await sendTelegramMessage(
-      env,
-      chatId,
-      "🧠 SawalNewton\n\n" +
-        "SSC questions. Random tests. Let's see kitna dum hai.\n\n" +
-        "Ready?",
-      {
-        inline_keyboard: [
-          [
-            {
-              text: "🧠 Start Test",
-              web_app: { url: miniAppUrl }
-            }
-          ]
-        ]
-      }
-    );
-
-    return new Response("OK", { status: 200 });
+    return withRequestId(json({ ok: true }), requestId);
   }
 
-  await sendTelegramMessage(
-    env,
+  const begin = await jobStoreRequest<BeginJobResponse>(env, chatId, {
+    action: "begin",
+    updateId,
     chatId,
-    "🧠 SawalNewton abhi test mode mein hai. /start bhejo aur test shuru karo."
-  );
+    question: text,
+    messageId,
+    requestId,
+    createdAt: Date.now(),
+  });
 
-  return new Response("OK", { status: 200 });
+  if (begin.action === "duplicate") {
+    return withRequestId(json({ ok: true, duplicate: true }), requestId);
+  }
+
+  if (begin.action === "rate_limited") {
+    if (begin.notify) {
+      try {
+        await sendTelegramMessage(env, chatId, RATE_LIMIT_TEXT, messageId);
+      } catch (error) {
+        logger.warn("telegram_rate_limit_reply_failed", {
+          requestId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return withRequestId(json({ ok: true, rateLimited: true }), requestId);
+  }
+
+  if (begin.action === "retry_ack") {
+    // A previous webhook attempt created the durable job but didn't finish the
+    // acknowledgement step. We retry the acknowledgement before enqueueing.
+  }
+
+  let statusMessageId = begin.statusMessageId;
+
+  if (!statusMessageId) {
+    try {
+      const statusMessage = await sendTelegramMessage(
+        env,
+        chatId,
+        TELEGRAM_STATUS_TEXT,
+        messageId,
+      );
+      statusMessageId = statusMessage.message_id;
+
+      await jobStoreRequest(env, chatId, {
+        action: "save_ack",
+        updateId,
+        statusMessageId,
+      });
+    } catch (error) {
+      logger.warn("telegram_ack_failed", {
+        requestId,
+        updateId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const job: QuestionJob = {
+    version: 1,
+    updateId,
+    chatId,
+    question: text,
+    messageId,
+    requestId,
+    createdAt: Date.now(),
+    ...(statusMessageId ? { statusMessageId } : {}),
+  };
+
+  try {
+    await enqueueQuestion(env, job);
+  } catch (error) {
+    logger.error("question_queue_enqueue_failed", {
+      requestId,
+      updateId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    // Returning non-2xx makes Telegram retry the webhook. The Durable Object
+    // keeps the job/ack state, so the retry won't create a second user job.
+    return withRequestId(json({ ok: false }, 500), requestId);
+  }
+
+  return withRequestId(json({ ok: true, queued: true }), requestId);
 }
 
-function normalizeSubmittedAnswers(
-  value: unknown
-): SubmittedAnswer[] {
-  if (!Array.isArray(value)) {
-    throw new Error("invalid_answers");
+async function handleQuestionBatch(
+  batch: MessageBatch<QuestionJob>,
+  env: Env,
+): Promise<void> {
+  for (const message of batch.messages) {
+    const job = message.body;
+
+    if (!isValidQuestionJob(job)) {
+      logger.error("invalid_question_job", { queueMessageId: message.id });
+      message.ack();
+      continue;
+    }
+
+    const claim = await jobStoreRequest<ClaimResponse>(env, job.chatId, {
+      action: "claim",
+      updateId: job.updateId,
+      queueMessageId: message.id,
+    });
+
+    if (!claim.claimed || !claim.record) {
+      message.ack();
+      continue;
+    }
+
+    try {
+      const answer = claim.record.answer ?? (await generateGeminiAnswer(env, job.question));
+
+      if (!claim.record.answer) {
+        await jobStoreRequest(env, job.chatId, {
+          action: "set_answer",
+          updateId: job.updateId,
+          answer,
+        });
+      }
+
+      await deliverAnswer(env, job, claim.record.statusMessageId, answer);
+
+      await jobStoreRequest(env, job.chatId, {
+        action: "complete",
+        updateId: job.updateId,
+      });
+
+      logger.info("question_completed", {
+        requestId: job.requestId,
+        updateId: job.updateId,
+        queueMessageId: message.id,
+        answerLength: answer.length,
+        attempts: message.attempts,
+      });
+
+      message.ack();
+    } catch (error) {
+      const retryable = isRetryableJobError(error);
+
+      logger.error("question_processing_failed", {
+        requestId: job.requestId,
+        updateId: job.updateId,
+        queueMessageId: message.id,
+        attempts: message.attempts,
+        retryable,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      if (retryable && message.attempts < QUEUE_MAX_RETRIES) {
+        message.retry({ delaySeconds: queueRetryDelay(message.attempts) });
+        continue;
+      }
+
+      try {
+        await deliverAnswer(
+          env,
+          job,
+          claim.record.statusMessageId,
+          userFacingFailure(error),
+        );
+
+        await jobStoreRequest(env, job.chatId, {
+          action: "complete",
+          updateId: job.updateId,
+        });
+
+        message.ack();
+      } catch (deliveryError) {
+        logger.error("final_failure_delivery_failed", {
+          requestId: job.requestId,
+          updateId: job.updateId,
+          error:
+            deliveryError instanceof Error
+              ? deliveryError.message
+              : String(deliveryError),
+        });
+        message.retry({ delaySeconds: Math.min(300, queueRetryDelay(message.attempts)) });
+      }
+    }
+  }
+}
+
+async function deliverAnswer(
+  env: Env,
+  job: QuestionJob,
+  statusMessageId: number | undefined,
+  answer: string,
+): Promise<void> {
+  if (statusMessageId) {
+    try {
+      await editTelegramMessage(env, job.chatId, statusMessageId, answer);
+      return;
+    } catch (error) {
+      if (!isMessageEditTerminalError(error)) {
+        throw error;
+      }
+    }
   }
 
-  return value.map((item) => {
-    if (!item || typeof item !== "object") {
-      throw new Error("invalid_answer_item");
+  await sendTelegramMessage(env, job.chatId, answer, job.messageId);
+}
+
+function isMessageEditTerminalError(error: unknown): boolean {
+  if (!(error instanceof TelegramError)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    error.status === 400 &&
+    (message.includes("message to edit not found") ||
+      message.includes("message can't be edited") ||
+      message.includes("message identifier is not specified"))
+  );
+}
+
+function userFacingFailure(error: unknown): string {
+  if (error instanceof GeminiError) {
+    if (error.status === 401 || error.status === 403) {
+      return "AI service ki authentication/configuration mein problem aa gayi hai. Team isse check kar rahi hai. 🙏";
     }
 
-    const record = item as Record<string, unknown>;
-    const questionId = Number(record.questionId);
-
-    if (!Number.isInteger(questionId)) {
-      throw new Error("invalid_question_id");
+    if (error.status === 429) {
+      return "AI service par abhi bahut load hai. Tumhara doubt save hua hai; thodi der baad same question dobara bhejna. 🙏";
     }
+  }
 
-    const selectedOption =
-      record.selectedOption === null ||
-      record.selectedOption === undefined
-        ? null
-        : String(record.selectedOption);
+  return FINAL_FAILURE_TEXT;
+}
 
-    return {
-      questionId,
-      selectedOption
-    };
-  });
+function isRetryableJobError(error: unknown): boolean {
+  if (error instanceof GeminiError) return error.retryable;
+  if (error instanceof TelegramError) return error.retryable;
+  return true;
+}
+
+function isSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value);
+}
+
+function positiveIntEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function queueRetryDelay(attempts: number): number {
+  const delay = 15 * 2 ** Math.max(0, attempts - 1);
+  return Math.min(delay, 600);
+}
+
+function isValidQuestionJob(value: unknown): value is QuestionJob {
+  if (!value || typeof value !== "object") return false;
+  const job = value as Partial<QuestionJob>;
+  return (
+    job.version === 1 &&
+    Number.isSafeInteger(job.updateId) &&
+    Number.isSafeInteger(job.chatId) &&
+    Number.isSafeInteger(job.messageId) &&
+    typeof job.question === "string" &&
+    job.question.length > 0 &&
+    typeof job.requestId === "string" &&
+    job.requestId.length > 0 &&
+    Number.isFinite(job.createdAt)
+  );
 }
 
 export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const requestId = getOrCreateRequestId(request);
     const url = new URL(request.url);
-    const route = url.pathname;
 
     try {
-      if (request.method === "GET" && route === "/health") {
-        const config = getConfig(env);
+      if (url.pathname === "/health") {
+        if (request.method !== "GET") {
+          return withRequestId(methodNotAllowed(["GET"]), requestId);
+        }
 
         return withRequestId(
           json({
             ok: true,
-            service: "sawalnewton",
-            version: config.version,
-            environment: config.environment,
+            service: "parmar-ai",
+            phase: "D",
+            environment: env.ENVIRONMENT ?? "production",
+            version: env.APP_VERSION ?? "1.0.0",
             timestamp: new Date().toISOString(),
-            telegram: Boolean(env.TELEGRAM_BOT_TOKEN),
-            database: Boolean(env.DB)
+            telegramConfigured: Boolean(
+              env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET,
+            ),
+            vertexAiConfigured: Boolean(
+              env.GCP_PROJECT_ID && env.GCP_CLIENT_EMAIL && env.GCP_PRIVATE_KEY,
+            ),
+            queueConfigured: Boolean(env.QUESTION_QUEUE),
+            jobStoreConfigured: Boolean(env.JOB_DEDUPE),
+            model: env.GEMINI_MODEL ?? "gemini-3.8-flash",
+            location: env.GEMINI_LOCATION ?? "global",
           }),
-          requestId
+          requestId,
         );
       }
 
-      if (request.method === "GET" && route === "/") {
+      if (url.pathname === "/") {
+        if (request.method !== "GET") {
+          return withRequestId(methodNotAllowed(["GET"]), requestId);
+        }
+
         return withRequestId(
           json({
             ok: true,
-            service: "sawalnewton",
-            status: "test_mvp"
+            service: "parmar-ai",
+            phase: "D",
+            status: "telegram_queue_vertex_ai",
           }),
-          requestId
+          requestId,
         );
       }
 
-      if (request.method === "GET" && route === "/app") {
-        return withRequestId(
-          new Response(getMiniAppHtml(), {
-            status: 200,
-            headers: {
-              "content-type": "text/html; charset=UTF-8",
-              "cache-control": "no-store"
-            }
-          }),
-          requestId
-        );
+      if (url.pathname === "/telegram/setup") {
+        if (request.method !== "GET") {
+          return withRequestId(methodNotAllowed(["GET"]), requestId);
+        }
+        return telegramSetup(request, env, requestId);
       }
 
-      if (
-        request.method === "GET" &&
-        route === "/api/user/preferences"
-      ) {
-        const initData = request.headers.get("x-telegram-init-data") ?? "";
-
-        try {
-          const { user } = await authenticateWebAppUser(env, initData);
-
-          return withRequestId(
-            jsonResponse(
-              {
-                ok: true,
-                language: user.language
-              },
-              200,
-              requestId
-            ),
-            requestId
-          );
-        } catch (error) {
-          return withRequestId(
-            jsonResponse(
-              {
-                ok: false,
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : "user_preferences_failed"
-              },
-              400,
-              requestId
-            ),
-            requestId
-          );
-        }
-      }
-
-      if (
-        request.method === "POST" &&
-        route === "/api/user/preferences"
-      ) {
-        let body: {
-          initData?: string;
-          language?: unknown;
-        };
-
-        try {
-          body = (await request.json()) as {
-            initData?: string;
-            language?: unknown;
-          };
-        } catch {
-          return withRequestId(
-            jsonResponse(
-              { ok: false, error: "invalid_json" },
-              400,
-              requestId
-            ),
-            requestId
-          );
-        }
-
-        if (!isLanguage(body.language)) {
-          return withRequestId(
-            jsonResponse(
-              {
-                ok: false,
-                error: "unsupported_language"
-              },
-              400,
-              requestId
-            ),
-            requestId
-          );
-        }
-
-        try {
-          const { user } = await authenticateWebAppUser(
-            env,
-            body.initData ?? ""
-          );
-
-          await setUserLanguage(
-            env,
-            user.id,
-            body.language
-          );
-
-          return withRequestId(
-            jsonResponse(
-              {
-                ok: true,
-                language: body.language
-              },
-              200,
-              requestId
-            ),
-            requestId
-          );
-        } catch (error) {
-          return withRequestId(
-            jsonResponse(
-              {
-                ok: false,
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : "user_language_update_failed"
-              },
-              400,
-              requestId
-            ),
-            requestId
-          );
-        }
-      }
-
-
-      if (
-        request.method === "GET" &&
-        route === "/admin/content.js"
-      ) {
-        return withRequestId(
-          new Response(getContentAdminScript(), {
-            status: 200,
-            headers: {
-              "content-type": "application/javascript; charset=UTF-8",
-              "cache-control": "no-store"
-            }
-          }),
-          requestId
-        );
-      }
-
-      if (
-        request.method === "GET" &&
-        route === "/admin/content"
-      ) {
-        return withRequestId(
-          new Response(
-            getContentAdminHtml(),
-            {
-              status: 200,
-              headers: {
-                "content-type":
-                  "text/html; charset=UTF-8",
-                "cache-control":
-                  "no-store"
-              }
-            }
-          ),
-          requestId
-        );
-      }
-
-      if (
-        route.startsWith("/api/admin/content/")
-      ) {
-        if (!isAdminAuthorized(request, env)) {
-          return withRequestId(
-            jsonResponse(
-              {
-                ok: false,
-                error: "admin_unauthorized"
-              },
-              401,
-              requestId
-            ),
-            requestId
-          );
-        }
-
-        if (
-          request.method === "GET" &&
-          route === "/api/admin/content/candidates"
-        ) {
-          const status =
-            new URL(request.url)
-              .searchParams
-              .get("status");
-
-          const limit =
-            new URL(request.url)
-              .searchParams
-              .get("limit");
-
-          const result =
-            await listCandidates(
-              env,
-              status,
-              Number(limit || 100)
-            );
-
-          return withRequestId(
-            jsonResponse(
-              {
-                ok: true,
-                candidates:
-                  result.results
-              },
-              200,
-              requestId
-            ),
-            requestId
-          );
-        }
-
-        if (
-          request.method === "GET" &&
-          route === "/api/admin/content/batches"
-        ) {
-          const limit =
-            new URL(request.url)
-              .searchParams
-              .get("limit");
-
-          const result =
-            await listBatches(
-              env,
-              Number(limit || 50)
-            );
-
-          return withRequestId(
-            jsonResponse(
-              {
-                ok: true,
-                batches:
-                  result.results
-              },
-              200,
-              requestId
-            ),
-            requestId
-          );
-        }
-
-        if (
-          request.method === "POST" &&
-          route === "/api/admin/content/ingest"
-        ) {
-          let form: FormData;
-
-          try {
-            form =
-              await request.formData();
-          } catch {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error: "invalid_multipart_form"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-
-          const file =
-            form.get("file");
-
-          if (!(file instanceof File)) {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error: "file_missing"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-
-          try {
-            const result =
-              await processContentUpload(
-                env,
-                {
-                  sourceName: String(
-                    form.get("source_name") ??
-                      ""
-                  ),
-                  exam: String(
-                    form.get("exam") ??
-                      ""
-                  ),
-                  tier: String(
-                    form.get("tier") ??
-                      ""
-                  ),
-                  year: Number(
-                    form.get("year")
-                  ),
-                  shift: String(
-                    form.get("shift") ??
-                      ""
-                  ),
-                  subject: String(
-                    form.get("subject") ??
-                      ""
-                  ),
-                  maxQuestions: Number(
-                    form.get(
-                      "max_questions"
-                    )
-                  ),
-                  file,
-                  mode:
-                    String(
-                      form.get("mode") ??
-                        "deterministic"
-                    ) === "ai"
-                      ? "ai"
-                      : "deterministic"
-                }
-              );
-
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: true,
-                  summary: result
-                },
-                200,
-                requestId
-              ),
-              requestId
-            );
-          } catch (error) {
-            logger.error(
-              "content_ingest_failed",
-              {
-                requestId,
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : String(error)
-              }
-            );
-
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error:
-                    error instanceof Error
-                      ? error.message
-                      : "content_ingest_failed"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-        }
-
-
-        if (
-          request.method === "POST" &&
-          route === "/api/admin/content/enhance"
-        ) {
-          let body: {
-            candidateIds?: unknown;
-          };
-
-          try {
-            body =
-              (await request.json()) as {
-                candidateIds?: unknown;
-              };
-          } catch {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error: "invalid_json"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-
-          if (!Array.isArray(body.candidateIds)) {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error: "candidate_ids_required"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-
-          const ids = body.candidateIds
-            .map(Number)
-            .filter(
-              (id) => Number.isInteger(id) && id > 0
-            )
-            .slice(0, 25);
-
-          if (!ids.length) {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error: "no_candidate_ids"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-
-          try {
-            const result =
-              await enhanceCandidatesWithGemini(
-                env,
-                ids
-              );
-
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: true,
-                  result
-                },
-                200,
-                requestId
-              ),
-              requestId
-            );
-          } catch (error) {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error:
-                    error instanceof Error
-                      ? error.message
-                      : "content_enhancement_failed"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-        }
-
-        if (
-          request.method === "POST" &&
-          route === "/api/admin/content/backfill"
-        ) {
-          try {
-            const result =
-              await backfillQuestionFingerprints(
-                env
-              );
-
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: true,
-                  result
-                },
-                200,
-                requestId
-              ),
-              requestId
-            );
-          } catch (error) {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error:
-                    error instanceof Error
-                      ? error.message
-                      : "fingerprint_backfill_failed"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-        }
-
-        if (
-          request.method === "POST" &&
-          route === "/api/admin/content/publish-ready"
-        ) {
-          try {
-            const candidates =
-              await listCandidates(
-                env,
-                "auto_ready",
-                100
-              );
-
-            const ids = candidates.results
-              .map((candidate) =>
-                Number(
-                  (candidate as { id: number }).id
-                )
-              )
-              .filter(
-                (id) =>
-                  Number.isInteger(id) &&
-                  id > 0
-              );
-
-            if (ids.length === 0) {
-              return withRequestId(
-                jsonResponse(
-                  {
-                    ok: true,
-                    result: {
-                      approved: 0,
-                      duplicates: 0,
-                      failed: 0
-                    }
-                  },
-                  200,
-                  requestId
-                ),
-                requestId
-              );
-            }
-
-            const result =
-              await approveCandidates(
-                env,
-                ids
-              );
-
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: true,
-                  result,
-                  attempted: ids.length
-                },
-                200,
-                requestId
-              ),
-              requestId
-            );
-          } catch (error) {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error:
-                    error instanceof Error
-                      ? error.message
-                      : "publish_ready_failed"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-        }
-
-        if (
-          request.method === "POST" &&
-          route === "/api/admin/content/approve"
-        ) {
-          let body: {
-            candidateIds?: unknown;
-          };
-
-          try {
-            body =
-              (await request.json()) as {
-                candidateIds?: unknown;
-              };
-          } catch {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error: "invalid_json"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-
-          if (
-            !Array.isArray(
-              body.candidateIds
-            )
-          ) {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error:
-                    "candidate_ids_required"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-
-          const ids = body.candidateIds
-            .map(Number)
-            .filter(
-              (id) =>
-                Number.isInteger(id) &&
-                id > 0
-            );
-
-          try {
-            const result =
-              await approveCandidates(
-                env,
-                ids
-              );
-
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: true,
-                  result
-                },
-                200,
-                requestId
-              ),
-              requestId
-            );
-          } catch (error) {
-            return withRequestId(
-              jsonResponse(
-                {
-                  ok: false,
-                  error:
-                    error instanceof Error
-                      ? error.message
-                      : "content_approval_failed"
-                },
-                400,
-                requestId
-              ),
-              requestId
-            );
-          }
-        }
-
-        return withRequestId(
-          notFound(),
-          requestId
-        );
-      }
-
-      if (request.method === "GET" && route === "/db-test") {
-        if (!env.DB) {
-          return withRequestId(
-            jsonResponse(
-              { ok: false, error: "d1_binding_missing" },
-              500,
-              requestId
-            ),
-            requestId
-          );
-        }
-
-        const result = await env.DB
-          .prepare(
-            `SELECT name
-             FROM sqlite_master
-             WHERE type = 'table'
-             ORDER BY name`
-          )
-          .all<{ name: string }>();
-
-        return withRequestId(
-          jsonResponse(
-            { ok: true, tables: result.results },
-            200,
-            requestId
-          ),
-          requestId
-        );
-      }
-
-      if (
-        request.method === "POST" &&
-        route === "/api/test/start"
-      ) {
-        let body: { initData?: string };
-
-        try {
-          body = (await request.json()) as {
-            initData?: string;
-          };
-        } catch {
-          return withRequestId(
-            jsonResponse(
-              { ok: false, error: "invalid_json" },
-              400
-            ),
-            requestId
-          );
-        }
-
-        try {
-          const result = await startMathsTest(
-            env,
-            body.initData ?? ""
-          );
-
-          return withRequestId(
-            jsonResponse({
-              ok: true,
-              attemptId: result.attemptId,
-              startedAt: result.startedAt,
-              durationSeconds: result.durationSeconds,
-              totalQuestions: result.totalQuestions,
-              questions: result.questions
-            }),
-            requestId
-          );
-        } catch (error) {
-          logger.error("test_start_failed", {
-            requestId,
-            error:
-              error instanceof Error
-                ? error.message
-                : String(error)
-          });
-
-          const status =
-            error instanceof Error &&
-            error.message.startsWith("not_enough_questions:")
-              ? 409
-              : error instanceof Error &&
-                  error.message === "language_not_set"
-                ? 409
-                : 400;
-
-          return withRequestId(
-            jsonResponse(
-              {
-                ok: false,
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : "test_start_failed"
-              },
-              status
-            ),
-            requestId
-          );
-        }
-      }
-
-      if (
-        request.method === "POST" &&
-        route === "/api/test/submit"
-      ) {
-        let body: {
-          initData?: string;
-          attemptId?: number;
-          answers?: unknown;
-        };
-
-        try {
-          body = (await request.json()) as {
-            initData?: string;
-            attemptId?: number;
-            answers?: unknown;
-          };
-        } catch {
-          return withRequestId(
-            jsonResponse(
-              { ok: false, error: "invalid_json" },
-              400
-            ),
-            requestId
-          );
-        }
-
-        try {
-          const attemptId = Number(body.attemptId);
-
-          if (!Number.isInteger(attemptId) || attemptId <= 0) {
-            throw new Error("invalid_attempt_id");
-          }
-
-          const answers = normalizeSubmittedAnswers(
-            body.answers
-          );
-
-          const result = await submitMathsTest(
-            env,
-            body.initData ?? "",
-            attemptId,
-            answers
-          );
-
-          return withRequestId(
-            jsonResponse({
-              ok: true,
-              ...result
-            }),
-            requestId
-          );
-        } catch (error) {
-          logger.error("test_submit_failed", {
-            requestId,
-            error:
-              error instanceof Error
-                ? error.message
-                : String(error)
-          });
-
-          const message =
-            error instanceof Error
-              ? error.message
-              : "test_submit_failed";
-
-          const status =
-            message === "attempt_not_found"
-              ? 404
-              : message === "attempt_already_finished"
-                ? 409
-                : 400;
-
-          return withRequestId(
-            jsonResponse(
-              {
-                ok: false,
-                error: message
-              },
-              status
-            ),
-            requestId
-          );
-        }
-      }
-
-      if (
-        request.method === "GET" &&
-        route === "/telegram/setup" ||
-        route === "/admin/content" ||
-        route.startsWith("/api/admin/content/")
-      ) {
-        return setupTelegramWebhook(
-          request,
-          env,
-          requestId
-        );
-      }
-
-      if (route === "/telegram/webhook") {
+      if (url.pathname === "/telegram/webhook") {
         if (request.method !== "POST") {
-          return withRequestId(
-            methodNotAllowed(["POST"]),
-            requestId
-          );
+          return withRequestId(methodNotAllowed(["POST"]), requestId);
         }
-
-        return handleTelegramWebhook(
-          request,
-          env,
-          requestId
-        );
-      }
-
-      if (
-        route === "/health" ||
-        route === "/" ||
-        route === "/app" ||
-        route.startsWith("/api/test/") ||
-        route.startsWith("/api/user/") ||
-        route === "/telegram/setup"
-      ) {
-        return withRequestId(
-          methodNotAllowed(["GET", "POST"]),
-          requestId
-        );
+        return handleTelegramWebhook(request, env, requestId);
       }
 
       return withRequestId(notFound(), requestId);
     } catch (error) {
       logger.error("unhandled_request_error", {
         requestId,
-        route,
-        error:
-          error instanceof Error
-            ? error.message
-            : String(error)
+        route: url.pathname,
+        error: error instanceof Error ? error.message : String(error),
       });
-
-      return withRequestId(
-        internalServerError(),
-        requestId
-      );
+      return withRequestId(internalServerError(), requestId);
     }
-  }
-} satisfies ExportedHandler<Env>;
+  },
+
+  async queue(batch: MessageBatch<QuestionJob>, env: Env): Promise<void> {
+    await handleQuestionBatch(batch, env);
+  },
+} satisfies ExportedHandler<Env, QuestionJob>;
+
+// Export the Durable Object class required by wrangler's declarative `exports`.
+export { JobDedupe };

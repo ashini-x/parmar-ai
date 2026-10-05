@@ -1,82 +1,42 @@
-# SawalNewton V1.3 — AI-Optional Content Factory
+# Parmar AI — production Telegram doubt solver — Queue + Durable Object
 
-SawalNewton is a Telegram-first SSC test platform on Cloudflare Workers.
+Production-oriented Telegram → Cloudflare Worker → Cloudflare Queue → Vertex AI → Gemini 3.8 Flash backend.
 
-This version keeps the working Telegram Mini App and bilingual test system while changing the content workflow so **structured TXT/CSV/JSON imports do not depend on Gemini**.
+## Core properties
 
-## Core content workflow
+- Telegram webhook protected by `secret_token`.
+- Durable Cloudflare Queue for burst absorption and retry.
+- SQLite-backed Durable Object for update idempotency, job state, and basic per-chat rate controls.
+- Google service-account JWT authentication implemented with Web Crypto; no Node `crypto` dependency and no Google auth SDK.
+- Cached Google OAuth access tokens to avoid a token exchange on every question.
+- Vertex AI global endpoint using `gemini-3.8-flash` by default.
+- Retries with bounded exponential backoff for temporary failures.
+- Final answers are stored before Telegram delivery retries so transient Telegram failures do not force another Gemini generation.
+- User sees an immediate acknowledgement message, then that message is edited into the final answer.
+- 4,096-character Telegram limit is respected.
+- No credentials committed to GitHub.
+- Cloudflare observability enabled.
 
-Fast Import:
+## Production architecture
 
-`TXT / CSV / JSON -> deterministic parser -> validation -> exact duplicate check -> staging -> publish`
+```text
+Telegram
+   ↓ webhook
+Cloudflare Worker
+   ↓
+Durable Object (dedupe/state/rate control)
+   ↓
+Cloudflare Queue
+   ↓
+Queue consumer
+   ↓
+Google OAuth JWT (Web Crypto)
+   ↓
+Vertex AI
+   ↓
+Gemini 3.8 Flash
+   ↓
+Telegram editMessageText / sendMessage
+```
 
-Optional AI:
-
-`PDF / messy source -> Gemini extraction`
-
-or, after import:
-
-`staging candidate -> AI Enhance selected -> updated staging candidate`
-
-A Gemini outage therefore does not block structured content ingestion.
-
-## Current production pieces
-
-- Telegram webhook
-- Telegram Mini App
-- Hindi / English user preference
-- random Maths tests
-- five-minute test timer
-- server-side scoring
-- D1 question bank
-- bilingual question translations
-- staging content factory
-- deterministic TXT / CSV / JSON importer
-- exact duplicate fingerprints
-- optional AI extraction and enhancement
-- admin review/publish queue
-
-## Required Cloudflare secrets
-
-Keep these as Worker secrets:
-
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_WEBHOOK_SECRET`
-- `TELEGRAM_SETUP_SECRET`
-- `GEMINI_API_KEY` (only needed for optional AI operations)
-- `ADMIN_SECRET`
-
-## Database
-
-Use the existing `sawalnewton-db` D1 database and binding `DB`.
-
-V1.3 does not require a new migration. Existing content-factory tables from V1.2 are reused.
-
-## Admin
-
-Open:
-
-`https://YOUR-WORKER-URL/admin/content`
-
-The default processing mode is **Fast import — no AI**.
-
-Use AI extraction only when you specifically want AI to parse a PDF or messy text source.
-
-## First test
-
-1. Deploy this version.
-2. Open `/admin/content`.
-3. Keep `Fast import — no AI` selected.
-4. Upload `data/content-factory-sample.txt`.
-5. Use the supplied development metadata.
-6. Confirm the batch completes without any Gemini request.
-7. Inspect the staging candidates.
-
-For a bilingual auto-ready development example, use `data/content-factory-sample-bilingual.txt`.
-
-Do not ingest copyrighted third-party material unless you have the right to use and redistribute it.
-
-
-## V1.3.3 build fix
-
-This version fixes an unescaped JavaScript template-literal issue inside the admin HTML template. It also keeps the deterministic import path independent of Gemini.
+See `DEPLOY_DASHBOARD.md` for the complete dashboard-only setup. No terminal commands are required for deployment.

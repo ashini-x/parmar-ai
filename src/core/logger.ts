@@ -6,15 +6,11 @@ interface LogContext {
   [key: string]: unknown;
 }
 
-function write(
-  level: LogLevel,
-  message: string,
-  context: LogContext = {}
-): void {
+function write(level: LogLevel, message: string, context: LogContext = {}) {
   const entry = {
     ts: new Date().toISOString(),
     level,
-    service: "sawalnewton",
+    service: "parmar-ai",
     message,
     ...context
   };
@@ -28,12 +24,8 @@ function write(
 }
 
 export const logger = {
-  debug: (message: string, context?: LogContext) =>
-    write("debug", message, context),
-  info: (message: string, context?: LogContext) =>
-    write("info", message, context),
-  warn: (message: string, context?: LogContext) =>
-    write("warn", message, context),
-  error: (message: string, context?: LogContext) =>
-    write("error", message, context)
+  debug: (message: string, context?: LogContext) => write("debug", message, context),
+  info: (message: string, context?: LogContext) => write("info", message, context),
+  warn: (message: string, context?: LogContext) => write("warn", message, context),
+  error: (message: string, context?: LogContext) => write("error", message, context)
 };
