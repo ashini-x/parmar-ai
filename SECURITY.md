@@ -2,7 +2,7 @@
 
 ## Supported release
 
-The supported production line is the latest deployed v2.4.x release. For the current repository baseline, that is **v2.4.2**.
+The supported production line is the latest deployed v2.4.x release. For the current repository baseline, that is **v2.5.0**.
 
 ## Never publish
 
@@ -24,7 +24,7 @@ Example files may contain placeholders only.
 
 For a suspected security vulnerability, do not create a public issue containing exploit details. Use the private security-reporting mechanism configured for the organization/maintainer, or contact the project security owner through a trusted private channel.
 
-## Security controls in v2.4.2
+## Security controls in v2.5.0
 
 - Secret-token validation for Telegram webhook requests.
 - Separate setup secret for webhook configuration.

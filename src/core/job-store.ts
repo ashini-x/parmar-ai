@@ -26,6 +26,7 @@ export interface JobRecord {
   version: 2;
   updateId: number;
   chatId: number;
+  telegramUserId?: number;
   question: string;
   messageId: number;
   requestId: string;
@@ -144,6 +145,7 @@ export class JobDedupe extends DurableObject {
           version: 2,
           updateId: record.updateId,
           chatId: record.chatId,
+          ...(record.telegramUserId !== undefined ? { telegramUserId: record.telegramUserId } : {}),
           question: record.question,
           messageId: record.messageId,
           requestId: record.requestId,
@@ -238,6 +240,7 @@ export class JobDedupe extends DurableObject {
       version: 2,
       updateId: job.updateId,
       chatId: job.chatId,
+      ...(job.telegramUserId !== undefined ? { telegramUserId: job.telegramUserId } : {}),
       question: job.question,
       messageId: job.messageId,
       requestId: job.requestId,
@@ -542,6 +545,7 @@ function parseJob(body: Record<string, unknown>): QuestionJob {
     version: 2,
     updateId: positiveNumber(body.updateId),
     chatId: positiveOrNegativeNumber(body.chatId),
+    ...(body.telegramUserId !== undefined ? { telegramUserId: positiveNumber(body.telegramUserId) } : {}),
     question: String(body.question ?? "").trim(),
     messageId: positiveNumber(body.messageId),
     requestId: String(body.requestId ?? ""),

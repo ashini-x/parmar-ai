@@ -1,8 +1,8 @@
-# Production Checklist — v2.4.2
+# Production Checklist — v2.5.0
 
 ## Source
 
-- [ ] Correct v2.4.2 source is deployed.
+- [ ] Correct v2.5.0 source is deployed.
 - [ ] No local `.env`, `.dev.vars`, key files, or credentials are committed.
 - [ ] `wrangler.jsonc` contains no secrets.
 - [ ] Version in code/config/docs is consistent.

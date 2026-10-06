@@ -63,3 +63,49 @@ CREATE TABLE IF NOT EXISTS ai_access_overrides (
   granted_at INTEGER NOT NULL,
   expires_at INTEGER
 );
+
+
+CREATE TABLE IF NOT EXISTS ai_usage_attempts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  update_id INTEGER NOT NULL,
+  request_id TEXT NOT NULL,
+  queue_attempt INTEGER NOT NULL DEFAULT 1,
+  telegram_user_id INTEGER NOT NULL,
+  chat_id INTEGER NOT NULL,
+  attempt INTEGER NOT NULL,
+  model TEXT NOT NULL,
+  location TEXT NOT NULL,
+  thinking_level TEXT NOT NULL,
+  grounded INTEGER NOT NULL DEFAULT 0,
+  prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  candidates_tokens INTEGER NOT NULL DEFAULT 0,
+  thoughts_tokens INTEGER NOT NULL DEFAULT 0,
+  tool_use_prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  cached_content_tokens INTEGER NOT NULL DEFAULT 0,
+  total_tokens INTEGER NOT NULL DEFAULT 0,
+  estimated_cost_microusd INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL,
+  recorded_at INTEGER NOT NULL,
+  UNIQUE(update_id, queue_attempt, attempt)
+);
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor TEXT NOT NULL,
+  action TEXT NOT NULL,
+  target_telegram_user_id INTEGER,
+  details_json TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS admin_user_controls (
+  telegram_user_id INTEGER PRIMARY KEY,
+  suspended INTEGER NOT NULL DEFAULT 0,
+  note TEXT,
+  updated_at INTEGER NOT NULL,
+  updated_by TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS app_settings (
+  setting_key TEXT PRIMARY KEY,
+  setting_value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  updated_by TEXT NOT NULL
+);

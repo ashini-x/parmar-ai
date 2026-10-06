@@ -1,4 +1,4 @@
-# Source Inventory — v2.4.2
+# Source Inventory — v2.5.0
 
 | Area | Files | Responsibility |
 |---|---|---|

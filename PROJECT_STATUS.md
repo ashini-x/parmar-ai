@@ -1,4 +1,4 @@
-# Project Status — v2.4.2
+# Project Status — v2.5.0
 
 ## Shipped
 
@@ -7,27 +7,31 @@
 - Durable Object state and job dedupe.
 - Cloudflare Queue processing with retries/DLQ.
 - Vertex AI / Gemini structured answer generation.
-- Conversation context.
+- Conversation context and follow-up resolution.
 - Evidence-based personalization.
-- 20/day + 5/10-second burst limits.
-- D1 analytics/admin projection.
-- Admin dashboard.
-- Daily analytics cleanup.
-- Production documentation and regression tests.
+- 20/day + 5/10-second burst controls.
+- Owner/admin/test unlimited-daily access.
+- D1 analytics and AI usage accounting.
+- Non-technical Admin Control Center.
+- AI token/cost visibility.
+- Student search and profile operations.
+- Admin audit and safety controls.
+- JSON export + offline Python/Matplotlib reports.
+- Public enterprise repository structure and CI scaffolding.
 
 ## Planned / not shipped
 
 - Telegram WebApp Battle Arena.
-- Squad creation and auto-matchmaking.
-- Real-time voice communications.
-- Spectator stadium.
+- Squad formation and matchmaking.
+- Voice communications.
+- Spectator stadium and live kill-feed.
 - Social graph/friends.
 - Sprint Coins economy.
-- Payments/donations.
+- Payments/donations/subscriptions.
 - Marketplace rewards.
-- Shareable leaderboard/victory cards.
+- Shareable competitive result cards.
 - Advanced live ranking engine.
 
 ## Release principle
 
-Do not represent planned product concepts as implemented features in product copy, investor materials, or the admin dashboard.
+Do not represent planned concepts as implemented features in product copy, investor materials, or the admin dashboard.

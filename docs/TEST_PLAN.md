@@ -1,4 +1,4 @@
-# Production Test Plan — v2.4.2
+# Production Test Plan — v2.5.0
 
 ## Smoke tests
 

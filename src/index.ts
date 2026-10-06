@@ -19,8 +19,8 @@ import {
   TelegramError,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
-import { recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess } from "./analytics/db";
-import { adminDashboard, adminOverview, adminUsers, adminUserQuestions } from "./admin/dashboard";
+import { recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended } from "./analytics/db";
+import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
 
 const QUEUE_MAX_RETRIES = 10;
@@ -257,6 +257,12 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true }), requestId);
   }
 
+  if (await isUserSuspended(env, analyticsUser.telegramUserId)) {
+    queueAnalytics(ctx, "suspended_user", () => recordEvent(env, "suspended_user_blocked", analyticsUser));
+    await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, "Abhi tumhara Parmar AI access temporarily paused hai. Admin se contact karo. 🙏", messageId));
+    return withRequestId(json({ ok: true, suspended: true }), requestId);
+  }
+
   const begin = await jobStoreRequest<BeginJobResponse>(env, chatId, {
     action: "begin",
     telegramUserId: analyticsUser.telegramUserId,
@@ -282,6 +288,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       requestId,
       createdAt: Date.now(),
       statusMessageId: begin.statusMessageId,
+      telegramUserId: analyticsUser.telegramUserId,
     };
     try {
       await env.QUESTION_QUEUE.send(retryJob, { contentType: "json" });
@@ -350,6 +357,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     requestId,
     createdAt: Date.now(),
     statusMessageId,
+    telegramUserId: analyticsUser.telegramUserId,
   };
 
   try {
@@ -405,11 +413,12 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
     try {
       const startedAt = Date.now();
       // Repair analytics asynchronously in case the webhook-side D1 write was interrupted.
-      ctx.waitUntil(recordUserSeen(env, { telegramUserId: job.chatId, chatId: job.chatId }));
+      const jobTelegramUserId = job.telegramUserId ?? job.chatId;
+      ctx.waitUntil(recordUserSeen(env, { telegramUserId: jobTelegramUserId, chatId: job.chatId }));
       ctx.waitUntil(recordQuestionStart(env, {
         updateId: job.updateId,
         requestId: job.requestId,
-        user: { telegramUserId: job.chatId, chatId: job.chatId },
+        user: { telegramUserId: jobTelegramUserId, chatId: job.chatId },
         messageId: job.messageId,
         question: job.question,
         receivedAt: job.createdAt,
@@ -454,11 +463,20 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       let packet = claim.record.answerPacket;
 
       if (!packet) {
-        packet = await generateGeminiAnswer(
+        const generation = await generateGeminiAnswer(
           env,
           job.question,
           buildProfileContext(profile, recentConversation),
         );
+        packet = generation.packet;
+        ctx.waitUntil(recordAiUsage(env, {
+          updateId: job.updateId,
+          requestId: job.requestId,
+          queueAttempt: message.attempts,
+          telegramUserId: jobTelegramUserId,
+          chatId: job.chatId,
+          usage: generation.usage,
+        }).catch((usageError) => logger.warn("analytics_ai_usage_failed", { error: usageError instanceof Error ? usageError.message : String(usageError) })));
         await jobStoreRequest(env, job.chatId, {
           action: "set_answer_packet",
           updateId: job.updateId,
@@ -486,6 +504,14 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             updateId: job.updateId,
           });
           latestProfile = await getStudentProfile(env, job.chatId);
+          if (packet.profileSignal === "confusion" || packet.profileSignal === "weak") {
+            ctx.waitUntil(recordEvent(env, "learning_signal_detected", { telegramUserId: jobTelegramUserId, chatId: job.chatId }, {
+              topic: packet.topic,
+              profileSignal: packet.profileSignal,
+              nextRevisionTopic: packet.nextRevisionTopic || packet.topic,
+              updateId: job.updateId,
+            }));
+          }
         } catch (profileError) {
           logger.error("student_profile_update_failed", {
             requestId: job.requestId,
@@ -529,6 +555,16 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         retryable,
         error: error instanceof Error ? error.message : String(error),
       });
+      if (error instanceof GeminiError && error.usageRecords.length) {
+        ctx.waitUntil(recordAiUsage(env, {
+          updateId: job.updateId,
+          requestId: job.requestId,
+          queueAttempt: message.attempts,
+          telegramUserId: job.telegramUserId ?? job.chatId,
+          chatId: job.chatId,
+          usage: error.usageRecords,
+        }).catch((usageError) => logger.warn("analytics_failed_ai_usage_failed", { error: usageError instanceof Error ? usageError.message : String(usageError) })));
+      }
 
       if (retryable && message.attempts < QUEUE_MAX_RETRIES) {
         message.retry({ delaySeconds: queueRetryDelay(message.attempts) });
@@ -889,6 +925,15 @@ const worker: ExportedHandler<Env, QuestionJob> = {
         if (url.pathname === "/admin/api/overview" && request.method === "GET") return adminOverview(env);
         if (url.pathname === "/admin/api/users" && request.method === "GET") return adminUsers(env, request);
         if (url.pathname === "/admin/api/questions" && request.method === "GET") return adminUserQuestions(env, request);
+        if (url.pathname === "/admin/api/user" && request.method === "GET") return adminUserDetail(env, request);
+        if (url.pathname === "/admin/api/ai-usage" && request.method === "GET") return adminAiUsage(env, request);
+        if (url.pathname === "/admin/api/learning" && request.method === "GET") return adminLearning(env);
+        if (url.pathname === "/admin/api/activity" && request.method === "GET") return adminActivity(env, request);
+        if (url.pathname === "/admin/api/access" && request.method === "GET") return adminAccess(env);
+        if (url.pathname === "/admin/api/audit" && request.method === "GET") return adminAudit(env, request);
+        if (url.pathname === "/admin/api/system" && request.method === "GET") return adminSystem(env);
+        if (url.pathname === "/admin/api/export" && request.method === "GET") return adminExport(env, request);
+        if (url.pathname === "/admin/api/action" && request.method === "POST") return adminAction(env, request);
         return withRequestId(notFound(), requestId);
       }
 

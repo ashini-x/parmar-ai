@@ -1,37 +1,49 @@
 # Changelog
 
-## [2.4.2] - Privileged Access Controls
+## 2.5.0 - Admin Control Center + AI Economics
 
-- Add explicit bot-owner/admin Telegram identity configuration.
-- Add D1-backed unlimited-AI access overrides targeted by Telegram user ID.
-- Add admin-only `/grant <telegram_user_id>`, `/revoke <telegram_user_id>`, and `/unlimited <telegram_user_id>` commands.
-- Keep the normal 20/day limit for ordinary users.
-- Keep 5/10-second burst protection for all accounts, including unlimited/admin accounts.
-- Make `/profile` display unlimited access for privileged accounts.
-- Keep public-source secret boundaries intact.
+- Expanded the protected admin page into a non-technical owner control center.
+- Added live overview metrics, alerts, quota distribution, active-user ranking and retention snapshots.
+- Added Gemini usage ledger with prompt/output/reasoning/tool-use/cached/total token metadata.
+- Added per-attempt estimated AI cost accounting with duplicate-safe persistence.
+- Added spend views by thinking level, grounding and model/policy.
+- Added configurable daily AI budget threshold and simple run-rate projection.
+- Added searchable student analytics, usage/cost detail, learning signals and administrative actions.
+- Added suspension controls with protection for configured owner/admin accounts.
+- Added administrator audit logging.
+- Added seven-day AI trend and expensive-request views.
+- Added JSON export plus offline PDF/CSV/PNG founder reporting through Python/Matplotlib.
+- Added repository CI/issue/PR support for the expanded production surface.
+- Preserved the stable v2.4.2 student path, daily quota, burst safeguard and privileged test access.
 
-All notable production changes are recorded here.
+## 2.4.2 - Privileged Access Controls
 
-## [2.4.1] - Stable
+- Add bot-owner/admin identity configuration.
+- Add D1-backed unlimited-AI overrides.
+- Add owner/admin Telegram commands.
+- Preserve 20/day for ordinary users and 5/10-second burst protection for everyone.
 
-- Separate daily and burst rate-limit messages.
-- Separate daily and burst analytics events.
-- Preserve rebuilt v2.4 profile-learning architecture.
+## 2.4.1 - Stable Production Release
 
-## [2.4.0]
+- Separate burst and daily quota messages/events.
+- Rebuilt v2.4 personalization architecture.
+- Profile-learning failures isolated from answer delivery.
 
-- Add evidence-based learning signals.
-- Add safe profile normalization/migration.
-- Add profile persistence isolation.
+## 2.4.0 - Evidence-Based Personalization
 
-## [2.3.0]
+- Add learning signals and safe migration.
+- Require explicit/repeated evidence for attention areas.
 
-- Add conversation intelligence and answer reliability improvements.
+## 2.3.0 - Conversation Intelligence & Answer Reliability
 
-## [2.2.1]
+- Add recent conversation context.
+- Improve follow-ups and confusion handling.
+- Retry malformed/incomplete structured model responses.
 
-- Fix D1 initialization.
+## 2.2.1 - Admin/D1 Stabilization
 
-## [2.2.0]
+- Fix and stabilize D1 initialization.
 
-- Add centralized admin analytics.
+## 2.2.0 - Central Admin Analytics
+
+- Add D1 analytics and protected admin dashboard.

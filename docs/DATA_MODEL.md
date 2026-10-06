@@ -1,4 +1,4 @@
-# Data Model — v2.4.2
+# Data Model — v2.5.0
 
 ## Durable Object keys
 
@@ -92,3 +92,24 @@ Stores runtime grants for unlimited daily AI access.
 | `expires_at` | Optional future expiry timestamp; current admin commands create non-expiring grants. |
 
 The owner/admin identity and static allowlist remain deployment configuration; runtime grants are stored in D1 so they can be changed without changing source code.
+
+
+## AI usage ledger
+
+### `ai_usage_attempts`
+
+One row represents one genuine Vertex/Gemini model attempt. It contains token metadata, model/policy, grounding state, estimated cost in micro-USD, queue attempt number and completion/rejection status.
+
+The unique key `(update_id, queue_attempt, attempt)` prevents duplicate accounting while allowing later Queue redelivery to remain visible when it actually performs another model attempt.
+
+### `admin_audit_log`
+
+Stores sensitive administrative actions such as access grants, revocations, suspension changes and profile resets.
+
+### `admin_user_controls`
+
+Stores per-student operational suspension state and administrator notes.
+
+### `app_settings`
+
+Reserved for safe, future runtime settings. Dangerous infrastructure configuration remains deployment configuration rather than mutable application state.

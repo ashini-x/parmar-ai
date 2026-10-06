@@ -1,6 +1,6 @@
 {
   "name": "parmar-ai",
-  "version": "2.4.2",
+  "version": "2.5.0",
   "release_channel": "stable",
   "repository_type": "public-production-source",
   "artifact_policy": "immutable-release-source",
@@ -17,24 +17,71 @@
     "burst_questions": 5,
     "burst_window_seconds": 10,
     "daily_reset": "00:00 Asia/Kolkata",
-    "privileged_daily_access": "unlimited"
+    "privileged_daily_access": "unlimited",
+    "privileged_burst": "5 per 10 seconds"
   },
-  "secret_policy": "No production secrets or real user exports are included.",
+  "admin_center": {
+    "live_refresh_seconds": 5,
+    "sections": [
+      "overview",
+      "students",
+      "ai_and_costs",
+      "learning",
+      "activity",
+      "system",
+      "access",
+      "audit",
+      "reports",
+      "settings"
+    ],
+    "token_metadata": [
+      "prompt",
+      "candidates",
+      "thoughts",
+      "tool_use_prompt",
+      "cached_content",
+      "total"
+    ],
+    "cost_estimate": "configurable micro-USD token estimate; not Google Cloud invoice",
+    "budget_mode": "optional configured threshold / estimated remaining",
+    "offline_reporting": [
+      "PDF",
+      "PNG",
+      "CSV",
+      "Markdown"
+    ]
+  },
   "access_control": {
     "owner_config": "BOT_OWNER_TELEGRAM_USER_ID",
     "additional_admins_config": "ADMIN_TELEGRAM_USER_IDS",
     "static_unlimited_allowlist": "UNLIMITED_AI_TELEGRAM_USER_IDS",
     "runtime_override_table": "ai_access_overrides",
-    "runtime_admin_commands": [
-      "/grant <telegram_user_id>",
-      "/revoke <telegram_user_id>",
-      "/unlimited <telegram_user_id>"
+    "protected_actions": [
+      "grant_unlimited",
+      "revoke_unlimited",
+      "suspend",
+      "unsuspend",
+      "reset_profile"
     ],
-    "burst_protection_applies_to_privileged_users": true
+    "burst_protection_applies_to_privileged_users": true,
+    "owner_admin_cannot_be_suspended": true
+  },
+  "accounting": {
+    "usage_table": "ai_usage_attempts",
+    "dedupe_key": "UNIQUE(update_id, queue_attempt, attempt)",
+    "price_defaults_valid_through": "2026-12-31",
+    "estimate_only": true
+  },
+  "security": {
+    "no_production_secrets_in_repo": true,
+    "no_real_user_exports": true,
+    "signed_admin_session": true,
+    "secret_configuration": "Cloudflare runtime secrets/variables"
   },
   "build": {
-    "source_baseline": "v2.4.1 enterprise GitHub release",
-    "feature_change": "privileged owner/admin access and targeted unlimited daily-AI grants",
+    "source_baseline": "v2.4.2 stable enterprise release",
+    "feature_change": "admin control center, AI token/cost ledger, owner analytics and offline reporting",
+    "student_path_change": "preserved",
     "release_status": "stable"
   }
 }

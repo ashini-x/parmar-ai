@@ -26,6 +26,10 @@ export interface Env {
   BURST_WINDOW_SECONDS?: string;
 
   ANALYTICS_RAW_RETENTION_DAYS?: string;
+  AI_BUDGET_USD?: string;
+  AI_INPUT_USD_PER_MILLION?: string;
+  AI_CACHED_INPUT_USD_PER_MILLION?: string;
+  AI_OUTPUT_USD_PER_MILLION?: string;
   ADMIN_DASHBOARD_USER?: string;
   ADMIN_DASHBOARD_PASSWORD?: string;
   ADMIN_SESSION_SECRET?: string;
@@ -47,6 +51,7 @@ export interface QuestionJob {
   requestId: string;
   createdAt: number;
   statusMessageId?: number;
+  telegramUserId?: number;
 }
 
 
@@ -73,6 +78,28 @@ export interface LearningSignal {
   confusionCount: number;
   weakCount: number;
   lastSeenAt: number;
+}
+
+export interface AiUsageRecord {
+  attempt: number;
+  model: string;
+  location: string;
+  thinkingLevel: "LOW" | "MEDIUM" | "HIGH";
+  grounded: boolean;
+  promptTokens: number;
+  candidatesTokens: number;
+  thoughtsTokens: number;
+  toolUsePromptTokens: number;
+  cachedContentTokens: number;
+  totalTokens: number;
+  estimatedCostMicrousd: number;
+  recordedAt: number;
+  status: "completed" | "rejected";
+}
+
+export interface GeminiGenerationResult {
+  packet: AnswerPacket;
+  usage: AiUsageRecord[];
 }
 
 export interface StudentProfile {
@@ -103,7 +130,7 @@ export interface ProfileContext {
 export function getConfig(env: Env) {
   return {
     environment: env.ENVIRONMENT ?? "development",
-    version: env.APP_VERSION ?? "2.4.2",
+    version: env.APP_VERSION ?? "2.5.0",
     model: env.GEMINI_MODEL ?? "gemini-3.8-flash",
     location: env.GEMINI_LOCATION ?? "global",
     maxThinkingLevel: normalizeThinkingLevel(env.GEMINI_THINKING_LEVEL),
@@ -112,6 +139,10 @@ export function getConfig(env: Env) {
     dailyQuestionLimit: parsePositiveInt(env.DAILY_QUESTION_LIMIT, 20),
     burstQuestionLimit: parsePositiveInt(env.BURST_QUESTION_LIMIT, 5),
     burstWindowSeconds: parsePositiveInt(env.BURST_WINDOW_SECONDS, 10),
+    aiBudgetUsd: parseNonNegativeFloat(env.AI_BUDGET_USD, 0),
+    aiInputUsdPerMillion: parseNonNegativeFloat(env.AI_INPUT_USD_PER_MILLION, 0.75),
+    aiCachedInputUsdPerMillion: parseNonNegativeFloat(env.AI_CACHED_INPUT_USD_PER_MILLION, 0.075),
+    aiOutputUsdPerMillion: parseNonNegativeFloat(env.AI_OUTPUT_USD_PER_MILLION, 3.75),
   } as const;
 }
 
@@ -126,4 +157,9 @@ function normalizeThinkingLevel(value: string | undefined): "LOW" | "MEDIUM" | "
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseNonNegativeFloat(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseFloat(value ?? "");
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }

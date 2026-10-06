@@ -13,6 +13,7 @@ The question is passed to the Queue as a versioned `QuestionJob` containing:
 - `requestId`
 - `createdAt`
 - optional Telegram status message ID
+- optional canonical Telegram user ID for analytics continuity
 
 ## Context assembly
 
@@ -83,3 +84,11 @@ Before Telegram delivery:
 - code-fence wrappers are stripped where appropriate,
 - redundant or malformed answer packets are rejected upstream,
 - the final answer is kept bounded for Telegram delivery.
+
+## Usage accounting
+
+After each successful Vertex HTTP response, Gemini usage metadata is normalized into an `AiUsageRecord`. The record stores prompt/input, candidate/output, thoughts/reasoning, tool-use, cached-input and total token counts plus the selected model, thinking level, grounding state and estimated cost.
+
+When the model requires an internal retry, each genuine model attempt is recorded. Accounting uses `(update_id, queue_attempt, attempt)` as a duplicate-safe key so queue redelivery cannot double-count the same model attempt.
+
+The usage ledger is asynchronous and isolated from answer delivery; analytics failure must not prevent a valid answer from reaching Telegram.

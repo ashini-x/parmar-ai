@@ -1,4 +1,4 @@
-import type { AnswerPacket, Env, ProfileContext } from "../config/env";
+import type { AiUsageRecord, AnswerPacket, Env, GeminiGenerationResult, ProfileContext } from "../config/env";
 import { GoogleAuthError, getGoogleAccessToken } from "../auth/google";
 import { getConfig } from "../config/env";
 
@@ -123,11 +123,14 @@ export class GeminiError extends Error {
   status?: number;
   retryable: boolean;
 
-  constructor(message: string, status?: number, retryable = false) {
+  usageRecords: AiUsageRecord[];
+
+  constructor(message: string, status?: number, retryable = false, usageRecords: AiUsageRecord[] = []) {
     super(message);
     this.name = "GeminiError";
     this.status = status;
     this.retryable = retryable;
+    this.usageRecords = usageRecords;
   }
 }
 
@@ -146,13 +149,23 @@ interface GeminiCandidate {
 interface GeminiApiResponse {
   candidates?: GeminiCandidate[];
   error?: GeminiRequestError;
+  usageMetadata?: GeminiUsageMetadata;
+}
+
+interface GeminiUsageMetadata {
+  promptTokenCount?: number;
+  candidatesTokenCount?: number;
+  thoughtsTokenCount?: number;
+  toolUsePromptTokenCount?: number;
+  cachedContentTokenCount?: number;
+  totalTokenCount?: number;
 }
 
 export async function generateGeminiAnswer(
   env: Env,
   question: string,
   profile: ProfileContext,
-): Promise<AnswerPacket> {
+): Promise<GeminiGenerationResult> {
   const projectId = env.GCP_PROJECT_ID?.trim();
   const normalizedQuestion = question.trim();
 
@@ -174,10 +187,11 @@ export async function generateGeminiAnswer(
   const requiresGrounding = isTimeSensitiveQuestion(normalizedQuestion) && isGroundingEnabled(env);
 
   let lastError: GeminiError | null = null;
+  const usageRecords: AiUsageRecord[] = [];
 
   for (let attempt = 1; attempt <= MAX_INTERNAL_ATTEMPTS; attempt += 1) {
     try {
-      return await requestVertexGemini(
+      const result = await requestVertexGemini(
         env,
         endpoint,
         normalizedQuestion,
@@ -186,8 +200,11 @@ export async function generateGeminiAnswer(
         requiresGrounding,
         attempt,
       );
+      return { packet: result.packet, usage: [...usageRecords, result.usage] };
     } catch (error) {
       const geminiError = toGeminiError(error);
+      usageRecords.push(...geminiError.usageRecords);
+      geminiError.usageRecords = usageRecords.slice();
       lastError = geminiError;
 
       if (!geminiError.retryable || attempt >= MAX_INTERNAL_ATTEMPTS) throw geminiError;
@@ -196,7 +213,7 @@ export async function generateGeminiAnswer(
     }
   }
 
-  throw lastError ?? new GeminiError("Gemini request failed.", undefined, true);
+  throw lastError ?? new GeminiError("Gemini request failed.", undefined, true, usageRecords);
 }
 
 async function requestVertexGemini(
@@ -207,7 +224,7 @@ async function requestVertexGemini(
   thinkingLevel: ThinkingLevel,
   requiresGrounding: boolean,
   attempt: number,
-): Promise<AnswerPacket> {
+): Promise<{ packet: AnswerPacket; usage: AiUsageRecord }> {
   let accessToken: string;
 
   try {
@@ -267,6 +284,15 @@ async function requestVertexGemini(
       );
     }
 
+    const usage = buildUsageRecord(env, data.usageMetadata, {
+      attempt,
+      model: env.GEMINI_MODEL?.trim() || DEFAULT_MODEL,
+      location: env.GEMINI_LOCATION?.trim() || DEFAULT_LOCATION,
+      thinkingLevel,
+      grounded: Boolean(data.candidates?.[0]?.groundingMetadata) || !requiresGrounding,
+      status: "completed",
+    });
+
     if (!response.ok) {
       const message = data.error?.message ?? `Vertex AI request failed with HTTP ${response.status}.`;
       throw new GeminiError(
@@ -279,25 +305,45 @@ async function requestVertexGemini(
     const candidate = data.candidates?.[0];
     const finishReason = candidate?.finishReason;
     if (finishReason === "MAX_TOKENS") {
-      throw new GeminiError("Vertex AI response hit the output limit before completing the answer.", undefined, true);
+      usage.status = "rejected";
+      throw new GeminiError("Vertex AI response hit the output limit before completing the answer.", undefined, true, [usage]);
     }
     if (finishReason === "SAFETY" || finishReason === "PROHIBITED_CONTENT" || finishReason === "SPII") {
-      throw new GeminiError("Vertex AI did not return a usable answer because the response was blocked by a safety filter.", undefined, false);
+      usage.status = "rejected";
+      throw new GeminiError("Vertex AI did not return a usable answer because the response was blocked by a safety filter.", undefined, false, [usage]);
     }
 
     const rawModelText = extractGeminiText(data) ?? "";
     const grounded = Boolean(candidate?.groundingMetadata);
-    const packet = parseAnswerPacket(rawModelText);
-    const sanitized = sanitizeAnswerPacket(
-      packet,
-      grounded || !requiresGrounding,
-      requiresGrounding,
-      question,
-      profileContext,
-    );
+    let packet: AnswerPacket;
+    try {
+      packet = parseAnswerPacket(rawModelText);
+    } catch (error) {
+      if (error instanceof GeminiError) {
+        usage.status = "rejected";
+        error.usageRecords = [usage, ...error.usageRecords];
+      }
+      throw error;
+    }
+    let sanitized: AnswerPacket;
+    try {
+      sanitized = sanitizeAnswerPacket(
+        packet,
+        grounded || !requiresGrounding,
+        requiresGrounding,
+        question,
+        profileContext,
+      );
+    } catch (error) {
+      if (error instanceof GeminiError) {
+        usage.status = "rejected";
+        error.usageRecords = [usage, ...error.usageRecords];
+      }
+      throw error;
+    }
     sanitized.thinkingLevelUsed = thinkingLevel;
     sanitized.grounded = grounded || !requiresGrounding;
-    return sanitized;
+    return { packet: sanitized, usage };
   } catch (error) {
     if (error instanceof GeminiError) throw error;
 
@@ -652,6 +698,87 @@ function positiveInt(value: string | undefined, fallback: number): number {
 function toGeminiError(error: unknown): GeminiError {
   if (error instanceof GeminiError) return error;
   return new GeminiError(error instanceof Error ? error.message : String(error), undefined, true);
+}
+
+function buildUsageRecord(
+  env: Env,
+  metadata: GeminiUsageMetadata | undefined,
+  options: {
+    attempt: number;
+    model: string;
+    location: string;
+    thinkingLevel: ThinkingLevel;
+    grounded: boolean;
+    status: "completed" | "rejected";
+  },
+): AiUsageRecord {
+  const promptTokens = nonNegativeInt(metadata?.promptTokenCount);
+  const candidatesTokens = nonNegativeInt(metadata?.candidatesTokenCount);
+  const thoughtsTokens = nonNegativeInt(metadata?.thoughtsTokenCount);
+  const toolUsePromptTokens = nonNegativeInt(metadata?.toolUsePromptTokenCount);
+  const cachedContentTokens = Math.min(nonNegativeInt(metadata?.cachedContentTokenCount), promptTokens);
+  const totalTokens = metadata?.totalTokenCount !== undefined
+    ? nonNegativeInt(metadata.totalTokenCount)
+    : promptTokens + candidatesTokens + thoughtsTokens + toolUsePromptTokens;
+
+  const inputRate = nonNegativeFloat(env.AI_INPUT_USD_PER_MILLION, 0.75);
+  const cachedInputRate = nonNegativeFloat(env.AI_CACHED_INPUT_USD_PER_MILLION, 0.075);
+  const outputRate = nonNegativeFloat(env.AI_OUTPUT_USD_PER_MILLION, 3.75);
+  const costUsd = estimateAiCostUsd({
+    promptTokens,
+    candidatesTokens,
+    thoughtsTokens,
+    toolUsePromptTokens,
+    cachedContentTokens,
+    inputUsdPerMillion: inputRate,
+    cachedInputUsdPerMillion: cachedInputRate,
+    outputUsdPerMillion: outputRate,
+  });
+
+  return {
+    attempt: options.attempt,
+    model: options.model,
+    location: options.location,
+    thinkingLevel: options.thinkingLevel,
+    grounded: options.grounded,
+    promptTokens,
+    candidatesTokens,
+    thoughtsTokens,
+    toolUsePromptTokens,
+    cachedContentTokens,
+    totalTokens,
+    estimatedCostMicrousd: Math.max(0, Math.round(costUsd * 1_000_000)),
+    recordedAt: Date.now(),
+    status: options.status,
+  };
+}
+
+function nonNegativeInt(value: unknown): number {
+  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0;
+}
+
+export function estimateAiCostUsd(input: {
+  promptTokens: number;
+  candidatesTokens: number;
+  thoughtsTokens: number;
+  toolUsePromptTokens: number;
+  cachedContentTokens: number;
+  inputUsdPerMillion: number;
+  cachedInputUsdPerMillion: number;
+  outputUsdPerMillion: number;
+}): number {
+  const uncachedPromptTokens = Math.max(0, input.promptTokens - input.cachedContentTokens) + input.toolUsePromptTokens;
+  const outputTokens = input.candidatesTokens + input.thoughtsTokens;
+  return Math.max(0,
+    (uncachedPromptTokens / 1_000_000) * input.inputUsdPerMillion +
+    (input.cachedContentTokens / 1_000_000) * input.cachedInputUsdPerMillion +
+    (outputTokens / 1_000_000) * input.outputUsdPerMillion,
+  );
+}
+
+function nonNegativeFloat(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseFloat(value ?? "");
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function sleep(milliseconds: number): Promise<void> {
