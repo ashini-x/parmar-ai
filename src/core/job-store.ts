@@ -564,6 +564,16 @@ function normalizeProfile(profile: StudentProfile): StudentProfile {
     recentSubjects: Array.isArray(profile.recentSubjects) ? profile.recentSubjects.slice(0, 6) : [],
     attentionTopics: Array.isArray(profile.attentionTopics) ? profile.attentionTopics.slice(0, 6) : [],
     revisionQueue: Array.isArray(profile.revisionQueue) ? profile.revisionQueue.slice(0, 6) : [],
+    learningSignals: rawSignals
+      .filter((item) => item && typeof item.topic === "string")
+      .map((item) => ({
+        topic: cleanText(item.topic, 100),
+        confusionCount: Number.isSafeInteger(item.confusionCount) && item.confusionCount >= 0 ? item.confusionCount : 0,
+        weakCount: Number.isSafeInteger(item.weakCount) && item.weakCount >= 0 ? item.weakCount : 0,
+        lastSeenAt: Number.isSafeInteger(item.lastSeenAt) && item.lastSeenAt >= 0 ? item.lastSeenAt : 0,
+      }))
+      .filter((item) => item.topic.length > 0)
+      .slice(0, 12),
     questionCount: Number.isSafeInteger(profile.questionCount) && profile.questionCount >= 0 ? profile.questionCount : 0,
     lastUpdatedAt: Number.isSafeInteger(profile.lastUpdatedAt) && profile.lastUpdatedAt >= 0 ? profile.lastUpdatedAt : 0,
   };

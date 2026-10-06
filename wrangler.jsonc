@@ -42,7 +42,7 @@
     {
       "binding": "DB",
       "database_name": "parmar-ai-admin-prod",
-      "database_id": "1c033fb8-10aa-4bee-a294-4dbc899c09f7"
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
     }
   ],
   "triggers": {
