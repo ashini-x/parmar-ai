@@ -47,7 +47,7 @@ The public `wrangler.jsonc` contains non-secret configuration and placeholders o
 Important defaults:
 
 ```text
-APP_VERSION=2.5.0
+APP_VERSION=2.5.1
 DAILY_QUESTION_LIMIT=20
 BURST_QUESTION_LIMIT=5
 BURST_WINDOW_SECONDS=10

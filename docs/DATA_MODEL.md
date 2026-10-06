@@ -1,4 +1,4 @@
-# Data Model — v2.5.0
+# Data Model — v2.5.1
 
 ## Durable Object keys
 

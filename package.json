@@ -1,6 +1,6 @@
 {
   "name": "parmar-ai",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "private": true,
   "description": "Telegram-first SSC doubt-solving backend on Cloudflare Workers + Queues + Durable Objects + D1 + Vertex AI.",
   "type": "module",

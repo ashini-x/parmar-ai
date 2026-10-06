@@ -1,5 +1,16 @@
 # Parmar AI Release Notes
 
+## v2.5.1 — Admin UI Interaction Fix
+
+### Goal
+Restore the interactive behavior of the v2.5.0 Admin Control Center without changing the backend architecture or student limits.
+
+### Fix
+- Correct a browser-side JavaScript parse error caused by the administrator confirmation text for study-profile reset.
+- The malformed string prevented the dashboard script from loading, which made navigation tabs, buttons, search actions, access controls, sign-out and report export appear non-clickable.
+- No database schema, quota, AI model, pricing estimate, access-control or student-processing behavior changed.
+- Release verification includes generated-browser-JavaScript syntax validation.
+
 ## v2.5.0 — Admin Control Center + AI Economics
 
 ### Goal

@@ -17,7 +17,7 @@ The release sequence is:
 - `2.3.0` — conversation intelligence and answer reliability.
 - `2.4.0` — rebuilt evidence-based personalization milestone.
 - `2.4.1` — quota messaging and stable release polish.
-- `2.5.0` — privileged owner/admin access and targeted unlimited daily-AI grants.
+- `2.5.1` — privileged owner/admin access and targeted unlimited daily-AI grants.
 
 ## Release process
 

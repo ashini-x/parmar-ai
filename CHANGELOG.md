@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.1 - Admin UI Interaction Fix
+
+- Fixed a browser JavaScript syntax error that prevented admin-dashboard click handlers from loading.
+- Restored navigation tabs, refresh/sign-out, student actions, access controls and report export interactions.
+- No runtime student behavior or backend quota/accounting semantics changed.
+
 ## 2.5.0 - Admin Control Center + AI Economics
 
 - Expanded the protected admin page into a non-technical owner control center.

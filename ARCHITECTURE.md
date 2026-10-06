@@ -1,8 +1,8 @@
-# Architecture — Parmar AI v2.5.0
+# Architecture — Parmar AI v2.5.1
 
 ## Design goals
 
-v2.5.0 is optimized for a Telegram-first SSC doubt-solving workload where the student should receive a reliable answer even when secondary systems such as analytics or learning-profile persistence fail.
+v2.5.1 is optimized for a Telegram-first SSC doubt-solving workload where the student should receive a reliable answer even when secondary systems such as analytics or learning-profile persistence fail.
 
 The architecture separates:
 

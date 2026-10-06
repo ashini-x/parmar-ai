@@ -1,6 +1,6 @@
 {
   "name": "parmar-ai",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "release_channel": "stable",
   "repository_type": "public-production-source",
   "artifact_policy": "immutable-release-source",
@@ -79,8 +79,8 @@
     "secret_configuration": "Cloudflare runtime secrets/variables"
   },
   "build": {
-    "source_baseline": "v2.4.2 stable enterprise release",
-    "feature_change": "admin control center, AI token/cost ledger, owner analytics and offline reporting",
+    "source_baseline": "v2.5.0 admin control center stable enterprise release",
+    "feature_change": "admin UI interaction fix; backend/admin analytics semantics preserved",
     "student_path_change": "preserved",
     "release_status": "stable"
   }

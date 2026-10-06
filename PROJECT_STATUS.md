@@ -1,4 +1,4 @@
-# Project Status — v2.5.0
+# Project Status — v2.5.1
 
 ## Shipped
 
