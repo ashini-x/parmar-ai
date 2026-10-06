@@ -292,7 +292,7 @@ async function requestVertexGemini(
       packet,
       grounded || !requiresGrounding,
       requiresGrounding,
-      normalizedQuestion,
+      question,
       profileContext,
     );
     sanitized.thinkingLevelUsed = thinkingLevel;
