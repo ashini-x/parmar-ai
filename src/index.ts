@@ -353,18 +353,50 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         question: job.question,
         receivedAt: job.createdAt,
       }));
-      const profile = await getStudentProfile(env, job.chatId);
-      const conversationResult = await jobStoreRequest<{ ok: true; recentConversation: ConversationTurn[] }>(env, job.chatId, {
-        action: "get_conversation",
-        updateId: job.updateId,
-      });
+      let profile: StudentProfile;
+      try {
+        profile = await getStudentProfile(env, job.chatId);
+      } catch (profileReadError) {
+        logger.error("student_profile_read_failed", {
+          requestId: job.requestId,
+          updateId: job.updateId,
+          error: profileReadError instanceof Error ? profileReadError.message : String(profileReadError),
+        });
+        profile = {
+          version: 2,
+          targetExam: "SSC (not specified)",
+          recentTopics: [],
+          recentSubjects: [],
+          attentionTopics: [],
+          revisionQueue: [],
+          learningSignals: [],
+          questionCount: 0,
+          lastUpdatedAt: 0,
+        };
+      }
+
+      let recentConversation: ConversationTurn[] = [];
+      try {
+        const conversationResult = await jobStoreRequest<{ ok: true; recentConversation: ConversationTurn[] }>(env, job.chatId, {
+          action: "get_conversation",
+          updateId: job.updateId,
+        });
+        recentConversation = Array.isArray(conversationResult.recentConversation) ? conversationResult.recentConversation : [];
+      } catch (conversationError) {
+        logger.warn("student_conversation_read_failed", {
+          requestId: job.requestId,
+          updateId: job.updateId,
+          error: conversationError instanceof Error ? conversationError.message : String(conversationError),
+        });
+      }
+
       let packet = claim.record.answerPacket;
 
       if (!packet) {
         packet = await generateGeminiAnswer(
           env,
           job.question,
-          buildProfileContext(profile, conversationResult.recentConversation),
+          buildProfileContext(profile, recentConversation),
         );
         await jobStoreRequest(env, job.chatId, {
           action: "set_answer_packet",
@@ -373,24 +405,36 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         });
       }
 
+      let latestProfile = profile;
       if (!claim.record.profileUpdated) {
-        await jobStoreRequest(env, job.chatId, {
-          action: "update_profile",
-          updateId: job.updateId,
-          topic: packet.topic,
-          subject: packet.subject,
-          profileSignal: packet.profileSignal,
-          nextRevisionTopic: packet.nextRevisionTopic,
-          detectedExam: packet.detectedExam ?? "",
-          answerScope: packet.answerScope,
-        });
-        await jobStoreRequest(env, job.chatId, {
-          action: "mark_profile_updated",
-          updateId: job.updateId,
-        });
+        try {
+          await jobStoreRequest(env, job.chatId, {
+            action: "update_profile",
+            updateId: job.updateId,
+            question: job.question,
+            topic: packet.topic,
+            subject: packet.subject,
+            profileSignal: packet.profileSignal,
+            nextRevisionTopic: packet.nextRevisionTopic,
+            detectedExam: packet.detectedExam ?? "",
+            answerScope: packet.answerScope,
+            questionMode: packet.questionMode,
+          });
+          await jobStoreRequest(env, job.chatId, {
+            action: "mark_profile_updated",
+            updateId: job.updateId,
+          });
+          latestProfile = await getStudentProfile(env, job.chatId);
+        } catch (profileError) {
+          logger.error("student_profile_update_failed", {
+            requestId: job.requestId,
+            updateId: job.updateId,
+            error: profileError instanceof Error ? profileError.message : String(profileError),
+          });
+          // Profile intelligence must never prevent a valid answer from reaching the student.
+        }
       }
 
-      const latestProfile = await getStudentProfile(env, job.chatId);
       await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, latestProfile));
       await jobStoreRequest(env, job.chatId, { action: "complete", updateId: job.updateId });
       const completedAt = Date.now();
@@ -524,6 +568,10 @@ function buildProfileText(profile: StudentProfile, usage: { dayCount: number; da
   const recent = profile.recentTopics.slice(0, 5);
   const attention = profile.attentionTopics.slice(0, 5);
   const revision = profile.revisionQueue.slice(0, 5);
+  const signals = profile.learningSignals
+    .filter((item) => item.confusionCount + item.weakCount > 0)
+    .sort((a, b) => (b.confusionCount + b.weakCount) - (a.confusionCount + a.weakCount))
+    .slice(0, 3);
 
   return [
     "📚 Tumhari Parmar SSC Profile",
@@ -534,6 +582,7 @@ function buildProfileText(profile: StudentProfile, usage: { dayCount: number; da
     `Recent focus: ${recent.length ? recent.join(" • ") : "abhi nahi"}`,
     `Attention areas: ${attention.length ? attention.join(" • ") : "abhi koi clear weak area nahi"}`,
     `Revision queue: ${revision.length ? revision.join(" → ") : "abhi build ho rahi hai"}`,
+    `Learning signals: ${signals.length ? signals.map((item) => `${item.topic} (${item.confusionCount + item.weakCount})`).join(" • ") : "abhi enough evidence nahi"}`,
     "",
     "Ye profile sirf tumhare Parmar AI questions se banti hai.",
   ].join("\n");

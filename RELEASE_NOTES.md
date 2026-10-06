@@ -1,4 +1,23 @@
-# Release 2.3.0
+# Release 2.4.0
+
+## Evidence-based personalization
+- Keeps the v2.3 conversation-intelligence and answer-reliability behavior as the stable base.
+- Adds persistent learning-signal evidence (`confusionCount`, `weakCount`, `lastSeenAt`) with repeated-signal thresholds before a topic becomes a persistent attention area.
+- Safely migrates legacy v1 profiles stored under the existing `profile:v1` key without requiring a D1 migration. Legacy attention topics become one historical signal and are not immediately re-promoted as persistent attention.
+- Prevents generic facts and simple follow-ups from generating weakness/confusion signals unless the student explicitly provides evidence.
+- Keeps revision recommendations anchored to the current topic for confusion/weakness/revision-mode questions.
+- Makes student-profile persistence best-effort: a profile write failure is logged but must not prevent a valid AI answer from being delivered.
+- Preserves the existing Queue, Durable Object, D1, Vertex AI, Telegram, daily-limit, and admin architecture.
+
+## Regression targets
+- Fact -> `iska reason?` -> `simple mein samjha de` stays on the same topic and does not create a fake focus recommendation.
+- `X se confuse ho raha hoon` creates one learning signal but does not become a persistent attention area until the evidence repeats.
+- A second explicit confusion/weakness signal on the same topic promotes that topic into attention areas.
+- Legacy v2.3 profiles load without `undefined` arrays and migrate safely to the v2 profile shape.
+- Profile persistence errors cannot strand the Telegram job in an endless typing state.
+
+---
+
 
 ## Conversation intelligence
 - Added rolling six-turn per-student conversation context from completed jobs.

@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "@cloudflare/workers-types";
-import type { AnswerPacket, ConversationTurn, Env, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
+import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
 import { sendTelegramChatAction } from "../telegram/api";
 
 const TYPING_HEARTBEAT_MS = 4_000;
@@ -54,12 +54,13 @@ export interface ClaimResponse {
 }
 
 const DEFAULT_PROFILE: StudentProfile = {
-  version: 1,
+  version: 2,
   targetExam: "SSC (not specified)",
   recentTopics: [],
   recentSubjects: [],
   attentionTopics: [],
   revisionQueue: [],
+  learningSignals: [],
   questionCount: 0,
   lastUpdatedAt: 0,
 };
@@ -361,8 +362,14 @@ export class JobDedupe extends DurableObject {
   }
 
   private async getProfile(): Promise<StudentProfile> {
-    const profile = await this.ctx.storage.get<StudentProfile>(PROFILE_KEY);
-    return profile ? normalizeProfile(profile) : { ...DEFAULT_PROFILE };
+    const stored = await this.ctx.storage.get<unknown>(PROFILE_KEY);
+    if (!stored) return { ...DEFAULT_PROFILE, recentTopics: [], recentSubjects: [], attentionTopics: [], revisionQueue: [], learningSignals: [] };
+
+    const normalized = normalizeProfile(stored);
+    if (profileNeedsMigration(stored, normalized)) {
+      await this.ctx.storage.put(PROFILE_KEY, normalized);
+    }
+    return normalized;
   }
 
   private async updateProfile(body: Record<string, unknown>): Promise<GenericResponse> {
@@ -373,40 +380,69 @@ export class JobDedupe extends DurableObject {
     const profile = await this.getProfile();
     const topic = cleanText(String(body.topic ?? ""), 100);
     const subject = cleanText(String(body.subject ?? ""), 40);
-    const signal = cleanText(String(body.profileSignal ?? "neutral"), 20);
+    const signal = normalizeProfileSignal(body.profileSignal);
     const nextRevisionTopic = cleanText(String(body.nextRevisionTopic ?? ""), 100);
+    const question = cleanText(String(body.question ?? ""), 500);
+    const questionMode = cleanText(String(body.questionMode ?? "fact"), 20);
     const detectedExam = cleanExam(String(body.detectedExam ?? ""));
     const answerScope = cleanText(String(body.answerScope ?? "ssc_ga_gs"), 20);
 
-    if (answerScope === "out_of_scope") {
-      return { ok: true };
-    }
+    if (answerScope === "out_of_scope") return { ok: true };
 
     profile.questionCount += 1;
     profile.lastUpdatedAt = Date.now();
 
-    if (detectedExam) {
-      profile.targetExam = detectedExam;
-    }
+    if (detectedExam) profile.targetExam = detectedExam;
 
-    const wasRecentTopic = topic && topic !== "General SSC doubt"
-      ? profile.recentTopics.some((item) => item.toLowerCase() === topic.toLowerCase())
-      : false;
-
-    if (topic && topic !== "General SSC doubt") {
+    const validTopic = Boolean(topic && topic !== "General SSC doubt");
+    if (validTopic) {
       profile.recentTopics = [topic, ...profile.recentTopics.filter((item) => item.toLowerCase() !== topic.toLowerCase())].slice(0, 10);
     }
     if (subject) {
       profile.recentSubjects = [subject, ...profile.recentSubjects.filter((item) => item.toLowerCase() !== subject.toLowerCase())].slice(0, 6);
     }
 
-    if ((signal === "confusion" || (signal === "weak" && wasRecentTopic)) && topic && topic !== "General SSC doubt") {
+    const confusionEvidence = signal === "confusion" && isExplicitConfusionQuestion(question);
+    const weaknessEvidence = signal === "weak" && isExplicitWeaknessQuestion(question);
+    const evidenceBackedSignal = (confusionEvidence || weaknessEvidence) ? signal : "neutral";
+
+    if (validTopic && (evidenceBackedSignal === "confusion" || evidenceBackedSignal === "weak")) {
       const normalized = topic.toLowerCase();
-      profile.attentionTopics = [topic, ...profile.attentionTopics.filter((item) => item.toLowerCase() !== normalized)].slice(0, 6);
+      const existingSignal = profile.learningSignals.find((item) => item.topic.toLowerCase() === normalized);
+      const nextSignal: LearningSignal = existingSignal
+        ? {
+            ...existingSignal,
+            topic,
+            confusionCount: existingSignal.confusionCount + (evidenceBackedSignal === "confusion" ? 1 : 0),
+            weakCount: existingSignal.weakCount + (evidenceBackedSignal === "weak" ? 1 : 0),
+            lastSeenAt: Date.now(),
+          }
+        : {
+            topic,
+            confusionCount: evidenceBackedSignal === "confusion" ? 1 : 0,
+            weakCount: evidenceBackedSignal === "weak" ? 1 : 0,
+            lastSeenAt: Date.now(),
+          };
+
+      profile.learningSignals = [
+        nextSignal,
+        ...profile.learningSignals.filter((item) => item.topic.toLowerCase() !== normalized),
+      ].slice(0, 12);
+
+      const totalEvidence = nextSignal.confusionCount + nextSignal.weakCount;
+      if (totalEvidence >= 2) {
+        profile.attentionTopics = [topic, ...profile.attentionTopics.filter((item) => item.toLowerCase() !== normalized)].slice(0, 6);
+      }
     }
 
-    if (nextRevisionTopic) {
-      profile.revisionQueue = [nextRevisionTopic, ...profile.revisionQueue.filter((item) => item.toLowerCase() !== nextRevisionTopic.toLowerCase())].slice(0, 6);
+    const revisionTopic = validTopic && (evidenceBackedSignal === "confusion" || evidenceBackedSignal === "weak" || questionMode === "revision")
+      ? topic
+      : questionMode === "revision" && nextRevisionTopic
+        ? nextRevisionTopic
+        : "";
+
+    if (revisionTopic) {
+      profile.revisionQueue = [revisionTopic, ...profile.revisionQueue.filter((item) => item.toLowerCase() !== revisionTopic.toLowerCase())].slice(0, 6);
     }
 
     await this.ctx.storage.put(PROFILE_KEY, profile);
@@ -500,17 +536,131 @@ function parseJob(body: Record<string, unknown>): QuestionJob {
   return job;
 }
 
-function normalizeProfile(profile: StudentProfile): StudentProfile {
+function normalizeProfileSignal(value: unknown): "neutral" | "weak" | "confusion" | "strength" {
+  const normalized = cleanText(String(value ?? "neutral"), 20).toLowerCase();
+  if (normalized === "weak" || normalized === "confusion" || normalized === "strength") return normalized;
+  return "neutral";
+}
+
+function isExplicitConfusionQuestion(question: string): boolean {
+  const q = question.toLowerCase();
+  const markers = [
+    "confused", "confuse", "confusing", "confusion", "dono same", "difference samajh",
+    "samajh nahi aa", "samajh nahi aata", "samajh nahi", "clear nahi", "mix ho raha",
+    "mix up", "ulta ho raha", "dono mein", "dono me", "कन्फ्यूज", "समझ नहीं", "दोनों में",
+  ];
+  return markers.some((marker) => q.includes(marker));
+}
+
+function isExplicitWeaknessQuestion(question: string): boolean {
+  const q = question.toLowerCase();
+  const markers = [
+    "mujhe nahi aata", "mujhe ye nahi aata", "weak hoon", "weak hu", "bar bar galat",
+    "baar baar galat", "mistake hoti", "galti hoti", "bhool jata", "bhool jaata",
+    "yaad nahi rehta", "yaad nahi rahta", "struggle hota", "struggle ho raha",
+    "problem hoti", "dikkat hoti", "कमजोर",
+  ];
+  return markers.some((marker) => q.includes(marker));
+}
+
+
+export function normalizeProfile(profile: unknown): StudentProfile {
+  const source = isRecord(profile) ? profile : {};
+  const version = Number(source.version);
+  const targetExam = cleanExamLike(source.targetExam) || "SSC (not specified)";
+  const recentTopics = normalizeStringArray(source.recentTopics, 10);
+  const recentSubjects = normalizeStringArray(source.recentSubjects, 6);
+  const legacyAttention = normalizeStringArray(source.attentionTopics, 6);
+  const revisionQueue = normalizeStringArray(source.revisionQueue, 6);
+  const lastUpdatedAt = safeNonNegativeInteger(source.lastUpdatedAt);
+
+  let learningSignals = normalizeLearningSignals(source.learningSignals);
+  let attentionTopics = legacyAttention;
+
+  // v1 profiles had attention topics but no evidence counters. Treat each legacy
+  // attention topic as one historical signal and require one more explicit signal
+  // before it becomes a persistent attention area under v2 rules.
+  if ((version < 2 || !Array.isArray(source.learningSignals)) && learningSignals.length === 0 && legacyAttention.length > 0) {
+    learningSignals = legacyAttention.map((topic) => ({
+      topic,
+      confusionCount: 1,
+      weakCount: 0,
+      lastSeenAt: lastUpdatedAt,
+    }));
+    attentionTopics = [];
+  }
+
   return {
-    version: 1,
-    targetExam: profile.targetExam || DEFAULT_PROFILE.targetExam,
-    recentTopics: Array.isArray(profile.recentTopics) ? profile.recentTopics.slice(0, 10) : [],
-    recentSubjects: Array.isArray(profile.recentSubjects) ? profile.recentSubjects.slice(0, 6) : [],
-    attentionTopics: Array.isArray(profile.attentionTopics) ? profile.attentionTopics.slice(0, 6) : [],
-    revisionQueue: Array.isArray(profile.revisionQueue) ? profile.revisionQueue.slice(0, 6) : [],
-    questionCount: Number.isSafeInteger(profile.questionCount) && profile.questionCount >= 0 ? profile.questionCount : 0,
-    lastUpdatedAt: Number.isSafeInteger(profile.lastUpdatedAt) && profile.lastUpdatedAt >= 0 ? profile.lastUpdatedAt : 0,
+    version: 2,
+    targetExam,
+    recentTopics,
+    recentSubjects,
+    attentionTopics: dedupeCaseInsensitive(attentionTopics).slice(0, 6),
+    revisionQueue,
+    learningSignals,
+    questionCount: safeNonNegativeInteger(source.questionCount),
+    lastUpdatedAt,
   };
+}
+
+function profileNeedsMigration(raw: unknown, normalized: StudentProfile): boolean {
+  if (!isRecord(raw)) return true;
+  if (raw.version !== 2 || !Array.isArray(raw.learningSignals)) return true;
+  if (!Array.isArray(raw.recentTopics) || !Array.isArray(raw.recentSubjects) || !Array.isArray(raw.attentionTopics) || !Array.isArray(raw.revisionQueue)) return true;
+  return JSON.stringify(raw) !== JSON.stringify(normalized);
+}
+
+function normalizeLearningSignals(value: unknown): LearningSignal[] {
+  if (!Array.isArray(value)) return [];
+  const result: LearningSignal[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const topic = cleanText(String(item.topic ?? ""), 100);
+    if (!topic || topic === "General SSC doubt") continue;
+    const normalized = topic.toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push({
+      topic,
+      confusionCount: safeNonNegativeInteger(item.confusionCount),
+      weakCount: safeNonNegativeInteger(item.weakCount),
+      lastSeenAt: safeNonNegativeInteger(item.lastSeenAt),
+    });
+    if (result.length >= 12) break;
+  }
+  return result;
+}
+
+function normalizeStringArray(value: unknown, limit: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return dedupeCaseInsensitive(value.map((item) => cleanText(String(item ?? ""), 100)).filter(Boolean)).slice(0, limit);
+}
+
+function dedupeCaseInsensitive(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = value.toLowerCase();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(value);
+  }
+  return result;
+}
+
+function safeNonNegativeInteger(value: unknown): number {
+  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : 0;
+}
+
+function cleanExamLike(value: unknown): string {
+  const cleaned = cleanText(String(value ?? ""), 60);
+  if (!cleaned) return "";
+  return cleaned;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function jobKey(updateId: number): string { return `job:${updateId}`; }

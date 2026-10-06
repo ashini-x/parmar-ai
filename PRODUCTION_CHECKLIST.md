@@ -36,9 +36,19 @@ The system is designed to absorb bursts instead of failing the webhook immediate
 - [ ] Before a major public launch, monitor D1/Workers/Queue Free-plan limits and upgrade Cloudflare before limits become user-visible.
 
 
-## 2.3.0 behavior tests
+## 2.4.0 behavior tests
 - Ask a fact question, then a contextual follow-up such as “iska main reason?”, then “simple mein samjha de”; verify the bot stays on the same topic.
 - Say “ryotwari se confuse ho raha hoon” after discussing Permanent Settlement; verify the answer directly contrasts the two rather than restarting the entire chapter.
 - Confirm no literal `\n` text appears in Telegram.
 - Confirm a partially generated/`MAX_TOKENS` response is never sent as a partial answer.
 - Run `/reset` and verify subsequent follow-ups do not use the pre-reset conversation.
+
+
+## v2.4.0 evidence-based personalization regression cases
+- Ask a fact question, then “iska reason?”, then “simple mein samjha de”; verify same-topic continuity and no speculative focus recommendation.
+- Say “ryotwari se confuse ho raha hoon” after discussing Permanent Settlement; verify direct contrast and exactly one learning signal.
+- Ask another normal question; verify a single signal does not create a persistent attention area.
+- Repeat an explicit confusion/weakness signal for the same topic; verify the topic is promoted to attention areas.
+- Run `/profile`; verify learning signals render safely even when none exist.
+- Test a v2.3-existing student profile; verify it loads and migrates without `undefined` arrays.
+- Temporarily induce a profile-write failure; verify the AI answer is still delivered and typing does not remain stuck.
