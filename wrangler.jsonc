@@ -23,7 +23,7 @@
     "VERTEX_TIMEOUT_MS": "25000",
     "ANALYTICS_RAW_RETENTION_DAYS": "90",
     "ADMIN_DASHBOARD_USER": "admin",
-    "BOT_OWNER_TELEGRAM_USER_ID": "REPLACE_WITH_OWNER_TELEGRAM_USER_ID",
+    "BOT_OWNER_TELEGRAM_USER_ID": "",
     "ADMIN_TELEGRAM_USER_IDS": "",
     "UNLIMITED_AI_TELEGRAM_USER_IDS": ""
   },
@@ -45,7 +45,7 @@
     {
       "binding": "DB",
       "database_name": "parmar-ai-admin-prod",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+      "database_id": "1c033fb8-10aa-4bee-a294-4dbc899c09f7"
     }
   ],
   "triggers": {
