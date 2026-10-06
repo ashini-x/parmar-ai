@@ -1,3 +1,22 @@
+# Release 2.4.1 — Quota Messaging & Stable v2.4
+
+## Changes
+- Keeps the rebuilt v2.4 evidence-based personalization architecture as the base.
+- Separates burst-limit notifications from daily-limit notifications.
+- Burst protection remains 5 questions per 10 seconds by default.
+- Daily allowance remains 20 accepted AI questions per India calendar day, resetting at 00:00 IST.
+- Analytics now records `burst_limit_reached` separately from `daily_limit_reached`.
+- The user-facing daily-limit message explicitly tells the student that the daily allowance is complete and to return after the next daily reset.
+- The burst-limit message remains a short temporary cooldown message.
+- No D1 schema change.
+
+## Regression target
+- A user who exceeds the burst window receives the burst message.
+- A user who reaches the daily quota receives the daily-limit message.
+- Neither rate-limit path starts an AI job or leaves an unnecessary Telegram typing indicator.
+
+---
+
 # Release 2.4.0
 
 ## Evidence-based personalization

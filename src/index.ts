@@ -248,10 +248,16 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (begin.action === "rate_limited") {
     if (begin.notify) {
-      queueAnalytics(ctx, "rate_limit", () => recordEvent(env, "daily_limit_reached", analyticsUser, { updateId }));
-      await bestEffortTelegram("rate_limit", () => sendTelegramMessage(env, chatId, RATE_LIMIT_TEXT, messageId));
+      const isDailyLimit = begin.rateLimitReason === "daily";
+      queueAnalytics(ctx, "rate_limit", () =>
+        recordEvent(env, isDailyLimit ? "daily_limit_reached" : "burst_limit_reached", analyticsUser, { updateId }),
+      );
+      await bestEffortTelegram(
+        "rate_limit",
+        () => sendTelegramMessage(env, chatId, isDailyLimit ? DAILY_LIMIT_TEXT : RATE_LIMIT_TEXT, messageId),
+      );
     }
-    return withRequestId(json({ ok: true, rateLimited: true }), requestId);
+    return withRequestId(json({ ok: true, rateLimited: true, rateLimitReason: begin.rateLimitReason }), requestId);
   }
 
   let statusMessageId = begin.statusMessageId;

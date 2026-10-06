@@ -42,6 +42,7 @@ interface BeginResponse {
   action: "new" | "duplicate" | "rate_limited" | "retry_ack";
   statusMessageId?: number;
   notify?: boolean;
+  rateLimitReason?: "daily" | "burst";
 }
 
 interface GenericResponse { ok: true; }
@@ -209,7 +210,11 @@ export class JobDedupe extends DurableObject {
         dayCount,
         lastRateNoticeAt: shouldNotify ? now : rate.lastRateNoticeAt,
       });
-      return { action: "rate_limited", notify: shouldNotify };
+      return {
+        action: "rate_limited",
+        notify: shouldNotify,
+        rateLimitReason: dayCount >= dailyLimit ? "daily" : "burst",
+      };
     }
 
     await this.ctx.storage.put<RateMeta>(RATE_LIMIT_META_KEY, {
