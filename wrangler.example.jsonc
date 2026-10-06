@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "parmar-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-05",
+  "workers_dev": true,
+  "observability": {"enabled": true},
+  "vars": {
+    "APP_VERSION": "2.4.1",
+    "BURST_QUESTION_LIMIT": "5",
+    "BURST_WINDOW_SECONDS": "10",
+    "DAILY_QUESTION_LIMIT": "20",
+    "ENVIRONMENT": "production",
+    "GEMINI_LOCATION": "global",
+    "GEMINI_THINKING_LEVEL": "HIGH",
+    "ENABLE_GOOGLE_SEARCH_GROUNDING": "true",
+    "GEMINI_MODEL": "gemini-3.8-flash",
+    "MAX_OUTPUT_TOKENS": "1200",
+    "MAX_QUESTION_LENGTH": "4000",
+    "VERTEX_TIMEOUT_MS": "25000",
+    "ANALYTICS_RAW_RETENTION_DAYS": "90",
+    "ADMIN_DASHBOARD_USER": "admin"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "parmar-ai-admin-prod",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ]
+}

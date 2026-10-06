@@ -1,0 +1,22 @@
+{
+  "name": "parmar-ai",
+  "version": "2.4.1",
+  "release_channel": "stable",
+  "repository_type": "public-production-source",
+  "artifact_policy": "immutable-release-source",
+  "runtime": {
+    "platform": "Cloudflare Workers",
+    "queue": "parmar-ai-questions-prod",
+    "dead_letter_queue": "parmar-ai-questions-dlq",
+    "durable_object": "JobDedupe",
+    "analytics": "Cloudflare D1",
+    "ai": "Google Vertex AI / Gemini"
+  },
+  "limits": {
+    "daily_questions": 20,
+    "burst_questions": 5,
+    "burst_window_seconds": 10,
+    "daily_reset": "00:00 Asia/Kolkata"
+  },
+  "secret_policy": "No production secrets or real user exports are included."
+}
