@@ -130,7 +130,7 @@ export interface ProfileContext {
 export function getConfig(env: Env) {
   return {
     environment: env.ENVIRONMENT ?? "development",
-    version: env.APP_VERSION ?? "2.5.1",
+    version: env.APP_VERSION ?? "2.5.2",
     model: env.GEMINI_MODEL ?? "gemini-3.8-flash",
     location: env.GEMINI_LOCATION ?? "global",
     maxThinkingLevel: normalizeThinkingLevel(env.GEMINI_THINKING_LEVEL),

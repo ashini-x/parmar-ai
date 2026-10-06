@@ -1,6 +1,6 @@
 {
   "name": "parmar-ai",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "release_channel": "stable",
   "repository_type": "public-production-source",
   "artifact_policy": "immutable-release-source",
@@ -80,8 +80,9 @@
   },
   "build": {
     "source_baseline": "v2.5.0 admin control center stable enterprise release",
-    "feature_change": "admin UI interaction fix; backend/admin analytics semantics preserved",
+    "feature_change": "admin Students directory effective-access display and action-handler fix; student path unchanged",
     "student_path_change": "preserved",
     "release_status": "stable"
-  }
+  },
+  "release_status": "stable"
 }

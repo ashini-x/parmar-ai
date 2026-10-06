@@ -1,4 +1,4 @@
-# HTTP/API Surface — v2.5.1
+# HTTP/API Surface — v2.5.2
 
 The Worker is primarily a Telegram webhook service. Admin routes are protected by the signed dashboard session.
 

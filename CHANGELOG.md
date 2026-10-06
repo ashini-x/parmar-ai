@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.2 - Admin Access Controls UI Fix
+- Fix owner/admin effective access display in the Students directory.
+- Fix Grant unlimited and Suspend action handlers so their action names are correctly quoted.
+- Surface admin API action failures instead of silently ignoring them.
+
 ## 2.5.1 - Admin UI Interaction Fix
 
 - Fixed a browser JavaScript syntax error that prevented admin-dashboard click handlers from loading.

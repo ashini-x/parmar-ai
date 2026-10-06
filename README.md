@@ -1,16 +1,16 @@
 # Parmar AI
 
-**Production Release: v2.5.1**
+**Production Release: v2.5.2**
 
 Parmar AI is a Telegram-first, SSC-focused AI study companion built for fast doubt solving, conversation continuity, evidence-based study personalization, and owner-grade operational visibility.
 
 The production application runs on **Cloudflare Workers**, **Cloudflare Queues**, **SQLite-backed Durable Objects**, **Cloudflare D1**, **Telegram Bot API**, and **Google Vertex AI / Gemini**.
 
-This repository intentionally contains the complete public application and engineering documentation for the v2.5.1 release. Production secrets, credentials, private user exports, and operational tokens are never committed.
+This repository intentionally contains the complete public application and engineering documentation for the v2.5.2 release. Production secrets, credentials, private user exports, and operational tokens are never committed.
 
-> **Repository status:** Public production source for v2.5.1. Future Battle Arena, social, voice, marketplace, and payments concepts are not shipped unless explicitly marked below.
+> **Repository status:** Public production source for v2.5.2. Future Battle Arena, social, voice, marketplace, and payments concepts are not shipped unless explicitly marked below.
 
-## What v2.5.1 ships
+## What v2.5.2 ships
 
 ### Student experience
 - SSC GA/GS-first doubt solving.
@@ -73,7 +73,7 @@ The dashboard converts that usage into an **estimate**, using configurable per-m
 
 The dashboard never presents this estimate as the authoritative Google Cloud invoice.
 
-## What v2.5.1 does not ship
+## What v2.5.2 does not ship
 
 - PUBG-style live Battle Royale arena.
 - Squad matchmaking and social graph.
@@ -190,7 +190,7 @@ Unlimited means **no daily quota**, not unlimited traffic. All accounts remain p
 
 ## Identity and reset semantics
 
-The canonical student identity is the Telegram `from.id` value for analytics and learning-profile identity. Private-chat operational routing continues to use chat ID because v2.5.1 supports private chats only.
+The canonical student identity is the Telegram `from.id` value for analytics and learning-profile identity. Private-chat operational routing continues to use chat ID because v2.5.2 supports private chats only.
 
 `/reset` clears the student's study profile and conversation context. It does **not** erase centralized analytics, and it does **not** reset the daily AI quota.
 
@@ -200,7 +200,7 @@ Token usage is recorded from Gemini response metadata after successful HTTP 200 
 
 ## Versioning
 
-See `docs/VERSIONING.md`. v2.5.1 is the first admin-control-center release on top of the stable v2.4.2 application line.
+See `docs/VERSIONING.md`. v2.5.x is the admin-control-center release line built on top of the stable v2.4.2 application line.
 
 ## License
 

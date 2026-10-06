@@ -1,5 +1,24 @@
 # Parmar AI Release Notes
 
+## v2.5.2 — Admin Access Controls UI Fix
+
+### Goal
+Correct the Students access-control interface so configured owner/admin/static-unlimited users are recognized consistently and administrative action buttons execute with the intended action names.
+
+### Fixed
+- Owner/admin/static-unlimited accounts now display effective unlimited access in the Students directory.
+- Owner/admin accounts are visibly protected from suspension and revocation actions in the directory.
+- Grant/revoke unlimited buttons now pass explicit action strings to the browser handler.
+- Suspend/unsuspend buttons now pass explicit action strings to the browser handler.
+- Admin action failures now surface an explicit error message instead of failing silently.
+- The underlying server-side authorization rules remain unchanged.
+
+### Compatibility
+- Student daily quota remains 20 by default.
+- Burst protection remains 5 accepted questions per 10 seconds for all accounts.
+- Existing D1, Queue and Durable Object data is reused; no new migration is required for this UI-only access-control correction.
+
+
 ## v2.5.1 — Admin UI Interaction Fix
 
 ### Goal
