@@ -1,10 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
-import { sendTelegramChatAction } from "../telegram/api";
+import { sendTelegramChatAction, sendTelegramMessage } from "../telegram/api";
 
 const TYPING_HEARTBEAT_MS = 4_000;
-const TYPING_MAX_AGE_MS = 30 * 60 * 1_000;
+const TYPING_MAX_AGE_MS = 15 * 60 * 1_000;
+const STALE_QUEUE_JOB_MS = 15 * 60 * 1_000;
 const JOB_RETENTION_MS = 48 * 60 * 60 * 1_000;
 const PROCESSING_LEASE_MS = 15 * 60 * 1_000;
 const RATE_LIMIT_META_KEY = "meta:rate:v2";
@@ -124,6 +125,30 @@ export class JobDedupe extends DurableObject {
       const cleanupAt = record.createdAt + JOB_RETENTION_MS;
       nextCleanupAt = nextCleanupAt === null ? cleanupAt : Math.min(nextCleanupAt, cleanupAt);
 
+      if (record.state !== "done" && record.createdAt >= typingCutoff) {
+        hasActiveRecentJob = true;
+        chatId = record.chatId;
+      }
+
+      const staleByCreatedAt = now - record.createdAt >= STALE_QUEUE_JOB_MS;
+      const staleProcessing = record.state === "processing" && record.processingAt !== undefined && now - record.processingAt >= PROCESSING_LEASE_MS;
+      if (record.state !== "done" && (staleByCreatedAt || staleProcessing)) {
+        record.state = "done";
+        record.processingAt = undefined;
+        record.activeQueueMessageId = undefined;
+        await this.ctx.storage.put(key, record);
+        try {
+          await sendTelegramMessage(this.runtimeEnv, record.chatId, "Bhai, is sawal ko process hone mein expected se zyada time lag gaya. Tumhara question complete nahi ho paaya. Same doubt dobara bhej dena, main phir se try karunga. 🙏", record.messageId);
+        } catch {
+          // Best effort only; completion below is what stops future heartbeats.
+        }
+      }
+    }
+
+    // Recompute active typing state after stale-job cleanup.
+    hasActiveRecentJob = false;
+    chatId = undefined;
+    for (const record of jobs.values()) {
       if (record.state !== "done" && record.createdAt >= typingCutoff) {
         hasActiveRecentJob = true;
         chatId = record.chatId;

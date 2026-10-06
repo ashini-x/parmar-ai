@@ -326,23 +326,26 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       continue;
     }
 
-    const claim = await jobStoreRequest<ClaimResponse>(env, job.chatId, {
-      action: "claim",
-      updateId: job.updateId,
-      queueMessageId: message.id,
-    });
-
-    if (!claim.claimed || !claim.record) {
-      if (claim.wait) {
-        message.retry({ delaySeconds: claim.retryAfterSeconds ?? 5 });
-      } else {
-        message.ack();
-      }
-      continue;
-    }
+    let claim: ClaimResponse | undefined;
 
     try {
+      claim = await jobStoreRequest<ClaimResponse>(env, job.chatId, {
+        action: "claim",
+        updateId: job.updateId,
+        queueMessageId: message.id,
+      });
+
+      if (!claim.claimed || !claim.record) {
+        if (claim.wait) {
+          message.retry({ delaySeconds: claim.retryAfterSeconds ?? 5 });
+        } else {
+          message.ack();
+        }
+        continue;
+      }
+
       const startedAt = Date.now();
+
       // Repair analytics asynchronously in case the webhook-side D1 write was interrupted.
       ctx.waitUntil(recordUserSeen(env, { telegramUserId: job.chatId, chatId: job.chatId }));
       ctx.waitUntil(recordQuestionStart(env, {
@@ -353,11 +356,13 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         question: job.question,
         receivedAt: job.createdAt,
       }));
+
       const profile = await getStudentProfile(env, job.chatId);
       const conversationResult = await jobStoreRequest<{ ok: true; recentConversation: ConversationTurn[] }>(env, job.chatId, {
         action: "get_conversation",
         updateId: job.updateId,
       });
+
       let packet = claim.record.answerPacket;
 
       if (!packet) {
@@ -394,6 +399,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       const latestProfile = await getStudentProfile(env, job.chatId);
       await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, latestProfile));
       await jobStoreRequest(env, job.chatId, { action: "complete", updateId: job.updateId });
+
       const completedAt = Date.now();
       ctx.waitUntil(recordQuestionResult(env, {
         updateId: job.updateId,
@@ -405,7 +411,9 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         packet,
         thinkingLevel: packet.thinkingLevelUsed,
         grounded: packet.grounded,
-      }).catch((error) => logger.warn("analytics_question_result_failed", { error: error instanceof Error ? error.message : String(error) })));
+      }).catch((error) => logger.warn("analytics_question_result_failed", {
+        error: error instanceof Error ? error.message : String(error),
+      })));
 
       logger.info("question_completed", {
         requestId: job.requestId,
@@ -423,32 +431,60 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         queueMessageId: message.id,
         attempts: message.attempts,
         retryable,
+        stage: claim?.claimed ? "after_claim" : "before_or_during_claim",
         error: error instanceof Error ? error.message : String(error),
       });
 
-      if (retryable && message.attempts < QUEUE_MAX_RETRIES) {
-        message.retry({ delaySeconds: queueRetryDelay(message.attempts) });
+      const attempts = Number.isSafeInteger(message.attempts) ? message.attempts : 1;
+      if (retryable && attempts < QUEUE_MAX_RETRIES) {
+        // If a pre-claim failure happened, the Durable Object record may still be
+        // pending/queued. The next Queue attempt can safely reclaim it.
+        message.retry({ delaySeconds: queueRetryDelay(attempts) });
         continue;
       }
 
+      // Never leave the user's typing indicator running indefinitely. At the final
+      // Queue attempt, try to deliver a clean failure and mark the durable job done.
+      // The completion call is deliberately attempted even if Telegram delivery fails.
+      let completionSucceeded = false;
       try {
-        await deliverAnswer(env, job, claim.record.statusMessageId, userFacingFailure(error));
-        await jobStoreRequest(env, job.chatId, { action: "complete", updateId: job.updateId });
-        ctx.waitUntil(recordQuestionResult(env, {
-          updateId: job.updateId,
-          status: "failed",
-          completedAt: Date.now(),
-          attempts: message.attempts,
-          errorMessage: error instanceof Error ? error.message : String(error),
-        }).catch((analyticsError) => logger.warn("analytics_question_failure_failed", { error: analyticsError instanceof Error ? analyticsError.message : String(analyticsError) })));
-        message.ack();
+        const statusMessageId = claim?.record?.statusMessageId ?? job.statusMessageId;
+        await deliverAnswer(env, job, statusMessageId, userFacingFailure(error));
       } catch (deliveryError) {
         logger.error("final_failure_delivery_failed", {
           requestId: job.requestId,
           updateId: job.updateId,
           error: deliveryError instanceof Error ? deliveryError.message : String(deliveryError),
         });
-        message.retry({ delaySeconds: Math.min(300, queueRetryDelay(message.attempts)) });
+      }
+
+      try {
+        await jobStoreRequest(env, job.chatId, { action: "complete", updateId: job.updateId });
+        completionSucceeded = true;
+        ctx.waitUntil(recordQuestionResult(env, {
+          updateId: job.updateId,
+          status: "failed",
+          completedAt: Date.now(),
+          attempts,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        }).catch((analyticsError) => logger.warn("analytics_question_failure_failed", {
+          error: analyticsError instanceof Error ? analyticsError.message : String(analyticsError),
+        })));
+      } catch (completionError) {
+        logger.error("final_failure_completion_failed", {
+          requestId: job.requestId,
+          updateId: job.updateId,
+          error: completionError instanceof Error ? completionError.message : String(completionError),
+        });
+      }
+
+      if (completionSucceeded) {
+        message.ack();
+      } else {
+        // Leave it for the Queue's DLQ/retry machinery if the state service itself
+        // is unavailable. The Durable Object watchdog is also responsible for
+        // clearing stale typing state.
+        message.retry({ delaySeconds: Math.min(300, queueRetryDelay(attempts)) });
       }
     }
   }

@@ -1,3 +1,10 @@
+# Release 2.5.0 — Queue/Typing Reliability
+
+- Wrapped the entire Queue-message lifecycle, including Durable Object claim, in the retry/failure boundary so pre-claim exceptions cannot leave typing state orphaned.
+- Final Queue attempts now try both a clean Telegram failure message and durable job completion; an unhandled consumer exception can no longer silently strand a job.
+- Added a Durable Object stale-job watchdog that closes jobs stuck beyond the processing lease and stops the typing heartbeat instead of allowing it to persist indefinitely.
+- Preserved the same Worker + Durable Object + Queue + Vertex AI + D1 architecture and the 20-question/day/user rule.
+
 # Release 2.4.0
 
 ## Conversation intelligence
