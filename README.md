@@ -1,16 +1,16 @@
 # Parmar AI
 
-**Production Release: v2.4.1**
+**Production Release: v2.4.2**
 
 Parmar AI is a Telegram-first, SSC-focused AI study companion built for fast doubt solving, conversation continuity, and evidence-based study personalization.
 
 The production application runs on **Cloudflare Workers**, **Cloudflare Queues**, **SQLite-backed Durable Objects**, **Cloudflare D1**, **Telegram Bot API**, and **Google Vertex AI / Gemini**.
 
-This repository intentionally contains the complete public application and engineering documentation for the v2.4.1 release. Production secrets, credentials, private user exports, and operational tokens are never committed.
+This repository intentionally contains the complete public application and engineering documentation for the v2.4.2 release. Production secrets, credentials, private user exports, and operational tokens are never committed.
 
-> **Repository status:** Public production source for v2.4.1. Future Battle Arena, social, voice, marketplace, and payments concepts described in older strategy notes are not part of this release unless explicitly marked as shipped below.
+> **Repository status:** Public production source for v2.4.2. Future Battle Arena, social, voice, marketplace, and payments concepts described in older strategy notes are not part of this release unless explicitly marked as shipped below.
 
-## What v2.4.1 ships
+## What v2.4.2 ships
 
 ### Student experience
 - SSC GA/GS-first doubt solving.
@@ -46,7 +46,7 @@ This repository intentionally contains the complete public application and engin
 - Daily scheduled cleanup.
 - Structured request IDs and operational logging without secret values.
 
-## What v2.4.1 does not ship
+## What v2.4.2 does not ship
 
 The following are product concepts, not implemented production features in this release:
 
@@ -150,10 +150,27 @@ After deployment, validate the release using `docs/TEST_PLAN.md`.
 | `MAX_QUESTION_LENGTH` | `4000` | Maximum incoming text length |
 | `VERTEX_TIMEOUT_MS` | `25000` | Vertex request timeout |
 | `ANALYTICS_RAW_RETENTION_DAYS` | `90` | D1 raw question/event retention |
+| `BOT_OWNER_TELEGRAM_USER_ID` | — | Primary bot owner/admin Telegram ID; configure outside the public source with the real value |
+| `ADMIN_TELEGRAM_USER_IDS` | — | Additional admin Telegram IDs, comma-separated |
+| `UNLIMITED_AI_TELEGRAM_USER_IDS` | — | Optional static unlimited-AI allowlist, comma-separated |
+
+## Privileged test/admin access
+
+The production default is 20 AI questions per India calendar day. The bot owner and configured admins are exempt from the daily quota for testing. Specific Telegram profiles can also be granted unlimited daily AI access without changing source code.
+
+Configuration:
+
+- `BOT_OWNER_TELEGRAM_USER_ID` — primary owner/admin Telegram ID.
+- `ADMIN_TELEGRAM_USER_IDS` — optional comma-separated additional admin IDs.
+- `UNLIMITED_AI_TELEGRAM_USER_IDS` — optional static test allowlist.
+
+Configured admins may grant runtime access with `/grant <telegram_user_id>`, revoke it with `/revoke <telegram_user_id>`, and inspect it with `/unlimited <telegram_user_id>`. Runtime grants are stored in D1. Admin commands are intentionally not exposed through the public command menu.
+
+Unlimited means **unlimited daily AI access**, not unlimited request bursts. The 5 questions / 10 seconds burst safeguard continues to protect the backend for every account.
 
 ## Identity and reset semantics
 
-The canonical student identity is the Telegram `from.id` value for analytics and learning-profile identity. Private-chat operational routing uses the chat ID because the current product intentionally supports private chats only.
+The canonical student identity is the Telegram `from.id` value for analytics and learning-profile identity. The bot owner/admin is explicitly configured through `BOT_OWNER_TELEGRAM_USER_ID`; Telegram does not expose BotFather ownership as a runtime field. Additional admins can be listed in `ADMIN_TELEGRAM_USER_IDS`. Private-chat operational routing uses the chat ID because the current product intentionally supports private chats only.
 
 `/reset` clears the student's live study profile and starts a fresh conversation context. It does **not** erase centralized D1 operational analytics. The daily question allowance is a separate rate-limit state and is **not** reset by `/reset`.
 

@@ -19,7 +19,7 @@ import {
   TelegramError,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
-import { recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics } from "./analytics/db";
+import { recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
 
@@ -46,6 +46,8 @@ interface BeginJobResponse {
   action: "new" | "duplicate" | "rate_limited" | "retry_ack";
   statusMessageId?: number;
   notify?: boolean;
+  rateLimitReason?: "daily" | "burst";
+  unlimited?: boolean;
 }
 
 function withRequestId(response: Response, requestId: string): Response {
@@ -168,11 +170,63 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true }), requestId);
   }
 
+  if (/^\/id$/i.test(text)) {
+    queueAnalytics(ctx, "id", () => recordEvent(env, "id_view", analyticsUser));
+    await bestEffortTelegram("id", () => sendTelegramMessage(env, chatId, `Tumhara Telegram User ID: ${analyticsUser.telegramUserId}`));
+    return withRequestId(json({ ok: true }), requestId);
+  }
+
   if (isReset(text)) {
     await jobStoreRequest(env, chatId, { action: "reset_profile" });
     queueAnalytics(ctx, "reset", () => recordEvent(env, "reset", analyticsUser));
     await bestEffortTelegram("reset", () => sendTelegramMessage(env, chatId, "Theek hai. Tumhari Parmar SSC study profile reset kar di. Ab fresh tracking se shuru karte hain. 📚"));
     return withRequestId(json({ ok: true }), requestId);
+  }
+
+  if (isAdminTelegramUser(env, analyticsUser.telegramUserId)) {
+    const grantMatch = text.match(/^\/grant(?:_unlimited)?\s+(\d+)$/i);
+    if (grantMatch) {
+      const targetId = Number(grantMatch[1]);
+      if (!Number.isSafeInteger(targetId) || targetId <= 0) {
+        await bestEffortTelegram("admin_grant_invalid", () => sendTelegramMessage(env, chatId, "Valid Telegram User ID bhejo."));
+      } else {
+        try {
+          await grantUnlimitedAiAccess(env, targetId, analyticsUser.telegramUserId);
+          await recordEvent(env, "admin_unlimited_ai_granted", analyticsUser, { targetTelegramUserId: targetId });
+          await bestEffortTelegram("admin_grant", () => sendTelegramMessage(env, chatId, `✅ Unlimited daily AI access granted to Telegram ID ${targetId}.`));
+        } catch (error) {
+          logger.error("admin_unlimited_ai_grant_failed", { requestId, targetTelegramUserId: targetId, error: error instanceof Error ? error.message : String(error) });
+          await bestEffortTelegram("admin_grant_failed", () => sendTelegramMessage(env, chatId, "Access change nahi ho paaya. D1/admin configuration check karo. 🙏"));
+        }
+      }
+      return withRequestId(json({ ok: true }), requestId);
+    }
+
+    const revokeMatch = text.match(/^\/revoke(?:_unlimited)?\s+(\d+)$/i);
+    if (revokeMatch) {
+      const targetId = Number(revokeMatch[1]);
+      if (targetId === analyticsUser.telegramUserId || Number(env.BOT_OWNER_TELEGRAM_USER_ID ?? "") === targetId) {
+        await bestEffortTelegram("admin_revoke_protected", () => sendTelegramMessage(env, chatId, "Owner/admin access protected hai; ise Telegram command se revoke nahi kiya ja sakta."));
+      } else {
+        try {
+          await revokeUnlimitedAiAccess(env, targetId);
+          await recordEvent(env, "admin_unlimited_ai_revoked", analyticsUser, { targetTelegramUserId: targetId });
+          await bestEffortTelegram("admin_revoke", () => sendTelegramMessage(env, chatId, `✅ Unlimited daily AI access revoked for Telegram ID ${targetId}.`));
+        } catch (error) {
+          logger.error("admin_unlimited_ai_revoke_failed", { requestId, targetTelegramUserId: targetId, error: error instanceof Error ? error.message : String(error) });
+          await bestEffortTelegram("admin_revoke_failed", () => sendTelegramMessage(env, chatId, "Access change nahi ho paaya. D1/admin configuration check karo. 🙏"));
+        }
+      }
+      return withRequestId(json({ ok: true }), requestId);
+    }
+
+    const statusMatch = text.match(/^\/unlimited(?:_status)?\s+(\d+)$/i);
+    if (statusMatch) {
+      const targetId = Number(statusMatch[1]);
+      const unlimited = await hasUnlimitedAiAccess(env, targetId);
+      await bestEffortTelegram("admin_unlimited_status", () => sendTelegramMessage(env, chatId, unlimited ? `♾️ Telegram ID ${targetId} has unlimited daily AI access.` : `🔒 Telegram ID ${targetId} is on the normal daily limit.`));
+      return withRequestId(json({ ok: true }), requestId);
+    }
   }
 
   if (/^\/exam$/i.test(text)) {
@@ -191,7 +245,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (isProfileCommand(text)) {
     queueAnalytics(ctx, "profile", () => recordEvent(env, "profile_view", analyticsUser));
-    const [profile, usage] = await Promise.all([getStudentProfile(env, chatId), getStudentUsage(env, chatId)]);
+    const [profile, usage] = await Promise.all([getStudentProfile(env, chatId), getStudentUsage(env, chatId, analyticsUser.telegramUserId)]);
     await bestEffortTelegram("profile", () => sendTelegramMessage(env, chatId, buildProfileText(profile, usage)));
     return withRequestId(json({ ok: true }), requestId);
   }
@@ -205,6 +259,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   const begin = await jobStoreRequest<BeginJobResponse>(env, chatId, {
     action: "begin",
+    telegramUserId: analyticsUser.telegramUserId,
     updateId,
     chatId,
     question: text,
@@ -536,8 +591,8 @@ async function getStudentProfile(env: Env, chatId: number): Promise<StudentProfi
   return response.profile;
 }
 
-async function getStudentUsage(env: Env, chatId: number): Promise<{ dayCount: number; dailyLimit: number }> {
-  const response = await jobStoreRequest<{ ok: true; usage: { dayCount: number; dailyLimit: number } }>(env, chatId, { action: "get_usage" });
+async function getStudentUsage(env: Env, chatId: number, telegramUserId: number): Promise<{ dayCount: number; dailyLimit: number; unlimited: boolean }> {
+  const response = await jobStoreRequest<{ ok: true; usage: { dayCount: number; dailyLimit: number; unlimited: boolean } }>(env, chatId, { action: "get_usage", telegramUserId });
   return response.usage;
 }
 
@@ -568,7 +623,7 @@ function buildHelpText(): string {
   ].join("\n");
 }
 
-function buildProfileText(profile: StudentProfile, usage: { dayCount: number; dailyLimit: number }): string {
+function buildProfileText(profile: StudentProfile, usage: { dayCount: number; dailyLimit: number; unlimited: boolean }): string {
   if (profile.questionCount === 0) return PROFILE_EMPTY_TEXT;
 
   const recent = profile.recentTopics.slice(0, 5);
@@ -583,7 +638,7 @@ function buildProfileText(profile: StudentProfile, usage: { dayCount: number; da
     "📚 Tumhari Parmar SSC Profile",
     `Target: ${profile.targetExam}`,
     `Questions tracked: ${profile.questionCount}`,
-    `Today: ${usage.dayCount}/${usage.dailyLimit} questions`,
+    `Today: ${usage.unlimited ? "Unlimited AI access" : `${usage.dayCount}/${usage.dailyLimit} questions`}`,
     "",
     `Recent focus: ${recent.length ? recent.join(" • ") : "abhi nahi"}`,
     `Attention areas: ${attention.length ? attention.join(" • ") : "abhi koi clear weak area nahi"}`,
@@ -652,6 +707,7 @@ function buildSetupCommands() {
     { command: "profile", description: "View your SSC study profile" },
     { command: "reset", description: "Reset your study profile" },
     { command: "help", description: "Show help" },
+    { command: "id", description: "Show your Telegram user ID" },
   ];
 }
 

@@ -47,7 +47,7 @@ The public `wrangler.jsonc` contains non-secret configuration and placeholders o
 Important defaults:
 
 ```text
-APP_VERSION=2.4.1
+APP_VERSION=2.4.2
 DAILY_QUESTION_LIMIT=20
 BURST_QUESTION_LIMIT=5
 BURST_WINDOW_SECONDS=10
@@ -56,7 +56,23 @@ VERTEX_TIMEOUT_MS=25000
 ANALYTICS_RAW_RETENTION_DAYS=90
 ```
 
-## 6. Worker secrets
+## 6. Privileged Telegram access
+
+Configure these non-secret Worker variables outside the public repository with your real values:
+
+```text
+BOT_OWNER_TELEGRAM_USER_ID=<creator/operator Telegram numeric ID>
+ADMIN_TELEGRAM_USER_IDS=<optional comma-separated admin IDs>
+UNLIMITED_AI_TELEGRAM_USER_IDS=<optional comma-separated static test IDs>
+```
+
+The owner/admin is **not discovered automatically from BotFather**; Telegram webhook updates do not expose bot-creator ownership. The owner ID is an explicit server-side trust anchor. Use `/id` in the bot to display the requesting account's Telegram ID.
+
+After the owner is configured, admins can manage runtime test access with `/grant <telegram_user_id>`, `/revoke <telegram_user_id>`, and `/unlimited <telegram_user_id>`. Runtime grants are stored in D1.
+
+Unlimited access bypasses only the daily 20-question quota. The 5-question/10-second burst guard remains enabled.
+
+## 7. Worker secrets
 
 Set these through Cloudflare's secret store:
 
@@ -71,20 +87,20 @@ ADMIN_DASHBOARD_PASSWORD
 ADMIN_SESSION_SECRET
 ```
 
-## 7. Google/Vertex
+## 8. Google/Vertex
 
 Verify the configured service account has the minimum required permissions for the Vertex AI API path used by the Worker.
 
-## 8. Telegram webhook
+## 9. Telegram webhook
 
 After deployment, call the protected setup endpoint using the deployment's setup secret. Confirm the webhook result is successful before beginning user testing.
 
-## 9. Admin
+## 10. Admin
 
 Open `/admin`, authenticate, and verify that the central D1 projection is receiving users, questions, and events.
 
 Add a Cloudflare Access policy in front of `/admin*` before exposing the production domain publicly.
 
-## 10. Post-deploy smoke test
+## 11. Post-deploy smoke test
 
 Use `docs/TEST_PLAN.md` and record the exact Cloudflare Worker version ID used for production.

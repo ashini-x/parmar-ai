@@ -1,4 +1,4 @@
-# Data Model — v2.4.1
+# Data Model — v2.4.2
 
 ## Durable Object keys
 
@@ -6,7 +6,7 @@
 |---|---|
 | `profile:v1` | Student profile payload. The key is retained for backward compatibility while the stored profile carries version `2`. |
 | `meta:rate:v2` | Daily/burst quota metadata. |
-| `meta:conversation_reset` | Timestamp boundary for `/reset`. |
+| `conversation:resetAt` | Timestamp boundary for `/reset`. |
 | `job:<updateId>` | Durable question job record. |
 | `profile:applied:<updateId>` | Idempotency marker preventing duplicate profile updates. |
 
@@ -47,7 +47,7 @@ The rate state tracks:
 - daily count,
 - last rate notification timestamp.
 
-The accepted-question counters are independent of `/reset`.
+The accepted-question counters are independent of `/reset`. Privileged access is a separate authorization state and is also independent of `/reset`.
 
 ## D1 tables
 
@@ -60,6 +60,35 @@ Operational analytics projection for accepted questions and their final processi
 ### `events`
 Operational/admin events such as start, reset, profile view, study plan, daily-limit reached, and burst-limit reached.
 
+## Privileged access model
+
+There are three layers:
+
+1. `BOT_OWNER_TELEGRAM_USER_ID` identifies the primary owner/admin.
+2. `ADMIN_TELEGRAM_USER_IDS` optionally identifies additional admins.
+3. `ai_access_overrides` stores runtime grants for specific Telegram IDs.
+
+`UNLIMITED_AI_TELEGRAM_USER_IDS` is a deployment-time bootstrap allowlist. It is useful for trusted test accounts but is not a replacement for the D1 runtime grant system.
+
+Privileged accounts bypass the daily AI allowance only. The 5 questions / 10 seconds burst safeguard remains active.
+
 ## Privacy note
 
 D1 intentionally contains question and answer analytics for operations. Raw question/event rows are subject to the configured retention cleanup. Production administrators should limit dashboard access and export only the minimum information needed.
+
+
+## D1 privileged access
+
+### `ai_access_overrides`
+
+Stores runtime grants for unlimited daily AI access.
+
+| Column | Purpose |
+|---|---|
+| `telegram_user_id` | Target Telegram profile ID; primary key. |
+| `unlimited_ai` | `1` while the override is active. |
+| `granted_by_telegram_user_id` | Admin who granted the override. |
+| `granted_at` | Grant timestamp. |
+| `expires_at` | Optional future expiry timestamp; current admin commands create non-expiring grants. |
+
+The owner/admin identity and static allowlist remain deployment configuration; runtime grants are stored in D1 so they can be changed without changing source code.

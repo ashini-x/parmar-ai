@@ -1,6 +1,6 @@
 {
   "name": "parmar-ai",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "release_channel": "stable",
   "repository_type": "public-production-source",
   "artifact_policy": "immutable-release-source",
@@ -16,7 +16,25 @@
     "daily_questions": 20,
     "burst_questions": 5,
     "burst_window_seconds": 10,
-    "daily_reset": "00:00 Asia/Kolkata"
+    "daily_reset": "00:00 Asia/Kolkata",
+    "privileged_daily_access": "unlimited"
   },
-  "secret_policy": "No production secrets or real user exports are included."
+  "secret_policy": "No production secrets or real user exports are included.",
+  "access_control": {
+    "owner_config": "BOT_OWNER_TELEGRAM_USER_ID",
+    "additional_admins_config": "ADMIN_TELEGRAM_USER_IDS",
+    "static_unlimited_allowlist": "UNLIMITED_AI_TELEGRAM_USER_IDS",
+    "runtime_override_table": "ai_access_overrides",
+    "runtime_admin_commands": [
+      "/grant <telegram_user_id>",
+      "/revoke <telegram_user_id>",
+      "/unlimited <telegram_user_id>"
+    ],
+    "burst_protection_applies_to_privileged_users": true
+  },
+  "build": {
+    "source_baseline": "v2.4.1 enterprise GitHub release",
+    "feature_change": "privileged owner/admin access and targeted unlimited daily-AI grants",
+    "release_status": "stable"
+  }
 }

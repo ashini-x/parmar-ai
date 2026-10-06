@@ -29,6 +29,9 @@ export interface Env {
   ADMIN_DASHBOARD_USER?: string;
   ADMIN_DASHBOARD_PASSWORD?: string;
   ADMIN_SESSION_SECRET?: string;
+  BOT_OWNER_TELEGRAM_USER_ID?: string;
+  ADMIN_TELEGRAM_USER_IDS?: string;
+  UNLIMITED_AI_TELEGRAM_USER_IDS?: string;
 
   DB?: D1Database;
   QUESTION_QUEUE: Queue<QuestionJob>;
@@ -100,7 +103,7 @@ export interface ProfileContext {
 export function getConfig(env: Env) {
   return {
     environment: env.ENVIRONMENT ?? "development",
-    version: env.APP_VERSION ?? "2.4.1",
+    version: env.APP_VERSION ?? "2.4.2",
     model: env.GEMINI_MODEL ?? "gemini-3.8-flash",
     location: env.GEMINI_LOCATION ?? "global",
     maxThinkingLevel: normalizeThinkingLevel(env.GEMINI_THINKING_LEVEL),

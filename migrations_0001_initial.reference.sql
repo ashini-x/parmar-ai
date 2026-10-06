@@ -54,3 +54,12 @@ CREATE INDEX IF NOT EXISTS idx_questions_status_received ON questions(status, re
 CREATE INDEX IF NOT EXISTS idx_questions_topic_received ON questions(topic, received_at);
 CREATE INDEX IF NOT EXISTS idx_events_at ON events(event_at);
 CREATE INDEX IF NOT EXISTS idx_events_user_at ON events(telegram_user_id, event_at);
+
+
+CREATE TABLE IF NOT EXISTS ai_access_overrides (
+  telegram_user_id INTEGER PRIMARY KEY,
+  unlimited_ai INTEGER NOT NULL DEFAULT 1,
+  granted_by_telegram_user_id INTEGER NOT NULL,
+  granted_at INTEGER NOT NULL,
+  expires_at INTEGER
+);

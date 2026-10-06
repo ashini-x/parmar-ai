@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
 import { sendTelegramChatAction } from "../telegram/api";
+import { hasUnlimitedAiAccess } from "../analytics/db";
 
 const TYPING_HEARTBEAT_MS = 4_000;
 const TYPING_MAX_AGE_MS = 30 * 60 * 1_000;
@@ -43,6 +44,7 @@ interface BeginResponse {
   statusMessageId?: number;
   notify?: boolean;
   rateLimitReason?: "daily" | "burst";
+  unlimited?: boolean;
 }
 
 interface GenericResponse { ok: true; }
@@ -87,7 +89,7 @@ export class JobDedupe extends DurableObject {
       case "mark_profile_updated": return this.json(await this.markProfileUpdated(body));
       case "complete": return this.json(await this.complete(body));
       case "get_profile": return this.json({ ok: true, profile: await this.getProfile() });
-      case "get_usage": return this.json({ ok: true, usage: await this.getUsage() });
+      case "get_usage": return this.json({ ok: true, usage: await this.getUsage(positiveNumber(body.telegramUserId)) });
       case "get_conversation": return this.json({ ok: true, recentConversation: await this.getConversation(positiveNumber(body.updateId)) });
       case "update_profile": return this.json(await this.updateProfile(body));
       case "set_exam": return this.json(await this.setExam(body));
@@ -186,6 +188,8 @@ export class JobDedupe extends DurableObject {
     }
 
     const now = Date.now();
+    const telegramUserId = positiveNumber(body.telegramUserId);
+    const unlimited = await hasUnlimitedAiAccess(this.runtimeEnv, telegramUserId, now);
     const rate = await this.getRateMeta(now);
     const dailyLimit = positiveEnv(this.runtimeEnv.DAILY_QUESTION_LIMIT, 20);
     const burstLimit = positiveEnv(this.runtimeEnv.BURST_QUESTION_LIMIT, 5);
@@ -201,7 +205,10 @@ export class JobDedupe extends DurableObject {
     const dayKey = indiaDayKey(now);
     const dayCount = rate.dayKey === dayKey ? rate.dayCount : 0;
 
-    if (dayCount >= dailyLimit || burstCount >= burstLimit) {
+    const dailyLimited = !unlimited && dayCount >= dailyLimit;
+    const burstLimited = burstCount >= burstLimit;
+
+    if (dailyLimited || burstLimited) {
       const shouldNotify = now - rate.lastRateNoticeAt >= burstWindowMs;
       await this.ctx.storage.put<RateMeta>(RATE_LIMIT_META_KEY, {
         burstWindowStart,
@@ -213,15 +220,17 @@ export class JobDedupe extends DurableObject {
       return {
         action: "rate_limited",
         notify: shouldNotify,
-        rateLimitReason: dayCount >= dailyLimit ? "daily" : "burst",
+        rateLimitReason: dailyLimited ? "daily" : "burst",
+        unlimited,
       };
     }
 
+    const nextBurstCount = burstCount + 1;
     await this.ctx.storage.put<RateMeta>(RATE_LIMIT_META_KEY, {
       burstWindowStart,
-      burstCount: burstCount + 1,
+      burstCount: nextBurstCount,
       dayKey,
-      dayCount: dayCount + 1,
+      dayCount: unlimited ? dayCount : dayCount + 1,
       lastRateNoticeAt: rate.lastRateNoticeAt,
     });
 
@@ -484,13 +493,15 @@ export class JobDedupe extends DurableObject {
     };
   }
 
-  private async getUsage(): Promise<{ dayCount: number; dailyLimit: number }> {
+  private async getUsage(telegramUserId: number): Promise<{ dayCount: number; dailyLimit: number; unlimited: boolean }> {
     const now = Date.now();
     const rate = await this.getRateMeta(now);
+    const unlimited = await hasUnlimitedAiAccess(this.runtimeEnv, telegramUserId, now);
     const currentDay = indiaDayKey(now);
     return {
       dayCount: rate.dayKey === currentDay ? rate.dayCount : 0,
       dailyLimit: positiveEnv(this.runtimeEnv.DAILY_QUESTION_LIMIT, 20),
+      unlimited,
     };
   }
 

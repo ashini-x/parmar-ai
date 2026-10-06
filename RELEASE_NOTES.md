@@ -1,5 +1,31 @@
 # Parmar AI Release Notes
 
+## v2.4.2 — Privileged Test Access
+
+### Purpose
+
+Allow the creator/admin and explicitly authorized Telegram profiles to test Parmar AI without consuming the normal daily allowance, while preserving backend burst protection.
+
+### Changes
+
+- Added `BOT_OWNER_TELEGRAM_USER_ID` as the primary bot-owner/admin identity.
+- Added `ADMIN_TELEGRAM_USER_IDS` for additional admins.
+- Added `UNLIMITED_AI_TELEGRAM_USER_IDS` for static bootstrap access.
+- Added D1 table `ai_access_overrides` for runtime grants/revocations by Telegram user ID.
+- Added admin-only Telegram commands: `/grant <ID>`, `/revoke <ID>`, `/unlimited <ID>`.
+- Admin/override accounts bypass only the daily quota.
+- All accounts remain subject to the 5 questions / 10 seconds burst safeguard.
+- `/profile` reports unlimited daily access for privileged accounts.
+- Admin actions are recorded in the analytics event stream.
+
+### Security
+
+- Privileged access is determined server-side from configured admin identity or D1 override state.
+- Normal users cannot grant access to themselves or others.
+- Owner/admin access cannot be revoked through the Telegram self-service command.
+- Admin commands are intentionally not published in the global Telegram command menu.
+
+
 ## v2.4.1 — Stable Production Release
 
 ### Purpose

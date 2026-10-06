@@ -27,11 +27,11 @@ The primary answer path should always complete the question state even if profil
 
 ## If you see `normalizedQuestion is not defined`
 
-This indicates a regression from the v2.5 modification branch and is not expected in v2.4.1. Do not patch production blindly; restore/redeploy the known v2.4.1 source and inspect the exact version ID in Cloudflare.
+This indicates a regression from the v2.5 modification branch and is not expected in the v2.4.x stable line. Do not patch production blindly; restore/redeploy the exact verified release artifact and inspect the deployed Cloudflare version ID.
 
 ## If you see `Cannot read properties of undefined (reading 'find')`
 
-This indicates a profile normalization regression from the original v2.4 branch. v2.4.1 includes safe normalization for missing `learningSignals`. Verify the deployed Worker version before changing storage.
+This indicates a profile normalization regression from the original v2.4 branch. the stable v2.4.x line includes safe normalization for missing `learningSignals`. Verify the deployed Worker version before changing storage.
 
 ## If the bot says “give me a gap”
 
@@ -54,3 +54,12 @@ Rotate secrets at the provider first, then update the Cloudflare Worker secret. 
 ## D1 problems
 
 D1 analytics failures should not be allowed to block the main student answer path. Check schema initialization and `/admin` first. Raw analytics are subject to automated retention cleanup.
+
+
+## Unlimited AI test access
+
+To identify the owner, configure `BOT_OWNER_TELEGRAM_USER_ID` with the numeric Telegram `from.id` of the creator/operator. Additional admins may be listed in `ADMIN_TELEGRAM_USER_IDS`.
+
+For a temporary/runtime grant, an admin sends `/grant <telegram_user_id>` in the bot's private chat. Verify with `/unlimited <telegram_user_id>`. Revoke with `/revoke <telegram_user_id>`.
+
+If D1 is unavailable, runtime grants cannot be written; the configured owner/admin and static allowlist still retain their deployment-configured privilege.

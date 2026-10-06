@@ -1,4 +1,4 @@
-# Production Test Plan — v2.4.1
+# Production Test Plan — v2.4.2
 
 ## Smoke tests
 
@@ -61,3 +61,15 @@ Expected: learning/conversation state resets, daily usage does not.
 ## Release acceptance
 
 A release is not production-ready until all smoke, personalization, rate-limit, and failure tests pass against the exact artifact being deployed.
+
+
+## Privileged-access tests
+
+- Configure a test owner ID and verify `/id` returns that account's Telegram user ID.
+- Verify the owner can exceed the 20/day daily quota.
+- Verify the owner is still blocked by 5 questions / 10 seconds.
+- From the owner, `/grant <target_id>` gives unlimited daily access to the target.
+- Verify the target is not blocked by the 20/day limit.
+- `/unlimited <target_id>` reports the expected state.
+- `/revoke <target_id>` restores the normal 20/day policy.
+- Verify an ordinary user cannot execute `/grant` or `/revoke` as an admin command.

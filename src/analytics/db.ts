@@ -58,9 +58,63 @@ CREATE INDEX IF NOT EXISTS idx_questions_status_received ON questions(status, re
 CREATE INDEX IF NOT EXISTS idx_questions_topic_received ON questions(topic, received_at);
 CREATE INDEX IF NOT EXISTS idx_events_at ON events(event_at);
 CREATE INDEX IF NOT EXISTS idx_events_user_at ON events(telegram_user_id, event_at);
+
+CREATE TABLE IF NOT EXISTS ai_access_overrides (
+  telegram_user_id INTEGER PRIMARY KEY,
+  unlimited_ai INTEGER NOT NULL DEFAULT 1,
+  granted_by_telegram_user_id INTEGER NOT NULL,
+  granted_at INTEGER NOT NULL,
+  expires_at INTEGER
+);
 `;
 
 let schemaPromise: Promise<void> | null = null;
+
+
+export function parseTelegramUserIdSet(value: string | undefined): Set<number> {
+  const result = new Set<number>();
+  for (const token of (value ?? "").split(",")) {
+    const parsed = Number(token.trim());
+    if (Number.isSafeInteger(parsed) && parsed > 0) result.add(parsed);
+  }
+  return result;
+}
+
+export function isAdminTelegramUser(env: Env, telegramUserId: number): boolean {
+  if (telegramUserId === Number(env.BOT_OWNER_TELEGRAM_USER_ID ?? "")) return true;
+  return parseTelegramUserIdSet(env.ADMIN_TELEGRAM_USER_IDS).has(telegramUserId);
+}
+
+export async function hasUnlimitedAiAccess(env: Env, telegramUserId: number, now = Date.now()): Promise<boolean> {
+  if (isAdminTelegramUser(env, telegramUserId)) return true;
+  if (parseTelegramUserIdSet(env.UNLIMITED_AI_TELEGRAM_USER_IDS).has(telegramUserId)) return true;
+  if (!env.DB) return false;
+  await ensureAnalyticsSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT unlimited_ai, expires_at FROM ai_access_overrides WHERE telegram_user_id = ?`
+  ).bind(telegramUserId).first<{ unlimited_ai: number; expires_at: number | null }>();
+  return Boolean(row && row.unlimited_ai && (row.expires_at === null || Number(row.expires_at) > now));
+}
+
+export async function grantUnlimitedAiAccess(env: Env, telegramUserId: number, grantedByTelegramUserId: number, expiresAt: number | null = null): Promise<void> {
+  if (!env.DB) throw new Error("D1 is required for runtime access overrides.");
+  await ensureAnalyticsSchema(env);
+  await env.DB.prepare(
+    `INSERT INTO ai_access_overrides (telegram_user_id, unlimited_ai, granted_by_telegram_user_id, granted_at, expires_at)
+     VALUES (?, 1, ?, ?, ?)
+     ON CONFLICT(telegram_user_id) DO UPDATE SET
+       unlimited_ai = 1,
+       granted_by_telegram_user_id = excluded.granted_by_telegram_user_id,
+       granted_at = excluded.granted_at,
+       expires_at = excluded.expires_at`
+  ).bind(telegramUserId, grantedByTelegramUserId, Date.now(), expiresAt).run();
+}
+
+export async function revokeUnlimitedAiAccess(env: Env, telegramUserId: number): Promise<void> {
+  if (!env.DB) throw new Error("D1 is required for runtime access overrides.");
+  await ensureAnalyticsSchema(env);
+  await env.DB.prepare(`DELETE FROM ai_access_overrides WHERE telegram_user_id = ?`).bind(telegramUserId).run();
+}
 
 export interface AnalyticsUser {
   telegramUserId: number;

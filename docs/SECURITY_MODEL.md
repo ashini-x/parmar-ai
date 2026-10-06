@@ -25,8 +25,13 @@ Requests to `/telegram/webhook` are accepted only when the configured `X-Telegra
 ### Telegram setup endpoint
 `/telegram/setup` requires the independent setup secret.
 
-### Admin
+### Admin dashboard
 `/admin*` uses an application-level signed session cookie backed by `ADMIN_SESSION_SECRET` and credentials stored as Worker secrets. Cloudflare Access should be added in front of the path for defense in depth.
+
+### Telegram owner/admin
+The Worker does not receive a BotFather “creator” field. The owner identity is therefore explicitly configured as `BOT_OWNER_TELEGRAM_USER_ID`, with optional additional admins in `ADMIN_TELEGRAM_USER_IDS`. Only these identities may execute privileged Telegram access commands. Runtime unlimited-AI grants are stored in `ai_access_overrides` and are checked server-side.
+
+Unlimited access bypasses only the daily AI quota. Burst protection remains enabled for every account to prevent accidental or malicious request floods.
 
 ## Secret handling
 

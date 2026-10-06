@@ -1,8 +1,8 @@
-# Production Checklist — v2.4.1
+# Production Checklist — v2.4.2
 
 ## Source
 
-- [ ] Correct v2.4.1 source is deployed.
+- [ ] Correct v2.4.2 source is deployed.
 - [ ] No local `.env`, `.dev.vars`, key files, or credentials are committed.
 - [ ] `wrangler.jsonc` contains no secrets.
 - [ ] Version in code/config/docs is consistent.
@@ -25,6 +25,8 @@
 - [ ] Telegram setup secret configured.
 - [ ] Google service-account credentials configured as secrets.
 - [ ] Admin password and session secret configured as secrets.
+- [ ] Owner/admin Telegram ID configured outside the public repository.
+- [ ] Any additional admin IDs are explicitly reviewed.
 
 ## Telegram
 
@@ -54,6 +56,9 @@
 - [ ] Daily-limit text differs from burst-limit text.
 - [ ] `/reset` does not reset daily quota.
 - [ ] Quota resets at 00:00 IST.
+- [ ] Owner can exceed the 20/day daily quota.
+- [ ] Owner is still subject to 5/10-second burst protection.
+- [ ] `/grant`, `/revoke`, and `/unlimited` work only for configured admins.
 
 ## Admin/security
 
