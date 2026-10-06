@@ -326,26 +326,23 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       continue;
     }
 
-    let claim: ClaimResponse | undefined;
+    const claim = await jobStoreRequest<ClaimResponse>(env, job.chatId, {
+      action: "claim",
+      updateId: job.updateId,
+      queueMessageId: message.id,
+    });
+
+    if (!claim.claimed || !claim.record) {
+      if (claim.wait) {
+        message.retry({ delaySeconds: claim.retryAfterSeconds ?? 5 });
+      } else {
+        message.ack();
+      }
+      continue;
+    }
 
     try {
-      claim = await jobStoreRequest<ClaimResponse>(env, job.chatId, {
-        action: "claim",
-        updateId: job.updateId,
-        queueMessageId: message.id,
-      });
-
-      if (!claim.claimed || !claim.record) {
-        if (claim.wait) {
-          message.retry({ delaySeconds: claim.retryAfterSeconds ?? 5 });
-        } else {
-          message.ack();
-        }
-        continue;
-      }
-
       const startedAt = Date.now();
-
       // Repair analytics asynchronously in case the webhook-side D1 write was interrupted.
       ctx.waitUntil(recordUserSeen(env, { telegramUserId: job.chatId, chatId: job.chatId }));
       ctx.waitUntil(recordQuestionStart(env, {
@@ -356,13 +353,11 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         question: job.question,
         receivedAt: job.createdAt,
       }));
-
       const profile = await getStudentProfile(env, job.chatId);
       const conversationResult = await jobStoreRequest<{ ok: true; recentConversation: ConversationTurn[] }>(env, job.chatId, {
         action: "get_conversation",
         updateId: job.updateId,
       });
-
       let packet = claim.record.answerPacket;
 
       if (!packet) {
@@ -388,7 +383,6 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           nextRevisionTopic: packet.nextRevisionTopic,
           detectedExam: packet.detectedExam ?? "",
           answerScope: packet.answerScope,
-          questionMode: packet.questionMode,
         });
         await jobStoreRequest(env, job.chatId, {
           action: "mark_profile_updated",
@@ -399,7 +393,6 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       const latestProfile = await getStudentProfile(env, job.chatId);
       await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, latestProfile));
       await jobStoreRequest(env, job.chatId, { action: "complete", updateId: job.updateId });
-
       const completedAt = Date.now();
       ctx.waitUntil(recordQuestionResult(env, {
         updateId: job.updateId,
@@ -411,9 +404,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         packet,
         thinkingLevel: packet.thinkingLevelUsed,
         grounded: packet.grounded,
-      }).catch((error) => logger.warn("analytics_question_result_failed", {
-        error: error instanceof Error ? error.message : String(error),
-      })));
+      }).catch((error) => logger.warn("analytics_question_result_failed", { error: error instanceof Error ? error.message : String(error) })));
 
       logger.info("question_completed", {
         requestId: job.requestId,
@@ -431,60 +422,32 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         queueMessageId: message.id,
         attempts: message.attempts,
         retryable,
-        stage: claim?.claimed ? "after_claim" : "before_or_during_claim",
         error: error instanceof Error ? error.message : String(error),
       });
 
-      const attempts = Number.isSafeInteger(message.attempts) ? message.attempts : 1;
-      if (retryable && attempts < QUEUE_MAX_RETRIES) {
-        // If a pre-claim failure happened, the Durable Object record may still be
-        // pending/queued. The next Queue attempt can safely reclaim it.
-        message.retry({ delaySeconds: queueRetryDelay(attempts) });
+      if (retryable && message.attempts < QUEUE_MAX_RETRIES) {
+        message.retry({ delaySeconds: queueRetryDelay(message.attempts) });
         continue;
       }
 
-      // Never leave the user's typing indicator running indefinitely. At the final
-      // Queue attempt, try to deliver a clean failure and mark the durable job done.
-      // The completion call is deliberately attempted even if Telegram delivery fails.
-      let completionSucceeded = false;
       try {
-        const statusMessageId = claim?.record?.statusMessageId ?? job.statusMessageId;
-        await deliverAnswer(env, job, statusMessageId, userFacingFailure(error));
+        await deliverAnswer(env, job, claim.record.statusMessageId, userFacingFailure(error));
+        await jobStoreRequest(env, job.chatId, { action: "complete", updateId: job.updateId });
+        ctx.waitUntil(recordQuestionResult(env, {
+          updateId: job.updateId,
+          status: "failed",
+          completedAt: Date.now(),
+          attempts: message.attempts,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        }).catch((analyticsError) => logger.warn("analytics_question_failure_failed", { error: analyticsError instanceof Error ? analyticsError.message : String(analyticsError) })));
+        message.ack();
       } catch (deliveryError) {
         logger.error("final_failure_delivery_failed", {
           requestId: job.requestId,
           updateId: job.updateId,
           error: deliveryError instanceof Error ? deliveryError.message : String(deliveryError),
         });
-      }
-
-      try {
-        await jobStoreRequest(env, job.chatId, { action: "complete", updateId: job.updateId });
-        completionSucceeded = true;
-        ctx.waitUntil(recordQuestionResult(env, {
-          updateId: job.updateId,
-          status: "failed",
-          completedAt: Date.now(),
-          attempts,
-          errorMessage: error instanceof Error ? error.message : String(error),
-        }).catch((analyticsError) => logger.warn("analytics_question_failure_failed", {
-          error: analyticsError instanceof Error ? analyticsError.message : String(analyticsError),
-        })));
-      } catch (completionError) {
-        logger.error("final_failure_completion_failed", {
-          requestId: job.requestId,
-          updateId: job.updateId,
-          error: completionError instanceof Error ? completionError.message : String(completionError),
-        });
-      }
-
-      if (completionSucceeded) {
-        message.ack();
-      } else {
-        // Leave it for the Queue's DLQ/retry machinery if the state service itself
-        // is unavailable. The Durable Object watchdog is also responsible for
-        // clearing stale typing state.
-        message.retry({ delaySeconds: Math.min(300, queueRetryDelay(attempts)) });
+        message.retry({ delaySeconds: Math.min(300, queueRetryDelay(message.attempts)) });
       }
     }
   }
@@ -493,21 +456,14 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
 function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile): string {
   let answer = packet.answer.trim();
 
+  // Make the personalization visible only when it is genuinely helpful.
   const isRepeatedArea = packet.topic && profile.recentTopics.some((topic) => topic.toLowerCase() === packet.topic.toLowerCase());
   const isAttentionArea = profile.attentionTopics.some((topic) => topic.toLowerCase() === packet.topic.toLowerCase());
-  const explicitPersonalSignal = packet.profileSignal === "confusion" || packet.profileSignal === "weak";
 
-  // A visible "your focus" recommendation is shown only when there is
-  // evidence for it. Generic/simple follow-ups must not manufacture a study priority.
-  if (explicitPersonalSignal && packet.answerScope !== "out_of_scope") {
-    const focusTopic = packet.topic || packet.nextRevisionTopic;
-    if (focusTopic) {
-      answer += `\n\n🎯 Abhi tumhara focus: ${focusTopic}. Pehle isko clear/strong karo, phir next topic par jao.`;
-    }
-  } else if (isAttentionArea && packet.questionMode === "comparison") {
-    answer += "\n\n🧠 Isko pichhle related topic ke saath pair mein yaad rakho—tumhari attention abhi isi distinction par hai.";
+  if (isAttentionArea && packet.profileSignal !== "neutral" && packet.answerScope !== "out_of_scope") {
+    answer += `\n\n🎯 Tumhare liye focus: ${packet.nextRevisionTopic || packet.topic} ko ek baar aur revise kar lena.`;
   } else if (isRepeatedArea && packet.questionMode === "comparison") {
-    answer += "\n\n🧠 Isko pichhle related topic ke saath pair mein yaad rakho.";
+    answer += "\n\n🧠 Isko pichhle related topic ke saath pair mein yaad rakho—SSC mein confusion yahin hota hai.";
   }
 
   return answer.slice(0, 3_900);
@@ -568,10 +524,6 @@ function buildProfileText(profile: StudentProfile, usage: { dayCount: number; da
   const recent = profile.recentTopics.slice(0, 5);
   const attention = profile.attentionTopics.slice(0, 5);
   const revision = profile.revisionQueue.slice(0, 5);
-  const signals = profile.learningSignals
-    .filter((item) => item.confusionCount + item.weakCount > 0)
-    .sort((a, b) => (b.confusionCount + b.weakCount) - (a.confusionCount + a.weakCount))
-    .slice(0, 3);
 
   return [
     "📚 Tumhari Parmar SSC Profile",
@@ -582,7 +534,6 @@ function buildProfileText(profile: StudentProfile, usage: { dayCount: number; da
     `Recent focus: ${recent.length ? recent.join(" • ") : "abhi nahi"}`,
     `Attention areas: ${attention.length ? attention.join(" • ") : "abhi koi clear weak area nahi"}`,
     `Revision queue: ${revision.length ? revision.join(" → ") : "abhi build ho rahi hai"}`,
-    `Learning signals: ${signals.length ? signals.map((item) => `${item.topic} (${item.confusionCount + item.weakCount})`).join(" • ") : "abhi enough evidence nahi"}`,
     "",
     "Ye profile sirf tumhare Parmar AI questions se banti hai.",
   ].join("\n");

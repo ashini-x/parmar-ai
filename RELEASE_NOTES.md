@@ -1,11 +1,4 @@
-# Release 2.5.0 — Queue/Typing Reliability
-
-- Wrapped the entire Queue-message lifecycle, including Durable Object claim, in the retry/failure boundary so pre-claim exceptions cannot leave typing state orphaned.
-- Final Queue attempts now try both a clean Telegram failure message and durable job completion; an unhandled consumer exception can no longer silently strand a job.
-- Added a Durable Object stale-job watchdog that closes jobs stuck beyond the processing lease and stops the typing heartbeat instead of allowing it to persist indefinitely.
-- Preserved the same Worker + Durable Object + Queue + Vertex AI + D1 architecture and the 20-question/day/user rule.
-
-# Release 2.4.0
+# Release 2.3.0
 
 ## Conversation intelligence
 - Added rolling six-turn per-student conversation context from completed jobs.
@@ -49,7 +42,7 @@
 Earlier release notes remain in Git history.
 
 
-## 2.4.0 — Conversation Intelligence & Answer Reliability
+## 2.3.0 — Conversation Intelligence & Answer Reliability
 
 - Added a rolling six-exchange per-student conversation context from completed jobs in the Durable Object.
 - Follow-up references such as “iska”, “isko”, “isme”, “ye”, “phir se”, and “simple mein” now have explicit continuity instructions.
@@ -59,17 +52,3 @@ Earlier release notes remain in Git history.
 - Normalizes literal `\n`, `\r`, and `\t` sequences before Telegram delivery.
 - Student delivery now reloads the latest profile after the current question updates learning signals.
 - No D1 schema change; existing admin database remains compatible.
-
-
-## v2.4.0 — Evidence-based personalization
-- Added explicit follow-up resolution so short references like “iska”, “simple mein”, and “samjha de” stay anchored to the immediate exchange.
-- Added persistent learning-signal evidence with repeated-signal thresholds before a topic becomes an attention area.
-- Suppressed speculative next-topic recommendations on ordinary factual/simple questions.
-- Confusion signals now focus the student on the actual confusing topic rather than an arbitrary related topic.
-- Kept 20-question daily limit, Queue, Durable Object, D1, Vertex AI, and Telegram architecture unchanged.
-
-
-### v2.4.0 follow-up clarification
-- Revision recommendations are now evidence-gated: ordinary answers do not generate a personal focus line, while explicit confusion points to the current topic.
-- Revision-mode prompts keep the recommendation anchored to the current topic.
-- The profile only promotes a topic into persistent attention after repeated learning signals.

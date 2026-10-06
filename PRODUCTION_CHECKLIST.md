@@ -36,17 +36,9 @@ The system is designed to absorb bursts instead of failing the webhook immediate
 - [ ] Before a major public launch, monitor D1/Workers/Queue Free-plan limits and upgrade Cloudflare before limits become user-visible.
 
 
-## 2.4.0 behavior tests
+## 2.3.0 behavior tests
 - Ask a fact question, then a contextual follow-up such as “iska main reason?”, then “simple mein samjha de”; verify the bot stays on the same topic.
 - Say “ryotwari se confuse ho raha hoon” after discussing Permanent Settlement; verify the answer directly contrasts the two rather than restarting the entire chapter.
 - Confirm no literal `\n` text appears in Telegram.
 - Confirm a partially generated/`MAX_TOKENS` response is never sent as a partial answer.
 - Run `/reset` and verify subsequent follow-ups do not use the pre-reset conversation.
-
-
-## v2.4.0 conversation-intelligence regression cases
-- “iska reason?” after a specific topic must stay on the previous topic.
-- “simple language mein samjha de” must simplify the previous idea and must not create a new focus recommendation.
-- “X se confuse ho raha hoon” may show X as the immediate focus, but a single signal should not permanently label X as an attention area.
-- “ab mujhe is topic me kya yaad rakhna hai?” must keep the revision topic equal to the current topic, not an arbitrary related topic.
-- Generic factual/concept questions must not append “Tumhare liye focus” unless an actual confusion/weakness signal exists.

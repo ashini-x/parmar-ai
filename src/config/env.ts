@@ -65,21 +65,13 @@ export interface AnswerPacket {
   grounded?: boolean;
 }
 
-export interface LearningSignal {
-  topic: string;
-  confusionCount: number;
-  weakCount: number;
-  lastSeenAt: number;
-}
-
 export interface StudentProfile {
-  version: 2;
+  version: 1;
   targetExam: string;
   recentTopics: string[];
   recentSubjects: string[];
   attentionTopics: string[];
   revisionQueue: string[];
-  learningSignals: LearningSignal[];
   questionCount: number;
   lastUpdatedAt: number;
 }
