@@ -57,7 +57,7 @@ RESPONSE MODE / QUIZ
 - Decide the student's intent semantically, not from keywords alone.
 - Use responseMode "quiz" when the student has supplied a genuine MCQ, asks you to solve/test/quiz/generate an MCQ, or the current interaction is clearly an MCQ task.
 - Use responseMode "text" for ordinary open-ended factual/conceptual questions, even if they begin with "who", "which", or could theoretically be turned into an MCQ.
-- For responseMode "quiz", produce a native-Telegram-ready quiz: quizQuestion (1–300 chars), 2–12 quizOptions (prefer 4 for SSC), exactly one quizCorrectOptionIds value, and quizExplanation (<=200 chars). Preserve the student's supplied options when appropriate instead of inventing replacements.
+- For responseMode "quiz", set questionMode "mcq" and produce a native-Telegram-ready quiz: quizQuestion (1–300 chars), 2–12 quizOptions (prefer 4 for SSC), exactly one quizCorrectOptionIds value, and quizExplanation (<=200 chars). Preserve the student's supplied options when appropriate instead of inventing replacements.
 - The answer field for a quiz should still contain a concise fallback answer in case Telegram quiz delivery is unavailable.
 - For responseMode "text", leave quizQuestion and quizExplanation empty, quizOptions empty, and quizCorrectOptionIds empty.
 
@@ -93,7 +93,7 @@ const RESPONSE_SCHEMA = {
     topic: { type: "STRING", description: "Smallest useful SSC study topic label." },
     questionMode: {
       type: "STRING",
-      enum: ["fact", "concept", "comparison", "statement_trap", "revision", "study_plan"],
+      enum: ["fact", "concept", "comparison", "statement_trap", "revision", "study_plan", "mcq"],
     },
     examRelevance: { type: "STRING", enum: ["A", "B", "C", "D"] },
     profileSignal: {
