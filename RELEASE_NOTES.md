@@ -1,3 +1,33 @@
+## v2.6.0 — Production Reliability & Access Control Hardening
+
+### Critical fixes
+- Added Durable Object lease fencing using queue message ID + lease version so stale workers cannot mutate a job after ownership changes.
+- Added recovery for stale pending, queued, and processing jobs, with a bounded maximum active lifetime so one stuck question cannot block a chat indefinitely.
+- Reserved typing heartbeats for actively processing jobs instead of queued/pending jobs.
+- Stopped retrying unexpected programming/runtime errors as if they were transient infrastructure failures.
+- Added runtime validation for persisted answer packets before they enter Durable Object state.
+- Made dashboard processing metrics use an explicit processing database state.
+- Made Queue processing establish the analytics processing state before AI generation.
+- Fixed the AI-cost test to match the current production function signature.
+
+### Admin access
+- Fixed dashboard unlimited-access mutation so the D1 write is verified and effective access is verified immediately.
+- Fixed dashboard grant UI naming collision (grantId) that could interfere with the browser global created by the input element.
+- Protected configured owner/admin accounts from unlimited-access revocation through the dashboard backend.
+- Dashboard grants are audited as a system-originated runtime grant rather than falsely attributing them to the bot owner Telegram ID.
+
+### AI freshness
+- Expanded current/mutable-fact detection beyond explicit words such as “current” and “latest”.
+- Current office-holder and appointment questions are now treated conservatively as freshness-sensitive.
+- grounded analytics now means actual Google Search grounding occurred; ordinary non-grounding questions are no longer counted as grounded.
+
+### Security / privacy
+- Moved Telegram setup authentication from a URL query parameter to POST /telegram/setup with X-Setup-Secret.
+- Reduced the public /health response to coarse service health checks.
+- Added /delete-my-data to remove the user's stored analytics/history, runtime access override, suspension record, and Durable Object study state.
+
+### Deployment note
+- This release does not change the Telegram bot token, Google service-account secrets, D1 database identity, Queue identity, or Durable Object binding names. Existing production bindings remain the source of truth.
 # Parmar AI Release Notes
 
 ## v2.5.2 — Admin Access Controls UI Fix
