@@ -92,6 +92,13 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS admin_login_attempts (
+  client_key TEXT PRIMARY KEY,
+  window_started_at INTEGER NOT NULL,
+  failures INTEGER NOT NULL DEFAULT 0,
+  locked_until INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS admin_user_controls (
   telegram_user_id INTEGER PRIMARY KEY,
   suspended INTEGER NOT NULL DEFAULT 0,
