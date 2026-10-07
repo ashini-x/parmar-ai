@@ -44,7 +44,7 @@ describe("production hardening", () => {
   });
 
   it("uses the v2.6.0 release fallback", () => {
-    expect(getConfig({} as any).version).toBe("2.6.1");
+    expect(getConfig({} as any).version).toBe("2.7.0");
   });
 
   it("defaults raw analytics retention to 30 days", () => {
