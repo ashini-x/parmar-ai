@@ -1,7 +1,13 @@
 # Operations Runbook
 
 ## First checks
-1. Confirm Worker configuration.\n2. Confirm Queue consumer and Durable Object.\n3. Send one SSC question.\n4. Confirm typing starts and stops.\n5. Confirm answer delivery.\n6. Confirm `/admin` analytics update.\n7. Test Telegram connection from the dashboard.
+1. Confirm Worker configuration.
+2. Confirm Queue consumer and Durable Object.
+3. Send one SSC question.
+4. Confirm typing starts and stops.
+5. Confirm answer delivery.
+6. Confirm `/admin` analytics update.
+7. Test Telegram connection from the dashboard.
 
 ## Telegram not responding
 Check dashboard bot status, webhook info, Worker logs, Queue consumer, recent question-processing events, and Telegram delivery errors.
