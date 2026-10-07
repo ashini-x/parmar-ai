@@ -4,7 +4,9 @@
 
 The Worker accepts text-only private Telegram messages up to `MAX_QUESTION_LENGTH` characters.
 
-The question is passed to the Queue as a versioned `QuestionJob` containing:
+The question is passed to the Queue as a versioned `QuestionJob` containing: 
+
+- optional requested quiz count (1–10)
 
 - `updateId`
 - `chatId`
@@ -24,7 +26,7 @@ Before Gemini execution, the consumer builds a `ProfileContext` containing:
 - recent subjects,
 - attention topics,
 - revision queue,
-- up to six recent completed in-scope conversation turns.
+- up to twelve recent completed in-scope conversation turns.
 
 The context is deliberately bounded to avoid unbounded prompt growth.
 
@@ -48,7 +50,7 @@ The model decides the presentation mode semantically. Ordinary open-ended doubts
 
 An MCQ must have a topic anchor: the current request, a recent stored SSC topic, or the immediately preceding Parmar exchange when the bot asked the student to choose an MCQ topic. A fresh generic request such as “mcq” or “quiz” is intercepted before the Gemini call and answered with a topic-selection prompt instead of allowing the model to invent a random topic. A topic supplied in the direct reply can then continue as the MCQ task.
 
-The application validates the quiz payload before delivery. Student-submitted options are preserved where practical, with four options preferred for generated SSC quizzes. The quiz fallback answer is delivery-failure-only and is not sent as a second message when a native quiz is delivered successfully.
+The application validates the quiz payload before delivery. Student-submitted options are preserved where practical, with four options preferred for generated SSC quizzes. Multiple-MCQ requests produce a bounded batch of independent native Telegram quizzes (maximum 10), each with its own answer session. Telegram's native quiz result remains the student-facing feedback surface; Parmar does not send a second result message. Quiz outcomes are retained in conversation context so later follow-ups can refer to the exact question and selected answer.
 
 ## Structured output
 
