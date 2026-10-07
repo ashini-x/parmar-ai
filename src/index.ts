@@ -828,24 +828,17 @@ async function telegramSetupMethod(env: Env, method: string, payload: Record<str
 }
 
 function buildHealth(env: Env) {
-  const config = getConfig(env);
   return {
     ok: true,
     service: "parmar-ai",
-    phase: "H",
-    environment: config.environment,
-    version: config.version,
-    telegramConfigured: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET),
-    vertexAiConfigured: Boolean(env.GCP_PROJECT_ID && env.GCP_CLIENT_EMAIL && env.GCP_PRIVATE_KEY),
-    queueConfigured: Boolean(env.QUESTION_QUEUE),
-    jobStoreConfigured: Boolean(env.JOB_DEDUPE),
-    model: config.model,
-    location: config.location,
-    thinkingPolicy: `ADAPTIVE (max ${config.maxThinkingLevel})`,
-    sscScope: "SSC GA/GS + exam-focused factual preparation",
-    studentProfile: true,
-    analyticsConfigured: Boolean(env.DB),
-    adminDashboard: Boolean(env.DB && env.ADMIN_DASHBOARD_PASSWORD && env.ADMIN_SESSION_SECRET),
+    status: "healthy",
+    checks: {
+      telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET),
+      ai: Boolean(env.GCP_PROJECT_ID && env.GCP_CLIENT_EMAIL && env.GCP_PRIVATE_KEY),
+      queue: Boolean(env.QUESTION_QUEUE),
+      database: Boolean(env.DB),
+      jobStore: Boolean(env.JOB_DEDUPE),
+    },
   };
 }
 
