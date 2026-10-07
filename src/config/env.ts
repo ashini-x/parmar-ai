@@ -59,6 +59,7 @@ export interface QuestionJob {
 
 export interface AnswerPacket {
   answer: string;
+  responseMode: "text" | "quiz";
   sscTakeaway: string;
   answerScope: "ssc_ga_gs" | "ssc_support" | "out_of_scope";
   subject: "history" | "polity" | "geography" | "economy" | "science" | "static_gk" | "current_affairs" | "art_culture" | "other";
@@ -71,6 +72,10 @@ export interface AnswerPacket {
   nextRevisionTopic: string;
   detectedExam: string | null;
   timeSensitive: boolean;
+  quizQuestion: string;
+  quizOptions: string[];
+  quizCorrectOptionIds: number[];
+  quizExplanation: string;
   thinkingLevelUsed?: "LOW" | "MEDIUM" | "HIGH";
   grounded?: boolean;
 }
