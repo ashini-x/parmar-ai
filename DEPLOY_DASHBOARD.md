@@ -87,13 +87,17 @@ ADMIN_DASHBOARD_PASSWORD
 ADMIN_SESSION_SECRET
 ```
 
+Telegram bot tokens entered through the admin dashboard are stored encrypted in D1. TELEGRAM_BOT_ENCRYPTION_KEY is optional but recommended; when it is absent, ADMIN_SESSION_SECRET is used as the encryption key source.
+
+After deployment, use the Telegram page in /admin. The first connection can import the bot currently configured in Cloudflare, or you can paste a new BotFather token. The dashboard verifies the new token first, removes the old webhook safely when switching, registers the new webhook and commands, and preserves student profiles and access settings.
+
 ## 8. Google/Vertex
 
 Verify the configured service account has the minimum required permissions for the Vertex AI API path used by the Worker.
 
 ## 9. Telegram webhook
 
-After deployment, call the protected setup endpoint using the deployment's setup secret. Confirm the webhook result is successful before beginning user testing.
+Normal bot setup and bot replacement should be performed from the Telegram page in /admin. No Postman, curl, or manual Telegram API calls are required. The protected /telegram/setup endpoint remains available for deployment automation and now uses the active dashboard-managed connection when one exists.
 
 ## 10. Admin
 
