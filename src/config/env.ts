@@ -7,6 +7,7 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   TELEGRAM_SETUP_SECRET?: string;
+  TELEGRAM_BOT_ENCRYPTION_KEY?: string;
 
   GCP_PROJECT_ID?: string;
   GCP_CLIENT_EMAIL?: string;
@@ -44,6 +45,7 @@ export interface Env {
 
 export interface QuestionJob {
   version: 1 | 2;
+  botConnectionId: string;
   updateId: number;
   chatId: number;
   question: string;
