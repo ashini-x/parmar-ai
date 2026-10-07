@@ -21,7 +21,7 @@ import { internalServerError, json, methodNotAllowed, notFound } from "./http/re
 import { recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
-import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, isTelegramBotConnectionActive } from "./telegram/bot-store";
+import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
 const QUEUE_MAX_RETRIES = 10;
 const STATUS_TEXT = "✅ Sawal mil gaya. Soch raha hoon... 🤔";
@@ -942,8 +942,9 @@ async function telegramSetup(request: Request, env: Env, requestId: string): Pro
   }
 
   const activeBot = await getActiveTelegramBot(env);
-  const token = activeBot?.token ?? env.TELEGRAM_BOT_TOKEN?.trim();
-  const webhookSecret = activeBot?.webhookSecret ?? env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  const hasBotRecords = await hasTelegramBotRecords(env);
+  const token = activeBot?.token ?? (!hasBotRecords ? env.TELEGRAM_BOT_TOKEN?.trim() : undefined);
+  const webhookSecret = activeBot?.webhookSecret ?? (!hasBotRecords ? env.TELEGRAM_WEBHOOK_SECRET?.trim() : undefined);
   if (!token || !webhookSecret) {
     return withRequestId(json({ ok: false, error: "telegram_configuration_missing" }, 500), requestId);
   }
@@ -999,13 +1000,15 @@ async function telegramSetupMethod(env: Env, method: string, payload: Record<str
   return data.result;
 }
 
-function buildHealth(env: Env) {
+async function buildHealth(env: Env) {
+  const activeTelegramBot = await getActiveTelegramBot(env);
+  const telegramConfigured = Boolean(activeTelegramBot || (await hasTelegramBotRecords(env)) || (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET));
   return {
     ok: true,
     service: "parmar-ai",
     status: "healthy",
     checks: {
-      telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET),
+      telegram: telegramConfigured,
       ai: Boolean(env.GCP_PROJECT_ID && env.GCP_CLIENT_EMAIL && env.GCP_PRIVATE_KEY),
       queue: Boolean(env.QUESTION_QUEUE),
       database: Boolean(env.DB),
@@ -1086,7 +1089,7 @@ const worker = {
     try {
       if (url.pathname === "/health") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
-        return withRequestId(json(buildHealth(env)), requestId);
+        return withRequestId(json(await buildHealth(env)), requestId);
       }
 
       if (url.pathname === "/") {
