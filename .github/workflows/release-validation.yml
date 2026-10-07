@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - main
   workflow_dispatch:
 
 permissions:
@@ -25,9 +24,9 @@ jobs:
       - name: Package source release
         run: |
           mkdir -p dist
-          git archive --format=zip --output=dist/parmar-ai-2.7.0-production.zip HEAD
+          git archive --format=zip --output=dist/parmar-ai-2.8.0-production.zip HEAD
       - uses: actions/upload-artifact@v4
         with:
-          name: parmar-ai-2.7.0-production
+          name: parmar-ai-2.8.0-production
           path: dist/parmar-ai-2.7.0-production.zip
           if-no-files-found: error
