@@ -744,7 +744,7 @@ export function isJobLeaseOwned(
     leaseVersion === record.leaseVersion;
 }
 
-export function isValidAnswerPacket(value: unknown): value is AnswerPacket  {
+export function isValidAnswerPacket(value: unknown): value is AnswerPacket {
   if (!isRecord(value)) return false;
   const requiredStrings = ["answer", "responseMode", "quizQuestion", "sscTakeaway", "answerScope", "subject", "topic", "questionMode", "examRelevance", "difficulty", "profileSignal", "profileNote", "nextRevisionTopic", "quizExplanation"];
   if (requiredStrings.some((key) => typeof value[key] !== "string")) return false;
@@ -760,17 +760,39 @@ export function isValidAnswerPacket(value: unknown): value is AnswerPacket  {
   if (!Array.isArray(value.quizOptions) || !Array.isArray(value.quizCorrectOptionIds)) return false;
   if (value.quizOptions.some((item) => typeof item !== "string" || item.trim().length === 0)) return false;
   if (value.quizCorrectOptionIds.some((item) => !Number.isSafeInteger(item))) return false;
+
   if (value.responseMode === "quiz") {
-    if (typeof value.quizQuestion !== "string" || value.quizQuestion.trim().length === 0) return false;
-    if (value.quizOptions.length < 2 || value.quizOptions.length > 12) return false;
-    if (value.quizCorrectOptionIds.length !== 1) return false;
-    if (value.quizCorrectOptionIds[0] < 0 || value.quizCorrectOptionIds[0] >= value.quizOptions.length) return false;
-    if (typeof value.quizExplanation !== "string" || value.quizExplanation.trim().length === 0 || value.quizExplanation.length > 200) return false;
-  } else if (value.quizQuestion !== "" || value.quizOptions.length !== 0 || value.quizCorrectOptionIds.length !== 0 || value.quizExplanation !== "") {
-    return false;
+    const rawItems = Array.isArray(value.quizItems) && value.quizItems.length
+      ? value.quizItems
+      : [{
+        question: value.quizQuestion,
+        options: value.quizOptions,
+        correctOptionIds: value.quizCorrectOptionIds,
+        explanation: value.quizExplanation,
+      }];
+
+    if (rawItems.length < 1 || rawItems.length > MAX_QUIZ_BATCH_SIZE) return false;
+    for (const raw of rawItems) {
+      if (!isRecord(raw)) return false;
+      if (typeof raw.question !== "string" || raw.question.trim().length === 0 || raw.question.length > 300) return false;
+      if (!Array.isArray(raw.options) || raw.options.length < 2 || raw.options.length > 12) return false;
+      if (raw.options.some((item) => typeof item !== "string" || item.trim().length === 0)) return false;
+      if (!Array.isArray(raw.correctOptionIds) || raw.correctOptionIds.length !== 1 || !Number.isSafeInteger(raw.correctOptionIds[0])) return false;
+      if (raw.correctOptionIds[0] < 0 || raw.correctOptionIds[0] >= raw.options.length) return false;
+      if (typeof raw.explanation !== "string" || raw.explanation.trim().length === 0 || raw.explanation.length > 200) return false;
+    }
+    return true;
   }
-  return true;
+
+  return (
+    value.quizQuestion === "" &&
+    value.quizOptions.length === 0 &&
+    value.quizCorrectOptionIds.length === 0 &&
+    value.quizExplanation === "" &&
+    (!Array.isArray(value.quizItems) || value.quizItems.length === 0)
+  );
 }
+
 
 function normalizeProfileSignal(value: unknown): "neutral" | "weak" | "confusion" | "strength" {
   const normalized = cleanText(String(value ?? "neutral"), 20).toLowerCase();
