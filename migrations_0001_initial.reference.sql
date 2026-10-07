@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS ai_usage_attempts (
 );
 CREATE TABLE IF NOT EXISTS quiz_sessions (
   poll_id TEXT PRIMARY KEY,
+  bot_connection_id TEXT NOT NULL,
   telegram_user_id INTEGER NOT NULL,
   chat_id INTEGER NOT NULL,
   update_id INTEGER NOT NULL,
