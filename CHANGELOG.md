@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.8.0 — Production Multi-MCQ Quiz Batches
+- Added bounded multi-MCQ requests with up to 10 independent native Telegram quizzes per request.
+- Batch size is carried through Durable Object job state and accounted for against daily and burst controls.
+- Underspecified batch requests ask for the topic and remember the requested quantity for the topic reply.
+- Removed separate bot result messages after quiz selections; Telegram's native quiz result is the student-facing result surface.
+- Persisted quiz outcomes into conversation context for follow-up questions about an answered quiz.
+- Added cleanup for partial batch delivery and quiz-session persistence failures.
+
 ## 2.7.0 — Intent-Driven Native Telegram Quizzes
 - Added semantic response-mode selection so ordinary doubts remain text while genuine MCQ/test/quiz intents become native Telegram quizzes.
 - Added non-anonymous Telegram quiz delivery with exactly one correct answer, compact in-card explanations, and immediate result feedback.
