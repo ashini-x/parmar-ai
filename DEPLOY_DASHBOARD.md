@@ -3,7 +3,8 @@
 Deploy only the exact reviewed source revision.
 
 ## Worker
-Name: `parmar-ai`\nEntrypoint: `src/index.ts`
+Name: `parmar-ai`
+Entrypoint: `src/index.ts`
 ## D1
 Production database: `parmar-ai-admin-prod`. Keep real private deployment identifiers and credentials outside public source where appropriate.
 ## Durable Object
