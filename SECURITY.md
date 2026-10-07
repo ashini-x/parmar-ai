@@ -2,7 +2,7 @@
 
 ## Supported release
 
-The supported production line is the latest v2.5.x release. For the current repository baseline, that is **v2.5.2**.
+The supported production line is the latest v2.x.x release. For the current repository baseline, that is **v2.6.0**.
 
 ## Never publish
 
