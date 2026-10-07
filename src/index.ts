@@ -759,15 +759,21 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
               job.chatId,
               delivered.messageId,
               job.botConnectionId,
-            ).catch(async () => {
-              await stopTelegramPoll(
-                env,
-                job.chatId,
-                delivered.messageId,
-                job.botConnectionId,
-              ).catch(() => undefined);
+            ).catch((error) => {
+              logger.warn("quiz_poll_cleanup_delete_failed", {
+                requestId: job.requestId,
+                pollId: delivered.pollId,
+                messageId: delivered.messageId,
+                error: error instanceof Error ? error.message : String(error),
+              });
             });
-            await deleteQuizSession(env, delivered.pollId).catch(() => undefined);
+            await deleteQuizSession(env, delivered.pollId).catch((error) => {
+              logger.warn("quiz_session_cleanup_delete_failed", {
+                requestId: job.requestId,
+                pollId: delivered.pollId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            });
           }
 
           await deliverAnswer(
