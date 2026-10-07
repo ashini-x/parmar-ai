@@ -10,8 +10,10 @@ describe("AI usage accounting", () => {
         thoughtsTokens: 200,
         toolUsePromptTokens: 100,
         cachedContentTokens: 500,
+        inputUsdPerMillion: 0.75,
+        cachedInputUsdPerMillion: 0.075,
+        outputUsdPerMillion: 3.75,
       },
-      { inputUsdPerMillion: 0.75, cachedInputUsdPerMillion: 0.075, outputUsdPerMillion: 3.75 },
     );
     expect(usd).toBeCloseTo(0.0031125, 9);
   });
@@ -24,8 +26,10 @@ describe("AI usage accounting", () => {
         thoughtsTokens: 0,
         toolUsePromptTokens: 0,
         cachedContentTokens: 500,
+        inputUsdPerMillion: 0.75,
+        cachedInputUsdPerMillion: 0.075,
+        outputUsdPerMillion: 3.75,
       },
-      { inputUsdPerMillion: 0.75, cachedInputUsdPerMillion: 0.075, outputUsdPerMillion: 3.75 },
     );
     expect(usd).toBeGreaterThanOrEqual(0);
   });
