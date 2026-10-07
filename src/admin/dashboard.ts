@@ -299,7 +299,7 @@ export async function adminAction(env: Env, request: Request): Promise<Response>
   const actor=(env.ADMIN_DASHBOARD_USER?.trim() || "admin").slice(0,120);
   try {
     if (action === "grant_unlimited") {
-      await grantUnlimitedAiAccess(env,userId,null,null);
+      await grantUnlimitedAiAccess(env,userId,0,null);
       if (!(await hasUnlimitedAiAccess(env,userId))) return json({ok:false,error:"unlimited_access_verification_failed"},500);
       await recordAdminAudit(env,actor,"grant_unlimited",userId);
     } else if (action === "revoke_unlimited") {
