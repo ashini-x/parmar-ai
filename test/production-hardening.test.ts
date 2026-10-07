@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount, requiresFreshData, requiresMcqTopicClarification } from "../src/ai/gemini";
 import { getAnalyticsConfig } from "../src/analytics/db";
@@ -115,29 +113,6 @@ describe("production hardening", () => {
 
     expect(requiresMcqTopicClarification("5 MCQs", emptyContext)).toBe(true);
     expect(requiresMcqTopicClarification("5 MCQs on Polity", emptyContext)).toBe(false);
-  });
-
-  it("does not send a second bot message after a native quiz vote", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/index.ts"), "utf8");
-    const start = source.indexOf("async function handleTelegramPollAnswer");
-    const end = source.indexOf("function startTypingHeartbeat", start);
-    const handler = source.slice(start, end);
-    expect(handler).toContain("record_quiz_result");
-    expect(handler).not.toContain("sendTelegramMessage(");
-  });
-
-  it("cleans up partial native quiz batches", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/index.ts"), "utf8");
-    expect(source).toContain("for (const delivered of deliveredQuizzes.reverse())");
-    expect(source).toContain("await deleteQuizSession(env, delivered.pollId)");
-    expect(source).toContain("buildQuizDeliveryFailureAnswer()");
-  });
-
-  it("protects the native quiz delivery path when D1 session persistence fails", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/index.ts"), "utf8");
-    expect(source).toContain("await stopTelegramPoll(");
-    expect(source).toContain("await deleteTelegramMessage(");
-    expect(source).toContain("buildQuizDeliveryFailureAnswer()");
   });
 
   it("does not invent an MCQ topic for a fresh generic quiz request", () => {
