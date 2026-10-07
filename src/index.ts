@@ -791,7 +791,7 @@ function buildStudyPlanText(profile: StudentProfile): string {
 function isStart(text: string): boolean { return /^\/start(?:\s|$)/i.test(text); }
 function isHelp(text: string): boolean { return /^\/(?:help|commands)(?:\s|$)/i.test(text); }
 function isReset(text: string): boolean { return /^\/(?:reset|forget)$/i.test(text); }
-function isDeleteMyData(text: string): boolean { return /^\/delete-my-data$/i.test(text); }
+function isDeleteMyData(text: string): boolean { return /^\/(?:delete_data|delete_my_data|delete-my-data)$/i.test(text); }
 function isProfileCommand(text: string): boolean { return /^\/(?:profile|progress|me)$/i.test(text); }
 function isStudyPlanQuery(text: string): boolean {
   const q = text.toLowerCase();
@@ -827,7 +827,7 @@ function buildSetupCommands() {
     { command: "exam", description: "Set your SSC target exam" },
     { command: "profile", description: "View your SSC study profile" },
     { command: "reset", description: "Reset your study profile" },
-    { command: "delete-my-data", description: "Delete your stored Parmar data" },
+    { command: "delete_data", description: "Delete your stored Parmar data" },
     { command: "help", description: "Show help" },
     { command: "id", description: "Show your Telegram user ID" },
   ];
