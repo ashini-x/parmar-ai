@@ -811,7 +811,7 @@ async function userAction(id,action){
       unsuspend:'✅ Student access restored and verified in the backend.',
       reset_profile:'✅ Student study profile reset.'
     }[action]||'✅ Action completed.';
-    alert(successText+(result.auditRecorded===false?'\n\nNote: the access change succeeded, but the audit log could not be written.':''));
+    alert(successText+(result.auditRecorded===false?' Note: the access change succeeded, but the audit log could not be written.':''));
   }catch(e){alert('Action failed: '+e.message);return;}
   await loadUsers();
   if(document.getElementById('userDetail').classList.contains('open'))await showUser(id);
