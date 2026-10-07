@@ -16,8 +16,6 @@
 - Fixed Telegram Test connection/Disconnect validation.
 - Added proprietary licensing, AI/ML restrictions, brand policy, privacy notice, governance, support, and documentation-index files.
 - Refreshed release, operations, and production test documentation.
-
-## 2.6.0 — Production Reliability & Access Control Hardening
 - Lease-fenced Durable Object jobs and stale-job recovery.
 - Correct processing/typing lifecycle and retry classification.
 - End-to-end dashboard unlimited-access verification.
