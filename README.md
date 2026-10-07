@@ -1,211 +1,245 @@
 # Parmar AI
 
-**Production Release: v2.6.0**
+**Production line: 2.6.x**  
+**Repository classification: Proprietary, source-available**  
+**Copyright © 2026 Parmar AI. All rights reserved.**
 
-Parmar AI is a Telegram-first, SSC-focused AI study companion built for fast doubt solving, conversation continuity, evidence-based study personalization, and owner-grade operational visibility.
+> **IMPORTANT — PROPRIETARY SOFTWARE**
+>
+> This repository is public for controlled source inspection and project transparency. It is not an open-source project and is not licensed for general reuse, modification, redistribution, deployment, resale, competing products, advertising, endorsement, or promotional use.
+>
+> Public GitHub visibility does not make the software public-domain or open-source. GitHub's Terms of Service separately provide platform-level rights to view and fork public repositories. No additional permission is granted by Parmar AI beyond those platform rights. See LICENSE and TRADEMARKS.md.
 
-The production application runs on **Cloudflare Workers**, **Cloudflare Queues**, **SQLite-backed Durable Objects**, **Cloudflare D1**, **Telegram Bot API**, and **Google Vertex AI / Gemini**.
+## 1. Product
 
-This repository intentionally contains the complete public application and engineering documentation for the v2.6.0 release. Production secrets, credentials, private user exports, and operational tokens are never committed.
+Parmar AI is a Telegram-first SSC study companion designed around fast doubt resolution, conversational continuity, evidence-based study personalization, usage controls, and operational visibility.
 
-> **Repository status:** Public production source for v2.6.0. Future Battle Arena, social, voice, marketplace, and payments concepts are not shipped unless explicitly marked below.
+The production system uses:
 
-## What v2.6.0 ships
+- Cloudflare Workers
+- Cloudflare Queues
+- SQLite-backed Durable Objects
+- Cloudflare D1
+- Telegram Bot API
+- Google Vertex AI / Gemini
+
+The repository contains application code, tests, deployment templates, reference schemas, controlled documentation, prompt assets, and offline reporting utilities. Production secrets and real student data are intentionally excluded.
+
+## 2. Current production scope
 
 ### Student experience
-- SSC GA/GS-first doubt solving.
-- Concise, exam-oriented answers with an SSC takeaway when useful.
-- Adaptive Gemini thinking: LOW, MEDIUM, or HIGH within the configured ceiling.
-- Conversation continuity across recent completed in-scope turns.
-- Follow-up handling for phrases such as `iska`, `isko`, `isme`, `ye`, `same`, `phir se`, and `simple mein`.
-- Explicit confusion-aware and simplification-aware responses.
-- Persistent evidence-based learning signals for repeated, explicit confusion/weakness.
-- Targeted revision suggestions anchored to the current topic.
-- `/profile`, `/exam`, `/reset`, `/help`, and `/id` commands.
 
-### Reliability and safety
-- Queue-backed asynchronous AI processing.
-- Durable per-private-chat job state and duplicate protection.
-- Retry and dead-letter-queue handling.
-- Structured Gemini answer validation.
-- Retry of incomplete `MAX_TOKENS` output.
-- Profile persistence isolated from primary answer delivery.
-- Telegram typing lifecycle and terminal failure handling.
-- Server-side suspension control for abusive or test-blocked accounts.
+- SSC GA/GS-focused doubt solving.
+- Exam-oriented factual and conceptual explanations.
+- Adaptive Gemini reasoning within the configured ceiling.
+- Recent conversation continuity and contextual follow-ups.
+- Simplification and confusion-aware responses.
+- Evidence-based learning signals.
+- Revision priorities derived from observed signals.
+- /start, /help, /id, /exam, /profile, /reset, and /delete-my-data.
 
-### Usage controls
-- **20 accepted AI questions per India calendar day by default.**
-- Daily reset at **00:00 IST**.
-- **5 accepted AI questions per 10 seconds** by default for burst protection.
-- Daily quota and burst protection are independent.
-- Privileged owner/admin/test profiles can bypass only the daily quota.
-- Unlimited accounts remain subject to the burst safeguard.
-- Daily-limit and burst-limit messages are separate.
+### Reliability
 
-### Admin and founder control center
-The protected `/admin` application is a non-technical operations console with:
+- Queue-backed asynchronous processing.
+- Durable per-chat job state and duplicate protection.
+- Lease-aware job ownership and stale-job recovery.
+- Queue retry and dead-letter handling.
+- Structured answer validation and controlled retry.
+- Telegram typing lifecycle management.
+- Terminal failure handling.
+- Student-profile failures isolated from the primary answer-delivery path.
 
-- Live overview of students, activity, success rate, latency, backlog and quota events.
-- AI token usage: prompt, output/candidate, reasoning/thought, cached and total tokens.
-- Estimated AI cost per request and aggregate spend.
-- Configurable AI budget display with estimated remaining budget.
-- Simple 30-day spend run-rate projection.
-- Spend by thinking level, model and location.
-- Most expensive requests.
-- Searchable student directory and individual student profiles.
-- Student usage, estimated cost, recent topics and learning signals.
-- Unlimited-access grant/revoke controls.
-- Student suspend/unsuspend controls.
-- Admin-triggered student profile reset.
-- Admin audit log.
-- Recent/live question activity with tokens, cost, latency and attempts.
-- Learning analytics for subjects, topics, modes and repeated explicit confusion.
-- System configuration/health visibility.
+### Usage and access
+
+- Default daily limit: 20 accepted AI questions per India calendar day.
+- Default burst guard: 5 accepted questions per 10 seconds.
+- Unlimited access bypasses the daily limit only; burst protection remains active.
+- Server-side Owner/Admin identities.
+- D1-backed runtime unlimited test access.
+- Server-side student suspension.
+
+### Admin Control Center
+
+The protected admin application provides:
+
+- Live operational overview.
+- Student directory and search.
+- Student usage and estimated cost visibility.
+- Grant/revoke unlimited access.
+- Suspend/unsuspend controls.
+- Profile reset.
+- Audit logging.
+- Activity monitoring.
+- AI token and estimated-cost reporting.
+- Learning analytics.
+- System/configuration visibility.
+- Telegram bot connection management.
 - JSON report export.
 
-### Offline reporting
-A Python/Matplotlib reporting utility lives under `reports/`. It is intentionally **not** on the production request path. It consumes exported admin JSON and produces local charts and a Markdown summary for founder/ops review.
+## 3. Architecture
 
-### AI economics accounting
-For each successful HTTP 200 Vertex response, the app records the token metadata returned by Gemini, including prompt, candidate output, thought and tool-use token counts when available. Google documents `promptTokenCount`, `candidatesTokenCount`, `thoughtsTokenCount`, `toolUsePromptTokenCount`, `cachedContentTokenCount`, and `totalTokenCount` in the GenerateContent response metadata. citeturn802934search2
-
-The dashboard converts that usage into an **estimate**, using configurable per-million-token rates. For the current production model, the default global standard rates are **$0.75 / 1M input**, **$0.075 / 1M cached input**, and **$3.75 / 1M text output (response + reasoning)** through December 31, 2026. Google lists higher standard rates beginning January 1, 2027. citeturn802934search0
-
-The dashboard never presents this estimate as the authoritative Google Cloud invoice.
-
-## What v2.6.0 does not ship
-
-- PUBG-style live Battle Royale arena.
-- Squad matchmaking and social graph.
-- WebRTC/Clubhouse-style voice rooms.
-- Spectator stadium / kill-feed system.
-- Sprint Coins economy.
-- Paid coins, payments, donations, subscriptions, or marketplace.
-- Production Telegram WebApp gaming shell.
-
-## Architecture
-
-```text
+~~~text
 Telegram private chat
         |
         v
 Cloudflare Worker
         |
-        +--> D1 analytics projection
-        |
-        +--> Durable Object (per private chat)
-        |       |
-        |       +--> daily/burst rate metadata
-        |       +--> duplicate/job state
-        |       +--> recent conversation context
-        |       +--> student profile + learning signals
+        +--> Durable Object
+        |      +--> duplicate/job state
+        |      +--> quota/rate metadata
+        |      +--> recent conversation context
+        |      +--> student profile
         |
         +--> Cloudflare Queue
-                |
-                v
-           Queue consumer
-                |
-                +--> Vertex AI / Gemini
-                |      |
-                |      +--> token metadata
-                |      +--> structured answer
-                |
-                +--> D1 AI usage accounting
-                +--> profile update
-                +--> Telegram answer delivery
+        |       |
+        |       v
+        |   Queue consumer
+        |       |
+        |       +--> Vertex AI / Gemini
+        |       +--> Telegram answer delivery
+        |       +--> D1 usage accounting
+        |
+        +--> D1 analytics projection
+                +--> users
+                +--> questions
+                +--> events
+                +--> AI usage
+                +--> access controls
+                +--> audit log
+                +--> Telegram bot connections
 
 Protected /admin
         |
         v
-D1 analytics + AI usage + access controls + audit log
-        |
-        +--> live dashboard
-        +--> JSON export --> offline Python/Matplotlib reports
-```
+Authenticated admin application
+~~~
 
-D1 is the admin/analytics projection; the Durable Object + Queue path remains the primary operational question-processing state machine.
+The Durable Object + Queue path is the primary operational question-processing state machine. D1 is the centralized analytics and administrative projection.
 
-## Public/private boundary
+## 4. Repository map
 
-**Public:** application source, tests, schemas, deployment templates, documentation, admin UI code, and report tooling.
+| Path | Purpose |
+|---|---|
+| src/ | Production Worker and application code |
+| src/ai/ | Vertex AI / Gemini integration |
+| src/admin/ | Protected Admin Control Center |
+| src/analytics/ | D1 analytics, usage, access and audit |
+| src/core/ | Durable Object job store and shared logic |
+| src/telegram/ | Telegram API and bot connection management |
+| prompts/ | Prompt fixtures and controlled prompt documentation |
+| reports/ | Offline founder/operations reporting |
+| test/ | Regression and integration-oriented tests |
+| docs/ | Engineering, operations, security, governance and release documentation |
+| data/ | Placeholder/reference-data location; never a production data store |
 
-**Never commit:** Telegram bot tokens, webhook/setup secrets, Google service-account private keys, admin passwords, session-signing secrets, Cloudflare API tokens, local `.dev.vars`, real student exports, production log dumps, or private billing credentials.
+See docs/README.md for the maintained documentation index.
 
-The repository uses placeholders in `wrangler.example.jsonc` and `.dev.vars.example`.
+## 5. Public/private boundary
 
-## Quick start
+### Repository material that may be published
 
-Requirements:
-- Node.js 22+
-- npm
-- Cloudflare Workers/D1/Queues/Durable Objects
-- Telegram bot
-- Google Cloud project with Vertex AI access
+Only source, tests, fixtures, schemas, templates, and documentation that Parmar AI has intentionally placed in this public repository.
 
-```bash
-npm install
-npm run check
-npm test
-```
+### Never commit
 
-Python reporting is optional and local-only:
+- Telegram bot tokens.
+- Telegram webhook/setup secrets.
+- Google service-account private keys.
+- Cloudflare API tokens or private credentials.
+- Admin passwords.
+- Session-signing secrets.
+- Production D1 exports.
+- Real student conversations.
+- Production logs containing private student content.
+- Private billing credentials.
+- Local secret files such as .dev.vars.
 
-```bash
-python reports/generate_report.py exported-report.json --output-dir report-output
-```
+Public configuration files use placeholders where deployment-specific secrets or identifiers are required.
 
-## Production deployment
+## 6. Security posture
 
-Follow:
+The application uses multiple security boundaries:
 
-1. `DEPLOY_DASHBOARD.md`
-2. `PRODUCTION_CHECKLIST.md`
-3. `docs/OPERATIONS_RUNBOOK.md`
-4. `docs/TEST_PLAN.md`
+- Telegram webhook secret validation.
+- Independent setup authentication.
+- Signed admin sessions.
+- Same-origin validation for admin mutations.
+- Server-side access checks.
+- Protected Owner/Admin identities.
+- Encryption for dashboard-managed Telegram bot secrets.
+- D1 retention cleanup.
+- Private-chat-only student processing.
+- Operational logging that avoids secret material.
 
-## Configuration summary
+Read SECURITY.md and docs/SECURITY_MODEL.md before changing authentication, access control, secrets, or data handling.
 
-| Setting | Default | Purpose |
-|---|---:|---|
-| `DAILY_QUESTION_LIMIT` | `20` | Accepted AI questions per India calendar day |
-| `BURST_QUESTION_LIMIT` | `5` | Accepted questions in the burst window |
-| `BURST_WINDOW_SECONDS` | `10` | Burst window duration |
-| `MAX_OUTPUT_TOKENS` | `1200` | Normal Gemini output ceiling |
-| `MAX_QUESTION_LENGTH` | `4000` | Maximum incoming text length |
-| `VERTEX_TIMEOUT_MS` | `25000` | Vertex request timeout |
-| `ANALYTICS_RAW_RETENTION_DAYS` | `90` | D1 raw question/event/usage retention |
-| `AI_BUDGET_USD` | unset | Optional daily budget used only for dashboard estimates |
-| `AI_INPUT_USD_PER_MILLION` | `0.75` | Estimated non-cached input rate |
-| `AI_CACHED_INPUT_USD_PER_MILLION` | `0.075` | Estimated cached-input rate |
-| `AI_OUTPUT_USD_PER_MILLION` | `3.75` | Estimated text output + reasoning rate |
-| `BOT_OWNER_TELEGRAM_USER_ID` | — | Primary bot owner/admin identity |
-| `ADMIN_TELEGRAM_USER_IDS` | — | Additional admin IDs |
-| `UNLIMITED_AI_TELEGRAM_USER_IDS` | — | Static unlimited-AI test allowlist |
+## 7. Privacy and data handling
 
-## Privileged access
+Parmar AI processes information required to operate the product, including Telegram identity metadata, submitted questions, operational state, study-profile signals, AI usage metadata, and administrator audit data.
 
-The owner and configured Telegram admins are exempt from the daily question quota. Specific test profiles can receive unlimited daily AI access through D1 runtime overrides or the static allowlist.
+The current bot provides /delete-my-data for explicit user-directed deletion of stored student data.
 
-Unlimited means **no daily quota**, not unlimited traffic. All accounts remain protected by the 5-question / 10-second burst rule.
+Read PRIVACY.md for the repository-level data handling notice. Third-party provider handling remains subject to the relevant provider configuration and terms.
 
-## Identity and reset semantics
+## 8. Deployment
 
-The canonical student identity is the Telegram `from.id` value for analytics and learning-profile identity. Private-chat operational routing continues to use chat ID because v2.6.0 supports private chats only.
+Production deployment is designed around Cloudflare and the repository-connected deployment workflow.
 
-`/reset` clears the student's study profile and conversation context. It does **not** erase centralized analytics, and it does **not** reset the daily AI quota.
+Read, in order:
 
-## AI cost accounting caveat
+1. DEPLOY_DASHBOARD.md
+2. PRODUCTION_CHECKLIST.md
+3. docs/OPERATIONS_RUNBOOK.md
+4. docs/TEST_PLAN.md
 
-Token usage is recorded from Gemini response metadata after successful HTTP 200 responses. The displayed AI spend is an estimate based on the configured pricing snapshot. It is deliberately separate from the actual Google Cloud billing account balance or final invoice.
+No real secret values belong in this repository.
 
-## Versioning
+## 9. Owner and admin model
 
-See `docs/VERSIONING.md`. v2.6.x is the production-reliability and access-control hardening line built on top of the stable v2.4.2 application line.
+- The Owner is defined by BOT_OWNER_TELEGRAM_USER_ID.
+- Additional Telegram admins are listed in ADMIN_TELEGRAM_USER_IDS.
+- Owner/Admin identities receive unlimited daily AI access.
+- Owner/Admin targets are protected from ordinary student-level suspension and revocation controls.
+- The web dashboard uses a separate authenticated administrator session.
 
-## License
+## 10. Testing and release discipline
 
-See `LICENSE`.
+A release is production-ready only when the relevant automated checks and manual production scenarios pass against the exact source artifact being deployed.
 
-## Security reporting
+See docs/TEST_PLAN.md, docs/RELEASE_PROCESS.md, CHANGELOG.md, and RELEASE_NOTES.md.
 
-Do not disclose credentials or exploitable vulnerabilities in public issues. See `SECURITY.md`.
+## 11. Contributions
+
+This is not an unrestricted open-source contribution project.
+
+Public visibility does not constitute permission to create, publish, distribute, commercialize, or repurpose derivative works. Do not submit code, prompt reproductions, datasets, screenshots, or production artifacts unless Parmar AI has expressly invited the contribution.
+
+See CONTRIBUTING.md.
+
+## 12. Trademarks and promotion
+
+Parmar AI product names, logos, screenshots, visual identity, and distinctive branding are not licensed for third-party advertising, promotion, endorsement, or confusingly similar products.
+
+See TRADEMARKS.md.
+
+## 13. Licensing
+
+This repository is governed by the Parmar AI Proprietary Source-Available License.
+
+No open-source rights are granted. No patent license is granted. No trademark license is granted. No permission is granted to use the source as the basis for a competing service, product, commercial offering, advertisement, endorsement, promotional material, training corpus, or public redistribution.
+
+Because this repository is public, GitHub's platform terms still control the ability of GitHub users to view and fork public repositories. GitHub states that public repositories may be viewed and forked on the service, while a license controls additional rights. citeturn856428search0turn856428search1
+
+If absolute access restriction is required, the repository must be private. A license cannot technically stop a person who already has access to public source from making a physical copy. citeturn856428search0turn856428search5
+
+## 14. Status
+
+Shipped functionality is tracked in PROJECT_STATUS.md. Planned concepts such as Battle Arena, squad matchmaking, live voice rooms, social graph, Sprint Coins, payments, marketplace features, and similar future ideas are not production features unless explicitly released.
+
+## 15. Legal note
+
+This documentation and the custom license are project materials, not legal advice. The project owner should obtain jurisdiction-specific legal review before relying on them as an enforceable commercial agreement.
+
+---
+
+**Parmar AI — Proprietary Software. All rights reserved.**
