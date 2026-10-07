@@ -522,7 +522,7 @@ async function connectTelegramBot(
       drop_pending_updates: false,
       max_connections: 100,
     });
-    await telegramAdminApi(candidateToken, "setMyCommands", buildTelegramCommands());
+    await telegramAdminApi(candidateToken, "setMyCommands", { commands: buildTelegramCommands() });
     await telegramAdminApi(candidateToken, "getWebhookInfo", {});
     await markTelegramBotVerified(env, active.connectionId);
     return {
@@ -560,7 +560,7 @@ async function connectTelegramBot(
     drop_pending_updates: willSwitch,
     max_connections: 100,
   });
-  await telegramAdminApi(candidateToken, "setMyCommands", buildTelegramCommands());
+  await telegramAdminApi(candidateToken, "setMyCommands", { commands: buildTelegramCommands() });
   const webhook = await telegramAdminApi<{ url?: string }>(candidateToken, "getWebhookInfo", {});
   if (webhook.url && webhook.url !== webhookUrl) {
     await telegramAdminApi(candidateToken, "deleteWebhook", { drop_pending_updates: true }).catch(() => undefined);
