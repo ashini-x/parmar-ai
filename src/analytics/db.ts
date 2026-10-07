@@ -451,8 +451,8 @@ export async function cleanupAnalytics(env: Env, retentionDays: number): Promise
 }
 
 export function getAnalyticsConfig(env: Env): { retentionDays: number } {
-  const value = Number.parseInt(env.ANALYTICS_RAW_RETENTION_DAYS ?? "90", 10);
-  return { retentionDays: Number.isFinite(value) && value > 0 ? value : 90 };
+  const value = Number.parseInt(env.ANALYTICS_RAW_RETENTION_DAYS ?? "30", 10);
+  return { retentionDays: Number.isFinite(value) && value > 0 ? value : 30 };
 }
 
 function splitSchemaStatements(): string[] {
