@@ -85,7 +85,9 @@ export class JobDedupe extends DurableObject {
   }
 
   async fetch(request: Request): Promise<Response> {
-    const body = (await request.json()) as Record<string, unknown>;
+    const payload = await request.json().catch(() => null);
+    if (!isRecord(payload)) return this.json({ ok: false, error: "invalid_internal_payload" }, 400);
+    const body = payload;
     const action = String(body.action ?? "");
 
     switch (action) {
@@ -359,7 +361,7 @@ export class JobDedupe extends DurableObject {
     const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
-    if (!this.ownsLease(record, body)) return { ok: true, stale: true };
+    if (!isJobLeaseOwned(record, body)) return { ok: true, stale: true };
     const packet = body.packet as AnswerPacket | undefined;
     if (!isValidAnswerPacket(packet)) throw new Error("Invalid answer packet.");
     record.answerPacket = packet;
@@ -374,7 +376,7 @@ export class JobDedupe extends DurableObject {
     const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
-    if (!this.ownsLease(record, body)) return { ok: true, stale: true };
+    if (!isJobLeaseOwned(record, body)) return { ok: true, stale: true };
     record.profileUpdated = true;
     await this.ctx.storage.put(key, record);
     return { ok: true };
@@ -386,7 +388,7 @@ export class JobDedupe extends DurableObject {
     const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
-    if (!this.ownsLease(record, body)) return { ok: true, stale: true };
+    if (!isJobLeaseOwned(record, body)) return { ok: true, stale: true };
     record.state = "done";
     record.processingAt = undefined;
     record.queuedAt = undefined;
@@ -436,7 +438,7 @@ export class JobDedupe extends DurableObject {
     const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
-    if (!this.ownsLease(record, body)) return { ok: true, stale: true };
+    if (!isJobLeaseOwned(record, body)) return { ok: true, stale: true };
     const appliedKey = `profile:applied:${updateId}`;
     if (await this.ctx.storage.get<boolean>(appliedKey)) return { ok: true };
 
@@ -514,13 +516,7 @@ export class JobDedupe extends DurableObject {
   }
 
   private ownsLease(record: JobRecord, body: Record<string, unknown>): boolean {
-    const queueMessageId = String(body.queueMessageId ?? "").trim();
-    const leaseVersion = Number(body.leaseVersion);
-    return record.state === "processing" &&
-      Boolean(queueMessageId) &&
-      record.activeQueueMessageId === queueMessageId &&
-      Number.isSafeInteger(leaseVersion) &&
-      leaseVersion === record.leaseVersion;
+    return isJobLeaseOwned(record, body);
   }
 
   private async setExam(body: Record<string, unknown>): Promise<GenericResponse> {
@@ -633,7 +629,20 @@ function parseJob(body: Record<string, unknown>): QuestionJob {
   return job;
 }
 
-function isValidAnswerPacket(value: unknown): value is AnswerPacket {
+export function isJobLeaseOwned(
+  record: Pick<JobRecord, "state" | "activeQueueMessageId" | "leaseVersion">,
+  body: Record<string, unknown>,
+): boolean {
+  const queueMessageId = String(body.queueMessageId ?? "").trim();
+  const leaseVersion = Number(body.leaseVersion);
+  return record.state === "processing" &&
+    Boolean(queueMessageId) &&
+    record.activeQueueMessageId === queueMessageId &&
+    Number.isSafeInteger(leaseVersion) &&
+    leaseVersion === record.leaseVersion;
+}
+
+export function isValidAnswerPacket(value: unknown): value is AnswerPacket  {
   if (!isRecord(value)) return false;
   const requiredStrings = ["answer", "sscTakeaway", "answerScope", "subject", "topic", "questionMode", "examRelevance", "difficulty", "profileSignal", "profileNote", "nextRevisionTopic"];
   if (requiredStrings.some((key) => typeof value[key] !== "string")) return false;
