@@ -247,11 +247,22 @@ export async function isUserSuspended(env: Env, telegramUserId: number): Promise
 export async function setUserSuspended(env: Env, telegramUserId: number, suspended: boolean, note: string, updatedBy: string): Promise<void> {
   if (!env.DB) throw new Error("D1 is required for user controls.");
   await ensureAnalyticsSchema(env);
-  await env.DB.prepare(
+  const desiredState = suspended ? 1 : 0;
+  const result = await env.DB.prepare(
     `INSERT INTO admin_user_controls (telegram_user_id, suspended, note, updated_at, updated_by)
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(telegram_user_id) DO UPDATE SET suspended = excluded.suspended, note = excluded.note, updated_at = excluded.updated_at, updated_by = excluded.updated_by`
-  ).bind(telegramUserId, suspended ? 1 : 0, note || null, Date.now(), updatedBy).run();
+  ).bind(telegramUserId, desiredState, note || null, Date.now(), updatedBy).run();
+
+  if (!result.success) throw new Error("D1 did not confirm the user-access control write.");
+
+  const verified = await env.DB.prepare(
+    `SELECT suspended FROM admin_user_controls WHERE telegram_user_id=?`
+  ).bind(telegramUserId).first<{ suspended: number }>();
+
+  if (!verified || Number(verified.suspended) !== desiredState) {
+    throw new Error("User-access control write could not be verified in D1.");
+  }
 }
 
 export interface AnalyticsUser {
