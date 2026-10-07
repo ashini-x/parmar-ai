@@ -1,7 +1,9 @@
 # Security Model
 
 ## Trust boundaries
-`Telegram -> Cloudflare Worker -> Durable Object / D1 / Queue -> Vertex AI`\n\n`Protected /admin -> D1 analytics + access controls + audit log`
+`Telegram -> Cloudflare Worker -> Durable Object / D1 / Queue -> Vertex AI`
+
+`Protected /admin -> D1 analytics + access controls + audit log`
 
 ## Authentication
 Telegram webhook requests require the configured secret header. `/telegram/setup` requires its setup secret. `/admin*` uses authenticated signed sessions and should additionally be protected by Cloudflare Access.
