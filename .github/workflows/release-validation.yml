@@ -3,6 +3,7 @@ name: Release validation
 on:
   push:
     branches:
+      - main
       - release-2.6.0-production
   workflow_dispatch:
 
