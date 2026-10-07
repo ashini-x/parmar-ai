@@ -1001,20 +1001,10 @@ async function telegramSetupMethod(env: Env, method: string, payload: Record<str
   return data.result;
 }
 
-async function buildHealth(env: Env) {
-  const activeTelegramBot = await getActiveTelegramBot(env);
-  const telegramConfigured = Boolean(activeTelegramBot || (await hasTelegramBotRecords(env)) || (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET));
+async function buildHealth(_env: Env) {
   return {
     ok: true,
-    service: "parmar-ai",
     status: "healthy",
-    checks: {
-      telegram: telegramConfigured,
-      ai: Boolean(env.GCP_PROJECT_ID && env.GCP_CLIENT_EMAIL && env.GCP_PRIVATE_KEY),
-      queue: Boolean(env.QUESTION_QUEUE),
-      database: Boolean(env.DB),
-      jobStore: Boolean(env.JOB_DEDUPE),
-    },
   };
 }
 
