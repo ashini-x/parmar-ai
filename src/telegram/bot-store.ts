@@ -261,22 +261,23 @@ async function aesKey(env: Env): Promise<CryptoKey> {
 }
 
 async function encryptString(env: Env, plaintext: string): Promise<string> {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ivBuffer = new ArrayBuffer(12);
+  crypto.getRandomValues(new Uint8Array(ivBuffer));
   const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv: ivBuffer },
     await aesKey(env),
     new TextEncoder().encode(plaintext),
   );
-  return `v1:${bytesToBase64(iv)}:${bytesToBase64(new Uint8Array(encrypted))}`;
+  return `v1:${bytesToBase64(new Uint8Array(ivBuffer))}:${bytesToBase64(new Uint8Array(encrypted))}`;
 }
 
 async function decryptString(env: Env, value: string): Promise<string> {
   const parts = value.split(":");
   if (parts.length !== 3 || parts[0] !== "v1") throw new Error("Unsupported Telegram secret format.");
   const plaintext = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: base64ToBytes(parts[1]) },
+    { name: "AES-GCM", iv: toOwnedArrayBuffer(base64ToBytes(parts[1])) },
     await aesKey(env),
-    base64ToBytes(parts[2]),
+    toOwnedArrayBuffer(base64ToBytes(parts[2])),
   );
   return new TextDecoder().decode(plaintext);
 }
@@ -299,6 +300,12 @@ async function decryptRow(env: Env, row: TelegramBotRow): Promise<TelegramBotCon
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function toOwnedArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
