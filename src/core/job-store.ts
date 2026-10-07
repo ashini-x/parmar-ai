@@ -150,6 +150,7 @@ export class JobDedupe extends DurableObject {
     const staleProcessingCutoff = now - PROCESSING_LEASE_MS;
     const terminalCutoff = now - JOB_MAX_ACTIVE_AGE_MS;
     const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
+    const quizResults = await this.ctx.storage.list<StoredQuizResultContext>({ prefix: "quiz-result:" });
     let hasProcessingRecentJob = false;
     let nextWakeAt: number | null = null;
 
@@ -182,6 +183,7 @@ export class JobDedupe extends DurableObject {
         requestId: record.requestId,
         createdAt: record.createdAt,
         ...(record.statusMessageId !== undefined ? { statusMessageId: record.statusMessageId } : {}),
+        ...(record.quizCount !== undefined ? { quizCount: record.quizCount } : {}),
       }, { contentType: "json" });
 
       if (record.state === "processing") {
@@ -282,9 +284,9 @@ export class JobDedupe extends DurableObject {
       ? Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, requestedQuizCountRaw))
       : 1;
     const continuation = body.quizContinuation === true;
-    const dailyUnits = continuation ? 0 : requestedQuizCount;
-    const dailyLimited = !unlimited && dayCount + dailyUnits > dailyLimit;
-    const burstLimited = burstCount >= burstLimit;
+    const usageUnits = continuation ? 0 : requestedQuizCount;
+    const dailyLimited = !unlimited && dayCount + usageUnits > dailyLimit;
+    const burstLimited = burstCount + usageUnits > burstLimit;
 
     if (dailyLimited || burstLimited) {
       const shouldNotify = now - rate.lastRateNoticeAt >= burstWindowMs;
@@ -304,12 +306,12 @@ export class JobDedupe extends DurableObject {
       };
     }
 
-    const nextBurstCount = burstCount + 1;
+    const nextBurstCount = burstCount + usageUnits;
     await this.ctx.storage.put<RateMeta>(RATE_LIMIT_META_KEY, {
       burstWindowStart,
       burstCount: nextBurstCount,
       dayKey,
-      dayCount: unlimited ? dayCount : dayCount + dailyUnits,
+      dayCount: unlimited ? dayCount : dayCount + usageUnits,
       lastRateNoticeAt: rate.lastRateNoticeAt,
     });
 
