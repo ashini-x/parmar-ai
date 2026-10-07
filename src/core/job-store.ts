@@ -1,13 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
-import { sendTelegramChatAction } from "../telegram/api";
+import { editTelegramMessage, sendTelegramChatAction, sendTelegramMessage } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
 
 const TYPING_HEARTBEAT_MS = 4_000;
-const TYPING_MAX_AGE_MS = 30 * 60 * 1_000;
+const TYPING_MAX_AGE_MS = 10 * 60 * 1_000;
 const JOB_RETENTION_MS = 48 * 60 * 60 * 1_000;
-const PROCESSING_LEASE_MS = 15 * 60 * 1_000;
+const PENDING_RECOVERY_MS = 45 * 1_000;
+const QUEUED_RECOVERY_MS = 2 * 60 * 1_000;
+const PROCESSING_LEASE_MS = 5 * 60 * 1_000;
+const JOB_MAX_ACTIVE_AGE_MS = 20 * 60 * 1_000;
 const RATE_LIMIT_META_KEY = "meta:rate:v2";
 const PROFILE_KEY = "profile:v1";
 const CONVERSATION_RESET_KEY = "conversation:resetAt";
@@ -35,6 +38,8 @@ export interface JobRecord {
   statusMessageId?: number;
   activeQueueMessageId?: string;
   processingAt?: number;
+  queuedAt?: number;
+  leaseVersion: number;
   answer?: string;
   answerPacket?: AnswerPacket;
   profileUpdated?: boolean;
@@ -54,6 +59,7 @@ export interface ClaimResponse {
   claimed: boolean;
   wait?: boolean;
   retryAfterSeconds?: number;
+  leaseVersion?: number;
   record?: JobRecord;
 }
 
