@@ -1,4 +1,5 @@
 import type { Env } from "../config/env";
+import { getActiveTelegramBot, getTelegramBotByConnectionId } from "./bot-store";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
@@ -34,8 +35,11 @@ export async function telegramApi<T = unknown>(
   env: Env,
   method: string,
   payload: Record<string, unknown>,
+  botConnectionId?: string,
 ): Promise<T> {
-  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  const token = botConnectionId
+    ? (await getTelegramBotByConnectionId(env, botConnectionId))?.token
+    : (await getActiveTelegramBot(env))?.token ?? env.TELEGRAM_BOT_TOKEN?.trim();
   if (!token) throw new TelegramError("Telegram bot token is not configured.");
 
   let lastError: TelegramError | null = null;
@@ -127,11 +131,12 @@ export async function sendTelegramChatAction(
   env: Env,
   chatId: number,
   action: "typing" = "typing",
+  botConnectionId?: string,
 ): Promise<void> {
   await telegramApi(env, "sendChatAction", {
     chat_id: chatId,
     action,
-  });
+  }, botConnectionId);
 }
 
 export async function sendTelegramMessage(
@@ -139,6 +144,7 @@ export async function sendTelegramMessage(
   chatId: number,
   text: string,
   replyToMessageId?: number,
+  botConnectionId?: string,
 ): Promise<TelegramMessageResult> {
   const payload: Record<string, unknown> = {
     chat_id: chatId,
@@ -153,7 +159,7 @@ export async function sendTelegramMessage(
     };
   }
 
-  return telegramApi<TelegramMessageResult>(env, "sendMessage", payload);
+  return telegramApi<TelegramMessageResult>(env, "sendMessage", payload, botConnectionId);
 }
 
 export async function editTelegramMessage(
@@ -161,6 +167,7 @@ export async function editTelegramMessage(
   chatId: number,
   messageId: number,
   text: string,
+  botConnectionId?: string,
 ): Promise<void> {
   try {
     await telegramApi(env, "editMessageText", {
@@ -168,7 +175,7 @@ export async function editTelegramMessage(
       message_id: messageId,
       text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH),
       link_preview_options: { is_disabled: true },
-    });
+    }, botConnectionId);
   } catch (error) {
     if (
       error instanceof TelegramError &&
