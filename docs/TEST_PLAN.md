@@ -1,4 +1,4 @@
-# Production Test Plan — v2.6.x
+# Production Test Plan — v2.8.0
 
 ## Core Telegram
 - `/start` returns.
@@ -12,8 +12,9 @@
 - Data deletion removes centralized analytics, quiz sessions, and per-chat study state according to application semantics.
 - Genuine MCQ/test intent renders as a native Telegram quiz while ordinary open-ended doubts remain text.
 - A fresh generic “mcq”/“quiz” request asks for a topic instead of inventing one, while a topic-anchored request generates the quiz.
+- A requested batch of up to 10 MCQs generates independent native Telegram quizzes; batch size is bounded and accounted for against limits.
 - A student-supplied MCQ preserves its options where practical and records the selected answer.
-- Correct and incorrect quiz selections produce immediate result feedback, with the explanation stored in the native quiz card.
+- Native quiz selection shows the result in Telegram without a second bot message; the outcome remains available to later follow-up questions.
 - Telegram webhook subscription includes poll_answer updates.
 
 ## Limits
