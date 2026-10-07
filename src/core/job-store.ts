@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
+import { MAX_QUIZ_BATCH_SIZE } from "../config/env";
 import { sendTelegramChatAction } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, isTelegramBotConnectionActive } from "../telegram/bot-store";
@@ -14,6 +15,8 @@ const JOB_MAX_ACTIVE_AGE_MS = 20 * 60 * 1_000;
 const RATE_LIMIT_META_KEY = "meta:rate:v2";
 const PROFILE_KEY = "profile:v1";
 const CONVERSATION_RESET_KEY = "conversation:resetAt";
+const PENDING_QUIZ_REQUEST_KEY = "pending:quiz-request";
+const PENDING_QUIZ_REQUEST_TTL_MS = 15 * 60 * 1_000;
 
 interface RateMeta {
   burstWindowStart: number;
@@ -44,10 +47,25 @@ export interface JobRecord {
   answer?: string;
   answerPacket?: AnswerPacket;
   profileUpdated?: boolean;
+  quizCount?: number;
+}
+
+interface StoredQuizResultContext {
+  pollId: string;
+  botConnectionId: string;
+  updateId: number;
+  createdAt: number;
+  question: string;
+  selectedAnswer: string;
+  correctAnswer: string;
+  result: "correct" | "incorrect";
+  explanation: string;
+  topic: string;
 }
 
 interface BeginResponse {
   action: "new" | "duplicate" | "rate_limited" | "retry_ack";
+  quizCount?: number;
   statusMessageId?: number;
   notify?: boolean;
   rateLimitReason?: "daily" | "burst";
@@ -101,6 +119,10 @@ export class JobDedupe extends DurableObject {
       case "get_profile": return this.json({ ok: true, profile: await this.getProfile() });
       case "get_usage": return this.json({ ok: true, usage: await this.getUsage(positiveNumber(body.telegramUserId)) });
       case "get_conversation": return this.json({ ok: true, recentConversation: await this.getConversation(positiveNumber(body.updateId), String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID)) });
+      case "set_pending_quiz": return this.json(await this.setPendingQuiz(body));
+      case "consume_pending_quiz": return this.json(await this.consumePendingQuiz());
+      case "clear_pending_quiz": return this.json(await this.clearPendingQuiz());
+      case "record_quiz_result": return this.json(await this.recordQuizResult(body));
       case "update_profile": return this.json(await this.updateProfile(body));
       case "set_exam": return this.json(await this.setExam(body));
       case "reset_profile": return this.json(await this.resetProfile());
@@ -130,6 +152,10 @@ export class JobDedupe extends DurableObject {
     const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
     let hasProcessingRecentJob = false;
     let nextWakeAt: number | null = null;
+
+    for (const [key, result] of quizResults) {
+      if (result.createdAt < retentionCutoff) await this.ctx.storage.delete(key);
+    }
 
     for (const [key, record] of jobs) {
       if (record.createdAt < retentionCutoff) { await this.ctx.storage.delete(key); continue; }
@@ -251,7 +277,13 @@ export class JobDedupe extends DurableObject {
     const dayKey = indiaDayKey(now);
     const dayCount = rate.dayKey === dayKey ? rate.dayCount : 0;
 
-    const dailyLimited = !unlimited && dayCount >= dailyLimit;
+    const requestedQuizCountRaw = Number(body.requestedQuizCount ?? 1);
+    const requestedQuizCount = Number.isSafeInteger(requestedQuizCountRaw)
+      ? Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, requestedQuizCountRaw))
+      : 1;
+    const continuation = body.quizContinuation === true;
+    const dailyUnits = continuation ? 0 : requestedQuizCount;
+    const dailyLimited = !unlimited && dayCount + dailyUnits > dailyLimit;
     const burstLimited = burstCount >= burstLimit;
 
     if (dailyLimited || burstLimited) {
@@ -268,6 +300,7 @@ export class JobDedupe extends DurableObject {
         notify: shouldNotify,
         rateLimitReason: dailyLimited ? "daily" : "burst",
         unlimited,
+        quizCount: requestedQuizCount,
       };
     }
 
@@ -276,7 +309,7 @@ export class JobDedupe extends DurableObject {
       burstWindowStart,
       burstCount: nextBurstCount,
       dayKey,
-      dayCount: unlimited ? dayCount : dayCount + 1,
+      dayCount: unlimited ? dayCount : dayCount + dailyUnits,
       lastRateNoticeAt: rate.lastRateNoticeAt,
     });
 
@@ -292,11 +325,12 @@ export class JobDedupe extends DurableObject {
       createdAt: job.createdAt,
       state: "pending",
       leaseVersion: 0,
+      quizCount: requestedQuizCount,
     };
 
     await this.ctx.storage.put(key, record);
     await this.ensureTypingAlarm(now);
-    return { action: "new" };
+    return { action: "new", quizCount: requestedQuizCount };
   }
 
   private async saveAck(body: Record<string, unknown>): Promise<GenericResponse> {
@@ -400,8 +434,10 @@ export class JobDedupe extends DurableObject {
 
   private async getConversation(currentUpdateId: number, currentBotConnectionId: string): Promise<ConversationTurn[]> {
     const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
+    const quizResults = await this.ctx.storage.list<StoredQuizResultContext>({ prefix: "quiz-result:" });
     const resetAt = (await this.ctx.storage.get<number>(CONVERSATION_RESET_KEY)) ?? 0;
-    const completed = [...jobs.values()]
+
+    const completedTurns = [...jobs.values()]
       .filter((record) =>
         !((record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID) === currentBotConnectionId && record.updateId === currentUpdateId) &&
         record.state === "done" &&
@@ -411,14 +447,24 @@ export class JobDedupe extends DurableObject {
         typeof record.question === "string" &&
         record.question.trim().length > 0,
       )
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, 6)
-      .reverse();
+      .map((record) => ({
+        createdAt: record.createdAt,
+        question: clampConversationText(record.question, 650),
+        answer: clampConversationText(buildStoredAnswer(record.answerPacket), 1_200),
+      }));
 
-    return completed.map((record) => ({
-      question: clampConversationText(record.question, 650),
-      answer: clampConversationText(buildStoredAnswer(record.answerPacket), 1_200),
-    }));
+    const quizTurns = [...quizResults.values()]
+      .filter((result) => result.createdAt > resetAt)
+      .map((result) => ({
+        createdAt: result.createdAt,
+        question: `Quiz result — ${result.topic}: ${result.question}`,
+        answer: `Student selected: ${result.selectedAnswer}\nResult: ${result.result}\nCorrect answer: ${result.correctAnswer}\nExplanation: ${result.explanation}`,
+      }));
+
+    return [...completedTurns, ...quizTurns]
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(-12)
+      .map(({ question, answer }) => ({ question, answer }));
   }
 
   private async getProfile(): Promise<StudentProfile> {
@@ -534,10 +580,52 @@ export class JobDedupe extends DurableObject {
     return { ok: true };
   }
 
+  private async setPendingQuiz(body: Record<string, unknown>): Promise<GenericResponse> {
+    const countRaw = Number(body.count ?? 1);
+    const count = Number.isSafeInteger(countRaw) ? Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, countRaw)) : 1;
+    await this.ctx.storage.put(PENDING_QUIZ_REQUEST_KEY, { count, createdAt: Date.now() });
+    return { ok: true };
+  }
+
+  private async consumePendingQuiz(): Promise<{ ok: true; count: number }> {
+    const pending = await this.ctx.storage.get<{ count: number; createdAt: number }>(PENDING_QUIZ_REQUEST_KEY);
+    if (!pending || !Number.isFinite(pending.createdAt) || Date.now() - pending.createdAt > PENDING_QUIZ_REQUEST_TTL_MS) {
+      await this.ctx.storage.delete(PENDING_QUIZ_REQUEST_KEY);
+      return { ok: true, count: 0 };
+    }
+    await this.ctx.storage.delete(PENDING_QUIZ_REQUEST_KEY);
+    return { ok: true, count: Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, Number(pending.count) || 1)) };
+  }
+
+  private async clearPendingQuiz(): Promise<GenericResponse> {
+    await this.ctx.storage.delete(PENDING_QUIZ_REQUEST_KEY);
+    return { ok: true };
+  }
+
+  private async recordQuizResult(body: Record<string, unknown>): Promise<GenericResponse> {
+    const pollId = String(body.pollId ?? "").trim();
+    const result = String(body.result ?? "");
+    if (!pollId || (result !== "correct" && result !== "incorrect")) throw new Error("Invalid quiz result context.");
+    await this.ctx.storage.put<StoredQuizResultContext>(`quiz-result:${pollId}`, {
+      pollId,
+      botConnectionId: String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID),
+      updateId: positiveNumber(body.updateId),
+      createdAt: Date.now(),
+      question: clampConversationText(String(body.question ?? ""), 650),
+      selectedAnswer: clampConversationText(String(body.selectedAnswer ?? "No answer recorded"), 250),
+      correctAnswer: clampConversationText(String(body.correctAnswer ?? "Unknown"), 250),
+      result,
+      explanation: clampConversationText(String(body.explanation ?? ""), 300),
+      topic: clampConversationText(String(body.topic ?? "General SSC doubt"), 100),
+    });
+    return { ok: true };
+  }
+
   private async resetProfile(): Promise<GenericResponse> {
     const now = Date.now();
     await this.ctx.storage.put(PROFILE_KEY, { ...DEFAULT_PROFILE, lastUpdatedAt: now });
     await this.ctx.storage.put(CONVERSATION_RESET_KEY, now);
+    await this.ctx.storage.delete(PENDING_QUIZ_REQUEST_KEY);
     return { ok: true };
   }
 
@@ -594,12 +682,23 @@ export function buildProfileContext(profile: StudentProfile, recentConversation:
     recentTopicHint: profile.recentTopics.slice(0, 6).join(", "),
     attentionTopicHint: profile.attentionTopics.slice(0, 5).join(", "),
     revisionHint: profile.revisionQueue.slice(0, 5).join(", "),
-    recentConversation: recentConversation.slice(-6),
+    recentConversation: recentConversation.slice(-12),
   };
 }
 
 function buildStoredAnswer(packet?: AnswerPacket): string {
   if (!packet) return "";
+  if (packet.responseMode === "quiz") {
+    const items = packet.quizItems?.length
+      ? packet.quizItems
+      : (packet.quizQuestion ? [{
+        question: packet.quizQuestion,
+        options: packet.quizOptions,
+        correctOptionIds: packet.quizCorrectOptionIds,
+        explanation: packet.quizExplanation,
+      }] : []);
+    return `Native quiz${items.length > 1 ? ` batch (${items.length})` : ""} on ${packet.topic || "SSC"}. Questions: ${items.map((item, index) => `${index + 1}. ${item.question}`).join(" | ")}`;
+  }
   const takeaway = packet.sscTakeaway?.trim();
   return takeaway ? `${packet.answer.trim()}
 SSC Focus: ${takeaway}` : packet.answer.trim();
@@ -624,6 +723,7 @@ function parseJob(body: Record<string, unknown>): QuestionJob {
     requestId: String(body.requestId ?? ""),
     createdAt: positiveNumber(body.createdAt),
     ...(body.statusMessageId !== undefined ? { statusMessageId: positiveNumber(body.statusMessageId) } : {}),
+    ...(body.quizCount !== undefined ? { quizCount: Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, positiveNumber(body.quizCount))) } : {}),
   };
   if (!job.question || !job.requestId) throw new Error("Invalid job payload.");
   return job;
