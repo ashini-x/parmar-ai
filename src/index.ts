@@ -702,8 +702,7 @@ function buildHelpText(): string {
     "",
     "/exam cgl — target exam set",
     "/profile — recent topics, attention areas aur revision queue",
-    "/reset — study profile reset
-/delete-my-data — delete your stored study data",
+    "/reset — study profile reset\n/delete-my-data — delete your stored study data",
     "/help — ye help",
     "",
     "Normal SSC GA/GS doubt seedha bhejo.\nDaily AI questions: 20.",
