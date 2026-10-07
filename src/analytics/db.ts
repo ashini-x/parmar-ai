@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS ai_usage_attempts (
 
 CREATE TABLE IF NOT EXISTS quiz_sessions (
   poll_id TEXT PRIMARY KEY,
+  bot_connection_id TEXT NOT NULL,
   telegram_user_id INTEGER NOT NULL,
   chat_id INTEGER NOT NULL,
   update_id INTEGER NOT NULL,
@@ -453,6 +454,7 @@ export async function recordAiUsage(env: Env, item: AiUsageAnalyticsInput): Prom
 
 export interface QuizSession {
   pollId: string;
+  botConnectionId: string;
   telegramUserId: number;
   chatId: number;
   updateId: number;
@@ -491,11 +493,12 @@ export async function createQuizSession(
   await ensureAnalyticsSchema(env);
   const result = await env.DB.prepare(
     `INSERT OR IGNORE INTO quiz_sessions
-      (poll_id, telegram_user_id, chat_id, update_id, message_id, question_text,
+      (poll_id, bot_connection_id, telegram_user_id, chat_id, update_id, message_id, question_text,
        options_json, correct_option_ids_json, explanation, topic, subject, difficulty, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     input.pollId,
+    input.botConnectionId,
     input.telegramUserId,
     input.chatId,
     input.updateId,
@@ -521,6 +524,7 @@ export async function getQuizSession(env: Env, pollId: string): Promise<QuizSess
   if (!row) return null;
   return {
     pollId: String(row.poll_id),
+    botConnectionId: String(row.bot_connection_id ?? ""),
     telegramUserId: Number(row.telegram_user_id),
     chatId: Number(row.chat_id),
     updateId: Number(row.update_id),
