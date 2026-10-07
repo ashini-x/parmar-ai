@@ -19,7 +19,7 @@ import {
   TelegramError,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
-import { recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended } from "./analytics/db";
+import { recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
 
@@ -174,6 +174,20 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     queueAnalytics(ctx, "id", () => recordEvent(env, "id_view", analyticsUser));
     await bestEffortTelegram("id", () => sendTelegramMessage(env, chatId, `Tumhara Telegram User ID: ${analyticsUser.telegramUserId}`));
     return withRequestId(json({ ok: true }), requestId);
+  }
+
+  if (isDeleteMyData(text)) {
+    const deletion = await deleteUserData(env, analyticsUser.telegramUserId);
+    if (deletion.chatId !== null) {
+      const id = env.JOB_DEDUPE.idFromName(String(deletion.chatId));
+      await env.JOB_DEDUPE.get(id).fetch("https://job-store/internal", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "delete_data" }),
+      });
+    }
+    await bestEffortTelegram("delete_data", () => sendTelegramMessage(env, chatId, "Tumhari Parmar AI ki stored study data aur history delete kar di gayi hai. Ab fresh start hoga. 🗑️"));
+    return withRequestId(json({ ok: true, deleted: true }), requestId);
   }
 
   if (isReset(text)) {
@@ -688,7 +702,8 @@ function buildHelpText(): string {
     "",
     "/exam cgl — target exam set",
     "/profile — recent topics, attention areas aur revision queue",
-    "/reset — study profile reset",
+    "/reset — study profile reset
+/delete-my-data — delete your stored study data",
     "/help — ye help",
     "",
     "Normal SSC GA/GS doubt seedha bhejo.\nDaily AI questions: 20.",
@@ -743,6 +758,7 @@ function buildStudyPlanText(profile: StudentProfile): string {
 function isStart(text: string): boolean { return /^\/start(?:\s|$)/i.test(text); }
 function isHelp(text: string): boolean { return /^\/(?:help|commands)(?:\s|$)/i.test(text); }
 function isReset(text: string): boolean { return /^\/(?:reset|forget)$/i.test(text); }
+function isDeleteMyData(text: string): boolean { return /^\/delete-my-data$/i.test(text); }
 function isProfileCommand(text: string): boolean { return /^\/(?:profile|progress|me)$/i.test(text); }
 function isStudyPlanQuery(text: string): boolean {
   const q = text.toLowerCase();
