@@ -1,5 +1,27 @@
 # Parmar AI Release Notes
 
+## v2.7.0 — Intent-Driven Native Telegram Quizzes
+
+### Student experience
+- Genuine MCQ/test/quiz intents now render as Telegram's native quiz card instead of a normal text answer.
+- Ordinary open-ended factual and conceptual questions remain text responses.
+- Student-supplied MCQs are preserved where practical; generated quizzes use SSC-friendly four-option defaults.
+- Each quiz carries a compact Telegram-native explanation and immediately receives correct/incorrect feedback after the student's vote.
+
+### Learning and analytics
+- Poll-answer updates are correlated to the creating Telegram bot, student, topic and generated question.
+- Quiz outcomes are stored in D1 for future learning, scoring and collective-intelligence features.
+- `/delete-my-data` removes stored quiz sessions together with the student's other centralized data.
+- Quiz sessions follow the existing raw-analytics retention lifecycle.
+
+### Reliability
+- Quiz packets are validated at the Gemini parsing layer and Durable Object boundary.
+- Quiz persistence is treated as part of the quiz interaction; if persistence fails after Telegram accepts the poll, the poll is stopped and the student receives a safe text fallback rather than an orphaned active quiz.
+- Telegram webhooks now subscribe to both ordinary messages and `poll_answer` updates.
+
+### Telegram limitation
+- Telegram's native quiz explanation is shown when a user selects an incorrect answer or opens the quiz explanation control; Telegram does not provide a separate automatic in-card explanation event for a correct selection. Parmar therefore keeps the explanation inside the quiz and also sends immediate result feedback after a correct vote.
+
 ## v2.6.1 — Production Hardening
 
 ### Security
