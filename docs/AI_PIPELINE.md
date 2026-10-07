@@ -46,7 +46,9 @@ Explicit confusion and weakness wording is treated differently from ordinary fac
 
 The model decides the presentation mode semantically. Ordinary open-ended doubts remain text responses. A genuine student-supplied MCQ, an explicit request to be tested, a request to generate an MCQ, or a clearly ongoing MCQ task produces responseMode=quiz and a Telegram-ready question, options, correct option ID and compact explanation.
 
-The application validates the quiz payload before delivery. Student-submitted options are preserved where practical, with four options preferred for generated SSC quizzes.
+An MCQ must have a topic anchor: the current request, a recent stored SSC topic, or the immediately preceding Parmar exchange when the bot asked the student to choose an MCQ topic. A fresh generic request such as “mcq” or “quiz” is intercepted before the Gemini call and answered with a topic-selection prompt instead of allowing the model to invent a random topic. A topic supplied in the direct reply can then continue as the MCQ task.
+
+The application validates the quiz payload before delivery. Student-submitted options are preserved where practical, with four options preferred for generated SSC quizzes. The quiz fallback answer is delivery-failure-only and is not sent as a second message when a native quiz is delivered successfully.
 
 ## Structured output
 

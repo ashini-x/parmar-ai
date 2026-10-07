@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { requiresFreshData } from "../src/ai/gemini";
+import { requiresFreshData, requiresMcqTopicClarification } from "../src/ai/gemini";
 import { getAnalyticsConfig } from "../src/analytics/db";
 import { getConfig } from "../src/config/env";
 import { isJobLeaseOwned, isValidAnswerPacket, type JobRecord } from "../src/core/job-store";
@@ -71,6 +71,41 @@ describe("production hardening", () => {
     expect(requiresFreshData("RBI governor?")).toBe(true);
     expect(requiresFreshData("Who is the RBI Governor in 2018?")).toBe(false);
     expect(requiresFreshData("What is the Permanent Settlement?")).toBe(false);
+  });
+
+  it("does not invent an MCQ topic for a fresh generic quiz request", () => {
+    const emptyContext = {
+      profile: {
+        version: 2,
+        targetExam: "SSC (not specified)",
+        recentTopics: [],
+        recentSubjects: [],
+        attentionTopics: [],
+        revisionQueue: [],
+        learningSignals: [],
+        questionCount: 0,
+        lastUpdatedAt: 0,
+      },
+      recentTopicHint: "",
+      attentionTopicHint: "",
+      revisionHint: "",
+      recentConversation: [],
+    } as any;
+
+    const anchoredContext = {
+      ...emptyContext,
+      profile: {
+        ...emptyContext.profile,
+        recentTopics: ["Fundamental Rights"],
+        questionCount: 1,
+      },
+    };
+
+    expect(requiresMcqTopicClarification("mcq", emptyContext)).toBe(true);
+    expect(requiresMcqTopicClarification("quiz", emptyContext)).toBe(true);
+    expect(requiresMcqTopicClarification("give me an mcq", emptyContext)).toBe(true);
+    expect(requiresMcqTopicClarification("mcq on Fundamental Rights", emptyContext)).toBe(false);
+    expect(requiresMcqTopicClarification("mcq", anchoredContext)).toBe(false);
   });
 
   it("rejects malformed answer packets at the Durable Object boundary", () => {

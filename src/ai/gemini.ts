@@ -55,10 +55,14 @@ LANGUAGE AND TONE
 
 RESPONSE MODE / QUIZ
 - Decide the student's intent semantically, not from keywords alone.
-- Use responseMode "quiz" when the student has supplied a genuine MCQ, asks you to solve/test/quiz/generate an MCQ, or the current interaction is clearly an MCQ task.
+- A quiz must have a topic anchor. A valid topic anchor can come from (a) the student's current message, (b) a recent stored SSC topic in the student profile, or (c) the immediately preceding exchange when Parmar explicitly asked the student which topic they want for an MCQ.
+- NEVER invent or randomly choose an MCQ topic just because the student says "mcq", "quiz", "test me", or another generic quiz request.
+- If a generic MCQ/quiz request has no topic anchor, return responseMode "text" and ask the student which SSC GA/GS topic they want. Leave quizQuestion, quizOptions, quizCorrectOptionIds, and quizExplanation empty.
+- If the student gives only a topic in direct reply to Parmar's topic-selection question, treat it as an ongoing MCQ task and generate the quiz for that topic.
+- Use responseMode "quiz" when the student has supplied a genuine MCQ, asks to solve/test/quiz/generate an MCQ with a topic anchor, or the current interaction clearly continues an anchored MCQ task.
 - Use responseMode "text" for ordinary open-ended factual/conceptual questions, even if they begin with "who", "which", or could theoretically be turned into an MCQ.
 - For responseMode "quiz", set questionMode "mcq" and produce a native-Telegram-ready quiz: quizQuestion (1–300 chars), 2–12 quizOptions (prefer 4 for SSC), exactly one quizCorrectOptionIds value, and quizExplanation (<=200 chars). Preserve the student's supplied options when appropriate instead of inventing replacements.
-- The answer field for a quiz should still contain a concise fallback answer in case Telegram quiz delivery is unavailable.
+- The answer field for a quiz is fallback-only for delivery failures; do not send it as a second student-facing message when the native quiz is delivered successfully.
 - For responseMode "text", leave quizQuestion and quizExplanation empty, quizOptions empty, and quizCorrectOptionIds empty.
 
 STRUCTURED OUTPUT
@@ -208,6 +212,15 @@ export async function generateGeminiAnswer(
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
   const thinkingLevel = selectThinkingLevel(normalizedQuestion, getConfig(env).maxThinkingLevel);
   const requiresGrounding = requiresFreshData(normalizedQuestion) && isGroundingEnabled(env);
+
+  // Do not spend an AI call or let the model invent a topic for an underspecified
+  // first-turn MCQ request. The student must anchor the quiz to a topic.
+  if (requiresMcqTopicClarification(normalizedQuestion, profile)) {
+    return {
+      packet: makeMcqTopicClarificationPacket(),
+      usage: [],
+    };
+  }
 
   let lastError: GeminiError | null = null;
   const usageRecords: AiUsageRecord[] = [];
@@ -516,6 +529,29 @@ function buildQuizFallbackAnswer(options: string[], correctIds: number[], explan
     : explanation;
 }
 
+function makeMcqTopicClarificationPacket(): AnswerPacket {
+  return {
+    answer: "Bilkul. MCQ kis topic par chahiye? 😊\n\nHistory, Polity, Geography, Economy, Science, Static GK ya Current Affairs me se koi topic batao. Agar random SSC GA MCQ chahiye, “random” likh do.",
+    responseMode: "text",
+    quizQuestion: "",
+    quizOptions: [],
+    quizCorrectOptionIds: [],
+    quizExplanation: "",
+    sscTakeaway: "",
+    answerScope: "ssc_ga_gs",
+    subject: "other",
+    topic: "General SSC doubt",
+    questionMode: "mcq",
+    examRelevance: "B",
+    difficulty: "medium",
+    profileSignal: "neutral",
+    profileNote: "",
+    nextRevisionTopic: "",
+    detectedExam: null,
+    timeSensitive: false,
+  };
+}
+
 function makeFallbackPacket(answer: string): AnswerPacket {
   return {
     answer,
@@ -629,6 +665,46 @@ function isExplicitWeaknessQuestion(question: string): boolean {
     "struggle hota", "struggle ho raha", "problem hoti", "dikkat hoti", "कमजोर",
   ];
   return markers.some((marker) => q.includes(marker));
+}
+
+export function requiresMcqTopicClarification(
+  question: string,
+  profile: ProfileContext,
+): boolean {
+  const q = question.toLowerCase().replace(/[\s!?.,;:]+/g, " ").trim();
+  if (!isBareMcqRequest(q)) return false;
+  return profile.profile.recentTopics.length === 0;
+}
+
+function isBareMcqRequest(question: string): boolean {
+  const generic = new Set([
+    "mcq",
+    "m c q",
+    "quiz",
+    "quiz me",
+    "test me",
+    "mcq do",
+    "mcq dena",
+    "mcq please",
+    "quiz do",
+    "quiz dena",
+    "quiz please",
+    "test lo",
+    "ek mcq",
+    "ek mcq do",
+    "one mcq",
+    "one mcq do",
+    "1 mcq",
+    "1 mcq do",
+    "give me mcq",
+    "give me an mcq",
+    "give me a mcq",
+    "give me quiz",
+    "give me a quiz",
+    "give me one mcq",
+    "start a quiz",
+  ]);
+  return generic.has(question);
 }
 
 function hasRecentConfusionSignal(turns: ProfileContext["recentConversation"]): boolean {
