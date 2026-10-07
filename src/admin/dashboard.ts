@@ -279,7 +279,7 @@ export async function adminSystem(env: Env): Promise<Response> {
   ]);
   const config=getConfig(env);
   const activeTelegramBot=await getActiveTelegramBot(env);
-  const telegramConfigured=Boolean(activeTelegramBot || (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET));
+  const telegramConfigured=Boolean(activeTelegramBot || (!activeTelegramBot && !(await (async()=>{ if(!env.DB)return false; const row=await env.DB.prepare("SELECT 1 AS present FROM telegram_bots LIMIT 1").first(); return Boolean(row); })()) && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET));
   return json({ok:true,generatedAt:now,version:config.version,environment:config.environment,model:config.model,location:config.location,thinkingPolicy:`ADAPTIVE (max ${config.maxThinkingLevel})`,telegramConfigured,vertexAiConfigured:Boolean(env.GCP_PROJECT_ID&&env.GCP_CLIENT_EMAIL&&env.GCP_PRIVATE_KEY),databaseConfigured:Boolean(env.DB),queueConfigured:Boolean(env.QUESTION_QUEUE),durableObjectConfigured:Boolean(env.JOB_DEDUPE),adminDashboardConfigured:Boolean(env.ADMIN_DASHBOARD_PASSWORD&&env.ADMIN_SESSION_SECRET),dailyQuestionLimit:config.dailyQuestionLimit,burstLimit:config.burstQuestionLimit,burstWindowSeconds:config.burstWindowSeconds,rawRetentionDays:Number(env.ANALYTICS_RAW_RETENTION_DAYS??90)||90,recentQuestions24h:n(recent?.count),avgLatencyMs24h:Number(recent?.avg_latency??0),analyticsEvents24h:n(dbWrite?.count),lastAdminAction:latestEvent??null,pricing:pricingInfo(env)});
 }
 
@@ -540,7 +540,6 @@ async function connectTelegramBot(
   const webhookUrl = origin + "/telegram/webhook";
   const willSwitch = Boolean(active && active.botId !== candidate.id);
 
-  // Stage the candidate first. It remains disconnected until the old webhook is safely removed.
   await saveTelegramBot(env, {
     connectionId,
     botId: candidate.id,
@@ -553,18 +552,30 @@ async function connectTelegramBot(
     disconnectedAt: null,
   });
 
-  await telegramAdminApi(candidateToken, "setWebhook", {
-    url: webhookUrl,
-    secret_token: webhookSecret,
-    allowed_updates: ["message"],
-    drop_pending_updates: willSwitch,
-    max_connections: 100,
-  });
-  await telegramAdminApi(candidateToken, "setMyCommands", { commands: buildTelegramCommands() });
-  const webhook = await telegramAdminApi<{ url?: string }>(candidateToken, "getWebhookInfo", {});
-  if (webhook.url && webhook.url !== webhookUrl) {
-    await telegramAdminApi(candidateToken, "deleteWebhook", { drop_pending_updates: true }).catch(() => undefined);
-    throw new Error("Telegram accepted the connection but reported a different webhook URL.");
+  let candidateWebhookRegistered = false;
+  try {
+    await telegramAdminApi(candidateToken, "setWebhook", {
+      url: webhookUrl,
+      secret_token: webhookSecret,
+      allowed_updates: ["message"],
+      drop_pending_updates: willSwitch,
+      max_connections: 100,
+    });
+    candidateWebhookRegistered = true;
+
+    await telegramAdminApi(candidateToken, "setMyCommands", { commands: buildTelegramCommands() });
+    const webhook = await telegramAdminApi<{ url?: string }>(candidateToken, "getWebhookInfo", {});
+    if (webhook.url && webhook.url !== webhookUrl) {
+      throw new Error("Telegram reported a different webhook URL.");
+    }
+  } catch (error) {
+    if (candidateWebhookRegistered) {
+      await telegramAdminApi(candidateToken, "deleteWebhook", { drop_pending_updates: true }).catch(() => undefined);
+    }
+    throw new Error(
+      "New Telegram bot setup failed before switching: " +
+      (error instanceof Error ? error.message : String(error)),
+    );
   }
 
   if (active && active.botId !== candidate.id) {
@@ -594,7 +605,37 @@ async function connectTelegramBot(
     }
   }
 
-  await activateTelegramBot(env, connectionId, active?.connectionId);
+  try {
+    await activateTelegramBot(env, connectionId, active?.connectionId);
+  } catch (error) {
+    await telegramAdminApi(candidateToken, "deleteWebhook", { drop_pending_updates: true }).catch(() => undefined);
+
+    if (active) {
+      try {
+        await activateTelegramBot(env, active.connectionId, connectionId);
+      } catch {
+        // Best-effort database rollback; webhook restoration below remains independently guarded.
+      }
+      try {
+        await telegramAdminApi(active.token, "setWebhook", {
+          url: webhookUrl,
+          secret_token: active.webhookSecret,
+          allowed_updates: ["message"],
+          drop_pending_updates: false,
+          max_connections: 100,
+        });
+        await telegramAdminApi(active.token, "setMyCommands", { commands: buildTelegramCommands() });
+      } catch {
+        // The original webhook restoration is best-effort; surface the activation error below.
+      }
+    }
+
+    throw new Error(
+      "Telegram connection could not be activated safely: " +
+      (error instanceof Error ? error.message : String(error)),
+    );
+  }
+
   return {
     botUsername: candidate.username ? "@" + candidate.username : candidate.first_name ?? "Telegram bot",
     botId: candidate.id,
