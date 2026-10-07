@@ -476,6 +476,7 @@ export async function createQuizSession(
   env: Env,
   input: {
     pollId: string;
+    botConnectionId: string;
     telegramUserId: number;
     chatId: number;
     updateId: number;
