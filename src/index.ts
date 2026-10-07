@@ -696,6 +696,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         await deliverAnswer(env, job, claim.record.statusMessageId, userFacingFailure(error));
         const completion = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
           action: "complete",
+          botConnectionId: job.botConnectionId,
           updateId: job.updateId,
           queueMessageId: message.id,
           leaseVersion: claim.leaseVersion,
@@ -751,6 +752,29 @@ function startTypingHeartbeat(env: Env, chatId: number, requestId: string, botCo
     stopped = true;
     clearInterval(interval);
   };
+}
+
+async function completeCancelledJob(
+  env: Env,
+  job: QuestionJob,
+  queueMessageId: string,
+  leaseVersion?: number,
+): Promise<void> {
+  await jobStoreRequest(env, job.chatId, {
+    action: "complete",
+    botConnectionId: job.botConnectionId,
+    updateId: job.updateId,
+    queueMessageId,
+    ...(leaseVersion !== undefined ? { leaseVersion } : {}),
+  });
+  await recordQuestionResult(env, {
+    updateId: job.updateId,
+    botConnectionId: job.botConnectionId,
+    status: "cancelled",
+    completedAt: Date.now(),
+    attempts: 0,
+    errorMessage: "telegram_bot_disconnected",
+  });
 }
 
 function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile): string {
@@ -1007,7 +1031,7 @@ function queueRetryDelay(attempt: number): number {
 function isValidQuestionJob(job: unknown): job is QuestionJob {
   if (!job || typeof job !== "object") return false;
   const candidate = job as Record<string, unknown>;
-  return ((candidate.version === 1 || candidate.version === 2) && isSafeInteger(candidate.updateId) && isSafeInteger(candidate.chatId) && isSafeInteger(candidate.messageId) && typeof candidate.question === "string" && candidate.question.trim().length > 0 && typeof candidate.requestId === "string");
+  return ((candidate.version === 1 || candidate.version === 2) && typeof candidate.botConnectionId === "string" && candidate.botConnectionId.trim().length > 0 && isSafeInteger(candidate.updateId) && isSafeInteger(candidate.chatId) && isSafeInteger(candidate.messageId) && typeof candidate.question === "string" && candidate.question.trim().length > 0 && typeof candidate.requestId === "string");
 }
 
 function isSafeInteger(value: unknown): value is number {
