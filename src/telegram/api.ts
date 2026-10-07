@@ -1,5 +1,5 @@
 import type { Env } from "../config/env";
-import { getActiveTelegramBot, getTelegramBotByConnectionId } from "./bot-store";
+import { getActiveTelegramBot, getTelegramBotByConnectionId, hasTelegramBotRecords } from "./bot-store";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
@@ -37,10 +37,18 @@ export async function telegramApi<T = unknown>(
   payload: Record<string, unknown>,
   botConnectionId?: string,
 ): Promise<T> {
-  const token = botConnectionId
-    ? (await getTelegramBotByConnectionId(env, botConnectionId))?.token
-    : (await getActiveTelegramBot(env))?.token ?? env.TELEGRAM_BOT_TOKEN?.trim();
-  if (!token) throw new TelegramError("Telegram bot token is not configured.");
+  let token: string | undefined;
+  if (botConnectionId) {
+    token = (await getTelegramBotByConnectionId(env, botConnectionId))?.token;
+  } else {
+    const active = await getActiveTelegramBot(env);
+    if (active) {
+      token = active.token;
+    } else if (!(await hasTelegramBotRecords(env))) {
+      token = env.TELEGRAM_BOT_TOKEN?.trim();
+    }
+  }
+  if (!token) throw new TelegramError("Telegram bot is not connected.");
 
   let lastError: TelegramError | null = null;
 
