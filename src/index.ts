@@ -439,15 +439,33 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
 async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, ctx: ExecutionContext): Promise<void> {
   for (const message of batch.messages) {
-    const job = message.body;
+    const rawJob = message.body;
+    const job = {
+      ...rawJob,
+      botConnectionId: rawJob.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
+    };
     if (!isValidQuestionJob(job)) {
       logger.error("invalid_question_job", { queueMessageId: message.id });
       message.ack();
       continue;
     }
 
+    if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
+      ctx.waitUntil(recordQuestionResult(env, {
+        updateId: job.updateId,
+        botConnectionId: job.botConnectionId,
+        status: "cancelled",
+        completedAt: Date.now(),
+        attempts: message.attempts,
+        errorMessage: "telegram_bot_disconnected",
+      }).catch(() => undefined));
+      message.ack();
+      continue;
+    }
+
     const claim = await jobStoreRequest<ClaimResponse>(env, job.chatId, {
       action: "claim",
+      botConnectionId: job.botConnectionId,
       updateId: job.updateId,
       queueMessageId: message.id,
     });
@@ -461,20 +479,26 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       continue;
     }
 
-    const stopTypingHeartbeat = startTypingHeartbeat(env, job.chatId, job.requestId);
+    if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
+      message.ack();
+      continue;
+    }
+
+    const stopTypingHeartbeat = startTypingHeartbeat(env, job.chatId, job.requestId, job.botConnectionId);
     try {
       const startedAt = Date.now();
       const jobTelegramUserId = job.telegramUserId ?? job.chatId;
       ctx.waitUntil(recordUserSeen(env, { telegramUserId: jobTelegramUserId, chatId: job.chatId }));
       await recordQuestionStart(env, {
         updateId: job.updateId,
+        botConnectionId: job.botConnectionId,
         requestId: job.requestId,
         user: { telegramUserId: jobTelegramUserId, chatId: job.chatId },
         messageId: job.messageId,
         question: job.question,
         receivedAt: job.createdAt,
       });
-      await recordQuestionResult(env, { updateId: job.updateId, status: "processing", startedAt });
+      await recordQuestionResult(env, { updateId: job.updateId, botConnectionId: job.botConnectionId, status: "processing", startedAt });
       let profile: StudentProfile;
       try {
         profile = await getStudentProfile(env, job.chatId);
@@ -501,6 +525,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       try {
         const conversationResult = await jobStoreRequest<{ ok: true; recentConversation: ConversationTurn[] }>(env, job.chatId, {
           action: "get_conversation",
+          botConnectionId: job.botConnectionId,
           updateId: job.updateId,
         });
         recentConversation = Array.isArray(conversationResult.recentConversation) ? conversationResult.recentConversation : [];
@@ -523,6 +548,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         packet = generation.packet;
         ctx.waitUntil(recordAiUsage(env, {
           updateId: job.updateId,
+          botConnectionId: job.botConnectionId,
           requestId: job.requestId,
           queueAttempt: message.attempts,
           telegramUserId: jobTelegramUserId,
@@ -531,6 +557,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         }).catch((usageError) => logger.warn("analytics_ai_usage_failed", { error: usageError instanceof Error ? usageError.message : String(usageError) })));
         const packetWrite = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
           action: "set_answer_packet",
+          botConnectionId: job.botConnectionId,
           updateId: job.updateId,
           queueMessageId: message.id,
           leaseVersion: claim.leaseVersion,
@@ -547,6 +574,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         try {
           const profileWrite = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
             action: "update_profile",
+            botConnectionId: job.botConnectionId,
             updateId: job.updateId,
             queueMessageId: message.id,
             leaseVersion: claim.leaseVersion,
@@ -565,6 +593,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           }
           const profileMark = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
             action: "mark_profile_updated",
+            botConnectionId: job.botConnectionId,
             updateId: job.updateId,
             queueMessageId: message.id,
             leaseVersion: claim.leaseVersion,
@@ -592,9 +621,15 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         }
       }
 
+      if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
+        await completeCancelledJob(env, job, message.id, claim.leaseVersion);
+        message.ack();
+        continue;
+      }
       await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, latestProfile));
       const completion = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
         action: "complete",
+        botConnectionId: job.botConnectionId,
         updateId: job.updateId,
         queueMessageId: message.id,
         leaseVersion: claim.leaseVersion,
@@ -606,6 +641,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       const completedAt = Date.now();
       ctx.waitUntil(recordQuestionResult(env, {
         updateId: job.updateId,
+        botConnectionId: job.botConnectionId,
         status: packet.answerScope === "out_of_scope" ? "out_of_scope" : "completed",
         startedAt,
         completedAt,
@@ -637,6 +673,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       if (error instanceof GeminiError && error.usageRecords.length) {
         ctx.waitUntil(recordAiUsage(env, {
           updateId: job.updateId,
+          botConnectionId: job.botConnectionId,
           requestId: job.requestId,
           queueAttempt: message.attempts,
           telegramUserId: job.telegramUserId ?? job.chatId,
@@ -651,6 +688,11 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       }
 
       try {
+        if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
+          await completeCancelledJob(env, job, message.id, claim.leaseVersion);
+          message.ack();
+          continue;
+        }
         await deliverAnswer(env, job, claim.record.statusMessageId, userFacingFailure(error));
         const completion = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
           action: "complete",
@@ -664,6 +706,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         }
         ctx.waitUntil(recordQuestionResult(env, {
           updateId: job.updateId,
+          botConnectionId: job.botConnectionId,
           status: "failed",
           completedAt: Date.now(),
           attempts: message.attempts,
@@ -684,12 +727,12 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
   }
 }
 
-function startTypingHeartbeat(env: Env, chatId: number, requestId: string): () => void {
+function startTypingHeartbeat(env: Env, chatId: number, requestId: string, botConnectionId: string): () => void {
   let stopped = false;
 
   const sendHeartbeat = (): void => {
     if (stopped) return;
-    void sendTelegramChatAction(env, chatId, "typing").catch((error) => {
+    void sendTelegramChatAction(env, chatId, "typing", botConnectionId).catch((error) => {
       if (!stopped) {
         logger.warn("telegram_typing_heartbeat_failed", {
           requestId,
@@ -729,13 +772,13 @@ function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile): s
 async function deliverAnswer(env: Env, job: QuestionJob, statusMessageId: number | undefined, answer: string): Promise<void> {
   if (statusMessageId) {
     try {
-      await editTelegramMessage(env, job.chatId, statusMessageId, answer);
+      await editTelegramMessage(env, job.chatId, statusMessageId, answer, job.botConnectionId);
       return;
     } catch (error) {
       if (!isMessageEditTerminalError(error)) throw error;
     }
   }
-  await sendTelegramMessage(env, job.chatId, answer, job.messageId);
+  await sendTelegramMessage(env, job.chatId, answer, job.messageId, job.botConnectionId);
 }
 
 async function getStudentProfile(env: Env, chatId: number): Promise<StudentProfile> {
