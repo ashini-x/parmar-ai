@@ -8,7 +8,7 @@
     "enabled": true
   },
   "vars": {
-    "APP_VERSION": "2.6.1",
+    "APP_VERSION": "2.7.0",
     "BURST_QUESTION_LIMIT": "5",
     "BURST_WINDOW_SECONDS": "10",
     "DAILY_QUESTION_LIMIT": "20",
