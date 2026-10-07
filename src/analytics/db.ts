@@ -128,6 +128,19 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at
 
 let schemaPromise: Promise<void> | null = null;
 
+function analyticsUpdateId(env: Env, updateId: number): number {
+  // Telegram update IDs are scoped to each bot. A replacement BotFather bot
+  // can legitimately reuse small IDs, so D1 analytics use a stable bot-specific
+  // key while the real Telegram update ID remains in the operational job path.
+  const seed = `${env.TELEGRAM_BOT_TOKEN ?? "no-telegram-token"}:${updateId}`;
+  let hash = 0xcbf29ce484222325n;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= BigInt(seed.charCodeAt(index));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return Number(hash % 9_000_000_000_000_000n) + 1;
+}
+
 export function parseTelegramUserIdSet(value: string | undefined): Set<number> {
   const result = new Set<number>();
   for (const token of (value ?? "").split(",")) {
@@ -331,7 +344,7 @@ export async function recordQuestionStart(env: Env, item: QuestionAnalyticsStart
       (update_id, request_id, telegram_user_id, chat_id, message_id, username, display_name,
        question_text, received_at, accepted_at, status)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
-  ).bind(item.updateId, item.requestId, item.user.telegramUserId, item.user.chatId, item.messageId, item.user.username ?? null, displayName, item.question, item.receivedAt, item.receivedAt).run();
+  ).bind(analyticsUpdateId(env, item.updateId), item.requestId, item.user.telegramUserId, item.user.chatId, item.messageId, item.user.username ?? null, displayName, item.question, item.receivedAt, item.receivedAt).run();
 }
 
 export async function recordQuestionResult(env: Env, result: QuestionAnalyticsResult): Promise<void> {
@@ -376,7 +389,7 @@ export async function recordAiUsage(env: Env, item: AiUsageAnalyticsInput): Prom
        total_tokens, estimated_cost_microusd, status, recorded_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
-    item.updateId, item.requestId, item.queueAttempt, item.telegramUserId, item.chatId, usage.attempt, usage.model, usage.location,
+    analyticsUpdateId(env, item.updateId), item.requestId, item.queueAttempt, item.telegramUserId, item.chatId, usage.attempt, usage.model, usage.location,
     usage.thinkingLevel, usage.grounded ? 1 : 0, usage.promptTokens, usage.candidatesTokens, usage.thoughtsTokens,
     usage.toolUsePromptTokens, usage.cachedContentTokens, usage.totalTokens, usage.estimatedCostMicrousd, usage.status, usage.recordedAt,
   ));
