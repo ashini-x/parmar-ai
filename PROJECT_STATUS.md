@@ -1,4 +1,4 @@
-# Project Status — v2.7.0
+# Project Status — v2.8.0
 
 ## Shipped
 
@@ -19,6 +19,7 @@
 - JSON export + offline Python/Matplotlib reports.
 - Public enterprise repository structure and CI scaffolding.
 - Intent-driven native Telegram MCQ/quiz delivery with per-student answer tracking.
+- Bounded multi-MCQ native Telegram quiz batches (up to 10), persistent quiz-result conversation context, and no extra post-vote bot messages.
 
 ## Planned / not shipped
 
