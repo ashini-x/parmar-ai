@@ -1,6 +1,6 @@
 {
   "name": "parmar-ai",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "release_channel": "stable",
   "repository_type": "public-production-source",
   "artifact_policy": "immutable-release-source",
