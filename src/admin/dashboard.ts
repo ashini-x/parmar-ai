@@ -7,6 +7,7 @@ import {
   getTelegramBotByBotId,
   getTelegramEncryptionStatus,
   listTelegramBots,
+  hasTelegramBotRecords,
   markTelegramBotDisconnected,
   markTelegramBotVerified,
   saveTelegramBot,
@@ -279,7 +280,7 @@ export async function adminSystem(env: Env): Promise<Response> {
   ]);
   const config=getConfig(env);
   const activeTelegramBot=await getActiveTelegramBot(env);
-  const telegramConfigured=Boolean(activeTelegramBot || (!activeTelegramBot && !(await (async()=>{ if(!env.DB)return false; const row=await env.DB.prepare("SELECT 1 AS present FROM telegram_bots LIMIT 1").first(); return Boolean(row); })()) && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET));
+  const telegramConfigured=Boolean(activeTelegramBot || (!(await hasTelegramBotRecords(env)) && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET));
   return json({ok:true,generatedAt:now,version:config.version,environment:config.environment,model:config.model,location:config.location,thinkingPolicy:`ADAPTIVE (max ${config.maxThinkingLevel})`,telegramConfigured,vertexAiConfigured:Boolean(env.GCP_PROJECT_ID&&env.GCP_CLIENT_EMAIL&&env.GCP_PRIVATE_KEY),databaseConfigured:Boolean(env.DB),queueConfigured:Boolean(env.QUESTION_QUEUE),durableObjectConfigured:Boolean(env.JOB_DEDUPE),adminDashboardConfigured:Boolean(env.ADMIN_DASHBOARD_PASSWORD&&env.ADMIN_SESSION_SECRET),dailyQuestionLimit:config.dailyQuestionLimit,burstLimit:config.burstQuestionLimit,burstWindowSeconds:config.burstWindowSeconds,rawRetentionDays:Number(env.ANALYTICS_RAW_RETENTION_DAYS??90)||90,recentQuestions24h:n(recent?.count),avgLatencyMs24h:Number(recent?.avg_latency??0),analyticsEvents24h:n(dbWrite?.count),lastAdminAction:latestEvent??null,pricing:pricingInfo(env)});
 }
 
@@ -437,6 +438,7 @@ export async function adminAction(env: Env, request: Request): Promise<Response>
     if (action === "test_telegram") {
       const active = await getActiveTelegramBot(env);
       if (!active) {
+        if (await hasTelegramBotRecords(env)) return json({ok:false,error:"telegram_not_connected"},409);
         if (!env.TELEGRAM_BOT_TOKEN?.trim()) return json({ok:false,error:"telegram_not_connected"},409);
         const bot = await telegramAdminApi<{id:number;username?:string;first_name?:string}>(env.TELEGRAM_BOT_TOKEN.trim(),"getMe",{});
         const webhook = await telegramAdminApi<{url?:string;pending_update_count?:number}>(env.TELEGRAM_BOT_TOKEN.trim(),"getWebhookInfo",{});
