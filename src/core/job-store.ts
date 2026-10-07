@@ -1,5 +1,4 @@
 import { DurableObject } from "cloudflare:workers";
-import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
 import { sendTelegramChatAction } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
@@ -78,7 +77,7 @@ const DEFAULT_PROFILE: StudentProfile = {
 export class JobDedupe extends DurableObject {
   private readonly runtimeEnv: Env;
 
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: ConstructorParameters<typeof DurableObject>[0], env: Env) {
     super(ctx, env);
     this.runtimeEnv = env;
   }
