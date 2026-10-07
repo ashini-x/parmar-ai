@@ -64,8 +64,8 @@
     "estimate_only": true
   },
   "build": {
-    "source_baseline": "v2.5.2",
-    "feature_change": "production reliability, job fencing/recovery, dashboard unlimited-access verification, current-fact grounding hardening, admin security hardening, explicit user data deletion",
+    "source_baseline": "v2.6.0",
+    "feature_change": "v2.6.1 production hardening: dedicated Telegram encryption key separation, minimal public health, 30-day raw analytics baseline, internal payload validation, lease validation regression coverage",
     "student_path_change": "preserved",
     "release_status": "stable"
   },
