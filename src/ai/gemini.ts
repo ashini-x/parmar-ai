@@ -53,6 +53,14 @@ LANGUAGE AND TONE
 - Avoid markdown tables.
 - Keep the visible answer concise enough for Telegram. Avoid unnecessary numbered lists. For very short factual questions, 1–4 short lines are preferable.
 
+RESPONSE MODE / QUIZ
+- Decide the student's intent semantically, not from keywords alone.
+- Use responseMode "quiz" when the student has supplied a genuine MCQ, asks you to solve/test/quiz/generate an MCQ, or the current interaction is clearly an MCQ task.
+- Use responseMode "text" for ordinary open-ended factual/conceptual questions, even if they begin with "who", "which", or could theoretically be turned into an MCQ.
+- For responseMode "quiz", produce a native-Telegram-ready quiz: quizQuestion (1–300 chars), 2–12 quizOptions (prefer 4 for SSC), exactly one quizCorrectOptionIds value, and quizExplanation (<=200 chars). Preserve the student's supplied options when appropriate instead of inventing replacements.
+- The answer field for a quiz should still contain a concise fallback answer in case Telegram quiz delivery is unavailable.
+- For responseMode "text", leave quizQuestion and quizExplanation empty, quizOptions empty, and quizCorrectOptionIds empty.
+
 STRUCTURED OUTPUT
 - Return ONLY JSON matching the supplied response schema.
 - Do not wrap JSON in markdown fences.
@@ -67,7 +75,12 @@ export type ThinkingLevel = "LOW" | "MEDIUM" | "HIGH";
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
-    answer: { type: "STRING", description: "Final concise answer suitable for Telegram. Never return JSON inside this field." },
+    answer: { type: "STRING", description: "Final concise fallback answer suitable for Telegram. Never return JSON inside this field." },
+    responseMode: { type: "STRING", enum: ["text", "quiz"] },
+    quizQuestion: { type: "STRING", description: "Native Telegram quiz question, empty for text responses." },
+    quizOptions: { type: "ARRAY", items: { type: "STRING" }, description: "Two to twelve quiz options, empty for text responses." },
+    quizCorrectOptionIds: { type: "ARRAY", items: { type: "INTEGER" }, description: "0-based correct option IDs; exactly one for Parmar quizzes." },
+    quizExplanation: { type: "STRING", description: "Compact explanation shown by Telegram for the quiz, up to 200 characters." },
     sscTakeaway: { type: "STRING", description: "One compact SSC-specific exam takeaway; empty if unnecessary." },
     answerScope: {
       type: "STRING",
@@ -93,6 +106,11 @@ const RESPONSE_SCHEMA = {
   },
   required: [
     "answer",
+    "responseMode",
+    "quizQuestion",
+    "quizOptions",
+    "quizCorrectOptionIds",
+    "quizExplanation",
     "sscTakeaway",
     "answerScope",
     "subject",
@@ -106,6 +124,11 @@ const RESPONSE_SCHEMA = {
   ],
   propertyOrdering: [
     "answer",
+    "responseMode",
+    "quizQuestion",
+    "quizOptions",
+    "quizCorrectOptionIds",
+    "quizExplanation",
     "sscTakeaway",
     "answerScope",
     "subject",
@@ -430,8 +453,21 @@ function parseAnswerPacket(rawText: string): AnswerPacket {
   const answer = unwrapNestedAnswer(String(parsed.answer));
   if (!answer) throw new GeminiError("Vertex AI returned no usable answer text.", undefined, true);
 
+  const responseMode = normalizeEnum(parsed.responseMode, ["text", "quiz"], "text");
+  const quizQuestion = cleanQuizQuestion(String(parsed.quizQuestion ?? ""));
+  const quizOptions = normalizeQuizOptions(parsed.quizOptions);
+  const quizCorrectOptionIds = normalizeQuizCorrectOptionIds(parsed.quizCorrectOptionIds, quizOptions.length);
+  const quizExplanation = cleanQuizExplanation(String(parsed.quizExplanation ?? ""));
+
   return {
-    answer,
+    answer: responseMode === "quiz"
+      ? (answer || buildQuizFallbackAnswer(quizOptions, quizCorrectOptionIds, quizExplanation))
+      : answer,
+    responseMode,
+    quizQuestion,
+    quizOptions,
+    quizCorrectOptionIds,
+    quizExplanation,
     sscTakeaway: String(parsed.sscTakeaway ?? "").trim(),
     answerScope: normalizeEnum(parsed.answerScope, ["ssc_ga_gs", "ssc_support", "out_of_scope"], "ssc_ga_gs"),
     subject: normalizeEnum(parsed.subject, ["history", "polity", "geography", "economy", "science", "static_gk", "current_affairs", "art_culture", "other"], "other"),
@@ -447,9 +483,47 @@ function parseAnswerPacket(rawText: string): AnswerPacket {
   };
 }
 
+function normalizeQuizOptions(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => cleanQuizOption(String(item ?? "")))
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function normalizeQuizCorrectOptionIds(value: unknown, optionCount: number): number[] {
+  if (!Array.isArray(value) || optionCount < 2) return [];
+  const result = value.filter((item) => Number.isSafeInteger(item) && Number(item) >= 0 && Number(item) < optionCount).map(Number);
+  return [...new Set(result)].sort((a, b) => a - b).slice(0, 1);
+}
+
+function cleanQuizQuestion(value: string): string {
+  return value.replace(/\s+/g, " ").trim().slice(0, 300);
+}
+
+function cleanQuizOption(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
+}
+
+function cleanQuizExplanation(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+}
+
+function buildQuizFallbackAnswer(options: string[], correctIds: number[], explanation: string): string {
+  const correct = correctIds.length === 1 ? options[correctIds[0]] : "";
+  return correct
+    ? `Correct answer: ${correct}${explanation ? `\n${explanation}` : ""}`
+    : explanation;
+}
+
 function makeFallbackPacket(answer: string): AnswerPacket {
   return {
     answer,
+    responseMode: "text",
+    quizQuestion: "",
+    quizOptions: [],
+    quizCorrectOptionIds: [],
+    quizExplanation: "",
     sscTakeaway: "",
     answerScope: "ssc_ga_gs",
     subject: "other",
@@ -496,6 +570,21 @@ function sanitizeAnswerPacket(
   }
 
   if (!answer) throw new GeminiError("Vertex AI returned no usable answer text.", undefined, true);
+
+  if (packet.responseMode === "quiz") {
+    if (
+      packet.answerScope === "out_of_scope" ||
+      packet.quizQuestion.length < 1 ||
+      packet.quizOptions.length < 2 ||
+      packet.quizOptions.length > 12 ||
+      packet.quizCorrectOptionIds.length !== 1 ||
+      packet.quizCorrectOptionIds[0] < 0 ||
+      packet.quizCorrectOptionIds[0] >= packet.quizOptions.length ||
+      !packet.quizExplanation
+    ) {
+      throw new GeminiError("Vertex AI returned an invalid quiz packet.", undefined, true);
+    }
+  }
 
   if (packet.answerScope === "out_of_scope") {
     return {
