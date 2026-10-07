@@ -1,6 +1,6 @@
 {
   "name": "parmar-ai",
-  "version": "2.5.2",
+  "version": "2.6.0",
   "release_channel": "stable",
   "repository_type": "public-production-source",
   "artifact_policy": "immutable-release-source",
@@ -20,37 +20,6 @@
     "privileged_daily_access": "unlimited",
     "privileged_burst": "5 per 10 seconds"
   },
-  "admin_center": {
-    "live_refresh_seconds": 5,
-    "sections": [
-      "overview",
-      "students",
-      "ai_and_costs",
-      "learning",
-      "activity",
-      "system",
-      "access",
-      "audit",
-      "reports",
-      "settings"
-    ],
-    "token_metadata": [
-      "prompt",
-      "candidates",
-      "thoughts",
-      "tool_use_prompt",
-      "cached_content",
-      "total"
-    ],
-    "cost_estimate": "configurable micro-USD token estimate; not Google Cloud invoice",
-    "budget_mode": "optional configured threshold / estimated remaining",
-    "offline_reporting": [
-      "PDF",
-      "PNG",
-      "CSV",
-      "Markdown"
-    ]
-  },
   "access_control": {
     "owner_config": "BOT_OWNER_TELEGRAM_USER_ID",
     "additional_admins_config": "ADMIN_TELEGRAM_USER_IDS",
@@ -64,7 +33,29 @@
       "reset_profile"
     ],
     "burst_protection_applies_to_privileged_users": true,
-    "owner_admin_cannot_be_suspended": true
+    "owner_admin_cannot_be_suspended": true,
+    "dashboard_grant_verification": "D1 write and effective-access read-back verification"
+  },
+  "reliability": {
+    "lease_fencing": "queue message ID + lease version",
+    "processing_lease_seconds": 300,
+    "stale_pending_recovery_seconds": 45,
+    "stale_queued_recovery_seconds": 120,
+    "max_active_job_minutes": 20,
+    "typing_only_while_processing": true
+  },
+  "security": {
+    "no_production_secrets_in_repo": true,
+    "no_real_user_exports": true,
+    "signed_admin_session": true,
+    "admin_login_rate_limit": true,
+    "admin_mutation_origin_check": true,
+    "setup_secret_in_url": false,
+    "public_health_detail": "minimal"
+  },
+  "privacy": {
+    "delete_my_data_command": true,
+    "reset_is_study_context_only": true
   },
   "accounting": {
     "usage_table": "ai_usage_attempts",
@@ -72,15 +63,9 @@
     "price_defaults_valid_through": "2026-12-31",
     "estimate_only": true
   },
-  "security": {
-    "no_production_secrets_in_repo": true,
-    "no_real_user_exports": true,
-    "signed_admin_session": true,
-    "secret_configuration": "Cloudflare runtime secrets/variables"
-  },
   "build": {
-    "source_baseline": "v2.5.0 admin control center stable enterprise release",
-    "feature_change": "admin Students directory effective-access display and action-handler fix; student path unchanged",
+    "source_baseline": "v2.5.2",
+    "feature_change": "production reliability, job fencing/recovery, dashboard unlimited-access verification, current-fact grounding hardening, admin security hardening, explicit user data deletion",
     "student_path_change": "preserved",
     "release_status": "stable"
   },
