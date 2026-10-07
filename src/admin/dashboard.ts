@@ -405,7 +405,8 @@ export async function adminAction(env: Env, request: Request): Promise<Response>
   try { body=await request.json() as Record<string,unknown>; } catch { return json({ok:false,error:"invalid_json"},400); }
   const action=String(body.action??"").trim();
   const userId=Number(body.telegramUserId);
-  if (action !== "connect_telegram" && (!Number.isSafeInteger(userId) || userId<=0)) {
+  const userTargetedActions = new Set(["grant_unlimited","revoke_unlimited","suspend","unsuspend","reset_profile"]);
+  if (userTargetedActions.has(action) && (!Number.isSafeInteger(userId) || userId<=0)) {
     return json({ok:false,error:"invalid_user_id"},400);
   }
   const actor=(env.ADMIN_DASHBOARD_USER?.trim() || "admin").slice(0,120);
