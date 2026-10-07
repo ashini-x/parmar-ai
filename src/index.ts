@@ -19,7 +19,7 @@ import {
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
 import { recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
-import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction } from "./admin/dashboard";
+import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
@@ -933,46 +933,69 @@ function buildSetupCommands() {
 }
 
 async function telegramSetup(request: Request, env: Env, requestId: string): Promise<Response> {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_WEBHOOK_SECRET || !env.TELEGRAM_SETUP_SECRET) {
-    return withRequestId(json({ ok: false, error: "telegram_configuration_missing" }, 500), requestId);
+  if (!env.TELEGRAM_SETUP_SECRET) {
+    return withRequestId(json({ ok: false, error: "telegram_setup_not_configured" }, 500), requestId);
   }
-  const url = new URL(request.url);
   const supplied = request.headers.get("X-Setup-Secret") ?? "";
   if (!supplied || !safeEqual(supplied, env.TELEGRAM_SETUP_SECRET)) {
     return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
   }
 
-  const webhookUrl = `${url.origin}/telegram/webhook`;
+  const activeBot = await getActiveTelegramBot(env);
+  const token = activeBot?.token ?? env.TELEGRAM_BOT_TOKEN?.trim();
+  const webhookSecret = activeBot?.webhookSecret ?? env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  if (!token || !webhookSecret) {
+    return withRequestId(json({ ok: false, error: "telegram_configuration_missing" }, 500), requestId);
+  }
+
+  const url = new URL(request.url);
+  const webhookUrl = url.origin + "/telegram/webhook";
   const webhookResult = await telegramSetupMethod(env, "setWebhook", {
     url: webhookUrl,
-    secret_token: env.TELEGRAM_WEBHOOK_SECRET,
+    secret_token: webhookSecret,
     allowed_updates: ["message"],
     drop_pending_updates: false,
     max_connections: 100,
+    botTokenOverride: token,
   });
 
   const commandsResult = await telegramSetupMethod(env, "setMyCommands", {
     commands: buildSetupCommands(),
+    botTokenOverride: token,
   });
 
-  logger.info("telegram_webhook_setup", { requestId, webhookUrl });
-  return withRequestId(json({ ok: true, configured: true, commandsConfigured: Boolean(commandsResult) }), requestId);
+  logger.info("telegram_webhook_setup", {
+    requestId,
+    webhookUrl,
+    botConnectionId: activeBot?.connectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
+  });
+  return withRequestId(json({
+    ok: true,
+    configured: true,
+    commandsConfigured: Boolean(commandsResult),
+    botUsername: activeBot?.username ?? null,
+  }), requestId);
 }
 
 async function telegramSetupMethod(env: Env, method: string, payload: Record<string, unknown>): Promise<unknown> {
-  const token = env.TELEGRAM_BOT_TOKEN?.trim();
-  if (!token) throw new TelegramError("Telegram bot token is not configured.");
+  const botTokenOverride = typeof payload.botTokenOverride === "string" ? payload.botTokenOverride : undefined;
+  const requestPayload = { ...payload };
+  delete requestPayload.botTokenOverride;
 
-  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+  const activeBot = await getActiveTelegramBot(env);
+  const token = botTokenOverride ?? activeBot?.token ?? env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!token) throw new TelegramError("Telegram bot is not configured.");
+
+  const response = await fetch("https://api.telegram.org/bot" + token + "/" + method, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(requestPayload),
   });
   const raw = await response.text();
   let data: { ok: boolean; result?: unknown; description?: string };
   try { data = JSON.parse(raw) as { ok: boolean; result?: unknown; description?: string }; }
-  catch { throw new TelegramError(`Telegram returned invalid JSON (HTTP ${response.status}).`, response.status); }
-  if (!response.ok || !data.ok) throw new TelegramError(data.description ?? `Telegram request failed (HTTP ${response.status}).`, response.status, response.status >= 500 || response.status === 429);
+  catch { throw new TelegramError("Telegram returned invalid JSON (HTTP " + response.status + ").", response.status); }
+  if (!response.ok || !data.ok) throw new TelegramError(data.description ?? ("Telegram request failed (HTTP " + response.status + ")."), response.status, response.status >= 500 || response.status === 429);
   return data.result;
 }
 
@@ -1100,6 +1123,7 @@ const worker = {
 
       if (url.pathname.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
+        if (url.pathname === "/admin/api/telegram" && request.method === "GET") return adminTelegram(env);
         if (url.pathname === "/admin/api/overview" && request.method === "GET") return adminOverview(env);
         if (url.pathname === "/admin/api/users" && request.method === "GET") return adminUsers(env, request);
         if (url.pathname === "/admin/api/questions" && request.method === "GET") return adminUserQuestions(env, request);
