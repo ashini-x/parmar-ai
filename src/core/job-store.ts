@@ -301,7 +301,10 @@ export class JobDedupe extends DurableObject {
     const key = jobKey(updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record || record.state === "done") return { ok: true };
-    if (record.state === "pending") record.state = "queued";
+    if (record.state === "pending") {
+      record.state = "queued";
+      record.queuedAt = Date.now();
+    }
     await this.ctx.storage.put(key, record);
     return { ok: true };
   }
