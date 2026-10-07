@@ -27,6 +27,22 @@ const validPacket = {
 } as const;
 
 describe("production hardening", () => {
+  it("accepts a valid native quiz packet", () => {
+    const quizPacket = {
+      ...validPacket,
+      responseMode: "quiz",
+      questionMode: "mcq",
+      answer: "Correct answer: Lord Cornwallis",
+      quizQuestion: "Who introduced the Permanent Settlement?",
+      quizOptions: ["Lord Cornwallis", "Lord Wellesley", "Lord Dalhousie", "Warren Hastings"],
+      quizCorrectOptionIds: [0],
+      quizExplanation: "Permanent Settlement was introduced by Lord Cornwallis in 1793.",
+    } as const;
+    expect(isValidAnswerPacket(quizPacket)).toBe(true);
+    expect(isValidAnswerPacket({ ...quizPacket, quizCorrectOptionIds: [9] })).toBe(false);
+    expect(isValidAnswerPacket({ ...quizPacket, quizExplanation: "x".repeat(201) })).toBe(false);
+  });
+
   it("uses the v2.6.0 release fallback", () => {
     expect(getConfig({} as any).version).toBe("2.6.1");
   });
