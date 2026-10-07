@@ -650,7 +650,7 @@ export function isValidAnswerPacket(value: unknown): value is AnswerPacket  {
   if (typeof value.timeSensitive !== "boolean") return false;
   if (!["ssc_ga_gs", "ssc_support", "out_of_scope"].includes(String(value.answerScope))) return false;
   if (!["history", "polity", "geography", "economy", "science", "static_gk", "current_affairs", "art_culture", "other"].includes(String(value.subject))) return false;
-  if (!["fact", "concept", "comparison", "statement_trap", "revision", "study_plan"].includes(String(value.questionMode))) return false;
+  if (!["fact", "concept", "comparison", "statement_trap", "revision", "study_plan", "mcq"].includes(String(value.questionMode))) return false;
   if (!["A", "B", "C", "D"].includes(String(value.examRelevance))) return false;
   if (!["easy", "medium", "hard"].includes(String(value.difficulty))) return false;
   if (!["neutral", "weak", "confusion", "strength"].includes(String(value.profileSignal))) return false;
