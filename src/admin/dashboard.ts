@@ -295,9 +295,16 @@ export async function adminAction(env: Env, request: Request): Promise<Response>
   try { body=await request.json() as Record<string,unknown>; } catch { return json({ok:false,error:"invalid_json"},400); }
   const action=String(body.action??"").trim();
   const userId=Number(body.telegramUserId);
-  if (!Number.isSafeInteger(userId) || userId<=0) return json({ok:false,error:"invalid_user_id"},400);
+  if (action !== "connect_telegram" && (!Number.isSafeInteger(userId) || userId<=0)) {
+    return json({ok:false,error:"invalid_user_id"},400);
+  }
   const actor=(env.ADMIN_DASHBOARD_USER?.trim() || "admin").slice(0,120);
   try {
+    if (action === "connect_telegram") {
+      const result = await connectTelegramBot(env, new URL(request.url).origin);
+      await recordAdminAudit(env,actor,"connect_telegram",null,{botUsername:result.botUsername, webhookUrl:result.webhookUrl});
+      return json({ok:true,action,botUsername:result.botUsername,webhookUrl:result.webhookUrl});
+    }
     if (action === "grant_unlimited") {
       await grantUnlimitedAiAccess(env,userId,0,null);
       if (!(await hasUnlimitedAiAccess(env,userId))) return json({ok:false,error:"unlimited_access_verification_failed"},500);
@@ -323,6 +330,54 @@ export async function adminAction(env: Env, request: Request): Promise<Response>
   }
 }
 
+async function connectTelegramBot(env: Env, origin: string): Promise<{botUsername:string; webhookUrl:string}> {
+  const token = env.TELEGRAM_BOT_TOKEN?.trim();
+  const webhookSecret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  if (!token || !webhookSecret) throw new Error("Telegram bot token/webhook secret is not configured.");
+
+  const bot = await telegramAdminApi<{ username?: string; first_name?: string }>(token, "getMe", {});
+  const webhookUrl = `${origin}/telegram/webhook`;
+  await telegramAdminApi(token, "setWebhook", {
+    url: webhookUrl,
+    secret_token: webhookSecret,
+    allowed_updates: ["message"],
+    drop_pending_updates: false,
+    max_connections: 100,
+  });
+  await telegramAdminApi(token, "setMyCommands", {
+    commands: [
+      { command: "start", description: "Start Parmar AI" },
+      { command: "exam", description: "Set your SSC target exam" },
+      { command: "profile", description: "View your SSC study profile" },
+      { command: "reset", description: "Reset your study profile" },
+      { command: "delete-my-data", description: "Delete your stored study data" },
+      { command: "help", description: "Show help" },
+      { command: "id", description: "Show your Telegram user ID" },
+    ],
+  });
+
+  return { botUsername: bot.username ? `@${bot.username}` : bot.first_name ?? "Telegram bot", webhookUrl };
+}
+
+async function telegramAdminApi<T>(token: string, method: string, payload: Record<string, unknown>): Promise<T> {
+  const response = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const raw = await response.text();
+  let data: { ok: boolean; result?: T; description?: string };
+  try {
+    data = JSON.parse(raw) as { ok: boolean; result?: T; description?: string };
+  } catch {
+    throw new Error(`Telegram returned invalid JSON (HTTP ${response.status}).`);
+  }
+  if (!response.ok || !data.ok || data.result === undefined) {
+    throw new Error(data.description ?? `Telegram request failed (HTTP ${response.status}).`);
+  }
+  return data.result;
+}
+
 function isProtectedAdminTarget(env: Env, telegramUserId: number): boolean {
   if (telegramUserId === Number(env.BOT_OWNER_TELEGRAM_USER_ID ?? "")) return true;
   return parseIdSet(env.ADMIN_TELEGRAM_USER_IDS).has(telegramUserId);
@@ -341,7 +396,7 @@ function startOfIndiaDay(timestamp:number):number { const shifted=new Date(times
 
 const HTML = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Parmar AI Admin Control Center</title><style>
 :root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;color:#111827;background:#eef2f7}*{box-sizing:border-box}body{margin:0}.top{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid #e5e7eb}.topin{max-width:1500px;margin:auto;padding:13px 20px;display:flex;gap:15px;align-items:center;justify-content:space-between}.brand{font-weight:900;font-size:19px}.small{font-size:12px;color:#6b7280}.btn{border:0;border-radius:10px;padding:9px 12px;font:inherit;font-weight:750;cursor:pointer;background:#111827;color:#fff}.btn.alt{background:#eef2f7;color:#111827}.nav{max-width:1500px;margin:auto;display:flex;overflow:auto;padding:0 20px}.tab{border:0;background:transparent;padding:12px 13px;cursor:pointer;font-weight:700;color:#6b7280}.tab.active{color:#111827;border-bottom:3px solid #111827}.wrap{max-width:1500px;margin:auto;padding:20px}.page{display:none}.page.active{display:block}.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}.card{background:#fff;border:1px solid #e3e7ee;border-radius:16px;box-shadow:0 8px 28px rgba(15,23,42,.05)}.metric{padding:16px}.metric .k{font-size:12px;color:#6b7280}.metric .v{font-size:26px;font-weight:900;margin-top:4px}.metric .sub{font-size:12px;color:#6b7280;margin-top:3px}.section{padding:17px;margin-top:14px}.section h2{font-size:15px;margin:0 0 12px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.bar{display:grid;grid-template-columns:150px 1fr 70px;gap:9px;align-items:center;margin:8px 0;font-size:13px}.track{height:8px;background:#edf0f4;border-radius:50px;overflow:hidden}.fill{height:100%;background:#111827}.tablewrap{overflow:auto}.table{border-collapse:collapse;width:100%;font-size:13px}.table th,.table td{padding:9px;border-bottom:1px solid #edf0f4;text-align:left;vertical-align:top}.table th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#f1f5f9;font-size:11px;font-weight:750}.good{color:#047857}.warn{color:#b45309}.bad{color:#b91c1c}.alert{padding:12px;border-radius:12px;margin:7px 0;border:1px solid #e5e7eb;background:#f8fafc}.alert.warning{background:#fff7ed;border-color:#fed7aa}.alert.critical{background:#fef2f2;border-color:#fecaca}.toolbar{display:flex;gap:9px;align-items:center;margin-bottom:11px}.toolbar input,.toolbar select{padding:9px 11px;border:1px solid #d1d5db;border-radius:10px;background:#fff;font:inherit}.toolbar input{flex:1}.muted{color:#6b7280}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}.row-actions{display:flex;gap:6px;flex-wrap:wrap}.row-actions .btn{font-size:11px;padding:6px 8px}.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:12px;color:#6b7280}.statusdot{display:inline-flex;align-items:center;gap:7px;font-weight:800}.dot{width:9px;height:9px;border-radius:50%;background:#10b981}.detail{display:none}.detail.open{display:block}.kv{display:grid;grid-template-columns:180px 1fr;gap:7px;font-size:13px}.notice{padding:12px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:12px}.footer{color:#6b7280;font-size:11px;padding:22px 0;text-align:center}@media(max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}.grid2,.grid3{grid-template-columns:1fr}}@media(max-width:680px){.cards{grid-template-columns:1fr}.wrap{padding:13px}.nav{padding:0 10px}.topin{padding:11px 13px}}
-</style></head><body><header class="top"><div class="topin"><div><div class="brand">Parmar AI — Admin Control Center</div><div class="small" id="stamp">Loading live operations…</div></div><div style="display:flex;gap:7px"><button class="btn alt" onclick="refreshAll()">Refresh</button><button class="btn alt" onclick="logout()">Sign out</button></div></div><nav class="nav"><button class="tab active" data-page="overview">Overview</button><button class="tab" data-page="users">Students</button><button class="tab" data-page="ai">AI & Costs</button><button class="tab" data-page="learning">Learning</button><button class="tab" data-page="activity">Activity</button><button class="tab" data-page="system">System</button><button class="tab" data-page="access">Access</button><button class="tab" data-page="audit">Audit</button><button class="tab" data-page="reports">Reports</button><button class="tab" data-page="settings">Settings</button></nav></header><main class="wrap">
+</style></head><body><header class="top"><div class="topin"><div><div class="brand">Parmar AI — Admin Control Center</div><div class="small" id="stamp">Loading live operations…</div></div><div style="display:flex;gap:7px"><button class="btn alt" onclick="refreshAll()">Refresh</button><button class="btn alt" onclick="connectTelegram()">Connect Telegram</button><button class="btn alt" onclick="logout()">Sign out</button></div></div><nav class="nav"><button class="tab active" data-page="overview">Overview</button><button class="tab" data-page="users">Students</button><button class="tab" data-page="ai">AI & Costs</button><button class="tab" data-page="learning">Learning</button><button class="tab" data-page="activity">Activity</button><button class="tab" data-page="system">System</button><button class="tab" data-page="access">Access</button><button class="tab" data-page="audit">Audit</button><button class="tab" data-page="reports">Reports</button><button class="tab" data-page="settings">Settings</button></nav></header><main class="wrap">
 <section id="page-overview" class="page active"><div id="alerts"></div><div id="overviewCards" class="cards"></div><div class="grid2"><div class="card section"><h2>AI economics — today</h2><div id="aiSummary"></div></div><div class="card section"><h2>System status</h2><div id="statusSummary"></div></div></div><div class="grid2"><div class="card section"><h2>Top subjects — 30 days</h2><div id="topSubjects"></div></div><div class="card section"><h2>Top topics — 30 days</h2><div id="topTopics"></div></div></div><div class="grid3"><div class="card section"><h2>Daily quota usage</h2><div id="quotaDistribution"></div><p class="muted">Accepted questions per student today. Unlimited users are included in the 20+ bucket when they pass it.</p></div><div class="card section"><h2>Most active students today</h2><div id="topUsersToday"></div></div><div class="card section"><h2>Retention snapshot</h2><div id="retentionView"></div><p class="muted">D+N means students who joined on the cohort day and were active again today at that interval.</p></div></div><div class="card section"><h2>Live / recent activity</h2><div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Student</th><th>Question</th><th>Topic</th><th>Status</th><th>Tokens</th><th>Est. cost</th></tr></thead><tbody id="overviewActivity"></tbody></table></div></div></section>
 <section id="page-users" class="page"><div class="card section"><div class="toolbar"><input id="userSearch" placeholder="Search name, @username or Telegram ID"><button class="btn" onclick="loadUsers()">Search</button></div><div class="tablewrap"><table class="table"><thead><tr><th>Student</th><th>Joined</th><th>Today</th><th>Total</th><th>30d</th><th>Est. spend</th><th>Access</th><th>Last active</th><th>Actions</th></tr></thead><tbody id="usersTable"></tbody></table></div></div><div id="userDetail" class="card section detail"></div></section>
 <section id="page-ai" class="page"><div class="cards" id="aiCards"></div><div class="grid3"><div class="card section"><h2>Token composition</h2><div id="tokenBreakdown"></div></div><div class="card section"><h2>Spend by thinking level</h2><div id="thinkingSpend"></div></div><div class="card section"><h2>Grounding usage</h2><div id="groundingSpend"></div></div></div><div class="grid2"><div class="card section"><h2>7-day AI trend</h2><div id="aiTrend"></div></div><div class="card section"><h2>Cost by model / policy</h2><div id="modelSpend"></div></div></div><div class="card section"><h2>Most expensive AI requests — last 7 days</h2><div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Student</th><th>Question</th><th>Tokens</th><th>Est. cost</th></tr></thead><tbody id="expensive"></tbody></table></div></div></section>
@@ -383,6 +438,7 @@ async function loadLearning(){const d=await api('/admin/api/learning');renderBar
 async function loadSystem(){const d=await api('/admin/api/system');document.getElementById('systemCards').innerHTML=[metric('Questions 24h',fmtNum(d.recentQuestions24h)),metric('Avg latency',fmtNum(d.avgLatencyMs24h)+' ms'),metric('Analytics events 24h',fmtNum(d.analyticsEvents24h)),metric('Raw retention',d.rawRetentionDays+' days')].join('');document.getElementById('systemAlerts').innerHTML='<div class="legend"><span>🟢 Telegram: '+(d.telegramConfigured?'configured':'missing')+'</span><span>🟢 Vertex AI: '+(d.vertexAiConfigured?'configured':'missing')+'</span><span>🟢 D1: '+(d.databaseConfigured?'configured':'missing')+'</span></div>';document.getElementById('queueHealth').innerHTML=\`<div class="kv"><div>Queue</div><div>\${d.queueConfigured?'Configured':'Missing'}</div><div>Durable Object</div><div>\${d.durableObjectConfigured?'Configured':'Missing'}</div><div>Daily limit</div><div>\${d.dailyQuestionLimit}</div><div>Burst guard</div><div>\${d.burstLimit} / \${d.burstWindowSeconds}s</div></div>\`;document.getElementById('configView').innerHTML=\`<div class="kv"><div>Version</div><div>\${esc(d.version)}</div><div>Environment</div><div>\${esc(d.environment)}</div><div>Model</div><div>\${esc(d.model)}</div><div>Location</div><div>\${esc(d.location)}</div><div>Thinking policy</div><div>\${esc(d.thinkingPolicy)}</div><div>Admin dashboard</div><div>\${d.adminDashboardConfigured?'Configured':'Missing credentials'}</div><div>AI estimate rate</div><div>\${fmtMoney(d.pricing?.inputUsdPerMillion/1000000)} / input token · \${fmtMoney(d.pricing?.outputUsdPerMillion/1000000)} / output token</div></div>\`;document.getElementById('settingsView').innerHTML=\`<div class="kv"><div>Daily AI questions</div><div>\${d.dailyQuestionLimit}</div><div>Burst guard</div><div>\${d.burstLimit} questions / \${d.burstWindowSeconds}s</div><div>AI model</div><div>\${esc(d.model)}</div><div>Google location</div><div>\${esc(d.location)}</div><div>Retention</div><div>\${d.rawRetentionDays} days</div></div>\`;document.getElementById('dataStatus').innerHTML='<div class="kv"><div>Feedback collection</div><div>Not enabled yet — no student feedback scores are currently stored.</div><div>AI cost source</div><div>Token usage metadata + configured estimate rates</div><div>Billing truth</div><div>Google Cloud billing account remains authoritative</div></div>';}
 async function loadAudit(){const d=await api('/admin/api/audit?limit=100');document.getElementById('auditTable').innerHTML=(d.audit||[]).map(x=>\`<tr><td>\${fmtTime(x.created_at)}</td><td>\${esc(x.actor)}</td><td>\${esc(x.action)}</td><td>\${x.target_telegram_user_id||'—'}</td><td class="mono">\${esc(x.details_json||'')}</td></tr>\`).join('');}
 async function downloadReport(){const days=document.getElementById('reportDays').value;const d=await api('/admin/api/export?days='+days);const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='parmar-ai-report-'+days+'d.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+async function connectTelegram(){if(!confirm('Register the currently configured Telegram bot with this Worker?'))return;try{const d=await api('/admin/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'connect_telegram'})});alert('✅ Connected '+(d.botUsername||'Telegram bot')+' to Parmar AI.');}catch(e){alert('Telegram connection failed: '+e.message);}}
 async function logout(){await fetch('/admin/logout',{method:'POST'});location.href='/admin/login';}
 document.querySelectorAll('.tab').forEach(t=>t.onclick=async()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('page-'+t.dataset.page).classList.add('active');const p=t.dataset.page;if(p==='users')await loadUsers();if(p==='ai')await loadAi();if(p==='learning')await loadLearning();if(p==='activity')await loadActivity();if(p==='system')await loadSystem();if(p==='access')await loadAccess();if(p==='audit')await loadAudit();if(p==='settings')await loadSystem();});
 refreshAll();setInterval(refreshAll,5000);
