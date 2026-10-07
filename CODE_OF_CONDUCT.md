@@ -1,14 +1,12 @@
 # Code of Conduct
 
-We want Parmar AI to remain a professional engineering project.
+Parmar AI is maintained as a professional engineering project.
 
-Contributors and issue participants must communicate respectfully, focus on
-technical facts, avoid harassment, and keep student privacy and security at
-the center of the project.
+## Expected conduct
+Participants must communicate respectfully, protect student privacy, avoid harassment, respect access controls, and comply with the proprietary license.
 
-Unacceptable behavior includes harassment, doxxing, credential sharing,
-publication of private student data, malicious code submission, and deliberate
-attempts to compromise production systems.
+## Unacceptable conduct
+- harassment, threats, or targeted abuse;\n- doxxing or publication of private information;\n- credential or secret disclosure;\n- malicious production probing;\n- deliberate security or quota bypass;\n- unauthorized use of Parmar AI identity;\n- unauthorized advertising or promotion using project materials.
 
-Project maintainers may remove content or restrict participation when needed
-to protect people or production systems.
+## Enforcement
+Maintainers may remove content, reject submissions, or restrict participation as reasonably necessary to protect users, intellectual property, contributors, and production systems. Security issues should be reported privately.
