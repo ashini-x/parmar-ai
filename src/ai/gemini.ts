@@ -1,6 +1,6 @@
 import type { AiUsageRecord, AnswerPacket, Env, GeminiGenerationResult, ProfileContext } from "../config/env";
 import { GoogleAuthError, getGoogleAccessToken } from "../auth/google";
-import { getConfig } from "../config/env";
+import { getConfig, MAX_QUIZ_BATCH_SIZE, type QuizItem } from "../config/env";
 
 const DEFAULT_LOCATION = "global";
 const DEFAULT_MODEL = "gemini-3.8-flash";
@@ -57,13 +57,14 @@ RESPONSE MODE / QUIZ
 - Decide the student's intent semantically, not from keywords alone.
 - A quiz must have a topic anchor. A valid topic anchor can come from (a) the student's current message, (b) a recent stored SSC topic in the student profile, or (c) the immediately preceding exchange when Parmar explicitly asked the student which topic they want for an MCQ.
 - NEVER invent or randomly choose an MCQ topic just because the student says "mcq", "quiz", "test me", or another generic quiz request.
-- If a generic MCQ/quiz request has no topic anchor, return responseMode "text" and ask the student which SSC GA/GS topic they want. Leave quizQuestion, quizOptions, quizCorrectOptionIds, and quizExplanation empty.
+- If a generic MCQ/quiz request has no topic anchor, return responseMode "text" and ask the student which SSC GA/GS topic they want. Leave quizQuestion, quizOptions, quizCorrectOptionIds, quizExplanation, and quizItems empty.
 - If the student gives only a topic in direct reply to Parmar's topic-selection question, treat it as an ongoing MCQ task and generate the quiz for that topic.
 - Use responseMode "quiz" when the student has supplied a genuine MCQ, asks to solve/test/quiz/generate an MCQ with a topic anchor, or the current interaction clearly continues an anchored MCQ task.
 - Use responseMode "text" for ordinary open-ended factual/conceptual questions, even if they begin with "who", "which", or could theoretically be turned into an MCQ.
-- For responseMode "quiz", set questionMode "mcq" and produce a native-Telegram-ready quiz: quizQuestion (1–300 chars), 2–12 quizOptions (prefer 4 for SSC), exactly one quizCorrectOptionIds value, and quizExplanation (<=200 chars). Preserve the student's supplied options when appropriate instead of inventing replacements.
-- The answer field for a quiz is fallback-only for delivery failures; do not send it as a second student-facing message when the native quiz is delivered successfully.
-- For responseMode "text", leave quizQuestion and quizExplanation empty, quizOptions empty, and quizCorrectOptionIds empty.
+- For responseMode "quiz", set questionMode "mcq" and produce exactly the requested number of independent native-Telegram-ready quiz items (maximum 10). Each item must have a quiz question (1–300 chars), 2–12 options (prefer 4 for SSC), exactly one correct option ID, and a compact explanation (<=200 chars). Do not merge multiple questions into one item.
+- Preserve the student's supplied options when appropriate instead of inventing replacements.
+- The answer field for a quiz is fallback-only for delivery failures; never send it as a second student-facing message when the native quiz succeeds.
+- For responseMode "text", leave quizQuestion, quizOptions, quizCorrectOptionIds, quizExplanation and quizItems empty.
 
 STRUCTURED OUTPUT
 - Return ONLY JSON matching the supplied response schema.
@@ -85,6 +86,21 @@ const RESPONSE_SCHEMA = {
     quizOptions: { type: "ARRAY", items: { type: "STRING" }, description: "Two to twelve quiz options, empty for text responses." },
     quizCorrectOptionIds: { type: "ARRAY", items: { type: "INTEGER" }, description: "0-based correct option IDs; exactly one for Parmar quizzes." },
     quizExplanation: { type: "STRING", description: "Compact explanation shown by Telegram for the quiz, up to 200 characters." },
+    quizItems: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          question: { type: "STRING" },
+          options: { type: "ARRAY", items: { type: "STRING" } },
+          correctOptionIds: { type: "ARRAY", items: { type: "INTEGER" } },
+          explanation: { type: "STRING" }
+        },
+        required: ["question", "options", "correctOptionIds", "explanation"],
+        propertyOrdering: ["question", "options", "correctOptionIds", "explanation"]
+      },
+      description: "Exactly the requested number of independent native Telegram quiz items; empty for text responses."
+    },
     sscTakeaway: { type: "STRING", description: "One compact SSC-specific exam takeaway; empty if unnecessary." },
     answerScope: {
       type: "STRING",
@@ -115,6 +131,7 @@ const RESPONSE_SCHEMA = {
     "quizOptions",
     "quizCorrectOptionIds",
     "quizExplanation",
+    "quizItems",
     "sscTakeaway",
     "answerScope",
     "subject",
@@ -212,12 +229,13 @@ export async function generateGeminiAnswer(
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
   const thinkingLevel = selectThinkingLevel(normalizedQuestion, getConfig(env).maxThinkingLevel);
   const requiresGrounding = requiresFreshData(normalizedQuestion) && isGroundingEnabled(env);
+  const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, profile);
 
   // Do not spend an AI call or let the model invent a topic for an underspecified
   // first-turn MCQ request. The student must anchor the quiz to a topic.
   if (requiresMcqTopicClarification(normalizedQuestion, profile)) {
     return {
-      packet: makeMcqTopicClarificationPacket(),
+      packet: makeMcqTopicClarificationPacket(requestedQuizCount),
       usage: [],
     };
   }
@@ -235,6 +253,7 @@ export async function generateGeminiAnswer(
         thinkingLevel,
         requiresGrounding,
         attempt,
+        requestedQuizCount,
       );
       return { packet: result.packet, usage: [...usageRecords, result.usage] };
     } catch (error) {
@@ -260,6 +279,7 @@ async function requestVertexGemini(
   thinkingLevel: ThinkingLevel,
   requiresGrounding: boolean,
   attempt: number,
+  requestedQuizCount: number,
 ): Promise<{ packet: AnswerPacket; usage: AiUsageRecord }> {
   let accessToken: string;
 
@@ -369,6 +389,7 @@ async function requestVertexGemini(
         requiresGrounding,
         question,
         profileContext,
+        requestedQuizCount,
       );
     } catch (error) {
       if (error instanceof GeminiError) {
@@ -393,7 +414,7 @@ async function requestVertexGemini(
   }
 }
 
-function buildUserPrompt(question: string, context: ProfileContext, requiresGrounding: boolean, isCompletionRetry: boolean): string {
+function buildUserPrompt(question: string, context: ProfileContext, requiresGrounding: boolean, isCompletionRetry: boolean, requestedQuizCount: number): string {
   const profile = context.profile;
   const latestTurn = context.recentConversation.at(-1);
   const likelyFollowUp = isLikelyFollowUp(question, context.recentConversation);
@@ -424,6 +445,8 @@ function buildUserPrompt(question: string, context: ProfileContext, requiresGrou
     isCompletionRetry
       ? "COMPLETION RETRY: The previous generation was incomplete. Return a COMPLETE, concise answer now. Prefer fewer facts and shorter wording over additional detail. Do not repeat the incomplete draft. Stay within a compact Telegram-friendly response."
       : "",
+    "",
+    `MCQ REQUEST: If this is a quiz task, generate exactly ${requestedQuizCount} independent quiz item(s). Do not merge multiple MCQs into one poll.`,
     "",
     "STUDENT'S NEW QUESTION:",
     question,
@@ -471,30 +494,31 @@ function parseAnswerPacket(rawText: string): AnswerPacket {
   const quizOptions = normalizeQuizOptions(parsed.quizOptions);
   const quizCorrectOptionIds = normalizeQuizCorrectOptionIds(parsed.quizCorrectOptionIds, quizOptions.length);
   const quizExplanation = cleanQuizExplanation(String(parsed.quizExplanation ?? ""));
+  const quizItems = normalizeQuizItems(parsed.quizItems);
+  const effectiveQuizItems = responseMode === "quiz"
+    ? (quizItems.length ? quizItems : (quizQuestion && quizOptions.length >= 2 && quizCorrectOptionIds.length === 1 && quizExplanation ? [{
+      question: quizQuestion,
+      options: quizOptions,
+      correctOptionIds: quizCorrectOptionIds,
+      explanation: quizExplanation,
+    }] : []))
+    : [];
+  const firstQuiz = effectiveQuizItems[0];
 
   return {
     answer: responseMode === "quiz"
-      ? (answer || buildQuizFallbackAnswer(quizOptions, quizCorrectOptionIds, quizExplanation))
+      ? (answer || buildQuizFallbackAnswer(
+        firstQuiz?.options ?? quizOptions,
+        firstQuiz?.correctOptionIds ?? quizCorrectOptionIds,
+        firstQuiz?.explanation ?? quizExplanation,
+      ))
       : answer,
     responseMode,
-    quizQuestion,
-    quizOptions,
-    quizCorrectOptionIds,
-    quizExplanation,
-    sscTakeaway: String(parsed.sscTakeaway ?? "").trim(),
-    answerScope: normalizeEnum(parsed.answerScope, ["ssc_ga_gs", "ssc_support", "out_of_scope"], "ssc_ga_gs"),
-    subject: normalizeEnum(parsed.subject, ["history", "polity", "geography", "economy", "science", "static_gk", "current_affairs", "art_culture", "other"], "other"),
-    topic: cleanTopic(String(parsed.topic ?? "General SSC doubt")),
-    questionMode: normalizeEnum(parsed.questionMode, ["fact", "concept", "comparison", "statement_trap", "revision", "study_plan", "mcq"], "fact"),
-    examRelevance: normalizeEnum(parsed.examRelevance, ["A", "B", "C", "D"], "B"),
-    difficulty: "medium",
-    profileSignal: normalizeEnum(parsed.profileSignal, ["neutral", "weak", "confusion", "strength"], "neutral"),
-    profileNote: "",
-    nextRevisionTopic: cleanTopic(String(parsed.nextRevisionTopic ?? ""), true),
-    detectedExam: parsed.detectedExam == null ? null : cleanExam(String(parsed.detectedExam)),
-    timeSensitive: Boolean(parsed.timeSensitive),
-  };
-}
+    quizQuestion: firstQuiz?.question ?? quizQuestion,
+    quizOptions: firstQuiz?.options ?? quizOptions,
+    quizCorrectOptionIds: firstQuiz?.correctOptionIds ?? quizCorrectOptionIds,
+    quizExplanation: firstQuiz?.explanation ?? quizExplanation,
+    quizItems: effectiveQuizItems,
 
 function normalizeQuizOptions(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -502,6 +526,23 @@ function normalizeQuizOptions(value: unknown): string[] {
     .map((item) => cleanQuizOption(String(item ?? "")))
     .filter(Boolean)
     .slice(0, 12);
+}
+
+function normalizeQuizItems(value: unknown): QuizItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((raw) => {
+      if (!raw || typeof raw !== "object") return null;
+      const item = raw as Record<string, unknown>;
+      const options = normalizeQuizOptions(item.options);
+      const correctOptionIds = normalizeQuizCorrectOptionIds(item.correctOptionIds, options.length);
+      const question = cleanQuizQuestion(String(item.question ?? ""));
+      const explanation = cleanQuizExplanation(String(item.explanation ?? ""));
+      if (!question || options.length < 2 || correctOptionIds.length !== 1 || !explanation) return null;
+      return { question, options, correctOptionIds, explanation };
+    })
+    .filter((item): item is QuizItem => Boolean(item))
+    .slice(0, MAX_QUIZ_BATCH_SIZE);
 }
 
 function normalizeQuizCorrectOptionIds(value: unknown, optionCount: number): number[] {
@@ -529,14 +570,15 @@ function buildQuizFallbackAnswer(options: string[], correctIds: number[], explan
     : explanation;
 }
 
-function makeMcqTopicClarificationPacket(): AnswerPacket {
+function makeMcqTopicClarificationPacket(requestedQuizCount: number): AnswerPacket {
   return {
-    answer: "Bilkul. MCQ kis topic par chahiye? 😊\n\nHistory, Polity, Geography, Economy, Science, Static GK ya Current Affairs me se koi topic batao. Agar random SSC GA MCQ chahiye, “random” likh do.",
+    answer: `${requestedQuizCount > 1 ? `${requestedQuizCount} MCQs` : "MCQ"} kis topic par chahiye? 😊\n\nHistory, Polity, Geography, Economy, Science, Static GK ya Current Affairs me se koi topic batao. Topic likh do; main wahi quiz banaunga.`,
     responseMode: "text",
     quizQuestion: "",
     quizOptions: [],
     quizCorrectOptionIds: [],
     quizExplanation: "",
+    quizItems: [],
     sscTakeaway: "",
     answerScope: "ssc_ga_gs",
     subject: "other",
@@ -581,6 +623,7 @@ function sanitizeAnswerPacket(
   requiresGrounding: boolean,
   question: string,
   context: ProfileContext,
+  requestedQuizCount: number,
 ): AnswerPacket {
   let answer = normalizeAnswer(packet.answer);
   const explicitConfusion = isExplicitConfusionQuestion(question) || hasRecentConfusionSignal(context.recentConversation);
@@ -608,18 +651,41 @@ function sanitizeAnswerPacket(
   if (!answer) throw new GeminiError("Vertex AI returned no usable answer text.", undefined, true);
 
   if (packet.responseMode === "quiz") {
+    const quizItems = packet.quizItems?.length
+      ? packet.quizItems
+      : (packet.quizQuestion && packet.quizOptions.length >= 2 && packet.quizCorrectOptionIds.length === 1 && packet.quizExplanation ? [{
+        question: packet.quizQuestion,
+        options: packet.quizOptions,
+        correctOptionIds: packet.quizCorrectOptionIds,
+        explanation: packet.quizExplanation,
+      }] : []);
+
     if (
       packet.answerScope === "out_of_scope" ||
-      packet.quizQuestion.length < 1 ||
-      packet.quizOptions.length < 2 ||
-      packet.quizOptions.length > 12 ||
-      packet.quizCorrectOptionIds.length !== 1 ||
-      packet.quizCorrectOptionIds[0] < 0 ||
-      packet.quizCorrectOptionIds[0] >= packet.quizOptions.length ||
-      !packet.quizExplanation
+      quizItems.length !== requestedQuizCount ||
+      quizItems.some((item) =>
+        item.question.length < 1 ||
+        item.question.length > 300 ||
+        item.options.length < 2 ||
+        item.options.length > 12 ||
+        item.correctOptionIds.length !== 1 ||
+        item.correctOptionIds[0] < 0 ||
+        item.correctOptionIds[0] >= item.options.length ||
+        !item.explanation ||
+        item.explanation.length > 200
+      )
     ) {
-      throw new GeminiError("Vertex AI returned an invalid quiz packet.", undefined, true);
+      throw new GeminiError(`Vertex AI returned an invalid quiz packet; expected ${requestedQuizCount} quiz item(s).`, undefined, true);
     }
+
+    packet = {
+      ...packet,
+      quizItems,
+      quizQuestion: quizItems[0].question,
+      quizOptions: quizItems[0].options,
+      quizCorrectOptionIds: quizItems[0].correctOptionIds,
+      quizExplanation: quizItems[0].explanation,
+    };
   }
 
   if (packet.answerScope === "out_of_scope") {
@@ -667,44 +733,70 @@ function isExplicitWeaknessQuestion(question: string): boolean {
   return markers.some((marker) => q.includes(marker));
 }
 
-export function requiresMcqTopicClarification(
-  question: string,
-  profile: ProfileContext,
-): boolean {
+export function parseRequestedMcqCount(question: string): number {
+  const match = question.toLowerCase().match(/\b(\d{1,3})\s*(?:mcqs?|quizzes?)\b/);
+  return match ? Number(match[1]) : 1;
+}
+
+export function isMcqRequest(question: string): boolean {
   const q = question.toLowerCase().replace(/[\s!?.,;:]+/g, " ").trim();
-  if (!isBareMcqRequest(q)) return false;
-  return profile.profile.recentTopics.length === 0;
+  if (!/\b(?:mcq|mcqs|quiz|quizzes)\b/.test(q)) return false;
+  if (/^what is an? mcq\b/.test(q) || /^what is (?:a )?quiz\b/.test(q)) return false;
+  return (
+    isBareMcqRequest(q) ||
+    /\b(?:give|generate|create|make|send|provide|want|need|start|do|dena|please|pls)\b/.test(q) ||
+    /^\d{1,3}\s*(?:mcqs?|quizzes?)\b/.test(q)
+  );
+}
+
+export function isLikelyMcqTopicReply(question: string): boolean {
+  const q = question.toLowerCase().replace(/[\s!?.,;:]+/g, " ").trim();
+  if (q.length < 2 || q.length > 80 || /\b(?:mcq|quiz|test|question)\b/.test(q)) return false;
+  const stripped = q.replace(/^(?:on|about|from|regarding|par|pe|mein|me)\s+/, "").trim();
+  if (!stripped) return false;
+  if (/^(?:what|who|why|how|when|where|which|can|could|please|give|generate|create|make|send|tell|explain|difference|meaning|mujhe|bhai|kya|kaise|kyun|kyu|kaun|kab|kahan|do|dena)\b/.test(stripped)) return false;
+  return true;
+}
+
+export function requiresMcqTopicClarification(question: string, profile: ProfileContext): boolean {
+  const q = question.toLowerCase().replace(/[\s!?.,;:]+/g, " ").trim();
+  if (!isMcqRequest(q)) return false;
+  if (profile.profile.recentTopics.length > 0) return false;
+  return !hasExplicitMcqTopic(q);
+}
+
+function hasExplicitMcqTopic(question: string): boolean {
+  let residual = question
+    .replace(/\b\d{1,3}\b/g, " ")
+    .replace(/\bmcqs?\b|\bquizzes?\b/g, " ")
+    .replace(/\b(?:please|pls|give|generate|create|make|send|provide|want|need|start|can|you|me|mujhe|bhai|do|dena|de|lo|one|some|an|a)\b/g, " ")
+    .replace(/\b(?:on|about|from|regarding|of|in|for|par|pe|mein|me|ka|ki|ke)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!residual) return false;
+  if (/^(?:what|i|we|studied|study|today|same|whatever|anything|something|want|need)$/.test(residual)) return false;
+  if (residual === "random") return true;
+  return residual.length >= 2;
 }
 
 function isBareMcqRequest(question: string): boolean {
   const generic = new Set([
-    "mcq",
-    "m c q",
-    "quiz",
-    "quiz me",
-    "test me",
-    "mcq do",
-    "mcq dena",
-    "mcq please",
-    "quiz do",
-    "quiz dena",
-    "quiz please",
-    "test lo",
-    "ek mcq",
-    "ek mcq do",
-    "one mcq",
-    "one mcq do",
-    "1 mcq",
-    "1 mcq do",
-    "give me mcq",
-    "give me an mcq",
-    "give me a mcq",
-    "give me quiz",
-    "give me a quiz",
-    "give me one mcq",
-    "start a quiz",
+    "mcq", "m c q", "quiz", "quiz me", "test me", "mcq do", "mcq dena", "mcq please",
+    "quiz do", "quiz dena", "quiz please", "test lo", "ek mcq", "ek mcq do",
+    "one mcq", "one mcq do", "1 mcq", "1 mcq do", "give me mcq", "give me an mcq",
+    "give me a mcq", "give me quiz", "give me a quiz", "give me one mcq", "start a quiz",
   ]);
   return generic.has(question);
+}
+
+function resolveRequestedQuizCount(question: string, profile: ProfileContext): number {
+  const direct = isMcqRequest(question) ? parseRequestedMcqCount(question) : 1;
+  const latest = profile.recentConversation.at(-1);
+  const continuation = !isMcqRequest(question) &&
+    latest &&
+    /\b(?:mcq|mcqs|quiz|quizzes)\b/i.test(latest.answer) &&
+    isMcqRequest(latest.question);
+  return Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, continuation ? parseRequestedMcqCount(latest.question) : direct));
 }
 
 function hasRecentConfusionSignal(turns: ProfileContext["recentConversation"]): boolean {
