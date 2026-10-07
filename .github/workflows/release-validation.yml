@@ -20,6 +20,7 @@ jobs:
       - run: npm install --no-audit --no-fund --legacy-peer-deps
       - run: npm run check
       - run: npm test
+      - run: npm run test:node
       - run: npm run format:check
       - name: Package source release
         run: |
