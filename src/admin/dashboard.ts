@@ -297,6 +297,102 @@ export async function adminExport(env: Env, request: Request): Promise<Response>
   return json({ok:true,generatedAt:Date.now(),days,overview:overviewJson,usage:{attempts:n(usage?.attempts),totalTokens:n(usage?.total_tokens),spendUsd:n(usage?.spend_microusd)/1_000_000},daily:(daily?.results??[]).map(r=>({day:String(r.day),totalTokens:n(r.total_tokens),spendUsd:n(r.spend_microusd)/1_000_000})),subjects:rows(subjects?.results),topics:rows(topics?.results),statuses:rows(failures?.results)});
 }
 
+export async function adminTelegram(env: Env): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "analytics_not_configured" }, 503);
+  await ensureAnalyticsSchema(env);
+
+  const encryption = await getTelegramEncryptionStatus(env);
+  const active = await getActiveTelegramBot(env);
+  const history = await listTelegramBots(env);
+
+  if (active) {
+    let webhook: { url?: string; pending_update_count?: number } | null = null;
+    let verified = true;
+    try {
+      webhook = await telegramAdminApi<{ url?: string; pending_update_count?: number }>(active.token, "getWebhookInfo", {});
+      await telegramAdminApi(active.token, "getMe", {});
+    } catch {
+      verified = false;
+    }
+
+    return json({
+      ok: true,
+      connected: true,
+      source: "dashboard",
+      verified,
+      bot: {
+        connectionId: active.connectionId,
+        botId: active.botId,
+        username: active.username,
+        firstName: active.firstName,
+        connectedAt: active.connectedAt,
+        lastVerifiedAt: active.lastVerifiedAt,
+        status: active.status,
+      },
+      webhook,
+      encryption,
+      history: history.map((item) => ({
+        connectionId: item.connectionId,
+        botId: item.botId,
+        username: item.username,
+        firstName: item.firstName,
+        status: item.status,
+        connectedAt: item.connectedAt,
+        lastVerifiedAt: item.lastVerifiedAt,
+        disconnectedAt: item.disconnectedAt,
+      })),
+    });
+  }
+
+  if (env.TELEGRAM_BOT_TOKEN?.trim() && env.TELEGRAM_WEBHOOK_SECRET?.trim()) {
+    try {
+      const legacy = await telegramAdminApi<{ id: number; username?: string; first_name?: string }>(
+        env.TELEGRAM_BOT_TOKEN.trim(),
+        "getMe",
+        {},
+      );
+      const webhook = await telegramAdminApi<{ url?: string; pending_update_count?: number }>(
+        env.TELEGRAM_BOT_TOKEN.trim(),
+        "getWebhookInfo",
+        {},
+      );
+      return json({
+        ok: true,
+        connected: true,
+        source: "cloudflare_legacy",
+        verified: true,
+        legacyNeedsImport: true,
+        bot: { connectionId: "legacy-env", botId: legacy.id, username: legacy.username ?? null, firstName: legacy.first_name ?? null },
+        webhook,
+        encryption,
+        history: history.map((item) => ({
+          connectionId: item.connectionId,
+          botId: item.botId,
+          username: item.username,
+          firstName: item.firstName,
+          status: item.status,
+          connectedAt: item.connectedAt,
+          lastVerifiedAt: item.lastVerifiedAt,
+          disconnectedAt: item.disconnectedAt,
+        })),
+      });
+    } catch {
+      // Fall through to the disconnected state so the dashboard can recover with a new token.
+    }
+  }
+
+  return json({ ok: true, connected: false, encryption, history: history.map((item) => ({
+    connectionId: item.connectionId,
+    botId: item.botId,
+    username: item.username,
+    firstName: item.firstName,
+    status: item.status,
+    connectedAt: item.connectedAt,
+    lastVerifiedAt: item.lastVerifiedAt,
+    disconnectedAt: item.disconnectedAt,
+  })) });
+}
+
 export async function adminAction(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ok:false,error:"analytics_not_configured"},503);
   await ensureAnalyticsSchema(env);
