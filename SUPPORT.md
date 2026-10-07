@@ -1,31 +1,12 @@
 # Support Policy
 
-**Repository classification: Proprietary production software**
+Parmar AI is proprietary software. Official support is limited to the authorized project deployment and approved integrations.
 
-Public repository access does not create a public support or service-level commitment.
+## Public issues
+Public GitHub issues may be used for non-sensitive discussion at maintainer discretion. Do not post credentials, private student information, production logs, exploit details, or private billing information.
 
-## Production support
+## Unauthorized copies
+No support is provided for unauthorized forks, modified deployments, derivative products, or third-party hosted copies.
 
-Operational support is handled by the project owner and authorized maintainers through private channels.
-
-There is no implied public SLA for uptime, response time, feature requests, third-party provider availability, compatibility, or security-fix timing.
-
-## Reporting an operational problem
-
-Private reports should include only the minimum necessary information:
-
-- approximate time
-- affected feature
-- visible error message
-- request or correlation ID when available
-- deployed application version
-
-Never send passwords, bot tokens, service-account credentials, cookies, session secrets, or complete student conversation exports.
-
-## Feature requests
-
-Feature requests may be accepted, deferred, declined, or kept private. Planned ideas are not production features unless a release document explicitly marks them as shipped.
-
-## Security issues
-
-Credentials, exploit details, and private student data must not be posted in public issues. Use SECURITY.md.
+## Service terms
+The repository does not constitute an SLA, support contract, availability commitment, or commercial warranty.
