@@ -42,12 +42,6 @@ export async function getTelegramBotByConnectionId(
   env: Env,
   connectionId: string,
 ): Promise<TelegramBotConnection | null> {
-  if (connectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID) {
-    const active = await getActiveTelegramBot(env);
-    if (active?.connectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID) return active;
-    return null;
-  }
-
   if (!env.DB) return null;
   await ensureTelegramBotSchema(env);
   const row = await env.DB.prepare(
