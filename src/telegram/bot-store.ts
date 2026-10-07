@@ -143,6 +143,31 @@ export async function saveTelegramBot(
   return saved;
 }
 
+export async function activateTelegramBot(
+  env: Env,
+  connectionId: string,
+  deactivateConnectionId?: string,
+): Promise<void> {
+  if (!env.DB) throw new Error("D1 is required for Telegram bot connections.");
+  await ensureTelegramBotSchema(env);
+
+  const statements = [];
+  if (deactivateConnectionId && deactivateConnectionId !== connectionId) {
+    statements.push(env.DB.prepare(
+      `UPDATE telegram_bots SET status='disconnected', disconnected_at=? WHERE bot_connection_id=? AND status='active'`,
+    ).bind(Date.now(), deactivateConnectionId));
+  }
+  statements.push(env.DB.prepare(
+    `UPDATE telegram_bots SET status='active', disconnected_at=NULL, last_verified_at=? WHERE bot_connection_id=?`,
+  ).bind(Date.now(), connectionId));
+  await env.DB.batch(statements);
+
+  const active = await getActiveTelegramBot(env);
+  if (!active || active.connectionId !== connectionId) {
+    throw new Error("Telegram bot activation could not be verified.");
+  }
+}
+
 export async function markTelegramBotDisconnected(
   env: Env,
   connectionId: string,
@@ -186,7 +211,9 @@ export async function isTelegramBotConnectionActive(
 ): Promise<boolean> {
   if (connectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID) {
     const active = await getActiveTelegramBot(env);
-    return Boolean(active?.connectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID);
+    return active
+      ? active.connectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID
+      : Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET);
   }
   if (!env.DB) return Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET);
   await ensureTelegramBotSchema(env);
