@@ -7,6 +7,11 @@ import { getTelegramEncryptionStatus } from "../src/telegram/bot-store";
 
 const validPacket = {
   answer: "Permanent Settlement was introduced by Lord Cornwallis in 1793.",
+  responseMode: "text",
+  quizQuestion: "",
+  quizOptions: [],
+  quizCorrectOptionIds: [],
+  quizExplanation: "",
   sscTakeaway: "Remember: Permanent Settlement — 1793 — Cornwallis.",
   answerScope: "ssc_ga_gs",
   subject: "history",
@@ -23,7 +28,7 @@ const validPacket = {
 
 describe("production hardening", () => {
   it("uses the v2.6.0 release fallback", () => {
-    expect(getConfig({} as any).version).toBe("2.6.0");
+    expect(getConfig({} as any).version).toBe("2.6.1");
   });
 
   it("defaults raw analytics retention to 30 days", () => {
