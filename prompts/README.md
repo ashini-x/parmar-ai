@@ -1,13 +1,28 @@
 # Prompt Assets
 
-The production prompt logic for v2.4.1 is implemented and versioned in `src/ai/gemini.ts` as application code.
+**Classification: Proprietary application material**
 
-This directory is reserved for future prompt fixtures, evaluation cases, and human-readable prompt documentation that is safe to publish.
+Production prompt logic is part of the application source, primarily under src/ai/.
+
+This directory is reserved for controlled prompt fixtures, evaluation cases, prompt documentation, and other material that the project owner has expressly approved for repository publication.
+
+## Rules
 
 Do not add:
 
-- credentials,
-- private evaluation datasets,
-- confidential provider material,
-- copyrighted source content without authorization,
-- production student conversation exports.
+- production secrets
+- private evaluation datasets
+- unpublished student conversations
+- confidential provider instructions
+- copyrighted source material without authorization
+- copied prompt systems from third parties
+- private internal benchmark data
+- credentials or tokens
+
+## Intellectual property
+
+Prompts, answer-policy rules, evaluation fixtures, and associated prompt engineering created for Parmar AI are proprietary project materials unless a file explicitly states otherwise.
+
+Do not reproduce, adapt, publish, sell, train competing systems on, or incorporate these materials into another product without written permission.
+
+See the repository root LICENSE for the controlling restrictions.
