@@ -661,6 +661,9 @@ export function requiresFreshData(question: string): boolean {
   ];
   if (freshnessMarkers.some((marker) => q.includes(marker))) return true;
 
+  const hasExplicitHistoricalYear = /\b(19|20)\d{2}\b/.test(q);
+  if (hasExplicitHistoricalYear) return false;
+
   const mutableOfficeMarkers = [
     "prime minister", "president of india", "vice president", "chief justice", "cji",
     "rbi governor", "governor of", "sebi chairman", "chief election commissioner",
