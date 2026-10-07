@@ -55,6 +55,7 @@ interface TelegramUpdate {
 
 interface BeginJobResponse {
   action: "new" | "duplicate" | "rate_limited" | "retry_ack";
+  quizCount?: number;
   statusMessageId?: number;
   notify?: boolean;
   rateLimitReason?: "daily" | "burst";
