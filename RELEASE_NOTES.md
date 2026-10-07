@@ -1,5 +1,22 @@
 # Parmar AI Release Notes
 
+## v2.8.0 — Production Multi-MCQ Quiz Batches
+
+### Student experience
+- Requests such as `5 MCQs on Polity` now produce five independent native Telegram quizzes.
+- Batch size is bounded to 10 by the application contract, with the active burst allowance still respected.
+- Underspecified batch requests ask for the topic and remember the requested quantity for the topic reply.
+- After a student selects an option, the native Telegram quiz remains the primary result surface; Parmar does not add a second result message.
+
+### Learning context
+- Quiz selections and outcomes are persisted for future conversation continuity.
+- Follow-up questions can refer to the exact answered quiz, selected option, correct answer and explanation.
+
+### Reliability
+- Partial multi-quiz delivery is cleaned up if a later Telegram poll or D1 quiz-session write fails.
+- Failed delivery uses a safe generic fallback rather than revealing quiz answers.
+- Legacy quiz-session schema is upgraded in place when the bot-aware correlation column is missing.
+
 ## v2.7.0 — Intent-Driven Native Telegram Quizzes
 
 ### Student experience
