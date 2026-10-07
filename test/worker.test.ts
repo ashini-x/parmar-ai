@@ -21,15 +21,14 @@ describe("Parmar AI production worker", () => {
 
     const body = (await response.json()) as {
       ok: boolean;
-      service: string;
       status: string;
-      checks: Record<string, boolean>;
+      service?: string;
+      checks?: unknown;
     };
 
-    expect(body.ok).toBe(true);
-    expect(body.service).toBe("parmar-ai");
-    expect(body.status).toBe("healthy");
-    expect(body.checks).toBeDefined();
+    expect(body).toEqual({ ok: true, status: "healthy" });
+    expect(body.service).toBeUndefined();
+    expect(body.checks).toBeUndefined();
   });
 
   it("returns 404 for unknown routes", async () => {
