@@ -180,6 +180,26 @@ export async function revokeUnlimitedAiAccess(env: Env, telegramUserId: number):
   if (verified) throw new Error("Unlimited-access revoke could not be verified in D1.");
 }
 
+export async function deleteUserData(env: Env, telegramUserId: number): Promise<{ chatId: number | null }> {
+  if (!env.DB) return { chatId: null };
+  await ensureAnalyticsSchema(env);
+  const user = await env.DB.prepare(`SELECT chat_id FROM users WHERE telegram_user_id = ?`)
+    .bind(telegramUserId)
+    .first<{ chat_id: number }>();
+
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM ai_usage_attempts WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM questions WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM events WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM ai_access_overrides WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM admin_user_controls WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM admin_audit_log WHERE target_telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM users WHERE telegram_user_id = ?`).bind(telegramUserId),
+  ]);
+
+  return { chatId: user?.chat_id ?? null };
+}
+
 export async function isUserSuspended(env: Env, telegramUserId: number): Promise<boolean> {
   if (!env.DB) return false;
   await ensureAnalyticsSchema(env);
