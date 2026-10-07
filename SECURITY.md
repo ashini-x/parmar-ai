@@ -1,21 +1,62 @@
 # Security Policy
 
-## Scope
-This policy covers the public source repository and the production Worker, Telegram integration, Queue/Durable Object processing, D1 analytics, AI integration, and admin control center.
+**Supported production line: 2.6.x**
 
-## Supported line
-The current documented production line is `v2.6.x`.
+Parmar AI treats security, student privacy, and production access control as high-priority concerns.
 
 ## Never publish
-Never commit or publicly paste Telegram tokens, webhook/setup secrets, Google service-account private keys, Cloudflare credentials, admin passwords, session secrets, production D1 exports, raw private logs, private billing data, `.env`, `.dev.vars`, or other credentials.
+
+Do not commit or disclose:
+
+- Telegram bot tokens
+- Telegram webhook or setup secrets
+- Google service-account private keys
+- Cloudflare API tokens
+- admin passwords
+- admin session-signing secrets
+- encryption keys
+- production D1 exports
+- raw production logs containing private questions
+- private incident evidence
+
+## Current controls
+
+The current application includes:
+
+- fail-closed Telegram webhook secret validation
+- independent setup authentication
+- signed admin sessions
+- same-origin protection for admin mutations
+- server-side privilege checks
+- protected Owner/Admin identities
+- encrypted dashboard-managed Telegram bot credentials
+- D1 retention cleanup
+- explicit user-data deletion
+- private-chat-only processing
+- verified student access mutations
+- protected administrative audit handling
+
+See docs/SECURITY_MODEL.md for the detailed trust-boundary model.
 
 ## Vulnerability reporting
-Do not create a public issue containing exploit details. Use the project's configured private security-reporting channel. Include the affected component, impact, reproduction summary, and source/deployment version when safe to disclose.
 
-## Secret exposure
-1. Revoke or rotate the credential at the provider.\n2. Replace the Cloudflare secret/configuration.\n3. Review relevant Worker and audit logs.\n4. Determine whether users or data were affected.\n5. Deploy a verified fix.\n6. Preserve an internal incident record.
+Do not create a public issue containing credentials, exploit instructions, private student data, or a working production attack path.
 
-## Security principles
-- Webhook secrets fail closed.\n- Owner/Admin authorization uses numeric Telegram IDs.\n- Dashboard mutations are server-side and same-origin protected.\n- Privileged access changes are verified in D1.\n- Logs must not contain secrets.\n- Retention and deletion are treated as explicit data controls.
+Use the private security-reporting channel maintained by the project owner.
 
-See [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md).
+Provide only the information necessary to reproduce and remediate the issue. Include the affected release/version and request or correlation identifiers where available.
+
+## Secret compromise
+
+If a secret may have been exposed:
+
+1. rotate or revoke it at the provider;
+2. update the Cloudflare deployment secret;
+3. validate the affected path;
+4. review logs and audit events;
+5. deploy the patched release;
+6. document the incident privately.
+
+## Responsible disclosure
+
+The project does not promise a particular response time, bounty, or public advisory schedule. Disclosure timing is determined by the maintainer based on severity, user impact, and remediation readiness.
