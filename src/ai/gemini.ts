@@ -767,7 +767,8 @@ export function isMcqRequest(question: string): boolean {
   return (
     isBareMcqRequest(q) ||
     /\b(?:give|generate|create|make|send|provide|want|need|start|do|dena|please|pls)\b/.test(q) ||
-    /^\d{1,3}\s*(?:mcqs?|quizzes?)\b/.test(q)
+    /^\d{1,3}\s*(?:mcqs?|quizzes?)\b/.test(q) ||
+    (hasExplicitMcqTopic(q) && !/^(?:what|why|how|is|are|can|could)\b/.test(q))
   );
 }
 
