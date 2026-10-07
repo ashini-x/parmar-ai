@@ -1,4 +1,4 @@
-# Project Status — v2.6.1
+# Project Status — v2.7.0
 
 ## Shipped
 
@@ -18,6 +18,7 @@
 - Admin audit and safety controls.
 - JSON export + offline Python/Matplotlib reports.
 - Public enterprise repository structure and CI scaffolding.
+- Intent-driven native Telegram MCQ/quiz delivery with per-student answer tracking.
 
 ## Planned / not shipped
 
