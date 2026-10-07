@@ -1,3 +1,4 @@
+import { ensureAnalyticsSchema } from "../analytics/db";
 import type { Env } from "../config/env";
 
 const COOKIE_NAME = "parmar_admin_session";
@@ -58,8 +59,59 @@ export async function requireAdmin(request: Request, env: Env): Promise<boolean>
   }
 }
 
+async function loginRateLimitState(env: Env, clientKey: string, now: number): Promise<{ locked: boolean }> {
+  if (!env.DB) return { locked: false };
+  await ensureAnalyticsSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT window_started_at, failures, locked_until FROM admin_login_attempts WHERE client_key = ?`
+  ).bind(clientKey).first<{ window_started_at: number; failures: number; locked_until: number | null }>();
+  if (!row) return { locked: false };
+  if (row.locked_until && Number(row.locked_until) > now) return { locked: true };
+  if (now - Number(row.window_started_at) > 5 * 60_000) {
+    await env.DB.prepare(`DELETE FROM admin_login_attempts WHERE client_key = ?`).bind(clientKey).run();
+  }
+  return { locked: false };
+}
+
+async function recordLoginFailure(env: Env, clientKey: string, now: number): Promise<void> {
+  if (!env.DB) return;
+  await ensureAnalyticsSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT window_started_at, failures FROM admin_login_attempts WHERE client_key = ?`
+  ).bind(clientKey).first<{ window_started_at: number; failures: number }>();
+
+  if (!row || now - Number(row.window_started_at) > 5 * 60_000) {
+    await env.DB.prepare(
+      `INSERT INTO admin_login_attempts (client_key, window_started_at, failures, locked_until) VALUES (?, ?, 1, NULL)
+       ON CONFLICT(client_key) DO UPDATE SET window_started_at=excluded.window_started_at, failures=1, locked_until=NULL`
+    ).bind(clientKey, now).run();
+    return;
+  }
+
+  const failures = Number(row.failures) + 1;
+  const lockedUntil = failures >= 5 ? now + 10 * 60_000 : null;
+  await env.DB.prepare(
+    `UPDATE admin_login_attempts SET failures = ?, locked_until = ? WHERE client_key = ?`
+  ).bind(failures, lockedUntil, clientKey).run();
+}
+
+async function clearLoginFailures(env: Env, clientKey: string): Promise<void> {
+  if (!env.DB) return;
+  await ensureAnalyticsSchema(env);
+  await env.DB.prepare(`DELETE FROM admin_login_attempts WHERE client_key = ?`).bind(clientKey).run();
+}
+
 export async function handleAdminLogin(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+
+  const clientKey = (request.headers.get("CF-Connecting-IP") ?? "unknown").slice(0, 100);
+  const now = Date.now();
+  if ((await loginRateLimitState(env, clientKey, now)).locked) {
+    return new Response(loginHtml("Too many failed attempts. Try again later."), {
+      status: 429,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "retry-after": "600" },
+    });
+  }
 
   const body = await request.formData();
   const username = String(body.get("username") ?? "").trim();
@@ -69,12 +121,14 @@ export async function handleAdminLogin(request: Request, env: Env): Promise<Resp
   const sessionSecret = env.ADMIN_SESSION_SECRET?.trim();
 
   if (!expectedPassword || !sessionSecret || username !== expectedUser || password !== expectedPassword) {
+    await recordLoginFailure(env, clientKey, now);
     return new Response(loginHtml("Invalid admin credentials."), {
       status: 401,
       headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
     });
   }
 
+  await clearLoginFailures(env, clientKey);
   const expires = Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS;
   const payload = base64UrlEncode(new TextEncoder().encode(`${expectedUser}|${expires}`));
   const signature = base64UrlEncode(await hmac(sessionSecret, payload));

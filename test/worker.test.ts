@@ -2,15 +2,17 @@ import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import worker from "../src";
+import type { Env } from "../src/config/env";
 
 const IncomingRequest = Request;
+const testEnv = env as unknown as Env;
 
 describe("Parmar AI production worker", () => {
   it("returns a healthy response", async () => {
     const request = new IncomingRequest("http://example.com/health");
     const ctx = createExecutionContext();
 
-    const response = await worker.fetch(request, env, ctx);
+    const response = await worker.fetch(request, testEnv, ctx);
     await waitOnExecutionContext(ctx);
 
     expect(response.status).toBe(200);
@@ -20,23 +22,21 @@ describe("Parmar AI production worker", () => {
     const body = (await response.json()) as {
       ok: boolean;
       service: string;
-      phase: string;
-      studentProfile: boolean;
-      thinkingPolicy: string;
+      status: string;
+      checks: Record<string, boolean>;
     };
 
     expect(body.ok).toBe(true);
     expect(body.service).toBe("parmar-ai");
-    expect(body.phase).toBe("H");
-    expect(body.studentProfile).toBe(true);
-    expect(body.thinkingPolicy).toContain("ADAPTIVE");
+    expect(body.status).toBe("healthy");
+    expect(body.checks).toBeDefined();
   });
 
   it("returns 404 for unknown routes", async () => {
     const request = new IncomingRequest("http://example.com/not-a-route");
     const ctx = createExecutionContext();
 
-    const response = await worker.fetch(request, env, ctx);
+    const response = await worker.fetch(request, testEnv, ctx);
     await waitOnExecutionContext(ctx);
 
     expect(response.status).toBe(404);
@@ -47,7 +47,7 @@ describe("Parmar AI production worker", () => {
     const request = new IncomingRequest("http://example.com/health", { method: "POST" });
     const ctx = createExecutionContext();
 
-    const response = await worker.fetch(request, env, ctx);
+    const response = await worker.fetch(request, testEnv, ctx);
     await waitOnExecutionContext(ctx);
 
     expect(response.status).toBe(405);

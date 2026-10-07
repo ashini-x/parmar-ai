@@ -1,0 +1,32 @@
+name: Release validation
+
+on:
+  push:
+    branches:
+      - release-2.6.0-production
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund --legacy-peer-deps
+      - run: npm run check
+      - run: npm test
+      - run: npm run test:node
+      - name: Package source release
+        run: |
+          mkdir -p dist
+          git archive --format=zip --output=dist/parmar-ai-2.6.0-production.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: parmar-ai-2.6.0-production
+          path: dist/parmar-ai-2.6.0-production.zip
+          if-no-files-found: error

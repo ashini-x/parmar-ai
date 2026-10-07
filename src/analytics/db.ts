@@ -92,6 +92,13 @@ CREATE TABLE IF NOT EXISTS admin_audit_log (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS admin_login_attempts (
+  client_key TEXT PRIMARY KEY,
+  window_started_at INTEGER NOT NULL,
+  failures INTEGER NOT NULL DEFAULT 0,
+  locked_until INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS admin_user_controls (
   telegram_user_id INTEGER PRIMARY KEY,
   suspended INTEGER NOT NULL DEFAULT 0,
@@ -149,7 +156,8 @@ export async function hasUnlimitedAiAccess(env: Env, telegramUserId: number, now
 export async function grantUnlimitedAiAccess(env: Env, telegramUserId: number, grantedByTelegramUserId: number, expiresAt: number | null = null): Promise<void> {
   if (!env.DB) throw new Error("D1 is required for runtime access overrides.");
   await ensureAnalyticsSchema(env);
-  await env.DB.prepare(
+  const grantedAt = Date.now();
+  const result = await env.DB.prepare(
     `INSERT INTO ai_access_overrides (telegram_user_id, unlimited_ai, granted_by_telegram_user_id, granted_at, expires_at)
      VALUES (?, 1, ?, ?, ?)
      ON CONFLICT(telegram_user_id) DO UPDATE SET
@@ -157,13 +165,46 @@ export async function grantUnlimitedAiAccess(env: Env, telegramUserId: number, g
        granted_by_telegram_user_id = excluded.granted_by_telegram_user_id,
        granted_at = excluded.granted_at,
        expires_at = excluded.expires_at`
-  ).bind(telegramUserId, grantedByTelegramUserId, Date.now(), expiresAt).run();
+  ).bind(telegramUserId, grantedByTelegramUserId, grantedAt, expiresAt).run();
+
+  if (!result.success) throw new Error("D1 did not confirm the unlimited-access write.");
+
+  const verified = await env.DB.prepare(
+    `SELECT unlimited_ai, expires_at FROM ai_access_overrides WHERE telegram_user_id = ?`
+  ).bind(telegramUserId).first<{ unlimited_ai: number; expires_at: number | null }>();
+
+  if (!verified || Number(verified.unlimited_ai) !== 1 || (expiresAt !== null && Number(verified.expires_at) !== expiresAt)) {
+    throw new Error("Unlimited-access write could not be verified in D1.");
+  }
 }
 
 export async function revokeUnlimitedAiAccess(env: Env, telegramUserId: number): Promise<void> {
   if (!env.DB) throw new Error("D1 is required for runtime access overrides.");
   await ensureAnalyticsSchema(env);
-  await env.DB.prepare(`DELETE FROM ai_access_overrides WHERE telegram_user_id = ?`).bind(telegramUserId).run();
+  const result = await env.DB.prepare(`DELETE FROM ai_access_overrides WHERE telegram_user_id = ?`).bind(telegramUserId).run();
+  if (!result.success) throw new Error("D1 did not confirm the unlimited-access revoke.");
+  const verified = await env.DB.prepare(`SELECT 1 AS present FROM ai_access_overrides WHERE telegram_user_id = ?`).bind(telegramUserId).first();
+  if (verified) throw new Error("Unlimited-access revoke could not be verified in D1.");
+}
+
+export async function deleteUserData(env: Env, telegramUserId: number): Promise<{ chatId: number | null }> {
+  if (!env.DB) return { chatId: null };
+  await ensureAnalyticsSchema(env);
+  const user = await env.DB.prepare(`SELECT chat_id FROM users WHERE telegram_user_id = ?`)
+    .bind(telegramUserId)
+    .first<{ chat_id: number }>();
+
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM ai_usage_attempts WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM questions WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM events WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM ai_access_overrides WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM admin_user_controls WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM admin_audit_log WHERE target_telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM users WHERE telegram_user_id = ?`).bind(telegramUserId),
+  ]);
+
+  return { chatId: user?.chat_id ?? null };
 }
 
 export async function isUserSuspended(env: Env, telegramUserId: number): Promise<boolean> {
@@ -204,7 +245,7 @@ export interface QuestionAnalyticsStart {
 
 export interface QuestionAnalyticsResult {
   updateId: number;
-  status: "completed" | "failed" | "out_of_scope" | "delivery_failed";
+  status: "processing" | "completed" | "failed" | "out_of_scope" | "delivery_failed";
   completedAt?: number;
   startedAt?: number;
   latencyMs?: number;
