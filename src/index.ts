@@ -412,17 +412,17 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
 
     try {
       const startedAt = Date.now();
-      // Repair analytics asynchronously in case the webhook-side D1 write was interrupted.
       const jobTelegramUserId = job.telegramUserId ?? job.chatId;
       ctx.waitUntil(recordUserSeen(env, { telegramUserId: jobTelegramUserId, chatId: job.chatId }));
-      ctx.waitUntil(recordQuestionStart(env, {
+      await recordQuestionStart(env, {
         updateId: job.updateId,
         requestId: job.requestId,
         user: { telegramUserId: jobTelegramUserId, chatId: job.chatId },
         messageId: job.messageId,
         question: job.question,
         receivedAt: job.createdAt,
-      }));
+      });
+      await recordQuestionResult(env, { updateId: job.updateId, status: "processing", startedAt });
       let profile: StudentProfile;
       try {
         profile = await getStudentProfile(env, job.chatId);
@@ -477,19 +477,27 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           chatId: job.chatId,
           usage: generation.usage,
         }).catch((usageError) => logger.warn("analytics_ai_usage_failed", { error: usageError instanceof Error ? usageError.message : String(usageError) })));
-        await jobStoreRequest(env, job.chatId, {
+        const packetWrite = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
           action: "set_answer_packet",
           updateId: job.updateId,
+          queueMessageId: message.id,
+          leaseVersion: claim.leaseVersion,
           packet,
         });
+        if (packetWrite.stale) {
+          message.ack();
+          continue;
+        }
       }
 
       let latestProfile = profile;
       if (!claim.record.profileUpdated) {
         try {
-          await jobStoreRequest(env, job.chatId, {
+          const profileWrite = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
             action: "update_profile",
             updateId: job.updateId,
+            queueMessageId: message.id,
+            leaseVersion: claim.leaseVersion,
             question: job.question,
             topic: packet.topic,
             subject: packet.subject,
@@ -499,10 +507,20 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             answerScope: packet.answerScope,
             questionMode: packet.questionMode,
           });
-          await jobStoreRequest(env, job.chatId, {
+          if (profileWrite.stale) {
+            message.ack();
+            continue;
+          }
+          const profileMark = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
             action: "mark_profile_updated",
             updateId: job.updateId,
+            queueMessageId: message.id,
+            leaseVersion: claim.leaseVersion,
           });
+          if (profileMark.stale) {
+            message.ack();
+            continue;
+          }
           latestProfile = await getStudentProfile(env, job.chatId);
           if (packet.profileSignal === "confusion" || packet.profileSignal === "weak") {
             ctx.waitUntil(recordEvent(env, "learning_signal_detected", { telegramUserId: jobTelegramUserId, chatId: job.chatId }, {
@@ -523,7 +541,16 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       }
 
       await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, latestProfile));
-      await jobStoreRequest(env, job.chatId, { action: "complete", updateId: job.updateId });
+      const completion = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
+        action: "complete",
+        updateId: job.updateId,
+        queueMessageId: message.id,
+        leaseVersion: claim.leaseVersion,
+      });
+      if (completion.stale) {
+        message.ack();
+        continue;
+      }
       const completedAt = Date.now();
       ctx.waitUntil(recordQuestionResult(env, {
         updateId: job.updateId,
@@ -573,7 +600,16 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
 
       try {
         await deliverAnswer(env, job, claim.record.statusMessageId, userFacingFailure(error));
-        await jobStoreRequest(env, job.chatId, { action: "complete", updateId: job.updateId });
+        const completion = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
+          action: "complete",
+          updateId: job.updateId,
+          queueMessageId: message.id,
+          leaseVersion: claim.leaseVersion,
+        });
+        if (completion.stale) {
+          message.ack();
+          continue;
+        }
         ctx.waitUntil(recordQuestionResult(env, {
           updateId: job.updateId,
           status: "failed",
@@ -842,7 +878,7 @@ function userFacingFailure(error: unknown): string {
 function isRetryableJobError(error: unknown): boolean {
   if (error instanceof GeminiError) return error.retryable;
   if (error instanceof TelegramError) return error.retryable;
-  return true;
+  return false;
 }
 
 function queueRetryDelay(attempt: number): number {
