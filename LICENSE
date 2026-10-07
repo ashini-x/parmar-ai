@@ -1,10 +1,40 @@
-Copyright (c) 2026 Parmar AI. All rights reserved.
+Parmar AI Proprietary Source License v1.0
+Copyright © 2026 Parmar AI. All rights reserved.
 
-This repository is made publicly available for transparency, inspection,
-internal evaluation, and development of the Parmar AI project.
+1. OWNERSHIP
+The software, source code, documentation, prompts, schemas, configuration patterns, UI source, and other original materials in this repository are proprietary intellectual property of Parmar AI, except third-party materials identified by their applicable licenses.
 
-Unless a separate written license is provided, no permission is granted to
-reproduce, modify, redistribute, sublicense, sell, or incorporate this source
-code into another product or service.
+2. LIMITED PUBLIC AVAILABILITY
+This repository may be publicly viewable on GitHub for transparency, inspection, security review, and project discussion. Public visibility is not an open-source grant.
 
-Third-party dependencies remain subject to their respective licenses.
+3. NO GENERAL LICENSE
+Except for rights required for GitHub platform operation and rights that cannot lawfully be excluded, no permission is granted to copy, reproduce, mirror, republish, modify, adapt, translate, create derivative works, distribute, sublicense, sell, rent, transfer, host for third parties, offer as a service, commercialize, monetize, or materially assist a competing product.
+
+4. AI/ML RESTRICTIONS
+No permission is granted to use the source, prompts, documentation, schemas, system behavior, screenshots, or substantial repository content for AI/ML training, fine-tuning, distillation, benchmarking, evaluation datasets, embeddings, retrieval datasets, synthetic-data generation, code corpora, or model-development workflows.
+
+5. ADVERTISING AND PROMOTION
+No permission is granted to use the source, screenshots, outputs, metrics, project name, or project identity for advertising, marketing, sponsorship, fundraising, endorsement claims, implied affiliation, lead generation, or promotional materials.
+
+6. BRAND
+No trademark, trade-name, logo, service-mark, or other branding rights are granted. See TRADEMARKS.md.
+
+7. THIRD-PARTY MATERIALS
+Third-party software, APIs, data, fonts, and libraries remain governed by their own licenses and terms. This license does not relicense them.
+
+8. SECURITY AND DATA
+This license does not authorize bypassing authentication, authorization, quotas, webhooks, cloud controls, or other security mechanisms. Production student data, credentials, logs, exports, and non-public operational information are not licensed by this document.
+
+9. WRITTEN PERMISSION
+Parmar AI may grant additional rights in a separate written agreement. Permission must identify its scope in writing.
+
+10. DISCLAIMER
+THE SOFTWARE IS PROVIDED AS-IS TO THE MAXIMUM EXTENT PERMITTED BY LAW. PARMAR AI DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS, NON-INFRINGEMENT, AND AVAILABILITY.
+
+11. LIMITATION OF LIABILITY
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, PARMAR AI SHALL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES ARISING FROM USE OF THE SOFTWARE OR PROJECT MATERIALS.
+
+12. NO OPEN-SOURCE STATUS
+This is a proprietary license and does not grant the freedoms associated with open-source software.
+
+All rights not expressly granted are reserved.
