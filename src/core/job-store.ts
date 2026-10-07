@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
 import { sendTelegramChatAction } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
-import { LEGACY_TELEGRAM_BOT_CONNECTION_ID } from "../telegram/bot-store";
+import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, isTelegramBotConnectionActive } from "../telegram/bot-store";
 
 const TYPING_HEARTBEAT_MS = 4_000;
 const TYPING_MAX_AGE_MS = 10 * 60 * 1_000;
@@ -167,7 +167,7 @@ export class JobDedupe extends DurableObject {
             await this.ctx.storage.put(key, record);
           } catch { nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + 5_000); }
         } else {
-          if (record.createdAt >= typingCutoff) hasProcessingRecentJob = true;
+          if (record.createdAt >= typingCutoff && await isTelegramBotConnectionActive(this.runtimeEnv, record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID)) hasProcessingRecentJob = true;
           if (record.processingAt) nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, record.processingAt + PROCESSING_LEASE_MS);
         }
         continue;
@@ -432,7 +432,9 @@ export class JobDedupe extends DurableObject {
 
   private async updateProfile(body: Record<string, unknown>): Promise<GenericResponse & { stale?: boolean }> {
     const updateId = positiveNumber(body.updateId);
-    const record = await this.ctx.storage.get<JobRecord>(jobKey(updateId));
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID);
+    const key = await this.resolveJobKey(botConnectionId, updateId);
+    const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
     if (!this.ownsLease(record, body)) return { ok: true, stale: true };
     const appliedKey = `profile:applied:${updateId}`;
