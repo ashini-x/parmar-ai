@@ -1,48 +1,21 @@
-# Offline Founder & Operations Reports
+# Offline Founder Reports
 
-**Classification: Proprietary internal tooling**
+The `reports/` utilities convert approved admin JSON exports into local founder/operations charts and summaries.
 
-The reports/ directory contains the optional offline reporting utility used to transform an exported admin analytics JSON snapshot into founder and operations reporting artifacts.
+## Intended use
+Authorized internal review only. This tooling is not part of the production request path.
 
-The tool is intentionally outside the production Cloudflare request path.
+## Data handling
+Exports may contain student identifiers, question text, timestamps, AI usage, spend, and learning analytics. Treat them as confidential operational material. Do not publish, redistribute, upload to unrelated services, or use as training/evaluation data without written authorization.
 
-## Input
-
-The Admin Control Center can export an analytics snapshot as JSON.
-
-That exported file may contain operational and student-level information. Treat it as confidential.
-
-## Local usage
-
-From the repository root:
-
-~~~text
+## Usage
+```bash
 pip install -r reports/requirements.txt
 python reports/generate_report.py exported-report.json --output-dir report-output
-~~~
+```
 
-Generated output may include:
+## Secrets
+Reports must never contain Telegram tokens, webhook secrets, Google private keys, Cloudflare credentials, or admin passwords.
 
-- executive PDF output
-- CSV summaries
-- PNG charts
-- Markdown summary output
-
-## Handling rules
-
-Do not commit exported production reports unless they have been fully sanitized and the project owner has expressly approved publication.
-
-Never publish:
-
-- real student names
-- Telegram IDs
-- private questions
-- raw usage exports
-- production logs
-- private cost or accounting data
-
-## Intellectual property
-
-The reporting logic, templates, presentation structure, and project-specific analysis are proprietary Parmar AI materials.
-
-See ../LICENSE and ../TRADEMARKS.md.
+## License
+The reporting source is subject to [LICENSE](../LICENSE), except for third-party components governed by their own licenses.
