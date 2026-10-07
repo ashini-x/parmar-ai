@@ -146,7 +146,7 @@ export async function hasUnlimitedAiAccess(env: Env, telegramUserId: number, now
   return Boolean(row && row.unlimited_ai && (row.expires_at === null || Number(row.expires_at) > now));
 }
 
-export async function grantUnlimitedAiAccess(env: Env, telegramUserId: number, grantedByTelegramUserId: number | null, expiresAt: number | null = null): Promise<void> {
+export async function grantUnlimitedAiAccess(env: Env, telegramUserId: number, grantedByTelegramUserId: number, expiresAt: number | null = null): Promise<void> {
   if (!env.DB) throw new Error("D1 is required for runtime access overrides.");
   await ensureAnalyticsSchema(env);
   const grantedAt = Date.now();
