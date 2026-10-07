@@ -18,7 +18,8 @@
     "burst_window_seconds": 10,
     "daily_reset": "00:00 Asia/Kolkata",
     "privileged_daily_access": "unlimited",
-    "privileged_burst": "5 per 10 seconds"
+    "privileged_burst": "5 per 10 seconds",
+    "raw_analytics_retention_days": 30
   },
   "access_control": {
     "owner_config": "BOT_OWNER_TELEGRAM_USER_ID",
@@ -51,6 +52,8 @@
     "admin_login_rate_limit": true,
     "admin_mutation_origin_check": true,
     "setup_secret_in_url": false,
+    "telegram_encryption_key_required_in_production": true,
+    "legacy_telegram_ciphertext_read_migration": true,
     "public_health_detail": "minimal"
   },
   "privacy": {
