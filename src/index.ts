@@ -12,13 +12,16 @@ import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } fr
 import { logger } from "./core/logger";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
+  deleteTelegramMessage,
   editTelegramMessage,
   sendTelegramChatAction,
   sendTelegramMessage,
+  sendTelegramQuiz,
+  stopTelegramPoll,
   TelegramError,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
-import { recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
+import { answerQuizSession, createQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
@@ -37,9 +40,16 @@ interface TelegramMessage {
   text?: string;
 }
 
+interface TelegramPollAnswer {
+  poll_id?: string;
+  user?: { id?: number; is_bot?: boolean };
+  option_ids?: number[];
+}
+
 interface TelegramUpdate {
   update_id?: number;
   message?: TelegramMessage;
+  poll_answer?: TelegramPollAnswer;
 }
 
 interface BeginJobResponse {
@@ -146,6 +156,11 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     update = (await request.json()) as TelegramUpdate;
   } catch {
     return withRequestId(json({ ok: false, error: "INVALID_JSON" }, 400), requestId);
+  }
+
+  if (update.poll_answer) {
+    await handleTelegramPollAnswer(update.poll_answer, env, requestId);
+    return withRequestId(json({ ok: true, pollAnswer: true }), requestId);
   }
 
   const updateId = update.update_id;
@@ -627,7 +642,51 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         message.ack();
         continue;
       }
-      await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, latestProfile));
+      let statusMessageHandled = false;
+      if (packet.responseMode === "quiz") {
+        const quiz = await sendTelegramQuiz(
+          env,
+          job.chatId,
+          packet.quizQuestion,
+          packet.quizOptions,
+          packet.quizCorrectOptionIds,
+          packet.quizExplanation,
+          job.messageId,
+          job.botConnectionId,
+        );
+        try {
+          await createQuizSession(env, {
+            pollId: quiz.poll_id,
+            telegramUserId: jobTelegramUserId,
+            chatId: job.chatId,
+            updateId: job.updateId,
+            messageId: quiz.message_id,
+            questionText: packet.quizQuestion,
+            options: packet.quizOptions,
+            correctOptionIds: packet.quizCorrectOptionIds,
+            explanation: packet.quizExplanation,
+            topic: packet.topic,
+            subject: packet.subject,
+            difficulty: packet.difficulty,
+          });
+        } catch (quizStoreError) {
+          logger.error("quiz_session_persist_failed", {
+            requestId: job.requestId,
+            updateId: job.updateId,
+            pollId: quiz.poll_id,
+            error: quizStoreError instanceof Error ? quizStoreError.message : String(quizStoreError),
+          });
+          await stopTelegramPoll(env, job.chatId, quiz.message_id, job.botConnectionId).catch(() => undefined);
+          await deliverAnswer(env, job, claim.record.statusMessageId, buildQuizFallbackAnswerForStudent(packet));
+          statusMessageHandled = true;
+        }
+        if (!statusMessageHandled && claim.record.statusMessageId) {
+          await deleteTelegramMessage(env, job.chatId, claim.record.statusMessageId, job.botConnectionId).catch(() => undefined);
+        }
+      } else {
+        await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, latestProfile));
+        statusMessageHandled = true;
+      }
       const completion = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
         action: "complete",
         botConnectionId: job.botConnectionId,
@@ -729,6 +788,70 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
   }
 }
 
+async function handleTelegramPollAnswer(
+  pollAnswer: TelegramPollAnswer,
+  env: Env,
+  requestId: string,
+): Promise<void> {
+  const pollId = pollAnswer.poll_id?.trim() ?? "";
+  const telegramUserId = pollAnswer.user?.id;
+  const selectedOptionIds = Array.isArray(pollAnswer.option_ids)
+    ? pollAnswer.option_ids.filter((id): id is number => Number.isSafeInteger(id) && id >= 0 && id <= 11)
+    : [];
+
+  if (!pollId || !isSafeInteger(telegramUserId) || telegramUserId <= 0) {
+    logger.warn("telegram_quiz_answer_invalid", { requestId, pollId });
+    return;
+  }
+
+  const session = await getQuizSession(env, pollId);
+  if (!session) {
+    logger.info("telegram_quiz_answer_unmatched", { requestId, pollId });
+    return;
+  }
+
+  if (session.telegramUserId !== telegramUserId) {
+    logger.warn("telegram_quiz_answer_wrong_user", { requestId, pollId, telegramUserId });
+    return;
+  }
+
+  const answered = await answerQuizSession(env, pollId, telegramUserId, selectedOptionIds);
+  if (!answered.changed || !answered.session) return;
+
+  const correct = answered.session.result === "correct";
+  const correctAnswers = answered.session.correctOptionIds
+    .map((id) => answered.session?.options[id])
+    .filter((value): value is string => Boolean(value));
+
+  const resultText = correct
+    ? `✅ Correct! 🎯\n\n📚 ${answered.session.explanation}`
+    : `❌ Not quite.\n✅ Correct answer: ${correctAnswers.join(", ")}\n\n📚 ${answered.session.explanation}`;
+
+  await bestEffortTelegram("quiz_result", () =>
+    sendTelegramMessage(
+      env,
+      answered.session!.chatId,
+      resultText,
+      answered.session!.messageId,
+    ),
+  );
+
+  await recordEvent(env, "quiz_answered", {
+    telegramUserId,
+    chatId: answered.session.chatId,
+  }, {
+    updateId: answered.session.updateId,
+    pollId,
+    topic: answered.session.topic,
+    subject: answered.session.subject,
+    result: answered.session.result,
+    selectedOptionIds: answered.session.selectedOptionIds,
+    correctOptionIds: answered.session.correctOptionIds,
+  }).catch((error) => {
+    logger.warn("quiz_answer_event_failed", { requestId, pollId, error: error instanceof Error ? error.message : String(error) });
+  });
+}
+
 function startTypingHeartbeat(env: Env, chatId: number, requestId: string, botConnectionId: string): () => void {
   let stopped = false;
 
@@ -776,6 +899,17 @@ async function completeCancelledJob(
     attempts: 0,
     errorMessage: "telegram_bot_disconnected",
   });
+}
+
+function buildQuizFallbackAnswerForStudent(packet: AnswerPacket): string {
+  const correct = packet.quizCorrectOptionIds.length === 1
+    ? packet.quizOptions[packet.quizCorrectOptionIds[0]]
+    : "";
+  return [
+    "🧠 Quiz answer:",
+    correct ? `✅ ${correct}` : "",
+    packet.quizExplanation ? `📚 ${packet.quizExplanation}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile): string {
@@ -955,7 +1089,7 @@ async function telegramSetup(request: Request, env: Env, requestId: string): Pro
   const webhookResult = await telegramSetupMethod(env, "setWebhook", {
     url: webhookUrl,
     secret_token: webhookSecret,
-    allowed_updates: ["message"],
+    allowed_updates: ["message", "poll_answer"],
     drop_pending_updates: false,
     max_connections: 100,
     botTokenOverride: token,
