@@ -1,6 +1,7 @@
 import type { Env } from "../config/env";
 import { ensureAnalyticsSchema, grantUnlimitedAiAccess, hasUnlimitedAiAccess, recordAdminAudit, revokeUnlimitedAiAccess, setUserSuspended } from "../analytics/db";
 import { getConfig } from "../config/env";
+import { logger } from "../core/logger";
 import {
   activateTelegramBot,
   getActiveTelegramBot,
@@ -452,21 +453,28 @@ export async function adminAction(env: Env, request: Request): Promise<Response>
     if (action === "grant_unlimited") {
       await grantUnlimitedAiAccess(env,userId,0,null);
       if (!(await hasUnlimitedAiAccess(env,userId))) return json({ok:false,error:"unlimited_access_verification_failed"},500);
-      await recordAdminAudit(env,actor,"grant_unlimited",userId);
+      const auditRecorded = await recordAdminAuditSafely(env,actor,"grant_unlimited",userId);
+      return json({ok:true,action,verified:true,unlimited:true,auditRecorded});
     } else if (action === "revoke_unlimited") {
       if (isProtectedAdminTarget(env,userId)) return json({ok:false,error:"protected_admin"},403);
       await revokeUnlimitedAiAccess(env,userId);
       if (await hasUnlimitedAiAccess(env,userId)) return json({ok:false,error:"unlimited_access_revoke_verification_failed"},500);
-      await recordAdminAudit(env,actor,"revoke_unlimited",userId);
+      const auditRecorded = await recordAdminAuditSafely(env,actor,"revoke_unlimited",userId);
+      return json({ok:true,action,verified:true,unlimited:false,auditRecorded});
     } else if (action === "suspend" || action === "unsuspend") {
       if (action === "suspend" && isProtectedAdminTarget(env,userId)) return json({ok:false,error:"protected_admin"},403);
-      await setUserSuspended(env,userId,action==="suspend",String(body.note??"").slice(0,500),actor); await recordAdminAudit(env,actor,action,userId,{note:String(body.note??"").slice(0,500)});
+      const suspended = action === "suspend";
+      await setUserSuspended(env,userId,suspended,String(body.note??"").slice(0,500),actor);
+      const auditRecorded = await recordAdminAuditSafely(env,actor,action,userId,{note:String(body.note??"").slice(0,500)});
+      return json({ok:true,action,verified:true,suspended,auditRecorded});
     } else if (action === "reset_profile") {
       const user=await env.DB.prepare(`SELECT chat_id FROM users WHERE telegram_user_id=?`).bind(userId).first<{chat_id:number}>();
       if (!user) return json({ok:false,error:"user_not_found"},404);
       const id=env.JOB_DEDUPE.idFromName(String(user.chat_id));
-      await env.JOB_DEDUPE.get(id).fetch("https://job-store/internal",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"reset_profile"})});
-      await recordAdminAudit(env,actor,"reset_profile",userId);
+      const response = await env.JOB_DEDUPE.get(id).fetch("https://job-store/internal",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"reset_profile"})});
+      if (!response.ok) return json({ok:false,error:"profile_reset_failed"},500);
+      const auditRecorded = await recordAdminAuditSafely(env,actor,"reset_profile",userId);
+      return json({ok:true,action,verified:true,auditRecorded});
     } else { return json({ok:false,error:"unknown_action"},400); }
     return json({ok:true,action});
   } catch (error) {
@@ -722,6 +730,26 @@ async function telegramAdminApi<T>(token: string, method: string, payload: Recor
   return data.result;
 }
 
+async function recordAdminAuditSafely(
+  env: Env,
+  actor: string,
+  action: string,
+  targetTelegramUserId?: number | null,
+  details?: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    await recordAdminAudit(env,actor,action,targetTelegramUserId,details);
+    return true;
+  } catch (error) {
+    logger.warn("admin_audit_write_failed", {
+      action,
+      targetTelegramUserId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
 function isProtectedAdminTarget(env: Env, telegramUserId: number): boolean {
   if (telegramUserId === Number(env.BOT_OWNER_TELEGRAM_USER_ID ?? "")) return true;
   return parseIdSet(env.ADMIN_TELEGRAM_USER_IDS).has(telegramUserId);
@@ -771,8 +799,36 @@ renderBars('topSubjects',d.topSubjects);renderBars('topTopics',d.topTopics);rend
 document.getElementById('alerts').innerHTML=(d.alerts||[]).map(a=>\`<div class="alert \${a.level}"><b>\${esc(a.title)}</b><div>\${esc(a.message)}</div></div>\`).join('');document.getElementById('aiCards').innerHTML=[metric('Today tokens',fmtNum(u.totalTokens)),metric('Today spend',fmtMoney(u.spendUsd)),metric('Retry spend',fmtMoney(u.retrySpendUsd)),metric('Budget remaining',b.remainingUsd===null?'—':fmtMoney(b.remainingUsd)),metric('30-day projection',fmtMoney(u.projected30dSpendUsd),'today run-rate')].join('');document.getElementById('thinkingSpend').innerHTML=Object.entries(u.spendByThinking).map(([k,v])=>\`<div class="bar"><span>\${k}</span><div class="track"><div class="fill" style="width:\${u.spendUsd?Math.max(3,v/u.spendUsd*100):3}%"></div></div><b>\${fmtMoney(v)}</b></div>\`).join('');}
 async function loadUsers(){const q=document.getElementById('userSearch').value;const d=await api('/admin/api/users?q='+encodeURIComponent(q));document.getElementById('usersTable').innerHTML=(d.users||[]).map(u=>{const name=u.username?'@'+u.username:[u.first_name,u.last_name].filter(Boolean).join(' ')||u.telegram_user_id;const isProtected=Number(u.is_owner)||Number(u.is_admin);const access=Number(u.suspended)?'⛔ Suspended':Number(u.unlimited)?'♾️ Unlimited':'20/day';const accessNote=Number(u.is_owner)?'Owner':Number(u.is_admin)?'Admin':Number(u.unlimited)?'Unlimited access':'Normal quota';const accessAction="userAction("+u.telegram_user_id+","+JSON.stringify(Number(u.unlimited)?'revoke_unlimited':'grant_unlimited')+")";const suspendAction="userAction("+u.telegram_user_id+","+JSON.stringify(Number(u.suspended)?'unsuspend':'suspend')+")";return '<tr><td><b>'+esc(name)+'</b><div class="mono">'+u.telegram_user_id+'</div></td><td>'+fmtTime(u.first_seen_at)+'</td><td>'+fmtNum(u.question_count_today)+'</td><td>'+fmtNum(u.question_count)+'</td><td>'+fmtNum(u.question_count_30d)+'</td><td>'+fmtMoney(Number(u.spend_microusd||0)/1e6)+'</td><td><b>'+access+'</b><div class="small">'+accessNote+'</div></td><td>'+fmtTime(u.last_question_at)+'</td><td><div class="row-actions"><button class="btn alt" onclick="showUser('+u.telegram_user_id+')">View</button>'+(isProtected?'<button class="btn alt" disabled title="Protected admin account">Admin access</button>':'<button class="btn alt" onclick="'+accessAction+'">'+(Number(u.unlimited)?'Revoke unlimited':'Grant unlimited')+'</button>')+(isProtected?'<button class="btn alt" disabled title="Protected admin account">Protected</button>':'<button class="btn alt" onclick="'+suspendAction+'">'+(Number(u.suspended)?'Unsuspend':'Suspend')+'</button>')+'</div></td></tr>';}).join('')||'<tr><td colspan="9" class="muted">No students found.</td></tr>';}
 async function showUser(id){const d=await api('/admin/api/user?user_id='+id);const u=d.user;const el=document.getElementById('userDetail');el.classList.add('open');el.innerHTML=\`<div style="display:flex;justify-content:space-between;gap:12px"><div><h2 style="margin:0">\${esc(u.username?'@'+u.username:[u.first_name,u.last_name].filter(Boolean).join(' ')||u.telegram_user_id)}</h2><div class="mono">Telegram ID \${u.telegram_user_id}</div></div><button class="btn alt" onclick="document.getElementById('userDetail').classList.remove('open')">Close</button></div><hr><div class="kv"><div>Target exam</div><div>\${esc(u.target_exam||'Not set')}</div><div>Total questions</div><div>\${fmtNum(u.question_count||0)}</div><div>Total AI tokens</div><div>\${fmtNum(d.totalTokens)}</div><div>Estimated AI spend</div><div>\${fmtMoney(d.estimatedSpendUsd)}</div><div>Unlimited access</div><div>\${d.unlimited?'Yes':'No'}</div><div>Suspended</div><div>\${Number(u.suspended)?'Yes':'No'}</div></div><h3>Top topics</h3><div>\${(d.topics||[]).map(x=>\`<span class="pill">\${esc(x.label)} · \${x.count}</span> \`).join('')||'—'}</div><h3>Learning signals</h3><div>\${(d.learningSignals||[]).map(x=>\`<span class="pill">\${esc(x.label)} · \${x.count}</span> \`).join('')||'No explicit learning signals yet.'}</div><h3>Recent questions</h3><div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Question</th><th>Topic</th><th>Status</th></tr></thead><tbody>\${(d.questions||[]).map(q=>\`<tr><td>\${fmtTime(q.received_at)}</td><td>\${esc(q.question_text)}</td><td>\${esc(q.topic||'—')}</td><td>\${esc(q.status)}</td></tr>\`).join('')}</tbody></table></div><div class="row-actions"><button class="btn alt" onclick="userAction(\${id},'reset_profile')">Reset study profile</button></div>\`;}
-async function userAction(id,action){const confirmText={grant_unlimited:'Grant unlimited daily AI access?',revoke_unlimited:'Revoke unlimited access?',suspend:'Suspend this student?',unsuspend:'Restore this student?',reset_profile:"Reset this student's study profile?"}[action]||'Continue?';if(!confirm(confirmText))return;try{await api('/admin/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action,telegramUserId:id})});}catch(e){alert('Action failed: '+e.message);return;}await loadUsers();if(document.getElementById('userDetail').classList.contains('open'))await showUser(id);await loadAccess();await loadAudit();}
-async function grantUnlimitedId(){const id=document.getElementById('grantId').value.trim();if(!/^\d+$/.test(id))return alert('Enter a numeric Telegram User ID.');try{await api('/admin/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'grant_unlimited',telegramUserId:Number(id)})});}catch(e){alert('Grant failed: '+e.message);return;}document.getElementById('grantId').value='';await loadAccess();await loadAudit();}
+async function userAction(id,action){
+  const confirmText={grant_unlimited:'Grant unlimited daily AI access?',revoke_unlimited:'Revoke unlimited access?',suspend:'Suspend this student?',unsuspend:'Restore this student?',reset_profile:"Reset this student's study profile?"}[action]||'Continue?';
+  if(!confirm(confirmText))return;
+  try{
+    const result=await api('/admin/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action,telegramUserId:id})});
+    const successText={
+      grant_unlimited:'✅ Unlimited access granted and verified in the backend.',
+      revoke_unlimited:'✅ Unlimited access revoked and verified in the backend.',
+      suspend:'✅ Student suspended and verified in the backend.',
+      unsuspend:'✅ Student access restored and verified in the backend.',
+      reset_profile:'✅ Student study profile reset.'
+    }[action]||'✅ Action completed.';
+    alert(successText+(result.auditRecorded===false?'\n\nNote: the access change succeeded, but the audit log could not be written.':''));
+  }catch(e){alert('Action failed: '+e.message);return;}
+  await loadUsers();
+  if(document.getElementById('userDetail').classList.contains('open'))await showUser(id);
+  await loadAccess();
+  await loadAudit();
+}
+async function grantUnlimitedId(){
+  const id=document.getElementById('grantId').value.trim();
+  if(!/^\d+$/.test(id))return alert('Enter a numeric Telegram User ID.');
+  try{
+    const result=await api('/admin/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'grant_unlimited',telegramUserId:Number(id)})});
+    alert('✅ Unlimited access granted and verified in the backend.'+(result.auditRecorded===false?'\n\nNote: the access change succeeded, but the audit log could not be written.':''));
+  }catch(e){alert('Grant failed: '+e.message);return;}
+  document.getElementById('grantId').value='';
+  await loadAccess();
+  await loadAudit();
+}
 async function loadAccess(){const d=await api('/admin/api/access');document.getElementById('adminList').innerHTML=\`<div class="kv"><div>Owner</div><div>\${d.ownerTelegramUserId||'Not configured'}</div><div>Additional admins</div><div>\${(d.admins||[]).map(x=>\`<span class="pill">\${x}</span>\`).join(' ')||'None'}</div><div>Static unlimited</div><div>\${(d.staticUnlimited||[]).map(x=>\`<span class="pill">\${x}</span>\`).join(' ')||'None'}</div></div>\`;document.getElementById('overrideList').innerHTML=(d.overrides||[]).map(o=>\`<div class="notice"><b>\${esc(o.username?'@'+o.username:[o.first_name,o.last_name].filter(Boolean).join(' ')||o.telegram_user_id)}</b><div class="mono">\${o.telegram_user_id}</div><div>Granted \${fmtTime(o.granted_at)} · \${o.expires_at?('expires '+fmtTime(o.expires_at)):'no expiry'}</div><button class="btn alt" onclick="userAction(\${o.telegram_user_id},'revoke_unlimited')">Revoke</button></div>\`).join('')||'<span class="muted">No runtime overrides.</span>';}
 async function loadActivity(){const n=document.getElementById('activityLimit').value;const d=await api('/admin/api/activity?limit='+n);document.getElementById('activityTable').innerHTML=(d.activity||[]).map(r=>\`<tr><td>\${fmtTime(r.received_at)}</td><td>\${esc(r.username?('@'+r.username):(r.display_name||r.telegram_user_id))}</td><td>\${esc(r.question_text)}</td><td>\${esc(r.topic||'—')}</td><td>\${esc(r.question_mode||'—')}</td><td>\${esc(r.thinking_level||'—')}</td><td>\${esc(r.status)}</td><td>\${fmtNum(r.attempts)}</td><td>\${fmtNum(r.total_tokens)}</td><td>\${fmtMoney(Number(r.spend_microusd||0)/1e6)}</td></tr>\`).join('');}
 async function loadAi(){const d=await api('/admin/api/ai-usage?days=7');const s=d.summary||{};document.getElementById('aiCards').innerHTML=[metric('7-day tokens',fmtNum(s.totalTokens)),metric('7-day spend',fmtMoney(s.spendUsd)),metric('Avg cost / attempt',fmtMoney(s.averageCostUsd)),metric('Prompt tokens',fmtNum(s.promptTokens)),metric('Thinking tokens',fmtNum(s.thoughtsTokens)),metric('Cached input',fmtNum(s.cachedContentTokens))].join('');document.getElementById('tokenBreakdown').innerHTML='<div class="kv">'+[['Prompt tokens',s.promptTokens],['Output tokens',s.candidatesTokens],['Thinking tokens',s.thoughtsTokens],['Tool-use input',s.toolUsePromptTokens],['Cached input',s.cachedContentTokens],['Total tokens',s.totalTokens]].map(x=>'<div>'+esc(x[0])+'</div><div>'+fmtNum(x[1])+'</div>').join('')+'</div>';renderSpendBars('thinkingSpend',Object.entries(d.thinkingSpend||{}).map(x=>({label:x[0],spendUsd:Number(x[1]||0)})));renderSpendBars('groundingSpend',(d.grounding||[]).map(x=>({label:String(x.label||'unknown'),spendUsd:Number(x.spendUsd||0)})));renderSpendBars('modelSpend',(d.models||[]).map(x=>({label:String(x.model||'unknown')+' · '+String(x.thinking_level||'unknown'),spendUsd:Number(x.spendUsd||0)})));document.getElementById('aiTrend').innerHTML=(d.daily||[]).map(x=>\`<div class="bar"><span>\${esc(x.day)}</span><div class="track"><div class="fill" style="width:\${Math.max(3,(x.spendUsd/Math.max(0.0001,...d.daily.map(y=>y.spendUsd)))*100)}%"></div></div><b>\${fmtMoney(x.spendUsd)}</b></div>\`).join('')||'<span class="muted">No data.</span>';document.getElementById('expensive').innerHTML=(d.expensive||[]).map(x=>\`<tr><td>\${fmtTime(x.received_at)}</td><td>\${esc(x.username?'@'+x.username:x.telegram_user_id)}</td><td>\${esc(x.question_text)}</td><td>\${fmtNum(x.totalTokens)}</td><td>\${fmtMoney(x.spendUsd)}</td></tr>\`).join('')||'<tr><td colspan="5">No data.</td></tr>';
