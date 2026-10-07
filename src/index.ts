@@ -429,6 +429,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       continue;
     }
 
+    const stopTypingHeartbeat = startTypingHeartbeat(env, job.chatId, job.requestId);
     try {
       const startedAt = Date.now();
       const jobTelegramUserId = job.telegramUserId ?? job.chatId;
@@ -645,8 +646,36 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         });
         message.retry({ delaySeconds: Math.min(300, queueRetryDelay(message.attempts)) });
       }
+    } finally {
+      stopTypingHeartbeat();
     }
   }
+}
+
+function startTypingHeartbeat(env: Env, chatId: number, requestId: string): () => void {
+  let stopped = false;
+
+  const sendHeartbeat = (): void => {
+    if (stopped) return;
+    void sendTelegramChatAction(env, chatId, "typing").catch((error) => {
+      if (!stopped) {
+        logger.warn("telegram_typing_heartbeat_failed", {
+          requestId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+  };
+
+  // Telegram expires a chat action after 5 seconds or less, so refresh it
+  // well before expiry while the Queue job remains actively owned.
+  sendHeartbeat();
+  const interval = setInterval(sendHeartbeat, 3_000);
+
+  return () => {
+    stopped = true;
+    clearInterval(interval);
+  };
 }
 
 function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile): string {
