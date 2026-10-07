@@ -313,6 +313,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   const begin = await jobStoreRequest<BeginJobResponse>(env, chatId, {
     action: "begin",
+    botConnectionId: bot.connectionId,
     telegramUserId: analyticsUser.telegramUserId,
     updateId,
     chatId,
@@ -329,6 +330,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   if (begin.action === "retry_ack") {
     const retryJob: QuestionJob = {
       version: 2,
+      botConnectionId: bot.connectionId,
       updateId,
       chatId,
       question: text,
@@ -340,9 +342,9 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     };
     try {
       await env.QUESTION_QUEUE.send(retryJob, { contentType: "json" });
-      await jobStoreRequest(env, chatId, { action: "mark_queued", updateId });
+      await jobStoreRequest(env, chatId, { action: "mark_queued", botConnectionId: bot.connectionId, updateId });
       queueAnalytics(ctx, "question_retry_ack", () => recordQuestionStart(env, {
-        updateId, requestId, user: analyticsUser, messageId, question: text, receivedAt: Date.now(),
+        updateId, botConnectionId: bot.connectionId, requestId, user: analyticsUser, messageId, question: text, receivedAt: Date.now(),
       }));
     } catch (error) {
       logger.error("question_queue_retry_enqueue_failed", {
@@ -352,7 +354,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       });
       return withRequestId(json({ ok: false }, 500), requestId);
     }
-    void sendTelegramChatAction(env, chatId, "typing").catch(() => undefined);
+    void sendTelegramChatAction(env, chatId, "typing", bot.connectionId).catch(() => undefined);
     return withRequestId(json({ ok: true, queued: true, recovered: true }), requestId);
   }
 
@@ -373,9 +375,9 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   let statusMessageId = begin.statusMessageId;
   if (!statusMessageId) {
     try {
-      const status = await sendTelegramMessage(env, chatId, STATUS_TEXT, messageId);
+      const status = await sendTelegramMessage(env, chatId, STATUS_TEXT, messageId, bot.connectionId);
       statusMessageId = status.message_id;
-      await jobStoreRequest(env, chatId, { action: "save_ack", updateId, statusMessageId });
+      await jobStoreRequest(env, chatId, { action: "save_ack", botConnectionId: bot.connectionId, updateId, statusMessageId });
     } catch (error) {
       // Do not enqueue a job that the user was not acknowledged for. Telegram will retry
       // the webhook while this update remains pending, and the Durable Object preserves state.
@@ -388,7 +390,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     }
   }
 
-  void sendTelegramChatAction(env, chatId, "typing").catch((error) => {
+  void sendTelegramChatAction(env, chatId, "typing", bot.connectionId).catch((error) => {
     logger.warn("telegram_initial_typing_failed", {
       requestId,
       updateId,
@@ -398,6 +400,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   const job: QuestionJob = {
     version: 2,
+    botConnectionId: bot.connectionId,
     updateId,
     chatId,
     question: text,
@@ -410,7 +413,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   try {
     await env.QUESTION_QUEUE.send(job, { contentType: "json" });
-    await jobStoreRequest(env, chatId, { action: "mark_queued", updateId });
+    await jobStoreRequest(env, chatId, { action: "mark_queued", botConnectionId: bot.connectionId, updateId });
     queueAnalytics(ctx, "question_start", () => recordQuestionStart(env, {
       updateId,
       requestId,
