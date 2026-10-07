@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { requiresFreshData, requiresMcqTopicClarification } from "../src/ai/gemini";
+import { isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount, requiresFreshData, requiresMcqTopicClarification } from "../src/ai/gemini";
 import { getAnalyticsConfig } from "../src/analytics/db";
 import { getConfig } from "../src/config/env";
 import { isJobLeaseOwned, isValidAnswerPacket, type JobRecord } from "../src/core/job-store";
@@ -12,6 +14,7 @@ const validPacket = {
   quizOptions: [],
   quizCorrectOptionIds: [],
   quizExplanation: "",
+  quizItems: [],
   sscTakeaway: "Remember: Permanent Settlement — 1793 — Cornwallis.",
   answerScope: "ssc_ga_gs",
   subject: "history",
@@ -37,14 +40,24 @@ describe("production hardening", () => {
       quizOptions: ["Lord Cornwallis", "Lord Wellesley", "Lord Dalhousie", "Warren Hastings"],
       quizCorrectOptionIds: [0],
       quizExplanation: "Permanent Settlement was introduced by Lord Cornwallis in 1793.",
+      quizItems: [{
+        question: "Who introduced the Permanent Settlement?",
+        options: ["Lord Cornwallis", "Lord Wellesley", "Lord Dalhousie", "Warren Hastings"],
+        correctOptionIds: [0],
+        explanation: "Permanent Settlement was introduced by Lord Cornwallis in 1793.",
+      }],
     } as const;
     expect(isValidAnswerPacket(quizPacket)).toBe(true);
     expect(isValidAnswerPacket({ ...quizPacket, quizCorrectOptionIds: [9] })).toBe(false);
     expect(isValidAnswerPacket({ ...quizPacket, quizExplanation: "x".repeat(201) })).toBe(false);
+    expect(isValidAnswerPacket({
+      ...quizPacket,
+      quizItems: Array.from({ length: 11 }, () => quizPacket.quizItems[0]),
+    })).toBe(false);
   });
 
-  it("uses the v2.6.0 release fallback", () => {
-    expect(getConfig({} as any).version).toBe("2.7.0");
+  it("uses the current 2.8.0 release fallback", () => {
+    expect(getConfig({} as any).version).toBe("2.8.0");
   });
 
   it("defaults raw analytics retention to 30 days", () => {
@@ -73,11 +86,58 @@ describe("production hardening", () => {
     expect(requiresFreshData("What is the Permanent Settlement?")).toBe(false);
   });
 
+  it("supports bounded multi-MCQ requests and safe topic continuation", () => {
+    expect(isMcqRequest("5 MCQs on Polity")).toBe(true);
+    expect(parseRequestedMcqCount("5 MCQs on Polity")).toBe(5);
+    expect(parseRequestedMcqCount("give me 10 quizzes on History")).toBe(10);
+    expect(parseRequestedMcqCount("11 MCQs on Polity")).toBe(11);
+    expect(isMcqRequest("What is an MCQ?")).toBe(false);
+    expect(isLikelyMcqTopicReply("Fundamental Rights")).toBe(true);
+    expect(isLikelyMcqTopicReply("why is Article 32 important?")).toBe(false);
+
+    const emptyContext = {
+      profile: {
+        version: 2,
+        targetExam: "SSC (not specified)",
+        recentTopics: [],
+        recentSubjects: [],
+        attentionTopics: [],
+        revisionQueue: [],
+        learningSignals: [],
+        questionCount: 0,
+        lastUpdatedAt: 0,
+      },
+      recentTopicHint: "",
+      attentionTopicHint: "",
+      revisionHint: "",
+      recentConversation: [],
+    } as any;
+
+    expect(requiresMcqTopicClarification("5 MCQs", emptyContext)).toBe(true);
+    expect(requiresMcqTopicClarification("5 MCQs on Polity", emptyContext)).toBe(false);
+  });
+
+  it("does not send a second bot message after a native quiz vote", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/index.ts"), "utf8");
+    const start = source.indexOf("async function handleTelegramPollAnswer");
+    const end = source.indexOf("function startTypingHeartbeat", start);
+    const handler = source.slice(start, end);
+    expect(handler).toContain("record_quiz_result");
+    expect(handler).not.toContain("sendTelegramMessage(");
+  });
+
+  it("cleans up partial native quiz batches", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/index.ts"), "utf8");
+    expect(source).toContain("for (const delivered of deliveredQuizzes.reverse())");
+    expect(source).toContain("await deleteQuizSession(env, delivered.pollId)");
+    expect(source).toContain("buildQuizDeliveryFailureAnswer()");
+  });
+
   it("protects the native quiz delivery path when D1 session persistence fails", () => {
     const source = readFileSync(resolve(process.cwd(), "src/index.ts"), "utf8");
-    expect(source).toContain("await stopTelegramPoll(env, job.chatId, quiz.message_id, job.botConnectionId).catch(() => undefined);");
-    expect(source).toContain("await deleteTelegramMessage(env, job.chatId, quiz.message_id, job.botConnectionId).catch(() => undefined);");
-    expect(source).toContain("buildQuizFallbackAnswerForStudent(packet)");
+    expect(source).toContain("await stopTelegramPoll(");
+    expect(source).toContain("await deleteTelegramMessage(");
+    expect(source).toContain("buildQuizDeliveryFailureAnswer()");
   });
 
   it("does not invent an MCQ topic for a fresh generic quiz request", () => {
