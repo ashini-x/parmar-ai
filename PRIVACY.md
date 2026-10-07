@@ -3,7 +3,13 @@
 **Status:** Technical product notice; obtain jurisdiction-specific legal advice before using this as a formal privacy policy.
 
 ## Data the application may process
-- Telegram user and private-chat IDs.\n- Telegram username and name fields when provided.\n- Questions and timestamps.\n- Question status/topic/subject/mode and related metadata.\n- AI token-usage metadata and estimated cost fields.\n- Study-profile data such as recent topics, attention areas, revision queue, and target exam.\n- Security, access-control, and administrator audit records.
+- Telegram user and private-chat IDs.
+- Telegram username and name fields when provided.
+- Questions and timestamps.
+- Question status/topic/subject/mode and related metadata.
+- AI token-usage metadata and estimated cost fields.
+- Study-profile data such as recent topics, attention areas, revision queue, and target exam.
+- Security, access-control, and administrator audit records.
 
 ## Purposes
 Data is processed to answer questions, maintain private-chat continuity, enforce limits, personalize study guidance, operate the admin dashboard, account for AI usage, and protect the service.
