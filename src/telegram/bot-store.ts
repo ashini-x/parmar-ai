@@ -38,6 +38,13 @@ export async function getActiveTelegramBot(env: Env): Promise<TelegramBotConnect
   return row ? await decryptRow(env, row) : null;
 }
 
+export async function hasTelegramBotRecords(env: Env): Promise<boolean> {
+  if (!env.DB) return false;
+  await ensureTelegramBotSchema(env);
+  const row = await env.DB.prepare("SELECT 1 AS present FROM telegram_bots LIMIT 1").first();
+  return Boolean(row);
+}
+
 export async function getTelegramBotByConnectionId(
   env: Env,
   connectionId: string,
