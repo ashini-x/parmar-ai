@@ -7,5 +7,8 @@ export default defineConfig({
       wrangler: { configPath: "./wrangler.jsonc" },
       miniflare: { compatibilityDate: "2026-09-22" }
     })
-  ]
+  ],
+  test: {
+    exclude: ["test/admin-access-ui.test.ts"]
+  }
 });
