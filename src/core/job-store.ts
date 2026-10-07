@@ -619,6 +619,7 @@ function clampConversationText(value: string, maxLength: number): string {
 function parseJob(body: Record<string, unknown>): QuestionJob {
   const job: QuestionJob = {
     version: 2,
+    botConnectionId: String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID),
     updateId: positiveNumber(body.updateId),
     chatId: positiveOrNegativeNumber(body.chatId),
     ...(body.telegramUserId !== undefined ? { telegramUserId: positiveNumber(body.telegramUserId) } : {}),
