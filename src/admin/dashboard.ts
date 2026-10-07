@@ -556,12 +556,21 @@ async function connectTelegramBot(
 
   let candidateWebhookRegistered = false;
   try {
-    await telegramAdminApi(candidateToken, "setWebhook", {
+    await telegramAdminApiWithRetry(candidateToken, "setWebhook", {
       url: webhookUrl,
       secret_token: webhookSecret,
       allowed_updates: ["message"],
       drop_pending_updates: willSwitch,
       max_connections: 100,
+    }, {
+      label: "webhook registration",
+      retryable: (error) => {
+        const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+        return message.includes("failed to resolve host") ||
+          message.includes("temporary failure in name resolution") ||
+          message.includes("timed out") ||
+          message.includes("timeout");
+      },
     });
     candidateWebhookRegistered = true;
 
@@ -663,6 +672,35 @@ function randomTelegramWebhookSecret(): string {
   let output = "";
   for (const byte of bytes) output += String.fromCharCode(byte);
   return btoa(output).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+async function telegramAdminApiWithRetry<T>(
+  token: string,
+  method: string,
+  payload: Record<string, unknown>,
+  options: { label: string; retryable: (error: unknown) => boolean },
+): Promise<T> {
+  const maxAttempts = 4;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await telegramAdminApi<T>(token, method, payload);
+    } catch (error) {
+      lastError = error;
+      if (!options.retryable(error) || attempt >= maxAttempts) break;
+      await new Promise((resolve) => setTimeout(resolve, 1_000 * 2 ** (attempt - 1)));
+    }
+  }
+  const base = lastError instanceof Error ? lastError.message : String(lastError);
+  if (base.toLowerCase().includes("failed to resolve host") || base.toLowerCase().includes("temporary failure in name resolution")) {
+    const webhookUrl = typeof payload.url === "string" ? payload.url : null;
+    throw new Error(
+      options.label + " failed after " + maxAttempts + " attempts because Telegram could not resolve the webhook hostname" +
+      (webhookUrl ? " (" + new URL(webhookUrl).hostname + ")." : ".") +
+      " Check that the Worker hostname has public DNS; otherwise try again in a moment.",
+    );
+  }
+  throw lastError instanceof Error ? lastError : new Error(base);
 }
 
 async function telegramAdminApi<T>(token: string, method: string, payload: Record<string, unknown>): Promise<T> {
