@@ -77,6 +77,28 @@ Privileged accounts bypass the daily AI allowance only. The 5 questions / 10 sec
 D1 intentionally contains question and answer analytics for operations. Raw question/event rows are subject to the configured retention cleanup. Production administrators should limit dashboard access and export only the minimum information needed.
 
 
+## Native quiz sessions
+
+The quiz_sessions table correlates a native Telegram quiz poll with the student and the generated content needed to validate the student's answer without re-running the model.
+
+| Column | Purpose |
+|---|---|
+| poll_id | Telegram poll identifier; primary key used by poll_answer updates. |
+| bot_connection_id | Telegram bot connection that created the poll. |
+| telegram_user_id | Student allowed to answer the private quiz. |
+| chat_id | Private Telegram chat used for result feedback. |
+| update_id | Original Parmar question update that produced the quiz. |
+| message_id | Telegram quiz message ID. |
+| question_text | Native quiz question shown to the student. |
+| options_json | Quiz option text in display order. |
+| correct_option_ids_json | 0-based correct option IDs. |
+| explanation | Compact Telegram-native explanation. |
+| created_at / answered_at | Quiz lifecycle timestamps. |
+| selected_option_ids_json | Student's selected option(s). |
+| result | correct or incorrect after the first vote. |
+
+Quiz sessions are intentionally one-shot: revoting is disabled so the first response becomes a clean learning/analytics signal.
+
 ## D1 privileged access
 
 ### `ai_access_overrides`
