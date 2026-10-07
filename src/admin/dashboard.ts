@@ -874,7 +874,7 @@ async function loadTelegram(){
     const alerts=document.getElementById('telegramAlerts');
     if(!d.connected){
       status.innerHTML='<div class="notice"><b>No active Telegram bot.</b><div class="muted">Enter a BotFather token to connect one.</div></div>';
-      alerts.innerHTML=d.encryption?.configured?'':'<div class="alert critical"><b>Telegram token encryption is unavailable.</b><div>Admin session secret/encryption secret is missing.</div></div>';
+      alerts.innerHTML=d.encryption?.configured?'':'<div class="alert critical"><b>Telegram token encryption is unavailable.</b><div>Dedicated Telegram encryption key is not configured for this environment.</div></div>';
     }else{
       const b=d.bot||{};
       const hook=d.webhook||{};
