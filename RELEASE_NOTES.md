@@ -1,3 +1,23 @@
+# Parmar AI Release Notes
+
+## v2.6.1 — Production Hardening
+
+### Security
+- Production Telegram bot credential encryption now requires the dedicated `TELEGRAM_BOT_ENCRYPTION_KEY`.
+- New Telegram credential writes never use `ADMIN_SESSION_SECRET` for encryption.
+- Existing legacy ciphertext remains readable during a controlled migration when the dedicated production key is configured.
+- The public `/health` endpoint now returns only coarse service health.
+
+### Reliability and validation
+- Durable Object internal requests reject malformed JSON/body payloads instead of relying on unchecked casts.
+- Lease ownership validation is centralized around queue message ID + lease version.
+- Added regression tests for stale/mismatched lease ownership and malformed AnswerPackets.
+
+### Privacy and release discipline
+- Production raw analytics retention baseline is now 30 days.
+- Release metadata is aligned to v2.6.1 across package, Worker configuration, manifest, and runtime fallback.
+- Added regression coverage for current mutable-fact detection and retention/security configuration.
+
 ## v2.6.0 — Production Reliability & Access Control Hardening
 
 ### Critical fixes
