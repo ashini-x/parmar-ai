@@ -150,6 +150,7 @@ const RESPONSE_SCHEMA = {
     "quizOptions",
     "quizCorrectOptionIds",
     "quizExplanation",
+    "quizItems",
     "sscTakeaway",
     "answerScope",
     "subject",
@@ -775,6 +776,7 @@ export function isLikelyMcqTopicReply(question: string): boolean {
   if (q.length < 2 || q.length > 80 || /\b(?:mcq|quiz|test|question)\b/.test(q)) return false;
   const stripped = q.replace(/^(?:on|about|from|regarding|par|pe|mein|me)\s+/, "").trim();
   if (!stripped) return false;
+  if (/^(?:yes|yeah|yep|haan|ha|ok|okay|sure|no|nahi|nahin|not now|skip)\b/.test(stripped)) return false;
   if (/^(?:what|who|why|how|when|where|which|can|could|please|give|generate|create|make|send|tell|explain|difference|meaning|mujhe|bhai|kya|kaise|kyun|kyu|kaun|kab|kahan|do|dena)\b/.test(stripped)) return false;
   return true;
 }
@@ -796,6 +798,7 @@ function hasExplicitMcqTopic(question: string): boolean {
     .trim();
   if (!residual) return false;
   if (/^(?:what|i|we|studied|study|today|same|whatever|anything|something|want|need)$/.test(residual)) return false;
+  if (/^(?:what we studied|what we studied today|whatever we studied|whatever we learned|something random|anything random)$/.test(residual)) return false;
   if (residual === "random") return true;
   return residual.length >= 2;
 }
