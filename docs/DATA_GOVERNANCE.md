@@ -24,7 +24,7 @@ Usernames, display names, and other mutable Telegram metadata are presentation a
 
 ### Retention
 
-Raw D1 analytics are removed according to ANALYTICS_RAW_RETENTION_DAYS, which is 90 days by default.
+Raw D1 analytics are removed according to ANALYTICS_RAW_RETENTION_DAYS, which is 30 days by default.
 
 Durable Object job and profile state has separate lifecycle controls implemented in application code.
 
@@ -38,7 +38,7 @@ Do not publish exports containing identifiable student information, private ques
 
 The /delete-my-data workflow is the product-level deletion path for centralized student data and associated Durable Object study state.
 
-Any new persistent store must define its deletion behavior before release.
+Any new persistent store must define its deletion behavior before release. Native quiz sessions are deleted by /delete-my-data and follow the same configured raw-data retention lifecycle.
 
 ### Access control
 
