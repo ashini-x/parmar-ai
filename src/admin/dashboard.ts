@@ -350,7 +350,7 @@ async function connectTelegramBot(env: Env, origin: string): Promise<{botUsernam
       { command: "exam", description: "Set your SSC target exam" },
       { command: "profile", description: "View your SSC study profile" },
       { command: "reset", description: "Reset your study profile" },
-      { command: "delete-my-data", description: "Delete your stored study data" },
+      { command: "delete_data", description: "Delete your stored study data" },
       { command: "help", description: "Show help" },
       { command: "id", description: "Show your Telegram user ID" },
     ],
