@@ -302,12 +302,18 @@ async function requestVertexGemini(
       contents: [
         {
           role: "user",
-          parts: [{ text: buildUserPrompt(question, profileContext, requiresGrounding, attempt > 1) }],
+          parts: [{ text: buildUserPrompt(question, profileContext, requiresGrounding, attempt > 1, requestedQuizCount) }],
         },
       ],
       generationConfig: {
         thinkingConfig: { thinkingLevel },
-        maxOutputTokens: Math.min(1_800, positiveInt(env.MAX_OUTPUT_TOKENS, 1_200) + (attempt > 1 ? 400 : 0)),
+        maxOutputTokens: Math.min(
+          6_000,
+          Math.max(
+            positiveInt(env.MAX_OUTPUT_TOKENS, 1_200),
+            700 + requestedQuizCount * 450 + (attempt > 1 ? 400 : 0),
+          ),
+        ),
         responseMimeType: "application/json",
         responseSchema: RESPONSE_SCHEMA,
       },
@@ -519,6 +525,20 @@ function parseAnswerPacket(rawText: string): AnswerPacket {
     quizCorrectOptionIds: firstQuiz?.correctOptionIds ?? quizCorrectOptionIds,
     quizExplanation: firstQuiz?.explanation ?? quizExplanation,
     quizItems: effectiveQuizItems,
+    sscTakeaway: String(parsed.sscTakeaway ?? "").trim(),
+    answerScope: normalizeEnum(parsed.answerScope, ["ssc_ga_gs", "ssc_support", "out_of_scope"], "ssc_ga_gs"),
+    subject: normalizeEnum(parsed.subject, ["history", "polity", "geography", "economy", "science", "static_gk", "current_affairs", "art_culture", "other"], "other"),
+    topic: cleanTopic(String(parsed.topic ?? "General SSC doubt")),
+    questionMode: normalizeEnum(parsed.questionMode, ["fact", "concept", "comparison", "statement_trap", "revision", "study_plan", "mcq"], "fact"),
+    examRelevance: normalizeEnum(parsed.examRelevance, ["A", "B", "C", "D"], "B"),
+    difficulty: "medium",
+    profileSignal: normalizeEnum(parsed.profileSignal, ["neutral", "weak", "confusion", "strength"], "neutral"),
+    profileNote: "",
+    nextRevisionTopic: cleanTopic(String(parsed.nextRevisionTopic ?? ""), true),
+    detectedExam: parsed.detectedExam == null ? null : cleanExam(String(parsed.detectedExam)),
+    timeSensitive: Boolean(parsed.timeSensitive),
+  };
+}
 
 function normalizeQuizOptions(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
@@ -602,6 +622,7 @@ function makeFallbackPacket(answer: string): AnswerPacket {
     quizOptions: [],
     quizCorrectOptionIds: [],
     quizExplanation: "",
+    quizItems: [],
     sscTakeaway: "",
     answerScope: "ssc_ga_gs",
     subject: "other",
