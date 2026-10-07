@@ -8,6 +8,7 @@ import {
   getTelegramEncryptionStatus,
   listTelegramBots,
   markTelegramBotDisconnected,
+  markTelegramBotVerified,
   saveTelegramBot,
 } from "../telegram/bot-store";
 
@@ -406,9 +407,43 @@ export async function adminAction(env: Env, request: Request): Promise<Response>
   const actor=(env.ADMIN_DASHBOARD_USER?.trim() || "admin").slice(0,120);
   try {
     if (action === "connect_telegram") {
-      const result = await connectTelegramBot(env, new URL(request.url).origin);
-      await recordAdminAudit(env,actor,"connect_telegram",null,{botUsername:result.botUsername, webhookUrl:result.webhookUrl});
-      return json({ok:true,action,botUsername:result.botUsername,webhookUrl:result.webhookUrl});
+      const requestedToken = typeof body.botToken === "string" ? body.botToken.trim() : "";
+      const result = await connectTelegramBot(env, new URL(request.url).origin, requestedToken || undefined);
+      await recordAdminAudit(env,actor,"connect_telegram",null,{
+        botUsername:result.botUsername,
+        botId:result.botId,
+        switched:result.switched,
+        previousBotUsername:result.previousBotUsername,
+      });
+      return json({
+        ok:true,
+        action,
+        botUsername:result.botUsername,
+        botId:result.botId,
+        switched:result.switched,
+        previousBotUsername:result.previousBotUsername,
+      });
+    }
+    if (action === "disconnect_telegram") {
+      const active = await getActiveTelegramBot(env);
+      if (!active) return json({ok:true,action,disconnected:false});
+      await telegramAdminApi(active.token, "deleteWebhook", { drop_pending_updates: true });
+      await markTelegramBotDisconnected(env, active.connectionId, "admin_disconnect");
+      await recordAdminAudit(env,actor,"disconnect_telegram",null,{botUsername:active.username,botId:active.botId});
+      return json({ok:true,action,disconnected:true});
+    }
+    if (action === "test_telegram") {
+      const active = await getActiveTelegramBot(env);
+      if (!active) {
+        if (!env.TELEGRAM_BOT_TOKEN?.trim()) return json({ok:false,error:"telegram_not_connected"},409);
+        const bot = await telegramAdminApi<{id:number;username?:string;first_name?:string}>(env.TELEGRAM_BOT_TOKEN.trim(),"getMe",{});
+        const webhook = await telegramAdminApi<{url?:string;pending_update_count?:number}>(env.TELEGRAM_BOT_TOKEN.trim(),"getWebhookInfo",{});
+        return json({ok:true,legacy:true,botUsername:bot.username ? "@" + bot.username : bot.first_name ?? "Telegram bot",botId:bot.id,webhook});
+      }
+      const bot = await telegramAdminApi<{id:number;username?:string;first_name?:string}>(active.token,"getMe",{});
+      const webhook = await telegramAdminApi<{url?:string;pending_update_count?:number}>(active.token,"getWebhookInfo",{});
+      await markTelegramBotVerified(env, active.connectionId);
+      return json({ok:true,legacy:false,botUsername:bot.username ? "@" + bot.username : bot.first_name ?? "Telegram bot",botId:bot.id,webhook});
     }
     if (action === "grant_unlimited") {
       await grantUnlimitedAiAccess(env,userId,0,null);
@@ -435,33 +470,154 @@ export async function adminAction(env: Env, request: Request): Promise<Response>
   }
 }
 
-async function connectTelegramBot(env: Env, origin: string): Promise<{botUsername:string; webhookUrl:string}> {
-  const token = env.TELEGRAM_BOT_TOKEN?.trim();
-  const webhookSecret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
-  if (!token || !webhookSecret) throw new Error("Telegram bot token/webhook secret is not configured.");
+async function connectTelegramBot(
+  env: Env,
+  origin: string,
+  requestedToken?: string,
+): Promise<{ botUsername: string; botId: number; switched: boolean; previousBotUsername: string | null }> {
+  const candidateToken = requestedToken?.trim() || env.TELEGRAM_BOT_TOKEN?.trim();
+  if (!candidateToken) throw new Error("Enter a Telegram BotFather token.");
 
-  const bot = await telegramAdminApi<{ username?: string; first_name?: string }>(token, "getMe", {});
-  const webhookUrl = `${origin}/telegram/webhook`;
-  await telegramAdminApi(token, "setWebhook", {
+  const candidate = await telegramAdminApi<{ id: number; username?: string; first_name?: string }>(
+    candidateToken,
+    "getMe",
+    {},
+  );
+
+  let active = await getActiveTelegramBot(env);
+  let previousBotUsername: string | null = active?.username ?? null;
+
+  if (!active && env.TELEGRAM_BOT_TOKEN?.trim() && env.TELEGRAM_WEBHOOK_SECRET?.trim() && candidateToken !== env.TELEGRAM_BOT_TOKEN.trim()) {
+    try {
+      const legacy = await telegramAdminApi<{ id: number; username?: string; first_name?: string }>(
+        env.TELEGRAM_BOT_TOKEN.trim(),
+        "getMe",
+        {},
+      );
+      active = {
+        connectionId: "legacy-env",
+        botId: legacy.id,
+        username: legacy.username ?? null,
+        firstName: legacy.first_name ?? null,
+        token: env.TELEGRAM_BOT_TOKEN.trim(),
+        webhookSecret: env.TELEGRAM_WEBHOOK_SECRET.trim(),
+        status: "active",
+        connectedAt: 0,
+        lastVerifiedAt: null,
+        disconnectedAt: null,
+      };
+      previousBotUsername = active.username;
+    } catch {
+      active = null;
+    }
+  }
+
+  if (active && active.botId === candidate.id && active.token === candidateToken) {
+    await telegramAdminApi(candidateToken, "setWebhook", {
+      url: origin + "/telegram/webhook",
+      secret_token: active.webhookSecret,
+      allowed_updates: ["message"],
+      drop_pending_updates: false,
+      max_connections: 100,
+    });
+    await telegramAdminApi(candidateToken, "setMyCommands", buildTelegramCommands());
+    await telegramAdminApi(candidateToken, "getWebhookInfo", {});
+    await markTelegramBotVerified(env, active.connectionId);
+    return {
+      botUsername: candidate.username ? "@" + candidate.username : candidate.first_name ?? "Telegram bot",
+      botId: candidate.id,
+      switched: false,
+      previousBotUsername: null,
+    };
+  }
+
+  const existing = await getTelegramBotByBotId(env, candidate.id);
+  const connectionId = existing?.connectionId
+    ?? (!active && candidateToken === env.TELEGRAM_BOT_TOKEN?.trim() ? "legacy-env" : crypto.randomUUID());
+  const webhookSecret = randomTelegramWebhookSecret();
+  const webhookUrl = origin + "/telegram/webhook";
+  const willSwitch = Boolean(active && active.botId !== candidate.id);
+
+  // Stage the candidate first. It remains disconnected until the old webhook is safely removed.
+  await saveTelegramBot(env, {
+    connectionId,
+    botId: candidate.id,
+    username: candidate.username ?? null,
+    firstName: candidate.first_name ?? null,
+    token: candidateToken,
+    webhookSecret,
+    status: "disconnected",
+    lastVerifiedAt: Date.now(),
+    disconnectedAt: null,
+  });
+
+  await telegramAdminApi(candidateToken, "setWebhook", {
     url: webhookUrl,
     secret_token: webhookSecret,
     allowed_updates: ["message"],
-    drop_pending_updates: false,
+    drop_pending_updates: willSwitch,
     max_connections: 100,
   });
-  await telegramAdminApi(token, "setMyCommands", {
-    commands: [
-      { command: "start", description: "Start Parmar AI" },
-      { command: "exam", description: "Set your SSC target exam" },
-      { command: "profile", description: "View your SSC study profile" },
-      { command: "reset", description: "Reset your study profile" },
-      { command: "delete_data", description: "Delete your stored study data" },
-      { command: "help", description: "Show help" },
-      { command: "id", description: "Show your Telegram user ID" },
-    ],
-  });
+  await telegramAdminApi(candidateToken, "setMyCommands", buildTelegramCommands());
+  const webhook = await telegramAdminApi<{ url?: string }>(candidateToken, "getWebhookInfo", {});
+  if (webhook.url && webhook.url !== webhookUrl) {
+    await telegramAdminApi(candidateToken, "deleteWebhook", { drop_pending_updates: true }).catch(() => undefined);
+    throw new Error("Telegram accepted the connection but reported a different webhook URL.");
+  }
 
-  return { botUsername: bot.username ? `@${bot.username}` : bot.first_name ?? "Telegram bot", webhookUrl };
+  if (active && active.botId !== candidate.id) {
+    try {
+      await telegramAdminApi(active.token, "deleteWebhook", { drop_pending_updates: true });
+    } catch (error) {
+      await telegramAdminApi(candidateToken, "deleteWebhook", { drop_pending_updates: true }).catch(() => undefined);
+      throw new Error(
+        "Could not safely disconnect the previous Telegram bot: " +
+        (error instanceof Error ? error.message : String(error)),
+      );
+    }
+
+    if (active.connectionId === "legacy-env") {
+      await saveTelegramBot(env, {
+        connectionId: active.connectionId,
+        botId: active.botId,
+        username: active.username,
+        firstName: active.firstName,
+        token: active.token,
+        webhookSecret: active.webhookSecret,
+        status: "disconnected",
+        connectedAt: active.connectedAt || Date.now(),
+        lastVerifiedAt: active.lastVerifiedAt,
+        disconnectedAt: Date.now(),
+      });
+    }
+  }
+
+  await activateTelegramBot(env, connectionId, active?.connectionId);
+  return {
+    botUsername: candidate.username ? "@" + candidate.username : candidate.first_name ?? "Telegram bot",
+    botId: candidate.id,
+    switched: willSwitch,
+    previousBotUsername: previousBotUsername,
+  };
+}
+
+function buildTelegramCommands() {
+  return [
+    { command: "start", description: "Start Parmar AI" },
+    { command: "exam", description: "Set your SSC target exam" },
+    { command: "profile", description: "View your SSC study profile" },
+    { command: "reset", description: "Reset your study profile" },
+    { command: "delete_data", description: "Delete your stored study data" },
+    { command: "help", description: "Show help" },
+    { command: "id", description: "Show your Telegram user ID" },
+  ];
+}
+
+function randomTelegramWebhookSecret(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  let output = "";
+  for (const byte of bytes) output += String.fromCharCode(byte);
+  return btoa(output).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
 async function telegramAdminApi<T>(token: string, method: string, payload: Record<string, unknown>): Promise<T> {
