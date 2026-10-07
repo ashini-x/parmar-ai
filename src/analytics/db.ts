@@ -114,6 +114,23 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_by TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS telegram_bots (
+  bot_connection_id TEXT PRIMARY KEY,
+  bot_id INTEGER NOT NULL UNIQUE,
+  username TEXT,
+  first_name TEXT,
+  token_ciphertext TEXT NOT NULL,
+  webhook_secret_ciphertext TEXT NOT NULL,
+  webhook_secret_hash TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL CHECK (status IN ('active','disconnected')),
+  connected_at INTEGER NOT NULL,
+  last_verified_at INTEGER,
+  disconnected_at INTEGER
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_bots_one_active
+  ON telegram_bots(status) WHERE status='active';
+
 CREATE INDEX IF NOT EXISTS idx_users_first_seen ON users(first_seen_at);
 CREATE INDEX IF NOT EXISTS idx_questions_received ON questions(received_at);
 CREATE INDEX IF NOT EXISTS idx_questions_user_received ON questions(telegram_user_id, received_at);
@@ -128,11 +145,11 @@ CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit_log(created_at
 
 let schemaPromise: Promise<void> | null = null;
 
-function analyticsUpdateId(env: Env, updateId: number): number {
+function analyticsUpdateId(env: Env, updateId: number, botConnectionId = "legacy-env"): number {
   // Telegram update IDs are scoped to each bot. A replacement BotFather bot
   // can legitimately reuse small IDs, so D1 analytics use a stable bot-specific
   // key while the real Telegram update ID remains in the operational job path.
-  const seed = `${env.TELEGRAM_BOT_TOKEN ?? "no-telegram-token"}:${updateId}`;
+  const seed = `${botConnectionId}:${updateId}`;
   let hash = 0xcbf29ce484222325n;
   for (let index = 0; index < seed.length; index += 1) {
     hash ^= BigInt(seed.charCodeAt(index));
@@ -249,6 +266,7 @@ export interface AnalyticsUser {
 
 export interface QuestionAnalyticsStart {
   updateId: number;
+  botConnectionId?: string;
   requestId: string;
   user: AnalyticsUser;
   messageId: number;
@@ -258,6 +276,7 @@ export interface QuestionAnalyticsStart {
 
 export interface QuestionAnalyticsResult {
   updateId: number;
+  botConnectionId?: string;
   status: "processing" | "completed" | "failed" | "out_of_scope" | "delivery_failed";
   completedAt?: number;
   startedAt?: number;
@@ -271,6 +290,7 @@ export interface QuestionAnalyticsResult {
 
 export interface AiUsageAnalyticsInput {
   updateId: number;
+  botConnectionId?: string;
   requestId: string;
   queueAttempt: number;
   telegramUserId: number;
@@ -344,7 +364,7 @@ export async function recordQuestionStart(env: Env, item: QuestionAnalyticsStart
       (update_id, request_id, telegram_user_id, chat_id, message_id, username, display_name,
        question_text, received_at, accepted_at, status)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`
-  ).bind(analyticsUpdateId(env, item.updateId), item.requestId, item.user.telegramUserId, item.user.chatId, item.messageId, item.user.username ?? null, displayName, item.question, item.receivedAt, item.receivedAt).run();
+  ).bind(analyticsUpdateId(env, item.updateId, item.botConnectionId), item.requestId, item.user.telegramUserId, item.user.chatId, item.messageId, item.user.username ?? null, displayName, item.question, item.receivedAt, item.receivedAt).run();
 }
 
 export async function recordQuestionResult(env: Env, result: QuestionAnalyticsResult): Promise<void> {
