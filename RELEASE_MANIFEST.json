@@ -1,6 +1,6 @@
 {
   "name": "parmar-ai",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "release_channel": "stable",
   "repository_type": "public-production-source",
   "artifact_policy": "immutable-release-source",
@@ -67,8 +67,8 @@
     "estimate_only": true
   },
   "build": {
-    "source_baseline": "v2.6.1",
-    "feature_change": "v2.7.0 intent-driven native Telegram quizzes: semantic response mode, non-anonymous quiz delivery, poll-answer handling, D1 quiz session persistence, deletion/retention coverage",
+    "source_baseline": "v2.7.0",
+    "feature_change": "v2.8.0 production multi-MCQ native Telegram quiz batches up to 10, persistent quiz-result conversation context, and no separate post-vote bot messages",
     "student_path_change": "preserved",
     "release_status": "stable"
   },
