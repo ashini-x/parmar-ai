@@ -823,7 +823,7 @@ async function grantUnlimitedId(){
   if(!/^\d+$/.test(id))return alert('Enter a numeric Telegram User ID.');
   try{
     const result=await api('/admin/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'grant_unlimited',telegramUserId:Number(id)})});
-    alert('✅ Unlimited access granted and verified in the backend.'+(result.auditRecorded===false?'\n\nNote: the access change succeeded, but the audit log could not be written.':''));
+    alert('✅ Unlimited access granted and verified in the backend.'+(result.auditRecorded===false?' Note: the access change succeeded, but the audit log could not be written.':''));
   }catch(e){alert('Grant failed: '+e.message);return;}
   document.getElementById('grantId').value='';
   await loadAccess();
