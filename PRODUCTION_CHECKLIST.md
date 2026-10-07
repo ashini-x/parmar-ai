@@ -1,68 +1,22 @@
-# Production Checklist — v2.6.0
+# Production Checklist — v2.6.x
 
 ## Source
-
-- [ ] Correct v2.6.0 source is deployed.
-- [ ] No local `.env`, `.dev.vars`, key files, or credentials are committed.
-- [ ] `wrangler.jsonc` contains no secrets.
-- [ ] Version in code/config/docs is consistent.
+- [ ] Exact approved revision reviewed.\n- [ ] No secrets or production exports committed.\n- [ ] Documentation matches deployed behavior.
 
 ## Cloudflare
-
-- [ ] Worker deployed.
-- [ ] Durable Object binding `JOB_DEDUPE` active.
-- [ ] D1 binding `DB` points to production database.
-- [ ] Queue producer active.
-- [ ] Queue consumer active.
-- [ ] Dead-letter queue exists.
-- [ ] Observability/logging enabled.
-- [ ] Daily cleanup cron enabled.
+- [ ] Worker deployed.\n- [ ] Durable Object active.\n- [ ] D1 production binding active.\n- [ ] Queue and DLQ active.\n- [ ] Observability enabled.\n- [ ] Cleanup cron enabled.
 
 ## Secrets
-
-- [ ] Telegram token configured as secret.
-- [ ] Telegram webhook secret configured.
-- [ ] Telegram setup secret configured.
-- [ ] Google service-account credentials configured as secrets.
-- [ ] Admin password and session secret configured as secrets.
-- [ ] Owner/admin Telegram ID configured outside the public repository.
-- [ ] Any additional admin IDs are explicitly reviewed.
+- [ ] Telegram secrets stored securely.\n- [ ] Google service-account credentials stored securely.\n- [ ] Admin password/session secret stored securely.\n- [ ] Owner/Admin IDs configured outside public source.
 
 ## Telegram
-
-- [ ] Webhook secret validation works.
-- [ ] Private chat accepted.
-- [ ] Group messages rejected safely.
-- [ ] `/start` works.
-- [ ] `/help` works.
-- [ ] `/reset` works.
-- [ ] `/profile` works.
-- [ ] `/exam` works.
-
-## AI
-
-- [ ] Direct fact question succeeds.
-- [ ] Follow-up continuity succeeds.
-- [ ] Simplification succeeds.
-- [ ] Explicit confusion handling succeeds.
-- [ ] Profile learning signal persists safely.
-- [ ] Malformed/incomplete model output is rejected/retried.
-- [ ] Time-sensitive grounding behaves as configured.
+- [ ] `/start`, `/help`, `/profile`, `/exam`, `/reset` verified.\n- [ ] Private-chat restriction verified.\n- [ ] Test connection works.\n- [ ] Switch/disconnect behavior verified.
 
 ## Limits
+- [ ] 20/day confirmed.\n- [ ] 5/10-second burst confirmed.\n- [ ] Owner/Admin daily-quota exemption confirmed.\n- [ ] Burst protection still applies to privileged users.\n- [ ] Unauthorized users cannot run privileged commands.
 
-- [ ] 20/day default confirmed.
-- [ ] 5/10-second burst default confirmed.
-- [ ] Daily-limit text differs from burst-limit text.
-- [ ] `/reset` does not reset daily quota.
-- [ ] Quota resets at 00:00 IST.
-- [ ] Owner can exceed the 20/day daily quota.
-- [ ] Owner is still subject to 5/10-second burst protection.
-- [ ] `/grant`, `/revoke`, and `/unlimited` work only for configured admins.
+## Admin
+- [ ] Authentication required.\n- [ ] Cloudflare Access applied.\n- [ ] Grant/Revoke unlimited works.\n- [ ] Suspend/Unsuspend works.\n- [ ] Protected Owner/Admin records cannot be suspended.\n- [ ] Audit entries work.\n- [ ] Telegram Test connection works without student ID.\n- [ ] Same-origin mutation protection works.
 
-## Admin/security
-
-- [ ] `/admin` requires authentication.
-- [ ] Cloudflare Access is applied to `/admin*`.
-- [ ] No secrets appear in logs.
-- [ ] D1 retention cleanup verified.
+## Data
+- [ ] D1 schema initializes.\n- [ ] Analytics update after questions.\n- [ ] Retention configured.\n- [ ] Exports are treated as confidential.\n- [ ] No private student data exists in the repository.
