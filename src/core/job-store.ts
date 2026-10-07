@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
 import { sendTelegramChatAction } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
+import { LEGACY_TELEGRAM_BOT_CONNECTION_ID } from "../telegram/bot-store";
 
 const TYPING_HEARTBEAT_MS = 4_000;
 const TYPING_MAX_AGE_MS = 10 * 60 * 1_000;
@@ -27,6 +28,7 @@ type JobState = "pending" | "queued" | "processing" | "done";
 export interface JobRecord {
   version: 2;
   updateId: number;
+  botConnectionId?: string;
   chatId: number;
   telegramUserId?: number;
   question: string;
@@ -96,7 +98,7 @@ export class JobDedupe extends DurableObject {
       case "complete": return this.json(await this.complete(body));
       case "get_profile": return this.json({ ok: true, profile: await this.getProfile() });
       case "get_usage": return this.json({ ok: true, usage: await this.getUsage(positiveNumber(body.telegramUserId)) });
-      case "get_conversation": return this.json({ ok: true, recentConversation: await this.getConversation(positiveNumber(body.updateId)) });
+      case "get_conversation": return this.json({ ok: true, recentConversation: await this.getConversation(positiveNumber(body.updateId), String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID)) });
       case "update_profile": return this.json(await this.updateProfile(body));
       case "set_exam": return this.json(await this.setExam(body));
       case "reset_profile": return this.json(await this.resetProfile());
@@ -144,6 +146,7 @@ export class JobDedupe extends DurableObject {
       const enqueue = async () => this.runtimeEnv.QUESTION_QUEUE.send({
         version: 2,
         updateId: record.updateId,
+        botConnectionId: record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
         chatId: record.chatId,
         ...(record.telegramUserId !== undefined ? { telegramUserId: record.telegramUserId } : {}),
         question: record.question,
@@ -194,7 +197,7 @@ export class JobDedupe extends DurableObject {
         .filter((record) => record.state === "processing" && record.createdAt >= typingCutoff)
         .sort((a, b) => b.createdAt - a.createdAt)[0];
       if (processing) {
-        try { await sendTelegramChatAction(this.runtimeEnv, processing.chatId, "typing"); } catch {}
+        try { await sendTelegramChatAction(this.runtimeEnv, processing.chatId, "typing", processing.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID); } catch {}
       }
       nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + TYPING_HEARTBEAT_MS);
     }
@@ -208,8 +211,18 @@ export class JobDedupe extends DurableObject {
 
   private async beginJob(body: Record<string, unknown>): Promise<BeginResponse> {
     const job = parseJob(body);
-    const key = jobKey(job.updateId);
-    const existing = await this.ctx.storage.get<JobRecord>(key);
+    const botConnectionId = job.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID;
+    const key = jobKey(botConnectionId, job.updateId);
+    let existing = await this.ctx.storage.get<JobRecord>(key);
+    if (!existing && botConnectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID) {
+      const legacyKey = legacyJobKey(job.updateId);
+      existing = await this.ctx.storage.get<JobRecord>(legacyKey);
+      if (existing) {
+        existing.botConnectionId = botConnectionId;
+        await this.ctx.storage.put(key, existing);
+        await this.ctx.storage.delete(legacyKey);
+      }
+    }
 
     if (existing) {
       if (existing.state === "done" || existing.state === "queued" || existing.state === "processing") {
@@ -268,6 +281,7 @@ export class JobDedupe extends DurableObject {
     const record: JobRecord = {
       version: 2,
       updateId: job.updateId,
+      botConnectionId,
       chatId: job.chatId,
       ...(job.telegramUserId !== undefined ? { telegramUserId: job.telegramUserId } : {}),
       question: job.question,
@@ -286,7 +300,8 @@ export class JobDedupe extends DurableObject {
   private async saveAck(body: Record<string, unknown>): Promise<GenericResponse> {
     const updateId = positiveNumber(body.updateId);
     const statusMessageId = positiveNumber(body.statusMessageId);
-    const key = jobKey(updateId);
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID);
+    const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
 
@@ -297,7 +312,8 @@ export class JobDedupe extends DurableObject {
 
   private async markQueued(body: Record<string, unknown>): Promise<GenericResponse> {
     const updateId = positiveNumber(body.updateId);
-    const key = jobKey(updateId);
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID);
+    const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record || record.state === "done") return { ok: true };
     if (record.state === "pending") {
@@ -310,11 +326,13 @@ export class JobDedupe extends DurableObject {
 
   private async claim(body: Record<string, unknown>): Promise<ClaimResponse> {
     const updateId = positiveNumber(body.updateId);
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID);
     const queueMessageId = String(body.queueMessageId ?? "").trim();
     if (!queueMessageId) throw new Error("Queue message ID is required.");
-    const key = jobKey(updateId);
+    const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record || record.state === "done") return { claimed: false };
+    record.botConnectionId ??= botConnectionId;
 
     const now = Date.now();
     const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
@@ -337,7 +355,8 @@ export class JobDedupe extends DurableObject {
 
   private async setAnswerPacket(body: Record<string, unknown>): Promise<GenericResponse & { stale?: boolean }> {
     const updateId = positiveNumber(body.updateId);
-    const key = jobKey(updateId);
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID);
+    const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
     if (!this.ownsLease(record, body)) return { ok: true, stale: true };
@@ -351,7 +370,8 @@ export class JobDedupe extends DurableObject {
 
   private async markProfileUpdated(body: Record<string, unknown>): Promise<GenericResponse & { stale?: boolean }> {
     const updateId = positiveNumber(body.updateId);
-    const key = jobKey(updateId);
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID);
+    const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
     if (!this.ownsLease(record, body)) return { ok: true, stale: true };
@@ -362,7 +382,8 @@ export class JobDedupe extends DurableObject {
 
   private async complete(body: Record<string, unknown>): Promise<GenericResponse & { stale?: boolean }> {
     const updateId = positiveNumber(body.updateId);
-    const key = jobKey(updateId);
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID);
+    const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
     if (!this.ownsLease(record, body)) return { ok: true, stale: true };
@@ -375,12 +396,12 @@ export class JobDedupe extends DurableObject {
     return { ok: true };
   }
 
-  private async getConversation(currentUpdateId: number): Promise<ConversationTurn[]> {
+  private async getConversation(currentUpdateId: number, currentBotConnectionId: string): Promise<ConversationTurn[]> {
     const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
     const resetAt = (await this.ctx.storage.get<number>(CONVERSATION_RESET_KEY)) ?? 0;
     const completed = [...jobs.values()]
       .filter((record) =>
-        record.updateId !== currentUpdateId &&
+        !((record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID) === currentBotConnectionId && record.updateId === currentUpdateId) &&
         record.state === "done" &&
         record.answerPacket &&
         record.answerPacket.answerScope !== "out_of_scope" &&
@@ -544,6 +565,21 @@ export class JobDedupe extends DurableObject {
       dailyLimit: positiveEnv(this.runtimeEnv.DAILY_QUESTION_LIMIT, 20),
       unlimited,
     };
+  }
+
+  private async resolveJobKey(botConnectionId: string, updateId: number): Promise<string> {
+    const key = jobKey(botConnectionId, updateId);
+    if (await this.ctx.storage.get<JobRecord>(key)) return key;
+    if (botConnectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID) {
+      const legacyKey = legacyJobKey(updateId);
+      const legacy = await this.ctx.storage.get<JobRecord>(legacyKey);
+      if (legacy) {
+        legacy.botConnectionId = botConnectionId;
+        await this.ctx.storage.put(key, legacy);
+        await this.ctx.storage.delete(legacyKey);
+      }
+    }
+    return key;
   }
 
   private json(body: unknown, status = 200): Response {
@@ -736,7 +772,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function jobKey(updateId: number): string { return `job:${updateId}`; }
+function jobKey(botConnectionId: string, updateId: number): string { return `job:${botConnectionId}:${updateId}`; }
+function legacyJobKey(updateId: number): string { return `job:${updateId}`; }
 function positiveNumber(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error("Expected a positive safe integer.");
