@@ -785,8 +785,14 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             claim.record.statusMessageId,
             job.botConnectionId,
           ).catch(() => undefined);
-        } else {
-        await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, latestProfile));
+        }
+      } else {
+        await deliverAnswer(
+          env,
+          job,
+          claim.record.statusMessageId,
+          buildAnswerForStudent(packet, latestProfile),
+        );
         statusMessageHandled = true;
       }
       const completion = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
