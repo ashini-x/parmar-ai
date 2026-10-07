@@ -644,7 +644,7 @@ export function isJobLeaseOwned(
 
 export function isValidAnswerPacket(value: unknown): value is AnswerPacket  {
   if (!isRecord(value)) return false;
-  const requiredStrings = ["answer", "sscTakeaway", "answerScope", "subject", "topic", "questionMode", "examRelevance", "difficulty", "profileSignal", "profileNote", "nextRevisionTopic"];
+  const requiredStrings = ["answer", "responseMode", "quizQuestion", "sscTakeaway", "answerScope", "subject", "topic", "questionMode", "examRelevance", "difficulty", "profileSignal", "profileNote", "nextRevisionTopic", "quizExplanation"];
   if (requiredStrings.some((key) => typeof value[key] !== "string")) return false;
   if (!(value.detectedExam === null || typeof value.detectedExam === "string")) return false;
   if (typeof value.timeSensitive !== "boolean") return false;
@@ -654,6 +654,19 @@ export function isValidAnswerPacket(value: unknown): value is AnswerPacket  {
   if (!["A", "B", "C", "D"].includes(String(value.examRelevance))) return false;
   if (!["easy", "medium", "hard"].includes(String(value.difficulty))) return false;
   if (!["neutral", "weak", "confusion", "strength"].includes(String(value.profileSignal))) return false;
+  if (!["text", "quiz"].includes(String(value.responseMode))) return false;
+  if (!Array.isArray(value.quizOptions) || !Array.isArray(value.quizCorrectOptionIds)) return false;
+  if (value.quizOptions.some((item) => typeof item !== "string" || item.trim().length === 0)) return false;
+  if (value.quizCorrectOptionIds.some((item) => !Number.isSafeInteger(item))) return false;
+  if (value.responseMode === "quiz") {
+    if (typeof value.quizQuestion !== "string" || value.quizQuestion.trim().length === 0) return false;
+    if (value.quizOptions.length < 2 || value.quizOptions.length > 12) return false;
+    if (value.quizCorrectOptionIds.length !== 1) return false;
+    if (value.quizCorrectOptionIds[0] < 0 || value.quizCorrectOptionIds[0] >= value.quizOptions.length) return false;
+    if (typeof value.quizExplanation !== "string" || value.quizExplanation.trim().length === 0 || value.quizExplanation.length > 200) return false;
+  } else if (value.quizQuestion !== "" || value.quizOptions.length !== 0 || value.quizCorrectOptionIds.length !== 0 || value.quizExplanation !== "") {
+    return false;
+  }
   return true;
 }
 
