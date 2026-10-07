@@ -792,7 +792,7 @@ export function requiresMcqTopicClarification(question: string, profile: Profile
 function hasExplicitMcqTopic(question: string): boolean {
   let residual = question
     .replace(/\b\d{1,3}\b/g, " ")
-    .replace(/\bmcqs?\b|\bquizzes?\b/g, " ")
+    .replace(/\bmcqs?\b|\bquiz(?:zes)?\b/g, " ")
     .replace(/\b(?:please|pls|give|generate|create|make|send|provide|want|need|start|can|you|me|mujhe|bhai|do|dena|de|lo|one|some|an|a)\b/g, " ")
     .replace(/\b(?:on|about|from|regarding|of|in|for|par|pe|mein|me|ka|ki|ke)\b/g, " ")
     .replace(/\s+/g, " ")
