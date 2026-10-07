@@ -529,7 +529,7 @@ async function connectTelegramBot(
     await telegramAdminApi(candidateToken, "setWebhook", {
       url: origin + "/telegram/webhook",
       secret_token: active.webhookSecret,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "poll_answer"],
       drop_pending_updates: false,
       max_connections: 100,
     });
@@ -568,7 +568,7 @@ async function connectTelegramBot(
     await telegramAdminApiWithRetry(candidateToken, "setWebhook", {
       url: webhookUrl,
       secret_token: webhookSecret,
-      allowed_updates: ["message"],
+      allowed_updates: ["message", "poll_answer"],
       drop_pending_updates: willSwitch,
       max_connections: 100,
     }, {
@@ -640,7 +640,7 @@ async function connectTelegramBot(
         await telegramAdminApi(active.token, "setWebhook", {
           url: webhookUrl,
           secret_token: active.webhookSecret,
-          allowed_updates: ["message"],
+          allowed_updates: ["message", "poll_answer"],
           drop_pending_updates: false,
           max_connections: 100,
         });
