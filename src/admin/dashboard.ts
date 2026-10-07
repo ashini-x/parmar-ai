@@ -844,7 +844,7 @@ async function userAction(id,action){
 }
 async function grantUnlimitedId(){
   const id=document.getElementById('grantId').value.trim();
-  if(!/^\d+$/.test(id))return alert('Enter a numeric Telegram User ID.');
+  if(!id||id.split('').some(ch=>ch<'0'||ch>'9'))return alert('Enter a numeric Telegram User ID.');
   try{
     const result=await api('/admin/api/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'grant_unlimited',telegramUserId:Number(id)})});
     alert('✅ Unlimited access granted and verified in the backend.'+(result.auditRecorded===false?' Note: the access change succeeded, but the audit log could not be written.':''));
