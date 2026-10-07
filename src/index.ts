@@ -50,6 +50,12 @@ interface BeginJobResponse {
   unlimited?: boolean;
 }
 
+function isSameOriginAdminRequest(request: Request, origin: string): boolean {
+  const supplied = request.headers.get("Origin");
+  if (!supplied) return false;
+  return safeEqual(supplied, origin);
+}
+
 function withRequestId(response: Response, requestId: string): Response {
   return addRequestId(response, requestId);
 }
@@ -977,7 +983,10 @@ const worker: ExportedHandler<Env, QuestionJob> = {
         if (url.pathname === "/admin/api/audit" && request.method === "GET") return adminAudit(env, request);
         if (url.pathname === "/admin/api/system" && request.method === "GET") return adminSystem(env);
         if (url.pathname === "/admin/api/export" && request.method === "GET") return adminExport(env, request);
-        if (url.pathname === "/admin/api/action" && request.method === "POST") return adminAction(env, request);
+        if (url.pathname === "/admin/api/action" && request.method === "POST") {
+          if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          return adminAction(env, request);
+        }
         return withRequestId(notFound(), requestId);
       }
 
