@@ -1,6 +1,15 @@
 import type { Env } from "../config/env";
 import { ensureAnalyticsSchema, grantUnlimitedAiAccess, hasUnlimitedAiAccess, recordAdminAudit, revokeUnlimitedAiAccess, setUserSuspended } from "../analytics/db";
 import { getConfig } from "../config/env";
+import {
+  activateTelegramBot,
+  getActiveTelegramBot,
+  getTelegramBotByBotId,
+  getTelegramEncryptionStatus,
+  listTelegramBots,
+  markTelegramBotDisconnected,
+  saveTelegramBot,
+} from "../telegram/bot-store";
 
 export async function adminDashboard(env: Env): Promise<Response> {
   if (!env.DB) return new Response("D1 analytics database is not configured.", { status: 503 });
