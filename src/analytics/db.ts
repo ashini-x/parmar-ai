@@ -83,6 +83,28 @@ CREATE TABLE IF NOT EXISTS ai_usage_attempts (
   UNIQUE(update_id, queue_attempt, attempt)
 );
 
+CREATE TABLE IF NOT EXISTS quiz_sessions (
+  poll_id TEXT PRIMARY KEY,
+  telegram_user_id INTEGER NOT NULL,
+  chat_id INTEGER NOT NULL,
+  update_id INTEGER NOT NULL,
+  message_id INTEGER NOT NULL,
+  question_text TEXT NOT NULL,
+  options_json TEXT NOT NULL,
+  correct_option_ids_json TEXT NOT NULL,
+  explanation TEXT NOT NULL,
+  topic TEXT,
+  subject TEXT,
+  difficulty TEXT,
+  created_at INTEGER NOT NULL,
+  answered_at INTEGER,
+  selected_option_ids_json TEXT,
+  result TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_sessions_user_created
+  ON quiz_sessions(telegram_user_id, created_at);
+
 CREATE TABLE IF NOT EXISTS admin_audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   actor TEXT NOT NULL,
@@ -226,6 +248,7 @@ export async function deleteUserData(env: Env, telegramUserId: number): Promise<
 
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM ai_usage_attempts WHERE telegram_user_id = ?`).bind(telegramUserId),
+    env.DB.prepare(`DELETE FROM quiz_sessions WHERE telegram_user_id = ?`).bind(telegramUserId),
     env.DB.prepare(`DELETE FROM questions WHERE telegram_user_id = ?`).bind(telegramUserId),
     env.DB.prepare(`DELETE FROM events WHERE telegram_user_id = ?`).bind(telegramUserId),
     env.DB.prepare(`DELETE FROM ai_access_overrides WHERE telegram_user_id = ?`).bind(telegramUserId),
@@ -428,6 +451,144 @@ export async function recordAiUsage(env: Env, item: AiUsageAnalyticsInput): Prom
   await env.DB.batch(statements);
 }
 
+export interface QuizSession {
+  pollId: string;
+  telegramUserId: number;
+  chatId: number;
+  updateId: number;
+  messageId: number;
+  questionText: string;
+  options: string[];
+  correctOptionIds: number[];
+  explanation: string;
+  topic: string | null;
+  subject: string | null;
+  difficulty: string | null;
+  createdAt: number;
+  answeredAt: number | null;
+  selectedOptionIds: number[];
+  result: "correct" | "incorrect" | null;
+}
+
+export async function createQuizSession(
+  env: Env,
+  input: {
+    pollId: string;
+    telegramUserId: number;
+    chatId: number;
+    updateId: number;
+    messageId: number;
+    questionText: string;
+    options: string[];
+    correctOptionIds: number[];
+    explanation: string;
+    topic?: string | null;
+    subject?: string | null;
+    difficulty?: string | null;
+  },
+): Promise<void> {
+  if (!env.DB) throw new Error("D1 is required for quiz sessions.");
+  await ensureAnalyticsSchema(env);
+  const result = await env.DB.prepare(
+    `INSERT OR IGNORE INTO quiz_sessions
+      (poll_id, telegram_user_id, chat_id, update_id, message_id, question_text,
+       options_json, correct_option_ids_json, explanation, topic, subject, difficulty, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    input.pollId,
+    input.telegramUserId,
+    input.chatId,
+    input.updateId,
+    input.messageId,
+    input.questionText,
+    JSON.stringify(input.options),
+    JSON.stringify(input.correctOptionIds),
+    input.explanation,
+    input.topic ?? null,
+    input.subject ?? null,
+    input.difficulty ?? null,
+    Date.now(),
+  ).run();
+  if (!result.success) throw new Error("D1 did not confirm the quiz session write.");
+}
+
+export async function getQuizSession(env: Env, pollId: string): Promise<QuizSession | null> {
+  if (!env.DB) return null;
+  await ensureAnalyticsSchema(env);
+  const row = await env.DB.prepare(
+    `SELECT * FROM quiz_sessions WHERE poll_id = ? LIMIT 1`
+  ).bind(pollId).first<Record<string, unknown>>();
+  if (!row) return null;
+  return {
+    pollId: String(row.poll_id),
+    telegramUserId: Number(row.telegram_user_id),
+    chatId: Number(row.chat_id),
+    updateId: Number(row.update_id),
+    messageId: Number(row.message_id),
+    questionText: String(row.question_text ?? ""),
+    options: parseJsonStringArray(row.options_json),
+    correctOptionIds: parseJsonNumberArray(row.correct_option_ids_json),
+    explanation: String(row.explanation ?? ""),
+    topic: row.topic == null ? null : String(row.topic),
+    subject: row.subject == null ? null : String(row.subject),
+    difficulty: row.difficulty == null ? null : String(row.difficulty),
+    createdAt: Number(row.created_at),
+    answeredAt: row.answered_at == null ? null : Number(row.answered_at),
+    selectedOptionIds: parseJsonNumberArray(row.selected_option_ids_json),
+    result: row.result === "correct" || row.result === "incorrect" ? row.result : null,
+  };
+}
+
+export async function answerQuizSession(
+  env: Env,
+  pollId: string,
+  telegramUserId: number,
+  selectedOptionIds: number[],
+): Promise<{ session: QuizSession | null; changed: boolean }> {
+  if (!env.DB) return { session: null, changed: false };
+  await ensureAnalyticsSchema(env);
+  const existing = await getQuizSession(env, pollId);
+  if (!existing || existing.telegramUserId !== telegramUserId || existing.answeredAt !== null) {
+    return { session: existing, changed: false };
+  }
+  const normalize = (values: number[]) => [...values].sort((a, b) => a - b);
+  const correct = normalize(existing.correctOptionIds);
+  const selected = normalize(selectedOptionIds);
+  const isCorrect = correct.length === selected.length && correct.every((value, index) => value === selected[index]);
+  const answeredAt = Date.now();
+
+  const result = await env.DB.prepare(
+    `UPDATE quiz_sessions
+     SET answered_at=?, selected_option_ids_json=?, result=?
+     WHERE poll_id=? AND telegram_user_id=? AND answered_at IS NULL`
+  ).bind(answeredAt, JSON.stringify(selected), isCorrect ? "correct" : "incorrect", pollId, telegramUserId).run();
+
+  if (!result.success || Number(result.meta?.changes ?? 0) !== 1) {
+    return { session: await getQuizSession(env, pollId), changed: false };
+  }
+  return { session: { ...existing, answeredAt, selectedOptionIds: selected, result: isCorrect ? "correct" : "incorrect" }, changed: true };
+}
+
+function parseJsonStringArray(value: unknown): string[] {
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map((item) => String(item ?? "")).filter(Boolean).slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseJsonNumberArray(value: unknown): number[] {
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item) => Number.isSafeInteger(item)).map(Number).slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function recordAdminAudit(env: Env, actor: string, action: string, targetTelegramUserId?: number | null, details?: Record<string, unknown>): Promise<void> {
   if (!env.DB) return;
   await ensureAnalyticsSchema(env);
@@ -448,6 +609,7 @@ export async function cleanupAnalytics(env: Env, retentionDays: number): Promise
   await env.DB.prepare(`DELETE FROM events WHERE event_at < ?`).bind(cutoff).run();
   await env.DB.prepare(`DELETE FROM ai_usage_attempts WHERE recorded_at < ?`).bind(cutoff).run();
   await env.DB.prepare(`DELETE FROM admin_audit_log WHERE created_at < ?`).bind(cutoff).run();
+  await env.DB.prepare(`DELETE FROM quiz_sessions WHERE created_at < ?`).bind(cutoff).run();
 }
 
 export function getAnalyticsConfig(env: Env): { retentionDays: number } {
