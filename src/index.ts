@@ -5,8 +5,9 @@ import type {
   ScheduledController,
 } from "@cloudflare/workers-types";
 
-import { generateGeminiAnswer, GeminiError } from "./ai/gemini";
-import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, ConversationTurn } from "./config/env";
+import { generateGeminiAnswer, GeminiError, isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount } from "./ai/gemini";
+import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, ConversationTurn, QuizItem } from "./config/env";
+import { MAX_QUIZ_BATCH_SIZE } from "./config/env";
 import { getConfig } from "./config/env";
 import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } from "./core/job-store";
 import { logger } from "./core/logger";
@@ -21,7 +22,7 @@ import {
   TelegramError,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
-import { answerQuizSession, createQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
+import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
@@ -326,6 +327,39 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true, suspended: true }), requestId);
   }
 
+  const mcqRequest = isMcqRequest(text);
+  const parsedQuizCount = mcqRequest ? parseRequestedMcqCount(text) : 1;
+
+  if (mcqRequest && parsedQuizCount > MAX_QUIZ_BATCH_SIZE) {
+    await bestEffortTelegram("quiz_batch_too_large", () =>
+      sendTelegramMessage(
+        env,
+        chatId,
+        `Ek batch mein maximum ${MAX_QUIZ_BATCH_SIZE} MCQs bhej sakta hoon. 🙂`,
+        messageId,
+        bot.connectionId,
+      ),
+    );
+    return withRequestId(json({ ok: true, rejected: "quiz_batch_too_large" }), requestId);
+  }
+
+  if (mcqRequest) {
+    await jobStoreRequest(env, chatId, { action: "clear_pending_quiz" }).catch(() => undefined);
+  }
+
+  let quizContinuationCount = 0;
+  if (!mcqRequest && isLikelyMcqTopicReply(text)) {
+    const pending = await jobStoreRequest<{ ok: true; count: number }>(
+      env,
+      chatId,
+      { action: "consume_pending_quiz" },
+    ).catch(() => ({ ok: true, count: 0 }));
+    quizContinuationCount = pending.count;
+  } else if (!mcqRequest) {
+    await jobStoreRequest(env, chatId, { action: "clear_pending_quiz" }).catch(() => undefined);
+  }
+
+  const effectiveQuizCount = quizContinuationCount || parsedQuizCount;
   const begin = await jobStoreRequest<BeginJobResponse>(env, chatId, {
     action: "begin",
     botConnectionId: bot.connectionId,
@@ -336,6 +370,8 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     messageId,
     requestId,
     createdAt: Date.now(),
+    requestedQuizCount: effectiveQuizCount,
+    quizContinuation: quizContinuationCount > 0,
   });
 
   if (begin.action === "duplicate") {
@@ -354,6 +390,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       createdAt: Date.now(),
       statusMessageId: begin.statusMessageId,
       telegramUserId: analyticsUser.telegramUserId,
+      quizCount: begin.quizCount,
     };
     try {
       await env.QUESTION_QUEUE.send(retryJob, { contentType: "json" });
@@ -424,6 +461,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     createdAt: Date.now(),
     statusMessageId,
     telegramUserId: analyticsUser.telegramUserId,
+    quizCount: effectiveQuizCount,
   };
 
   try {
@@ -562,6 +600,17 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           buildProfileContext(profile, recentConversation),
         );
         packet = generation.packet;
+        if (packet.questionMode === "mcq" && packet.responseMode === "text" && !(packet.quizItems?.length)) {
+          await jobStoreRequest(env, job.chatId, {
+            action: "set_pending_quiz",
+            count: job.quizCount ?? 1,
+          }).catch((error) => {
+            logger.warn("pending_quiz_store_failed", {
+              requestId: job.requestId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+        }
         ctx.waitUntil(recordAiUsage(env, {
           updateId: job.updateId,
           botConnectionId: job.botConnectionId,
@@ -643,54 +692,100 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         continue;
       }
       let statusMessageHandled = false;
+      let questionDeliveryFailed = false;
       if (packet.responseMode === "quiz") {
-        const quiz = await sendTelegramQuiz(
-          env,
-          job.chatId,
-          packet.quizQuestion,
-          packet.quizOptions,
-          packet.quizCorrectOptionIds,
-          packet.quizExplanation,
-          job.messageId,
-          job.botConnectionId,
-        );
+        const quizItems = getQuizItems(packet);
+        const expectedQuizCount = job.quizCount ?? 1;
+
+        if (quizItems.length !== expectedQuizCount) {
+          throw new GeminiError(
+            `Quiz batch size mismatch: expected ${expectedQuizCount}, received ${quizItems.length}.`,
+            undefined,
+            true,
+          );
+        }
+
+        const deliveredQuizzes: Array<{ pollId: string; messageId: number }> = [];
+
         try {
-          await createQuizSession(env, {
-            pollId: quiz.poll_id,
-            botConnectionId: job.botConnectionId,
-            telegramUserId: jobTelegramUserId,
-            chatId: job.chatId,
-            updateId: job.updateId,
-            messageId: quiz.message_id,
-            questionText: packet.quizQuestion,
-            options: packet.quizOptions,
-            correctOptionIds: packet.quizCorrectOptionIds,
-            explanation: packet.quizExplanation,
-            topic: packet.topic,
-            subject: packet.subject,
-            difficulty: packet.difficulty,
-          });
-        } catch (quizStoreError) {
-          logger.error("quiz_session_persist_failed", {
+          for (const item of quizItems) {
+            const quiz = await sendTelegramQuiz(
+              env,
+              job.chatId,
+              item.question,
+              item.options,
+              item.correctOptionIds,
+              item.explanation,
+              job.messageId,
+              job.botConnectionId,
+            );
+
+            deliveredQuizzes.push({
+              pollId: quiz.poll_id,
+              messageId: quiz.message_id,
+            });
+
+            await createQuizSession(env, {
+              pollId: quiz.poll_id,
+              botConnectionId: job.botConnectionId,
+              telegramUserId: jobTelegramUserId,
+              chatId: job.chatId,
+              updateId: job.updateId,
+              messageId: quiz.message_id,
+              questionText: item.question,
+              options: item.options,
+              correctOptionIds: item.correctOptionIds,
+              explanation: item.explanation,
+              topic: packet.topic,
+              subject: packet.subject,
+              difficulty: packet.difficulty,
+            });
+          }
+        } catch (quizDeliveryError) {
+          questionDeliveryFailed = true;
+
+          logger.error("quiz_batch_delivery_failed", {
             requestId: job.requestId,
             updateId: job.updateId,
-            pollId: quiz.poll_id,
-            error: quizStoreError instanceof Error ? quizStoreError.message : String(quizStoreError),
+            quizCount: quizItems.length,
+            deliveredCount: deliveredQuizzes.length,
+            error: quizDeliveryError instanceof Error ? quizDeliveryError.message : String(quizDeliveryError),
           });
 
-          // Never leave a native quiz open or visibly resolved without a stored
-          // session. The poll_answer webhook needs the D1 session to evaluate
-          // the student's choice. Stop it first, then delete it so the student
-          // does not see a second answer plus an already-revealed quiz.
-          await stopTelegramPoll(env, job.chatId, quiz.message_id, job.botConnectionId).catch(() => undefined);
-          await deleteTelegramMessage(env, job.chatId, quiz.message_id, job.botConnectionId).catch(() => undefined);
-          await deliverAnswer(env, job, claim.record.statusMessageId, buildQuizFallbackAnswerForStudent(packet));
+          for (const delivered of deliveredQuizzes.reverse()) {
+            await deleteTelegramMessage(
+              env,
+              job.chatId,
+              delivered.messageId,
+              job.botConnectionId,
+            ).catch(async () => {
+              await stopTelegramPoll(
+                env,
+                job.chatId,
+                delivered.messageId,
+                job.botConnectionId,
+              ).catch(() => undefined);
+            });
+            await deleteQuizSession(env, delivered.pollId).catch(() => undefined);
+          }
+
+          await deliverAnswer(
+            env,
+            job,
+            claim.record.statusMessageId,
+            buildQuizDeliveryFailureAnswer(),
+          );
           statusMessageHandled = true;
         }
+
         if (!statusMessageHandled && claim.record.statusMessageId) {
-          await deleteTelegramMessage(env, job.chatId, claim.record.statusMessageId, job.botConnectionId).catch(() => undefined);
-        }
-      } else {
+          await deleteTelegramMessage(
+            env,
+            job.chatId,
+            claim.record.statusMessageId,
+            job.botConnectionId,
+          ).catch(() => undefined);
+        } else {
         await deliverAnswer(env, job, claim.record.statusMessageId, buildAnswerForStudent(packet, latestProfile));
         statusMessageHandled = true;
       }
@@ -709,7 +804,9 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       ctx.waitUntil(recordQuestionResult(env, {
         updateId: job.updateId,
         botConnectionId: job.botConnectionId,
-        status: packet.answerScope === "out_of_scope" ? "out_of_scope" : "completed",
+        status: questionDeliveryFailed
+          ? "delivery_failed"
+          : (packet.answerScope === "out_of_scope" ? "out_of_scope" : "completed"),
         startedAt,
         completedAt,
         latencyMs: completedAt - job.createdAt,
@@ -829,21 +926,31 @@ async function handleTelegramPollAnswer(
   const correctAnswers = answered.session.correctOptionIds
     .map((id) => answered.session?.options[id])
     .filter((value): value is string => Boolean(value));
+  const selectedAnswers = answered.session.selectedOptionIds
+    .map((id) => answered.session?.options[id])
+    .filter((value): value is string => Boolean(value));
 
-  const resultText = correct
-    ? `✅ Correct! 🎯\n\n📚 ${answered.session.explanation}`
-    : `❌ Not quite.\n✅ Correct answer: ${correctAnswers.join(", ")}\n\n📚 ${answered.session.explanation}`;
+  await jobStoreRequest(env, answered.session.chatId, {
+    action: "record_quiz_result",
+    botConnectionId: answered.session.botConnectionId,
+    pollId,
+    updateId: answered.session.updateId,
+    question: answered.session.questionText,
+    selectedAnswer: selectedAnswers.join(", ") || "No answer recorded",
+    correctAnswer: correctAnswers.join(", ") || "Unknown",
+    result: correct ? "correct" : "incorrect",
+    explanation: answered.session.explanation,
+    topic: answered.session.topic ?? "General SSC doubt",
+  }).catch((error) => {
+    logger.warn("quiz_result_context_failed", {
+      requestId,
+      pollId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
-  await bestEffortTelegram("quiz_result", () =>
-    sendTelegramMessage(
-      env,
-      answered.session!.chatId,
-      resultText,
-      answered.session!.messageId,
-      answered.session!.botConnectionId,
-    ),
-  );
-
+  // Telegram's native quiz UI already presents the result/explanation. Parmar
+  // deliberately sends no second bot message after a student vote.
   await recordEvent(env, "quiz_answered", {
     telegramUserId,
     chatId: answered.session.chatId,
@@ -909,15 +1016,26 @@ async function completeCancelledJob(
   });
 }
 
-function buildQuizFallbackAnswerForStudent(packet: AnswerPacket): string {
-  const correct = packet.quizCorrectOptionIds.length === 1
-    ? packet.quizOptions[packet.quizCorrectOptionIds[0]]
-    : "";
-  return [
-    "🧠 Quiz answer:",
-    correct ? `✅ ${correct}` : "",
-    packet.quizExplanation ? `📚 ${packet.quizExplanation}` : "",
-  ].filter(Boolean).join("\n");
+function buildQuizDeliveryFailureAnswer(): string {
+  return "Quiz abhi safely deliver nahi ho paaya. Please wahi request dobara bhejo. 🙏";
+}
+
+function getQuizItems(packet: AnswerPacket): QuizItem[] {
+  if (packet.quizItems?.length) return packet.quizItems;
+  if (
+    packet.quizQuestion &&
+    packet.quizOptions.length >= 2 &&
+    packet.quizCorrectOptionIds.length === 1 &&
+    packet.quizExplanation
+  ) {
+    return [{
+      question: packet.quizQuestion,
+      options: packet.quizOptions,
+      correctOptionIds: packet.quizCorrectOptionIds,
+      explanation: packet.quizExplanation,
+    }];
+  }
+  return [];
 }
 
 function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile): string {
@@ -1190,7 +1308,21 @@ function queueRetryDelay(attempt: number): number {
 function isValidQuestionJob(job: unknown): job is QuestionJob {
   if (!job || typeof job !== "object") return false;
   const candidate = job as Record<string, unknown>;
-  return ((candidate.version === 1 || candidate.version === 2) && typeof candidate.botConnectionId === "string" && candidate.botConnectionId.trim().length > 0 && isSafeInteger(candidate.updateId) && isSafeInteger(candidate.chatId) && isSafeInteger(candidate.messageId) && typeof candidate.question === "string" && candidate.question.trim().length > 0 && typeof candidate.requestId === "string");
+  const quizCount = candidate.quizCount === undefined ? 1 : Number(candidate.quizCount);
+  return (
+    (candidate.version === 1 || candidate.version === 2) &&
+    typeof candidate.botConnectionId === "string" &&
+    candidate.botConnectionId.trim().length > 0 &&
+    isSafeInteger(candidate.updateId) &&
+    isSafeInteger(candidate.chatId) &&
+    isSafeInteger(candidate.messageId) &&
+    typeof candidate.question === "string" &&
+    candidate.question.trim().length > 0 &&
+    typeof candidate.requestId === "string" &&
+    Number.isSafeInteger(quizCount) &&
+    quizCount >= 1 &&
+    quizCount <= MAX_QUIZ_BATCH_SIZE
+  );
 }
 
 function isSafeInteger(value: unknown): value is number {
