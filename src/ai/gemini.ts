@@ -472,7 +472,7 @@ function parseAnswerPacket(rawText: string): AnswerPacket {
     answerScope: normalizeEnum(parsed.answerScope, ["ssc_ga_gs", "ssc_support", "out_of_scope"], "ssc_ga_gs"),
     subject: normalizeEnum(parsed.subject, ["history", "polity", "geography", "economy", "science", "static_gk", "current_affairs", "art_culture", "other"], "other"),
     topic: cleanTopic(String(parsed.topic ?? "General SSC doubt")),
-    questionMode: normalizeEnum(parsed.questionMode, ["fact", "concept", "comparison", "statement_trap", "revision", "study_plan"], "fact"),
+    questionMode: normalizeEnum(parsed.questionMode, ["fact", "concept", "comparison", "statement_trap", "revision", "study_plan", "mcq"], "fact"),
     examRelevance: normalizeEnum(parsed.examRelevance, ["A", "B", "C", "D"], "B"),
     difficulty: "medium",
     profileSignal: normalizeEnum(parsed.profileSignal, ["neutral", "weak", "confusion", "strength"], "neutral"),
