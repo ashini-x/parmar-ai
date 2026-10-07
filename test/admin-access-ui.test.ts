@@ -5,9 +5,13 @@ import { resolve } from "node:path";
 describe("admin access UI", () => {
   const source = readFileSync(resolve(process.cwd(), "src/admin/dashboard.ts"), "utf8");
 
-  it("passes explicit action strings from student controls", () => {
-    expect(source).toContain('JSON.stringify(Number(u.unlimited)?\'revoke_unlimited\':\'grant_unlimited\')');
-    expect(source).toContain('JSON.stringify(Number(u.suspended)?\'unsuspend\':\'suspend\')');
+  it("passes explicit access-control actions from student controls", () => {
+    expect(source).toContain("data-user-action");
+    expect(source).toContain("grant_unlimited");
+    expect(source).toContain("revoke_unlimited");
+    expect(source).toContain("suspend");
+    expect(source).toContain("unsuspend");
+    expect(source).toContain("body:JSON.stringify({action,telegramUserId:id})");
   });
 
   it("recognizes owner, admin and static-unlimited identities in the directory", () => {
