@@ -1,3 +1,12 @@
+## 2.6.0 - Production Reliability & Access Control Hardening
+
+- Lease-fenced Durable Object jobs and stale-job recovery.
+- Correct processing/typing lifecycle and retry classification.
+- End-to-end dashboard unlimited-access verification.
+- Broader current-fact grounding detection and truthful grounding analytics.
+- Secure Telegram setup authentication and reduced public health disclosure.
+- Added explicit user data deletion.
+
 # Changelog
 
 ## 2.5.2 - Admin Access Controls UI Fix
