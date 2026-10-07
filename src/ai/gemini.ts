@@ -563,7 +563,7 @@ function isLikelyFollowUp(question: string, turns: ProfileContext["recentConvers
   return q.length <= 70 && !/[?؟]$/.test(q) && /^(haan|hmm|ok|okay|toh|aur|fir|phir|then)\b/.test(q);
 }
 
-function requiresFreshData(question: string): boolean {
+export function requiresFreshData(question: string): boolean {
   const q = question.toLowerCase().trim();
   const freshnessMarkers = [
     "current", "currently", "latest", "today", "now", "present", "as of", "this year", "recent", "recently",
