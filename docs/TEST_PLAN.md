@@ -44,3 +44,13 @@
 
 ## Release acceptance
 Test the exact source revision intended for deployment, then record the resulting Cloudflare version ID.
+
+## Production-hardening regression cases
+- Current mutable fact without an explicit freshness keyword (for example, "Who is the RBI Governor?") requires live grounding.
+- Historical office-holder question with an explicit year is not forced into current-fact handling.
+- Ordinary non-current question is not recorded as Google-grounded merely because grounding was unnecessary.
+- Lease ownership accepts the active queue message ID + lease version and rejects stale/mismatched ownership.
+- Malformed Durable Object internal payloads are rejected rather than causing an unhandled JSON/body access error.
+- In production, Telegram bot credential encryption requires TELEGRAM_BOT_ENCRYPTION_KEY; ADMIN_SESSION_SECRET is not used for new encryption.
+- Legacy Telegram ciphertext can still be read during key migration when a dedicated production encryption key is present.
+- Raw analytics retention defaults to 30 days when no override is configured.
