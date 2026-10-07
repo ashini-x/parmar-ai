@@ -43,6 +43,8 @@ export interface Env {
   JOB_DEDUPE: DurableObjectNamespace;
 }
 
+export const MAX_QUIZ_BATCH_SIZE = 10;
+
 export interface QuestionJob {
   version: 1 | 2;
   botConnectionId: string;
@@ -54,8 +56,16 @@ export interface QuestionJob {
   createdAt: number;
   statusMessageId?: number;
   telegramUserId?: number;
+  quizCount?: number;
 }
 
+
+export interface QuizItem {
+  question: string;
+  options: string[];
+  correctOptionIds: number[];
+  explanation: string;
+}
 
 export interface AnswerPacket {
   answer: string;
@@ -76,6 +86,7 @@ export interface AnswerPacket {
   quizOptions: string[];
   quizCorrectOptionIds: number[];
   quizExplanation: string;
+  quizItems?: QuizItem[];
   thinkingLevelUsed?: "LOW" | "MEDIUM" | "HIGH";
   grounded?: boolean;
 }
@@ -137,7 +148,7 @@ export interface ProfileContext {
 export function getConfig(env: Env) {
   return {
     environment: env.ENVIRONMENT ?? "development",
-    version: env.APP_VERSION ?? "2.7.0",
+    version: env.APP_VERSION ?? "2.8.0",
     model: env.GEMINI_MODEL ?? "gemini-3.8-flash",
     location: env.GEMINI_LOCATION ?? "global",
     maxThinkingLevel: normalizeThinkingLevel(env.GEMINI_THINKING_LEVEL),
