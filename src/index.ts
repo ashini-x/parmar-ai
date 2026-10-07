@@ -657,6 +657,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         try {
           await createQuizSession(env, {
             pollId: quiz.poll_id,
+            botConnectionId: job.botConnectionId,
             telegramUserId: jobTelegramUserId,
             chatId: job.chatId,
             updateId: job.updateId,
@@ -833,6 +834,7 @@ async function handleTelegramPollAnswer(
       answered.session!.chatId,
       resultText,
       answered.session!.messageId,
+      answered.session!.botConnectionId,
     ),
   );
 
