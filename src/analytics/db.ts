@@ -395,7 +395,8 @@ export async function recordQuestionResult(env: Env, result: QuestionAnalyticsRe
     result.status, result.startedAt ?? null, result.completedAt ?? null, result.latencyMs ?? null, result.attempts ?? 0,
     packet?.topic ?? null, packet?.subject ?? null, packet?.questionMode ?? null, packet?.examRelevance ?? null, packet?.difficulty ?? null,
     result.thinkingLevel ?? null, packet?.timeSensitive ? 1 : 0, result.grounded ? 1 : 0, packet?.answer ?? null, packet?.sscTakeaway ?? null,
-    result.errorMessage?.slice(0, 2_000) ?? null, packet?.detectedExam ?? null, result.updateId,
+    result.errorMessage?.slice(0, 2_000) ?? null, packet?.detectedExam ?? null,
+    analyticsUpdateId(env, result.updateId, result.botConnectionId),
   ).run();
 }
 
@@ -409,7 +410,7 @@ export async function recordAiUsage(env: Env, item: AiUsageAnalyticsInput): Prom
        total_tokens, estimated_cost_microusd, status, recorded_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
-    analyticsUpdateId(env, item.updateId), item.requestId, item.queueAttempt, item.telegramUserId, item.chatId, usage.attempt, usage.model, usage.location,
+    analyticsUpdateId(env, item.updateId, item.botConnectionId), item.requestId, item.queueAttempt, item.telegramUserId, item.chatId, usage.attempt, usage.model, usage.location,
     usage.thinkingLevel, usage.grounded ? 1 : 0, usage.promptTokens, usage.candidatesTokens, usage.thoughtsTokens,
     usage.toolUsePromptTokens, usage.cachedContentTokens, usage.totalTokens, usage.estimatedCostMicrousd, usage.status, usage.recordedAt,
   ));
