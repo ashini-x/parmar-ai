@@ -788,7 +788,7 @@ async function telegramSetup(request: Request, env: Env, requestId: string): Pro
     return withRequestId(json({ ok: false, error: "telegram_configuration_missing" }, 500), requestId);
   }
   const url = new URL(request.url);
-  const supplied = url.searchParams.get("key");
+  const supplied = request.headers.get("X-Setup-Secret") ?? "";
   if (!supplied || !safeEqual(supplied, env.TELEGRAM_SETUP_SECRET)) {
     return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
   }
@@ -807,7 +807,7 @@ async function telegramSetup(request: Request, env: Env, requestId: string): Pro
   });
 
   logger.info("telegram_webhook_setup", { requestId, webhookUrl });
-  return withRequestId(json({ ok: true, webhook: webhookUrl, webhookResult, commandsResult }), requestId);
+  return withRequestId(json({ ok: true, configured: true, commandsConfigured: Boolean(commandsResult) }), requestId);
 }
 
 async function telegramSetupMethod(env: Env, method: string, payload: Record<string, unknown>): Promise<unknown> {
@@ -930,7 +930,7 @@ const worker: ExportedHandler<Env, QuestionJob> = {
       }
 
       if (url.pathname === "/telegram/setup") {
-        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        if (request.method !== "POST") return withRequestId(methodNotAllowed(["POST"]), requestId);
         return telegramSetup(request, env, requestId);
       }
 
