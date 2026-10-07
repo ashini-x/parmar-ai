@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
-import { editTelegramMessage, sendTelegramChatAction, sendTelegramMessage } from "../telegram/api";
+import { sendTelegramChatAction } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
 
 const TYPING_HEARTBEAT_MS = 4_000;
@@ -276,6 +276,7 @@ export class JobDedupe extends DurableObject {
       requestId: job.requestId,
       createdAt: job.createdAt,
       state: "pending",
+      leaseVersion: 0,
     };
 
     await this.ctx.storage.put(key, record);
