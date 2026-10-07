@@ -9,7 +9,11 @@
 - Simplification works.
 - `/profile` works.
 - `/reset` resets study context without resetting daily quota.
-- Data deletion behaves according to application semantics.
+- Data deletion removes centralized analytics, quiz sessions, and per-chat study state according to application semantics.
+- Genuine MCQ/test intent renders as a native Telegram quiz while ordinary open-ended doubts remain text.
+- A student-supplied MCQ preserves its options where practical and records the selected answer.
+- Correct and incorrect quiz selections produce immediate result feedback, with the explanation stored in the native quiz card.
+- Telegram webhook subscription includes poll_answer updates.
 
 ## Limits
 - Five accepted questions in the burst window cause the sixth to receive the burst response.
