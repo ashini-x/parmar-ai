@@ -11,6 +11,7 @@
     "check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:node": "vitest run --config vitest.node.config.ts",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
