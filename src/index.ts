@@ -1,7 +1,6 @@
 import type {
   DurableObjectStub,
-  ExportedHandler,
-  ExecutionContext,
+   ExecutionContext,
   MessageBatch,
   ScheduledController,
 } from "@cloudflare/workers-types";
@@ -928,7 +927,7 @@ function dedupe(values: string[]): string[] {
   return result;
 }
 
-const worker: ExportedHandler<Env, QuestionJob> = {
+const worker = {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const requestId = getOrCreateRequestId(request);
     const url = new URL(request.url);
