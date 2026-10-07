@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("native quiz production contract", () => {
-  const source = readFileSync(resolve(process.cwd(), "src/index.ts"), "utf8");
+  const source = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
 
   it("does not send a second bot message after a native quiz vote", () => {
     const start = source.indexOf("async function handleTelegramPollAnswer");
