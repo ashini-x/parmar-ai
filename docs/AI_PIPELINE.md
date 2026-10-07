@@ -42,6 +42,12 @@ The answer pipeline uses the recent context to resolve short follow-ups such as:
 
 Explicit confusion and weakness wording is treated differently from ordinary factual questions so the personalization system does not manufacture false signals.
 
+## Response mode
+
+The model decides the presentation mode semantically. Ordinary open-ended doubts remain text responses. A genuine student-supplied MCQ, an explicit request to be tested, a request to generate an MCQ, or a clearly ongoing MCQ task produces responseMode=quiz and a Telegram-ready question, options, correct option ID and compact explanation.
+
+The application validates the quiz payload before delivery. Student-submitted options are preserved where practical, with four options preferred for generated SSC quizzes.
+
 ## Structured output
 
 Gemini is expected to return an `AnswerPacket` with fields for:
