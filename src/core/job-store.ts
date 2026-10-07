@@ -256,9 +256,9 @@ export class JobDedupe extends DurableObject {
 
     if (existing) {
       if (existing.state === "done" || existing.state === "queued" || existing.state === "processing") {
-        return { action: "duplicate", statusMessageId: existing.statusMessageId };
+        return { action: "duplicate", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount };
       }
-      return { action: "retry_ack", statusMessageId: existing.statusMessageId };
+      return { action: "retry_ack", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount };
     }
 
     const now = Date.now();
