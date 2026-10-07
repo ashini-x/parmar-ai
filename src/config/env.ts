@@ -64,7 +64,7 @@ export interface AnswerPacket {
   answerScope: "ssc_ga_gs" | "ssc_support" | "out_of_scope";
   subject: "history" | "polity" | "geography" | "economy" | "science" | "static_gk" | "current_affairs" | "art_culture" | "other";
   topic: string;
-  questionMode: "fact" | "concept" | "comparison" | "statement_trap" | "revision" | "study_plan";
+  questionMode: "fact" | "concept" | "comparison" | "statement_trap" | "revision" | "study_plan" | "mcq";
   examRelevance: "A" | "B" | "C" | "D";
   difficulty: "easy" | "medium" | "hard";
   profileSignal: "neutral" | "weak" | "confusion" | "strength";
