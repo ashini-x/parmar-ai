@@ -231,7 +231,7 @@ export async function getTelegramEncryptionStatus(env: Env): Promise<{
   if (env.TELEGRAM_BOT_ENCRYPTION_KEY?.trim()) {
     return { configured: true, source: "TELEGRAM_BOT_ENCRYPTION_KEY" };
   }
-  if (env.ADMIN_SESSION_SECRET?.trim()) {
+  if (env.ENVIRONMENT !== "production" && env.ADMIN_SESSION_SECRET?.trim()) {
     return { configured: true, source: "ADMIN_SESSION_SECRET" };
   }
   return { configured: false, source: "missing" };
@@ -242,15 +242,20 @@ export async function ensureTelegramBotSchema(env: Env): Promise<void> {
 }
 
 function encryptionSecret(env: Env): string {
-  const secret = env.TELEGRAM_BOT_ENCRYPTION_KEY?.trim() || env.ADMIN_SESSION_SECRET?.trim();
-  if (!secret) {
-    throw new Error("Telegram bot encryption is not configured. Set TELEGRAM_BOT_ENCRYPTION_KEY (recommended) or ADMIN_SESSION_SECRET.");
+  const dedicated = env.TELEGRAM_BOT_ENCRYPTION_KEY?.trim();
+  if (dedicated) return dedicated;
+  if (env.ENVIRONMENT === "production") {
+    throw new Error("Telegram bot encryption is not configured. Set TELEGRAM_BOT_ENCRYPTION_KEY in production.");
   }
-  return secret;
+  const fallback = env.ADMIN_SESSION_SECRET?.trim();
+  if (!fallback) {
+    throw new Error("Telegram bot encryption is not configured. Set TELEGRAM_BOT_ENCRYPTION_KEY.");
+  }
+  return fallback;
 }
 
-async function aesKey(env: Env): Promise<CryptoKey> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(encryptionSecret(env)));
+async function aesKeyForSecret(secret: string): Promise<CryptoKey> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
   return crypto.subtle.importKey(
     "raw",
     digest,
@@ -265,21 +270,48 @@ async function encryptString(env: Env, plaintext: string): Promise<string> {
   crypto.getRandomValues(new Uint8Array(ivBuffer));
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: ivBuffer },
-    await aesKey(env),
+    await aesKeyForSecret(encryptionSecret(env)),
     new TextEncoder().encode(plaintext),
   );
   return `v1:${bytesToBase64(new Uint8Array(ivBuffer))}:${bytesToBase64(new Uint8Array(encrypted))}`;
 }
 
+async function decryptWithSecret(secret: string, ivBytes: Uint8Array, ciphertext: Uint8Array): Promise<string> {
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: toOwnedArrayBuffer(ivBytes) },
+    await aesKeyForSecret(secret),
+    toOwnedArrayBuffer(ciphertext),
+  );
+  return new TextDecoder().decode(plaintext);
+}
+
 async function decryptString(env: Env, value: string): Promise<string> {
   const parts = value.split(":");
   if (parts.length !== 3 || parts[0] !== "v1") throw new Error("Unsupported Telegram secret format.");
-  const plaintext = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: toOwnedArrayBuffer(base64ToBytes(parts[1])) },
-    await aesKey(env),
-    toOwnedArrayBuffer(base64ToBytes(parts[2])),
-  );
-  return new TextDecoder().decode(plaintext);
+
+  const dedicated = env.TELEGRAM_BOT_ENCRYPTION_KEY?.trim();
+  if (env.ENVIRONMENT === "production" && !dedicated) {
+    throw new Error("Telegram bot encryption is not configured. Set TELEGRAM_BOT_ENCRYPTION_KEY in production.");
+  }
+
+  const iv = base64ToBytes(parts[1]);
+  const ciphertext = base64ToBytes(parts[2]);
+  const candidates = [
+    dedicated,
+    env.ADMIN_SESSION_SECRET?.trim(),
+  ].filter((secret, index, all): secret is string => Boolean(secret) && all.indexOf(secret) === index);
+
+  if (!candidates.length) throw new Error("Telegram bot encryption is not configured.");
+
+  let lastError: unknown;
+  for (const secret of candidates) {
+    try {
+      return await decryptWithSecret(secret, iv, ciphertext);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Telegram bot secret could not be decrypted.");
 }
 
 async function decryptRow(env: Env, row: TelegramBotRow): Promise<TelegramBotConnection> {
