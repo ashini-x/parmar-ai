@@ -101,6 +101,7 @@ export class JobDedupe extends DurableObject {
       case "update_profile": return this.json(await this.updateProfile(body));
       case "set_exam": return this.json(await this.setExam(body));
       case "reset_profile": return this.json(await this.resetProfile());
+      case "delete_data": return this.json(await this.deleteData());
       default: return this.json({ ok: false, error: "unknown_action" }, 400);
     }
   }
@@ -503,6 +504,11 @@ export class JobDedupe extends DurableObject {
     profile.targetExam = exam;
     profile.lastUpdatedAt = Date.now();
     await this.ctx.storage.put(PROFILE_KEY, profile);
+    return { ok: true };
+  }
+
+  private async deleteData(): Promise<GenericResponse> {
+    await this.ctx.storage.deleteAll();
     return { ok: true };
   }
 
