@@ -416,6 +416,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     await jobStoreRequest(env, chatId, { action: "mark_queued", botConnectionId: bot.connectionId, updateId });
     queueAnalytics(ctx, "question_start", () => recordQuestionStart(env, {
       updateId,
+      botConnectionId: bot.connectionId,
       requestId,
       user: analyticsUser,
       messageId,
