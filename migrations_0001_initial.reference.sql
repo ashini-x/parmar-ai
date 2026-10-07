@@ -88,6 +88,27 @@ CREATE TABLE IF NOT EXISTS ai_usage_attempts (
   recorded_at INTEGER NOT NULL,
   UNIQUE(update_id, queue_attempt, attempt)
 );
+CREATE TABLE IF NOT EXISTS quiz_sessions (
+  poll_id TEXT PRIMARY KEY,
+  telegram_user_id INTEGER NOT NULL,
+  chat_id INTEGER NOT NULL,
+  update_id INTEGER NOT NULL,
+  message_id INTEGER NOT NULL,
+  question_text TEXT NOT NULL,
+  options_json TEXT NOT NULL,
+  correct_option_ids_json TEXT NOT NULL,
+  explanation TEXT NOT NULL,
+  topic TEXT,
+  subject TEXT,
+  difficulty TEXT,
+  created_at INTEGER NOT NULL,
+  answered_at INTEGER,
+  selected_option_ids_json TEXT,
+  result TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_quiz_sessions_user_created
+  ON quiz_sessions(telegram_user_id, created_at);
+
 CREATE TABLE IF NOT EXISTS admin_audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   actor TEXT NOT NULL,
