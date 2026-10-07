@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.7.0 — Intent-Driven Native Telegram Quizzes
+- Added semantic response-mode selection so ordinary doubts remain text while genuine MCQ/test/quiz intents become native Telegram quizzes.
+- Added non-anonymous Telegram quiz delivery with exactly one correct answer, compact in-card explanations, and immediate result feedback.
+- Added D1 quiz-session persistence for poll correlation, deletion, retention, and correct/incorrect outcome tracking.
+- Added poll-answer webhook handling and protected multi-bot quiz correlation.
+- Added fallback behavior when quiz-session persistence is unavailable so a valid answer can still reach the student.
+- Added regression coverage for quiz packet validation and poll-answer webhook subscription.
+
 ## 2.6.1 — Production Hardening
 - Aligned release metadata and runtime fallback on v2.6.1.
 - Made dedicated Telegram credential encryption mandatory for production writes, with controlled legacy-read compatibility during key migration.
