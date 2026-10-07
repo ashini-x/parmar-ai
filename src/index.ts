@@ -103,14 +103,42 @@ async function jobStoreRequest<T>(env: Env, chatId: number, body: Record<string,
 }
 
 async function handleTelegramWebhook(request: Request, env: Env, requestId: string, ctx: ExecutionContext): Promise<Response> {
-  if (!env.TELEGRAM_WEBHOOK_SECRET) {
-    return withRequestId(json({ ok: false, error: "telegram_not_configured" }, 500), requestId);
-  }
-
-  const receivedSecret = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
-  if (!receivedSecret || !safeEqual(receivedSecret, env.TELEGRAM_WEBHOOK_SECRET)) {
+  const receivedSecret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")?.trim() ?? "";
+  if (!receivedSecret) {
     logger.warn("telegram_webhook_unauthorized", { requestId });
     return withRequestId(json({ ok: false, error: "UNAUTHORIZED" }, 401), requestId);
+  }
+
+  let bot = await findTelegramBotByWebhookSecret(env, receivedSecret);
+  if (!bot) {
+    const active = await getActiveTelegramBot(env);
+    if (!active && env.TELEGRAM_WEBHOOK_SECRET && safeEqual(receivedSecret, env.TELEGRAM_WEBHOOK_SECRET)) {
+      bot = {
+        connectionId: LEGACY_TELEGRAM_BOT_CONNECTION_ID,
+        botId: 0,
+        username: null,
+        firstName: null,
+        token: env.TELEGRAM_BOT_TOKEN?.trim() ?? "",
+        webhookSecret: receivedSecret,
+        status: "active",
+        connectedAt: 0,
+        lastVerifiedAt: null,
+        disconnectedAt: null,
+      };
+    }
+  }
+
+  if (!bot?.token) {
+    logger.warn("telegram_webhook_unauthorized", { requestId });
+    return withRequestId(json({ ok: false, error: "UNAUTHORIZED" }, 401), requestId);
+  }
+
+  if (bot.status !== "active" || !(await isTelegramBotConnectionActive(env, bot.connectionId))) {
+    logger.info("telegram_webhook_from_inactive_bot_ignored", {
+      requestId,
+      botConnectionId: bot.connectionId,
+    });
+    return withRequestId(json({ ok: true, ignored: "inactive_bot" }), requestId);
   }
 
   let update: TelegramUpdate;
