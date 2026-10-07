@@ -184,7 +184,7 @@ export async function generateGeminiAnswer(
   const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
   const thinkingLevel = selectThinkingLevel(normalizedQuestion, getConfig(env).maxThinkingLevel);
-  const requiresGrounding = isTimeSensitiveQuestion(normalizedQuestion) && isGroundingEnabled(env);
+  const requiresGrounding = requiresFreshData(normalizedQuestion) && isGroundingEnabled(env);
 
   let lastError: GeminiError | null = null;
   const usageRecords: AiUsageRecord[] = [];
@@ -289,7 +289,7 @@ async function requestVertexGemini(
       model: env.GEMINI_MODEL?.trim() || DEFAULT_MODEL,
       location: env.GEMINI_LOCATION?.trim() || DEFAULT_LOCATION,
       thinkingLevel,
-      grounded: Boolean(data.candidates?.[0]?.groundingMetadata) || !requiresGrounding,
+      grounded: Boolean(data.candidates?.[0]?.groundingMetadata),
       status: "completed",
     });
 
@@ -329,7 +329,7 @@ async function requestVertexGemini(
     try {
       sanitized = sanitizeAnswerPacket(
         packet,
-        grounded || !requiresGrounding,
+        grounded,
         requiresGrounding,
         question,
         profileContext,
@@ -342,7 +342,7 @@ async function requestVertexGemini(
       throw error;
     }
     sanitized.thinkingLevelUsed = thinkingLevel;
-    sanitized.grounded = grounded || !requiresGrounding;
+    sanitized.grounded = grounded;
     return { packet: sanitized, usage };
   } catch (error) {
     if (error instanceof GeminiError) throw error;
@@ -563,14 +563,30 @@ function isLikelyFollowUp(question: string, turns: ProfileContext["recentConvers
   return q.length <= 70 && !/[?؟]$/.test(q) && /^(haan|hmm|ok|okay|toh|aur|fir|phir|then)\b/.test(q);
 }
 
-function isTimeSensitiveQuestion(question: string): boolean {
-  const q = question.toLowerCase();
-  const markers = [
+function requiresFreshData(question: string): boolean {
+  const q = question.toLowerCase().trim();
+  const freshnessMarkers = [
     "current", "currently", "latest", "today", "now", "present", "as of", "this year", "recent", "recently",
-    "who is the current", "who is currently", "new governor", "newly appointed", "vartaman", "haal hi", "filhaal", "is samay",
-    "current affairs", "recent affairs", "latest news",
+    "newly appointed", "new governor", "new chairman", "new chief", "vartaman", "haal hi", "filhaal", "is samay",
+    "current affairs", "recent affairs", "latest news", "aaj ka", "abhi ka", "vartaman mein",
   ];
-  return markers.some((marker) => q.includes(marker));
+  if (freshnessMarkers.some((marker) => q.includes(marker))) return true;
+
+  const mutableOfficeMarkers = [
+    "prime minister", "president of india", "vice president", "chief justice", "cji",
+    "rbi governor", "governor of", "sebi chairman", "chief election commissioner",
+    "election commissioner", "cabinet secretary", "attorney general", "chief minister of",
+    "cm of", "chief of defence staff", "cds", "army chief", "navy chief", "air chief",
+    "chairman of isro", "isro chief", "niti aayog ceo", "current office",
+  ];
+  const asksForHolder = /\b(who is|who's|which person|name of|kaun hai|kaun hain|कौन है|कौन हैं)\b/.test(q);
+  if (asksForHolder && mutableOfficeMarkers.some((marker) => q.includes(marker))) return true;
+
+  return mutableOfficeMarkers.some((marker) => q.includes(marker)) && !/\b(19|20)\d{2}\b/.test(q);
+}
+
+function isTimeSensitiveQuestion(question: string): boolean {
+  return requiresFreshData(question);
 }
 
 function isGroundingEnabled(env: Env): boolean {
