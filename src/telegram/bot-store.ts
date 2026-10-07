@@ -35,7 +35,7 @@ export async function getActiveTelegramBot(env: Env): Promise<TelegramBotConnect
   const row = await env.DB.prepare(
     `SELECT * FROM telegram_bots WHERE status='active' ORDER BY connected_at DESC LIMIT 1`,
   ).first<TelegramBotRow>();
-  return row ? decryptRow(env, row) : null;
+  return row ? await decryptRow(env, row) : null;
 }
 
 export async function getTelegramBotByConnectionId(
@@ -177,7 +177,7 @@ export async function listTelegramBots(env: Env): Promise<TelegramBotConnection[
   const result = await env.DB.prepare(
     `SELECT * FROM telegram_bots ORDER BY connected_at DESC LIMIT 25`,
   ).all<TelegramBotRow>();
-  return (result.results ?? []).map((row) => decryptRow(env, row));
+  return Promise.all((result.results ?? []).map((row) => decryptRow(env, row)));
 }
 
 export async function isTelegramBotConnectionActive(
@@ -253,11 +253,7 @@ async function decryptString(env: Env, value: string): Promise<string> {
   return new TextDecoder().decode(plaintext);
 }
 
-function decryptRow(env: Env, row: TelegramBotRow): TelegramBotConnection {
-  throw new Error("decryptRow must be awaited through decryptRowAsync.");
-}
-
-async function decryptRowAsync(env: Env, row: TelegramBotRow): Promise<TelegramBotConnection> {
+async function decryptRow(env: Env, row: TelegramBotRow): Promise<TelegramBotConnection> {
   return {
     connectionId: row.bot_connection_id,
     botId: Number(row.bot_id),
