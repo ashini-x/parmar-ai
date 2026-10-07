@@ -1,77 +1,25 @@
 # Security Model
 
 ## Trust boundaries
+`Telegram -> Cloudflare Worker -> Durable Object / D1 / Queue -> Vertex AI`\n\n`Protected /admin -> D1 analytics + access controls + audit log`
 
-```text
-Telegram platform
-      |
-      | signed webhook header
-      v
-Cloudflare Worker
-      |
-      +-- Durable Object state
-      +-- D1 analytics
-      +-- Cloudflare Queue
-      |
-      v
-Google Vertex AI
-```
+## Authentication
+Telegram webhook requests require the configured secret header. `/telegram/setup` requires its setup secret. `/admin*` uses authenticated signed sessions and should additionally be protected by Cloudflare Access.
 
-## Authentication boundaries
+## Authorization
+Owner/Admin checks use numeric Telegram IDs. Dashboard access mutations are server-side, same-origin protected, and verified against D1. Protected administrator identities cannot be suspended through ordinary student controls.
 
-### Telegram webhook
-Requests to `/telegram/webhook` are accepted only when the configured `X-Telegram-Bot-Api-Secret-Token` matches.
+## Data separation
+Durable Object holds private-chat operational state, profile, conversation, rate metadata, and job lifecycle. D1 holds analytics, AI usage, access overrides, audit entries, and Telegram bot metadata. Queue is transport for asynchronous processing.
 
-### Telegram setup endpoint
-`/telegram/setup` requires the independent setup secret.
+## Secrets
+Credentials must remain in secure deployment configuration. Never log tokens, private keys, cookies, authorization headers, or secret environment values.
 
-### Admin dashboard
-`/admin*` uses an application-level signed session cookie backed by `ADMIN_SESSION_SECRET` and credentials stored as Worker secrets. Cloudflare Access should be added in front of the path for defense in depth.
+## Telegram lifecycle
+Dashboard-managed bot secrets are encrypted in D1. New bot connections are verified before switching from the active bot, with rollback safeguards.
 
-### Telegram owner/admin
-The Worker does not receive a BotFather “creator” field. The owner identity is therefore explicitly configured as `BOT_OWNER_TELEGRAM_USER_ID`, with optional additional admins in `ADMIN_TELEGRAM_USER_IDS`. Only these identities may execute privileged Telegram access commands. Runtime unlimited-AI grants are stored in `ai_access_overrides` and are checked server-side.
-
-Unlimited access bypasses only the daily AI quota. Burst protection remains enabled for every account to prevent accidental or malicious request floods.
-
-## Secret handling
-
-Secrets must exist only in the deployment environment or local ignored configuration.
-
-Never commit:
-
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_WEBHOOK_SECRET`
-- `TELEGRAM_SETUP_SECRET`
-- `GCP_PRIVATE_KEY`
-- `GCP_CLIENT_EMAIL`
-- `GCP_PRIVATE_KEY_ID`
-- `ADMIN_DASHBOARD_PASSWORD`
-- `ADMIN_SESSION_SECRET`
-- Cloudflare account/API credentials
-
-## Logging
-
-Logs must use operational identifiers rather than credentials. Avoid logging full authorization headers, raw service-account JSON, cookies, access tokens, or secret environment variables.
-
-## Identity isolation
-
-The canonical student identity for analytics/profile data is Telegram `from.id`. Usernames are mutable display metadata and must never be used as the primary identity key.
-
-The current product accepts private chats only. Group traffic is rejected and redirected to DM so one group's users cannot accidentally share a stateful per-chat profile.
-
-## Webhook integrity
-
-Webhook requests must fail closed when the secret header is absent or mismatched.
-
-## Data minimization and retention
-
-Only the student profile information needed for personalization is retained in Durable Object state. Central D1 analytics is retained for the configured number of days and cleaned automatically.
+## AI boundaries
+Use bounded conversation/profile context and validate structured model output before delivery.
 
 ## Incident response
-
-1. Rotate the affected secret immediately.
-2. Disable or invalidate compromised credentials at the provider.
-3. Review Worker logs and admin events using request IDs.
-4. Check whether D1 contains exposed payloads.
-5. Deploy the patched release.
-6. Record the incident and postmortem under the operational process.
+Rotate credentials, disable compromised access, inspect logs/audit events, assess impact, deploy the verified fix, and preserve an internal incident record.
