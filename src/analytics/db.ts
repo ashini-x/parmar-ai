@@ -563,6 +563,13 @@ export async function getQuizSession(env: Env, pollId: string): Promise<QuizSess
   };
 }
 
+export async function deleteQuizSession(env: Env, pollId: string): Promise<void> {
+  if (!env.DB) return;
+  await ensureAnalyticsSchema(env);
+  const result = await env.DB.prepare(`DELETE FROM quiz_sessions WHERE poll_id=?`).bind(pollId).run();
+  if (!result.success) throw new Error("D1 did not confirm the quiz-session delete.");
+}
+
 export async function answerQuizSession(
   env: Env,
   pollId: string,
