@@ -11,6 +11,11 @@ export interface TelegramMessageResult {
   message_id: number;
 }
 
+export interface TelegramQuizResult {
+  message_id: number;
+  poll_id: string;
+}
+
 interface TelegramApiResponse<T = unknown> {
   ok: boolean;
   result?: T;
@@ -133,6 +138,65 @@ export async function telegramApi<T = unknown>(
   }
 
   throw lastError ?? new TelegramError("Telegram API request failed.", undefined, true);
+}
+
+export async function sendTelegramQuiz(
+  env: Env,
+  chatId: number,
+  question: string,
+  options: string[],
+  correctOptionIds: number[],
+  explanation: string,
+  replyToMessageId?: number,
+  botConnectionId?: string,
+): Promise<TelegramQuizResult> {
+  const result = await telegramApi<{
+    message_id: number;
+    poll?: { id: string };
+  }>(env, "sendPoll", {
+    chat_id: chatId,
+    question: question.trim().slice(0, 300),
+    options: options.map((text) => ({ text: text.trim().slice(0, 100) })).slice(0, 12),
+    is_anonymous: false,
+    type: "quiz",
+    allows_multiple_answers: false,
+    allows_revoting: false,
+    correct_option_ids: [...correctOptionIds].sort((a, b) => a - b),
+    explanation: explanation.trim().slice(0, 200),
+    ...(replyToMessageId ? {
+      reply_parameters: {
+        message_id: replyToMessageId,
+        allow_sending_without_reply: true,
+      },
+    } : {}),
+  }, botConnectionId);
+  const pollId = String(result.poll?.id ?? "").trim();
+  if (!pollId) throw new TelegramError("Telegram sent the quiz but did not return a poll ID.");
+  return { message_id: result.message_id, poll_id: pollId };
+}
+
+export async function deleteTelegramMessage(
+  env: Env,
+  chatId: number,
+  messageId: number,
+  botConnectionId?: string,
+): Promise<void> {
+  await telegramApi(env, "deleteMessage", {
+    chat_id: chatId,
+    message_id: messageId,
+  }, botConnectionId);
+}
+
+export async function stopTelegramPoll(
+  env: Env,
+  chatId: number,
+  messageId: number,
+  botConnectionId?: string,
+): Promise<void> {
+  await telegramApi(env, "stopPoll", {
+    chat_id: chatId,
+    message_id: messageId,
+  }, botConnectionId);
 }
 
 export async function sendTelegramChatAction(
