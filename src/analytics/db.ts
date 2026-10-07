@@ -277,7 +277,7 @@ export interface QuestionAnalyticsStart {
 export interface QuestionAnalyticsResult {
   updateId: number;
   botConnectionId?: string;
-  status: "processing" | "completed" | "failed" | "out_of_scope" | "delivery_failed";
+  status: "processing" | "completed" | "failed" | "cancelled" | "out_of_scope" | "delivery_failed";
   completedAt?: number;
   startedAt?: number;
   latencyMs?: number;
