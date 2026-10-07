@@ -1,16 +1,43 @@
 # Contributing
 
-## Contribution status
-Parmar AI is proprietary, source-available software. **Unsolicited public code contributions are not accepted by default.**
+**Parmar AI is proprietary software.**
 
-## Written authorization
-Obtain written authorization from the project owner or an authorized maintainer before submitting code intended for incorporation. A pull request or patch does not create an implied license, acceptance, ownership transfer, or compensation obligation.
+The public repository is primarily for controlled source inspection, transparency, and authorized development. It is not an unrestricted open-source contribution project.
 
-## Do not submit
-Never submit secrets, credentials, production exports, private student data, exploit details, or copied proprietary code.
+## Before contributing
+
+Do not submit code, prompts, datasets, screenshots, student exports, or operational material unless the project owner has expressly invited the contribution.
 
 ## Authorized changes
-Authorized changes should include regression coverage where appropriate, preserve existing trust boundaries, update documentation for behavior changes, and follow [docs/TEST_PLAN.md](docs/TEST_PLAN.md).
 
-## No implied rights
-Reading or forking the public repository does not create a right to publish, commercialize, redistribute, or create a derivative product. See [LICENSE](LICENSE).
+An authorized change should explain:
+
+- what changed;
+- why it changed;
+- affected behavior;
+- tests performed;
+- deployment/configuration requirements;
+- security or data implications.
+
+## Engineering standard
+
+- Preserve the primary student response path.
+- Prefer small, reviewable changes.
+- Add a regression test for production bugs.
+- Treat Durable Object and D1 changes as compatibility-sensitive.
+- Treat prompt/schema changes as production code changes.
+- Never commit secrets or real student data.
+
+## Validation
+
+Run the relevant repository checks before approval, including type-checking, tests, and format validation when configured.
+
+For production-impacting changes, run the relevant manual scenarios in docs/TEST_PLAN.md.
+
+## Intellectual property
+
+Submitting a change does not by itself grant the submitter a right to use, redistribute, commercialize, or republish Parmar AI source or documentation.
+
+Authorized contributors may be required to execute a separate intellectual-property or contribution agreement.
+
+See LICENSE and TRADEMARKS.md.
