@@ -772,6 +772,13 @@ export function isValidAnswerPacket(value: unknown): value is AnswerPacket {
       }];
 
     if (rawItems.length < 1 || rawItems.length > MAX_QUIZ_BATCH_SIZE) return false;
+    const first = rawItems[0] as Record<string, unknown>;
+    if (
+      first.question !== value.quizQuestion ||
+      JSON.stringify(first.options) !== JSON.stringify(value.quizOptions) ||
+      JSON.stringify(first.correctOptionIds) !== JSON.stringify(value.quizCorrectOptionIds) ||
+      first.explanation !== value.quizExplanation
+    ) return false;
     for (const raw of rawItems) {
       if (!isRecord(raw)) return false;
       if (typeof raw.question !== "string" || raw.question.trim().length === 0 || raw.question.length > 300) return false;
