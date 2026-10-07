@@ -25,9 +25,9 @@ jobs:
       - name: Package source release
         run: |
           mkdir -p dist
-          git archive --format=zip --output=dist/parmar-ai-2.6.0-production.zip HEAD
+          git archive --format=zip --output=dist/parmar-ai-2.6.1-production.zip HEAD
       - uses: actions/upload-artifact@v4
         with:
-          name: parmar-ai-2.6.0-production
-          path: dist/parmar-ai-2.6.0-production.zip
+          name: parmar-ai-2.6.1-production
+          path: dist/parmar-ai-2.6.1-production.zip
           if-no-files-found: error
