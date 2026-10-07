@@ -119,67 +119,90 @@ export class JobDedupe extends DurableObject {
   private async reconcileAlarm(now = Date.now()): Promise<void> {
     const retentionCutoff = now - JOB_RETENTION_MS;
     const typingCutoff = now - TYPING_MAX_AGE_MS;
+    const stalePendingCutoff = now - PENDING_RECOVERY_MS;
+    const staleQueuedCutoff = now - QUEUED_RECOVERY_MS;
+    const staleProcessingCutoff = now - PROCESSING_LEASE_MS;
+    const terminalCutoff = now - JOB_MAX_ACTIVE_AGE_MS;
     const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
-
-    let hasActiveRecentJob = false;
-    let nextCleanupAt: number | null = null;
-    let chatId: number | undefined;
+    let hasProcessingRecentJob = false;
+    let nextWakeAt: number | null = null;
 
     for (const [key, record] of jobs) {
-      if (record.createdAt < retentionCutoff) {
-        await this.ctx.storage.delete(key);
+      if (record.createdAt < retentionCutoff) { await this.ctx.storage.delete(key); continue; }
+      nextWakeAt = nextWakeAt === null ? record.createdAt + JOB_RETENTION_MS : Math.min(nextWakeAt, record.createdAt + JOB_RETENTION_MS);
+      if (record.state === "done") continue;
+
+      if (record.createdAt < terminalCutoff) {
+        record.state = "done";
+        record.processingAt = undefined;
+        record.queuedAt = undefined;
+        record.activeQueueMessageId = undefined;
+        await this.ctx.storage.put(key, record);
         continue;
       }
 
-      const cleanupAt = record.createdAt + JOB_RETENTION_MS;
-      nextCleanupAt = nextCleanupAt === null ? cleanupAt : Math.min(nextCleanupAt, cleanupAt);
+      const enqueue = async () => this.runtimeEnv.QUESTION_QUEUE.send({
+        version: 2,
+        updateId: record.updateId,
+        chatId: record.chatId,
+        ...(record.telegramUserId !== undefined ? { telegramUserId: record.telegramUserId } : {}),
+        question: record.question,
+        messageId: record.messageId,
+        requestId: record.requestId,
+        createdAt: record.createdAt,
+        ...(record.statusMessageId !== undefined ? { statusMessageId: record.statusMessageId } : {}),
+      }, { contentType: "json" });
 
-      if (record.state !== "done" && record.createdAt >= typingCutoff) {
-        hasActiveRecentJob = true;
-        chatId = record.chatId;
+      if (record.state === "processing") {
+        if (record.processingAt && record.processingAt < staleProcessingCutoff) {
+          try {
+            await enqueue();
+            record.state = "queued";
+            record.queuedAt = now;
+            record.processingAt = undefined;
+            record.activeQueueMessageId = undefined;
+            await this.ctx.storage.put(key, record);
+          } catch { nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + 5_000); }
+        } else {
+          if (record.createdAt >= typingCutoff) hasProcessingRecentJob = true;
+          if (record.processingAt) nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, record.processingAt + PROCESSING_LEASE_MS);
+        }
+        continue;
+      }
+
+      if (record.state === "queued") {
+        const queuedAt = record.queuedAt ?? record.createdAt;
+        if (queuedAt < staleQueuedCutoff) {
+          try { await enqueue(); record.queuedAt = now; await this.ctx.storage.put(key, record); }
+          catch { nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + 5_000); }
+        }
+        nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, queuedAt + QUEUED_RECOVERY_MS);
+        continue;
+      }
+
+      if (record.state === "pending") {
+        if (record.createdAt < stalePendingCutoff) {
+          try { await enqueue(); record.state = "queued"; record.queuedAt = now; await this.ctx.storage.put(key, record); }
+          catch { nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + 5_000); }
+        }
+        nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, record.createdAt + PENDING_RECOVERY_MS);
       }
     }
 
-    // Recover accepted jobs that never made it from the webhook into the Queue.
-    // Queue delivery is durable; this alarm closes the small gap between accepting
-    // the Telegram update and persisting the queued state. Duplicate Queue messages
-    // are safe because claim() is idempotent per Telegram update ID.
-    for (const record of jobs.values()) {
-      if (record.state !== "pending" || record.createdAt < typingCutoff) continue;
-      try {
-        await this.runtimeEnv.QUESTION_QUEUE.send({
-          version: 2,
-          updateId: record.updateId,
-          chatId: record.chatId,
-          ...(record.telegramUserId !== undefined ? { telegramUserId: record.telegramUserId } : {}),
-          question: record.question,
-          messageId: record.messageId,
-          requestId: record.requestId,
-          createdAt: record.createdAt,
-          ...(record.statusMessageId !== undefined ? { statusMessageId: record.statusMessageId } : {}),
-        }, { contentType: "json" });
-        record.state = "queued";
-        await this.ctx.storage.put(jobKey(record.updateId), record);
-      } catch {
-        // Retry on the next alarm/webhook delivery.
+    if (hasProcessingRecentJob) {
+      const processing = [...jobs.values()]
+        .filter((record) => record.state === "processing" && record.createdAt >= typingCutoff)
+        .sort((a, b) => b.createdAt - a.createdAt)[0];
+      if (processing) {
+        try { await sendTelegramChatAction(this.runtimeEnv, processing.chatId, "typing"); } catch {}
       }
+      nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + TYPING_HEARTBEAT_MS);
     }
 
-    if (hasActiveRecentJob && chatId !== undefined) {
-      try {
-        await sendTelegramChatAction(this.runtimeEnv, chatId, "typing");
-      } catch {
-        // Best effort: Telegram may rate-limit chat actions during spikes.
-      }
-      await this.ctx.storage.setAlarm(now + TYPING_HEARTBEAT_MS);
+    if (nextWakeAt !== null && Number.isFinite(nextWakeAt)) {
+      await this.ctx.storage.setAlarm(Math.max(now + 1_000, nextWakeAt));
       return;
     }
-
-    if (nextCleanupAt !== null) {
-      await this.ctx.storage.setAlarm(Math.max(now + 1_000, nextCleanupAt));
-      return;
-    }
-
     await this.ctx.storage.deleteAlarm();
   }
 
@@ -283,78 +306,65 @@ export class JobDedupe extends DurableObject {
 
   private async claim(body: Record<string, unknown>): Promise<ClaimResponse> {
     const updateId = positiveNumber(body.updateId);
-    const queueMessageId = String(body.queueMessageId ?? "");
+    const queueMessageId = String(body.queueMessageId ?? "").trim();
+    if (!queueMessageId) throw new Error("Queue message ID is required.");
     const key = jobKey(updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
-    if (!record) return { claimed: false };
-    if (record.state === "done") return { claimed: false };
+    if (!record || record.state === "done") return { claimed: false };
 
     const now = Date.now();
     const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
+    if ([...jobs.values()].some((candidate) =>
+      candidate.updateId !== record.updateId && candidate.state !== "done" && candidate.createdAt <= record.createdAt
+    )) return { claimed: false, wait: true, retryAfterSeconds: 10 };
 
-    // Serialize AI processing per chat. This keeps answers in the same order
-    // for a student even though the Queue may process multiple chats in parallel.
-    const olderActiveJob = [...jobs.values()].some((candidate) =>
-      candidate.updateId !== record.updateId &&
-      candidate.state !== "done" &&
-      candidate.createdAt <= record.createdAt,
-    );
-
-    if (olderActiveJob) {
-      return { claimed: false, wait: true, retryAfterSeconds: 30 };
-    }
-
-    if (
-      record.state === "processing" &&
-      record.activeQueueMessageId !== queueMessageId &&
-      record.processingAt &&
-      now - record.processingAt < PROCESSING_LEASE_MS
-    ) {
-      return { claimed: false, wait: true, retryAfterSeconds: 30 };
+    if (record.state === "processing" && record.activeQueueMessageId !== queueMessageId && record.processingAt && now - record.processingAt < PROCESSING_LEASE_MS) {
+      return { claimed: false, wait: true, retryAfterSeconds: 10 };
     }
 
     record.state = "processing";
     record.activeQueueMessageId = queueMessageId;
     record.processingAt = now;
+    record.queuedAt = undefined;
+    record.leaseVersion = Math.max(0, Number(record.leaseVersion ?? 0)) + 1;
     await this.ctx.storage.put(key, record);
-    return { claimed: true, record };
+    return { claimed: true, leaseVersion: record.leaseVersion, record };
   }
 
-  private async setAnswerPacket(body: Record<string, unknown>): Promise<GenericResponse> {
+  private async setAnswerPacket(body: Record<string, unknown>): Promise<GenericResponse & { stale?: boolean }> {
     const updateId = positiveNumber(body.updateId);
     const key = jobKey(updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
-
+    if (!this.ownsLease(record, body)) return { ok: true, stale: true };
     const packet = body.packet as AnswerPacket | undefined;
-    if (!packet || typeof packet.answer !== "string") {
-      throw new Error("Invalid answer packet.");
-    }
-
+    if (!isValidAnswerPacket(packet)) throw new Error("Invalid answer packet.");
     record.answerPacket = packet;
     record.answer = packet.answer;
     await this.ctx.storage.put(key, record);
     return { ok: true };
   }
 
-  private async markProfileUpdated(body: Record<string, unknown>): Promise<GenericResponse> {
+  private async markProfileUpdated(body: Record<string, unknown>): Promise<GenericResponse & { stale?: boolean }> {
     const updateId = positiveNumber(body.updateId);
     const key = jobKey(updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
+    if (!this.ownsLease(record, body)) return { ok: true, stale: true };
     record.profileUpdated = true;
     await this.ctx.storage.put(key, record);
     return { ok: true };
   }
 
-  private async complete(body: Record<string, unknown>): Promise<GenericResponse> {
+  private async complete(body: Record<string, unknown>): Promise<GenericResponse & { stale?: boolean }> {
     const updateId = positiveNumber(body.updateId);
     const key = jobKey(updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
     if (!record) return { ok: true };
-
+    if (!this.ownsLease(record, body)) return { ok: true, stale: true };
     record.state = "done";
     record.processingAt = undefined;
+    record.queuedAt = undefined;
     record.activeQueueMessageId = undefined;
     await this.ctx.storage.put(key, record);
     await this.reconcileAlarm();
@@ -395,8 +405,11 @@ export class JobDedupe extends DurableObject {
     return normalized;
   }
 
-  private async updateProfile(body: Record<string, unknown>): Promise<GenericResponse> {
+  private async updateProfile(body: Record<string, unknown>): Promise<GenericResponse & { stale?: boolean }> {
     const updateId = positiveNumber(body.updateId);
+    const record = await this.ctx.storage.get<JobRecord>(jobKey(updateId));
+    if (!record) return { ok: true };
+    if (!this.ownsLease(record, body)) return { ok: true, stale: true };
     const appliedKey = `profile:applied:${updateId}`;
     if (await this.ctx.storage.get<boolean>(appliedKey)) return { ok: true };
 
@@ -471,6 +484,16 @@ export class JobDedupe extends DurableObject {
     await this.ctx.storage.put(PROFILE_KEY, profile);
     await this.ctx.storage.put(appliedKey, true);
     return { ok: true };
+  }
+
+  private ownsLease(record: JobRecord, body: Record<string, unknown>): boolean {
+    const queueMessageId = String(body.queueMessageId ?? "").trim();
+    const leaseVersion = Number(body.leaseVersion);
+    return record.state === "processing" &&
+      Boolean(queueMessageId) &&
+      record.activeQueueMessageId === queueMessageId &&
+      Number.isSafeInteger(leaseVersion) &&
+      leaseVersion === record.leaseVersion;
   }
 
   private async setExam(body: Record<string, unknown>): Promise<GenericResponse> {
@@ -560,6 +583,20 @@ function parseJob(body: Record<string, unknown>): QuestionJob {
   };
   if (!job.question || !job.requestId) throw new Error("Invalid job payload.");
   return job;
+}
+
+function isValidAnswerPacket(value: unknown): value is AnswerPacket {
+  if (!isRecord(value)) return false;
+  const requiredStrings = ["answer", "sscTakeaway", "answerScope", "subject", "topic", "questionMode", "examRelevance", "profileSignal", "nextRevisionTopic"];
+  if (requiredStrings.some((key) => typeof value[key] !== "string")) return false;
+  if (!(value.detectedExam === null || typeof value.detectedExam === "string")) return false;
+  if (typeof value.timeSensitive !== "boolean") return false;
+  if (!["ssc_ga_gs", "ssc_support", "out_of_scope"].includes(String(value.answerScope))) return false;
+  if (!["history", "polity", "geography", "economy", "science", "static_gk", "current_affairs", "art_culture", "other"].includes(String(value.subject))) return false;
+  if (!["fact", "concept", "comparison", "statement_trap", "revision", "study_plan"].includes(String(value.questionMode))) return false;
+  if (!["A", "B", "C", "D"].includes(String(value.examRelevance))) return false;
+  if (!["neutral", "weak", "confusion", "strength"].includes(String(value.profileSignal))) return false;
+  return true;
 }
 
 function normalizeProfileSignal(value: unknown): "neutral" | "weak" | "confusion" | "strength" {
