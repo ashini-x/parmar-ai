@@ -109,3 +109,19 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at INTEGER NOT NULL,
   updated_by TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS telegram_bots (
+  bot_connection_id TEXT PRIMARY KEY,
+  bot_id INTEGER NOT NULL UNIQUE,
+  username TEXT,
+  first_name TEXT,
+  token_ciphertext TEXT NOT NULL,
+  webhook_secret_ciphertext TEXT NOT NULL,
+  webhook_secret_hash TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL CHECK (status IN ('active','disconnected')),
+  connected_at INTEGER NOT NULL,
+  last_verified_at INTEGER,
+  disconnected_at INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_bots_one_active
+  ON telegram_bots(status) WHERE status='active';
