@@ -333,10 +333,29 @@ export interface AiUsageAnalyticsInput {
   usage: AiUsageRecord[];
 }
 
+async function ensureQuizSessionSchema(env: Env): Promise<void> {
+  if (!env.DB) return;
+
+  // quiz_sessions existed before bot-aware quiz correlation was introduced.
+  // CREATE TABLE IF NOT EXISTS does not add the new column to an existing D1
+  // table, so migrate that legacy shape in place.
+  const columns = await env.DB.prepare("SELECT name FROM pragma_table_info('quiz_sessions')").all<{ name: string }>();
+  const hasBotConnectionId = (columns.results ?? []).some((column) => column.name === "bot_connection_id");
+
+  if (!hasBotConnectionId) {
+    await env.DB.prepare(
+      "ALTER TABLE quiz_sessions ADD COLUMN bot_connection_id TEXT NOT NULL DEFAULT 'legacy-env'"
+    ).run();
+  }
+}
+
 export async function ensureAnalyticsSchema(env: Env): Promise<void> {
   if (!env.DB) return;
   if (!schemaPromise) {
-    schemaPromise = env.DB.batch(splitSchemaStatements().map((sql) => env.DB!.prepare(sql)))
+    schemaPromise = (async () => {
+      await env.DB!.batch(splitSchemaStatements().map((sql) => env.DB!.prepare(sql)));
+      await ensureQuizSessionSchema(env);
+    })()
       .then(() => undefined)
       .catch((error) => {
         schemaPromise = null;

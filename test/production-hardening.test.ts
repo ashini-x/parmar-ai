@@ -73,6 +73,13 @@ describe("production hardening", () => {
     expect(requiresFreshData("What is the Permanent Settlement?")).toBe(false);
   });
 
+  it("protects the native quiz delivery path when D1 session persistence fails", () => {
+    const source = readFileSync(resolve(process.cwd(), "src/index.ts"), "utf8");
+    expect(source).toContain("await stopTelegramPoll(env, job.chatId, quiz.message_id, job.botConnectionId).catch(() => undefined);");
+    expect(source).toContain("await deleteTelegramMessage(env, job.chatId, quiz.message_id, job.botConnectionId).catch(() => undefined);");
+    expect(source).toContain("buildQuizFallbackAnswerForStudent(packet)");
+  });
+
   it("does not invent an MCQ topic for a fresh generic quiz request", () => {
     const emptyContext = {
       profile: {

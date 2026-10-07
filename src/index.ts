@@ -677,7 +677,13 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             pollId: quiz.poll_id,
             error: quizStoreError instanceof Error ? quizStoreError.message : String(quizStoreError),
           });
+
+          // Never leave a native quiz open or visibly resolved without a stored
+          // session. The poll_answer webhook needs the D1 session to evaluate
+          // the student's choice. Stop it first, then delete it so the student
+          // does not see a second answer plus an already-revealed quiz.
           await stopTelegramPoll(env, job.chatId, quiz.message_id, job.botConnectionId).catch(() => undefined);
+          await deleteTelegramMessage(env, job.chatId, quiz.message_id, job.botConnectionId).catch(() => undefined);
           await deliverAnswer(env, job, claim.record.statusMessageId, buildQuizFallbackAnswerForStudent(packet));
           statusMessageHandled = true;
         }
