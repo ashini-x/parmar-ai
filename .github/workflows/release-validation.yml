@@ -13,12 +13,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: parmar-ai-validation-${{ github.ref }}
-  cancel-in-progress: true
+  group: parmar-ai-${{ github.ref }}
+  # New PR commits cancel stale PR checks, but do not cancel an in-progress production deployment.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
-    name: Typecheck and test
+    name: Typecheck, test and build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -30,6 +31,8 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run test:node
+      - name: Validate Worker bundle without deploying
+        run: npx wrangler deploy --dry-run
       - name: Package source release
         if: github.event_name != 'pull_request'
         run: |
@@ -102,5 +105,108 @@ jobs:
             process.exit(1);
           }
           console.log('Cloudflare token authenticated and can list the existing parmar-ai Worker.');
-          console.log('No production deployment was attempted. A real deployment is still needed to verify write permission.');
+          console.log('No production deployment was attempted.');
           NODE
+
+  deploy-production:
+    name: Deploy and smoke-test production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://parmar-ai.thenewtongs.workers.dev
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Capture active version for rollback
+        id: previous
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" || -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
+            echo "::error::Cloudflare deployment credentials are missing."
+            exit 1
+          fi
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          http_code="$(curl --silent --show-error \
+            --output "$response_file" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/parmar-ai/deployments")"
+          HTTP_CODE="$http_code" RESPONSE_FILE="$response_file" node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from 'node:fs';
+          const status = Number(process.env.HTTP_CODE);
+          let body;
+          try {
+            body = JSON.parse(readFileSync(process.env.RESPONSE_FILE, 'utf8'));
+          } catch {
+            console.error(`Cannot read Cloudflare deployment history (HTTP ${status}); refusing to deploy without a rollback target.`);
+            process.exit(1);
+          }
+          if (status < 200 || status >= 300 || body.success !== true) {
+            const errors = (body.errors ?? []).map((item) => `${item.code}: ${item.message}`).join('; ');
+            console.error(`Cannot read Cloudflare deployment history (HTTP ${status}). ${errors}`);
+            process.exit(1);
+          }
+          const deployments = body.result?.deployments ?? [];
+          const active = deployments.find((deployment) =>
+            (deployment.versions ?? []).some((version) => version.percentage === 100 && version.version_id)
+          );
+          const version = active?.versions?.find((item) => item.percentage === 100)?.version_id;
+          if (!version) {
+            console.error('No active 100% deployment version found; refusing to deploy without a rollback target.');
+            process.exit(1);
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `version_id=${version}\n`);
+          console.log(`Captured the active version for rollback: ${version}`);
+          NODE
+
+      - name: Deploy Worker
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npm run deploy
+
+      - name: Verify production health
+        id: smoke
+        env:
+          SMOKE_TEST_URL: https://parmar-ai.thenewtongs.workers.dev/health
+          SMOKE_TEST_ATTEMPTS: "12"
+          SMOKE_TEST_DELAY_MS: "5000"
+        run: node scripts/production-smoke-test.mjs
+
+      - name: Roll back if production health check fails
+        id: rollback
+        if: ${{ failure() && steps.deploy.outcome == 'success' && steps.smoke.outcome == 'failure' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+          PREVIOUS_VERSION_ID: ${{ steps.previous.outputs.version_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${PREVIOUS_VERSION_ID:-}" ]]; then
+            echo "::error::Rollback target is unavailable."
+            exit 1
+          fi
+          npx wrangler rollback "${PREVIOUS_VERSION_ID}" --name parmar-ai --message "Automatic rollback after failed production health check"
+
+      - name: Verify health after rollback
+        if: ${{ always() && steps.rollback.outcome == 'success' }}
+        env:
+          SMOKE_TEST_URL: https://parmar-ai.thenewtongs.workers.dev/health
+          SMOKE_TEST_ATTEMPTS: "6"
+          SMOKE_TEST_DELAY_MS: "5000"
+        run: node scripts/production-smoke-test.mjs
