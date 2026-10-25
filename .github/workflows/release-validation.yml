@@ -81,7 +81,7 @@ jobs:
             --write-out '%{http_code}' \
             --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             --header 'Content-Type: application/json' \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/parmar-ai")"
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts?per_page=100")"
           HTTP_CODE="$http_code" RESPONSE_FILE="$response_file" node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
           const status = Number(process.env.HTTP_CODE);
@@ -97,6 +97,10 @@ jobs:
             console.error(`Cloudflare credential preflight failed (HTTP ${status}). ${errors}`);
             process.exit(1);
           }
-          console.log('Cloudflare token authenticated and can read the existing parmar-ai Worker.');
+          if (!Array.isArray(body.result) || !body.result.some((script) => script.id === 'parmar-ai')) {
+            console.error('Cloudflare API authentication succeeded, but the parmar-ai Worker was not present in the accessible script list.');
+            process.exit(1);
+          }
+          console.log('Cloudflare token authenticated and can list the existing parmar-ai Worker.');
           console.log('No production deployment was attempted. A real deployment is still needed to verify write permission.');
           NODE
