@@ -10,6 +10,9 @@ export default defineConfig({
   ],
   test: {
     include: ["test/**/*.test.ts"],
-    exclude: ["test/admin-access-ui.test.ts"]
+    exclude: [
+      "test/admin-access-ui.test.ts",
+      "test/native-quiz-contract.node.test.ts"
+    ]
   }
 });

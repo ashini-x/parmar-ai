@@ -1,6 +1,9 @@
 name: Release validation
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -9,12 +12,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: parmar-ai-validation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
+    name: Typecheck and test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund --legacy-peer-deps
@@ -22,11 +31,72 @@ jobs:
       - run: npm test
       - run: npm run test:node
       - name: Package source release
+        if: github.event_name != 'pull_request'
         run: |
           mkdir -p dist
-          git archive --format=zip --output=dist/parmar-ai-2.8.0-production.zip HEAD
+          VERSION="$(node -p "require('./package.json').version")"
+          git archive --format=zip --output="dist/parmar-ai-${VERSION}-production.zip" HEAD
       - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
         with:
-          name: parmar-ai-2.8.0-production
-          path: dist/parmar-ai-2.8.0-production.zip
+          name: parmar-ai-production-source
+          path: dist/parmar-ai-*-production.zip
           if-no-files-found: error
+
+  cloudflare-preflight:
+    name: Verify Cloudflare credentials (no deployment)
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check required secrets are available
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+            echo "::error::Missing repository secret CLOUDFLARE_API_TOKEN."
+            exit 1
+          fi
+          if [[ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
+            echo "::error::Missing CLOUDFLARE_ACCOUNT_ID. Add it as a repository secret or repository variable."
+            exit 1
+          fi
+          echo "Both required Cloudflare settings are present."
+
+      - name: Verify token can access the existing Worker
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          http_code="$(curl --silent --show-error \
+            --output "$response_file" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/parmar-ai")"
+          HTTP_CODE="$http_code" RESPONSE_FILE="$response_file" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const status = Number(process.env.HTTP_CODE);
+          let body;
+          try {
+            body = JSON.parse(readFileSync(process.env.RESPONSE_FILE, 'utf8'));
+          } catch {
+            console.error(`Cloudflare returned an unreadable response (HTTP ${status}).`);
+            process.exit(1);
+          }
+          if (status < 200 || status >= 300 || body.success !== true) {
+            const errors = (body.errors ?? []).map((item) => `${item.code}: ${item.message}`).join('; ');
+            console.error(`Cloudflare credential preflight failed (HTTP ${status}). ${errors}`);
+            process.exit(1);
+          }
+          console.log('Cloudflare token authenticated and can read the existing parmar-ai Worker.');
+          console.log('No production deployment was attempted. A real deployment is still needed to verify write permission.');
+          NODE
