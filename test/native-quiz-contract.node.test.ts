@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("native quiz production contract", () => {
@@ -16,7 +15,7 @@ describe("native quiz production contract", () => {
 
   it("cleans up partial native quiz batches without revealing answers", () => {
     const start = source.indexOf('if (packet.responseMode === "quiz")');
-    const end = source.indexOf('} else {', start);
+    const end = source.indexOf("} else {", start);
     const handler = source.slice(start, end);
 
     expect(handler).toContain("for (const delivered of deliveredQuizzes.reverse())");
@@ -26,13 +25,15 @@ describe("native quiz production contract", () => {
     expect(handler).not.toContain("stopTelegramPoll(");
   });
 
-  it("keeps the quiz persistence failure path from revealing the answer", () => {
-    const start = source.indexOf("quiz_session_persist_failed");
-    const end = source.indexOf("if (!statusMessageHandled", start);
+  it("uses a safe fallback when native quiz delivery fails", () => {
+    const start = source.indexOf("} catch (quizDeliveryError) {");
+    const end = source.indexOf("if (!statusMessageHandled && claim.record.statusMessageId)", start);
     const block = source.slice(start, end);
 
-    expect(block).toContain("deleteTelegramMessage");
-    expect(block).toContain("buildQuizDeliveryFailureAnswer");
-    expect(block).not.toContain("sendTelegramMessage");
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(block).toContain('logger.error("quiz_batch_delivery_failed"');
+    expect(block).toContain("buildQuizDeliveryFailureAnswer()");
+    expect(block).toContain("statusMessageHandled = true");
+    expect(block).not.toContain("buildAnswerForStudent(packet");
   });
 });
