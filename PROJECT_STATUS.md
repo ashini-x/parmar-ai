@@ -21,6 +21,10 @@
 - Intent-driven native Telegram MCQ/quiz delivery with per-student answer tracking.
 - Bounded multi-MCQ native Telegram quiz batches (up to 10), persistent quiz-result conversation context, and no extra post-vote bot messages.
 
+## In development — `feat/photo-doubt-support`
+
+- Photo-based SSC doubts with optional captions and albums of up to 10 pictures. This feature branch is not part of the v2.8.0 production release.
+
 ## Planned / not shipped
 
 - Telegram WebApp Battle Arena.

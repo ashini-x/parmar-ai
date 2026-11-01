@@ -7,7 +7,7 @@ import type {
 
 import { generateGeminiAnswer, GeminiError, isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount } from "./ai/gemini";
 import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, ConversationTurn, QuizItem } from "./config/env";
-import { MAX_QUIZ_BATCH_SIZE } from "./config/env";
+import { DEFAULT_PHOTO_QUESTION, MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "./config/env";
 import { getConfig } from "./config/env";
 import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } from "./core/job-store";
 import { logger } from "./core/logger";
@@ -20,6 +20,8 @@ import {
   sendTelegramQuiz,
   stopTelegramPoll,
   TelegramError,
+  TelegramMediaError,
+  downloadTelegramPhotos,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
@@ -39,6 +41,9 @@ interface TelegramMessage {
   chat?: { id?: number; type?: string };
   from?: { id?: number; is_bot?: boolean; username?: string; first_name?: string; last_name?: string };
   text?: string;
+  caption?: string;
+  media_group_id?: string;
+  photo?: Array<{ file_id?: string; width?: number; height?: number; file_size?: number }>;
 }
 
 interface TelegramPollAnswer {
@@ -52,6 +57,8 @@ interface TelegramUpdate {
   message?: TelegramMessage;
   poll_answer?: TelegramPollAnswer;
 }
+
+interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed"; }
 
 interface BeginJobResponse {
   action: "new" | "duplicate" | "rate_limited" | "retry_ack";
@@ -175,7 +182,9 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true }), requestId);
   }
 
-  const text = message?.text?.trim() ?? "";
+  const text = (message?.text ?? message?.caption ?? "").trim();
+  const photoFileId = getTelegramPhotoFileId(message?.photo);
+  const questionText = text || (photoFileId ? DEFAULT_PHOTO_QUESTION : "");
   if (chatType && chatType !== "private") {
     await bestEffortTelegram("group_scope", () =>
       sendTelegramMessage(env, chatId, "Parmar AI abhi private chat mein SSC doubts ke liye optimized hai. Mujhe DM karke doubt bhejo. 📚", messageId),
@@ -200,11 +209,12 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     updateId,
     chatId: String(chatId),
     textLength: text.length,
+    photoCount: photoFileId ? 1 : 0,
   });
 
-  if (!text) {
+  if (!text && !photoFileId) {
     await bestEffortTelegram("non_text", () =>
-      sendTelegramMessage(env, chatId, "Abhi main text SSC GA/GS doubts handle kar raha hoon. 📚", messageId),
+      sendTelegramMessage(env, chatId, "Abhi main text ya photo SSC GA/GS doubts handle kar raha hoon. 📚", messageId),
     );
     return withRequestId(json({ ok: true }), requestId);
   }
@@ -328,6 +338,37 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true, suspended: true }), requestId);
   }
 
+  if (photoFileId && message?.media_group_id?.trim()) {
+    await jobStoreRequest(env, chatId, { action: "clear_pending_quiz" }).catch(() => undefined);
+    const staged = await jobStoreRequest<PhotoAlbumStageResponse>(env, chatId, {
+      action: "stage_photo_album",
+      botConnectionId: bot.connectionId,
+      mediaGroupId: message.media_group_id.trim(),
+      telegramUserId: analyticsUser.telegramUserId,
+      updateId,
+      chatId,
+      messageId,
+      fileId: photoFileId,
+      caption: text,
+      requestId,
+    });
+    if (staged.action === "too_many") {
+      await bestEffortTelegram("photo_album_too_many", () => sendTelegramMessage(
+        env,
+        chatId,
+        `Ek doubt ke saath maximum ${MAX_PHOTO_COUNT} photos bhej sakte ho. Thode kam photos ke saath dobara bhejo. 🙂`,
+        messageId,
+        bot.connectionId,
+      ));
+      return withRequestId(json({ ok: true, rejected: "photo_album_too_many" }), requestId);
+    }
+    if (staged.action === "staged" || staged.action === "duplicate") {
+      return withRequestId(json({ ok: true, photoAlbum: staged.action }), requestId);
+    }
+    // A very late item in an already-flushed album is still answered as a
+    // standalone photo instead of being dropped.
+  }
+
   const mcqRequest = isMcqRequest(text);
   const parsedQuizCount = mcqRequest ? parseRequestedMcqCount(text) : 1;
 
@@ -367,10 +408,11 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     telegramUserId: analyticsUser.telegramUserId,
     updateId,
     chatId,
-    question: text,
+    question: questionText,
     messageId,
     requestId,
     createdAt: Date.now(),
+    ...(photoFileId ? { photoFileIds: [photoFileId] } : {}),
     requestedQuizCount: effectiveQuizCount,
     quizContinuation: quizContinuationCount > 0,
   });
@@ -385,7 +427,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       botConnectionId: bot.connectionId,
       updateId,
       chatId,
-      question: text,
+      question: questionText,
       messageId,
       requestId,
       createdAt: Date.now(),
@@ -397,7 +439,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       await env.QUESTION_QUEUE.send(retryJob, { contentType: "json" });
       await jobStoreRequest(env, chatId, { action: "mark_queued", botConnectionId: bot.connectionId, updateId });
       queueAnalytics(ctx, "question_retry_ack", () => recordQuestionStart(env, {
-        updateId, botConnectionId: bot.connectionId, requestId, user: analyticsUser, messageId, question: text, receivedAt: Date.now(),
+        updateId, botConnectionId: bot.connectionId, requestId, user: analyticsUser, messageId, question: questionText, receivedAt: Date.now(),
       }));
     } catch (error) {
       logger.error("question_queue_retry_enqueue_failed", {
@@ -456,7 +498,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     botConnectionId: bot.connectionId,
     updateId,
     chatId,
-    question: text,
+    question: questionText,
     messageId,
     requestId,
     createdAt: Date.now(),
@@ -474,7 +516,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       requestId,
       user: analyticsUser,
       messageId,
-      question: text,
+      question: questionText,
       receivedAt: Date.now(),
     }));
   } catch (error) {
@@ -595,10 +637,14 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       let packet = claim.record.answerPacket;
 
       if (!packet) {
+        const images = claim.record.photoFileIds?.length
+          ? await downloadTelegramPhotos(env, claim.record.photoFileIds, job.botConnectionId)
+          : [];
         const generation = await generateGeminiAnswer(
           env,
           job.question,
           buildProfileContext(profile, recentConversation),
+          images,
         );
         packet = generation.packet;
         if (packet.questionMode === "mcq" && packet.responseMode === "text" && !(packet.quizItems?.length)) {
@@ -1095,7 +1141,7 @@ function buildStartText(): string {
     "",
     "Parmar AI abhi SSC-focused study companion hai—especially GA/GS, History, Polity, Geography, Economy, Science, Static GK aur exam-oriented factual doubts ke liye. 📚",
     "",
-    "Doubt bhejo. Main sirf answer nahi dunga; zarurat padne par bataunga ki SSC ke liye kya yaad rakhna hai aur kya next revise karna useful hoga.\nDaily AI questions: 20 per student.",
+    "Doubt text, ek photo, ya maximum 10 photos ka album bhejo; caption optional hai. Main SSC ke liye kya yaad rakhna hai woh bhi bataunga.\nDaily AI questions: 20 per student.",
     "",
     "/exam cgl — target exam set karo",
     "/profile — tumhari study profile",
@@ -1112,7 +1158,7 @@ function buildHelpText(): string {
     "/reset — study profile reset\n/delete-my-data — delete your stored study data",
     "/help — ye help",
     "",
-    "Normal SSC GA/GS doubt seedha bhejo.\nDaily AI questions: 20.",
+    "Normal SSC GA/GS doubt text ya photo mein bhejo. Ek album mein maximum 10 photos bhej sakte ho; caption optional hai.\nDaily AI questions: 20.",
   ].join("\n");
 }
 
@@ -1300,6 +1346,7 @@ function isMessageEditTerminalError(error: unknown): boolean {
 }
 
 function userFacingFailure(error: unknown): string {
+  if (error instanceof TelegramMediaError) return "Photo process nahi ho paayi. JPEG, PNG ya WebP bhejo; har photo 7 MB tak aur poora album 12 MB tak ho sakta hai. 🙏";
   if (error instanceof GeminiError) {
     if (error.status === 401 || error.status === 403) return "AI service ki authentication/configuration mein problem aa gayi hai. Team isse check kar rahi hai. 🙏";
     if (error.status === 429) return "AI service par abhi bahut load hai. Tumhara doubt save hai; system retry kar raha hai. 🙏";
@@ -1336,6 +1383,14 @@ function isValidQuestionJob(job: unknown): job is QuestionJob {
     quizCount >= 1 &&
     quizCount <= MAX_QUIZ_BATCH_SIZE
   );
+}
+
+function getTelegramPhotoFileId(photos: TelegramMessage["photo"]): string | undefined {
+  if (!Array.isArray(photos)) return undefined;
+  const largest = [...photos]
+    .filter((photo) => typeof photo?.file_id === "string" && photo.file_id.trim())
+    .sort((a, b) => (Number(b.width) * Number(b.height)) - (Number(a.width) * Number(a.height)))[0];
+  return largest?.file_id?.trim();
 }
 
 function isSafeInteger(value: unknown): value is number {

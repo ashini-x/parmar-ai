@@ -4,7 +4,7 @@
 
 Parmar AI is a **Telegram-first, SSC-focused AI study companion** built for fast doubt solving, conversation continuity, adaptive study assistance, native quiz interaction, and controlled operational visibility.
 
-The current repository baseline is **v2.8.0**, including the production multi-MCQ quiz workflow.
+The current production baseline is **v2.8.0**, including the multi-MCQ quiz workflow. Photo doubt support is being prepared on the `feat/photo-doubt-support` branch and is not deployed.
 
 > **Public repository does not mean public reuse.** This codebase is published for transparency and inspection. Reuse, redistribution, commercial exploitation, derivative products, AI/ML training use, advertising or endorsement use, and Parmar branding are restricted by the repository's legal documents unless separately authorized in writing.
 
@@ -15,6 +15,7 @@ The current repository baseline is **v2.8.0**, including the production multi-MC
 Parmar currently supports:
 
 - SSC GA/GS-focused doubt solving.
+- Photo doubts with optional captions and albums of up to 10 pictures (feature branch; not in production yet).
 - Context-aware follow-ups using recent completed conversation turns.
 - Simplification and clarification requests.
 - Evidence-based study personalization, including recent topics, attention areas, and revision guidance.

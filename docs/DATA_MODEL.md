@@ -1,4 +1,4 @@
-# Data Model — v2.5.2
+# Data Model
 
 ## Durable Object keys
 
@@ -7,7 +7,8 @@
 | `profile:v1` | Student profile payload. The key is retained for backward compatibility while the stored profile carries version `2`. |
 | `meta:rate:v2` | Daily/burst quota metadata. |
 | `conversation:resetAt` | Timestamp boundary for `/reset`. |
-| `job:<updateId>` | Durable question job record. |
+| `job:<botConnectionId>:<updateId>` | Durable question job record, including temporary Telegram photo file IDs when a job has images. Photo IDs are cleared on completion; abandoned state follows 48-hour cleanup. |
+| `photo-album:<botConnectionId>:<mediaGroupId>` | Temporary Telegram album staging and update-deduplication state. Image file IDs are removed when the album is queued; staging follows 48-hour cleanup. |
 | `profile:applied:<updateId>` | Idempotency marker preventing duplicate profile updates. |
 
 ## Student profile
@@ -47,7 +48,7 @@ The rate state tracks:
 - daily count,
 - last rate notification timestamp.
 
-The accepted-question counters are independent of `/reset`. Privileged access is a separate authorization state and is also independent of `/reset`.
+The accepted-question counters are independent of `/reset`. Privileged access is a separate authorization state and is also independent of `/reset`. A photo album is admitted as one question and consumes one usage unit. Photo bytes are not stored in this data model; only Telegram file IDs are retained temporarily so Queue retries can retrieve the images.
 
 ## D1 tables
 

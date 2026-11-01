@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — Photo Doubt Support (feature branch)
+- Added private Telegram photo doubts, including albums of up to 10 pictures, as one SSC doubt and one quota unit.
+- Added bounded image downloads and Gemini multimodal input; image bytes are not persisted.
+- Album photo IDs stay in Durable Object retry state and are cleared when processing completes.
+
+
 ## 2.8.0 — Production Multi-MCQ Quiz Batches
 - Added bounded multi-MCQ requests with up to 10 independent native Telegram quizzes per request.
 - Batch size is carried through Durable Object job state and accounted for against daily and burst controls.

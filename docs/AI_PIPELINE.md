@@ -2,9 +2,9 @@
 
 ## Input contract
 
-The Worker accepts text-only private Telegram messages up to `MAX_QUESTION_LENGTH` characters.
+The Worker accepts private Telegram text or photo messages. Captions are bounded by `MAX_QUESTION_LENGTH`. A single photo is processed directly; Telegram album updates are staged for a 2.5-second quiet period and combined into one doubt (maximum 10 photos).
 
-The question is passed to the Queue as a versioned `QuestionJob` containing: 
+The text question and optional caption are passed to the Queue as a versioned `QuestionJob` containing:
 
 - optional requested quiz count (1–10)
 
@@ -16,6 +16,8 @@ The question is passed to the Queue as a versioned `QuestionJob` containing:
 - `createdAt`
 - optional Telegram status message ID
 - optional canonical Telegram user ID for analytics continuity
+
+Photo file IDs are stored in the per-chat Durable Object job record for retries and are not included in Queue messages. At processing time, the consumer retrieves the photos from Telegram, validates JPEG/PNG/WebP type and size, then sends them to Gemini as inline image parts in message order. Downloads are capped at 7 MB per image and 12 MB total. The application does not persist the image bytes.
 
 ## Context assembly
 

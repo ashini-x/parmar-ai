@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
-import { MAX_QUIZ_BATCH_SIZE } from "../config/env";
-import { sendTelegramChatAction } from "../telegram/api";
+import { DEFAULT_PHOTO_QUESTION, MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "../config/env";
+import { sendTelegramChatAction, sendTelegramMessage } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, isTelegramBotConnectionActive } from "../telegram/bot-store";
 
@@ -17,6 +17,10 @@ const PROFILE_KEY = "profile:v1";
 const CONVERSATION_RESET_KEY = "conversation:resetAt";
 const PENDING_QUIZ_REQUEST_KEY = "pending:quiz-request";
 const PENDING_QUIZ_REQUEST_TTL_MS = 15 * 60 * 1_000;
+const PHOTO_ALBUM_SETTLE_MS = 2_500;
+const PHOTO_STATUS_TEXT = "✅ Photo doubt mil gaya. Tasveerein dekh raha hoon... 🤔";
+const PHOTO_RATE_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
+const PHOTO_BURST_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
 
 interface RateMeta {
   burstWindowStart: number;
@@ -48,7 +52,31 @@ export interface JobRecord {
   answerPacket?: AnswerPacket;
   profileUpdated?: boolean;
   quizCount?: number;
+  photoFileIds?: string[];
 }
+
+interface PendingAlbumPhoto {
+  updateId: number;
+  messageId: number;
+  fileId: string;
+  caption: string;
+}
+
+interface PendingPhotoAlbum {
+  version: 1;
+  state: "collecting" | "queued" | "rejected";
+  botConnectionId: string;
+  mediaGroupId: string;
+  chatId: number;
+  telegramUserId: number;
+  requestId: string;
+  createdAt: number;
+  flushAt: number;
+  photos: PendingAlbumPhoto[];
+  updateIds: number[];
+}
+
+interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed"; }
 
 interface StoredQuizResultContext {
   pollId: string;
@@ -110,6 +138,7 @@ export class JobDedupe extends DurableObject {
 
     switch (action) {
       case "begin": return this.json(await this.beginJob(body));
+      case "stage_photo_album": return this.json(await this.stagePhotoAlbum(body));
       case "save_ack": return this.json(await this.saveAck(body));
       case "mark_queued": return this.json(await this.markQueued(body));
       case "claim": return this.json(await this.claim(body));
@@ -135,6 +164,51 @@ export class JobDedupe extends DurableObject {
     await this.reconcileAlarm();
   }
 
+  private async stagePhotoAlbum(body: Record<string, unknown>): Promise<PhotoAlbumStageResponse> {
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID).trim();
+    const mediaGroupId = String(body.mediaGroupId ?? "").trim();
+    const updateId = positiveNumber(body.updateId);
+    const messageId = positiveNumber(body.messageId);
+    const fileId = String(body.fileId ?? "").trim();
+    const requestId = String(body.requestId ?? "").trim();
+    const telegramUserId = positiveNumber(body.telegramUserId);
+    const caption = String(body.caption ?? "").trim();
+    if (!botConnectionId || !mediaGroupId || mediaGroupId.length > 128 || !fileId || fileId.length > 512 || !requestId) {
+      throw new Error("Invalid photo album payload.");
+    }
+
+    const now = Date.now();
+    const key = photoAlbumKey(botConnectionId, mediaGroupId);
+    const result = await this.ctx.storage.transaction(async (transaction) => {
+      const existing = await transaction.get<PendingPhotoAlbum>(key);
+      if (existing?.updateIds.includes(updateId)) return { action: "duplicate" as const };
+      if (existing && existing.state !== "collecting") return { action: "closed" as const };
+      if (existing && existing.photos.length >= MAX_PHOTO_COUNT) return { action: "too_many" as const };
+
+      const album: PendingPhotoAlbum = existing ?? {
+        version: 1,
+        state: "collecting",
+        botConnectionId,
+        mediaGroupId,
+        chatId: positiveOrNegativeNumber(body.chatId),
+        telegramUserId,
+        requestId,
+        createdAt: now,
+        flushAt: now + PHOTO_ALBUM_SETTLE_MS,
+        photos: [],
+        updateIds: [],
+      };
+      album.photos.push({ updateId, messageId, fileId, caption });
+      album.updateIds.push(updateId);
+      album.flushAt = now + PHOTO_ALBUM_SETTLE_MS;
+      await transaction.put(key, album);
+      return { action: "staged" as const };
+    });
+
+    if (result.action === "staged") await this.reconcileAlarm();
+    return result;
+  }
+
   private async ensureTypingAlarm(now = Date.now()): Promise<void> {
     const alarm = await this.ctx.storage.getAlarm();
     if (alarm === null || alarm > now + TYPING_HEARTBEAT_MS) {
@@ -149,8 +223,8 @@ export class JobDedupe extends DurableObject {
     const staleQueuedCutoff = now - QUEUED_RECOVERY_MS;
     const staleProcessingCutoff = now - PROCESSING_LEASE_MS;
     const terminalCutoff = now - JOB_MAX_ACTIVE_AGE_MS;
-    const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
     const quizResults = await this.ctx.storage.list<StoredQuizResultContext>({ prefix: "quiz-result:" });
+    const albums = await this.ctx.storage.list<PendingPhotoAlbum>({ prefix: "photo-album:" });
     let hasProcessingRecentJob = false;
     let nextWakeAt: number | null = null;
 
@@ -158,6 +232,27 @@ export class JobDedupe extends DurableObject {
       if (result.createdAt < retentionCutoff) await this.ctx.storage.delete(key);
     }
 
+    for (const [key, album] of albums) {
+      if (album.createdAt < retentionCutoff) {
+        await this.ctx.storage.delete(key);
+        continue;
+      }
+      nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, album.createdAt + JOB_RETENTION_MS);
+      if (album.state !== "collecting") continue;
+      if (album.flushAt > now) {
+        nextWakeAt = Math.min(nextWakeAt, album.flushAt);
+        continue;
+      }
+      try {
+        await this.flushPhotoAlbum(key, album, now);
+      } catch {
+        album.flushAt = now + 5_000;
+        await this.ctx.storage.put(key, album);
+        nextWakeAt = Math.min(nextWakeAt, album.flushAt);
+      }
+    }
+
+    const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
     for (const [key, record] of jobs) {
       if (record.createdAt < retentionCutoff) { await this.ctx.storage.delete(key); continue; }
       nextWakeAt = nextWakeAt === null ? record.createdAt + JOB_RETENTION_MS : Math.min(nextWakeAt, record.createdAt + JOB_RETENTION_MS);
@@ -168,6 +263,7 @@ export class JobDedupe extends DurableObject {
         record.processingAt = undefined;
         record.queuedAt = undefined;
         record.activeQueueMessageId = undefined;
+        record.photoFileIds = undefined;
         await this.ctx.storage.put(key, record);
         continue;
       }
@@ -237,6 +333,84 @@ export class JobDedupe extends DurableObject {
       return;
     }
     await this.ctx.storage.deleteAlarm();
+  }
+
+  private async flushPhotoAlbum(key: string, album: PendingPhotoAlbum, now: number): Promise<void> {
+    if (!(await isTelegramBotConnectionActive(this.runtimeEnv, album.botConnectionId))) {
+      album.state = "rejected";
+      album.photos = [];
+      await this.ctx.storage.put(key, album);
+      return;
+    }
+
+    const photos = [...album.photos].sort((a, b) => a.messageId - b.messageId);
+    if (!photos.length) {
+      album.state = "rejected";
+      await this.ctx.storage.put(key, album);
+      return;
+    }
+    const updateId = Math.min(...photos.map((photo) => photo.updateId));
+    const question = photos.find((photo) => photo.caption)?.caption || DEFAULT_PHOTO_QUESTION;
+    const begin = await this.beginJob({
+      action: "begin",
+      botConnectionId: album.botConnectionId,
+      telegramUserId: album.telegramUserId,
+      updateId,
+      chatId: album.chatId,
+      question,
+      messageId: photos[0].messageId,
+      requestId: album.requestId,
+      createdAt: album.createdAt,
+      requestedQuizCount: 1,
+      photoFileIds: photos.map((photo) => photo.fileId),
+    });
+
+    if (begin.action === "rate_limited") {
+      album.state = "rejected";
+      album.photos = [];
+      await this.ctx.storage.put(key, album);
+      if (begin.notify) {
+        const limitText = begin.rateLimitReason === "daily" ? PHOTO_RATE_LIMIT_TEXT : PHOTO_BURST_LIMIT_TEXT;
+        await sendTelegramMessage(this.runtimeEnv, album.chatId, limitText, photos[0].messageId, album.botConnectionId);
+      }
+      return;
+    }
+
+    if (begin.action === "duplicate") {
+      album.state = "queued";
+      album.photos = [];
+      await this.ctx.storage.put(key, album);
+      return;
+    }
+
+    let statusMessageId = begin.statusMessageId;
+    if (!statusMessageId) {
+      const status = await sendTelegramMessage(this.runtimeEnv, album.chatId, PHOTO_STATUS_TEXT, photos[0].messageId, album.botConnectionId);
+      statusMessageId = status.message_id;
+      await this.saveAck({ botConnectionId: album.botConnectionId, updateId, statusMessageId });
+    }
+
+    const job: QuestionJob = {
+      version: 2,
+      botConnectionId: album.botConnectionId,
+      updateId,
+      chatId: album.chatId,
+      question,
+      messageId: photos[0].messageId,
+      requestId: album.requestId,
+      createdAt: album.createdAt,
+      statusMessageId,
+      telegramUserId: album.telegramUserId,
+      quizCount: begin.quizCount ?? 1,
+    };
+    await this.runtimeEnv.QUESTION_QUEUE.send(job, { contentType: "json" });
+    await this.markQueued({ botConnectionId: album.botConnectionId, updateId });
+    void sendTelegramChatAction(this.runtimeEnv, album.chatId, "typing", album.botConnectionId).catch(() => undefined);
+
+    album.state = "queued";
+    album.photos = [];
+    album.flushAt = now;
+    await this.ctx.storage.put(key, album);
   }
 
   private async beginJob(body: Record<string, unknown>): Promise<BeginResponse> {
@@ -328,6 +502,7 @@ export class JobDedupe extends DurableObject {
       state: "pending",
       leaseVersion: 0,
       quizCount: requestedQuizCount,
+      ...(job.photoFileIds?.length ? { photoFileIds: job.photoFileIds } : {}),
     };
 
     await this.ctx.storage.put(key, record);
@@ -429,6 +604,7 @@ export class JobDedupe extends DurableObject {
     record.processingAt = undefined;
     record.queuedAt = undefined;
     record.activeQueueMessageId = undefined;
+    record.photoFileIds = undefined;
     await this.ctx.storage.put(key, record);
     await this.reconcileAlarm();
     return { ok: true };
@@ -713,8 +889,18 @@ function clampConversationText(value: string, maxLength: number): string {
   return normalized.slice(0, cut > maxLength * 0.7 ? cut : maxLength).trim() + "…";
 }
 
-function parseJob(body: Record<string, unknown>): QuestionJob {
-  const job: QuestionJob = {
+interface ParsedQuestionJob extends QuestionJob { photoFileIds?: string[]; }
+
+function parseJob(body: Record<string, unknown>): ParsedQuestionJob {
+  const photoIdsValue = body.photoFileIds;
+  if (photoIdsValue !== undefined && (
+    !Array.isArray(photoIdsValue) ||
+    photoIdsValue.length < 1 ||
+    photoIdsValue.length > MAX_PHOTO_COUNT ||
+    photoIdsValue.some((value) => typeof value !== "string" || !value.trim() || value.length > 512)
+  )) throw new Error("Invalid photo IDs.");
+  const photoFileIds = Array.isArray(photoIdsValue) ? photoIdsValue.map((value) => String(value).trim()) : undefined;
+  const job: ParsedQuestionJob = {
     version: 2,
     botConnectionId: String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID),
     updateId: positiveNumber(body.updateId),
@@ -726,6 +912,7 @@ function parseJob(body: Record<string, unknown>): QuestionJob {
     createdAt: positiveNumber(body.createdAt),
     ...(body.statusMessageId !== undefined ? { statusMessageId: positiveNumber(body.statusMessageId) } : {}),
     ...(body.quizCount !== undefined ? { quizCount: Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, positiveNumber(body.quizCount))) } : {}),
+    ...(photoFileIds ? { photoFileIds } : {}),
   };
   if (!job.question || !job.requestId) throw new Error("Invalid job payload.");
   return job;
@@ -928,6 +1115,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function photoAlbumKey(botConnectionId: string, mediaGroupId: string): string { return `photo-album:${encodeURIComponent(botConnectionId)}:${encodeURIComponent(mediaGroupId)}`; }
 function jobKey(botConnectionId: string, updateId: number): string { return `job:${botConnectionId}:${updateId}`; }
 function legacyJobKey(updateId: number): string { return `job:${updateId}`; }
 function positiveNumber(value: unknown): number {

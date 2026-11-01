@@ -21,6 +21,7 @@ Usernames, display names, and other mutable Telegram metadata are presentation a
 - Durable Object state stores per-chat operational state and study context.
 - D1 stores the centralized analytics and administrative projection.
 - Queue messages are operational transport, not the long-term analytics system of record.
+- Temporary photo file IDs are held in Durable Object state for retry; raw image bytes are processed in memory and are not stored by the application.
 
 ### Retention
 
@@ -38,7 +39,7 @@ Do not publish exports containing identifiable student information, private ques
 
 The /delete-my-data workflow is the product-level deletion path for centralized student data and associated Durable Object study state.
 
-Any new persistent store must define its deletion behavior before release. Native quiz sessions are deleted by /delete-my-data and follow the same configured raw-data retention lifecycle.
+Any new persistent store must define its deletion behavior before release. Native quiz sessions are deleted by /delete-my-data and follow the same configured raw-data retention lifecycle. Photo album staging and retry file IDs live in the student's Durable Object, so `/delete-my-data` clears them with the rest of that object's state; completed jobs clear their photo IDs and abandoned job state follows the 48-hour cleanup.
 
 ### Access control
 
