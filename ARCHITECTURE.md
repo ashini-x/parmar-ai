@@ -34,6 +34,10 @@ The architecture separates:
 16. D1 analytics is updated as a separate projection
 ```
 
+## Photo doubt path
+
+Telegram photo albums arrive as separate message updates. The Worker stages their file IDs in the per-chat Durable Object and waits 2.5 seconds after the latest image before admitting one job for the full album. Video messages and mixed photo/video albums are rejected. An album is one question and consumes one quota unit. The Queue message carries ordinary job metadata only; the photo IDs remain in the Durable Object for retry. The consumer retrieves bounded JPEG, PNG, or WebP data from Telegram and passes ordered inline images to Vertex AI / Gemini. The image bytes are not persisted.
+
 ## Durable Object responsibilities
 
 `JobDedupe` is the main per-private-chat operational state store.

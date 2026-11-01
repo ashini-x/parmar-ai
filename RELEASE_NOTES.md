@@ -1,5 +1,14 @@
 # Parmar AI Release Notes
 
+## Unreleased — Photo Doubt Support (feature branch)
+
+- Students can send one photo or a photo-only album of up to 5 pictures with an optional caption; video uploads and mixed photo/video albums are rejected. Photo albums over five images are rejected with a chat notice.
+- Each photo album is combined into one doubt and one quota unit.
+- Photo downloads are bounded to 7 MB per image and 12 MB per album. Supported formats are JPEG, PNG, and WebP.
+- Raw image bytes are held only for request processing; Telegram file IDs are kept in Durable Object retry state and cleared after completion.
+- This feature branch is not deployed to production.
+
+
 ## v2.8.0 — Production Multi-MCQ Quiz Batches
 
 ### Student experience
