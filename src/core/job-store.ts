@@ -21,6 +21,8 @@ const PHOTO_ALBUM_SETTLE_MS = 2_500;
 const PHOTO_STATUS_TEXT = "✅ Photo doubt mil gaya. Tasveerein dekh raha hoon... 🤔";
 const PHOTO_RATE_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
 const PHOTO_BURST_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
+const UNSUPPORTED_VIDEO_NOTICE_KEY = "meta:unsupported-video-notice";
+const UNSUPPORTED_VIDEO_NOTICE_INTERVAL_MS = 10_000;
 
 interface RateMeta {
   burstWindowStart: number;
@@ -76,7 +78,7 @@ interface PendingPhotoAlbum {
   updateIds: number[];
 }
 
-interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed"; }
+interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; }
 
 interface StoredQuizResultContext {
   pollId: string;
@@ -139,6 +141,7 @@ export class JobDedupe extends DurableObject {
     switch (action) {
       case "begin": return this.json(await this.beginJob(body));
       case "stage_photo_album": return this.json(await this.stagePhotoAlbum(body));
+      case "reject_telegram_video": return this.json(await this.rejectTelegramVideo(body));
       case "save_ack": return this.json(await this.saveAck(body));
       case "mark_queued": return this.json(await this.markQueued(body));
       case "claim": return this.json(await this.claim(body));
@@ -164,6 +167,50 @@ export class JobDedupe extends DurableObject {
     await this.reconcileAlarm();
   }
 
+  private async rejectTelegramVideo(body: Record<string, unknown>): Promise<{ notify: boolean }> {
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID).trim();
+    const mediaGroupId = String(body.mediaGroupId ?? "").trim();
+    const updateId = positiveNumber(body.updateId);
+    const chatId = positiveOrNegativeNumber(body.chatId);
+    const telegramUserId = positiveNumber(body.telegramUserId);
+    const requestId = String(body.requestId ?? "").trim();
+    const now = Date.now();
+    let changed = false;
+
+    if (mediaGroupId && mediaGroupId.length <= 128) {
+      const key = photoAlbumKey(botConnectionId, mediaGroupId);
+      changed = await this.ctx.storage.transaction(async (transaction) => {
+        const existing = await transaction.get<PendingPhotoAlbum>(key);
+        if (existing?.state === "queued") return false;
+        if (existing?.state === "rejected") return false;
+        const album: PendingPhotoAlbum = existing ?? {
+          version: 1,
+          state: "rejected",
+          botConnectionId,
+          mediaGroupId,
+          chatId,
+          telegramUserId,
+          requestId,
+          createdAt: now,
+          flushAt: now,
+          photos: [],
+          updateIds: [],
+        };
+        album.state = "rejected";
+        album.photos = [];
+        if (!album.updateIds.includes(updateId)) album.updateIds.push(updateId);
+        await transaction.put(key, album);
+        return true;
+      });
+      if (changed) await this.reconcileAlarm();
+    }
+
+    const lastNoticeAt = await this.ctx.storage.get<number>(UNSUPPORTED_VIDEO_NOTICE_KEY);
+    const notify = !Number.isFinite(lastNoticeAt) || now - Number(lastNoticeAt) >= UNSUPPORTED_VIDEO_NOTICE_INTERVAL_MS;
+    if (notify) await this.ctx.storage.put(UNSUPPORTED_VIDEO_NOTICE_KEY, now);
+    return { notify };
+  }
+
   private async stagePhotoAlbum(body: Record<string, unknown>): Promise<PhotoAlbumStageResponse> {
     const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID).trim();
     const mediaGroupId = String(body.mediaGroupId ?? "").trim();
@@ -182,7 +229,8 @@ export class JobDedupe extends DurableObject {
     const result = await this.ctx.storage.transaction(async (transaction) => {
       const existing = await transaction.get<PendingPhotoAlbum>(key);
       if (existing?.updateIds.includes(updateId)) return { action: "duplicate" as const };
-      if (existing && existing.state !== "collecting") return { action: "closed" as const };
+      if (existing?.state === "rejected") return { action: "rejected" as const };
+      if (existing?.state === "queued") return { action: "closed" as const };
       if (existing && existing.photos.length >= MAX_PHOTO_COUNT) return { action: "too_many" as const };
 
       const album: PendingPhotoAlbum = existing ?? {

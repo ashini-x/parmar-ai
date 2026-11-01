@@ -6,9 +6,10 @@
 |---|---|
 | `profile:v1` | Student profile payload. The key is retained for backward compatibility while the stored profile carries version `2`. |
 | `meta:rate:v2` | Daily/burst quota metadata. |
+| `meta:unsupported-video-notice` | Ten-second per-chat notice throttle for rejected video uploads. |
 | `conversation:resetAt` | Timestamp boundary for `/reset`. |
 | `job:<botConnectionId>:<updateId>` | Durable question job record, including temporary Telegram photo file IDs when a job has images. Photo IDs are cleared on completion; abandoned state follows 48-hour cleanup. |
-| `photo-album:<botConnectionId>:<mediaGroupId>` | Temporary Telegram album staging and update-deduplication state. Image file IDs are removed when the album is queued; staging follows 48-hour cleanup. |
+| `photo-album:<botConnectionId>:<mediaGroupId>` | Temporary photo-album staging and update-deduplication state, including rejected mixed-media groups. Image file IDs are removed when a photo-only album is queued; staging follows 48-hour cleanup. |
 | `profile:applied:<updateId>` | Idempotency marker preventing duplicate profile updates. |
 
 ## Student profile

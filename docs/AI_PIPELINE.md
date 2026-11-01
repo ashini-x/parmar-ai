@@ -2,7 +2,7 @@
 
 ## Input contract
 
-The Worker accepts private Telegram text or photo messages. Captions are bounded by `MAX_QUESTION_LENGTH`. A single photo is processed directly; Telegram album updates are staged for a 2.5-second quiet period and combined into one doubt (maximum 10 photos).
+The Worker accepts private Telegram text or photo messages; video uploads and mixed photo/video albums are rejected. Captions are bounded by `MAX_QUESTION_LENGTH`. A single photo is processed directly; photo-only Telegram album updates are staged for a 2.5-second quiet period and combined into one doubt (maximum 10 photos).
 
 The text question and optional caption are passed to the Queue as a versioned `QuestionJob` containing:
 

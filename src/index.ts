@@ -44,6 +44,10 @@ interface TelegramMessage {
   caption?: string;
   media_group_id?: string;
   photo?: Array<{ file_id?: string; width?: number; height?: number; file_size?: number }>;
+  video?: unknown;
+  video_note?: unknown;
+  animation?: unknown;
+  document?: { mime_type?: string };
 }
 
 interface TelegramPollAnswer {
@@ -58,7 +62,7 @@ interface TelegramUpdate {
   poll_answer?: TelegramPollAnswer;
 }
 
-interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed"; }
+interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; }
 
 interface BeginJobResponse {
   action: "new" | "duplicate" | "rate_limited" | "retry_ack";
@@ -194,6 +198,28 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   const analyticsUser = buildAnalyticsUser(message!, chatId);
   queueAnalytics(ctx, "user_seen", () => recordUserSeen(env, analyticsUser));
+
+  if (isTelegramVideoMessage(message)) {
+    const notice = await jobStoreRequest<{ notify: boolean }>(env, chatId, {
+      action: "reject_telegram_video",
+      botConnectionId: bot.connectionId,
+      mediaGroupId: message?.media_group_id,
+      updateId,
+      chatId,
+      telegramUserId: analyticsUser.telegramUserId,
+      requestId,
+    });
+    if (notice.notify) {
+      await bestEffortTelegram("video_not_supported", () => sendTelegramMessage(
+        env,
+        chatId,
+        "Parmar AI sirf photos support karta hai—videos process nahi karta. SSC doubt ke liye ek photo ya maximum 10 photos ka album bhejo. 📸",
+        messageId,
+        bot.connectionId,
+      ));
+    }
+    return withRequestId(json({ ok: true, rejected: "video_not_supported" }), requestId);
+  }
 
   const maxQuestionLength = positiveIntEnv(env.MAX_QUESTION_LENGTH, 4_000);
 
@@ -362,7 +388,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       ));
       return withRequestId(json({ ok: true, rejected: "photo_album_too_many" }), requestId);
     }
-    if (staged.action === "staged" || staged.action === "duplicate") {
+    if (staged.action === "staged" || staged.action === "duplicate" || staged.action === "rejected") {
       return withRequestId(json({ ok: true, photoAlbum: staged.action }), requestId);
     }
     // A very late item in an already-flushed album is still answered as a
@@ -1141,7 +1167,7 @@ function buildStartText(): string {
     "",
     "Parmar AI abhi SSC-focused study companion hai—especially GA/GS, History, Polity, Geography, Economy, Science, Static GK aur exam-oriented factual doubts ke liye. 📚",
     "",
-    "Doubt text, ek photo, ya maximum 10 photos ka album bhejo; caption optional hai. Main SSC ke liye kya yaad rakhna hai woh bhi bataunga.\nDaily AI questions: 20 per student.",
+    "SSC doubt text ya photo mein bhejo. Ek album mein maximum 10 photos bhejo; caption optional hai. Videos supported nahi hain.\nDaily AI questions: 20 per student.",
     "",
     "/exam cgl — target exam set karo",
     "/profile — tumhari study profile",
@@ -1158,7 +1184,7 @@ function buildHelpText(): string {
     "/reset — study profile reset\n/delete-my-data — delete your stored study data",
     "/help — ye help",
     "",
-    "Normal SSC GA/GS doubt text ya photo mein bhejo. Ek album mein maximum 10 photos bhej sakte ho; caption optional hai.\nDaily AI questions: 20.",
+    "Normal SSC GA/GS doubt text ya photo mein bhejo. Ek album mein maximum 10 photos bhejo; caption optional hai. Videos supported nahi hain.\nDaily AI questions: 20.",
   ].join("\n");
 }
 
@@ -1382,6 +1408,15 @@ function isValidQuestionJob(job: unknown): job is QuestionJob {
     Number.isSafeInteger(quizCount) &&
     quizCount >= 1 &&
     quizCount <= MAX_QUIZ_BATCH_SIZE
+  );
+}
+
+function isTelegramVideoMessage(message: TelegramMessage | undefined): boolean {
+  return Boolean(
+    message?.video ||
+    message?.video_note ||
+    message?.animation ||
+    message?.document?.mime_type?.toLowerCase().startsWith("video/"),
   );
 }
 

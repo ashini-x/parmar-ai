@@ -23,7 +23,7 @@
 
 ## In development — `feat/photo-doubt-support`
 
-- Photo-based SSC doubts with optional captions and albums of up to 10 pictures. This feature branch is not part of the v2.8.0 production release.
+- Photo-only SSC doubts with optional captions and albums of up to 10 pictures; video uploads are rejected. This feature branch is not part of the v2.8.0 production release.
 
 ## Planned / not shipped
 
