@@ -5,7 +5,7 @@ import type {
   ScheduledController,
 } from "@cloudflare/workers-types";
 
-import { generateGeminiAnswer, GeminiError, isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount } from "./ai/gemini";
+import { generateGeminiAnswer, GeminiError, isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount, type PartialAnswerHandler } from "./ai/gemini";
 import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, ConversationTurn, QuizItem } from "./config/env";
 import { DEFAULT_PHOTO_QUESTION, MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "./config/env";
 import { getConfig } from "./config/env";
@@ -1147,30 +1147,59 @@ function createTelegramPartialAnswerUpdater(
   env: Env,
   job: QuestionJob,
   statusMessageId: number,
-): (partialAnswer: string) => Promise<void> {
+): PartialAnswerHandler {
+  let latestText = "";
   let lastSentText = "";
   let lastSentAt = 0;
   let disabled = false;
+  let inFlight: Promise<void> | null = null;
 
-  return async (partialAnswer: string): Promise<void> => {
-    const text = partialAnswer.trimEnd().slice(0, 3_900);
-    if (disabled || text.length < 12 || text === lastSentText) return;
+  const scheduleUpdate = (): void => {
+    if (disabled || inFlight || latestText.length < 12 || latestText === lastSentText) return;
+    if (lastSentAt && Date.now() - lastSentAt < 800) return;
 
-    const now = Date.now();
-    if (lastSentAt && now - lastSentAt < 800) return;
+    const text = latestText;
+    const request = (async (): Promise<void> => {
+      try {
+        await editTelegramMessage(env, job.chatId, statusMessageId, text, job.botConnectionId);
+        lastSentText = text;
+        lastSentAt = Date.now();
+      } catch (error) {
+        disabled = true;
+        logger.warn("telegram_partial_answer_stream_failed", {
+          requestId: job.requestId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
 
-    try {
-      await editTelegramMessage(env, job.chatId, statusMessageId, text, job.botConnectionId);
-      lastSentText = text;
-      lastSentAt = Date.now();
-    } catch (error) {
-      disabled = true;
-      logger.warn("telegram_partial_answer_stream_failed", {
-        requestId: job.requestId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+    inFlight = request;
+    void request.then(
+      () => {
+        if (inFlight === request) inFlight = null;
+        scheduleUpdate();
+      },
+      () => {
+        disabled = true;
+        if (inFlight === request) inFlight = null;
+      },
+    );
   };
+
+  const update = (partialAnswer: string): void => {
+    latestText = partialAnswer.trimEnd().slice(0, 3_900);
+    scheduleUpdate();
+  };
+
+  return Object.assign(update, {
+    flush: async (): Promise<void> => {
+      while (inFlight) {
+        const request = inFlight;
+        await request;
+        if (inFlight === request) break;
+      }
+    },
+  });
 }
 
 async function deliverAnswer(env: Env, job: QuestionJob, statusMessageId: number | undefined, answer: string): Promise<void> {

@@ -44,7 +44,14 @@ export async function telegramApi<T = unknown>(
   botConnectionId?: string,
 ): Promise<T> {
   const token = await resolveTelegramToken(env, botConnectionId);
+  return telegramApiWithToken<T>(token, method, payload);
+}
 
+async function telegramApiWithToken<T>(
+  token: string,
+  method: string,
+  payload: Record<string, unknown>,
+): Promise<T> {
   let lastError: TelegramError | null = null;
 
   for (let attempt = 1; attempt <= TELEGRAM_MAX_ATTEMPTS; attempt += 1) {
@@ -130,6 +137,7 @@ export async function telegramApi<T = unknown>(
   throw lastError ?? new TelegramError("Telegram API request failed.", undefined, true);
 }
 
+
 async function resolveTelegramToken(env: Env, botConnectionId?: string): Promise<string> {
   let token: string | undefined;
   if (botConnectionId) {
@@ -168,84 +176,126 @@ export async function downloadTelegramPhotos(
   }
 
   const token = await resolveTelegramToken(env, botConnectionId);
-  const images: GeminiImageInput[] = [];
-  let totalBytes = 0;
-
-  for (const fileId of fileIds) {
-    const file = await telegramApi<TelegramFileResult>(env, "getFile", { file_id: fileId }, botConnectionId);
+  const files = await Promise.all(
+    fileIds.map((fileId) =>
+      telegramApiWithToken<TelegramFileResult>(token, "getFile", { file_id: fileId }),
+    ),
+  );
+  const photos = files.map((file) => {
     const filePath = file.file_path?.trim() ?? "";
-    if (!filePath || filePath.includes("..") || !/^[A-Za-z0-9_./-]+$/.test(filePath)) {
+    if (!filePath || filePath.includes("..") || !/^[A-Za-z0-9_./-]+$/u.test(filePath)) {
       throw new TelegramMediaError("Telegram could not provide a usable photo file.");
     }
-    const remainingBytes = MAX_TOTAL_PHOTO_BYTES - totalBytes;
-    const maxBytes = Math.min(MAX_SINGLE_PHOTO_BYTES, remainingBytes);
-    if (maxBytes <= 0 || (Number.isFinite(file.file_size) && Number(file.file_size) > maxBytes)) {
+    const fileSize = Number.isSafeInteger(file.file_size) && Number(file.file_size) > 0
+      ? Number(file.file_size)
+      : undefined;
+    return { filePath, fileSize };
+  });
+
+  const allSizesKnown = photos.every((photo) => photo.fileSize !== undefined);
+  if (allSizesKnown) {
+    const advertisedTotal = photos.reduce((total, photo) => total + (photo.fileSize ?? 0), 0);
+    if (
+      photos.some((photo) => (photo.fileSize ?? 0) > MAX_SINGLE_PHOTO_BYTES) ||
+      advertisedTotal > MAX_TOTAL_PHOTO_BYTES
+    ) {
       throw new TelegramMediaError("Photos must be 7 MB or smaller each and 12 MB or smaller in total.");
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
-    let response: Response;
+    const controllers: AbortController[] = [];
     try {
-      response = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`, { signal: controller.signal });
-      if (!response.ok) {
-        throw new TelegramError(
-          `Telegram photo download failed (HTTP ${response.status}).`,
-          response.status,
-          response.status === 408 || response.status === 429 || response.status >= 500,
-        );
-      }
-      const contentLength = Number(response.headers.get("content-length"));
-      if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-        await response.body?.cancel().catch(() => undefined);
-        throw new TelegramMediaError("Photos must be 7 MB or smaller each and 12 MB or smaller in total.");
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new TelegramError("Telegram photo download returned no body.", undefined, true);
-      const chunks: Uint8Array[] = [];
-      let byteLength = 0;
-      try {
-        while (true) {
-          const item = await reader.read();
-          if (item.done) break;
-          byteLength += item.value.byteLength;
-          if (byteLength > maxBytes) {
-            await reader.cancel().catch(() => undefined);
-            throw new TelegramMediaError("Photos must be 7 MB or smaller each and 12 MB or smaller in total.");
-          }
-          chunks.push(item.value);
-        }
-      } catch (error) {
-        await reader.cancel().catch(() => undefined);
-        if (error instanceof TelegramMediaError || error instanceof TelegramError) throw error;
-        throw new TelegramError("Telegram photo download was interrupted.", undefined, true);
-      }
-
-      if (byteLength === 0) throw new TelegramMediaError("Telegram returned an empty photo.");
-      const mimeType = resolvePhotoMimeType(response.headers.get("content-type"), filePath);
-      if (!mimeType) throw new TelegramMediaError("Use a JPEG, PNG, or WebP photo.");
-      const bytes = new Uint8Array(byteLength);
-      let offset = 0;
-      for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.byteLength;
-      }
-      images.push({ mimeType, data: bytesToBase64(bytes), byteLength });
-      totalBytes += byteLength;
+      const downloads = photos.map((photo) => {
+        const controller = new AbortController();
+        controllers.push(controller);
+        return downloadTelegramPhotoFile(token, photo.filePath, photo.fileSize!, controller);
+      });
+      return await Promise.all(downloads);
     } catch (error) {
-      if (error instanceof TelegramMediaError || error instanceof TelegramError) throw error;
-      throw new TelegramError(
-        error instanceof Error && error.name === "AbortError" ? "Telegram photo download timed out." : "Telegram photo download failed.",
-        undefined,
-        true,
-      );
-    } finally {
-      clearTimeout(timeout);
+      controllers.forEach((controller) => controller.abort());
+      throw error;
     }
   }
 
+  const images: GeminiImageInput[] = [];
+  let totalBytes = 0;
+  for (const photo of photos) {
+    const maxBytes = Math.min(MAX_SINGLE_PHOTO_BYTES, MAX_TOTAL_PHOTO_BYTES - totalBytes);
+    if (maxBytes <= 0 || (photo.fileSize !== undefined && photo.fileSize > maxBytes)) {
+      throw new TelegramMediaError("Photos must be 7 MB or smaller each and 12 MB or smaller in total.");
+    }
+    const image = await downloadTelegramPhotoFile(token, photo.filePath, maxBytes);
+    totalBytes += image.byteLength;
+    images.push(image);
+  }
   return images;
+}
+
+async function downloadTelegramPhotoFile(
+  token: string,
+  filePath: string,
+  maxBytes: number,
+  controller = new AbortController(),
+): Promise<GeminiImageInput> {
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(`https://api.telegram.org/file/bot${token}/${filePath}`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new TelegramError(
+        `Telegram photo download failed (HTTP ${response.status}).`,
+        response.status,
+        response.status === 408 || response.status === 429 || response.status >= 500,
+      );
+    }
+
+    const contentLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new TelegramMediaError("Photos must be 7 MB or smaller each and 12 MB or smaller in total.");
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new TelegramError("Telegram photo download returned no body.", undefined, true);
+    const chunks: Uint8Array[] = [];
+    let byteLength = 0;
+    try {
+      while (true) {
+        const item = await reader.read();
+        if (item.done) break;
+        byteLength += item.value.byteLength;
+        if (byteLength > maxBytes) {
+          await reader.cancel().catch(() => undefined);
+          throw new TelegramMediaError("Photos must be 7 MB or smaller each and 12 MB or smaller in total.");
+        }
+        chunks.push(item.value);
+      }
+    } catch (error) {
+      await reader.cancel().catch(() => undefined);
+      if (error instanceof TelegramMediaError || error instanceof TelegramError) throw error;
+      throw new TelegramError("Telegram photo download was interrupted.", undefined, true);
+    }
+
+    if (byteLength === 0) throw new TelegramMediaError("Telegram returned an empty photo.");
+    const mimeType = resolvePhotoMimeType(response.headers.get("content-type"), filePath);
+    if (!mimeType) throw new TelegramMediaError("Use a JPEG, PNG, or WebP photo.");
+    const bytes = new Uint8Array(byteLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { mimeType, data: bytesToBase64(bytes), byteLength };
+  } catch (error) {
+    if (error instanceof TelegramMediaError || error instanceof TelegramError) throw error;
+    throw new TelegramError(
+      error instanceof Error && error.name === "AbortError" ? "Telegram photo download timed out." : "Telegram photo download failed.",
+      undefined,
+      true,
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function resolvePhotoMimeType(contentType: string | null, filePath: string): GeminiImageInput["mimeType"] | null {

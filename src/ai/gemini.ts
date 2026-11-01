@@ -82,7 +82,9 @@ STRUCTURED OUTPUT
 - Do not include raw JSON, code fences, or internal metadata in the answer field.`;
 
 export type ThinkingLevel = "LOW" | "MEDIUM" | "HIGH";
-type PartialAnswerHandler = (answer: string) => Promise<void>;
+export type PartialAnswerHandler = ((answer: string) => void) & {
+  flush(): Promise<void>;
+};
 
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
@@ -360,7 +362,11 @@ async function requestVertexGemini(
 
     let data: GeminiApiResponse;
     if (response.ok && onPartialAnswer) {
-      data = await readVertexGeminiStream(response, onPartialAnswer);
+      try {
+        data = await readVertexGeminiStream(response, onPartialAnswer);
+      } finally {
+        await onPartialAnswer.flush();
+      }
     } else {
       const raw = await response.text();
       try {
@@ -1069,7 +1075,7 @@ async function readVertexGeminiStream(
     const partialAnswer = extractPartialJsonString(responseText, "answer");
     if (partialAnswer) {
       // A Telegram update failure must not interrupt generation or final validation.
-      await onPartialAnswer(partialAnswer).catch(() => undefined);
+      onPartialAnswer(partialAnswer);
     }
   };
 
