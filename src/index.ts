@@ -30,7 +30,7 @@ import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
 const QUEUE_MAX_RETRIES = 10;
-const STATUS_TEXT = "✅ Sawal mil gaya. Soch raha hoon... 🤔";
+const STATUS_TEXT = "Thinking…";
 const RATE_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
 const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
 const FINAL_FAILURE_TEXT = "Bhai, is waqt answer complete nahi ho paaya. Tumhara sawal retry hua hai; same doubt dobara bhejna. 🙏";
