@@ -1155,7 +1155,7 @@ function createTelegramPartialAnswerUpdater(
   let inFlight: Promise<void> | null = null;
 
   const scheduleUpdate = (): void => {
-    if (disabled || inFlight || latestText.length < 12 || latestText === lastSentText) return;
+    if (disabled || inFlight || latestText.length < 4 || latestText === lastSentText) return;
     if (lastSentAt && Date.now() - lastSentAt < 800) return;
 
     const text = latestText;
