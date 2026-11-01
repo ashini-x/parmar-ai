@@ -1,7 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
 import { DEFAULT_PHOTO_QUESTION, MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "../config/env";
-import { sendTelegramChatAction, sendTelegramMessage } from "../telegram/api";
+import { editTelegramMessage, sendTelegramChatAction, sendTelegramMessage } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, isTelegramBotConnectionActive } from "../telegram/bot-store";
 
@@ -18,7 +18,7 @@ const CONVERSATION_RESET_KEY = "conversation:resetAt";
 const PENDING_QUIZ_REQUEST_KEY = "pending:quiz-request";
 const PENDING_QUIZ_REQUEST_TTL_MS = 15 * 60 * 1_000;
 const PHOTO_ALBUM_SETTLE_MS = 2_500;
-const PHOTO_STATUS_TEXT = "✅ Photo doubt mil gaya. Tasveerein dekh raha hoon... 🤔";
+const PHOTO_STATUS_TEXT = "Thinking…";
 const PHOTO_RATE_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
 const PHOTO_BURST_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
 const UNSUPPORTED_VIDEO_NOTICE_KEY = "meta:unsupported-video-notice";
@@ -76,10 +76,12 @@ interface PendingPhotoAlbum {
   flushAt: number;
   photos: PendingAlbumPhoto[];
   updateIds: number[];
+  statusMessageId?: number;
+  ackPending?: boolean;
   limitNotified?: boolean;
 }
 
-interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; }
+interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; statusMessageId?: number; }
 
 interface StoredQuizResultContext {
   pollId: string;
@@ -217,6 +219,7 @@ export class JobDedupe extends DurableObject {
     const mediaGroupId = String(body.mediaGroupId ?? "").trim();
     const updateId = positiveNumber(body.updateId);
     const messageId = positiveNumber(body.messageId);
+    const chatId = positiveOrNegativeNumber(body.chatId);
     const fileId = String(body.fileId ?? "").trim();
     const requestId = String(body.requestId ?? "").trim();
     const telegramUserId = positiveNumber(body.telegramUserId);
@@ -227,20 +230,30 @@ export class JobDedupe extends DurableObject {
 
     const now = Date.now();
     const key = photoAlbumKey(botConnectionId, mediaGroupId);
-    const result = await this.ctx.storage.transaction(async (transaction) => {
+    let shouldSendAcknowledgement = false;
+    let acknowledgementReplyTo = messageId;
+    const result: PhotoAlbumStageResponse = await this.ctx.storage.transaction(async (transaction) => {
       const existing = await transaction.get<PendingPhotoAlbum>(key);
-      if (existing?.updateIds.includes(updateId)) return { action: "duplicate" as const };
+      if (existing?.updateIds.includes(updateId)) {
+        if (existing.state === "collecting" && existing.photos.length > 0 && !existing.statusMessageId && !existing.ackPending) {
+          existing.ackPending = true;
+          acknowledgementReplyTo = existing.photos[0].messageId;
+          shouldSendAcknowledgement = true;
+          await transaction.put(key, existing);
+        }
+        return { action: "duplicate" as const, ...(existing.statusMessageId ? { statusMessageId: existing.statusMessageId } : {}) };
+      }
       if (existing?.state === "rejected") return { action: "rejected" as const };
       if (existing?.state === "queued") {
         if (existing.updateIds.length >= MAX_PHOTO_COUNT) {
-          if (existing.limitNotified) return { action: "rejected" as const };
+          if (existing.limitNotified) return { action: "rejected" as const, ...(existing.statusMessageId ? { statusMessageId: existing.statusMessageId } : {}) };
           existing.limitNotified = true;
           await transaction.put(key, existing);
-          return { action: "too_many" as const };
+          return { action: "too_many" as const, ...(existing.statusMessageId ? { statusMessageId: existing.statusMessageId } : {}) };
         }
         existing.updateIds.push(updateId);
         await transaction.put(key, existing);
-        return { action: "closed" as const };
+        return { action: "closed" as const, ...(existing.statusMessageId ? { statusMessageId: existing.statusMessageId } : {}) };
       }
       if (existing && existing.photos.length >= MAX_PHOTO_COUNT) {
         existing.state = "rejected";
@@ -248,7 +261,7 @@ export class JobDedupe extends DurableObject {
         existing.updateIds.push(updateId);
         existing.limitNotified = true;
         await transaction.put(key, existing);
-        return { action: "too_many" as const };
+        return { action: "too_many" as const, ...(existing.statusMessageId ? { statusMessageId: existing.statusMessageId } : {}) };
       }
 
       const album: PendingPhotoAlbum = existing ?? {
@@ -256,7 +269,7 @@ export class JobDedupe extends DurableObject {
         state: "collecting",
         botConnectionId,
         mediaGroupId,
-        chatId: positiveOrNegativeNumber(body.chatId),
+        chatId,
         telegramUserId,
         requestId,
         createdAt: now,
@@ -267,9 +280,36 @@ export class JobDedupe extends DurableObject {
       album.photos.push({ updateId, messageId, fileId, caption });
       album.updateIds.push(updateId);
       album.flushAt = now + PHOTO_ALBUM_SETTLE_MS;
+      if (!album.statusMessageId && !album.ackPending) {
+        album.ackPending = true;
+        shouldSendAcknowledgement = true;
+        acknowledgementReplyTo = album.photos[0].messageId;
+      }
       await transaction.put(key, album);
-      return { action: "staged" as const };
+      return { action: "staged" as const, ...(album.statusMessageId ? { statusMessageId: album.statusMessageId } : {}) };
     });
+
+    if (shouldSendAcknowledgement) {
+      try {
+        const status = await sendTelegramMessage(this.runtimeEnv, chatId, PHOTO_STATUS_TEXT, acknowledgementReplyTo, botConnectionId);
+        await this.ctx.storage.transaction(async (transaction) => {
+          const album = await transaction.get<PendingPhotoAlbum>(key);
+          if (!album || album.state !== "collecting" || album.statusMessageId) return;
+          album.statusMessageId = status.message_id;
+          album.ackPending = undefined;
+          await transaction.put(key, album);
+        });
+        result.statusMessageId = status.message_id;
+      } catch (error) {
+        await this.ctx.storage.transaction(async (transaction) => {
+          const album = await transaction.get<PendingPhotoAlbum>(key);
+          if (!album || album.statusMessageId) return;
+          album.ackPending = undefined;
+          await transaction.put(key, album);
+        }).catch(() => undefined);
+        console.warn("telegram_photo_album_ack_failed", error);
+      }
+    }
 
     if (result.action === "staged" || result.action === "too_many") await this.reconcileAlarm();
     return result;
@@ -402,6 +442,12 @@ export class JobDedupe extends DurableObject {
   }
 
   private async flushPhotoAlbum(key: string, album: PendingPhotoAlbum, now: number): Promise<void> {
+    if (album.ackPending && !album.statusMessageId) {
+      album.flushAt = now + 500;
+      await this.ctx.storage.put(key, album);
+      await this.ctx.storage.setAlarm(album.flushAt);
+      return;
+    }
     if (!(await isTelegramBotConnectionActive(this.runtimeEnv, album.botConnectionId))) {
       album.state = "rejected";
       album.photos = [];
@@ -428,6 +474,7 @@ export class JobDedupe extends DurableObject {
       requestId: album.requestId,
       createdAt: album.createdAt,
       requestedQuizCount: 1,
+      ...(album.statusMessageId ? { statusMessageId: album.statusMessageId } : {}),
       photoFileIds: photos.map((photo) => photo.fileId),
     });
 
@@ -437,7 +484,15 @@ export class JobDedupe extends DurableObject {
       await this.ctx.storage.put(key, album);
       if (begin.notify) {
         const limitText = begin.rateLimitReason === "daily" ? PHOTO_RATE_LIMIT_TEXT : PHOTO_BURST_LIMIT_TEXT;
-        await sendTelegramMessage(this.runtimeEnv, album.chatId, limitText, photos[0].messageId, album.botConnectionId);
+        if (album.statusMessageId) {
+          try {
+            await editTelegramMessage(this.runtimeEnv, album.chatId, album.statusMessageId, limitText, album.botConnectionId);
+          } catch {
+            await sendTelegramMessage(this.runtimeEnv, album.chatId, limitText, photos[0].messageId, album.botConnectionId);
+          }
+        } else {
+          await sendTelegramMessage(this.runtimeEnv, album.chatId, limitText, photos[0].messageId, album.botConnectionId);
+        }
       }
       return;
     }
@@ -449,11 +504,12 @@ export class JobDedupe extends DurableObject {
       return;
     }
 
-    let statusMessageId = begin.statusMessageId;
+    let statusMessageId = begin.statusMessageId ?? album.statusMessageId;
     if (!statusMessageId) {
       const status = await sendTelegramMessage(this.runtimeEnv, album.chatId, PHOTO_STATUS_TEXT, photos[0].messageId, album.botConnectionId);
       statusMessageId = status.message_id;
       await this.saveAck({ botConnectionId: album.botConnectionId, updateId, statusMessageId });
+      album.statusMessageId = statusMessageId;
     }
 
     const job: QuestionJob = {
@@ -565,6 +621,7 @@ export class JobDedupe extends DurableObject {
       messageId: job.messageId,
       requestId: job.requestId,
       createdAt: job.createdAt,
+      ...(positiveNumber(body.statusMessageId) ? { statusMessageId: positiveNumber(body.statusMessageId) } : {}),
       state: "pending",
       leaseVersion: 0,
       quizCount: requestedQuizCount,
@@ -573,7 +630,7 @@ export class JobDedupe extends DurableObject {
 
     await this.ctx.storage.put(key, record);
     await this.ensureTypingAlarm(now);
-    return { action: "new", quizCount: requestedQuizCount };
+    return { action: "new", quizCount: requestedQuizCount, ...(positiveNumber(body.statusMessageId) ? { statusMessageId: positiveNumber(body.statusMessageId) } : {}) };
   }
 
   private async saveAck(body: Record<string, unknown>): Promise<GenericResponse> {
