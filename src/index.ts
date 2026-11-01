@@ -62,7 +62,7 @@ interface TelegramUpdate {
   poll_answer?: TelegramPollAnswer;
 }
 
-interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; }
+interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; statusMessageId?: number; }
 
 interface BeginJobResponse {
   action: "new" | "duplicate" | "rate_limited" | "retry_ack";
