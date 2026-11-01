@@ -213,7 +213,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       await bestEffortTelegram("video_not_supported", () => sendTelegramMessage(
         env,
         chatId,
-        "Parmar AI sirf photos support karta hai—videos process nahi karta. SSC doubt ke liye ek photo ya maximum 10 photos ka album bhejo. 📸",
+        "Parmar AI sirf photos support karta hai—videos process nahi karta. SSC doubt ke liye ek photo ya maximum 5 photos ka album bhejo. 📸",
         messageId,
         bot.connectionId,
       ));
@@ -382,7 +382,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       await bestEffortTelegram("photo_album_too_many", () => sendTelegramMessage(
         env,
         chatId,
-        `Ek doubt ke saath maximum ${MAX_PHOTO_COUNT} photos bhej sakte ho. Thode kam photos ke saath dobara bhejo. 🙂`,
+        `Ek doubt ke saath maximum ${MAX_PHOTO_COUNT} photos bhejo. Photos ka limit paar ho gaya hai; doubt ko 5 ya usse kam photos ke saath bhejo. 🙂`,
         messageId,
         bot.connectionId,
       ));
@@ -1167,7 +1167,7 @@ function buildStartText(): string {
     "",
     "Parmar AI abhi SSC-focused study companion hai—especially GA/GS, History, Polity, Geography, Economy, Science, Static GK aur exam-oriented factual doubts ke liye. 📚",
     "",
-    "SSC doubt text ya photo mein bhejo. Ek album mein maximum 10 photos bhejo; caption optional hai. Videos supported nahi hain.\nDaily AI questions: 20 per student.",
+    "SSC doubt text ya photo mein bhejo. Ek album mein maximum 5 photos bhejo; caption optional hai. Videos supported nahi hain.\nDaily AI questions: 20 per student.",
     "",
     "/exam cgl — target exam set karo",
     "/profile — tumhari study profile",
@@ -1184,7 +1184,7 @@ function buildHelpText(): string {
     "/reset — study profile reset\n/delete-my-data — delete your stored study data",
     "/help — ye help",
     "",
-    "Normal SSC GA/GS doubt text ya photo mein bhejo. Ek album mein maximum 10 photos bhejo; caption optional hai. Videos supported nahi hain.\nDaily AI questions: 20.",
+    "Normal SSC GA/GS doubt text ya photo mein bhejo. Ek album mein maximum 5 photos bhejo; caption optional hai. Videos supported nahi hain.\nDaily AI questions: 20.",
   ].join("\n");
 }
 

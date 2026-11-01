@@ -76,6 +76,7 @@ interface PendingPhotoAlbum {
   flushAt: number;
   photos: PendingAlbumPhoto[];
   updateIds: number[];
+  limitNotified?: boolean;
 }
 
 interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; }
@@ -230,8 +231,25 @@ export class JobDedupe extends DurableObject {
       const existing = await transaction.get<PendingPhotoAlbum>(key);
       if (existing?.updateIds.includes(updateId)) return { action: "duplicate" as const };
       if (existing?.state === "rejected") return { action: "rejected" as const };
-      if (existing?.state === "queued") return { action: "closed" as const };
-      if (existing && existing.photos.length >= MAX_PHOTO_COUNT) return { action: "too_many" as const };
+      if (existing?.state === "queued") {
+        if (existing.updateIds.length >= MAX_PHOTO_COUNT) {
+          if (existing.limitNotified) return { action: "rejected" as const };
+          existing.limitNotified = true;
+          await transaction.put(key, existing);
+          return { action: "too_many" as const };
+        }
+        existing.updateIds.push(updateId);
+        await transaction.put(key, existing);
+        return { action: "closed" as const };
+      }
+      if (existing && existing.photos.length >= MAX_PHOTO_COUNT) {
+        existing.state = "rejected";
+        existing.photos = [];
+        existing.updateIds.push(updateId);
+        existing.limitNotified = true;
+        await transaction.put(key, existing);
+        return { action: "too_many" as const };
+      }
 
       const album: PendingPhotoAlbum = existing ?? {
         version: 1,
@@ -253,7 +271,7 @@ export class JobDedupe extends DurableObject {
       return { action: "staged" as const };
     });
 
-    if (result.action === "staged") await this.reconcileAlarm();
+    if (result.action === "staged" || result.action === "too_many") await this.reconcileAlarm();
     return result;
   }
 

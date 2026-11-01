@@ -15,7 +15,7 @@ The current production baseline is **v2.8.0**, including the multi-MCQ quiz work
 Parmar currently supports:
 
 - SSC GA/GS-focused doubt solving.
-- Photo doubts only, with optional captions and albums of up to 10 pictures; videos are rejected (feature branch; not in production yet).
+- Photo doubts only, with optional captions and albums of up to 5 pictures; videos are rejected (feature branch; not in production yet).
 - Context-aware follow-ups using recent completed conversation turns.
 - Simplification and clarification requests.
 - Evidence-based study personalization, including recent topics, attention areas, and revision guidance.

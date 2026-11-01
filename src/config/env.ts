@@ -44,7 +44,7 @@ export interface Env {
 }
 
 export const MAX_QUIZ_BATCH_SIZE = 10;
-export const MAX_PHOTO_COUNT = 10;
+export const MAX_PHOTO_COUNT = 5;
 export const MAX_SINGLE_PHOTO_BYTES = 7 * 1024 * 1024;
 export const MAX_TOTAL_PHOTO_BYTES = 12 * 1024 * 1024;
 export const DEFAULT_PHOTO_QUESTION = "Please read the attached study image(s) and answer the SSC doubt shown. Match the language of any caption or visible question.";

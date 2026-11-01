@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased — Photo Doubt Support (feature branch)
-- Added private Telegram photo doubts, including photo-only albums of up to 10 pictures, as one SSC doubt and one quota unit.
+- Added private Telegram photo doubts, including photo-only albums of up to 5 pictures, as one SSC doubt and one quota unit; albums over the limit are rejected.
 - Explicitly reject videos and mixed photo/video albums; rate-limit unsupported-video notices to prevent reply spam.
 - Added bounded image downloads and Gemini multimodal input; image bytes are not persisted.
 - Album photo IDs stay in Durable Object retry state and are cleared when processing completes.
