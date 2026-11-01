@@ -666,11 +666,15 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         const images = claim.record.photoFileIds?.length
           ? await downloadTelegramPhotos(env, claim.record.photoFileIds, job.botConnectionId)
           : [];
+        const updatePartialAnswer = claim.record.statusMessageId
+          ? createTelegramPartialAnswerUpdater(env, job, claim.record.statusMessageId)
+          : undefined;
         const generation = await generateGeminiAnswer(
           env,
           job.question,
           buildProfileContext(profile, recentConversation),
           images,
+          updatePartialAnswer,
         );
         packet = generation.packet;
         if (packet.questionMode === "mcq" && packet.responseMode === "text" && !(packet.quizItems?.length)) {
@@ -1137,6 +1141,36 @@ function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile): s
   }
 
   return answer.slice(0, 3_900);
+}
+
+function createTelegramPartialAnswerUpdater(
+  env: Env,
+  job: QuestionJob,
+  statusMessageId: number,
+): (partialAnswer: string) => Promise<void> {
+  let lastSentText = "";
+  let lastSentAt = 0;
+  let disabled = false;
+
+  return async (partialAnswer: string): Promise<void> => {
+    const text = partialAnswer.trimEnd().slice(0, 3_900);
+    if (disabled || text.length < 12 || text === lastSentText) return;
+
+    const now = Date.now();
+    if (lastSentAt && now - lastSentAt < 800) return;
+
+    try {
+      await editTelegramMessage(env, job.chatId, statusMessageId, text, job.botConnectionId);
+      lastSentText = text;
+      lastSentAt = Date.now();
+    } catch (error) {
+      disabled = true;
+      logger.warn("telegram_partial_answer_stream_failed", {
+        requestId: job.requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
 }
 
 async function deliverAnswer(env: Env, job: QuestionJob, statusMessageId: number | undefined, answer: string): Promise<void> {

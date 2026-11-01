@@ -82,12 +82,13 @@ STRUCTURED OUTPUT
 - Do not include raw JSON, code fences, or internal metadata in the answer field.`;
 
 export type ThinkingLevel = "LOW" | "MEDIUM" | "HIGH";
+type PartialAnswerHandler = (answer: string) => Promise<void>;
 
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
-    answer: { type: "STRING", description: "Final concise fallback answer suitable for Telegram. Never return JSON inside this field." },
     responseMode: { type: "STRING", enum: ["text", "quiz"] },
+    answer: { type: "STRING", description: "Final concise fallback answer suitable for Telegram. Never return JSON inside this field." },
     quizQuestion: { type: "STRING", description: "Native Telegram quiz question, empty for text responses." },
     quizOptions: { type: "ARRAY", items: { type: "STRING" }, description: "Two to twelve quiz options, empty for text responses." },
     quizCorrectOptionIds: { type: "ARRAY", items: { type: "INTEGER" }, description: "0-based correct option IDs; exactly one for Parmar quizzes." },
@@ -131,8 +132,8 @@ const RESPONSE_SCHEMA = {
     timeSensitive: { type: "BOOLEAN" },
   },
   required: [
-    "answer",
     "responseMode",
+    "answer",
     "quizQuestion",
     "quizOptions",
     "quizCorrectOptionIds",
@@ -150,8 +151,8 @@ const RESPONSE_SCHEMA = {
     "timeSensitive",
   ],
   propertyOrdering: [
-    "answer",
     "responseMode",
+    "answer",
     "quizQuestion",
     "quizOptions",
     "quizCorrectOptionIds",
@@ -217,6 +218,7 @@ export async function generateGeminiAnswer(
   question: string,
   profile: ProfileContext,
   images: GeminiImageInput[] = [],
+  onPartialAnswer?: PartialAnswerHandler,
 ): Promise<GeminiGenerationResult> {
   const projectId = env.GCP_PROJECT_ID?.trim();
   const normalizedQuestion = question.trim();
@@ -263,6 +265,7 @@ export async function generateGeminiAnswer(
         attempt,
         requestedQuizCount,
         images,
+        onPartialAnswer,
       );
       return { packet: result.packet, usage: [...usageRecords, result.usage] };
     } catch (error) {
@@ -290,6 +293,7 @@ async function requestVertexGemini(
   attempt: number,
   requestedQuizCount: number,
   images: GeminiImageInput[],
+  onPartialAnswer?: PartialAnswerHandler,
 ): Promise<{ packet: AnswerPacket; usage: AiUsageRecord }> {
   let accessToken: string;
 
@@ -341,7 +345,10 @@ async function requestVertexGemini(
       body.tools = [{ googleSearch: {} }];
     }
 
-    const response = await fetch(endpoint, {
+    const requestEndpoint = onPartialAnswer
+      ? endpoint.replace(":generateContent", ":streamGenerateContent?alt=sse")
+      : endpoint;
+    const response = await fetch(requestEndpoint, {
       method: "POST",
       headers: {
         authorization: `Bearer ${accessToken}`,
@@ -351,17 +358,20 @@ async function requestVertexGemini(
       signal: controller.signal,
     });
 
-    const raw = await response.text();
     let data: GeminiApiResponse;
-
-    try {
-      data = JSON.parse(raw) as GeminiApiResponse;
-    } catch {
-      throw new GeminiError(
-        `Vertex AI returned invalid JSON (HTTP ${response.status}).`,
-        response.status,
-        isRetryableStatus(response.status),
-      );
+    if (response.ok && onPartialAnswer) {
+      data = await readVertexGeminiStream(response, onPartialAnswer);
+    } else {
+      const raw = await response.text();
+      try {
+        data = JSON.parse(raw) as GeminiApiResponse;
+      } catch {
+        throw new GeminiError(
+          `Vertex AI returned invalid JSON (HTTP ${response.status}).`,
+          response.status,
+          isRetryableStatus(response.status),
+        );
+      }
     }
 
     const usage = buildUsageRecord(env, data.usageMetadata, {
@@ -999,6 +1009,158 @@ function isRetryableGeminiError(status: number, error?: GeminiRequestError): boo
 
 function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
+async function readVertexGeminiStream(
+  response: Response,
+  onPartialAnswer: PartialAnswerHandler,
+): Promise<GeminiApiResponse> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new GeminiError("Vertex AI streaming response had no body.", undefined, true);
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let responseText = "";
+  let responseMode: "text" | "quiz" | null = null;
+  let candidate: GeminiCandidate | null = null;
+  let usageMetadata: GeminiUsageMetadata | undefined;
+
+  const processEvent = async (eventText: string): Promise<void> => {
+    const eventData = eventText
+      .split(/\r?\n/u)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n");
+    if (!eventData || eventData === "[DONE]") return;
+
+    let chunk: GeminiApiResponse;
+    try {
+      chunk = JSON.parse(eventData) as GeminiApiResponse;
+    } catch {
+      throw new GeminiError("Vertex AI returned invalid streaming JSON.", undefined, true);
+    }
+
+    if (chunk.error) {
+      throw new GeminiError(
+        chunk.error.message ?? "Vertex AI streaming request failed.",
+        chunk.error.code,
+        isRetryableGeminiError(chunk.error.code ?? 500, chunk.error),
+      );
+    }
+
+    const streamedCandidate = chunk.candidates?.[0];
+    if (streamedCandidate) {
+      candidate = {
+        ...(candidate ?? {}),
+        finishReason: streamedCandidate.finishReason ?? candidate?.finishReason,
+        groundingMetadata: streamedCandidate.groundingMetadata ?? candidate?.groundingMetadata,
+      };
+    }
+    if (chunk.usageMetadata) usageMetadata = chunk.usageMetadata;
+
+    const text = extractGeminiStreamChunkText(chunk);
+    if (!text) return;
+    responseText += text;
+
+    const mode = extractPartialJsonString(responseText, "responseMode");
+    if (mode === "text" || mode === "quiz") responseMode = mode;
+    if (responseMode !== "text") return;
+
+    const partialAnswer = extractPartialJsonString(responseText, "answer");
+    if (partialAnswer) {
+      // A Telegram update failure must not interrupt generation or final validation.
+      await onPartialAnswer(partialAnswer).catch(() => undefined);
+    }
+  };
+
+  const processBufferedEvents = async (flushRemainder = false): Promise<void> => {
+    let match = /\r?\n\r?\n/u.exec(buffer);
+    while (match) {
+      const eventText = buffer.slice(0, match.index);
+      buffer = buffer.slice(match.index + match[0].length);
+      await processEvent(eventText);
+      match = /\r?\n\r?\n/u.exec(buffer);
+    }
+
+    if (flushRemainder && buffer.trim()) {
+      const eventText = buffer;
+      buffer = "";
+      await processEvent(eventText);
+    }
+  };
+
+  try {
+    while (true) {
+      const item = await reader.read();
+      if (item.done) break;
+      buffer += decoder.decode(item.value, { stream: true });
+      await processBufferedEvents();
+    }
+    buffer += decoder.decode();
+    await processBufferedEvents(true);
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+
+  return {
+    candidates: candidate || responseText
+      ? [{
+        ...(candidate ?? {}),
+        ...(responseText ? { content: { parts: [{ text: responseText }] } } : {}),
+      }]
+      : [],
+    usageMetadata,
+  };
+}
+
+function extractPartialJsonString(rawJson: string, key: string): string | null {
+  const match = new RegExp('"' + key + '"\\s*:\\s*"', "u").exec(rawJson);
+  if (!match) return null;
+
+  let value = "";
+  const valueStart = match.index + match[0].length;
+  for (let index = valueStart; index < rawJson.length; index += 1) {
+    const character = rawJson[index];
+    if (character === '"') return value;
+    if (character !== "\\") {
+      value += character;
+      continue;
+    }
+
+    const escape = rawJson[index + 1];
+    if (!escape) break;
+    switch (escape) {
+      case '"': value += '"'; index += 1; break;
+      case "\\": value += "\\"; index += 1; break;
+      case "/": value += "/"; index += 1; break;
+      case "b": value += "\b"; index += 1; break;
+      case "f": value += "\f"; index += 1; break;
+      case "n": value += "\n"; index += 1; break;
+      case "r": value += "\r"; index += 1; break;
+      case "t": value += "\t"; index += 1; break;
+      case "u": {
+        const code = rawJson.slice(index + 2, index + 6);
+        if (!/^[0-9a-f]{4}$/iu.test(code)) return value;
+        value += String.fromCharCode(Number.parseInt(code, 16));
+        index += 5;
+        break;
+      }
+      default:
+        return value;
+    }
+  }
+
+  return value;
+}
+
+function extractGeminiStreamChunkText(data: GeminiApiResponse): string | null {
+  const parts = data.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return null;
+  const text = parts.map((part) => part.text).filter((value): value is string => typeof value === "string").join("");
+  return text || null;
 }
 
 function extractGeminiText(data: GeminiApiResponse): string | null {
