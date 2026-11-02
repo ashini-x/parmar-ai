@@ -33,8 +33,8 @@ describe("Fatman index rollout contract", () => {
     const importHandler = source.slice(importStart, importEnd);
 
     expect(source).toContain('api("preview"');
-    expect(finalizeHandler).toContain("if (body.reviewed !== true)");
-    expect(source).toContain("body:JSON.stringify({reviewed:true})");
+    expect(finalizeHandler).toContain("if (reviewedQueries.length < 3)");
+    expect(source).toContain("body:JSON.stringify({reviewedQueries:Array.from(reviewedQueries).slice(0,3)})");
     expect(importHandler).not.toContain('api("finalize"');
   });
 });
