@@ -1,4 +1,4 @@
-# Architecture — Parmar AI v2.5.2
+# Architecture: Parmar AI v2.5.2
 
 ## Design goals
 
