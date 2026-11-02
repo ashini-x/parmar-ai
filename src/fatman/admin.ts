@@ -85,14 +85,18 @@ export async function uploadFatmanPage(env: Env, request: Request, pageNumber: n
     if (exactMatches.some((item) => item.status === "completed")) {
       return json({ ok: true, page: pageNumber, status: "completed", skipped: true });
     }
-    if (exactMatches.some((item) => item.status === "queued" || item.status === "running")) {
-      return json({ ok: true, page: pageNumber, status: "running", skipped: true }, 202);
+    const pending = exactMatches.find((item) => item.status === "queued" || item.status === "running");
+    if (pending) {
+      return fatmanPageUploadResponse(pageNumber, await waitForFatmanItem(instance, pending));
     }
     for (const item of exactMatches) await instance.items.delete(item.id);
 
     const blob = new Blob([bytes], { type: "image/jpeg" });
-    const item = await instance.items.upload(key, blob);
-    return json({ ok: true, page: pageNumber, status: item.status }, 202);
+    const item = await instance.items.uploadAndPoll(key, blob, {
+      pollIntervalMs: 1_000,
+      timeoutMs: 60_000,
+    });
+    return fatmanPageUploadResponse(pageNumber, item);
   } catch (error) {
     return json({ ok: false, error: safeError(error) }, 502);
   }
@@ -119,10 +123,14 @@ export async function fatmanIndexStatus(env: Env): Promise<Response> {
     }
 
     const items = await listFatmanPages(env.FATMAN_SEARCH!.get(instanceName));
-    const pages = items.map((item) => ({
-      page: pageNumberFromKey(item.key),
-      status: item.status,
-    })).filter((item): item is { page: number; status: string } => item.page !== undefined);
+    const pages = items.flatMap((item) => {
+      const page = pageNumberFromKey(item.key);
+      return page === undefined ? [] : [{
+        page,
+        status: item.status,
+        error: item.error ? safeError(item.error) : undefined,
+      }];
+    });
     const completedPages = pages.filter((item) => item.status === "completed").length;
     return json({
       ok: true,
@@ -252,6 +260,37 @@ export async function disableFatmanIndex(env: Env): Promise<Response> {
   }
 }
 
+function fatmanPageUploadResponse(pageNumber: number, item: AiSearchItem): Response {
+  if (item.status === "error" || item.status === "skipped") {
+    return json({
+      ok: false,
+      page: pageNumber,
+      status: item.status,
+      error: safeError(item.error ?? "Cloudflare could not index this page."),
+    }, 422);
+  }
+  if (item.status !== "completed") {
+    return json({
+      ok: false,
+      page: pageNumber,
+      status: item.status,
+      error: "Cloudflare is still processing this page. Refresh status and resume later.",
+    }, 409);
+  }
+  return json({ ok: true, page: pageNumber, status: item.status });
+}
+
+async function waitForFatmanItem(instance: AiSearchInstance, item: AiSearchItem): Promise<AiSearchItem> {
+  const deadline = Date.now() + 60_000;
+  let current = item;
+  while (current.status === "queued" || current.status === "running") {
+    if (Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    current = await instance.items.get(item.id).info();
+  }
+  return current;
+}
+
 async function listFatmanPages(instance: AiSearchInstance): Promise<AiSearchItem[]> {
   const items: AiSearchItem[] = [];
   let page = 1;
@@ -317,8 +356,10 @@ async function refresh(){
   try{
     const data=await api("status");
     progressEl.value=data.completedPages||0;
+    const firstError=(data.pages||[]).find(item=>item.error)?.error;
     setStatus((data.enabled?"Book mode is enabled. ":"Book mode is disabled. ")+
-      (data.exists?(data.completedPages+" of "+data.expectedPages+" pages indexed; "+data.queuedPages+" processing; "+data.failedPages+" failed."):"Index has not been created."));
+      (data.exists?(data.completedPages+" of "+data.expectedPages+" pages indexed; "+data.queuedPages+" processing; "+data.failedPages+" failed."):"Index has not been created.")+
+      (firstError?"\\nFirst indexing error: "+firstError:""));
   }catch(error){setStatus("Could not read index status: "+error.message);}
 }
 async function disable(){
@@ -409,14 +450,19 @@ async function importBook(){
         if(complete.has(pageNumber))continue;
         try{
           const blob=await renderPage(pdf,pageNumber);
-          let response;
+          let response,data;
           for(let attempt=0;attempt<3;attempt++){
-            response=await fetch(API+"page/"+pageNumber,{method:"POST",headers:{"content-type":"image/jpeg"},body:blob});
-            if(response.ok)break;
-            if(attempt<2)await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
+            try{
+              response=await fetch(API+"page/"+pageNumber,{method:"POST",headers:{"content-type":"image/jpeg"},body:blob});
+              data=await response.json();
+            }catch(error){
+              if(attempt===2)throw new Error("Page "+pageNumber+" upload failed: "+(error instanceof Error?error.message:String(error)));
+              await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
+              continue;
+            }
+            if(response.ok&&data.ok)break;
+            throw new Error(data.error||("Page "+pageNumber+" upload failed."));
           }
-          const data=await response.json();
-          if(!response.ok||!data.ok)throw new Error(data.error||("Page "+pageNumber+" upload failed."));
           done++;progressEl.value=done;
           setStatus("Uploading page images… "+done+" of "+pdf.numPages+".");
         }catch(error){failure=error;}
@@ -429,6 +475,10 @@ async function importBook(){
       const data=await api("status");
       progressEl.value=data.completedPages||0;
       setStatus("OCR index: "+data.completedPages+" of "+data.expectedPages+" pages complete; "+data.queuedPages+" processing; "+data.failedPages+" failed.");
+      if(data.failedPages>0){
+        const firstError=(data.pages||[]).find(item=>item.error)?.error;
+        throw new Error(firstError||("Cloudflare reported "+data.failedPages+" failed pages."));
+      }
       if(data.completedPages===538&&data.failedPages===0){
         setStatus("All 538 pages are indexed. Review a search result above before enabling book mode.");
         return;
