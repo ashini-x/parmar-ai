@@ -62,7 +62,7 @@ interface TelegramUpdate {
   poll_answer?: TelegramPollAnswer;
 }
 
-interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; statusMessageId?: number; }
+interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; }
 
 interface BeginJobResponse {
   action: "new" | "duplicate" | "rate_limited" | "retry_ack";
@@ -358,14 +358,6 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true }), requestId);
   }
 
-  void sendTelegramChatAction(env, chatId, "typing", bot.connectionId).catch((error) => {
-    logger.warn("telegram_initial_typing_failed", {
-      requestId,
-      updateId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  });
-
   if (await isUserSuspended(env, analyticsUser.telegramUserId)) {
     queueAnalytics(ctx, "suspended_user", () => recordEvent(env, "suspended_user_blocked", analyticsUser));
     await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, "Abhi tumhara Parmar AI access temporarily paused hai. Admin se contact karo. 🙏", messageId));
@@ -387,21 +379,13 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       requestId,
     });
     if (staged.action === "too_many") {
-      const limitText = `Ek doubt ke saath maximum ${MAX_PHOTO_COUNT} photos bhejo. Photos ka limit paar ho gaya hai; doubt ko 5 ya usse kam photos ke saath bhejo. 🙂`;
-      await bestEffortTelegram("photo_album_too_many", async () => {
-        if (staged.statusMessageId) {
-          try {
-            await editTelegramMessage(env, chatId, staged.statusMessageId, limitText, bot.connectionId);
-            return;
-          } catch (error) {
-            logger.warn("telegram_photo_album_limit_edit_failed", {
-              requestId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-        }
-        await sendTelegramMessage(env, chatId, limitText, messageId, bot.connectionId);
-      });
+      await bestEffortTelegram("photo_album_too_many", () => sendTelegramMessage(
+        env,
+        chatId,
+        `Ek doubt ke saath maximum ${MAX_PHOTO_COUNT} photos bhejo. Photos ka limit paar ho gaya hai; doubt ko 5 ya usse kam photos ke saath bhejo. 🙂`,
+        messageId,
+        bot.connectionId,
+      ));
       return withRequestId(json({ ok: true, rejected: "photo_album_too_many" }), requestId);
     }
     if (staged.action === "staged" || staged.action === "duplicate" || staged.action === "rejected") {
@@ -526,6 +510,14 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       return withRequestId(json({ ok: false }, 500), requestId);
     }
   }
+
+  void sendTelegramChatAction(env, chatId, "typing", bot.connectionId).catch((error) => {
+    logger.warn("telegram_initial_typing_failed", {
+      requestId,
+      updateId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   const job: QuestionJob = {
     version: 2,
