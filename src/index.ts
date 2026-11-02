@@ -17,6 +17,7 @@ import {
   editTelegramMessage,
   sendTelegramChatAction,
   sendTelegramMessage,
+  sendTelegramBusinessMessage,
   sendTelegramQuiz,
   stopTelegramPoll,
   telegramApi,
@@ -42,6 +43,8 @@ interface TelegramMessage {
   message_id?: number;
   chat?: { id?: number; type?: string };
   from?: { id?: number; is_bot?: boolean; username?: string; first_name?: string; last_name?: string };
+  sender_business_bot?: { id?: number };
+  business_connection_id?: string;
   text?: string;
   caption?: string;
   media_group_id?: string;
@@ -58,10 +61,19 @@ interface TelegramPollAnswer {
   option_ids?: number[];
 }
 
+interface TelegramBusinessConnection {
+  id?: string;
+  user?: { id?: number };
+  is_enabled?: boolean;
+  rights?: { can_reply?: boolean };
+}
+
 interface TelegramUpdate {
   update_id?: number;
   message?: TelegramMessage;
   poll_answer?: TelegramPollAnswer;
+  business_connection?: TelegramBusinessConnection;
+  business_message?: TelegramMessage;
 }
 
 interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; }
@@ -101,6 +113,22 @@ function getJobStore(env: Env, chatId: number): DurableObjectStub {
   return env.JOB_DEDUPE.get(id);
 }
 
+function getBusinessOwnerStore(env: Env, ownerTelegramUserId: number): DurableObjectStub {
+  const id = env.JOB_DEDUPE.idFromName(`business-owner:${ownerTelegramUserId}`);
+  return env.JOB_DEDUPE.get(id);
+}
+
+async function businessOwnerStoreRequest<T>(env: Env, ownerTelegramUserId: number, body: Record<string, unknown>): Promise<T> {
+  const response = await getBusinessOwnerStore(env, ownerTelegramUserId).fetch("https://business-owner/internal", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`Business owner store returned HTTP ${response.status}.`);
+  return (await response.json()) as T;
+}
+
+
 function buildAnalyticsUser(message: TelegramMessage, chatId: number) {
   const from = message.from;
   return {
@@ -125,6 +153,89 @@ async function jobStoreRequest<T>(env: Env, chatId: number, body: Record<string,
   });
   if (!response.ok) throw new Error(`Job store returned HTTP ${response.status}.`);
   return (await response.json()) as T;
+}
+
+const BUSINESS_AUTO_REPLY_TEXT = "Thanks for reaching out. I may be away right now, but I’ll get back to you as soon as I can.";
+
+async function handleTelegramBusinessConnection(
+  connection: TelegramBusinessConnection,
+  env: Env,
+  botConnectionId: string,
+  requestId: string,
+): Promise<void> {
+  const ownerTelegramUserId = Number(env.BOT_OWNER_TELEGRAM_USER_ID ?? "");
+  if (!Number.isSafeInteger(ownerTelegramUserId) || ownerTelegramUserId <= 0) {
+    logger.warn("telegram_business_owner_id_not_configured", { requestId, botConnectionId });
+    return;
+  }
+
+  if (!connection.id || connection.user?.id !== ownerTelegramUserId) {
+    logger.warn("telegram_business_connection_rejected", { requestId, botConnectionId });
+    return;
+  }
+
+  await businessOwnerStoreRequest(env, ownerTelegramUserId, {
+    action: "set_business_connection",
+    businessConnectionId: connection.id,
+    enabled: connection.is_enabled === true,
+    canReply: connection.rights?.can_reply === true,
+  });
+  logger.info("telegram_business_connection_updated", {
+    requestId,
+    botConnectionId,
+    enabled: connection.is_enabled === true,
+    canReply: connection.rights?.can_reply === true,
+  });
+}
+
+async function handleTelegramBusinessMessage(
+  message: TelegramMessage,
+  updateIdValue: number | undefined,
+  env: Env,
+  botConnectionId: string,
+  requestId: string,
+): Promise<void> {
+  const ownerTelegramUserId = Number(env.BOT_OWNER_TELEGRAM_USER_ID ?? "");
+  if (!Number.isSafeInteger(ownerTelegramUserId) || ownerTelegramUserId <= 0) {
+    logger.warn("telegram_business_owner_id_not_configured", { requestId, botConnectionId });
+    return;
+  }
+
+  const chatId = message.chat?.id;
+  const messageId = message.message_id;
+  const updateId = updateIdValue;
+  const businessConnectionId = message.business_connection_id?.trim();
+  if (
+    message.chat?.type !== "private" ||
+    !Number.isSafeInteger(chatId) ||
+    !Number.isSafeInteger(messageId) ||
+    !Number.isSafeInteger(updateId) ||
+    !businessConnectionId ||
+    message.from?.is_bot ||
+    message.sender_business_bot ||
+    message.from?.id === ownerTelegramUserId
+  ) return;
+
+  const connection = await businessOwnerStoreRequest<{ allowed: boolean }>(env, ownerTelegramUserId, {
+    action: "check_business_connection",
+    businessConnectionId,
+  });
+  if (!connection.allowed) return;
+
+  const claim = await businessOwnerStoreRequest<{ shouldReply: boolean }>(env, ownerTelegramUserId, {
+    action: "claim_business_message",
+    updateId,
+  });
+  if (!claim.shouldReply) return;
+
+  await sendTelegramBusinessMessage(
+    env,
+    chatId,
+    messageId,
+    businessConnectionId,
+    BUSINESS_AUTO_REPLY_TEXT,
+    botConnectionId,
+  );
 }
 
 async function handleTelegramWebhook(request: Request, env: Env, requestId: string, ctx: ExecutionContext): Promise<Response> {
@@ -171,6 +282,16 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     update = (await request.json()) as TelegramUpdate;
   } catch {
     return withRequestId(json({ ok: false, error: "INVALID_JSON" }, 400), requestId);
+  }
+
+  if (update.business_connection) {
+    await handleTelegramBusinessConnection(update.business_connection, env, bot.connectionId, requestId);
+    return withRequestId(json({ ok: true, businessConnection: true }), requestId);
+  }
+
+  if (update.business_message) {
+    await handleTelegramBusinessMessage(update.business_message, update.update_id, env, bot.connectionId, requestId);
+    return withRequestId(json({ ok: true, businessMessage: true }), requestId);
   }
 
   if (update.poll_answer) {
@@ -1354,7 +1475,7 @@ async function telegramSetup(request: Request, env: Env, requestId: string): Pro
   const webhookResult = await telegramSetupMethod(env, "setWebhook", {
     url: webhookUrl,
     secret_token: webhookSecret,
-    allowed_updates: ["message", "poll_answer"],
+    allowed_updates: ["message", "poll_answer", "business_connection", "business_message"],
     drop_pending_updates: false,
     max_connections: 100,
     botTokenOverride: token,

@@ -21,6 +21,23 @@ interface CreatorContactKeyboardMarkup {
   }>>;
 }
 
+interface BusinessContactKeyboardMarkup {
+  inline_keyboard: Array<Array<{
+    text: string;
+    url: string;
+  }>>;
+}
+
+function creatorBusinessContactMarkup(): BusinessContactKeyboardMarkup {
+  return {
+    inline_keyboard: [[{
+      text: "creator: " + CREATOR_NAME,
+      url: CREATOR_CONTACT_URL,
+    }]],
+  };
+}
+
+
 function creatorContactMarkup(chatId: number, includeCreatorFooter = true): CreatorContactKeyboardMarkup | undefined {
   if (!includeCreatorFooter || chatId <= 0) return undefined;
   return {
@@ -416,6 +433,28 @@ export async function sendTelegramChatAction(
   await telegramApi(env, "sendChatAction", {
     chat_id: chatId,
     action,
+  }, botConnectionId);
+}
+
+export async function sendTelegramBusinessMessage(
+  env: Env,
+  chatId: number,
+  replyToMessageId: number,
+  businessConnectionId: string,
+  text: string,
+  botConnectionId?: string,
+): Promise<TelegramMessageResult> {
+  const message = limitTelegramMessage(text);
+  return telegramApi<TelegramMessageResult>(env, "sendMessage", {
+    chat_id: chatId,
+    business_connection_id: businessConnectionId,
+    reply_parameters: {
+      message_id: replyToMessageId,
+      allow_sending_without_reply: true,
+    },
+    text: message.text,
+    reply_markup: creatorBusinessContactMarkup(),
+    link_preview_options: { is_disabled: true },
   }, botConnectionId);
 }
 

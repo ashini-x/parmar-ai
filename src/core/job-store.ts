@@ -160,6 +160,9 @@ export class JobDedupe extends DurableObject {
       case "set_exam": return this.json(await this.setExam(body));
       case "reset_profile": return this.json(await this.resetProfile());
       case "delete_data": return this.json(await this.deleteData());
+      case "set_business_connection": return this.json(await this.setBusinessConnection(body));
+      case "check_business_connection": return this.json(await this.checkBusinessConnection(body));
+      case "claim_business_message": return this.json(await this.claimBusinessMessage(body));
       default: return this.json({ ok: false, error: "unknown_action" }, 400);
     }
   }
@@ -167,6 +170,44 @@ export class JobDedupe extends DurableObject {
   async alarm(): Promise<void> {
     await this.reconcileAlarm();
   }
+
+  private async setBusinessConnection(body: Record<string, unknown>): Promise<GenericResponse> {
+    const businessConnectionId = String(body.businessConnectionId ?? "").trim();
+    if (!businessConnectionId || businessConnectionId.length > 256) {
+      throw new Error("Invalid business connection identifier.");
+    }
+    await this.ctx.storage.put("business:connection:v1", {
+      businessConnectionId,
+      enabled: body.enabled === true,
+      canReply: body.canReply === true,
+    });
+    return { ok: true };
+  }
+
+  private async checkBusinessConnection(body: Record<string, unknown>): Promise<{ allowed: boolean }> {
+    const businessConnectionId = String(body.businessConnectionId ?? "").trim();
+    const connection = await this.ctx.storage.get<{ businessConnectionId: string; enabled: boolean; canReply: boolean }>("business:connection:v1");
+    return {
+      allowed: Boolean(
+        connection &&
+        connection.businessConnectionId === businessConnectionId &&
+        connection.enabled &&
+        connection.canReply
+      ),
+    };
+  }
+
+  private async claimBusinessMessage(body: Record<string, unknown>): Promise<{ shouldReply: boolean }> {
+    const updateId = positiveNumber(body.updateId);
+    if (!updateId) return { shouldReply: false };
+    return this.ctx.storage.transaction(async (transaction) => {
+      const seen = (await transaction.get<number[]>("business:seen-updates:v1")) ?? [];
+      if (seen.includes(updateId)) return { shouldReply: false };
+      await transaction.put("business:seen-updates:v1", [...seen.slice(-199), updateId]);
+      return { shouldReply: true };
+    });
+  }
+
 
   private async rejectTelegramVideo(body: Record<string, unknown>): Promise<{ notify: boolean }> {
     const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID).trim();
