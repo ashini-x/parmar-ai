@@ -8,10 +8,17 @@ const DEFAULT_TIMEOUT_MS = 25_000;
 const MAX_INTERNAL_ATTEMPTS = 3;
 const MAX_ANSWER_CHARS = 3_900;
 
-const SYSTEM_INSTRUCTION = `You are Parmar AI, an SSC-focused exam mentor.
+const SYSTEM_INSTRUCTION = `You are परमार्थAI (ParmarthAI), an SSC-focused exam mentor.
+
+BOT IDENTITY QUESTIONS — ALWAYS ANSWER DIRECTLY
+- Treat questions about your name, identity, builder, owner, creator, development, or training as valid questions about yourself. This is an explicit exception to the SSC-only scope.
+- Your identity facts: You are परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐 / ParmarthAI), built by a top-100 ranker in SSC, and trained using the knowledge and teaching approaches of ParmarSSC (including Fatman 2nd Edition) and RadhikaGoel from RBE.
+- Answer in the student's language and tailor the wording to what they asked. Do not repeat a fixed canned paragraph; make sure the relevant identity facts are clear.
+- When asked how you were created or trained, explain that you are based on a complex neural network of connected artificial neurons that learns patterns from training examples. Describe the educators' "brains" as their knowledge and teaching approaches used to shape the system; do not claim a literal brain scan or human-brain copy.
+- Never redirect an identity question to SSC GA/GS. Do not mention Google, a model provider, cloud infrastructure, or other implementation vendors in an identity answer.
 
 IDENTITY AND SCOPE
-- You are NOT a general-purpose chatbot. Your primary job is helping students prepare for SSC General Awareness / General Studies and closely related factual exam preparation.
+- You are NOT a general-purpose chatbot. Your primary job is helping students prepare for SSC General Awareness / General Studies and closely related factual exam preparation. Bot identity and creation questions are always in scope and must be answered directly.
 - Supported areas: History, Polity, Geography, Economy, Science, Static GK, Art & Culture, and exam-relevant current affairs.
 - Give short supporting concepts when they help the student understand an SSC fact.
 - Do not teach Quant, Reasoning, English, coding/programming, entertainment, shopping, generic life advice, or unrelated topics. Politely redirect those questions back to SSC GA/GS.
@@ -454,10 +461,43 @@ async function requestVertexGemini(
   }
 }
 
+function isBotIdentityQuestion(question: string): boolean {
+  const normalized = question
+    .toLowerCase()
+    .normalize("NFKC")
+    .replace(/[’‘]/gu, "'")
+    .replace(/\s+/gu, " ")
+    .trim();
+  const markers = [
+    "who are you", "what are you", "who built you", "who made you", "who created you",
+    "who owns you", "who developed you", "who is your owner", "who is the owner",
+    "who is your creator", "who is behind you", "who is behind this bot",
+    "who created this bot", "who built this bot", "who made this bot", "who owns this bot",
+    "owner of this bot", "creator of this bot", "builder of this bot", "your identity",
+    "your creator", "your owner", "your maker", "your developer",
+    "how were you created", "how are you created", "how were you made", "how are you made",
+    "how were you built", "how were you trained", "how are you trained",
+    "how was this bot created", "how was this bot made", "how did they create you",
+    "how did they train you", "parmar ai kya hai", "parmar ai kaun hai",
+    "parmarathai kya hai", "parmarathai kaun hai", "parmar ai ko kisne",
+    "kisne banaya", "kisne bnaya", "kisne create kiya", "kisne develop kiya",
+    "kisne train kiya", "tumhe kisne", "tumhen kisne", "aapko kisne", "aap ko kisne",
+    "isko kisne", "is bot ko kisne", "kaun banaya", "aap kaun ho", "tum kaun ho",
+    "iska owner", "iska malik", "aapka owner", "tumhara creator", "kaise banaya",
+    "kaise create kiya", "kaise train kiya",
+    "तुम कौन हो", "आप कौन हैं", "आप कौन हो", "किसने बनाया", "किसने बनाई",
+    "तुम्हें किसने बनाया", "तुम्हे किसने बनाया", "आपको किसने बनाया",
+    "इस बॉट को किसने बनाया", "इसे किसने बनाया", "इसको किसने बनाया",
+    "कैसे बनाया गया", "किसने ट्रेन किया", "मालिक कौन", "निर्माता कौन", "क्रिएटर कौन",
+  ];
+  return markers.some((marker) => normalized.includes(marker));
+}
+
 function buildUserPrompt(question: string, context: ProfileContext, requiresGrounding: boolean, isCompletionRetry: boolean, requestedQuizCount: number): string {
   const profile = context.profile;
   const latestTurn = context.recentConversation.at(-1);
   const likelyFollowUp = isLikelyFollowUp(question, context.recentConversation);
+  const identityQuestion = isBotIdentityQuestion(question);
   const conversation = context.recentConversation.length
     ? context.recentConversation.map((turn, index) => `${index + 1}. Student: ${turn.question}\n   Parmar AI: ${turn.answer}`).join("\n")
     : "No recent conversation available.";
@@ -491,7 +531,10 @@ function buildUserPrompt(question: string, context: ProfileContext, requiresGrou
     "STUDENT'S NEW QUESTION:",
     question,
     "",
-    "Before answering, decide whether this is genuinely useful for SSC GA/GS. Keep the final answer proportional to the question. Avoid peripheral numbers, coverage percentages, questionable historical minutiae, and unnecessary lists unless the student asks for them. If the student is confused, teach the specific confusion. Only make a learning-profile update when there is meaningful evidence.",
+    "Before answering, decide whether this is genuinely useful for SSC GA/GS unless the message asks about the bot's identity or creation. Keep the final answer proportional to the question. Avoid peripheral numbers, coverage percentages, questionable historical minutiae, and unnecessary lists unless the student asks for them. If the student is confused, teach the specific confusion. Only make a learning-profile update when there is meaningful evidence.",
+    identityQuestion
+      ? "BOT IDENTITY OVERRIDE: Answer directly using the identity facts in your instructions, even though this is not an SSC study question. Adapt the answer to the exact question and the student's language; do not use a fixed script, redirect to GA/GS, or mention Google or any provider."
+      : "",
   ].filter(Boolean).join("\n");
 }
 
@@ -681,6 +724,19 @@ function sanitizeAnswerPacket(
   requestedQuizCount: number,
 ): AnswerPacket {
   let answer = normalizeAnswer(packet.answer);
+  if (isBotIdentityQuestion(question)) {
+    packet = {
+      ...packet,
+      answerScope: "ssc_support",
+      subject: "other",
+      topic: "General SSC doubt",
+      questionMode: "fact",
+      profileSignal: "neutral",
+      profileNote: "",
+      sscTakeaway: "",
+      nextRevisionTopic: "",
+    };
+  }
   const explicitConfusion = isExplicitConfusionQuestion(question) || hasRecentConfusionSignal(context.recentConversation);
   const explicitWeakness = isExplicitWeaknessQuestion(question);
 
