@@ -496,7 +496,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   let statusMessageId = begin.statusMessageId;
   if (!statusMessageId) {
     try {
-      const status = await sendTelegramMessage(env, chatId, STATUS_TEXT, messageId, bot.connectionId);
+      const status = await sendTelegramMessage(env, chatId, STATUS_TEXT, messageId, bot.connectionId, false);
       statusMessageId = status.message_id;
       await jobStoreRequest(env, chatId, { action: "save_ack", botConnectionId: bot.connectionId, updateId, statusMessageId });
     } catch (error) {
@@ -1161,7 +1161,7 @@ function createTelegramPartialAnswerUpdater(
     const text = latestText;
     const request = (async (): Promise<void> => {
       try {
-        await editTelegramMessage(env, job.chatId, statusMessageId, text, job.botConnectionId);
+        await editTelegramMessage(env, job.chatId, statusMessageId, text, job.botConnectionId, false);
         lastSentText = text;
         lastSentAt = Date.now();
       } catch (error) {

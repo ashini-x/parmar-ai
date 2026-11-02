@@ -5,7 +5,7 @@ import { getActiveTelegramBot, getTelegramBotByConnectionId, hasTelegramBotRecor
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
 const CREATOR_NAME = "Quantum Labs";
-const CREATOR_EMAIL = "quantumcoremind@gmail.com";
+const CREATOR_EMAIL_URL = "https://mail.google.com/mail/?view=cm&fs=1&to=quantumcoremind%40gmail.com";
 const CREATOR_FOOTER = "\n\nCreator: " + CREATOR_NAME;
 const CREATOR_FOOTER_LINK_OFFSET = "\n\nCreator: ".length;
 
@@ -16,7 +16,10 @@ interface TelegramTextLinkEntity {
   url: string;
 }
 
-function withCreatorFooter(text: string): { text: string; entities: TelegramTextLinkEntity[] } {
+function withCreatorFooter(text: string, includeCreatorFooter = true): { text: string; entities: TelegramTextLinkEntity[] } {
+  if (!includeCreatorFooter) {
+    return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH), entities: [] };
+  }
   const maxBodyLength = TELEGRAM_MAX_MESSAGE_LENGTH - CREATOR_FOOTER.length;
   const body = text.trim().slice(0, maxBodyLength);
   return {
@@ -25,7 +28,7 @@ function withCreatorFooter(text: string): { text: string; entities: TelegramText
       type: "text_link",
       offset: body.length + CREATOR_FOOTER_LINK_OFFSET,
       length: CREATOR_NAME.length,
-      url: `mailto:${CREATOR_EMAIL}`,
+      url: CREATOR_EMAIL_URL,
     }],
   };
 }
@@ -41,7 +44,7 @@ function withCreatorPollFooter(explanation: string): { text: string; entities: T
       type: "text_link",
       offset: body.length + linkOffset,
       length: CREATOR_NAME.length,
-      url: `mailto:${CREATOR_EMAIL}`,
+      url: CREATOR_EMAIL_URL,
     }],
   };
 }
@@ -439,12 +442,13 @@ export async function sendTelegramMessage(
   text: string,
   replyToMessageId?: number,
   botConnectionId?: string,
+  includeCreatorFooter = true,
 ): Promise<TelegramMessageResult> {
-  const message = withCreatorFooter(text);
+  const message = withCreatorFooter(text, includeCreatorFooter);
   const payload: Record<string, unknown> = {
     chat_id: chatId,
     text: message.text,
-    entities: message.entities,
+    ...(message.entities.length ? { entities: message.entities } : {}),
     link_preview_options: { is_disabled: true },
   };
 
@@ -464,14 +468,15 @@ export async function editTelegramMessage(
   messageId: number,
   text: string,
   botConnectionId?: string,
+  includeCreatorFooter = true,
 ): Promise<void> {
-  const message = withCreatorFooter(text);
+  const message = withCreatorFooter(text, includeCreatorFooter);
   try {
     await telegramApi(env, "editMessageText", {
       chat_id: chatId,
       message_id: messageId,
       text: message.text,
-      entities: message.entities,
+      ...(message.entities.length ? { entities: message.entities } : {}),
       link_preview_options: { is_disabled: true },
     }, botConnectionId);
   } catch (error) {

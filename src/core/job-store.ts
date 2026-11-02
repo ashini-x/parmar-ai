@@ -451,7 +451,7 @@ export class JobDedupe extends DurableObject {
 
     let statusMessageId = begin.statusMessageId;
     if (!statusMessageId) {
-      const status = await sendTelegramMessage(this.runtimeEnv, album.chatId, PHOTO_STATUS_TEXT, photos[0].messageId, album.botConnectionId);
+      const status = await sendTelegramMessage(this.runtimeEnv, album.chatId, PHOTO_STATUS_TEXT, photos[0].messageId, album.botConnectionId, false);
       statusMessageId = status.message_id;
       await this.saveAck({ botConnectionId: album.botConnectionId, updateId, statusMessageId });
     }
