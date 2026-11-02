@@ -31,6 +31,7 @@ import { internalServerError, json, methodNotAllowed, notFound } from "./http/re
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
+import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, uploadFatmanPage } from "./fatman/admin";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
 const QUEUE_MAX_RETRIES = 10;
@@ -1972,6 +1973,12 @@ const worker = {
         return clearAdminSession();
       }
 
+      if (url.pathname === "/admin/fatman") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+        return fatmanAdminPage();
+      }
+
       if (url.pathname === "/admin" || url.pathname === "/admin/") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -1980,6 +1987,18 @@ const worker = {
 
       if (url.pathname.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
+        if (url.pathname === "/admin/api/fatman/status" && request.method === "GET") return fatmanIndexStatus(env);
+        if (request.method === "POST" && url.pathname.startsWith("/admin/api/fatman/")) {
+          if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          if (url.pathname === "/admin/api/fatman/prepare") return prepareFatmanIndex(env);
+          if (url.pathname === "/admin/api/fatman/finalize") return finalizeFatmanIndex(env);
+          if (url.pathname === "/admin/api/fatman/disable") return disableFatmanIndex(env);
+          const pagePrefix = "/admin/api/fatman/page/";
+          if (url.pathname.startsWith(pagePrefix)) {
+            const pageNumber = Number(url.pathname.slice(pagePrefix.length));
+            return uploadFatmanPage(env, request, pageNumber);
+          }
+        }
         if (url.pathname === "/admin/api/telegram" && request.method === "GET") return adminTelegram(env);
         if (url.pathname === "/admin/api/overview" && request.method === "GET") return adminOverview(env);
         if (url.pathname === "/admin/api/users" && request.method === "GET") return adminUsers(env, request);
