@@ -1529,7 +1529,7 @@ function creatorContactPage(): Response {
     body{margin:0;min-height:100svh;display:grid;place-items:center;padding:max(28px,env(safe-area-inset-top)) 22px max(28px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 0%,#fff 0%,#f5f5f2 62%,#eeefec 100%)}
     main{display:flex;width:min(100%,410px);flex-direction:column;align-items:center;text-align:center}
     .trust-badge{position:relative;isolation:isolate;overflow:hidden;display:flex;align-items:center;gap:13px;min-height:66px;max-width:100%;margin:0 0 38px;padding:9px 20px 9px 11px;border:1px solid #ffffffd9;border-radius:999px;background:#ffffffb5;box-shadow:0 10px 30px #25251f10,0 2px 5px #25251f08;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);animation:surface-breathe 5.8s ease-in-out infinite}
-    .trust-badge::before{position:absolute;z-index:0;top:-45%;bottom:-45%;left:0;width:38%;content:"";pointer-events:none;background:linear-gradient(105deg,transparent 0%,#fff0 20%,#ffffff9c 50%,#fff0 80%,transparent 100%);filter:blur(5px);transform:translateX(-170%);animation:badge-shimmer 7.2s ease-in-out infinite}
+    .trust-badge::before{position:absolute;z-index:2;top:-45%;bottom:-45%;left:-43%;width:44%;content:"";pointer-events:none;background:linear-gradient(105deg,transparent 0%,#ffffff26 28%,#ffffffd1 50%,#ffffff40 70%,transparent 100%);filter:blur(2px);transform:translateX(0);animation:badge-shimmer 5.6s ease-in-out infinite}
     .avatars{position:relative;z-index:1;display:flex;flex:none;align-items:center;padding-left:2px}
     .avatar{display:grid;width:43px;height:43px;place-items:center;overflow:hidden;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 7px #24241f20}
     .avatar+.avatar{margin-left:-13px}
@@ -1548,12 +1548,12 @@ function creatorContactPage(): Response {
     .contact-details{width:min(100%,340px);margin-top:25px;padding:22px 20px 18px;border:1px solid #ffffffdc;border-radius:23px;background:#ffffffa8;box-shadow:0 16px 42px #25251f0d;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
     .contact-details[hidden]{display:none}
     .email-label{margin:0 0 12px;color:#777772;font-size:14px;font-weight:520}
-    .email-copy{display:flex;width:100%;min-height:52px;align-items:center;justify-content:center;gap:12px;padding:0 14px;border:1px solid #17171712;border-radius:15px;background:#ffffffc9;color:#171717;font:600 14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+    .email-copy{display:flex;width:100%;min-height:52px;align-items:center;justify-content:space-between;gap:8px;padding:0 11px;border:1px solid #17171712;border-radius:15px;background:#ffffffc9;color:#171717;font:600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
     .email-copy:active{background:#f5f5f2}
-    .email-address{overflow-wrap:anywhere}
-    .copy-hint{flex:none;color:#8a8a84;font-size:12px;font-weight:550}
+    .email-address{flex:none;white-space:nowrap;overflow-wrap:normal;font-size:clamp(11px,3.8vw,13px);letter-spacing:-.02em}
+    .copy-hint{display:grid;width:18px;height:18px;flex:none;place-items:center;color:#8a8a84}.copy-hint svg{display:block;width:17px;height:17px}.copy-hint svg[hidden]{display:none}
     .copy-status{min-height:18px;margin:10px 0 0;color:#85857f;font-size:12px;line-height:1.5}
-    @keyframes badge-shimmer{0%,19%{transform:translateX(-170%);opacity:0}26%{opacity:.8}58%,100%{transform:translateX(390%);opacity:0}}
+    @keyframes badge-shimmer{0%,18%{transform:translateX(0);opacity:0}22%{opacity:.9}58%{transform:translateX(330%);opacity:.85}68%,100%{transform:translateX(330%);opacity:0}}
     @keyframes surface-breathe{0%,100%{box-shadow:0 10px 30px #25251f10,0 2px 5px #25251f08}50%{box-shadow:0 12px 34px #25251f12,0 2px 6px #25251f09}}
     @media(max-width:360px){.trust-badge{gap:9px;padding-right:14px}.avatar{width:39px;height:39px}.avatar+.avatar{margin-left:-12px}.trust-copy{font-size:13px}}
     @media(prefers-reduced-motion:reduce){.trust-badge,.trust-badge::before{animation:none}.contact-button{transition:none}}
@@ -1569,7 +1569,7 @@ function creatorContactPage(): Response {
       </div>
       <span class="trust-copy">Trusted by 150k+ users</span>
     </div>
-    <h1>iDoctor</h1>
+    <h1>iDoctor Projects</h1>
     <p class="intro">Have a question? We’re listening.</p>
     <button class="contact-button" id="contact-toggle" type="button" aria-expanded="false" aria-controls="email-contact">
       <svg class="gmail-icon" viewBox="0 0 48 48" aria-hidden="true">
@@ -1584,7 +1584,7 @@ function creatorContactPage(): Response {
     <section class="contact-details" id="email-contact" hidden aria-labelledby="email-title">
       <p class="email-label" id="email-title">Send an email to</p>
       <button class="email-copy" id="copy-email" type="button" aria-label="Copy ${creatorEmail}">
-        <span class="email-address">${creatorEmail}</span><span class="copy-hint" id="copy-hint">Tap to copy</span>
+        <span class="email-address">${creatorEmail}</span><span class="copy-hint" aria-hidden="true"><svg id="copy-icon" viewBox="0 0 20 20"><rect x="6" y="6" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M13 4V3.5A1.5 1.5 0 0 0 11.5 2h-8A1.5 1.5 0 0 0 2 3.5v8A1.5 1.5 0 0 0 3.5 13H4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><svg id="copied-icon" viewBox="0 0 20 20" hidden><path d="m3.5 10.5 4.2 4.2L16.5 6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg></span>
       </button>
       <p class="copy-status" id="copy-status" aria-live="polite"></p>
     </section>
@@ -1594,7 +1594,8 @@ function creatorContactPage(): Response {
     const contactToggle = document.getElementById("contact-toggle");
     const contactDetails = document.getElementById("email-contact");
     const copyEmailButton = document.getElementById("copy-email");
-    const copyHint = document.getElementById("copy-hint");
+    const copyIcon = document.getElementById("copy-icon");
+    const copiedIcon = document.getElementById("copied-icon");
     const copyStatus = document.getElementById("copy-status");
 
     contactToggle.addEventListener("click", () => {
@@ -1623,10 +1624,14 @@ function creatorContactPage(): Response {
         } catch {
           if (!fallbackCopyEmail()) throw new Error("Clipboard unavailable");
         }
-        copyHint.textContent = "Copied";
+        copyIcon.hidden = true;
+        copiedIcon.hidden = false;
         copyStatus.textContent = "Copied to clipboard.";
+        window.setTimeout(() => {
+          copiedIcon.hidden = true;
+          copyIcon.hidden = false;
+        }, 1100);
       } catch {
-        copyHint.textContent = "Press and hold";
         copyStatus.textContent = "Copy didn’t work. Press and hold the address to copy it.";
       }
     });
