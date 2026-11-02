@@ -1549,7 +1549,7 @@ function creatorContactPage(): Response {
     <p class="eyebrow">Parmar AI · SSC General Studies</p>
     <h1>Let’s talk.</h1>
     <p class="description">Questions about this SSC GS tutor, or exploring a digital tutor for another subject? Get in touch with the creator.</p>
-    <a class="button" href="\${mailtoUrl}">
+    <a class="button" href="${mailtoUrl}">
       <span>Contact the creator</span><span class="arrow" aria-hidden="true">↗</span>
     </a>
     <p class="note">Your email app opens with the recipient and subject ready.</p>
