@@ -1524,6 +1524,7 @@ function creatorContactPage(): Response {
   <meta name="theme-color" content="#f5f5f2">
   <meta name="robots" content="noindex,nofollow">
   <title>Contact Quantum Labs</title>
+  <script src="https://telegram.org/js/telegram-web-app.js?64"></script>
   <style>
     :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f2;color:#171717;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
     *{box-sizing:border-box}
@@ -1554,6 +1555,12 @@ function creatorContactPage(): Response {
     </a>
     <p class="note">Your email app opens with the recipient and subject ready.</p>
   </main>
+  <script>
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
+    }
+  </script>
 </body>
 </html>`;
   return new Response(html, {
