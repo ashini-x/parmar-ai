@@ -4,6 +4,47 @@ import { getActiveTelegramBot, getTelegramBotByConnectionId, hasTelegramBotRecor
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
+const CREATOR_NAME = "Quantum Labs";
+const CREATOR_EMAIL = "quantumcoremind@gmail.com";
+const CREATOR_FOOTER = "\n\nCreator: " + CREATOR_NAME;
+const CREATOR_FOOTER_LINK_OFFSET = "\n\nCreator: ".length;
+
+interface TelegramTextLinkEntity {
+  type: "text_link";
+  offset: number;
+  length: number;
+  url: string;
+}
+
+function withCreatorFooter(text: string): { text: string; entities: TelegramTextLinkEntity[] } {
+  const maxBodyLength = TELEGRAM_MAX_MESSAGE_LENGTH - CREATOR_FOOTER.length;
+  const body = text.trim().slice(0, maxBodyLength);
+  return {
+    text: body + CREATOR_FOOTER,
+    entities: [{
+      type: "text_link",
+      offset: body.length + CREATOR_FOOTER_LINK_OFFSET,
+      length: CREATOR_NAME.length,
+      url: `mailto:${CREATOR_EMAIL}`,
+    }],
+  };
+}
+
+function withCreatorPollFooter(explanation: string): { text: string; entities: TelegramTextLinkEntity[] } {
+  const normalizedExplanation = explanation.trim().replace(/\\s*\\n+\\s*/gu, " ");
+  const footer = CREATOR_FOOTER;
+  const body = normalizedExplanation.slice(0, 200 - footer.length);
+  return {
+    text: body + footer,
+    entities: [{
+      type: "text_link",
+      offset: body.length + CREATOR_FOOTER_LINK_OFFSET,
+      length: CREATOR_NAME.length,
+      url: `mailto:${CREATOR_EMAIL}`,
+    }],
+  };
+}
+
 const TELEGRAM_REQUEST_TIMEOUT_MS = 5_000;
 const TELEGRAM_MAX_ATTEMPTS = 4;
 const TELEGRAM_MAX_RETRY_AFTER_SECONDS = 5;
@@ -328,6 +369,7 @@ export async function sendTelegramQuiz(
   replyToMessageId?: number,
   botConnectionId?: string,
 ): Promise<TelegramQuizResult> {
+  const pollExplanation = withCreatorPollFooter(explanation);
   const result = await telegramApi<{
     message_id: number;
     poll?: { id: string };
@@ -340,7 +382,8 @@ export async function sendTelegramQuiz(
     allows_multiple_answers: false,
     allows_revoting: false,
     correct_option_ids: [...correctOptionIds].sort((a, b) => a - b),
-    explanation: explanation.trim().slice(0, 200),
+    explanation: pollExplanation.text,
+    explanation_entities: pollExplanation.entities,
     ...(replyToMessageId ? {
       reply_parameters: {
         message_id: replyToMessageId,
@@ -396,9 +439,11 @@ export async function sendTelegramMessage(
   replyToMessageId?: number,
   botConnectionId?: string,
 ): Promise<TelegramMessageResult> {
+  const message = withCreatorFooter(text);
   const payload: Record<string, unknown> = {
     chat_id: chatId,
-    text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH),
+    text: message.text,
+    entities: message.entities,
     link_preview_options: { is_disabled: true },
   };
 
@@ -419,11 +464,13 @@ export async function editTelegramMessage(
   text: string,
   botConnectionId?: string,
 ): Promise<void> {
+  const message = withCreatorFooter(text);
   try {
     await telegramApi(env, "editMessageText", {
       chat_id: chatId,
       message_id: messageId,
-      text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH),
+      text: message.text,
+      entities: message.entities,
       link_preview_options: { is_disabled: true },
     }, botConnectionId);
   } catch (error) {
