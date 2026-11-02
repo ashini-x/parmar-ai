@@ -288,9 +288,9 @@ async function handleFatmanModeCallback(
       return;
     }
 
-    const current = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode" });
+    const current = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId });
     const active = !current.active;
-    await jobStoreRequest(env, chatId, { action: "set_fatman_mode", active });
+    await jobStoreRequest(env, chatId, { action: "set_fatman_mode", botConnectionId, active });
     await answerCallback(active ? "Fatman mode on." : "Usual study mode on.");
     const confirmation = active
       ? "Fatman mode is on. Answers now use the book and include page citations."
@@ -452,7 +452,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   if (isHelp(text)) {
     queueAnalytics(ctx, "help", () => recordEvent(env, "help", analyticsUser));
     ctx.waitUntil(bestEffortTelegram("help_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId)));
-    const mode = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode" }).catch(() => ({ ok: true as const, active: false }));
+    const mode = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId }).catch(() => ({ ok: true as const, active: false }));
     const markup = isFatmanReady(env) ? buildFatmanModeMarkup(mode.active) : undefined;
     await bestEffortTelegram("help", () => sendTelegramMessage(env, chatId, buildHelpText(), undefined, bot.connectionId, true, markup));
     return withRequestId(json({ ok: true }), requestId);
@@ -565,10 +565,10 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true, suspended: true }), requestId);
   }
 
-  const fatmanState = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode" });
+  const fatmanState = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId });
   const fatmanModeSnapshot = fatmanState.active === true;
   if (fatmanModeSnapshot && !isFatmanReady(env)) {
-    await jobStoreRequest(env, chatId, { action: "set_fatman_mode", active: false }).catch(() => undefined);
+    await jobStoreRequest(env, chatId, { action: "set_fatman_mode", botConnectionId: bot.connectionId, active: false }).catch(() => undefined);
     await bestEffortTelegram("fatman_unavailable", () => sendTelegramMessage(env, chatId, "Fatman mode is temporarily unavailable. Use /help to return to the usual study mode.", messageId, bot.connectionId));
     return withRequestId(json({ ok: true, fatmanUnavailable: true }), requestId);
   }
@@ -889,7 +889,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         } else if (fatmanMode && !isFatmanReady(env)) {
           packet = makeFatmanNoticePacket("Fatman mode abhi available nahi hai. /help se usual study mode mein wapas aa jao.");
         } else if (fatmanMode) {
-          let bookContext;
+          let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
           try {
             bookContext = await retrieveFatmanContext(env, job.question);
           } catch (error) {
@@ -907,7 +907,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
               env,
               job.question,
               buildProfileContext(profile, recentConversation),
-              [...images, ...bookContext.pageImages],
+              images,
               updatePartialAnswer,
               bookContext,
             );
