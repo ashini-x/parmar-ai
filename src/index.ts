@@ -1237,14 +1237,10 @@ function buildStartText(): string {
 }
 function buildHelpText(): string {
   return [
-    `${BOT_BRAND_NAME}: commands`,
-    "",
-    "/exam cgl: target exam set",
-    "/profile: recent topics, attention areas aur revision queue",
-    "/reset: study profile reset\n/delete-my-data: delete your stored study data",
-    "/help: ye help",
-    "",
-    "Normal SSC GA/GS doubt text ya photo mein bhejo. Ek album mein maximum 5 photos bhejo; caption optional hai. Videos supported nahi hain.\nDaily AI questions: 20.",
+    "Set your SSC target exam: /exam",
+    "View your SSC study profile: /profile",
+    "Reset your study profile: /reset",
+    "Delete your stored study data: /delete_data",
   ].join("\n");
 }
 
