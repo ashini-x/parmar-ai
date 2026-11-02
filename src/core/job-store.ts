@@ -14,6 +14,7 @@ const PROCESSING_LEASE_MS = 5 * 60 * 1_000;
 const JOB_MAX_ACTIVE_AGE_MS = 20 * 60 * 1_000;
 const RATE_LIMIT_META_KEY = "meta:rate:v2";
 const PROFILE_KEY = "profile:v1";
+const FATMAN_MODE_PREFIX = "mode:fatman:"
 const CONVERSATION_RESET_KEY = "conversation:resetAt";
 const PENDING_QUIZ_REQUEST_KEY = "pending:quiz-request";
 const PENDING_QUIZ_REQUEST_TTL_MS = 15 * 60 * 1_000;
@@ -55,6 +56,7 @@ export interface JobRecord {
   profileUpdated?: boolean;
   quizCount?: number;
   photoFileIds?: string[];
+  fatmanModeSnapshot?: boolean;
 }
 
 interface PendingAlbumPhoto {
@@ -77,6 +79,7 @@ interface PendingPhotoAlbum {
   photos: PendingAlbumPhoto[];
   updateIds: number[];
   limitNotified?: boolean;
+  fatmanModeSnapshot?: boolean;
 }
 
 interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" | "closed" | "rejected"; }
@@ -97,6 +100,7 @@ interface StoredQuizResultContext {
 interface BeginResponse {
   action: "new" | "duplicate" | "rate_limited" | "retry_ack";
   quizCount?: number;
+  fatmanModeSnapshot?: boolean;
   statusMessageId?: number;
   notify?: boolean;
   rateLimitReason?: "daily" | "burst";
@@ -149,9 +153,11 @@ export class JobDedupe extends DurableObject {
       case "set_answer_packet": return this.json(await this.setAnswerPacket(body));
       case "mark_profile_updated": return this.json(await this.markProfileUpdated(body));
       case "complete": return this.json(await this.complete(body));
+      case "get_fatman_mode": return this.json({ ok: true, active: await this.getFatmanMode(String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID)) });
+      case "set_fatman_mode": return this.json(await this.setFatmanMode(body));
       case "get_profile": return this.json({ ok: true, profile: await this.getProfile() });
       case "get_usage": return this.json({ ok: true, usage: await this.getUsage(positiveNumber(body.telegramUserId)) });
-      case "get_conversation": return this.json({ ok: true, recentConversation: await this.getConversation(positiveNumber(body.updateId), String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID)) });
+      case "get_conversation": return this.json({ ok: true, recentConversation: await this.getConversation(positiveNumber(body.updateId), String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID), body.fatmanModeSnapshot === true) });
       case "set_pending_quiz": return this.json(await this.setPendingQuiz(body));
       case "consume_pending_quiz": return this.json(await this.consumePendingQuiz());
       case "clear_pending_quiz": return this.json(await this.clearPendingQuiz());
@@ -304,6 +310,7 @@ export class JobDedupe extends DurableObject {
         flushAt: now + PHOTO_ALBUM_SETTLE_MS,
         photos: [],
         updateIds: [],
+        fatmanModeSnapshot: body.fatmanModeSnapshot === true,
       };
       album.photos.push({ updateId, messageId, fileId, caption });
       album.updateIds.push(updateId);
@@ -387,6 +394,7 @@ export class JobDedupe extends DurableObject {
         createdAt: record.createdAt,
         ...(record.statusMessageId !== undefined ? { statusMessageId: record.statusMessageId } : {}),
         ...(record.quizCount !== undefined ? { quizCount: record.quizCount } : {}),
+        ...(record.fatmanModeSnapshot !== undefined ? { fatmanModeSnapshot: record.fatmanModeSnapshot } : {}),
       }, { contentType: "json" });
 
       if (record.state === "processing") {
@@ -469,6 +477,7 @@ export class JobDedupe extends DurableObject {
       requestId: album.requestId,
       createdAt: album.createdAt,
       requestedQuizCount: 1,
+      fatmanModeSnapshot: album.fatmanModeSnapshot === true,
       photoFileIds: photos.map((photo) => photo.fileId),
     });
 
@@ -509,6 +518,7 @@ export class JobDedupe extends DurableObject {
       statusMessageId,
       telegramUserId: album.telegramUserId,
       quizCount: begin.quizCount ?? 1,
+      fatmanModeSnapshot: album.fatmanModeSnapshot === true,
     };
     await this.runtimeEnv.QUESTION_QUEUE.send(job, { contentType: "json" });
     await this.markQueued({ botConnectionId: album.botConnectionId, updateId });
@@ -537,9 +547,9 @@ export class JobDedupe extends DurableObject {
 
     if (existing) {
       if (existing.state === "done" || existing.state === "queued" || existing.state === "processing") {
-        return { action: "duplicate", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount };
+        return { action: "duplicate", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount, fatmanModeSnapshot: existing.fatmanModeSnapshot };
       }
-      return { action: "retry_ack", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount };
+      return { action: "retry_ack", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount, fatmanModeSnapshot: existing.fatmanModeSnapshot };
     }
 
     const now = Date.now();
@@ -610,6 +620,7 @@ export class JobDedupe extends DurableObject {
       leaseVersion: 0,
       quizCount: requestedQuizCount,
       ...(job.photoFileIds?.length ? { photoFileIds: job.photoFileIds } : {}),
+      ...(job.fatmanModeSnapshot !== undefined ? { fatmanModeSnapshot: job.fatmanModeSnapshot } : {}),
     };
 
     await this.ctx.storage.put(key, record);
@@ -717,7 +728,7 @@ export class JobDedupe extends DurableObject {
     return { ok: true };
   }
 
-  private async getConversation(currentUpdateId: number, currentBotConnectionId: string): Promise<ConversationTurn[]> {
+  private async getConversation(currentUpdateId: number, currentBotConnectionId: string, currentFatmanMode: boolean): Promise<ConversationTurn[]> {
     const jobs = await this.ctx.storage.list<JobRecord>({ prefix: "job:" });
     const quizResults = await this.ctx.storage.list<StoredQuizResultContext>({ prefix: "quiz-result:" });
     const resetAt = (await this.ctx.storage.get<number>(CONVERSATION_RESET_KEY)) ?? 0;
@@ -726,6 +737,7 @@ export class JobDedupe extends DurableObject {
       .filter((record) =>
         !((record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID) === currentBotConnectionId && record.updateId === currentUpdateId) &&
         record.state === "done" &&
+        (record.fatmanModeSnapshot === true) === currentFatmanMode &&
         record.answerPacket &&
         record.answerPacket.answerScope !== "out_of_scope" &&
         record.createdAt > resetAt &&
@@ -750,6 +762,18 @@ export class JobDedupe extends DurableObject {
       .sort((a, b) => a.createdAt - b.createdAt)
       .slice(-12)
       .map(({ question, answer }) => ({ question, answer }));
+  }
+
+  private async getFatmanMode(botConnectionId: string): Promise<boolean> {
+    return (await this.ctx.storage.get<boolean>(FATMAN_MODE_PREFIX + encodeURIComponent(botConnectionId))) === true;
+  }
+
+  private async setFatmanMode(body: Record<string, unknown>): Promise<GenericResponse & { active: boolean }> {
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID).trim();
+    if (!botConnectionId || botConnectionId.length > 128) throw new Error("Invalid bot connection identifier.");
+    const active = body.active === true;
+    await this.ctx.storage.put(FATMAN_MODE_PREFIX + encodeURIComponent(botConnectionId), active);
+    return { ok: true, active };
   }
 
   private async getProfile(): Promise<StudentProfile> {
@@ -1019,6 +1043,7 @@ function parseJob(body: Record<string, unknown>): ParsedQuestionJob {
     createdAt: positiveNumber(body.createdAt),
     ...(body.statusMessageId !== undefined ? { statusMessageId: positiveNumber(body.statusMessageId) } : {}),
     ...(body.quizCount !== undefined ? { quizCount: Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, positiveNumber(body.quizCount))) } : {}),
+    ...(body.fatmanModeSnapshot !== undefined ? { fatmanModeSnapshot: body.fatmanModeSnapshot === true } : {}),
     ...(photoFileIds ? { photoFileIds } : {}),
   };
   if (!job.question || !job.requestId) throw new Error("Invalid job payload.");
