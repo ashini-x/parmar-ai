@@ -24,7 +24,7 @@
 ## In development
 
 - Photo-only SSC doubts with optional captions and albums of up to 5 pictures; video uploads are rejected. This feature branch is not part of the v2.8.0 production release.
-- Fatman 2nd Edition book mode: the AI Search instance exists, but all 50 uploaded page items failed before vectorization. Book mode remains disabled until page processing works, all 538 pages are indexed, and three retrieval results are reviewed.
+- Fatman 2nd Edition book mode: the admin importer now uses Google Vision Document Text Detection and stores extracted page text in the existing AI Search index. The 538-page PDF still needs to be imported and all pages plus three retrieval results reviewed before book mode is enabled.
 
 ## Planned / not shipped
 
