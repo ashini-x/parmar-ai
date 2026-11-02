@@ -1561,13 +1561,13 @@ function creatorContactPage(): Response {
 </head>
 <body>
   <main>
-    <div class="trust-badge" aria-label="Trusted by 150,000 or more users">
+    <div class="trust-badge" aria-label="Trusted by 115,000 users">
       <div class="avatars" aria-hidden="true">
         <span class="avatar avatar-one"><svg viewBox="0 0 32 32"><circle cx="16" cy="11" r="6" fill="#806d67"/><path d="M5 29c.8-7.2 4.7-11 11-11s10.2 3.8 11 11" fill="#a88b80"/></svg></span>
         <span class="avatar avatar-two"><svg viewBox="0 0 32 32"><circle cx="16" cy="11" r="6" fill="#8c5f4e"/><path d="M5 29c.8-7.2 4.7-11 11-11s10.2 3.8 11 11" fill="#bd8570"/></svg></span>
         <span class="avatar avatar-three"><svg viewBox="0 0 32 32"><circle cx="16" cy="11" r="6" fill="#625d72"/><path d="M5 29c.8-7.2 4.7-11 11-11s10.2 3.8 11 11" fill="#89849b"/></svg></span>
       </div>
-      <span class="trust-copy">Trusted by 150k+ users</span>
+      <span class="trust-copy">Trusted by 115k users</span>
     </div>
     <h1>iDoctor Projects</h1>
     <p class="intro">Have a question? We’re listening.</p>
