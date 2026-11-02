@@ -198,7 +198,7 @@ export async function finalizeFatmanIndex(env: Env, request: Request): Promise<R
   const reviewedQueries = Array.isArray(body.reviewedQueries)
     ? [...new Set(body.reviewedQueries
       .filter((query): query is string => typeof query === "string")
-      .map((query) => query.replace(/\\s+/gu, " ").trim().slice(0, 1_000))
+      .map((query) => query.replace(/\s+/gu, " ").trim().slice(0, 1_000))
       .filter(Boolean))].slice(0, 3)
     : [];
   if (reviewedQueries.length < 3) {
