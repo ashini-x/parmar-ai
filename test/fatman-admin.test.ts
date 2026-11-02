@@ -10,6 +10,7 @@ vi.mock("../src/analytics/db", () => analytics);
 
 import {
   finalizeFatmanIndex,
+  prepareFatmanIndex,
   previewFatmanIndex,
 } from "../src/fatman/admin";
 
@@ -22,14 +23,18 @@ describe("Fatman admin retrieval gate", () => {
   const itemsList = vi.fn();
   const search = vi.fn();
   const namespaceList = vi.fn();
+  const namespaceCreate = vi.fn();
+  const instanceUpdate = vi.fn();
   const instance = {
     items: { list: itemsList },
     search,
+    update: instanceUpdate,
   };
   const env = {
     FATMAN_SEARCH: {
       list: namespaceList,
       get: () => instance,
+      create: namespaceCreate,
     },
     FATMAN_INSTANCE_NAME: "fatman-test",
     FATMAN_DOCUMENT_VERSION: "fatman-test-v1",
@@ -40,6 +45,8 @@ describe("Fatman admin retrieval gate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     namespaceList.mockResolvedValue({ result: [{ id: "fatman-test" }] });
+    namespaceCreate.mockResolvedValue(instance);
+    instanceUpdate.mockResolvedValue(undefined);
     itemsList.mockImplementation(async (options: { page?: number }) => {
       const page = options.page ?? 1;
       return {
@@ -63,6 +70,31 @@ describe("Fatman admin retrieval gate", () => {
     });
     analytics.reserveFatmanSearchQuery.mockResolvedValue({ allowed: true, queryCount: 1 });
     analytics.setFatmanBookState.mockResolvedValue(undefined);
+  });
+
+  it("keeps OCR enabled when preparing an existing scanned-book index", async () => {
+    const response = await prepareFatmanIndex(env);
+    const result = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(result.expectedPages).toBe(538);
+    expect(instanceUpdate).toHaveBeenCalledWith({
+      indexing_options: { use_ocr: true },
+      index_method: { vector: true, keyword: true },
+    });
+    expect(namespaceCreate).not.toHaveBeenCalled();
+  });
+
+  it("creates a new scanned-book index with OCR enabled", async () => {
+    namespaceList.mockResolvedValue({ result: [] });
+    const response = await prepareFatmanIndex(env);
+
+    expect(response.status).toBe(200);
+    expect(namespaceCreate).toHaveBeenCalledWith({
+      id: "fatman-test",
+      indexing_options: { use_ocr: true },
+      index_method: { vector: true, keyword: true },
+    });
   });
 
   it("returns preview passages with their exact PDF page", async () => {
