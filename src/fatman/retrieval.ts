@@ -106,7 +106,7 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
   for (const chunk of chunks) {
     const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
     const pdfPage = pageNumberFromKey(key);
-    const text = typeof chunk.text === "string"
+    const text = typeof chunk.text === "string" ? cleanPassageText(chunk.text).slice(0, MAX_PASSAGE_CHARS) : "";
       ? chunk.text.replace(/\s+/gu, " ").trim().slice(0, MAX_PASSAGE_CHARS)
       : "";
     const score = finiteScore(chunk.score) ??
@@ -161,6 +161,13 @@ function pageNumberFromKey(key: string): number | undefined {
   if (!match) return undefined;
   const page = Number(match[1]);
   return Number.isSafeInteger(page) && page > 0 ? page : undefined;
+}
+
+function cleanPassageText(value: string): string {
+  return value
+    .replace(/\bjoin\s*[-:]*\s*@?freebookspdf\d*\b/giu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
 }
 
 function finiteScore(value: unknown): number | undefined {
