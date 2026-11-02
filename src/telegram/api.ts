@@ -5,8 +5,7 @@ import { getActiveTelegramBot, getTelegramBotByConnectionId, hasTelegramBotRecor
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
 const CREATOR_NAME = "Quantum Labs";
-const CREATOR_MAILTO_URL = "mailto:quantumcoremind@gmail.com?subject=Contact%20Quantum%20Labs%20%7C%20Parmar%20AI&body=Hi%20Quantum%20Labs%2C%0A%0AI%27d%20like%20to%20contact%20you%20about%20the%20SSC%20GS%20bot.";
-const CREATOR_EMAIL_URL = "https://mail.google.com/mail/?extsrc=mailto&url=" + encodeURIComponent(CREATOR_MAILTO_URL);
+const CREATOR_EMAIL_URL = "https://parmar-ai.thenewtongs.workers.dev/contact";
 const CREATOR_FOOTER = "\n\nCreator: " + CREATOR_NAME;
 const CREATOR_FOOTER_LINK_OFFSET = "\n\nCreator: ".length;
 

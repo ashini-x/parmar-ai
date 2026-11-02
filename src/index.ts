@@ -1512,12 +1512,70 @@ function dedupe(values: string[]): string[] {
   return result;
 }
 
+function creatorContactPage(): Response {
+  const subject = encodeURIComponent("Contact Quantum Labs | Parmar AI");
+  const body = encodeURIComponent("Hi Quantum Labs,\n\nI'd like to contact you about the SSC GS bot.");
+  const mailtoUrl = `mailto:quantumcoremind@gmail.com?subject=${subject}&body=${body}`;
+  const gmailUrl = `https://mail.google.com/mail/?tf=cm&to=quantumcoremind%40gmail.com&su=${subject}&body=${body}`;
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Contact Quantum Labs</title>
+  <style>
+    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:#0b1220;color:#edf2f8}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px}
+    main{width:min(100%,440px);padding:32px;border:1px solid #273449;border-radius:24px;background:#111a2a;box-shadow:0 24px 70px #0005}
+    .brand{margin:0 0 24px;color:#9eb0c8;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+    h1{margin:0 0 12px;font-size:28px;letter-spacing:-.03em}
+    p{color:#b9c4d2;line-height:1.6}
+    .button{display:block;margin-top:14px;padding:14px 18px;border-radius:12px;text-align:center;text-decoration:none;font-weight:700}
+    .primary{background:#eef3fa;color:#111827}
+    .secondary{border:1px solid #34445d;color:#eef3fa}
+    .address{margin:24px 0 4px;color:#eef3fa;font-weight:600;overflow-wrap:anywhere}
+    .note{margin-bottom:0;font-size:13px;color:#91a0b3}
+  </style>
+</head>
+<body>
+  <main>
+    <p class="brand">Parmar AI · Quantum Labs</p>
+    <h1>Contact the creator</h1>
+    <p>For questions about the SSC General Studies bot or a digital tutor for another subject, email the creator.</p>
+    <a class="button primary" href="${mailtoUrl.replace(/&/gu, "&amp;")}">Compose email</a>
+    <a class="button secondary" href="${gmailUrl.replace(/&/gu, "&amp;")}">Open Gmail in browser</a>
+    <p class="address">quantumcoremind@gmail.com</p>
+    <p class="note">The recipient, subject, and starter message are filled in. Review them before sending.</p>
+  </main>
+  <script>
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      window.location.href = "${mailtoUrl}";
+    }
+  </script>
+</body>
+</html>`;
+  return new Response(html, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}
+
 const worker = {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const requestId = getOrCreateRequestId(request);
     const url = new URL(request.url);
 
     try {
+      if (url.pathname === "/contact") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        return withRequestId(creatorContactPage(), requestId);
+      }
+
       if (url.pathname === "/health") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         return withRequestId(json(await buildHealth(env)), requestId);
