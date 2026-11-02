@@ -884,6 +884,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         const updatePartialAnswer = claim.record.statusMessageId
           ? createTelegramPartialAnswerUpdater(env, job, claim.record.statusMessageId)
           : undefined;
+        let generation: Awaited<ReturnType<typeof generateGeminiAnswer>> | undefined;
         if (fatmanMode && job.question === DEFAULT_PHOTO_QUESTION && images.length > 0) {
           packet = makeFatmanNoticePacket("Photo mil gaya. Fatman mein sahi page dhoondhne ke liye photo ke saath apna sawaal ya ek keyword bhi likho.");
         } else if (fatmanMode && !isFatmanReady(env)) {
@@ -903,7 +904,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
           }
           if (!packet && bookContext) {
-            const generation = await generateGeminiAnswer(
+            generation = await generateGeminiAnswer(
               env,
               job.question,
               buildProfileContext(profile, recentConversation),
@@ -920,7 +921,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             packet.nextRevisionTopic = "";
           }
         } else {
-          const generation = await generateGeminiAnswer(
+          generation = await generateGeminiAnswer(
             env,
             job.question,
             buildProfileContext(profile, recentConversation),
@@ -929,7 +930,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           );
           packet = generation.packet;
         }
-        if (packet.questionMode === "mcq" && packet.responseMode === "text" && !(packet.quizItems?.length)) {
+        if (!fatmanMode && packet.questionMode === "mcq" && packet.responseMode === "text" && !(packet.quizItems?.length)) {
           await jobStoreRequest(env, job.chatId, {
             action: "set_pending_quiz",
             count: job.quizCount ?? 1,
@@ -940,15 +941,17 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             });
           });
         }
-        ctx.waitUntil(recordAiUsage(env, {
-          updateId: job.updateId,
-          botConnectionId: job.botConnectionId,
-          requestId: job.requestId,
-          queueAttempt: message.attempts,
-          telegramUserId: jobTelegramUserId,
-          chatId: job.chatId,
-          usage: generation.usage,
-        }).catch((usageError) => logger.warn("analytics_ai_usage_failed", { error: usageError instanceof Error ? usageError.message : String(usageError) })));
+        if (generation?.usage.length) {
+          ctx.waitUntil(recordAiUsage(env, {
+            updateId: job.updateId,
+            botConnectionId: job.botConnectionId,
+            requestId: job.requestId,
+            queueAttempt: message.attempts,
+            telegramUserId: jobTelegramUserId,
+            chatId: job.chatId,
+            usage: generation.usage,
+          }).catch((usageError) => logger.warn("analytics_ai_usage_failed", { error: usageError instanceof Error ? usageError.message : String(usageError) })));
+        }
         const packetWrite = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
           action: "set_answer_packet",
           botConnectionId: job.botConnectionId,
