@@ -21,23 +21,6 @@ interface CreatorContactKeyboardMarkup {
   }>>;
 }
 
-interface BusinessContactKeyboardMarkup {
-  inline_keyboard: Array<Array<{
-    text: string;
-    url: string;
-  }>>;
-}
-
-function creatorBusinessContactMarkup(): BusinessContactKeyboardMarkup {
-  return {
-    inline_keyboard: [[{
-      text: "creator: " + CREATOR_NAME,
-      url: CREATOR_CONTACT_URL,
-    }]],
-  };
-}
-
-
 function creatorContactMarkup(chatId: number, includeCreatorFooter = true): CreatorContactKeyboardMarkup | undefined {
   if (!includeCreatorFooter || chatId <= 0) return undefined;
   return {
@@ -453,7 +436,6 @@ export async function sendTelegramBusinessMessage(
       allow_sending_without_reply: true,
     },
     text: message.text,
-    reply_markup: creatorBusinessContactMarkup(),
     link_preview_options: { is_disabled: true },
   }, botConnectionId);
 }
