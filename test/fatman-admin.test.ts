@@ -28,7 +28,7 @@ describe("Fatman admin retrieval gate", () => {
     status: "completed",
   }));
   const itemsList = vi.fn();
-  const itemsUploadAndPoll = vi.fn();
+  const itemsUpload = vi.fn();
   const itemsGetInfo = vi.fn();
   const itemsGetDownload = vi.fn();
   const visionFetch = vi.fn();
@@ -39,7 +39,7 @@ describe("Fatman admin retrieval gate", () => {
   const instance = {
     items: {
       list: itemsList,
-      uploadAndPoll: itemsUploadAndPoll,
+      upload: itemsUpload,
       get: (itemId: string) => ({ info: () => itemsGetInfo(itemId), download: () => itemsGetDownload(itemId) }),
     },
     search,
@@ -71,7 +71,7 @@ describe("Fatman admin retrieval gate", () => {
     namespaceList.mockResolvedValue({ result: [{ id: "fatman-test" }] });
     namespaceCreate.mockResolvedValue(instance);
     instanceUpdate.mockResolvedValue(undefined);
-    itemsUploadAndPoll.mockResolvedValue({ id: "new-page", key: "fatman/pages/page-000001.txt", status: "completed" });
+    itemsUpload.mockResolvedValue({ id: "new-page", key: "fatman/pages/page-000001.txt", status: "completed" });
     itemsGetInfo.mockResolvedValue({ id: "pending-page", key: "fatman/pages/page-000001.txt", status: "completed" });
     itemsList.mockImplementation(async (options: { page?: number }) => {
       const page = options.page ?? 1;
@@ -115,7 +115,7 @@ describe("Fatman admin retrieval gate", () => {
 
   it("OCRs a page with Google Vision and indexes extracted text", async () => {
     itemsList.mockResolvedValue({ result: [] });
-    itemsUploadAndPoll.mockResolvedValue({
+    itemsUpload.mockResolvedValue({
       id: "new-page",
       key: "fatman/pages/page-000001.txt",
       status: "completed",
@@ -134,7 +134,7 @@ describe("Fatman admin retrieval gate", () => {
 
     const response = await uploadFatmanPage(env, request, 1);
     const result = await response.json() as any;
-    const [key, indexedText] = itemsUploadAndPoll.mock.calls[0];
+    const [key, indexedText] = itemsUpload.mock.calls[0];
 
     expect(response.status).toBe(200);
     expect(result).toMatchObject({ ok: true, page: 1, status: "completed" });
@@ -143,6 +143,32 @@ describe("Fatman admin retrieval gate", () => {
     expect(JSON.parse(visionFetch.mock.calls[0][1].body).requests[0].features).toEqual([
       { type: "DOCUMENT_TEXT_DETECTION" },
     ]);
+  });
+
+  it("accepts a page that Cloudflare is still indexing without repeating Vision OCR", async () => {
+    itemsList.mockResolvedValue({
+      result: [{
+        id: "pending-page",
+        key: "fatman/pages/page-000001.txt",
+        status: "running",
+      }],
+    });
+    const request = new Request("https://worker.test/admin/api/fatman/page/1", {
+      method: "POST",
+      headers: {
+        "content-type": "image/jpeg",
+        "x-fatman-free-quota-confirmed": "true",
+      },
+      body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    });
+
+    const response = await uploadFatmanPage(env, request, 1);
+    const result = await response.json() as any;
+
+    expect(response.status).toBe(202);
+    expect(result).toMatchObject({ ok: true, page: 1, status: "running", processing: true });
+    expect(visionFetch).not.toHaveBeenCalled();
+    expect(itemsUpload).not.toHaveBeenCalled();
   });
 
   it("requires free quota confirmation before calling Vision", async () => {
@@ -156,7 +182,7 @@ describe("Fatman admin retrieval gate", () => {
 
     expect(response.status).toBe(400);
     expect(visionFetch).not.toHaveBeenCalled();
-    expect(itemsUploadAndPoll).not.toHaveBeenCalled();
+    expect(itemsUpload).not.toHaveBeenCalled();
   });
 
   it("keeps OCR enabled when preparing an existing scanned-book index", async () => {

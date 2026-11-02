@@ -118,7 +118,7 @@ export async function uploadFatmanPage(env: Env, request: Request, pageNumber: n
     }
     const pending = exactMatches.find((item) => item.status === "queued" || item.status === "running");
     if (pending) {
-      return fatmanPageUploadResponse(pageNumber, await waitForFatmanItem(instance, pending));
+      return fatmanPageUploadResponse(pageNumber, pending);
     }
 
     const recoverable = exactMatches.find((item) =>
@@ -131,10 +131,7 @@ export async function uploadFatmanPage(env: Env, request: Request, pageNumber: n
       text = await recognizeFatmanPage(env, new Uint8Array(bytes), pageNumber);
     }
 
-    const item = await instance.items.uploadAndPoll(key, text, {
-      pollIntervalMs: 1_000,
-      timeoutMs: 60_000,
-    });
+    const item = await instance.items.upload(key, text);
     return fatmanPageUploadResponse(pageNumber, item);
   } catch (error) {
     return json({ ok: false, error: safeError(error) }, 502);
@@ -441,26 +438,18 @@ function fatmanPageUploadResponse(pageNumber: number, item: AiSearchItem): Respo
       error: safeError(item.error ?? "Cloudflare could not index this page."),
     }, 422);
   }
+  if (item.status === "queued" || item.status === "running") {
+    return json({ ok: true, page: pageNumber, status: item.status, processing: true }, 202);
+  }
   if (item.status !== "completed") {
     return json({
       ok: false,
       page: pageNumber,
       status: item.status,
-      error: "Cloudflare is still processing this page. Refresh status and resume later.",
+      error: "Cloudflare could not accept this page. Refresh status before resuming.",
     }, 409);
   }
   return json({ ok: true, page: pageNumber, status: item.status });
-}
-
-async function waitForFatmanItem(instance: AiSearchInstance, item: AiSearchItem): Promise<AiSearchItem> {
-  const deadline = Date.now() + 60_000;
-  let current = item;
-  while (current.status === "queued" || current.status === "running") {
-    if (Date.now() >= deadline) break;
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-    current = await instance.items.get(item.id).info();
-  }
-  return current;
 }
 
 async function listFatmanPages(instance: AiSearchInstance): Promise<AiSearchItem[]> {
@@ -640,7 +629,7 @@ async function importBook(){
     const complete=new Set((current.pages||[]).filter(item=>item.status==="completed").map(item=>item.page));
     let done=complete.size;
   progressEl.value=done;
-  setStatus("Google Vision OCR and indexing… "+done+" pages already indexed.");
+  setStatus("Google Vision and Cloudflare indexing: "+done+" pages indexed or processing.");
   for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
     if(complete.has(pageNumber))continue;
     try{
@@ -656,7 +645,7 @@ async function importBook(){
       const data=await response.json();
       if(!response.ok||!data.ok)throw new Error(data.error||("Page "+pageNumber+" upload failed."));
       done++;progressEl.value=done;
-      setStatus("Google Vision OCR and indexing… "+done+" of "+pdf.numPages+".");
+      setStatus("Page submissions: "+done+" of "+pdf.numPages+". Cloudflare indexing continues in the background.");
     }catch(error){
       throw new Error("Page "+pageNumber+" stopped: "+(error instanceof Error?error.message:String(error))+" Refresh status, then resume; completed pages will be skipped.");
     }
