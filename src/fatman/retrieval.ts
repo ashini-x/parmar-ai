@@ -1,4 +1,5 @@
 import type { AiSearchChunk, Env, GeminiImageInput } from "../config/env";
+import { getFatmanBookState, reserveFatmanSearchQuery } from "../analytics/db";
 
 const MAX_MATCHES = 12;
 const MAX_PASSAGES = 8;
@@ -21,34 +22,60 @@ export interface FatmanBookContext {
 
 export class FatmanRetrievalError extends Error {
   readonly retryable: boolean;
+  readonly userMessage?: string;
 
-  constructor(message: string, retryable = true) {
+  constructor(message: string, retryable = true, userMessage?: string) {
     super(message);
     this.name = "FatmanRetrievalError";
     this.retryable = retryable;
+    this.userMessage = userMessage;
   }
 }
 
-export function isFatmanReady(env: Env): boolean {
+export async function isFatmanReady(env: Env): Promise<boolean> {
   const version = env.FATMAN_DOCUMENT_VERSION?.trim();
   const instanceName = env.FATMAN_INSTANCE_NAME?.trim();
+  const expectedPages = Number(env.FATMAN_EXPECTED_PAGES);
   const threshold = Number(env.FATMAN_MIN_SCORE);
-  return env.FATMAN_ENABLED?.trim().toLowerCase() === "true" &&
-    Boolean(version) &&
-    Boolean(instanceName) &&
-    Boolean(env.FATMAN_SEARCH) &&
-    Number.isFinite(threshold) &&
-    threshold >= 0 &&
-    threshold <= 1;
+  if (
+    env.FATMAN_ENABLED?.trim().toLowerCase() !== "true" ||
+    !version ||
+    !instanceName ||
+    !env.FATMAN_SEARCH ||
+    !env.DB ||
+    !Number.isSafeInteger(expectedPages) ||
+    expectedPages < 1 ||
+    !Number.isFinite(threshold) ||
+    threshold < 0 ||
+    threshold > 1
+  ) return false;
+
+  const state = await getFatmanBookState(env);
+  return state.enabled &&
+    state.documentVersion === version &&
+    state.indexedPages === expectedPages;
 }
 
 export async function retrieveFatmanContext(env: Env, query: string): Promise<FatmanBookContext> {
-  if (!isFatmanReady(env) || !env.FATMAN_SEARCH) {
+  if (!(await isFatmanReady(env)) || !env.FATMAN_SEARCH) {
     throw new FatmanRetrievalError("Fatman retrieval is not configured.", false);
   }
 
   const normalizedQuery = query.replace(/\s+/gu, " ").trim().slice(0, 4_000);
   if (!normalizedQuery) throw new FatmanRetrievalError("Fatman search query is empty.", false);
+
+  const configuredLimit = Number(env.FATMAN_MONTHLY_QUERY_LIMIT);
+  const monthlyLimit = Number.isFinite(configuredLimit)
+    ? Math.max(1, Math.min(800, Math.floor(configuredLimit)))
+    : 800;
+  const usage = await reserveFatmanSearchQuery(env, monthlyLimit);
+  if (!usage.allowed) {
+    throw new FatmanRetrievalError(
+      "Fatman has reached this month's included search limit.",
+      false,
+      "Fatman search has reached this month's free usage limit. Use /help to return to usual study mode.",
+    );
+  }
 
   let chunks: AiSearchChunk[];
   try {
