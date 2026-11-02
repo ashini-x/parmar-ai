@@ -1513,9 +1513,7 @@ function dedupe(values: string[]): string[] {
 }
 
 function creatorContactPage(): Response {
-  const subject = encodeURIComponent("Contact Quantum Labs | Parmar AI");
-  const body = encodeURIComponent("Hi Quantum Labs,\n\nI'd like to contact you about the SSC GS bot.");
-  const mailtoUrl = `mailto:quantumcoremind@gmail.com?subject=${subject}&body=${body}`;
+  const creatorEmail = "quantumcoremind@gmail.com";
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -1535,13 +1533,17 @@ function creatorContactPage(): Response {
     .eyebrow{margin:0 0 12px;color:#777772;font-size:13px;font-weight:550;letter-spacing:.02em}
     h1{margin:0;font-size:clamp(36px,10vw,48px);font-weight:620;letter-spacing:-.055em;line-height:1.04}
     .description{margin:18px 0 30px;color:#666660;font-size:16px;line-height:1.6;letter-spacing:-.01em}
-    .button{display:flex;min-height:54px;align-items:center;justify-content:center;gap:10px;padding:0 20px;border:1px solid #171717;border-radius:999px;background:#171717;color:#fff;text-decoration:none;font-size:15px;font-weight:600;letter-spacing:-.01em;box-shadow:0 5px 14px #17171720;transition:transform .16s ease,background .16s ease,box-shadow .16s ease}
-    .button:hover{background:#30302e;box-shadow:0 8px 20px #17171725}
-    .button:active{transform:scale(.985)}
-    .button:focus-visible{outline:3px solid #6b8cff;outline-offset:4px}
+    .button{display:flex;width:100%;min-height:54px;align-items:center;justify-content:center;gap:10px;padding:0 20px;border:1px solid #171717;border-radius:999px;background:#171717;color:#fff;text-decoration:none;font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.01em;box-shadow:0 5px 14px #17171720;cursor:pointer}
+    .button:active{transform:scale(.99)}
+    .button:focus-visible,.email-copy:focus-visible{outline:3px solid #6b8cff;outline-offset:4px}
     .arrow{font-size:19px;font-weight:400;line-height:1}
-    .note{margin:16px 2px 0;color:#8a8a84;text-align:center;font-size:12px;line-height:1.5}
-    @media(prefers-reduced-motion:reduce){.button{transition:none}}
+    .contact-details{margin-top:24px;padding-top:22px;border-top:1px solid #17171712}
+    .contact-details[hidden]{display:none}
+    .email-label{margin:0 0 10px;color:#777772;font-size:13px;font-weight:550}
+    .email-copy{display:flex;width:100%;min-height:54px;align-items:center;justify-content:space-between;gap:12px;padding:0 15px;border:1px solid #17171718;border-radius:15px;background:#ffffffb8;color:#171717;font:600 14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+    .email-address{-webkit-user-select:text;user-select:text;overflow-wrap:anywhere;text-align:left}
+    .copy-hint{flex:none;color:#777772;font-size:12px;font-weight:550}
+    .note{min-height:18px;margin:12px 2px 0;color:#8a8a84;text-align:center;font-size:12px;line-height:1.5}
   </style>
 </head>
 <body>
@@ -1550,12 +1552,59 @@ function creatorContactPage(): Response {
     <p class="eyebrow">Parmar AI · SSC General Studies</p>
     <h1>Let’s talk.</h1>
     <p class="description">Questions about this SSC GS tutor, or exploring a digital tutor for another subject? Get in touch with the creator.</p>
-    <a class="button" href="${mailtoUrl}">
-      <span>Contact the creator</span><span class="arrow" aria-hidden="true">↗</span>
-    </a>
-    <p class="note">Your email app opens with the recipient and subject ready.</p>
+    <button class="button" id="contact-toggle" type="button" aria-expanded="false" aria-controls="email-contact">
+      <span>Contact</span><span class="arrow" aria-hidden="true">↗</span>
+    </button>
+    <section class="contact-details" id="email-contact" hidden aria-labelledby="email-title">
+      <p class="email-label" id="email-title">Send an email to</p>
+      <button class="email-copy" id="copy-email" type="button" aria-label="Copy ${creatorEmail}">
+        <span class="email-address">${creatorEmail}</span><span class="copy-hint" id="copy-hint">Tap to copy</span>
+      </button>
+      <p class="note" id="copy-status" aria-live="polite">Tap the address to copy it.</p>
+    </section>
   </main>
   <script>
+    const contactToggle = document.getElementById("contact-toggle");
+    const contactDetails = document.getElementById("email-contact");
+    const copyEmailButton = document.getElementById("copy-email");
+    const copyHint = document.getElementById("copy-hint");
+    const copyStatus = document.getElementById("copy-status");
+    const email = "${creatorEmail}";
+
+    contactToggle.addEventListener("click", () => {
+      const isExpanded = contactToggle.getAttribute("aria-expanded") === "true";
+      contactToggle.setAttribute("aria-expanded", String(!isExpanded));
+      contactDetails.hidden = isExpanded;
+    });
+
+    function fallbackCopyEmail() {
+      const field = document.createElement("textarea");
+      field.value = email;
+      field.setAttribute("readonly", "");
+      field.style.position = "fixed";
+      field.style.opacity = "0";
+      document.body.appendChild(field);
+      field.select();
+      const copied = document.execCommand("copy");
+      field.remove();
+      return copied;
+    }
+
+    copyEmailButton.addEventListener("click", async () => {
+      try {
+        try {
+          await navigator.clipboard.writeText(email);
+        } catch {
+          if (!fallbackCopyEmail()) throw new Error("Clipboard unavailable");
+        }
+        copyHint.textContent = "Copied";
+        copyStatus.textContent = "Email address copied to clipboard.";
+      } catch {
+        copyHint.textContent = "Press and hold";
+        copyStatus.textContent = "Copy didn’t work. Press and hold the email address to copy it.";
+      }
+    });
+
     if (window.Telegram && window.Telegram.WebApp) {
       window.Telegram.WebApp.ready();
       window.Telegram.WebApp.expand();
