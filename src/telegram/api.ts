@@ -4,7 +4,7 @@ import { getActiveTelegramBot, getTelegramBotByConnectionId, hasTelegramBotRecor
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
-const CREATOR_NAME = "Quantum Labs";
+const CREATOR_NAME = "iDoctor";
 const CREATOR_CONTACT_URL = "https://parmar-ai.thenewtongs.workers.dev/contact";
 const CREATOR_FOOTER = "\n\nCreator: " + CREATOR_NAME;
 
@@ -39,7 +39,7 @@ function creatorContactMarkup(chatId: number, includeCreatorFooter = true): Crea
   if (!includeCreatorFooter || chatId <= 0) return undefined;
   return {
     inline_keyboard: [[{
-      text: "Contact Quantum Labs",
+      text: "Contact iDoctor",
       web_app: { url: CREATOR_CONTACT_URL },
     }]],
   };
