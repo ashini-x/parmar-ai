@@ -1521,7 +1521,7 @@ function creatorContactPage(): Response {
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f5f5f2">
   <meta name="robots" content="noindex,nofollow">
-  <title>iDoctor</title>
+  <title>iDoctor Projects</title>
   <script src="https://telegram.org/js/telegram-web-app.js?64"></script>
   <style>
     :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f2;color:#171717;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
