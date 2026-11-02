@@ -1228,7 +1228,8 @@ async function getStudentUsage(env: Env, chatId: number, telegramUserId: number)
 function buildStartText(): string {
   return [
     "So Hello Everyone, umeed karta hoon aap sabhi thik honge!",
-    "परमार्थAI: sawaal daago!",
+    "",
+    "Chalo, sawaal lao—seedha point pe aate hain!",
   ].join("\n");
 }
 function buildHelpText(): string {
