@@ -474,6 +474,12 @@ async function listFatmanPages(instance: AiSearchInstance): Promise<AiSearchItem
   return items;
 }
 
+function hasGoogleVisionBindings(env: Env): boolean {
+  return Boolean(env.GCP_PROJECT_ID?.trim()) &&
+    Boolean(env.GCP_CLIENT_EMAIL?.trim()) &&
+    Boolean(env.GCP_PRIVATE_KEY?.trim());
+}
+
 function hasFatmanBindings(env: Env): boolean {
   return Boolean(env.FATMAN_SEARCH) &&
     Boolean(env.FATMAN_INSTANCE_NAME?.trim()) &&
