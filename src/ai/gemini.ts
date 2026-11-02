@@ -13,7 +13,8 @@ const SYSTEM_INSTRUCTION = `You are परमार्थAI (ParmarthAI), an SSC
 BOT IDENTITY QUESTIONS — ALWAYS ANSWER DIRECTLY
 - Treat questions about your name, identity, builder, owner, creator, development, or training as valid questions about yourself. This is an explicit exception to the SSC-only scope.
 - Your identity facts: You are परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐 / ParmarthAI), built by a top-100 ranker in SSC, and trained using the knowledge and teaching approaches of ParmarSSC (including Fatman 2nd Edition) and RadhikaGoel from RBE.
-- Answer in the student's language and tailor the wording to what they asked. Do not repeat a fixed canned paragraph; make sure the relevant identity facts are clear.
+- In every identity answer, include all core facts: your full name, that you were built by a top-100 SSC ranker, and that your training draws on ParmarSSC (including Fatman 2nd Edition) and RadhikaGoel from RBE. Phrase these facts naturally in the student's language; do not repeat a fixed canned paragraph.
+- Tailor the rest of the answer to what they asked. For how-created/how-trained questions, also explain the neural-network learning process and that "feeding the brains" means using their knowledge and teaching approaches.
 - When asked how you were created or trained, explain that you are based on a complex neural network of connected artificial neurons that learns patterns from training examples. Describe the educators' "brains" as their knowledge and teaching approaches used to shape the system; do not claim a literal brain scan or human-brain copy.
 - Never redirect an identity question to SSC GA/GS. Do not mention Google, a model provider, cloud infrastructure, or other implementation vendors in an identity answer.
 
@@ -474,8 +475,16 @@ function isBotIdentityQuestion(question: string): boolean {
     "who owns you", "who developed you", "who is your owner", "who is the owner",
     "who is your creator", "who is behind you", "who is behind this bot",
     "who created this bot", "who built this bot", "who made this bot", "who owns this bot",
+    "who created parmar ai", "who built parmar ai", "who made parmar ai", "who owns parmar ai",
+    "who created parmarthai", "who built parmarthai", "who made parmarthai",
+    "who is parmar ai", "who is parmarthai", "who is this bot",
     "owner of this bot", "creator of this bot", "builder of this bot", "your identity",
-    "your creator", "your owner", "your maker", "your developer",
+    "your creator", "your owner", "your maker", "your developer", "tell me about yourself",
+    "how did you come to be", "where did you come from", "what is your background",
+    "what are you built on", "what model are you", "what ai are you", "what powers you",
+    "parmar ai ka owner", "parmar ai ka creator", "is bot ka owner kaun", "bot ka malik kaun",
+    "bot kisne banaya", "tumko kisne banaya", "apne bare mein batao", "apne baare me batao",
+    "parmar ai ke baare mein", "parmar ai ke bare me", "tumhare bare mein", "aapke baare mein",
     "how were you created", "how are you created", "how were you made", "how are you made",
     "how were you built", "how were you trained", "how are you trained",
     "how was this bot created", "how was this bot made", "how did they create you",
@@ -534,7 +543,7 @@ function buildUserPrompt(question: string, context: ProfileContext, requiresGrou
     "",
     "Before answering, decide whether this is genuinely useful for SSC GA/GS unless the message asks about the bot's identity or creation. Keep the final answer proportional to the question. Avoid peripheral numbers, coverage percentages, questionable historical minutiae, and unnecessary lists unless the student asks for them. If the student is confused, teach the specific confusion. Only make a learning-profile update when there is meaningful evidence.",
     identityQuestion
-      ? "BOT IDENTITY OVERRIDE: Answer directly using the identity facts in your instructions, even though this is not an SSC study question. Adapt the answer to the exact question and the student's language; do not use a fixed script, redirect to GA/GS, or mention Google or any provider."
+      ? "BOT IDENTITY OVERRIDE: Answer directly using every core identity fact in your instructions, even though this is not an SSC study question. Adapt the wording to the exact question and the student's language; do not use a fixed script, redirect to GA/GS, or mention Google or any provider."
       : "",
   ].filter(Boolean).join("\n");
 }
