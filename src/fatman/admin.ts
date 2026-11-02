@@ -62,6 +62,11 @@ export async function uploadFatmanPage(env: Env, request: Request, pageNumber: n
     return json({ ok: false, error: "jpeg_required" }, 415);
   }
 
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_PAGE_BYTES) {
+    return json({ ok: false, error: "page_size_out_of_range" }, 413);
+  }
+
   try {
     const bytes = await request.arrayBuffer();
     if (bytes.byteLength < 4 || bytes.byteLength > MAX_PAGE_BYTES) {
@@ -197,8 +202,7 @@ async function listFatmanPages(instance: AiSearchInstance): Promise<AiSearchItem
 }
 
 function hasFatmanBindings(env: Env): boolean {
-  return Boolean(env.AI_SEARCH_PLACEHOLDER === undefined) &&
-    Boolean(env.FATMAN_SEARCH) &&
+  return Boolean(env.FATMAN_SEARCH) &&
     Boolean(env.FATMAN_INSTANCE_NAME?.trim()) &&
     Boolean(env.FATMAN_DOCUMENT_VERSION?.trim()) &&
     Boolean(env.DB);
