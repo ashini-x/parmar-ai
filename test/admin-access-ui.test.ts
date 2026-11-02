@@ -20,7 +20,7 @@ describe("admin access UI", () => {
   });
 
   it("subscribes Telegram webhooks to poll answers for native quizzes", () => {
-    expect(source).toContain('allowed_updates: ["message", "poll_answer"]');
+    expect(source).toContain('allowed_updates: ["message", "poll_answer", "business_connection", "business_message"]');
   });
 
   it("protects owner/admin rows from suspend or access mutation in the UI", () => {
