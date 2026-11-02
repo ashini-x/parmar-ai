@@ -10,6 +10,7 @@ import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, Co
 import { DEFAULT_PHOTO_QUESTION, MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "./config/env";
 import { getConfig } from "./config/env";
 import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } from "./core/job-store";
+import { formatFatmanCitations, isFatmanReady, retrieveFatmanContext, FatmanRetrievalError } from "./fatman/retrieval";
 import { logger } from "./core/logger";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
@@ -24,11 +25,13 @@ import {
   TelegramError,
   TelegramMediaError,
   downloadTelegramPhotos,
+  buildFatmanModeMarkup,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
+import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, uploadFatmanPage } from "./fatman/admin";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
 const QUEUE_MAX_RETRIES = 10;
@@ -55,6 +58,13 @@ interface TelegramMessage {
   document?: { mime_type?: string };
 }
 
+interface TelegramCallbackQuery {
+  id?: string;
+  from?: { id?: number };
+  message?: TelegramMessage;
+  data?: string;
+}
+
 interface TelegramPollAnswer {
   poll_id?: string;
   user?: { id?: number; is_bot?: boolean };
@@ -71,6 +81,7 @@ interface TelegramBusinessConnection {
 interface TelegramUpdate {
   update_id?: number;
   message?: TelegramMessage;
+  callback_query?: TelegramCallbackQuery;
   poll_answer?: TelegramPollAnswer;
   business_connection?: TelegramBusinessConnection;
   business_message?: TelegramMessage;
@@ -81,6 +92,7 @@ interface PhotoAlbumStageResponse { action: "staged" | "duplicate" | "too_many" 
 interface BeginJobResponse {
   action: "new" | "duplicate" | "rate_limited" | "retry_ack";
   quizCount?: number;
+  fatmanModeSnapshot?: boolean;
   statusMessageId?: number;
   notify?: boolean;
   rateLimitReason?: "daily" | "burst";
@@ -241,6 +253,61 @@ async function handleTelegramBusinessMessage(
   );
 }
 
+async function handleFatmanModeCallback(
+  callback: TelegramCallbackQuery,
+  env: Env,
+  botConnectionId: string,
+  requestId: string,
+): Promise<void> {
+  const callbackId = callback.id?.trim();
+  if (!callbackId) return;
+  let answered = false;
+  const answerCallback = async (text: string, showAlert = false) => {
+    await telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callbackId,
+      text,
+      show_alert: showAlert,
+    }, botConnectionId);
+    answered = true;
+  };
+
+  try {
+    const chatId = callback.message?.chat?.id;
+    const senderId = callback.from?.id;
+    if (
+      callback.data !== "fatman:toggle" ||
+      !isSafeInteger(chatId) ||
+      callback.message?.chat?.type !== "private" ||
+      !isSafeInteger(senderId) ||
+      senderId !== chatId
+    ) {
+      await answerCallback("This control is only available in your private chat.", true);
+      return;
+    }
+    if (!(await isFatmanReady(env))) {
+      await answerCallback("Fatman mode is not available yet.", true);
+      return;
+    }
+
+    const current = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId });
+    const active = !current.active;
+    await jobStoreRequest(env, chatId, { action: "set_fatman_mode", botConnectionId, active });
+    await answerCallback(active ? "Fatman mode on." : "Usual study mode on.");
+    const confirmation = active
+      ? "Fatman mode is on. Answers now use the book and include page citations."
+      : "Fatman mode is off. Answers now use the usual study mode.";
+    await sendTelegramMessage(env, chatId, confirmation, undefined, botConnectionId, true, buildFatmanModeMarkup(active));
+  } catch (error) {
+    logger.warn("fatman_mode_callback_failed", {
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    if (!answered) {
+      await answerCallback("Could not change Fatman mode. Please try again.", true).catch(() => undefined);
+    }
+  }
+}
+
 async function handleTelegramWebhook(request: Request, env: Env, requestId: string, ctx: ExecutionContext): Promise<Response> {
   const receivedSecret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")?.trim() ?? "";
   if (!receivedSecret) {
@@ -285,6 +352,11 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     update = (await request.json()) as TelegramUpdate;
   } catch {
     return withRequestId(json({ ok: false, error: "INVALID_JSON" }, 400), requestId);
+  }
+
+  if (update.callback_query) {
+    await handleFatmanModeCallback(update.callback_query, env, bot.connectionId, requestId);
+    return withRequestId(json({ ok: true, callbackQuery: true }), requestId);
   }
 
   if (update.business_connection) {
@@ -381,7 +453,10 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   if (isHelp(text)) {
     queueAnalytics(ctx, "help", () => recordEvent(env, "help", analyticsUser));
     ctx.waitUntil(bestEffortTelegram("help_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId)));
-    await bestEffortTelegram("help", () => sendTelegramMessage(env, chatId, buildHelpText()));
+    const mode = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId }).catch(() => ({ ok: true as const, active: false }));
+    const fatmanReady = await isFatmanReady(env);
+    const markup = fatmanReady ? buildFatmanModeMarkup(mode.active) : undefined;
+    await bestEffortTelegram("help", () => sendTelegramMessage(env, chatId, buildHelpText(), undefined, bot.connectionId, true, markup));
     return withRequestId(json({ ok: true }), requestId);
   }
 
@@ -492,6 +567,14 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true, suspended: true }), requestId);
   }
 
+  const fatmanState = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId });
+  const fatmanModeSnapshot = fatmanState.active === true;
+  if (fatmanModeSnapshot && !(await isFatmanReady(env))) {
+    await jobStoreRequest(env, chatId, { action: "set_fatman_mode", botConnectionId: bot.connectionId, active: false }).catch(() => undefined);
+    await bestEffortTelegram("fatman_unavailable", () => sendTelegramMessage(env, chatId, "Fatman mode is temporarily unavailable. Use /help to return to the usual study mode.", messageId, bot.connectionId));
+    return withRequestId(json({ ok: true, fatmanUnavailable: true }), requestId);
+  }
+
   if (photoFileId && message?.media_group_id?.trim()) {
     await jobStoreRequest(env, chatId, { action: "clear_pending_quiz" }).catch(() => undefined);
     const staged = await jobStoreRequest<PhotoAlbumStageResponse>(env, chatId, {
@@ -505,6 +588,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       fileId: photoFileId,
       caption: text,
       requestId,
+      fatmanModeSnapshot,
     });
     if (staged.action === "too_many") {
       await bestEffortTelegram("photo_album_too_many", () => sendTelegramMessage(
@@ -569,6 +653,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     ...(photoFileId ? { photoFileIds: [photoFileId] } : {}),
     requestedQuizCount: effectiveQuizCount,
     quizContinuation: quizContinuationCount > 0,
+    fatmanModeSnapshot,
   });
 
   if (begin.action === "duplicate") {
@@ -588,6 +673,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       statusMessageId: begin.statusMessageId,
       telegramUserId: analyticsUser.telegramUserId,
       quizCount: begin.quizCount,
+      fatmanModeSnapshot: begin.fatmanModeSnapshot === true,
     };
     try {
       await env.QUESTION_QUEUE.send(retryJob, { contentType: "json" });
@@ -659,6 +745,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     statusMessageId,
     telegramUserId: analyticsUser.telegramUserId,
     quizCount: effectiveQuizCount,
+    fatmanModeSnapshot,
   };
 
   try {
@@ -778,6 +865,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           action: "get_conversation",
           botConnectionId: job.botConnectionId,
           updateId: job.updateId,
+          fatmanModeSnapshot: (claim.record.fatmanModeSnapshot ?? job.fatmanModeSnapshot) === true,
         });
         recentConversation = Array.isArray(conversationResult.recentConversation) ? conversationResult.recentConversation : [];
       } catch (conversationError) {
@@ -788,6 +876,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         });
       }
 
+      const fatmanMode = (claim.record.fatmanModeSnapshot ?? job.fatmanModeSnapshot) === true;
       let packet = claim.record.answerPacket;
 
       if (!packet) {
@@ -797,15 +886,56 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         const updatePartialAnswer = claim.record.statusMessageId
           ? createTelegramPartialAnswerUpdater(env, job, claim.record.statusMessageId)
           : undefined;
-        const generation = await generateGeminiAnswer(
-          env,
-          job.question,
-          buildProfileContext(profile, recentConversation),
-          images,
-          updatePartialAnswer,
-        );
-        packet = generation.packet;
-        if (packet.questionMode === "mcq" && packet.responseMode === "text" && !(packet.quizItems?.length)) {
+        let generation: Awaited<ReturnType<typeof generateGeminiAnswer>> | undefined;
+        if (fatmanMode && job.question === DEFAULT_PHOTO_QUESTION && images.length > 0) {
+          packet = makeFatmanNoticePacket("Photo mil gaya. Fatman mein sahi page dhoondhne ke liye photo ke saath apna sawaal ya ek keyword bhi likho.");
+        } else if (fatmanMode && !(await isFatmanReady(env))) {
+          packet = makeFatmanNoticePacket("Fatman mode abhi available nahi hai. /help se usual study mode mein wapas aa jao.");
+        } else if (fatmanMode) {
+          let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
+          try {
+            bookContext = await retrieveFatmanContext(env, job.question);
+          } catch (error) {
+            if (error instanceof FatmanRetrievalError && !error.retryable) {
+              packet = makeFatmanNoticePacket(error.userMessage ?? "Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
+            } else {
+              throw error;
+            }
+          }
+          if (!packet && bookContext && !bookContext.passages.length) {
+            packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
+          }
+          if (!packet && bookContext) {
+            generation = await generateGeminiAnswer(
+              env,
+              job.question,
+              buildProfileContext(profile, recentConversation),
+              images,
+              updatePartialAnswer,
+              bookContext,
+            );
+            packet = generation.packet;
+            const citations = formatFatmanCitations(bookContext.passages);
+            packet.answer = appendFatmanCitations(packet.answer, citations);
+            packet.sscTakeaway = "";
+            packet.profileSignal = "neutral";
+            packet.profileNote = "";
+            packet.nextRevisionTopic = "";
+          }
+        } else {
+          generation = await generateGeminiAnswer(
+            env,
+            job.question,
+            buildProfileContext(profile, recentConversation),
+            images,
+            updatePartialAnswer,
+          );
+          packet = generation.packet;
+        }
+        if (!packet) {
+          throw new GeminiError("Question generation did not produce an answer packet.", undefined, true);
+        }
+        if (!fatmanMode && packet.questionMode === "mcq" && packet.responseMode === "text" && !(packet.quizItems?.length)) {
           await jobStoreRequest(env, job.chatId, {
             action: "set_pending_quiz",
             count: job.quizCount ?? 1,
@@ -816,15 +946,17 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             });
           });
         }
-        ctx.waitUntil(recordAiUsage(env, {
-          updateId: job.updateId,
-          botConnectionId: job.botConnectionId,
-          requestId: job.requestId,
-          queueAttempt: message.attempts,
-          telegramUserId: jobTelegramUserId,
-          chatId: job.chatId,
-          usage: generation.usage,
-        }).catch((usageError) => logger.warn("analytics_ai_usage_failed", { error: usageError instanceof Error ? usageError.message : String(usageError) })));
+        if (generation?.usage.length) {
+          ctx.waitUntil(recordAiUsage(env, {
+            updateId: job.updateId,
+            botConnectionId: job.botConnectionId,
+            requestId: job.requestId,
+            queueAttempt: message.attempts,
+            telegramUserId: jobTelegramUserId,
+            chatId: job.chatId,
+            usage: generation.usage,
+          }).catch((usageError) => logger.warn("analytics_ai_usage_failed", { error: usageError instanceof Error ? usageError.message : String(usageError) })));
+        }
         const packetWrite = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
           action: "set_answer_packet",
           botConnectionId: job.botConnectionId,
@@ -840,7 +972,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       }
 
       let latestProfile = profile;
-      if (!claim.record.profileUpdated) {
+      if (!fatmanMode && !claim.record.profileUpdated) {
         try {
           const profileWrite = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
             action: "update_profile",
@@ -1002,7 +1134,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           env,
           job,
           claim.record.statusMessageId,
-          buildAnswerForStudent(packet, latestProfile),
+          buildAnswerForStudent(packet, latestProfile, !fatmanMode),
         );
         statusMessageHandled = true;
       }
@@ -1255,8 +1387,9 @@ function getQuizItems(packet: AnswerPacket): QuizItem[] {
   return [];
 }
 
-function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile): string {
+function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile, personalize = true): string {
   let answer = packet.answer.trim();
+  if (!personalize) return answer.slice(0, 3_900);
 
   // Make the personalization visible only when it is genuinely helpful.
   const isRepeatedArea = packet.topic && profile.recentTopics.some((topic) => topic.toLowerCase() === packet.topic.toLowerCase());
@@ -1359,6 +1492,37 @@ function buildStartText(): string {
     "Chalo, sawaal lao, seedha point pe aate hain!",
   ].join("\n");
 }
+function makeFatmanNoticePacket(answer: string): AnswerPacket {
+  return {
+    answer,
+    responseMode: "text",
+    sscTakeaway: "",
+    answerScope: "ssc_support",
+    subject: "other",
+    topic: "General SSC doubt",
+    questionMode: "fact",
+    examRelevance: "B",
+    difficulty: "medium",
+    profileSignal: "neutral",
+    profileNote: "",
+    nextRevisionTopic: "",
+    detectedExam: null,
+    timeSensitive: false,
+    quizQuestion: "",
+    quizOptions: [],
+    quizCorrectOptionIds: [],
+    quizExplanation: "",
+  };
+}
+
+function appendFatmanCitations(answer: string, citations: string): string {
+  const cleanAnswer = answer
+    .replace(/\n{0,2}(?:source|sources)\s*:\s*fatman[^\n]*/giu, "")
+    .trim()
+    .slice(0, 3_450);
+  return citations ? cleanAnswer + "\n\n" + citations : cleanAnswer;
+}
+
 function buildHelpText(): string {
   return [
     "Set your SSC target exam /exam",
@@ -1478,7 +1642,7 @@ async function telegramSetup(request: Request, env: Env, requestId: string): Pro
   const webhookResult = await telegramSetupMethod(env, "setWebhook", {
     url: webhookUrl,
     secret_token: webhookSecret,
-    allowed_updates: ["message", "poll_answer", "business_connection", "business_message"],
+    allowed_updates: ["message", "poll_answer", "business_connection", "business_message", "callback_query"],
     drop_pending_updates: false,
     max_connections: 100,
     botTokenOverride: token,
@@ -1809,6 +1973,12 @@ const worker = {
         return clearAdminSession();
       }
 
+      if (url.pathname === "/admin/fatman") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+        return fatmanAdminPage();
+      }
+
       if (url.pathname === "/admin" || url.pathname === "/admin/") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -1817,6 +1987,19 @@ const worker = {
 
       if (url.pathname.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
+        if (url.pathname === "/admin/api/fatman/status" && request.method === "GET") return fatmanIndexStatus(env);
+        if (request.method === "POST" && url.pathname.startsWith("/admin/api/fatman/")) {
+          if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          if (url.pathname === "/admin/api/fatman/prepare") return prepareFatmanIndex(env);
+          if (url.pathname === "/admin/api/fatman/preview") return previewFatmanIndex(env, request);
+          if (url.pathname === "/admin/api/fatman/finalize") return finalizeFatmanIndex(env, request);
+          if (url.pathname === "/admin/api/fatman/disable") return disableFatmanIndex(env);
+          const pagePrefix = "/admin/api/fatman/page/";
+          if (url.pathname.startsWith(pagePrefix)) {
+            const pageNumber = Number(url.pathname.slice(pagePrefix.length));
+            return uploadFatmanPage(env, request, pageNumber);
+          }
+        }
         if (url.pathname === "/admin/api/telegram" && request.method === "GET") return adminTelegram(env);
         if (url.pathname === "/admin/api/overview" && request.method === "GET") return adminOverview(env);
         if (url.pathname === "/admin/api/users" && request.method === "GET") return adminUsers(env, request);

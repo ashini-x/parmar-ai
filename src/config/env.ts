@@ -1,5 +1,54 @@
 import type { D1Database, DurableObjectNamespace, Queue } from "@cloudflare/workers-types";
 
+export interface AiSearchChunk {
+  id?: string;
+  text?: string;
+  score?: number;
+  item?: {
+    key?: string;
+    metadata?: Record<string, unknown>;
+  };
+  scoring_details?: {
+    vector_score?: number;
+    reranking_score?: number;
+  };
+}
+
+export interface AiSearchItem {
+  id: string;
+  key: string;
+  status: "queued" | "running" | "completed" | "error" | "skipped" | "outdated" | string;
+  chunks_count?: number;
+  error?: string;
+  file_size?: number;
+}
+
+export interface AiSearchInstance {
+  search(args: {
+    query?: string;
+    messages?: Array<{ role: "user"; content: string }>;
+    ai_search_options?: {
+      retrieval?: {
+        max_num_results?: number;
+        retrieval_type?: "vector" | "keyword" | "hybrid";
+      };
+    };
+  }): Promise<{ chunks?: AiSearchChunk[] }>;
+  info(): Promise<Record<string, unknown>>;
+  update(args: { indexing_options?: { use_ocr?: boolean }; index_method?: { vector?: boolean; keyword?: boolean } }): Promise<unknown>;
+  items: {
+    upload(key: string, content: ReadableStream<Uint8Array> | ArrayBuffer | Blob | string, options?: { metadata?: Record<string, string | number | boolean> }): Promise<AiSearchItem>;
+    list(options?: { page?: number; per_page?: number; status?: string; search?: string; source?: string }): Promise<{ result: AiSearchItem[]; result_info?: { total_count?: number; page?: number; per_page?: number; total_pages?: number } }>;
+    delete(itemId: string): Promise<void>;
+  };
+}
+
+export interface AiSearchNamespace {
+  get(name: string): AiSearchInstance;
+  create(args: { id: string; indexing_options?: { use_ocr?: boolean }; index_method?: { vector?: boolean; keyword?: boolean } }): Promise<AiSearchInstance>;
+  list(): Promise<{ result: Array<{ id: string }> }>;
+}
+
 export interface Env {
   ENVIRONMENT?: "development" | "staging" | "production";
   APP_VERSION?: string;
@@ -41,6 +90,13 @@ export interface Env {
   DB?: D1Database;
   QUESTION_QUEUE: Queue<QuestionJob>;
   JOB_DEDUPE: DurableObjectNamespace;
+  FATMAN_ENABLED?: string;
+  FATMAN_DOCUMENT_VERSION?: string;
+  FATMAN_MIN_SCORE?: string;
+  FATMAN_INSTANCE_NAME?: string;
+  FATMAN_EXPECTED_PAGES?: string;
+  FATMAN_MONTHLY_QUERY_LIMIT?: string;
+  FATMAN_SEARCH?: AiSearchNamespace;
 }
 
 export const MAX_QUIZ_BATCH_SIZE = 10;
@@ -67,6 +123,7 @@ export interface QuestionJob {
   statusMessageId?: number;
   telegramUserId?: number;
   quizCount?: number;
+  fatmanModeSnapshot?: boolean;
 }
 
 

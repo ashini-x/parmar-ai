@@ -19,8 +19,8 @@ describe("admin access UI", () => {
     expect(source).toContain("isOwner || isAdmin || staticUnlimited || Number(user.unlimited) === 1");
   });
 
-  it("subscribes Telegram webhooks to poll answers for native quizzes", () => {
-    expect(source).toContain('allowed_updates: ["message", "poll_answer", "business_connection", "business_message"]');
+  it("subscribes Telegram webhooks to poll answers and Fatman callbacks", () => {
+    expect(source).toContain('allowed_updates: ["message", "poll_answer", "business_connection", "business_message", "callback_query"]');
   });
 
   it("protects owner/admin rows from suspend or access mutation in the UI", () => {
