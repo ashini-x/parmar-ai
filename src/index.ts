@@ -1524,41 +1524,84 @@ function creatorContactPage(): Response {
   <title>iDoctor</title>
   <script src="https://telegram.org/js/telegram-web-app.js?64"></script>
   <style>
-    :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f2}
+    :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f2;color:#171717;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
     *{box-sizing:border-box}
-    body{margin:0;min-height:100svh;display:grid;place-items:center;padding:max(24px,env(safe-area-inset-top)) 22px max(24px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 0%,#fff 0%,#f5f5f2 62%,#eeefec 100%);-webkit-font-smoothing:antialiased}
-    main{display:grid;place-items:center}
-    .icon-button{display:grid;width:112px;height:112px;place-items:center;padding:0;border:1px solid #ffffffed;border-radius:30px;background:#ffffffb8;box-shadow:0 22px 60px #20201b18,0 2px 8px #20201b0a;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}
-    .icon-button:active{transform:scale(.96);box-shadow:0 12px 34px #20201b18}
-    .icon-button:focus-visible{outline:3px solid #6b8cff;outline-offset:5px}
-    .icon{display:block;width:58px;height:58px}
-    .icon[hidden]{display:none}
-    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-    @media(prefers-reduced-motion:reduce){.icon-button{transition:none}}
+    body{margin:0;min-height:100svh;display:grid;place-items:center;padding:max(28px,env(safe-area-inset-top)) 22px max(28px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 0%,#fff 0%,#f5f5f2 62%,#eeefec 100%)}
+    main{display:flex;width:min(100%,410px);flex-direction:column;align-items:center;text-align:center}
+    .trust-badge{position:relative;isolation:isolate;overflow:hidden;display:flex;align-items:center;gap:13px;min-height:66px;max-width:100%;margin:0 0 38px;padding:9px 20px 9px 11px;border:1px solid #ffffffd9;border-radius:999px;background:#ffffffb5;box-shadow:0 10px 30px #25251f10,0 2px 5px #25251f08;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);animation:surface-breathe 5.8s ease-in-out infinite}
+    .trust-badge::before{position:absolute;z-index:0;top:-45%;bottom:-45%;left:0;width:38%;content:"";pointer-events:none;background:linear-gradient(105deg,transparent 0%,#fff0 20%,#ffffff9c 50%,#fff0 80%,transparent 100%);filter:blur(5px);transform:translateX(-170%);animation:badge-shimmer 7.2s ease-in-out infinite}
+    .avatars{position:relative;z-index:1;display:flex;flex:none;align-items:center;padding-left:2px}
+    .avatar{display:grid;width:43px;height:43px;place-items:center;overflow:hidden;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 7px #24241f20}
+    .avatar+.avatar{margin-left:-13px}
+    .avatar svg{width:26px;height:26px}
+    .avatar-one{background:linear-gradient(145deg,#d9e8ed,#b9cbd1)}
+    .avatar-two{background:linear-gradient(145deg,#ead9d3,#d7b9ad)}
+    .avatar-three{background:linear-gradient(145deg,#e2dff0,#c9c4dd)}
+    .trust-copy{position:relative;z-index:1;white-space:nowrap;background:linear-gradient(100deg,#78afcb 0%,#aaa2c0 38%,#d995a7 70%,#e99583 100%);background-clip:text;-webkit-background-clip:text;color:transparent;font-size:14px;font-weight:630;letter-spacing:-.025em}
+    h1{margin:0;font-size:36px;font-weight:620;letter-spacing:-.055em;line-height:1.08}
+    .intro{margin:10px 0 28px;color:#777772;font-size:15px;line-height:1.5;letter-spacing:-.01em}
+    .contact-button{display:flex;width:min(100%,280px);min-height:58px;align-items:center;justify-content:center;gap:12px;padding:0 22px;border:1px solid #171717;border-radius:999px;background:#171717;color:#fff;font:600 16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.015em;box-shadow:0 8px 20px #1717171a;cursor:pointer;transition:transform .15s ease,background .15s ease}
+    .contact-button:hover{background:#2b2b29}
+    .contact-button:active{transform:scale(.985)}
+    .contact-button:focus-visible,.email-copy:focus-visible{outline:3px solid #6b8cff;outline-offset:4px}
+    .gmail-icon{width:25px;height:25px;flex:none}
+    .contact-details{width:min(100%,340px);margin-top:25px;padding:22px 20px 18px;border:1px solid #ffffffdc;border-radius:23px;background:#ffffffa8;box-shadow:0 16px 42px #25251f0d;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+    .contact-details[hidden]{display:none}
+    .email-label{margin:0 0 12px;color:#777772;font-size:14px;font-weight:520}
+    .email-copy{display:flex;width:100%;min-height:52px;align-items:center;justify-content:center;gap:12px;padding:0 14px;border:1px solid #17171712;border-radius:15px;background:#ffffffc9;color:#171717;font:600 14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+    .email-copy:active{background:#f5f5f2}
+    .email-address{overflow-wrap:anywhere}
+    .copy-hint{flex:none;color:#8a8a84;font-size:12px;font-weight:550}
+    .copy-status{min-height:18px;margin:10px 0 0;color:#85857f;font-size:12px;line-height:1.5}
+    @keyframes badge-shimmer{0%,19%{transform:translateX(-170%);opacity:0}26%{opacity:.8}58%,100%{transform:translateX(390%);opacity:0}}
+    @keyframes surface-breathe{0%,100%{box-shadow:0 10px 30px #25251f10,0 2px 5px #25251f08}50%{box-shadow:0 12px 34px #25251f12,0 2px 6px #25251f09}}
+    @media(max-width:360px){.trust-badge{gap:9px;padding-right:14px}.avatar{width:39px;height:39px}.avatar+.avatar{margin-left:-12px}.trust-copy{font-size:13px}}
+    @media(prefers-reduced-motion:reduce){.trust-badge,.trust-badge::before{animation:none}.contact-button{transition:none}}
   </style>
 </head>
 <body>
   <main>
-    <button class="icon-button" id="copy-email" type="button" aria-label="Copy ${creatorEmail}">
-      <svg class="icon" id="gmail-icon" viewBox="0 0 48 48" aria-hidden="true">
+    <div class="trust-badge" aria-label="Trusted by 150,000 or more users">
+      <div class="avatars" aria-hidden="true">
+        <span class="avatar avatar-one"><svg viewBox="0 0 32 32"><circle cx="16" cy="11" r="6" fill="#806d67"/><path d="M5 29c.8-7.2 4.7-11 11-11s10.2 3.8 11 11" fill="#a88b80"/></svg></span>
+        <span class="avatar avatar-two"><svg viewBox="0 0 32 32"><circle cx="16" cy="11" r="6" fill="#8c5f4e"/><path d="M5 29c.8-7.2 4.7-11 11-11s10.2 3.8 11 11" fill="#bd8570"/></svg></span>
+        <span class="avatar avatar-three"><svg viewBox="0 0 32 32"><circle cx="16" cy="11" r="6" fill="#625d72"/><path d="M5 29c.8-7.2 4.7-11 11-11s10.2 3.8 11 11" fill="#89849b"/></svg></span>
+      </div>
+      <span class="trust-copy">Trusted by 150k+ users</span>
+    </div>
+    <h1>iDoctor</h1>
+    <p class="intro">Have a question? We’re listening.</p>
+    <button class="contact-button" id="contact-toggle" type="button" aria-expanded="false" aria-controls="email-contact">
+      <svg class="gmail-icon" viewBox="0 0 48 48" aria-hidden="true">
         <path d="M8 14v22" fill="none" stroke="#4285f4" stroke-linecap="round" stroke-width="4"/>
         <path d="M40 14v22" fill="none" stroke="#34a853" stroke-linecap="round" stroke-width="4"/>
         <path d="M8 14 24 27 40 14" fill="none" stroke="#ea4335" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
         <path d="m8 36 10-9" fill="none" stroke="#fbbc04" stroke-linecap="round" stroke-width="4"/>
         <path d="m40 36-10-9" fill="none" stroke="#ea4335" stroke-linecap="round" stroke-width="4"/>
       </svg>
-      <svg class="icon" id="copied-icon" viewBox="0 0 48 48" aria-hidden="true" hidden>
-        <path d="m11 25 9 9 18-20" fill="none" stroke="#202124" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
-      </svg>
+      <span>Contact</span>
     </button>
-    <span class="sr-only" id="copy-status" aria-live="polite"></span>
+    <section class="contact-details" id="email-contact" hidden aria-labelledby="email-title">
+      <p class="email-label" id="email-title">Send an email to</p>
+      <button class="email-copy" id="copy-email" type="button" aria-label="Copy ${creatorEmail}">
+        <span class="email-address">${creatorEmail}</span><span class="copy-hint" id="copy-hint">Tap to copy</span>
+      </button>
+      <p class="copy-status" id="copy-status" aria-live="polite"></p>
+    </section>
   </main>
   <script>
     const email = "${creatorEmail}";
-    const copyButton = document.getElementById("copy-email");
-    const gmailIcon = document.getElementById("gmail-icon");
-    const copiedIcon = document.getElementById("copied-icon");
+    const contactToggle = document.getElementById("contact-toggle");
+    const contactDetails = document.getElementById("email-contact");
+    const copyEmailButton = document.getElementById("copy-email");
+    const copyHint = document.getElementById("copy-hint");
     const copyStatus = document.getElementById("copy-status");
+
+    contactToggle.addEventListener("click", () => {
+      const isExpanded = contactToggle.getAttribute("aria-expanded") === "true";
+      contactToggle.setAttribute("aria-expanded", String(!isExpanded));
+      contactDetails.hidden = isExpanded;
+    });
 
     function fallbackCopyEmail() {
       const field = document.createElement("textarea");
@@ -1573,22 +1616,18 @@ function creatorContactPage(): Response {
       return copied;
     }
 
-    copyButton.addEventListener("click", async () => {
+    copyEmailButton.addEventListener("click", async () => {
       try {
         try {
           await navigator.clipboard.writeText(email);
         } catch {
           if (!fallbackCopyEmail()) throw new Error("Clipboard unavailable");
         }
-        gmailIcon.hidden = true;
-        copiedIcon.hidden = false;
-        copyStatus.textContent = "Email copied to clipboard.";
-        window.setTimeout(() => {
-          copiedIcon.hidden = true;
-          gmailIcon.hidden = false;
-        }, 1100);
+        copyHint.textContent = "Copied";
+        copyStatus.textContent = "Copied to clipboard.";
       } catch {
-        copyStatus.textContent = "Email could not be copied.";
+        copyHint.textContent = "Press and hold";
+        copyStatus.textContent = "Copy didn’t work. Press and hold the address to copy it.";
       }
     });
 
