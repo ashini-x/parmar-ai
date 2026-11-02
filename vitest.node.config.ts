@@ -6,6 +6,7 @@ export default defineConfig({
       "test/admin-access-ui.test.ts",
       "test/native-quiz-contract.node.test.ts",
       "test/fatman-retrieval.test.ts",
+      "test/fatman-admin-contract.node.test.ts",
     ],
   },
 });
