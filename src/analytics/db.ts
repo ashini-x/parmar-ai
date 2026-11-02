@@ -154,6 +154,25 @@ CREATE TABLE IF NOT EXISTS fatman_search_usage (
   updated_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS fatman_import_jobs (
+  id TEXT PRIMARY KEY,
+  source_object TEXT NOT NULL,
+  source_sha256 TEXT NOT NULL,
+  expected_size INTEGER NOT NULL,
+  uploaded_bytes INTEGER NOT NULL DEFAULT 0,
+  upload_session_uri TEXT,
+  status TEXT NOT NULL,
+  vision_operation TEXT,
+  workflow_instance_id TEXT,
+  indexed_pages INTEGER NOT NULL DEFAULT 0,
+  error_message TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_fatman_import_jobs_hash_created
+  ON fatman_import_jobs(source_sha256, expected_size, created_at);
+
 CREATE TABLE IF NOT EXISTS telegram_bots (
   bot_connection_id TEXT PRIMARY KEY,
   bot_id INTEGER NOT NULL UNIQUE,

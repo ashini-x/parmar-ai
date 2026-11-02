@@ -159,14 +159,18 @@ export async function fatmanIndexStatus(env: Env): Promise<Response> {
     }
 
     const items = await listFatmanPages(env.FATMAN_SEARCH!.get(instanceName));
-    const pages = items.flatMap((item) => {
+    const pageByNumber = new Map<number, { page: number; status: string; error?: string }>();
+    const priority = (status: string) => status === "completed" ? 5 :
+      status === "queued" || status === "running" ? 4 :
+      status === "error" || status === "skipped" || status === "outdated" ? 3 : 0;
+    for (const item of items) {
       const page = pageNumberFromKey(item.key);
-      return page === undefined ? [] : [{
-        page,
-        status: item.status,
-        error: item.error ? safeError(item.error) : undefined,
-      }];
-    });
+      if (page === undefined) continue;
+      const candidate = { page, status: item.status, error: item.error ? safeError(item.error) : undefined };
+      const existing = pageByNumber.get(page);
+      if (!existing || priority(candidate.status) > priority(existing.status)) pageByNumber.set(page, candidate);
+    }
+    const pages = Array.from(pageByNumber.values()).sort((a, b) => a.page - b.page);
     const completedPages = pages.filter((item) => item.status === "completed").length;
     return json({
       ok: true,
@@ -499,11 +503,11 @@ const HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatman book index</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#18202a;background:#f4f6f8}body{margin:0;padding:32px 16px}.card{max-width:720px;margin:0 auto;background:white;border:1px solid #e2e6ea;border-radius:16px;padding:24px;box-shadow:0 8px 28px #10203012}h1{font-size:24px;margin:0 0 8px}.sub{color:#657180;line-height:1.5}.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}.button{border:0;border-radius:10px;background:#1264d6;color:white;padding:11px 16px;font-size:15px;font-weight:600;cursor:pointer}.button.alt{background:#e9edf2;color:#18202a}.button:disabled{opacity:.5;cursor:wait}input{max-width:100%}textarea{width:100%;min-height:72px;padding:10px 12px;border:1px solid #d9dfe6;border-radius:10px;font:inherit;resize:vertical}.review{display:flex;gap:9px;align-items:flex-start;color:#4d5968;font-size:14px;line-height:1.45;margin:14px 0}.result{padding:12px 14px;border:1px solid #e3e8ed;border-radius:12px;margin:10px 0;background:#fafbfc}.result-title{font-weight:700;margin-bottom:5px}.result-text{white-space:pre-wrap;color:#4d5968;font-size:13px;line-height:1.5}progress{width:100%;height:10px}#status{white-space:pre-wrap;color:#374354;font-size:14px;min-height:42px}.note{font-size:13px;color:#6a7480;border-top:1px solid #eef0f3;margin-top:20px;padding-top:14px}
-</style></head><body><main class="card"><h1>Fatman 2nd Edition index</h1><p class="sub">Choose the reviewed 538-page Fatman PDF. The importer checks its SHA-256, sends each page image to Google Vision for OCR, and indexes the extracted text. Keep this page open while the import runs.</p>
+</style></head><body><main class="card"><h1>Fatman 2nd Edition index</h1><p class="sub">Choose the reviewed 538-page Fatman PDF. After checking its SHA-256 and page count, this page uploads the PDF privately to Google Cloud Storage. Keep it open until the upload finishes and background OCR starts. Google Vision OCR and indexing then continue on the server, even if you close this page. If the browser closes during transfer, choose the same PDF and select Import or resume to continue from the saved position.</p>
 <div class="row"><button id="test-vision" class="button alt">Test Google Vision</button><span id="vision-status" class="sub">Connection not tested. This check sends no page images.</span></div>
 <label class="review"><input id="quota-confirmed" type="checkbox"><span>I verified that at least 538 free Google Vision Document Text Detection units remain this month. I will not start the import if I cannot confirm this.</span></label>
 <div class="row"><input id="pdf" type="file" accept="application/pdf"><button id="import" class="button">Import or resume</button><button id="refresh" class="button alt">Refresh status</button><button id="disable" class="button alt">Disable book mode</button></div>
-<progress id="progress" value="0" max="538"></progress><p id="status">Checking index status…</p>
+<div id="storage-access" class="note"></div><progress id="progress" value="0" max="538"></progress><p id="status">Checking index status…</p>
 <h2>Review retrieval</h2><p class="sub">After all pages finish, run three different searches using facts you can verify in the book. Review the returned text and PDF page for each before enabling.</p><div class="row"><textarea id="preview-query" placeholder="Enter a fact or phrase you can verify in the book"></textarea><button id="preview" class="button alt">Preview search</button></div><div id="preview-results"></div><label class="review"><input id="reviewed" type="checkbox"><span>I checked the currently displayed text and PDF page against the book.</span></label><button id="enable" class="button" disabled>Review 0/3 searches</button>
 <div class="note">Only an administrator can open this page. Importing disables book mode. Enablement requires all 538 pages and three distinct reviewed search results.</div></main>
 <script type="module">
@@ -521,15 +525,48 @@ async function api(path,options){
   if(!response.ok||!data.ok)throw new Error(data.error||("Request failed: "+response.status));
   return data;
 }
+let refreshTimer=null;
 async function refresh(){
   try{
     const data=await api("status");
-    progressEl.value=data.completedPages||0;
+    let upload=await api("upload/status");
+    if(upload.import?.status==="uploaded"&&upload.import.id){
+      if(!refreshTimer)refreshTimer=setInterval(()=>refresh(),15000);
+      await api("upload/"+encodeURIComponent(upload.import.id)+"/complete",{method:"POST",headers:{"content-type":"application/json"},body:"{}"}).catch(()=>undefined);
+      upload=await api("upload/status?id="+encodeURIComponent(upload.import.id));
+    }
+    const job=upload.import;
+    const indexed=Math.max(Number(data.completedPages||0),Number(job?.indexedPages||0));
+    progressEl.max=job?.status==="uploading"&&job.expectedSize?job.expectedSize:538;
+    progressEl.value=progressEl.max===538?indexed:Number(job?.uploadedBytes||0);
     const firstError=(data.pages||[]).find(item=>item.error)?.error;
+    const accessEl=document.getElementById("storage-access");
+    accessEl.textContent=upload.serviceAccountEmail
+      ? "Before upload, grant roles/storage.objectAdmin on bucket parmar-fatman-ocr-90db7be4 to "+upload.serviceAccountEmail+". This permission lets the Worker upload the PDF and lets Vision read it and write OCR output."
+      : "Google service-account email is not configured on the Worker.";
+    let jobLine="";
+    if(job?.status==="uploading"){
+      const pct=job.expectedSize?Math.floor((job.uploadedBytes/job.expectedSize)*100):0;
+      jobLine="PDF upload: "+pct+" percent. Keep this page open until it reaches 100 percent.";
+    }else if(job?.status==="uploaded"){
+      jobLine="PDF upload complete. Starting background OCR and indexing.";
+    }else if(job?.status==="processing"){
+      jobLine="Background OCR and indexing: "+indexed+" of 538 pages indexed. You can close this page and return later.";
+    }else if(job?.status==="completed"){
+      jobLine="Import complete. All 538 pages are indexed. Review search results before enabling book mode.";
+    }else if(job?.status==="failed"){
+      jobLine="Import stopped: "+(job.error||"An error occurred. Choose the same PDF and select Import or resume.");
+    }
     setStatus((data.enabled?"Book mode is enabled. ":"Book mode is disabled. ")+
       (data.exists?(data.completedPages+" of "+data.expectedPages+" pages indexed; "+data.queuedPages+" processing; "+data.failedPages+" failed."):"Index has not been created.")+
-      (firstError?"\\nFirst indexing error: "+firstError:""));
-  }catch(error){setStatus("Could not read index status: "+error.message);}
+      (jobLine?"\n"+jobLine:"")+
+      (firstError?"\nFirst indexing error: "+firstError:""));
+    if((job?.status==="uploading"||job?.status==="uploaded"||job?.status==="processing")&&!refreshTimer){
+      refreshTimer=setInterval(()=>refresh(),15000);
+    }else if((!job||job.status==="completed"||job.status==="failed")&&refreshTimer){
+      clearInterval(refreshTimer);refreshTimer=null;
+    }
+  }catch(error){setStatus("Could not read import status: "+error.message);}
 }
 const quotaConfirmed=document.getElementById("quota-confirmed");
 const visionStatus=document.getElementById("vision-status");
@@ -591,83 +628,76 @@ reviewedCheckbox.addEventListener("change",()=>{
 });
 document.getElementById("preview").addEventListener("click",previewSearch);
 enableButton.addEventListener("click",enableBook);
-async function renderPage(pdf,pageNumber){
-  const page=await pdf.getPage(pageNumber);
-  const initial=page.getViewport({scale:1});
-  const scale=Math.min(1.8,1300/initial.width);
-  const viewport=page.getViewport({scale});
-  const canvas=document.createElement("canvas");
-  canvas.width=Math.round(viewport.width);canvas.height=Math.round(viewport.height);
-  const context=canvas.getContext("2d",{alpha:false});
-  if(!context)throw new Error("Could not render PDF page "+pageNumber);
-  await page.render({canvasContext:context,viewport}).promise;
-  const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",0.88));
-  canvas.width=0;canvas.height=0;
-  if(!blob)throw new Error("Could not encode PDF page "+pageNumber);
-  if(blob.size>2*1024*1024)throw new Error("Rendered page "+pageNumber+" exceeds the 2 MB page limit.");
-  return blob;
-}
 async function importBook(){
   const file=document.getElementById("pdf").files[0];
-  if(!file){setStatus("Choose the PDF first.");return;}
+  if(!file){setStatus("Choose the reviewed Fatman PDF to start or resume its upload.");return;}
   if(!quotaConfirmed.checked){setStatus("Before importing, verify at least 538 free Google Vision OCR units remain this month and check the box above.");return;}
   importButton.disabled=true;
-  progressEl.value=0;
   try{
-    setStatus("Reading the PDF in this browser…");
-    const bytes=new Uint8Array(await file.arrayBuffer());
+    setStatus("Checking PDF and page count…");
+    const bytes=await file.arrayBuffer();
     const digest=await crypto.subtle.digest("SHA-256",bytes);
     const sourceHash=Array.from(new Uint8Array(digest),value=>value.toString(16).padStart(2,"0")).join("").toUpperCase();
     if(sourceHash!==EXPECTED_PDF_SHA256)throw new Error("This is not the reviewed Fatman PDF. No index changes were made.");
-    const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
-    if(pdf.numPages!==538)throw new Error("This import requires 538 PDF pages. The selected file has "+pdf.numPages+".");
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes)}).promise;
+    const pageCount=pdf.numPages;
+    await pdf.destroy();
+    if(pageCount!==538)throw new Error("This import requires 538 PDF pages. The selected file has "+pageCount+".");
     setStatus("Testing Google Vision without sending a page image…");
     await api("vision/test",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
-    setStatus("Google Vision is ready. Preparing the text index…");
-    await api("prepare",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pages:pdf.numPages})});
-    const current=await api("status");
-    const complete=new Set((current.pages||[]).filter(item=>item.status==="completed").map(item=>item.page));
-    let done=complete.size;
-  progressEl.value=done;
-  setStatus("Google Vision and Cloudflare indexing: "+done+" pages indexed or processing.");
-  for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
-    if(complete.has(pageNumber))continue;
-    try{
-      const blob=await renderPage(pdf,pageNumber);
-      const response=await fetch(API+"page/"+pageNumber,{
+    setStatus("Preparing the Fatman text index…");
+    await api("prepare",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pages:pageCount})});
+    const started=await api("upload/start",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({sha256:sourceHash,size:file.size,quotaConfirmed:quotaConfirmed.checked})
+    });
+    const importId=started.importId;
+    let offset=Number(started.uploadedBytes||0);
+    if(started.status==="completed"){
+      await refresh();
+      return;
+    }
+    if(started.status==="processing"){
+      await api("upload/"+encodeURIComponent(importId)+"/complete",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+      if(!refreshTimer)refreshTimer=setInterval(()=>refresh(),15000);
+      await refresh();
+      return;
+    }
+    const chunkSize=8*1024*1024;
+    progressEl.max=file.size;
+    progressEl.value=offset;
+    while(offset<file.size){
+      setStatus("Uploading the private PDF: "+Math.floor(offset/file.size*100)+" percent. Keep this page open until the upload completes.");
+      const chunk=file.slice(offset,Math.min(file.size,offset+chunkSize));
+      const response=await fetch(API+"upload/"+encodeURIComponent(importId)+"/chunk",{
         method:"POST",
         headers:{
-          "content-type":"image/jpeg",
-          "x-fatman-free-quota-confirmed":quotaConfirmed.checked?"true":"false"
+          "content-type":"application/octet-stream",
+          "x-fatman-chunk-start":String(offset),
+          "x-fatman-total-size":String(file.size)
         },
-        body:blob
+        body:chunk
       });
       const data=await response.json();
-      if(!response.ok||!data.ok)throw new Error(data.error||("Page "+pageNumber+" upload failed."));
-      done++;progressEl.value=done;
-      setStatus("Page submissions: "+done+" of "+pdf.numPages+". Cloudflare indexing continues in the background.");
-    }catch(error){
-      throw new Error("Page "+pageNumber+" stopped: "+(error instanceof Error?error.message:String(error))+" Refresh status, then resume; completed pages will be skipped.");
-    }
-  }
-  setStatus("All pages sent to Google Vision. Waiting for text indexing…");
-    for(let attempt=0;attempt<180;attempt++){
-      const data=await api("status");
-      progressEl.value=data.completedPages||0;
-      setStatus("OCR index: "+data.completedPages+" of "+data.expectedPages+" pages complete; "+data.queuedPages+" processing; "+data.failedPages+" failed.");
-      if(data.failedPages>0){
-        const firstError=(data.pages||[]).find(item=>item.error)?.error;
-        throw new Error(firstError||("Cloudflare reported "+data.failedPages+" failed pages."));
+      if(response.status===409&&Number.isSafeInteger(Number(data.uploadedBytes))){
+        offset=Number(data.uploadedBytes);
+        progressEl.value=offset;
+        continue;
       }
-      if(data.completedPages===538&&data.failedPages===0){
-        setStatus("All 538 pages are indexed. Review a search result above before enabling book mode.");
-        return;
-      }
-      await new Promise(resolve=>setTimeout(resolve,10000));
+      if(!response.ok||!data.ok)throw new Error(data.error||("PDF upload failed: "+response.status));
+      offset=Number(data.uploadedBytes);
+      progressEl.value=offset;
     }
-    throw new Error("Indexing is still processing. Refresh this page later to check progress.");
-  }catch(error){setStatus("Import stopped: "+error.message);}
-  finally{importButton.disabled=false;}
+    progressEl.max=538;
+    progressEl.value=0;
+    setStatus("PDF safely uploaded. Starting background Google Vision OCR and indexing…");
+    await api("upload/"+encodeURIComponent(importId)+"/complete",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+    if(!refreshTimer)refreshTimer=setInterval(()=>refresh(),15000);
+    await refresh();
+  }catch(error){
+    setStatus("Import paused: "+error.message+" Choose the same PDF and select Import or resume to continue from the saved upload position.");
+  }finally{importButton.disabled=false;}
 }
 document.getElementById("import").addEventListener("click",importBook);
 document.getElementById("refresh").addEventListener("click",refresh);
