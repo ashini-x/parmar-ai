@@ -283,7 +283,7 @@ async function handleFatmanModeCallback(
       await answerCallback("This control is only available in your private chat.", true);
       return;
     }
-    if (!isFatmanReady(env)) {
+    if (!(await isFatmanReady(env))) {
       await answerCallback("Fatman mode is not available yet.", true);
       return;
     }
@@ -453,7 +453,8 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     queueAnalytics(ctx, "help", () => recordEvent(env, "help", analyticsUser));
     ctx.waitUntil(bestEffortTelegram("help_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId)));
     const mode = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId }).catch(() => ({ ok: true as const, active: false }));
-    const markup = isFatmanReady(env) ? buildFatmanModeMarkup(mode.active) : undefined;
+    const fatmanReady = await isFatmanReady(env);
+    const markup = fatmanReady ? buildFatmanModeMarkup(mode.active) : undefined;
     await bestEffortTelegram("help", () => sendTelegramMessage(env, chatId, buildHelpText(), undefined, bot.connectionId, true, markup));
     return withRequestId(json({ ok: true }), requestId);
   }
@@ -567,7 +568,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   const fatmanState = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId });
   const fatmanModeSnapshot = fatmanState.active === true;
-  if (fatmanModeSnapshot && !isFatmanReady(env)) {
+  if (fatmanModeSnapshot && !(await isFatmanReady(env))) {
     await jobStoreRequest(env, chatId, { action: "set_fatman_mode", botConnectionId: bot.connectionId, active: false }).catch(() => undefined);
     await bestEffortTelegram("fatman_unavailable", () => sendTelegramMessage(env, chatId, "Fatman mode is temporarily unavailable. Use /help to return to the usual study mode.", messageId, bot.connectionId));
     return withRequestId(json({ ok: true, fatmanUnavailable: true }), requestId);
@@ -887,7 +888,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         let generation: Awaited<ReturnType<typeof generateGeminiAnswer>> | undefined;
         if (fatmanMode && job.question === DEFAULT_PHOTO_QUESTION && images.length > 0) {
           packet = makeFatmanNoticePacket("Photo mil gaya. Fatman mein sahi page dhoondhne ke liye photo ke saath apna sawaal ya ek keyword bhi likho.");
-        } else if (fatmanMode && !isFatmanReady(env)) {
+        } else if (fatmanMode && !(await isFatmanReady(env))) {
           packet = makeFatmanNoticePacket("Fatman mode abhi available nahi hai. /help se usual study mode mein wapas aa jao.");
         } else if (fatmanMode) {
           let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
@@ -895,7 +896,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             bookContext = await retrieveFatmanContext(env, job.question);
           } catch (error) {
             if (error instanceof FatmanRetrievalError && !error.retryable) {
-              packet = makeFatmanNoticePacket("Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
+              packet = makeFatmanNoticePacket(error.userMessage ?? "Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
             } else {
               throw error;
             }
