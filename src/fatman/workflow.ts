@@ -64,9 +64,13 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         return { ready: true };
       });
 
+      const indexingCheckpointPages = 8;
       for (let page = 1; page <= 538; page += 1) {
         const pageNumber = page;
         await step.do("index Fatman PDF page " + pageNumber, async () => indexOcrPage(this.env, importId, pageNumber));
+        if (pageNumber % indexingCheckpointPages === 0 && pageNumber < 538) {
+          await step.sleep("checkpoint Fatman indexing after page " + pageNumber, "1 second");
+        }
       }
 
       let complete = false;

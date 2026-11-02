@@ -32,7 +32,7 @@ import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
 import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, testFatmanVision, uploadFatmanPage } from "./fatman/admin";
-import { completeFatmanUpload, fatmanUploadStatus, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
+import { completeFatmanUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
@@ -1997,6 +1997,8 @@ const worker = {
           if (url.pathname === "/admin/api/fatman/upload/start") return startFatmanUpload(env, request);
           const uploadChunkMatch = url.pathname.match(/^\/admin\/api\/fatman\/upload\/([a-f0-9-]+)\/chunk$/i);
           if (uploadChunkMatch) return uploadFatmanChunk(env, request, uploadChunkMatch[1]);
+          const uploadResumeMatch = url.pathname.match(/^\/admin\/api\/fatman\/upload\/([a-f0-9-]+)\/resume$/i);
+          if (uploadResumeMatch) return resumeFatmanImport(env, uploadResumeMatch[1]);
           const uploadCompleteMatch = url.pathname.match(/^\/admin\/api\/fatman\/upload\/([a-f0-9-]+)\/complete$/i);
           if (uploadCompleteMatch) return completeFatmanUpload(env, uploadCompleteMatch[1]);
           if (url.pathname === "/admin/api/fatman/prepare") return prepareFatmanIndex(env);

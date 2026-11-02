@@ -81,6 +81,8 @@ export async function fatmanUploadStatus(env: Env, id?: string | null): Promise<
         uploadedBytes: Number(job.uploaded_bytes),
         indexedPages: Number(job.indexed_pages),
         expectedPages: FATMAN_IMPORT_PAGES,
+        canResume: job.status === "failed" && Boolean(job.vision_operation) &&
+          Number(job.uploaded_bytes) === Number(job.expected_size),
         error: job.error_message ?? undefined,
         updatedAt: Number(job.updated_at),
       } : null,
@@ -307,6 +309,48 @@ export async function completeFatmanUpload(env: Env, importId: string): Promise<
       }
     }
     return json({ ok: true, status: "processing", importId });
+  } catch (error) {
+    return json({ ok: false, error: safeError(error) }, 502);
+  }
+}
+
+export async function resumeFatmanImport(env: Env, importId: string): Promise<Response> {
+  if (!validId(importId)) return json({ ok: false, error: "invalid_import_id" }, 400);
+  const db = env.DB;
+  const workflow = env.FATMAN_IMPORT;
+  if (!db || !workflow) return json({ ok: false, error: "fatman_workflow_not_configured" }, 503);
+  try {
+    const job = await getFatmanImportJob(env, importId);
+    if (!job) return json({ ok: false, error: "import_not_found" }, 404);
+    if (job.status !== "failed" || !job.vision_operation ||
+        Number(job.uploaded_bytes) !== Number(job.expected_size)) {
+      return json({ ok: false, error: "This import has no complete saved OCR result to resume." }, 409);
+    }
+
+    const workflowId = importId + "-" + crypto.randomUUID().slice(0, 8);
+    await db.prepare(
+      "UPDATE fatman_import_jobs SET status = 'processing', workflow_instance_id = ?, error_message = NULL, updated_at = ? " +
+      "WHERE id = ? AND status = 'failed' AND vision_operation IS NOT NULL AND uploaded_bytes = expected_size"
+    ).bind(workflowId, Date.now(), importId).run();
+    const refreshed = await getFatmanImportJob(env, importId);
+    if (refreshed?.status !== "processing" || refreshed.workflow_instance_id !== workflowId) {
+      return json({ ok: true, status: refreshed?.status ?? "unknown", importId });
+    }
+
+    try {
+      await workflow.create({ id: workflowId, params: { importId } });
+    } catch (error) {
+      try {
+        await workflow.get(workflowId);
+      } catch {
+        await db.prepare(
+          "UPDATE fatman_import_jobs SET status = 'failed', error_message = ?, updated_at = ? " +
+          "WHERE id = ? AND workflow_instance_id = ?"
+        ).bind(safeError(error), Date.now(), importId, workflowId).run();
+        throw error;
+      }
+    }
+    return json({ ok: true, status: "processing", importId, indexedPages: Number(job.indexed_pages) });
   } catch (error) {
     return json({ ok: false, error: safeError(error) }, 502);
   }

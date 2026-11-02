@@ -506,7 +506,7 @@ const HTML = `<!doctype html>
 </style></head><body><main class="card"><h1>Fatman 2nd Edition index</h1><p class="sub">Choose the reviewed 538-page Fatman PDF. After checking its SHA-256 and page count, this page uploads the PDF privately to Google Cloud Storage. Keep it open until the upload finishes and background OCR starts. Google Vision OCR and indexing then continue on the server, even if you close this page. If the browser closes during transfer, choose the same PDF and select Import or resume to continue from the saved position.</p>
 <div class="row"><button id="test-vision" class="button alt">Test Google Vision</button><span id="vision-status" class="sub">Connection not tested. This check sends no page images.</span></div>
 <label class="review"><input id="quota-confirmed" type="checkbox"><span>I verified that at least 538 free Google Vision Document Text Detection units remain this month. I will not start the import if I cannot confirm this.</span></label>
-<div class="row"><input id="pdf" type="file" accept="application/pdf"><button id="import" class="button">Import or resume</button><button id="refresh" class="button alt">Refresh status</button><button id="disable" class="button alt">Disable book mode</button></div>
+<div class="row"><input id="pdf" type="file" accept="application/pdf"><button id="import" class="button">Import or resume</button><button id="resume-index" class="button alt" hidden>Resume indexing</button><button id="refresh" class="button alt">Refresh status</button><button id="disable" class="button alt">Disable book mode</button></div>
 <div id="storage-access" class="note"></div><progress id="progress" value="0" max="538"></progress><p id="status">Checking index status…</p>
 <h2>Review retrieval</h2><p class="sub">After all pages finish, run three different searches using facts you can verify in the book. Review the returned text and PDF page for each before enabling.</p><div class="row"><textarea id="preview-query" placeholder="Enter a fact or phrase you can verify in the book"></textarea><button id="preview" class="button alt">Preview search</button></div><div id="preview-results"></div><label class="review"><input id="reviewed" type="checkbox"><span>I checked the currently displayed text and PDF page against the book.</span></label><button id="enable" class="button" disabled>Review 0/3 searches</button>
 <div class="note">Only an administrator can open this page. Importing disables book mode. Enablement requires all 538 pages and three distinct reviewed search results.</div></main>
@@ -517,6 +517,7 @@ const EXPECTED_PDF_SHA256=${JSON.stringify(EXPECTED_PDF_SHA256)};
 const statusEl=document.getElementById("status");
 const progressEl=document.getElementById("progress");
 const importButton=document.getElementById("import");
+const resumeButton=document.getElementById("resume-index");
 const API="/admin/api/fatman/";
 function setStatus(text){statusEl.textContent=text;}
 async function api(path,options){
@@ -536,6 +537,8 @@ async function refresh(){
       upload=await api("upload/status?id="+encodeURIComponent(upload.import.id));
     }
     const job=upload.import;
+    resumeButton.hidden=job?.canResume!==true;
+    importButton.disabled=job?.canResume===true;
     const indexed=Math.max(Number(data.completedPages||0),Number(job?.indexedPages||0));
     progressEl.max=job?.status==="uploading"&&job.expectedSize?job.expectedSize:538;
     progressEl.value=progressEl.max===538?indexed:Number(job?.uploadedBytes||0);
@@ -555,7 +558,8 @@ async function refresh(){
     }else if(job?.status==="completed"){
       jobLine="Import complete. All 538 pages are indexed. Review search results before enabling book mode.";
     }else if(job?.status==="failed"){
-      jobLine="Import stopped: "+(job.error||"An error occurred. Choose the same PDF and select Import or resume.");
+      jobLine="Import stopped: "+(job.error||"An error occurred.")+
+        (job.canResume?" Saved OCR is preserved. Select Resume indexing; no PDF upload is needed.":" Choose the same PDF and select Import or resume.");
     }
     setStatus((data.enabled?"Book mode is enabled. ":"Book mode is disabled. ")+
       (data.exists?(data.completedPages+" of "+data.expectedPages+" pages indexed; "+data.queuedPages+" processing; "+data.failedPages+" failed."):"Index has not been created.")+
@@ -582,6 +586,18 @@ async function testVision(){
   }finally{visionButton.disabled=false;}
 }
 visionButton.addEventListener("click",testVision);
+async function resumeIndex(){
+  resumeButton.disabled=true;
+  try{
+    const upload=await api("upload/status");
+    const job=upload.import;
+    if(!job?.id||job.canResume!==true)throw new Error("No saved OCR result is ready to resume.");
+    await api("upload/"+encodeURIComponent(job.id)+"/resume",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+    await refresh();
+  }catch(error){setStatus("Could not resume indexing: "+error.message);}
+  finally{resumeButton.disabled=false;}
+}
+resumeButton.addEventListener("click",resumeIndex);
 async function disable(){
   try{await api("disable",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});await refresh();}
   catch(error){setStatus("Could not disable book mode: "+error.message);}
