@@ -31,14 +31,15 @@ function withCreatorFooter(text: string): { text: string; entities: TelegramText
 }
 
 function withCreatorPollFooter(explanation: string): { text: string; entities: TelegramTextLinkEntity[] } {
-  const normalizedExplanation = explanation.trim().replace(/\\s*\\n+\\s*/gu, " ");
-  const footer = CREATOR_FOOTER;
-  const body = normalizedExplanation.slice(0, 200 - footer.length);
+  const normalizedExplanation = explanation.trim().replace(/\s*\n+\s*/gu, " ");
+  const body = normalizedExplanation.slice(0, 200 - CREATOR_FOOTER.length);
+  const footer = body ? CREATOR_FOOTER : CREATOR_FOOTER.trimStart();
+  const linkOffset = body ? CREATOR_FOOTER_LINK_OFFSET : "Creator: ".length;
   return {
     text: body + footer,
     entities: [{
       type: "text_link",
-      offset: body.length + CREATOR_FOOTER_LINK_OFFSET,
+      offset: body.length + linkOffset,
       length: CREATOR_NAME.length,
       url: `mailto:${CREATOR_EMAIL}`,
     }],
