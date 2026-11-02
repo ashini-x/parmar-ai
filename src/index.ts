@@ -31,7 +31,7 @@ import { internalServerError, json, methodNotAllowed, notFound } from "./http/re
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
-import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, uploadFatmanPage } from "./fatman/admin";
+import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, uploadFatmanPage } from "./fatman/admin";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
 const QUEUE_MAX_RETRIES = 10;
@@ -1991,7 +1991,8 @@ const worker = {
         if (request.method === "POST" && url.pathname.startsWith("/admin/api/fatman/")) {
           if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
           if (url.pathname === "/admin/api/fatman/prepare") return prepareFatmanIndex(env);
-          if (url.pathname === "/admin/api/fatman/finalize") return finalizeFatmanIndex(env);
+          if (url.pathname === "/admin/api/fatman/preview") return previewFatmanIndex(env, request);
+          if (url.pathname === "/admin/api/fatman/finalize") return finalizeFatmanIndex(env, request);
           if (url.pathname === "/admin/api/fatman/disable") return disableFatmanIndex(env);
           const pagePrefix = "/admin/api/fatman/page/";
           if (url.pathname.startsWith(pagePrefix)) {
