@@ -560,7 +560,7 @@ async function refresh(){
     setStatus((data.enabled?"Book mode is enabled. ":"Book mode is disabled. ")+
       (data.exists?(data.completedPages+" of "+data.expectedPages+" pages indexed; "+data.queuedPages+" processing; "+data.failedPages+" failed."):"Index has not been created.")+
       (jobLine?"\\n"+jobLine:"")+
-      (firstError?"\nFirst indexing error: "+firstError:""));
+      (firstError?"\\nFirst indexing error: "+firstError:""));
     if((job?.status==="uploading"||job?.status==="uploaded"||job?.status==="processing")&&!refreshTimer){
       refreshTimer=setInterval(()=>refresh(),15000);
     }else if((!job||job.status==="completed"||job.status==="failed")&&refreshTimer){
