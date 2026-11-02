@@ -930,6 +930,9 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           );
           packet = generation.packet;
         }
+        if (!packet) {
+          throw new GeminiError("Question generation did not produce an answer packet.", undefined, true);
+        }
         if (!fatmanMode && packet.questionMode === "mcq" && packet.responseMode === "text" && !(packet.quizItems?.length)) {
           await jobStoreRequest(env, job.chatId, {
             action: "set_pending_quiz",
