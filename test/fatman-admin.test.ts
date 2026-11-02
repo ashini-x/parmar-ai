@@ -111,7 +111,7 @@ describe("Fatman admin retrieval gate", () => {
     const unreviewed = new Request("https://worker.test/admin/api/fatman/finalize", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ reviewed: false }),
+      body: JSON.stringify({ reviewedQueries: ["one", " one ", "two"] }),
     });
     expect((await finalizeFatmanIndex(env, unreviewed)).status).toBe(400);
     expect(analytics.setFatmanBookState).not.toHaveBeenCalled();
@@ -119,7 +119,7 @@ describe("Fatman admin retrieval gate", () => {
     const reviewed = new Request("https://worker.test/admin/api/fatman/finalize", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ reviewed: true }),
+      body: JSON.stringify({ reviewedQueries: ["Battle of Plassey", "Permanent Settlement", "Mansabdari system"] }),
     });
     const response = await finalizeFatmanIndex(env, reviewed);
 
