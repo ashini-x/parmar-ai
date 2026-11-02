@@ -43,7 +43,7 @@ export interface AiSearchInstance {
       pollIntervalMs?: number;
       timeoutMs?: number;
     }): Promise<AiSearchItem>;
-    get(itemId: string): { info(): Promise<AiSearchItem> };
+    get(itemId: string): { info(): Promise<AiSearchItem>; download(): Promise<{ filename: string; contentType: string; size: number; body: ReadableStream<Uint8Array> }> };
     list(options?: { page?: number; per_page?: number; status?: string; search?: string; source?: string }): Promise<{ result: AiSearchItem[]; result_info?: { total_count?: number; page?: number; per_page?: number; total_pages?: number } }>;
     delete(itemId: string): Promise<void>;
   };
