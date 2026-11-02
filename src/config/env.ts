@@ -1,4 +1,4 @@
-import type { D1Database, DurableObjectNamespace, Queue } from "@cloudflare/workers-types";
+import type { D1Database, DurableObjectNamespace, Queue, R2Bucket, VectorizeIndex } from "@cloudflare/workers-types";
 
 export interface Env {
   ENVIRONMENT?: "development" | "staging" | "production";
@@ -41,6 +41,11 @@ export interface Env {
   DB?: D1Database;
   QUESTION_QUEUE: Queue<QuestionJob>;
   JOB_DEDUPE: DurableObjectNamespace;
+  FATMAN_ENABLED?: string;
+  FATMAN_DOCUMENT_VERSION?: string;
+  FATMAN_MIN_SCORE?: string;
+  FATMAN_INDEX?: VectorizeIndex;
+  FATMAN_PAGES?: R2Bucket;
 }
 
 export const MAX_QUIZ_BATCH_SIZE = 10;
@@ -67,6 +72,7 @@ export interface QuestionJob {
   statusMessageId?: number;
   telegramUserId?: number;
   quizCount?: number;
+  fatmanModeSnapshot?: boolean;
 }
 
 
