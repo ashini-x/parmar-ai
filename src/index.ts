@@ -1240,8 +1240,8 @@ function buildHelpText(): string {
     "Set your SSC target exam /exam",
     "View your SSC study profile /profile",
     "Reset your study profile /reset",
-    "Delete your stored study data /delete_data",
-  ].join("\n");
+    "Delete your study data /delete_data",
+  ].join("\n\n");
 }
 
 function buildProfileText(profile: StudentProfile, usage: { dayCount: number; dailyLimit: number; unlimited: boolean }): string {
