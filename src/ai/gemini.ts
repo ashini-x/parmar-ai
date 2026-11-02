@@ -510,7 +510,7 @@ function buildUserPrompt(question: string, context: ProfileContext, requiresGrou
   const likelyFollowUp = isLikelyFollowUp(question, context.recentConversation);
   const identityQuestion = isBotIdentityQuestion(question);
   const conversation = context.recentConversation.length
-    ? context.recentConversation.map((turn, index) => `${index + 1}. Student: ${turn.question}\n   Parmar AI: ${turn.answer}`).join("\n")
+    ? context.recentConversation.map((turn, index) => `${index + 1}. Student: ${turn.question}\n   परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐): ${turn.answer}`).join("\n")
     : "No recent conversation available.";
 
   return [
