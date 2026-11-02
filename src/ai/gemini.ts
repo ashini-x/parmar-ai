@@ -247,7 +247,8 @@ export async function generateGeminiAnswer(
   const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
   const thinkingLevel = selectThinkingLevel(normalizedQuestion, getConfig(env).maxThinkingLevel);
-  const requiresGrounding = requiresFreshData(normalizedQuestion) && isGroundingEnabled(env);
+  const identityQuestion = isBotIdentityQuestion(normalizedQuestion);
+  const requiresGrounding = !identityQuestion && requiresFreshData(normalizedQuestion) && isGroundingEnabled(env);
   const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, profile);
 
   // Do not spend an AI call or let the model invent a topic for an underspecified
@@ -724,7 +725,8 @@ function sanitizeAnswerPacket(
   requestedQuizCount: number,
 ): AnswerPacket {
   let answer = normalizeAnswer(packet.answer);
-  if (isBotIdentityQuestion(question)) {
+  const identityQuestion = isBotIdentityQuestion(question);
+  if (identityQuestion) {
     packet = {
       ...packet,
       answerScope: "ssc_support",
@@ -808,7 +810,7 @@ function sanitizeAnswerPacket(
     };
   }
 
-  if (requiresGrounding && !currentFactTrusted) {
+  if (requiresGrounding && !currentFactTrusted && !identityQuestion) {
     answer = "Ye current-affairs type ka fact hai. Main is waqt live verification ko confidently confirm nahi kar pa raha hoon, isliye guess nahi karunga. Official source se latest fact verify karke bhejna safest rahega. 📚";
   }
 
