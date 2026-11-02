@@ -1513,7 +1513,7 @@ function dedupe(values: string[]): string[] {
 }
 
 function creatorContactPage(): Response {
-  const creatorEmail = "quantumcoremind@gmail.com";
+  const creatorEmail = "idoctorprojects@gmail.com";
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -1521,61 +1521,44 @@ function creatorContactPage(): Response {
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f5f5f2">
   <meta name="robots" content="noindex,nofollow">
-  <title>Contact Quantum Labs</title>
+  <title>iDoctor</title>
   <script src="https://telegram.org/js/telegram-web-app.js?64"></script>
   <style>
-    :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f2;color:#171717;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
+    :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f2}
     *{box-sizing:border-box}
-    body{margin:0;min-height:100svh;display:grid;place-items:center;padding:max(24px,env(safe-area-inset-top)) 22px max(24px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 0%,#fff 0%,#f5f5f2 58%,#eeefec 100%)}
-    main{width:min(100%,430px);padding:clamp(28px,8vw,44px);border:1px solid #ffffffd9;border-radius:30px;background:#ffffffa8;box-shadow:0 24px 80px #25251f12,0 2px 8px #25251f08;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
-    .brand{display:flex;align-items:center;gap:10px;margin:0 0 42px;color:#6b6b67;font-size:11px;font-weight:650;letter-spacing:.16em;text-transform:uppercase}
-    .mark{width:9px;height:9px;border-radius:50%;background:#171717;box-shadow:0 0 0 4px #1717170b}
-    .eyebrow{margin:0 0 12px;color:#777772;font-size:13px;font-weight:550;letter-spacing:.02em}
-    h1{margin:0;font-size:clamp(36px,10vw,48px);font-weight:620;letter-spacing:-.055em;line-height:1.04}
-    .description{margin:18px 0 30px;color:#666660;font-size:16px;line-height:1.6;letter-spacing:-.01em}
-    .button{display:flex;width:100%;min-height:54px;align-items:center;justify-content:center;gap:10px;padding:0 20px;border:1px solid #171717;border-radius:999px;background:#171717;color:#fff;text-decoration:none;font:600 15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.01em;box-shadow:0 5px 14px #17171720;cursor:pointer}
-    .button:active{transform:scale(.99)}
-    .button:focus-visible,.email-copy:focus-visible{outline:3px solid #6b8cff;outline-offset:4px}
-    .arrow{font-size:19px;font-weight:400;line-height:1}
-    .contact-details{margin-top:24px;padding-top:22px;border-top:1px solid #17171712}
-    .contact-details[hidden]{display:none}
-    .email-label{margin:0 0 10px;color:#777772;font-size:13px;font-weight:550}
-    .email-copy{display:flex;width:100%;min-height:54px;align-items:center;justify-content:space-between;gap:12px;padding:0 15px;border:1px solid #17171718;border-radius:15px;background:#ffffffb8;color:#171717;font:600 14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
-    .email-address{-webkit-user-select:text;user-select:text;overflow-wrap:anywhere;text-align:left}
-    .copy-hint{flex:none;color:#777772;font-size:12px;font-weight:550}
-    .note{min-height:18px;margin:12px 2px 0;color:#8a8a84;text-align:center;font-size:12px;line-height:1.5}
+    body{margin:0;min-height:100svh;display:grid;place-items:center;padding:max(24px,env(safe-area-inset-top)) 22px max(24px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 0%,#fff 0%,#f5f5f2 62%,#eeefec 100%);-webkit-font-smoothing:antialiased}
+    main{display:grid;place-items:center}
+    .icon-button{display:grid;width:112px;height:112px;place-items:center;padding:0;border:1px solid #ffffffed;border-radius:30px;background:#ffffffb8;box-shadow:0 22px 60px #20201b18,0 2px 8px #20201b0a;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}
+    .icon-button:active{transform:scale(.96);box-shadow:0 12px 34px #20201b18}
+    .icon-button:focus-visible{outline:3px solid #6b8cff;outline-offset:5px}
+    .icon{display:block;width:58px;height:58px}
+    .icon[hidden]{display:none}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    @media(prefers-reduced-motion:reduce){.icon-button{transition:none}}
   </style>
 </head>
 <body>
   <main>
-    <p class="brand"><span class="mark" aria-hidden="true"></span>Quantum Labs</p>
-    <p class="eyebrow">Parmar AI · SSC General Studies</p>
-    <h1>Let’s talk.</h1>
-    <p class="description">Questions about this SSC GS tutor, or exploring a digital tutor for another subject? Get in touch with the creator.</p>
-    <button class="button" id="contact-toggle" type="button" aria-expanded="false" aria-controls="email-contact">
-      <span>Contact</span><span class="arrow" aria-hidden="true">↗</span>
+    <button class="icon-button" id="copy-email" type="button" aria-label="Copy ${creatorEmail}">
+      <svg class="icon" id="gmail-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M8 14v22" fill="none" stroke="#4285f4" stroke-linecap="round" stroke-width="4"/>
+        <path d="M40 14v22" fill="none" stroke="#34a853" stroke-linecap="round" stroke-width="4"/>
+        <path d="M8 14 24 27 40 14" fill="none" stroke="#ea4335" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
+        <path d="m8 36 10-9" fill="none" stroke="#fbbc04" stroke-linecap="round" stroke-width="4"/>
+        <path d="m40 36-10-9" fill="none" stroke="#ea4335" stroke-linecap="round" stroke-width="4"/>
+      </svg>
+      <svg class="icon" id="copied-icon" viewBox="0 0 48 48" aria-hidden="true" hidden>
+        <path d="m11 25 9 9 18-20" fill="none" stroke="#202124" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
+      </svg>
     </button>
-    <section class="contact-details" id="email-contact" hidden aria-labelledby="email-title">
-      <p class="email-label" id="email-title">Send an email to</p>
-      <button class="email-copy" id="copy-email" type="button" aria-label="Copy ${creatorEmail}">
-        <span class="email-address">${creatorEmail}</span><span class="copy-hint" id="copy-hint">Tap to copy</span>
-      </button>
-      <p class="note" id="copy-status" aria-live="polite">Tap the address to copy it.</p>
-    </section>
+    <span class="sr-only" id="copy-status" aria-live="polite"></span>
   </main>
   <script>
-    const contactToggle = document.getElementById("contact-toggle");
-    const contactDetails = document.getElementById("email-contact");
-    const copyEmailButton = document.getElementById("copy-email");
-    const copyHint = document.getElementById("copy-hint");
-    const copyStatus = document.getElementById("copy-status");
     const email = "${creatorEmail}";
-
-    contactToggle.addEventListener("click", () => {
-      const isExpanded = contactToggle.getAttribute("aria-expanded") === "true";
-      contactToggle.setAttribute("aria-expanded", String(!isExpanded));
-      contactDetails.hidden = isExpanded;
-    });
+    const copyButton = document.getElementById("copy-email");
+    const gmailIcon = document.getElementById("gmail-icon");
+    const copiedIcon = document.getElementById("copied-icon");
+    const copyStatus = document.getElementById("copy-status");
 
     function fallbackCopyEmail() {
       const field = document.createElement("textarea");
@@ -1590,18 +1573,22 @@ function creatorContactPage(): Response {
       return copied;
     }
 
-    copyEmailButton.addEventListener("click", async () => {
+    copyButton.addEventListener("click", async () => {
       try {
         try {
           await navigator.clipboard.writeText(email);
         } catch {
           if (!fallbackCopyEmail()) throw new Error("Clipboard unavailable");
         }
-        copyHint.textContent = "Copied";
-        copyStatus.textContent = "Email address copied to clipboard.";
+        gmailIcon.hidden = true;
+        copiedIcon.hidden = false;
+        copyStatus.textContent = "Email copied to clipboard.";
+        window.setTimeout(() => {
+          copiedIcon.hidden = true;
+          gmailIcon.hidden = false;
+        }, 1100);
       } catch {
-        copyHint.textContent = "Press and hold";
-        copyStatus.textContent = "Copy didn’t work. Press and hold the email address to copy it.";
+        copyStatus.textContent = "Email could not be copied.";
       }
     });
 
