@@ -139,7 +139,7 @@ describe("Fatman admin retrieval gate", () => {
     expect(response.status).toBe(200);
     expect(result).toMatchObject({ ok: true, page: 1, status: "completed" });
     expect(key).toBe("fatman/pages/page-000001.txt");
-    expect(indexedText).toBe("Fatman 2nd Edition\\nPDF page: 1\\n\\nRecognized passage.\\n");
+    expect(indexedText).toBe("Fatman 2nd Edition\nPDF page: 1\n\nRecognized passage.\n");
     expect(JSON.parse(visionFetch.mock.calls[0][1].body).requests[0].features).toEqual([
       { type: "DOCUMENT_TEXT_DETECTION" },
     ]);
