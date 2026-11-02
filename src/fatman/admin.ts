@@ -379,7 +379,8 @@ function isMissingImageValidation(error: Record<string, unknown>): boolean {
   const code = error.code;
   const message = typeof error.message === "string" ? error.message : "";
   return (code === 3 || code === 400) &&
-    /image.*(required|missing|specified|provided)|missing.*image/iu.test(message);
+    /image/iu.test(message) &&
+    /(required|missing|specified|provided|supplied|must|invalid)/iu.test(message);
 }
 
 function googleVisionFailureResponse(status: number, data: unknown): Response {
