@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased: Fatman Google Vision OCR importer
+- Replaced Cloudflare image OCR with Google Cloud Vision Document Text Detection; extracted per-page text is indexed in the existing Cloudflare AI Search instance with exact PDF page metadata.
+- Added a zero-image Google Vision connectivity check, explicit confirmation of at least 538 remaining free OCR units, sequential page processing, and resumable page indexing.
+
 ## Unreleased: Fatman async indexing failures
 - Wait for Cloudflare’s indexing result for each uploaded page and stop immediately when processing fails or remains pending.
 - Surface the provider’s page error in the admin status instead of continuing bulk uploads.

@@ -1,10 +1,13 @@
 import type { AiSearchInstance, AiSearchItem, Env } from "../config/env";
+import { getGoogleAccessToken } from "../auth/google";
 import { getFatmanBookState, reserveFatmanSearchQuery, setFatmanBookState } from "../analytics/db";
 import { json } from "../http/response";
 
 const EXPECTED_PAGES = 538;
 const EXPECTED_PDF_SHA256 = "8B183803FE8EE53087D731F7319519AF9AC5BB62B39B2D3110ACC3FE0AB59886";
 const MAX_PAGE_BYTES = 2 * 1024 * 1024;
+const MAX_OCR_TEXT_CHARS = 120_000;
+const GOOGLE_VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
 const PAGE_PREFIX = "fatman/pages/page-";
 
 export function fatmanAdminPage(): Response {
@@ -14,6 +17,27 @@ export function fatmanAdminPage(): Response {
       "cache-control": "no-store",
     },
   });
+}
+
+export async function testFatmanVision(env: Env): Promise<Response> {
+  if (!hasGoogleVisionBindings(env)) {
+    return json({ ok: false, error: "Google Cloud project and service-account credentials are not configured on the Worker." }, 503);
+  }
+
+  try {
+    const token = await getGoogleAccessToken(env);
+    const response = await callGoogleVision(env, token, {
+      requests: [{ features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }],
+    });
+    const data = await googleResponseJson(response);
+    const requestError = googleVisionRequestError(data);
+    if (requestError && isMissingImageValidation(requestError)) {
+      return json({ ok: true, provider: "google_vision", billableImages: 0 });
+    }
+    return googleVisionFailureResponse(response.status, data);
+  } catch (error) {
+    return json({ ok: false, error: safeError(error) }, 502);
+  }
 }
 
 export async function prepareFatmanIndex(env: Env): Promise<Response> {
@@ -56,6 +80,9 @@ export async function prepareFatmanIndex(env: Env): Promise<Response> {
 
 export async function uploadFatmanPage(env: Env, request: Request, pageNumber: number): Promise<Response> {
   if (!hasFatmanBindings(env)) return json({ ok: false, error: "fatman_not_configured" }, 503);
+  if (request.headers.get("x-fatman-free-quota-confirmed") !== "true") {
+    return json({ ok: false, error: "Confirm that at least 538 free Vision OCR units remain before importing." }, 400);
+  }
   if (!Number.isSafeInteger(pageNumber) || pageNumber < 1 || pageNumber > EXPECTED_PAGES) {
     return json({ ok: false, error: "invalid_page_number" }, 400);
   }
@@ -78,6 +105,10 @@ export async function uploadFatmanPage(env: Env, request: Request, pageNumber: n
       return json({ ok: false, error: "invalid_jpeg" }, 415);
     }
 
+    if (!hasGoogleVisionBindings(env)) {
+      return json({ ok: false, page: pageNumber, error: "Google Cloud Vision is not configured on the Worker." }, 503);
+    }
+
     const instance = env.FATMAN_SEARCH!.get(env.FATMAN_INSTANCE_NAME!.trim());
     const key = pageKey(pageNumber);
     const existing = await instance.items.list({ search: key, per_page: 50, source: "builtin" });
@@ -89,10 +120,18 @@ export async function uploadFatmanPage(env: Env, request: Request, pageNumber: n
     if (pending) {
       return fatmanPageUploadResponse(pageNumber, await waitForFatmanItem(instance, pending));
     }
-    for (const item of exactMatches) await instance.items.delete(item.id);
 
-    const blob = new Blob([bytes], { type: "image/jpeg" });
-    const item = await instance.items.uploadAndPoll(key, blob, {
+    const recoverable = exactMatches.find((item) =>
+      item.status === "error" || item.status === "skipped" || item.status === "outdated");
+    let text: string;
+    if (recoverable) {
+      text = await recoverFatmanPageText(instance, recoverable);
+      await instance.items.delete(recoverable.id);
+    } else {
+      text = await recognizeFatmanPage(env, new Uint8Array(bytes), pageNumber);
+    }
+
+    const item = await instance.items.uploadAndPoll(key, text, {
       pollIntervalMs: 1_000,
       timeoutMs: 60_000,
     });
@@ -139,7 +178,7 @@ export async function fatmanIndexStatus(env: Env): Promise<Response> {
       expectedPages: EXPECTED_PAGES,
       completedPages,
       queuedPages: pages.filter((item) => item.status === "queued" || item.status === "running").length,
-      failedPages: pages.filter((item) => item.status === "error" || item.status === "skipped").length,
+      failedPages: pages.filter((item) => item.status === "error" || item.status === "skipped" || item.status === "outdated").length,
       pages,
     });
   } catch (error) {
@@ -231,7 +270,7 @@ export async function finalizeFatmanIndex(env: Env, request: Request): Promise<R
         ok: false,
         error: "index_not_complete",
         completedPages: Array.from(pageByNumber.values()).filter((item) => item.status === "completed").length,
-        failedPages: Array.from(pageByNumber.values()).filter((item) => item.status === "error" || item.status === "skipped").length,
+        failedPages: Array.from(pageByNumber.values()).filter((item) => item.status === "error" || item.status === "skipped" || item.status === "outdated").length,
       }, 409);
     }
     await setFatmanBookState(env, {
@@ -260,8 +299,141 @@ export async function disableFatmanIndex(env: Env): Promise<Response> {
   }
 }
 
+async function recognizeFatmanPage(env: Env, bytes: Uint8Array, pageNumber: number): Promise<string> {
+  const token = await getGoogleAccessToken(env);
+  const response = await callGoogleVision(env, token, {
+    requests: [{
+      image: { content: bytesToBase64(bytes) },
+      features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+    }],
+  });
+  const data = await googleResponseJson(response);
+  if (!response.ok) throw new Error(googleVisionErrorMessage(response.status, data));
+
+  const result = firstGoogleVisionResult(data);
+  if (!result) throw new Error("Google Vision returned no result for PDF page " + pageNumber + ".");
+  const requestError = asRecord(result.error);
+  if (requestError) throw new Error(googleVisionErrorMessage(response.status, { responses: [result] }));
+
+  const text = asRecord(result.fullTextAnnotation)?.text;
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("Google Vision found no readable text on PDF page " + pageNumber + ".");
+  }
+
+  const normalized = text.replace(/\u0000/g, "").replace(/\r\n?/g, "\n").trim();
+  if (normalized.length > MAX_OCR_TEXT_CHARS) {
+    throw new Error("Google Vision text for PDF page " + pageNumber + " exceeds the page text limit.");
+  }
+  return "Fatman 2nd Edition\nPDF page: " + pageNumber + "\n\n" + normalized + "\n";
+}
+
+async function callGoogleVision(env: Env, token: string, body: Record<string, unknown>): Promise<Response> {
+  const projectId = env.GCP_PROJECT_ID?.trim();
+  if (!projectId) throw new Error("GCP_PROJECT_ID is not configured on the Worker.");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    return await fetch(GOOGLE_VISION_URL, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer " + token,
+        "content-type": "application/json",
+        "x-goog-user-project": projectId,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Google Vision timed out after 30 seconds. Refresh status before retrying this page.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function googleResponseJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json() as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function firstGoogleVisionResult(data: unknown): Record<string, unknown> | undefined {
+  const responses = asRecord(data)?.responses;
+  if (!Array.isArray(responses)) return undefined;
+  const first = asRecord(responses[0]);
+  return first ?? undefined;
+}
+
+function googleVisionRequestError(data: unknown): Record<string, unknown> | undefined {
+  const outerError = asRecord(asRecord(data)?.error);
+  if (outerError) return outerError;
+  return asRecord(firstGoogleVisionResult(data)?.error) ?? undefined;
+}
+
+function isMissingImageValidation(error: Record<string, unknown>): boolean {
+  const code = error.code;
+  const message = typeof error.message === "string" ? error.message : "";
+  return (code === 3 || code === 400) &&
+    /image/iu.test(message) &&
+    /(required|missing|specified|provided|supplied|must|invalid)/iu.test(message);
+}
+
+function googleVisionFailureResponse(status: number, data: unknown): Response {
+  return json({ ok: false, error: googleVisionErrorMessage(status, data) }, status === 403 ? 503 : 502);
+}
+
+function googleVisionErrorMessage(status: number, data: unknown): string {
+  const error = googleVisionRequestError(data);
+  const code = typeof error?.status === "string" ? error.status : String(error?.code ?? "");
+  const message = typeof error?.message === "string" ? error.message : "";
+  const details = code + " " + message;
+
+  if (/SERVICE_DISABLED|has not been used|API is disabled|not enabled/iu.test(details)) {
+    return "Cloud Vision API is not enabled for the configured Google Cloud project. Enable Cloud Vision API, then test again.";
+  }
+  if (/USER_PROJECT_DENIED|serviceusage\.services\.use|quota project|user project/iu.test(details)) {
+    return "The Worker service account needs Service Usage Consumer access on the configured Google Cloud project.";
+  }
+  if (/BILLING_DISABLED|billing.*(disabled|not enabled|must be enabled)/iu.test(details)) {
+    return "Billing is not enabled for the configured Google Cloud project. Check the project billing setup before using Vision.";
+  }
+  return "Google Vision OCR failed (HTTP " + status + "): " + safeError(message || code || "Unknown Google Vision error.");
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 32_768;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+async function recoverFatmanPageText(instance: AiSearchInstance, item: AiSearchItem): Promise<string> {
+  const source = await instance.items.get(item.id).download();
+  if (!source.contentType.toLowerCase().startsWith("text/")) {
+    throw new Error("Cloudflare could not return the previous OCR text, so this page was not sent to Vision again.");
+  }
+  const text = await new Response(source.body).text();
+  if (!text.trim() || text.length > MAX_OCR_TEXT_CHARS) {
+    throw new Error("The previous OCR text could not be recovered safely, so this page was not sent to Vision again.");
+  }
+  return text;
+}
+
 function fatmanPageUploadResponse(pageNumber: number, item: AiSearchItem): Response {
-  if (item.status === "error" || item.status === "skipped") {
+  if (item.status === "error" || item.status === "skipped" || item.status === "outdated") {
     return json({
       ok: false,
       page: pageNumber,
@@ -297,11 +469,17 @@ async function listFatmanPages(instance: AiSearchInstance): Promise<AiSearchItem
   let totalPages = 1;
   while (page <= totalPages && page <= 20) {
     const response = await instance.items.list({ page, per_page: 50, source: "builtin" });
-    items.push(...(response.result ?? []).filter((item) => item.key.startsWith(PAGE_PREFIX)));
+    items.push(...(response.result ?? []).filter((item) => item.key.startsWith(PAGE_PREFIX) && item.key.endsWith(".txt")));
     totalPages = Number(response.result_info?.total_pages ?? page);
     page += 1;
   }
   return items;
+}
+
+function hasGoogleVisionBindings(env: Env): boolean {
+  return Boolean(env.GCP_PROJECT_ID?.trim()) &&
+    Boolean(env.GCP_CLIENT_EMAIL?.trim()) &&
+    Boolean(env.GCP_PRIVATE_KEY?.trim());
 }
 
 function hasFatmanBindings(env: Env): boolean {
@@ -312,11 +490,11 @@ function hasFatmanBindings(env: Env): boolean {
 }
 
 function pageKey(pageNumber: number): string {
-  return PAGE_PREFIX + String(pageNumber).padStart(6, "0") + ".jpg";
+  return PAGE_PREFIX + String(pageNumber).padStart(6, "0") + ".txt";
 }
 
 function pageNumberFromKey(key: string): number | undefined {
-  if (!key.startsWith(PAGE_PREFIX) || !key.endsWith(".jpg")) return undefined;
+  if (!key.startsWith(PAGE_PREFIX) || !key.endsWith(".txt")) return undefined;
   const value = key.slice(PAGE_PREFIX.length, -4);
   if (!/^[0-9]{1,6}$/.test(value)) return undefined;
   const page = Number(value);
@@ -332,7 +510,9 @@ const HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatman book index</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#18202a;background:#f4f6f8}body{margin:0;padding:32px 16px}.card{max-width:720px;margin:0 auto;background:white;border:1px solid #e2e6ea;border-radius:16px;padding:24px;box-shadow:0 8px 28px #10203012}h1{font-size:24px;margin:0 0 8px}.sub{color:#657180;line-height:1.5}.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}.button{border:0;border-radius:10px;background:#1264d6;color:white;padding:11px 16px;font-size:15px;font-weight:600;cursor:pointer}.button.alt{background:#e9edf2;color:#18202a}.button:disabled{opacity:.5;cursor:wait}input{max-width:100%}textarea{width:100%;min-height:72px;padding:10px 12px;border:1px solid #d9dfe6;border-radius:10px;font:inherit;resize:vertical}.review{display:flex;gap:9px;align-items:flex-start;color:#4d5968;font-size:14px;line-height:1.45;margin:14px 0}.result{padding:12px 14px;border:1px solid #e3e8ed;border-radius:12px;margin:10px 0;background:#fafbfc}.result-title{font-weight:700;margin-bottom:5px}.result-text{white-space:pre-wrap;color:#4d5968;font-size:13px;line-height:1.5}progress{width:100%;height:10px}#status{white-space:pre-wrap;color:#374354;font-size:14px;min-height:42px}.note{font-size:13px;color:#6a7480;border-top:1px solid #eef0f3;margin-top:20px;padding-top:14px}
-</style></head><body><main class="card"><h1>Fatman 2nd Edition index</h1><p class="sub">Choose the reviewed 538-page Fatman PDF. The importer checks its SHA-256 before creating or uploading anything, then converts pages to images for OCR. Keep this page open while the import runs.</p>
+</style></head><body><main class="card"><h1>Fatman 2nd Edition index</h1><p class="sub">Choose the reviewed 538-page Fatman PDF. The importer checks its SHA-256, sends each page image to Google Vision for OCR, and indexes the extracted text. Keep this page open while the import runs.</p>
+<div class="row"><button id="test-vision" class="button alt">Test Google Vision</button><span id="vision-status" class="sub">Connection not tested. This check sends no page images.</span></div>
+<label class="review"><input id="quota-confirmed" type="checkbox"><span>I verified that at least 538 free Google Vision Document Text Detection units remain this month. I will not start the import if I cannot confirm this.</span></label>
 <div class="row"><input id="pdf" type="file" accept="application/pdf"><button id="import" class="button">Import or resume</button><button id="refresh" class="button alt">Refresh status</button><button id="disable" class="button alt">Disable book mode</button></div>
 <progress id="progress" value="0" max="538"></progress><p id="status">Checking index status…</p>
 <h2>Review retrieval</h2><p class="sub">After all pages finish, run three different searches using facts you can verify in the book. Review the returned text and PDF page for each before enabling.</p><div class="row"><textarea id="preview-query" placeholder="Enter a fact or phrase you can verify in the book"></textarea><button id="preview" class="button alt">Preview search</button></div><div id="preview-results"></div><label class="review"><input id="reviewed" type="checkbox"><span>I checked the currently displayed text and PDF page against the book.</span></label><button id="enable" class="button" disabled>Review 0/3 searches</button>
@@ -362,6 +542,20 @@ async function refresh(){
       (firstError?"\\nFirst indexing error: "+firstError:""));
   }catch(error){setStatus("Could not read index status: "+error.message);}
 }
+const quotaConfirmed=document.getElementById("quota-confirmed");
+const visionStatus=document.getElementById("vision-status");
+const visionButton=document.getElementById("test-vision");
+async function testVision(){
+  visionButton.disabled=true;
+  visionStatus.textContent="Checking Google Vision without sending an image…";
+  try{
+    await api("vision/test",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+    visionStatus.textContent="Google Vision is reachable. This check sent no images and used 0 OCR units.";
+  }catch(error){
+    visionStatus.textContent="Google Vision check failed: "+error.message;
+  }finally{visionButton.disabled=false;}
+}
+visionButton.addEventListener("click",testVision);
 async function disable(){
   try{await api("disable",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});await refresh();}
   catch(error){setStatus("Could not disable book mode: "+error.message);}
@@ -427,6 +621,7 @@ async function renderPage(pdf,pageNumber){
 async function importBook(){
   const file=document.getElementById("pdf").files[0];
   if(!file){setStatus("Choose the PDF first.");return;}
+  if(!quotaConfirmed.checked){setStatus("Before importing, verify at least 538 free Google Vision OCR units remain this month and check the box above.");return;}
   importButton.disabled=true;
   progressEl.value=0;
   try{
@@ -437,40 +632,36 @@ async function importBook(){
     if(sourceHash!==EXPECTED_PDF_SHA256)throw new Error("This is not the reviewed Fatman PDF. No index changes were made.");
     const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
     if(pdf.numPages!==538)throw new Error("This import requires 538 PDF pages. The selected file has "+pdf.numPages+".");
-    setStatus("Preparing OCR index…");
+    setStatus("Testing Google Vision without sending a page image…");
+    await api("vision/test",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+    setStatus("Google Vision is ready. Preparing the text index…");
     await api("prepare",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({pages:pdf.numPages})});
     const current=await api("status");
     const complete=new Set((current.pages||[]).filter(item=>item.status==="completed").map(item=>item.page));
-    let next=1,done=complete.size,failure=null;
-    progressEl.value=done;
-    setStatus("Uploading page images… "+done+" already indexed.");
-    async function worker(){
-      while(next<=pdf.numPages&&!failure){
-        const pageNumber=next++;
-        if(complete.has(pageNumber))continue;
-        try{
-          const blob=await renderPage(pdf,pageNumber);
-          let response,data;
-          for(let attempt=0;attempt<3;attempt++){
-            try{
-              response=await fetch(API+"page/"+pageNumber,{method:"POST",headers:{"content-type":"image/jpeg"},body:blob});
-              data=await response.json();
-            }catch(error){
-              if(attempt===2)throw new Error("Page "+pageNumber+" upload failed: "+(error instanceof Error?error.message:String(error)));
-              await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
-              continue;
-            }
-            if(response.ok&&data.ok)break;
-            throw new Error(data.error||("Page "+pageNumber+" upload failed."));
-          }
-          done++;progressEl.value=done;
-          setStatus("Uploading page images… "+done+" of "+pdf.numPages+".");
-        }catch(error){failure=error;}
-      }
+    let done=complete.size;
+  progressEl.value=done;
+  setStatus("Google Vision OCR and indexing… "+done+" pages already indexed.");
+  for(let pageNumber=1;pageNumber<=pdf.numPages;pageNumber++){
+    if(complete.has(pageNumber))continue;
+    try{
+      const blob=await renderPage(pdf,pageNumber);
+      const response=await fetch(API+"page/"+pageNumber,{
+        method:"POST",
+        headers:{
+          "content-type":"image/jpeg",
+          "x-fatman-free-quota-confirmed":quotaConfirmed.checked?"true":"false"
+        },
+        body:blob
+      });
+      const data=await response.json();
+      if(!response.ok||!data.ok)throw new Error(data.error||("Page "+pageNumber+" upload failed."));
+      done++;progressEl.value=done;
+      setStatus("Google Vision OCR and indexing… "+done+" of "+pdf.numPages+".");
+    }catch(error){
+      throw new Error("Page "+pageNumber+" stopped: "+(error instanceof Error?error.message:String(error))+" Refresh status, then resume; completed pages will be skipped.");
     }
-    await Promise.all([worker(),worker(),worker()]);
-    if(failure)throw failure;
-    setStatus("All page images are uploaded. Waiting for OCR and indexing…");
+  }
+  setStatus("All pages sent to Google Vision. Waiting for text indexing…");
     for(let attempt=0;attempt<180;attempt++){
       const data=await api("status");
       progressEl.value=data.completedPages||0;
