@@ -5,9 +5,9 @@ import { getActiveTelegramBot, getTelegramBotByConnectionId, hasTelegramBotRecor
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
 const CREATOR_NAME = "Quantum Labs";
-const CREATOR_EMAIL_URL = "mailto:quantumcoremind@gmail.com";
+const CREATOR_EMAIL_URL = "https://mail.google.com/mail/?view=cm&fs=1&to=quantumcoremind%40gmail.com";
 const CREATOR_FOOTER = "\n\nCreator: " + CREATOR_NAME;
-const CREATOR_FOOTER_HTML = "\n\nCreator: <a href=\"mailto:quantumcoremind@gmail.com\">Quantum Labs</a>";
+const CREATOR_FOOTER_HTML = "\n\nCreator: <a href=\"https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=quantumcoremind%40gmail.com\">Quantum Labs</a>";
 const CREATOR_FOOTER_LINK_OFFSET = "\n\nCreator: ".length;
 
 interface TelegramTextLinkEntity {
