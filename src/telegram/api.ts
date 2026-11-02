@@ -6,26 +6,12 @@ export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
 const CREATOR_NAME = "iDoctor";
 const CREATOR_CONTACT_URL = "https://parmar-ai.thenewtongs.workers.dev/contact";
-const CREATOR_FOOTER = "\n\nCreator: " + CREATOR_NAME;
-
-interface TelegramCreatorFooterMessage {
-  text: string;
+function limitTelegramMessage(text: string): { text: string } {
+  return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH) };
 }
 
-function withCreatorFooter(text: string, includeCreatorFooter = true): TelegramCreatorFooterMessage {
-  if (!includeCreatorFooter) {
-    return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH) };
-  }
-  const maxBodyLength = TELEGRAM_MAX_MESSAGE_LENGTH - CREATOR_FOOTER.length;
-  const body = text.trim().slice(0, maxBodyLength);
-  return { text: body + CREATOR_FOOTER };
-}
-
-function withCreatorPollFooter(explanation: string): TelegramCreatorFooterMessage {
-  const normalizedExplanation = explanation.trim().replace(/\s*\n+\s*/gu, " ");
-  const body = normalizedExplanation.slice(0, 200 - CREATOR_FOOTER.length);
-  const footer = body ? CREATOR_FOOTER : CREATOR_FOOTER.trimStart();
-  return { text: body + footer };
+function limitTelegramPollExplanation(explanation: string): string {
+  return explanation.trim().replace(/\s*\n+\s*/gu, " ").slice(0, 200);
 }
 
 interface CreatorContactKeyboardMarkup {
@@ -39,7 +25,7 @@ function creatorContactMarkup(chatId: number, includeCreatorFooter = true): Crea
   if (!includeCreatorFooter || chatId <= 0) return undefined;
   return {
     inline_keyboard: [[{
-      text: "Contact iDoctor",
+      text: "creator: " + CREATOR_NAME,
       web_app: { url: CREATOR_CONTACT_URL },
     }]],
   };
@@ -369,7 +355,7 @@ export async function sendTelegramQuiz(
   replyToMessageId?: number,
   botConnectionId?: string,
 ): Promise<TelegramQuizResult> {
-  const pollExplanation = withCreatorPollFooter(explanation);
+  const pollExplanation = limitTelegramPollExplanation(explanation);
   const creatorMarkup = creatorContactMarkup(chatId);
   const result = await telegramApi<{
     message_id: number;
@@ -383,7 +369,7 @@ export async function sendTelegramQuiz(
     allows_multiple_answers: false,
     allows_revoting: false,
     correct_option_ids: [...correctOptionIds].sort((a, b) => a - b),
-    explanation: pollExplanation.text,
+    explanation: pollExplanation,
     ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
     ...(replyToMessageId ? {
       reply_parameters: {
@@ -441,7 +427,7 @@ export async function sendTelegramMessage(
   botConnectionId?: string,
   includeCreatorFooter = true,
 ): Promise<TelegramMessageResult> {
-  const message = withCreatorFooter(text, includeCreatorFooter);
+  const message = limitTelegramMessage(text);
   const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
   const payload: Record<string, unknown> = {
     chat_id: chatId,
@@ -468,7 +454,7 @@ export async function editTelegramMessage(
   botConnectionId?: string,
   includeCreatorFooter = true,
 ): Promise<void> {
-  const message = withCreatorFooter(text, includeCreatorFooter);
+  const message = limitTelegramMessage(text);
   const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
   try {
     await telegramApi(env, "editMessageText", {
