@@ -1516,55 +1516,55 @@ function creatorContactPage(): Response {
   const subject = encodeURIComponent("Contact Quantum Labs | Parmar AI");
   const body = encodeURIComponent("Hi Quantum Labs,\n\nI'd like to contact you about the SSC GS bot.");
   const mailtoUrl = `mailto:quantumcoremind@gmail.com?subject=${subject}&body=${body}`;
-  const gmailUrl = `https://mail.google.com/mail/?tf=cm&to=quantumcoremind%40gmail.com&su=${subject}&body=${body}`;
   const html = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0b1220">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f5f5f2">
   <meta name="robots" content="noindex,nofollow">
   <title>Contact Quantum Labs</title>
   <style>
-    :root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:#0b1220;color:#edf2f8}
+    :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f2;color:#171717;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
     *{box-sizing:border-box}
-    body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px}
-    main{width:min(100%,440px);padding:32px;border:1px solid #273449;border-radius:24px;background:#111a2a;box-shadow:0 24px 70px #0005}
-    .brand{margin:0 0 24px;color:#9eb0c8;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
-    h1{margin:0 0 12px;font-size:28px;letter-spacing:-.03em}
-    p{color:#b9c4d2;line-height:1.6}
-    .button{display:block;margin-top:14px;padding:14px 18px;border-radius:12px;text-align:center;text-decoration:none;font-weight:700}
-    .primary{background:#eef3fa;color:#111827}
-    .secondary{border:1px solid #34445d;color:#eef3fa}
-    .address{margin:24px 0 4px;color:#eef3fa;font-weight:600;overflow-wrap:anywhere}
-    .note{margin-bottom:0;font-size:13px;color:#91a0b3}
+    body{margin:0;min-height:100svh;display:grid;place-items:center;padding:max(24px,env(safe-area-inset-top)) 22px max(24px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 0%,#fff 0%,#f5f5f2 58%,#eeefec 100%)}
+    main{width:min(100%,430px);padding:clamp(28px,8vw,44px);border:1px solid #ffffffd9;border-radius:30px;background:#ffffffa8;box-shadow:0 24px 80px #25251f12,0 2px 8px #25251f08;backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+    .brand{display:flex;align-items:center;gap:10px;margin:0 0 42px;color:#6b6b67;font-size:11px;font-weight:650;letter-spacing:.16em;text-transform:uppercase}
+    .mark{width:9px;height:9px;border-radius:50%;background:#171717;box-shadow:0 0 0 4px #1717170b}
+    .eyebrow{margin:0 0 12px;color:#777772;font-size:13px;font-weight:550;letter-spacing:.02em}
+    h1{margin:0;font-size:clamp(36px,10vw,48px);font-weight:620;letter-spacing:-.055em;line-height:1.04}
+    .description{margin:18px 0 30px;color:#666660;font-size:16px;line-height:1.6;letter-spacing:-.01em}
+    .button{display:flex;min-height:54px;align-items:center;justify-content:center;gap:10px;padding:0 20px;border:1px solid #171717;border-radius:999px;background:#171717;color:#fff;text-decoration:none;font-size:15px;font-weight:600;letter-spacing:-.01em;box-shadow:0 5px 14px #17171720;transition:transform .16s ease,background .16s ease,box-shadow .16s ease}
+    .button:hover{background:#30302e;box-shadow:0 8px 20px #17171725}
+    .button:active{transform:scale(.985)}
+    .button:focus-visible{outline:3px solid #6b8cff;outline-offset:4px}
+    .arrow{font-size:19px;font-weight:400;line-height:1}
+    .note{margin:16px 2px 0;color:#8a8a84;text-align:center;font-size:12px;line-height:1.5}
+    @media(prefers-reduced-motion:reduce){.button{transition:none}}
   </style>
 </head>
 <body>
   <main>
-    <p class="brand">Parmar AI · Quantum Labs</p>
-    <h1>Contact the creator</h1>
-    <p>For questions about the SSC General Studies bot or a digital tutor for another subject, email the creator.</p>
-    <a class="button primary" href="${mailtoUrl.replace(/&/gu, "&amp;")}">Compose email</a>
-    <a class="button secondary" href="${gmailUrl.replace(/&/gu, "&amp;")}">Open Gmail in browser</a>
-    <p class="address">quantumcoremind@gmail.com</p>
-    <p class="note">The recipient, subject, and starter message are filled in. Review them before sending.</p>
+    <p class="brand"><span class="mark" aria-hidden="true"></span>Quantum Labs</p>
+    <p class="eyebrow">Parmar AI · SSC General Studies</p>
+    <h1>Let’s talk.</h1>
+    <p class="description">Questions about this SSC GS tutor, or exploring a digital tutor for another subject? Get in touch with the creator.</p>
+    <a class="button" href="\${mailtoUrl}">
+      <span>Contact the creator</span><span class="arrow" aria-hidden="true">↗</span>
+    </a>
+    <p class="note">Your email app opens with the recipient and subject ready.</p>
   </main>
-  <script>
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-      window.location.href = "${mailtoUrl}";
-    }
-  </script>
 </body>
 </html>`;
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
     },
   });
 }
-
 const worker = {
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const requestId = getOrCreateRequestId(request);
