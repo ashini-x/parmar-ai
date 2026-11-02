@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 describe("Fatman index rollout contract", () => {
   const source = readFileSync(new URL("../src/fatman/admin.ts", import.meta.url), "utf8");
+  const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+  const storeSource = readFileSync(new URL("../src/core/job-store.ts", import.meta.url), "utf8");
 
   it("checks the approved PDF fingerprint before preparing the index", () => {
     const hashCheck = source.indexOf("if(sourceHash!==EXPECTED_PDF_SHA256)");
@@ -11,6 +13,15 @@ describe("Fatman index rollout contract", () => {
     expect(source).toContain("const EXPECTED_PDF_SHA256 = \"8B183803FE8EE53087D731F7319519AF9AC5BB62B39B2D3110ACC3FE0AB59886\";");
     expect(hashCheck).toBeGreaterThanOrEqual(0);
     expect(prepareIndex).toBeGreaterThan(hashCheck);
+  });
+
+  it("isolates Fatman mode by private chat and snapshots each queued question", () => {
+    expect(workerSource).toContain("const id = env.JOB_DEDUPE.idFromName(String(chatId));");
+    expect(workerSource).toContain('callback.message?.chat?.type !== "private"');
+    expect(storeSource).toContain('const FATMAN_MODE_PREFIX = "mode:fatman:"');
+    expect(storeSource).toContain("this.ctx.storage.get<boolean>(FATMAN_MODE_PREFIX + encodeURIComponent(botConnectionId))");
+    expect(storeSource).toContain("this.ctx.storage.put(FATMAN_MODE_PREFIX + encodeURIComponent(botConnectionId), active)");
+    expect(storeSource).toContain("fatmanModeSnapshot: body.fatmanModeSnapshot === true");
   });
 
   it("requires a retrieval preview and explicit review before enabling book mode", () => {
