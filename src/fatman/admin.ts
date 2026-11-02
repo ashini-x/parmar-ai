@@ -1,5 +1,5 @@
 import type { AiSearchInstance, AiSearchItem, Env } from "../config/env";
-import { getFatmanBookState, setFatmanBookState } from "../analytics/db";
+import { getFatmanBookState, reserveFatmanSearchQuery, setFatmanBookState } from "../analytics/db";
 import { json } from "../http/response";
 
 const EXPECTED_PAGES = 538;
@@ -138,8 +138,63 @@ export async function fatmanIndexStatus(env: Env): Promise<Response> {
   }
 }
 
-export async function finalizeFatmanIndex(env: Env): Promise<Response> {
+export async function previewFatmanIndex(env: Env, request: Request): Promise<Response> {
   if (!hasFatmanBindings(env)) return json({ ok: false, error: "fatman_not_configured" }, 503);
+  let body: { query?: unknown };
+  try {
+    body = await request.json() as { query?: unknown };
+  } catch {
+    return json({ ok: false, error: "invalid_json" }, 400);
+  }
+  const query = typeof body.query === "string" ? body.query.replace(/\s+/gu, " ").trim().slice(0, 1_000) : "";
+  if (!query) return json({ ok: false, error: "query_required" }, 400);
+
+  try {
+    const instanceName = env.FATMAN_INSTANCE_NAME!.trim();
+    const listed = await env.FATMAN_SEARCH!.list();
+    if (!(listed.result ?? []).some((item) => item.id === instanceName)) {
+      return json({ ok: false, error: "index_instance_missing" }, 409);
+    }
+    const instance = env.FATMAN_SEARCH!.get(instanceName);
+    const pages = await listFatmanPages(instance);
+    const readyPages = new Set(pages.filter((item) => item.status === "completed").map((item) => pageNumberFromKey(item.key)));
+    if (Array.from({ length: EXPECTED_PAGES }, (_, index) => readyPages.has(index + 1)).some((ready) => !ready)) {
+      return json({ ok: false, error: "index_not_complete" }, 409);
+    }
+
+    const configuredLimit = Number(env.FATMAN_MONTHLY_QUERY_LIMIT);
+    const monthlyLimit = Number.isFinite(configuredLimit) ? Math.max(1, Math.min(800, Math.floor(configuredLimit))) : 800;
+    const usage = await reserveFatmanSearchQuery(env, monthlyLimit);
+    if (!usage.allowed) return json({ ok: false, error: "monthly_search_limit_reached" }, 429);
+
+    const result = await instance.search({
+      messages: [{ role: "user", content: query }],
+      ai_search_options: { retrieval: { max_num_results: 5, retrieval_type: "hybrid" } },
+    });
+    const results = (result.chunks ?? []).flatMap((chunk) => {
+      const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
+      const page = pageNumberFromKey(key);
+      const text = typeof chunk.text === "string"
+        ? chunk.text.replace(/\bjoin\s*[-:]*\s*@?freebookspdf\d*\b/giu, " ").replace(/\s+/gu, " ").trim().slice(0, 1_400)
+        : "";
+      const score = typeof chunk.score === "number" && Number.isFinite(chunk.score) ? chunk.score : null;
+      return page && text ? [{ page, text, score }] : [];
+    }).slice(0, 5);
+    return json({ ok: true, query, results, monthlyQueryCount: usage.queryCount });
+  } catch (error) {
+    return json({ ok: false, error: safeError(error) }, 502);
+  }
+}
+
+export async function finalizeFatmanIndex(env: Env, request: Request): Promise<Response> {
+  if (!hasFatmanBindings(env)) return json({ ok: false, error: "fatman_not_configured" }, 503);
+  let body: { reviewed?: unknown };
+  try {
+    body = await request.json() as { reviewed?: unknown };
+  } catch {
+    return json({ ok: false, error: "review_confirmation_required" }, 400);
+  }
+  if (body.reviewed !== true) return json({ ok: false, error: "review_confirmation_required" }, 400);
   try {
     const listed = await env.FATMAN_SEARCH!.list();
     const instanceName = env.FATMAN_INSTANCE_NAME!.trim();
@@ -228,11 +283,12 @@ function safeError(error: unknown): string {
 const HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fatman book index</title>
 <style>
-:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#18202a;background:#f4f6f8}body{margin:0;padding:32px 16px}.card{max-width:720px;margin:0 auto;background:white;border:1px solid #e2e6ea;border-radius:16px;padding:24px;box-shadow:0 8px 28px #10203012}h1{font-size:24px;margin:0 0 8px}.sub{color:#657180;line-height:1.5}.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}.button{border:0;border-radius:10px;background:#1264d6;color:white;padding:11px 16px;font-size:15px;font-weight:600;cursor:pointer}.button.alt{background:#e9edf2;color:#18202a}.button:disabled{opacity:.5;cursor:wait}input{max-width:100%}progress{width:100%;height:10px}#status{white-space:pre-wrap;color:#374354;font-size:14px;min-height:42px}.note{font-size:13px;color:#6a7480;border-top:1px solid #eef0f3;margin-top:20px;padding-top:14px}
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#18202a;background:#f4f6f8}body{margin:0;padding:32px 16px}.card{max-width:720px;margin:0 auto;background:white;border:1px solid #e2e6ea;border-radius:16px;padding:24px;box-shadow:0 8px 28px #10203012}h1{font-size:24px;margin:0 0 8px}.sub{color:#657180;line-height:1.5}.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}.button{border:0;border-radius:10px;background:#1264d6;color:white;padding:11px 16px;font-size:15px;font-weight:600;cursor:pointer}.button.alt{background:#e9edf2;color:#18202a}.button:disabled{opacity:.5;cursor:wait}input{max-width:100%}textarea{width:100%;min-height:72px;padding:10px 12px;border:1px solid #d9dfe6;border-radius:10px;font:inherit;resize:vertical}.review{display:flex;gap:9px;align-items:flex-start;color:#4d5968;font-size:14px;line-height:1.45;margin:14px 0}.result{padding:12px 14px;border:1px solid #e3e8ed;border-radius:12px;margin:10px 0;background:#fafbfc}.result-title{font-weight:700;margin-bottom:5px}.result-text{white-space:pre-wrap;color:#4d5968;font-size:13px;line-height:1.5}progress{width:100%;height:10px}#status{white-space:pre-wrap;color:#374354;font-size:14px;min-height:42px}.note{font-size:13px;color:#6a7480;border-top:1px solid #eef0f3;margin-top:20px;padding-top:14px}
 </style></head><body><main class="card"><h1>Fatman 2nd Edition index</h1><p class="sub">Choose the complete 538-page PDF. The browser converts each page to a clear image, then Cloudflare OCR indexes the pages for search. Keep this page open while the import runs.</p>
 <div class="row"><input id="pdf" type="file" accept="application/pdf"><button id="import" class="button">Import or resume</button><button id="refresh" class="button alt">Refresh status</button><button id="disable" class="button alt">Disable book mode</button></div>
 <progress id="progress" value="0" max="538"></progress><p id="status">Checking index status…</p>
-<div class="note">Only an administrator can open this page. Importing turns book mode off until all 538 pages finish indexing and pass the final check.</div></main>
+<h2>Review retrieval</h2><p class="sub">After all pages finish, search for a fact you can verify in the book. Check that the returned text and PDF page match before enabling.</p><div class="row"><textarea id="preview-query" placeholder="Enter a fact or phrase you can verify in the book"></textarea><button id="preview" class="button alt">Preview search</button></div><div id="preview-results"></div><label class="review"><input id="reviewed" type="checkbox"><span>I checked the retrieved text and page against the book.</span></label><button id="enable" class="button" disabled>Enable book mode</button>
+<div class="note">Only an administrator can open this page. Importing disables book mode. It is enabled only after all 538 pages finish indexing and you review at least one retrieval result.</div></main>
 <script type="module">
 import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
@@ -259,6 +315,35 @@ async function disable(){
   try{await api("disable",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});await refresh();}
   catch(error){setStatus("Could not disable book mode: "+error.message);}
 }
+let previewHasResults=false;
+const enableButton=document.getElementById("enable");
+const reviewedCheckbox=document.getElementById("reviewed");
+async function previewSearch(){
+  enableButton.disabled=true;reviewedCheckbox.checked=false;previewHasResults=false;
+  const query=document.getElementById("preview-query").value.trim();
+  const resultsEl=document.getElementById("preview-results");resultsEl.replaceChildren();
+  try{
+    const data=await api("preview",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({query})});
+    for(const item of data.results){
+      const card=document.createElement("article");card.className="result";
+      const title=document.createElement("div");title.className="result-title";
+      title.textContent="PDF page "+item.page+(item.score===null?"":" · score "+item.score.toFixed(3));
+      const passage=document.createElement("div");passage.className="result-text";passage.textContent=item.text;
+      card.append(title,passage);resultsEl.append(card);
+    }
+    previewHasResults=data.results.length>0;
+    setStatus(previewHasResults?"Review the retrieved passages above against the same pages in the book.":"No page passages were returned. Try a more specific phrase.");
+    enableButton.disabled=!previewHasResults||!reviewedCheckbox.checked;
+  }catch(error){setStatus("Search preview failed: "+error.message);}
+}
+async function enableBook(){
+  enableButton.disabled=true;
+  try{await api("finalize",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({reviewed:true})});await refresh();setStatus("Book mode is enabled.");}
+  catch(error){setStatus("Could not enable book mode: "+error.message);enableButton.disabled=!previewHasResults||!reviewedCheckbox.checked;}
+}
+reviewedCheckbox.addEventListener("change",()=>{enableButton.disabled=!previewHasResults||!reviewedCheckbox.checked;});
+document.getElementById("preview").addEventListener("click",previewSearch);
+enableButton.addEventListener("click",enableBook);
 async function renderPage(pdf,pageNumber){
   const page=await pdf.getPage(pageNumber);
   const initial=page.getViewport({scale:1});
@@ -319,9 +404,7 @@ async function importBook(){
       progressEl.value=data.completedPages||0;
       setStatus("OCR index: "+data.completedPages+" of "+data.expectedPages+" pages complete; "+data.queuedPages+" processing; "+data.failedPages+" failed.");
       if(data.completedPages===538&&data.failedPages===0){
-        await api("finalize",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
-        await refresh();
-        setStatus("All 538 pages are indexed. Fatman book mode is ready.");
+        setStatus("All 538 pages are indexed. Review a search result above before enabling book mode.");
         return;
       }
       await new Promise(resolve=>setTimeout(resolve,10000));
