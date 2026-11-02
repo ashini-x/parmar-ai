@@ -47,7 +47,7 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
     throw new FatmanRetrievalError("Fatman retrieval is not configured.", false);
   }
 
-  const normalizedQuery = query.replace(/\\s+/gu, " ").trim().slice(0, 4_000);
+  const normalizedQuery = query.replace(/\s+/gu, " ").trim().slice(0, 4_000);
   if (!normalizedQuery) throw new FatmanRetrievalError("Fatman search query is empty.", false);
 
   let chunks: AiSearchChunk[];
@@ -80,7 +80,7 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
     const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
     const pdfPage = pageNumberFromKey(key);
     const text = typeof chunk.text === "string"
-      ? chunk.text.replace(/\\s+/gu, " ").trim().slice(0, MAX_PASSAGE_CHARS)
+      ? chunk.text.replace(/\s+/gu, " ").trim().slice(0, MAX_PASSAGE_CHARS)
       : "";
     const score = finiteScore(chunk.score) ??
       finiteScore(chunk.scoring_details?.reranking_score) ??
@@ -130,7 +130,7 @@ export function formatFatmanCitations(passages: FatmanPassage[]): string {
 }
 
 function pageNumberFromKey(key: string): number | undefined {
-  const match = /(?:^|\\/)page-(\\d{1,6})\\.(?:jpg|jpeg|pdf)$/iu.exec(key);
+  const match = /(?:^|\/)page-(\d{1,6})\.(?:jpg|jpeg|pdf)$/iu.exec(key);
   if (!match) return undefined;
   const page = Number(match[1]);
   return Number.isSafeInteger(page) && page > 0 ? page : undefined;
@@ -143,6 +143,6 @@ function finiteScore(value: unknown): number | undefined {
 
 function cleanMetadataText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== "string") return undefined;
-  const cleaned = value.replace(/[\\r\\n]+/gu, " ").replace(/\\s+/gu, " ").trim().slice(0, maxLength);
+  const cleaned = value.replace(/[\r\n]+/gu, " ").replace(/\s+/gu, " ").trim().slice(0, maxLength);
   return cleaned || undefined;
 }
