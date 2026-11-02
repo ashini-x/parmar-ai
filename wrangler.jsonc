@@ -28,7 +28,7 @@
     "DAILY_QUESTION_LIMIT": "20",
     "ENVIRONMENT": "production",
     "FATMAN_ENABLED": "true",
-    "FATMAN_DOCUMENT_VERSION": "fatman-2nd-edition-2026",
+    "FATMAN_DOCUMENT_VERSION": "fatman-2026-8b183803",
     "FATMAN_INSTANCE_NAME": "fatman-2nd-edition-2026",
     "FATMAN_MIN_SCORE": "0.2",
     "FATMAN_EXPECTED_PAGES": "538",
