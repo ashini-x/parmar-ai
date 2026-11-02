@@ -5,9 +5,9 @@ import { getActiveTelegramBot, getTelegramBotByConnectionId, hasTelegramBotRecor
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
 const CREATOR_NAME = "Quantum Labs";
-const CREATOR_EMAIL_URL = "mailto:quantumcoremind@gmail.com?subject=Contact%20Quantum%20Labs%20%7C%20Parmar%20AI&body=Hi%20Quantum%20Labs%2C%0A%0AI%27d%20like%20to%20contact%20you%20about%20the%20SSC%20GS%20bot.";
+const CREATOR_MAILTO_URL = "mailto:quantumcoremind@gmail.com?subject=Contact%20Quantum%20Labs%20%7C%20Parmar%20AI&body=Hi%20Quantum%20Labs%2C%0A%0AI%27d%20like%20to%20contact%20you%20about%20the%20SSC%20GS%20bot.";
+const CREATOR_EMAIL_URL = "https://mail.google.com/mail/?extsrc=mailto&url=" + encodeURIComponent(CREATOR_MAILTO_URL);
 const CREATOR_FOOTER = "\n\nCreator: " + CREATOR_NAME;
-const CREATOR_FOOTER_HTML = "\n\nCreator: <a href=\"mailto:quantumcoremind@gmail.com?subject=Contact%20Quantum%20Labs%20%7C%20Parmar%20AI&amp;body=Hi%20Quantum%20Labs%2C%0A%0AI%27d%20like%20to%20contact%20you%20about%20the%20SSC%20GS%20bot.\">Quantum Labs</a>";
 const CREATOR_FOOTER_LINK_OFFSET = "\n\nCreator: ".length;
 
 interface TelegramTextLinkEntity {
@@ -19,23 +19,23 @@ interface TelegramTextLinkEntity {
 
 interface TelegramCreatorFooterMessage {
   text: string;
-  richMessage?: boolean;
-  entities?: TelegramTextLinkEntity[];
-}
-
-function escapeTelegramHtml(text: string): string {
-  return text.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;");
+  entities: TelegramTextLinkEntity[];
 }
 
 function withCreatorFooter(text: string, includeCreatorFooter = true): TelegramCreatorFooterMessage {
   if (!includeCreatorFooter) {
-    return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH) };
+    return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH), entities: [] };
   }
   const maxBodyLength = TELEGRAM_MAX_MESSAGE_LENGTH - CREATOR_FOOTER.length;
   const body = text.trim().slice(0, maxBodyLength);
   return {
-    text: escapeTelegramHtml(body) + CREATOR_FOOTER_HTML,
-    richMessage: true,
+    text: body + CREATOR_FOOTER,
+    entities: [{
+      type: "text_link",
+      offset: body.length + CREATOR_FOOTER_LINK_OFFSET,
+      length: CREATOR_NAME.length,
+      url: CREATOR_EMAIL_URL,
+    }],
   };
 }
 
@@ -451,27 +451,21 @@ export async function sendTelegramMessage(
   includeCreatorFooter = true,
 ): Promise<TelegramMessageResult> {
   const message = withCreatorFooter(text, includeCreatorFooter);
-  const replyParameters = replyToMessageId ? {
-    reply_parameters: {
-      message_id: replyToMessageId,
-      allow_sending_without_reply: true,
-    },
-  } : {};
-
-  if (message.richMessage) {
-    return telegramApi<TelegramMessageResult>(env, "sendRichMessage", {
-      chat_id: chatId,
-      rich_message: { html: message.text, skip_entity_detection: true },
-      ...replyParameters,
-    }, botConnectionId);
-  }
-
-  return telegramApi<TelegramMessageResult>(env, "sendMessage", {
+  const payload: Record<string, unknown> = {
     chat_id: chatId,
     text: message.text,
+    ...(message.entities.length ? { entities: message.entities } : {}),
     link_preview_options: { is_disabled: true },
-    ...replyParameters,
-  }, botConnectionId);
+  };
+
+  if (replyToMessageId) {
+    payload.reply_parameters = {
+      message_id: replyToMessageId,
+      allow_sending_without_reply: true,
+    };
+  }
+
+  return telegramApi<TelegramMessageResult>(env, "sendMessage", payload, botConnectionId);
 }
 
 export async function editTelegramMessage(
@@ -484,14 +478,11 @@ export async function editTelegramMessage(
 ): Promise<void> {
   const message = withCreatorFooter(text, includeCreatorFooter);
   try {
-    await telegramApi(env, "editMessageText", message.richMessage ? {
-      chat_id: chatId,
-      message_id: messageId,
-      rich_message: { html: message.text, skip_entity_detection: true },
-    } : {
+    await telegramApi(env, "editMessageText", {
       chat_id: chatId,
       message_id: messageId,
       text: message.text,
+      ...(message.entities.length ? { entities: message.entities } : {}),
       link_preview_options: { is_disabled: true },
     }, botConnectionId);
   } catch (error) {
