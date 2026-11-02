@@ -1,6 +1,6 @@
 # Parmar AI
 
-**Production software — proprietary, source-available, not open source.**
+**Production software: proprietary, source-available, not open source.**
 
 Parmar AI is a **Telegram-first, SSC-focused AI study companion** built for fast doubt solving, conversation continuity, adaptive study assistance, native quiz interaction, and controlled operational visibility.
 
@@ -176,30 +176,30 @@ The current learning system is primarily **per-student**. Accumulated quiz and l
 
 ### Product, engineering, and operations
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — system design and failure boundaries.
-- [PROJECT_STATUS.md](PROJECT_STATUS.md) — shipped versus planned scope.
-- [CHANGELOG.md](CHANGELOG.md) — release history.
-- [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md) — release readiness.
-- [DEPLOY_DASHBOARD.md](DEPLOY_DASHBOARD.md) — dashboard deployment notes.
-- [docs/README.md](docs/README.md) — complete engineering documentation index.
+- [ARCHITECTURE.md](ARCHITECTURE.md): system design and failure boundaries.
+- [PROJECT_STATUS.md](PROJECT_STATUS.md): shipped versus planned scope.
+- [CHANGELOG.md](CHANGELOG.md): release history.
+- [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md): release readiness.
+- [DEPLOY_DASHBOARD.md](DEPLOY_DASHBOARD.md): dashboard deployment notes.
+- [docs/README.md](docs/README.md): complete engineering documentation index.
 
 ### Security, privacy, and governance
 
-- [LICENSE](LICENSE) — controlling proprietary source license.
-- [NOTICE.md](NOTICE.md) — copyright and third-party notices.
-- [SECURITY.md](SECURITY.md) — vulnerability reporting and secret-handling policy.
-- [PRIVACY.md](PRIVACY.md) — product data-handling notice.
-- [AI_USAGE_POLICY.md](AI_USAGE_POLICY.md) — AI/ML reuse restrictions.
-- [TRADEMARKS.md](TRADEMARKS.md) — Parmar brand restrictions.
-- [GOVERNANCE.md](GOVERNANCE.md) — ownership and change control.
-- [CONTRIBUTING.md](CONTRIBUTING.md) — authorized contribution rules.
-- [SUPPORT.md](SUPPORT.md) — support boundaries.
+- [LICENSE](LICENSE): controlling proprietary source license.
+- [NOTICE.md](NOTICE.md): copyright and third-party notices.
+- [SECURITY.md](SECURITY.md): vulnerability reporting and secret-handling policy.
+- [PRIVACY.md](PRIVACY.md): product data-handling notice.
+- [AI_USAGE_POLICY.md](AI_USAGE_POLICY.md): AI/ML reuse restrictions.
+- [TRADEMARKS.md](TRADEMARKS.md): Parmar brand restrictions.
+- [GOVERNANCE.md](GOVERNANCE.md): ownership and change control.
+- [CONTRIBUTING.md](CONTRIBUTING.md): authorized contribution rules.
+- [SUPPORT.md](SUPPORT.md): support boundaries.
 
 ### Specialized directories
 
-- [data/README.md](data/README.md) — repository data boundary and fixture rules.
-- [prompts/README.md](prompts/README.md) — prompt-asset policy.
-- [reports/README.md](reports/README.md) — offline founder/operations reporting.
+- [data/README.md](data/README.md): repository data boundary and fixture rules.
+- [prompts/README.md](prompts/README.md): prompt-asset policy.
+- [reports/README.md](reports/README.md): offline founder/operations reporting.
 
 ## Development and verification
 
@@ -235,7 +235,7 @@ See [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md), [DEPLOY_DASHBOARD.md](DE
 
 ## License and IP
 
-**Parmar AI Proprietary Source License v1.0 — All Rights Reserved.**
+**Parmar AI Proprietary Source License v1.0: All Rights Reserved.**
 
 Copyright © 2026 Parmar AI. All rights reserved.
 

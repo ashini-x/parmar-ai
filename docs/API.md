@@ -1,4 +1,4 @@
-# HTTP/API Surface — v2.5.2
+# HTTP/API Surface: v2.5.2
 
 The Worker is primarily a Telegram webhook service. Admin routes are protected by the signed dashboard session.
 
@@ -75,10 +75,10 @@ The server derives the audit actor from the configured dashboard username rather
 
 Configured bot owner/admin identities may use private-chat commands:
 
-- `/grant <telegram_user_id>` — create/renew unlimited daily AI access.
-- `/revoke <telegram_user_id>` — remove a runtime unlimited-AI override.
-- `/unlimited <telegram_user_id>` — inspect access status.
-- `/id` — display the requesting private-chat user's numeric Telegram ID.
+- `/grant <telegram_user_id>`: create/renew unlimited daily AI access.
+- `/revoke <telegram_user_id>`: remove a runtime unlimited-AI override.
+- `/unlimited <telegram_user_id>`: inspect access status.
+- `/id`: display the requesting private-chat user's numeric Telegram ID.
 
 These controls do not remove the five-question/10-second burst safeguard.
 

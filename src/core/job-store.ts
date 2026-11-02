@@ -701,7 +701,7 @@ export class JobDedupe extends DurableObject {
       .filter((result) => result.createdAt > resetAt)
       .map((result) => ({
         createdAt: result.createdAt,
-        question: `Quiz result — ${result.topic}: ${result.question}`,
+        question: `Quiz result: ${result.topic}: ${result.question}`,
         answer: `Student selected: ${result.selectedAnswer}\nResult: ${result.result}\nCorrect answer: ${result.correctAnswer}\nExplanation: ${result.explanation}`,
       }));
 

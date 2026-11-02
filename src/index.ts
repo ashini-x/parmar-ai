@@ -214,7 +214,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       await bestEffortTelegram("video_not_supported", () => sendTelegramMessage(
         env,
         chatId,
-        `${BOT_BRAND_NAME} sirf photos support karta hai—videos process nahi karta. SSC doubt ke liye ek photo ya maximum 5 photos ka album bhejo. 📸`,
+        `${BOT_BRAND_NAME} sirf photos support karta hai, videos process nahi karta. SSC doubt ke liye ek photo ya maximum 5 photos ka album bhejo. 📸`,
         messageId,
         bot.connectionId,
       ));
@@ -1138,7 +1138,7 @@ function buildAnswerForStudent(packet: AnswerPacket, profile: StudentProfile): s
   if (isAttentionArea && packet.profileSignal !== "neutral" && packet.answerScope !== "out_of_scope") {
     answer += `\n\n🎯 Tumhare liye focus: ${packet.nextRevisionTopic || packet.topic} ko ek baar aur revise kar lena.`;
   } else if (isRepeatedArea && packet.questionMode === "comparison") {
-    answer += "\n\n🧠 Isko pichhle related topic ke saath pair mein yaad rakho—SSC mein confusion yahin hota hai.";
+    answer += "\n\n🧠 Isko pichhle related topic ke saath pair mein yaad rakho. SSC mein confusion yahin hota hai.";
   }
 
   return answer.slice(0, 3_900);
@@ -1229,17 +1229,17 @@ function buildStartText(): string {
   return [
     "So Hello Everyone, umeed karta hoon aap sabhi thik honge!",
     "",
-    "Chalo, sawaal lao—seedha point pe aate hain!",
+    "Chalo, sawaal lao, seedha point pe aate hain!",
   ].join("\n");
 }
 function buildHelpText(): string {
   return [
-    `${BOT_BRAND_NAME} — commands`,
+    `${BOT_BRAND_NAME}: commands`,
     "",
-    "/exam cgl — target exam set",
-    "/profile — recent topics, attention areas aur revision queue",
-    "/reset — study profile reset\n/delete-my-data — delete your stored study data",
-    "/help — ye help",
+    "/exam cgl: target exam set",
+    "/profile: recent topics, attention areas aur revision queue",
+    "/reset: study profile reset\n/delete-my-data: delete your stored study data",
+    "/help: ye help",
     "",
     "Normal SSC GA/GS doubt text ya photo mein bhejo. Ek album mein maximum 5 photos bhejo; caption optional hai. Videos supported nahi hain.\nDaily AI questions: 20.",
   ].join("\n");
@@ -1286,7 +1286,7 @@ function buildStudyPlanText(profile: StudentProfile): string {
     "🎯 SSC ke liye abhi ye padhna sabse useful rahega:",
     ...priorities.map((topic, index) => `${index + 1}. ${topic}`),
     "",
-    `Reason: ${BOT_BRAND_NAME} tumhare recent doubts aur repeated attention areas ko priority de raha hai—random syllabus dump nahi.`,
+    `Reason: ${BOT_BRAND_NAME} tumhare recent doubts aur repeated attention areas ko priority de raha hai, random syllabus dump nahi.`,
   ].join("\n");
 }
 

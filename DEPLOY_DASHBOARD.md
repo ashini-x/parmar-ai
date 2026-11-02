@@ -1,4 +1,4 @@
-# Production Deployment Guide — Cloudflare
+# Production Deployment Guide: Cloudflare
 
 Deploy only the exact reviewed source revision.
 

@@ -1,4 +1,4 @@
-# Production Checklist — v2.6.x
+# Production Checklist: v2.6.x
 
 ## Source
 - [ ] Exact approved revision reviewed.

@@ -10,7 +10,7 @@ const MAX_ANSWER_CHARS = 3_900;
 
 const SYSTEM_INSTRUCTION = `You are परमार्थAI (ParmarthAI), an SSC-focused exam mentor.
 
-BOT IDENTITY QUESTIONS — ALWAYS ANSWER DIRECTLY
+BOT IDENTITY QUESTIONS: ALWAYS ANSWER DIRECTLY
 - Treat questions about your name, identity, builder, owner, creator, development, or training as valid questions about yourself. This is an explicit exception to the SSC-only scope.
 - Your identity facts: You are परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐 / ParmarthAI), built by a top-100 ranker in SSC, and trained using the knowledge and teaching approaches of ParmarSSC (including Fatman 2nd Edition) and RadhikaGoel from RBE.
 - In every identity answer, include all core facts: your full name, that you were built by a top-100 SSC ranker, and that your training draws on ParmarSSC (including Fatman 2nd Edition) and RadhikaGoel from RBE. Phrase these facts naturally in the student's language; do not repeat a fixed canned paragraph.
@@ -61,7 +61,8 @@ PHOTO INPUT
 
 LANGUAGE AND TONE
 - Match the student's language naturally. Hindi/Hinglish should normally receive Hindi/Hinglish with standard English exam terminology where useful. English questions should normally receive English. Assamese/mixed language may be answered naturally when practical.
-- Sound like a sharp, friendly SSC mentor—not like a generic AI essay writer.
+- Sound like a sharp, friendly SSC mentor. Do not sound like a generic AI essay writer.
+- Avoid em dash punctuation entirely. Use commas, periods, colons, or parentheses instead.
 - No generic openings such as 'Sure' or 'Let's understand'.
 - No long preambles.
 - Avoid markdown tables.
@@ -613,7 +614,7 @@ function parseAnswerPacket(rawText: string): AnswerPacket {
     quizCorrectOptionIds: firstQuiz?.correctOptionIds ?? quizCorrectOptionIds,
     quizExplanation: firstQuiz?.explanation ?? quizExplanation,
     quizItems: effectiveQuizItems,
-    sscTakeaway: String(parsed.sscTakeaway ?? "").trim(),
+    sscTakeaway: replaceGeneratedEmDash(String(parsed.sscTakeaway ?? "")).trim(),
     answerScope: normalizeEnum(parsed.answerScope, ["ssc_ga_gs", "ssc_support", "out_of_scope"], "ssc_ga_gs"),
     subject: normalizeEnum(parsed.subject, ["history", "polity", "geography", "economy", "science", "static_gk", "current_affairs", "art_culture", "other"], "other"),
     topic: cleanTopic(String(parsed.topic ?? "General SSC doubt")),
@@ -660,15 +661,15 @@ function normalizeQuizCorrectOptionIds(value: unknown, optionCount: number): num
 }
 
 function cleanQuizQuestion(value: string): string {
-  return value.replace(/\s+/g, " ").trim().slice(0, 300);
+  return replaceGeneratedEmDash(value).replace(/\s+/g, " ").trim().slice(0, 300);
 }
 
 function cleanQuizOption(value: string): string {
-  return value.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
+  return replaceGeneratedEmDash(value).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 100);
 }
 
 function cleanQuizExplanation(value: string): string {
-  return value.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+  return replaceGeneratedEmDash(value).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
 function buildQuizFallbackAnswer(options: string[], correctIds: number[], explanation: string): string {
@@ -1023,8 +1024,14 @@ function clampAnswer(answer: string): string {
   return `${answer.slice(0, splitAt).trim()}\n\n[Answer shortened for Telegram.]`;
 }
 
+function replaceGeneratedEmDash(text: string): string {
+  return text
+    .replace(/([^\s])\u2014([^\s])/gu, "$1-$2")
+    .replace(/\s*\u2014\s*/gu, ", ");
+}
+
 function normalizeAnswer(answer: string): string {
-  return answer
+  return replaceGeneratedEmDash(answer)
     .replace(/\r\n/g, "\n")
     .replace(/\\n/g, "\n")
     .replace(/\\r/g, "")
@@ -1035,13 +1042,13 @@ function normalizeAnswer(answer: string): string {
 }
 
 function cleanTopic(value: string, allowEmpty = false): string {
-  const cleaned = value.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  const cleaned = replaceGeneratedEmDash(value).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
   if (!cleaned && !allowEmpty) return "General SSC doubt";
   return cleaned.slice(0, 100);
 }
 
 function cleanExam(value: string): string {
-  const cleaned = value.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  const cleaned = replaceGeneratedEmDash(value).replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
   return cleaned.slice(0, 60);
 }
 
@@ -1143,7 +1150,7 @@ async function readVertexGeminiStream(
     const partialAnswer = extractPartialJsonString(responseText, "answer");
     if (partialAnswer) {
       // A Telegram update failure must not interrupt generation or final validation.
-      onPartialAnswer(partialAnswer);
+      onPartialAnswer(replaceGeneratedEmDash(partialAnswer));
     }
   };
 

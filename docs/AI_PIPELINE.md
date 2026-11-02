@@ -80,9 +80,9 @@ The configured environment value is a **maximum ceiling**, not a fixed instructi
 
 The runtime chooses among:
 
-- LOW — direct factual or very simple questions,
-- MEDIUM — ordinary concepts/comparisons,
-- HIGH — difficult, ambiguous, confused, or trap-style questions.
+- LOW: direct factual or very simple questions,
+- MEDIUM: ordinary concepts/comparisons,
+- HIGH: difficult, ambiguous, confused, or trap-style questions.
 
 ## Grounding policy
 

@@ -1,6 +1,6 @@
 # Parmar AI Release Notes
 
-## Unreleased — Photo Doubt Support (feature branch)
+## Unreleased: Photo Doubt Support (feature branch)
 
 - Students can send one photo or a photo-only album of up to 5 pictures with an optional caption; video uploads and mixed photo/video albums are rejected. Photo albums over five images are rejected with a chat notice.
 - Each photo album is combined into one doubt and one quota unit.
@@ -9,7 +9,7 @@
 - This feature branch is not deployed to production.
 
 
-## v2.8.0 — Production Multi-MCQ Quiz Batches
+## v2.8.0: Production Multi-MCQ Quiz Batches
 
 ### Student experience
 - Requests such as `5 MCQs on Polity` now produce five independent native Telegram quizzes.
@@ -26,7 +26,7 @@
 - Failed delivery uses a safe generic fallback rather than revealing quiz answers.
 - Legacy quiz-session schema is upgraded in place when the bot-aware correlation column is missing.
 
-## v2.7.0 — Intent-Driven Native Telegram Quizzes
+## v2.7.0: Intent-Driven Native Telegram Quizzes
 
 ### Student experience
 - Genuine MCQ/test/quiz intents now render as Telegram's native quiz card instead of a normal text answer.
@@ -48,7 +48,7 @@
 ### Telegram limitation
 - Telegram's native quiz explanation is shown when a user selects an incorrect answer or opens the quiz explanation control; Telegram does not provide a separate automatic in-card explanation event for a correct selection. Parmar therefore keeps the explanation inside the quiz and also sends immediate result feedback after a correct vote.
 
-## v2.6.1 — Production Hardening
+## v2.6.1: Production Hardening
 
 ### Security
 - Production Telegram bot credential encryption now requires the dedicated `TELEGRAM_BOT_ENCRYPTION_KEY`.
@@ -66,7 +66,7 @@
 - Release metadata is aligned to v2.6.1 across package, Worker configuration, manifest, and runtime fallback.
 - Added regression coverage for current mutable-fact detection and retention/security configuration.
 
-## v2.6.0 — Production Reliability & Access Control Hardening
+## v2.6.0: Production Reliability & Access Control Hardening
 
 ### Critical fixes
 - Added Durable Object lease fencing using queue message ID + lease version so stale workers cannot mutate a job after ownership changes.
@@ -98,7 +98,7 @@
 - This release does not change the Telegram bot token, Google service-account secrets, D1 database identity, Queue identity, or Durable Object binding names. Existing production bindings remain the source of truth.
 # Parmar AI Release Notes
 
-## v2.5.2 — Admin Access Controls UI Fix
+## v2.5.2: Admin Access Controls UI Fix
 
 ### Goal
 Correct the Students access-control interface so configured owner/admin/static-unlimited users are recognized consistently and administrative action buttons execute with the intended action names.
@@ -117,7 +117,7 @@ Correct the Students access-control interface so configured owner/admin/static-u
 - Existing D1, Queue and Durable Object data is reused; no new migration is required for this UI-only access-control correction.
 
 
-## v2.5.1 — Admin UI Interaction Fix
+## v2.5.1: Admin UI Interaction Fix
 
 ### Goal
 Restore the interactive behavior of the v2.5.0 Admin Control Center without changing the backend architecture or student limits.
@@ -128,7 +128,7 @@ Restore the interactive behavior of the v2.5.0 Admin Control Center without chan
 - No database schema, quota, AI model, pricing estimate, access-control or student-processing behavior changed.
 - Release verification includes generated-browser-JavaScript syntax validation.
 
-## v2.5.0 — Admin Control Center + AI Economics
+## v2.5.0: Admin Control Center + AI Economics
 
 ### Goal
 
@@ -195,34 +195,34 @@ Python is intentionally not part of the Worker request path.
 
 Student helpful/not-helpful feedback is not yet collected by the student UI in v2.5.0. The dashboard explicitly reports that state rather than fabricating feedback statistics. A future release may add optional Telegram feedback buttons and persist those ratings.
 
-## v2.4.2 — Privileged Test Access
+## v2.4.2: Privileged Test Access
 
 - Add bot-owner/admin identity configuration.
 - Add D1-backed unlimited-AI overrides.
 - Add owner/admin Telegram commands.
 - Preserve 20/day for ordinary users and 5/10-second burst protection for everyone.
 
-## v2.4.1 — Stable Production Release
+## v2.4.1: Stable Production Release
 
 - Separate burst and daily quota messages/events.
 - Rebuilt v2.4 personalization architecture.
 - Profile-learning failures isolated from answer delivery.
 
-## v2.4.0 — Evidence-Based Personalization
+## v2.4.0: Evidence-Based Personalization
 
 - Add learning signals and safe migration.
 - Require explicit/repeated evidence for attention areas.
 
-## v2.3.0 — Conversation Intelligence & Answer Reliability
+## v2.3.0: Conversation Intelligence & Answer Reliability
 
 - Add recent conversation context.
 - Improve follow-ups and confusion handling.
 - Retry malformed/incomplete structured model responses.
 
-## v2.2.1 — Admin/D1 Stabilization
+## v2.2.1: Admin/D1 Stabilization
 
 - Fix and stabilize D1 initialization.
 
-## v2.2.0 — Central Admin Analytics
+## v2.2.0: Central Admin Analytics
 
 - Add D1 analytics and protected admin dashboard.

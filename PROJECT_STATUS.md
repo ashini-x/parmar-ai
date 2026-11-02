@@ -1,4 +1,4 @@
-# Project Status — v2.8.0
+# Project Status: v2.8.0
 
 ## Shipped
 
@@ -21,7 +21,7 @@
 - Intent-driven native Telegram MCQ/quiz delivery with per-student answer tracking.
 - Bounded multi-MCQ native Telegram quiz batches (up to 10), persistent quiz-result conversation context, and no extra post-vote bot messages.
 
-## In development — `feat/photo-doubt-support`
+## In development: `feat/photo-doubt-support`
 
 - Photo-only SSC doubts with optional captions and albums of up to 5 pictures; video uploads are rejected. This feature branch is not part of the v2.8.0 production release.
 

@@ -26,9 +26,9 @@ The current source baseline is **v2.8.0**.
 
 ## API and source references
 
-- [API.md](API.md) — supported HTTP/webhook/admin surface and request expectations.
-- [SOURCE_INVENTORY.md](SOURCE_INVENTORY.md) — tracked source/assets and their roles.
-- [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md) — documentation maintenance requirements.
+- [API.md](API.md): supported HTTP/webhook/admin surface and request expectations.
+- [SOURCE_INVENTORY.md](SOURCE_INVENTORY.md): tracked source/assets and their roles.
+- [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md): documentation maintenance requirements.
 
 ## Current feature documentation
 

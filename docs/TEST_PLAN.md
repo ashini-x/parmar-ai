@@ -1,4 +1,4 @@
-# Production Test Plan — v2.8.0
+# Production Test Plan: v2.8.0
 
 ## Core Telegram
 - `/start` returns.

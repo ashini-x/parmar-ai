@@ -53,7 +53,7 @@ def main() -> None:
     if daily:
         fig = plt.figure(figsize=(10, 5))
         plt.plot(days, spend, marker="o")
-        plt.title("Parmar AI — Estimated AI spend")
+        plt.title("परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐): Estimated AI spend")
         plt.xlabel("India date")
         plt.ylabel("USD")
         plt.xticks(rotation=45, ha="right")
@@ -65,7 +65,7 @@ def main() -> None:
 
         fig = plt.figure(figsize=(10, 5))
         plt.plot(days, tokens, marker="o")
-        plt.title("Parmar AI — Total AI tokens")
+        plt.title("परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐): Total AI tokens")
         plt.xlabel("India date")
         plt.ylabel("Tokens")
         plt.xticks(rotation=45, ha="right")
@@ -78,7 +78,7 @@ def main() -> None:
     # Create a simple PDF pack from the generated PNG charts plus an executive page.
     with PdfPages(out / "parmar-ai-founder-report.pdf") as pdf:
         fig = plt.figure(figsize=(11, 8.5))
-        fig.text(0.08, 0.90, "Parmar AI — Founder Analytics Report", fontsize=20, weight="bold")
+        fig.text(0.08, 0.90, "परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐): Founder Analytics Report", fontsize=20, weight="bold")
         fig.text(0.08, 0.84, f"Report window: {data.get('days', 'unknown')} days", fontsize=12)
         fig.text(0.08, 0.78, f"Students: {metrics.get('totalStudents', 0):,}", fontsize=12)
         fig.text(0.08, 0.73, f"Questions today: {metrics.get('questionsToday', 0):,}", fontsize=12)

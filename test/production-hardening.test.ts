@@ -13,7 +13,7 @@ const validPacket = {
   quizCorrectOptionIds: [],
   quizExplanation: "",
   quizItems: [],
-  sscTakeaway: "Remember: Permanent Settlement — 1793 — Cornwallis.",
+  sscTakeaway: "Remember: Permanent Settlement, 1793, Cornwallis.",
   answerScope: "ssc_ga_gs",
   subject: "history",
   topic: "Permanent Settlement",
