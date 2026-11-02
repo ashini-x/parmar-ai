@@ -33,6 +33,7 @@
     "FATMAN_MIN_SCORE": "0.2",
     "FATMAN_EXPECTED_PAGES": "538",
     "FATMAN_MONTHLY_QUERY_LIMIT": "800",
+    "FATMAN_GCS_BUCKET": "parmar-fatman-ocr-90db7be4",
     "GCP_PROJECT_ID": "project-90db7be4-619f-4ed7-89b",
     "GEMINI_LOCATION": "global",
     "GEMINI_THINKING_LEVEL": "HIGH",
@@ -53,6 +54,13 @@
     {
       "binding": "FATMAN_SEARCH",
       "namespace": "default"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "parmar-ai-fatman-import",
+      "binding": "FATMAN_IMPORT",
+      "class_name": "FatmanImportWorkflow"
     }
   ],
   "durable_objects": {

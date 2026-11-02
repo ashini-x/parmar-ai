@@ -55,6 +55,15 @@ export interface AiSearchNamespace {
   list(): Promise<{ result: Array<{ id: string }> }>;
 }
 
+export interface FatmanImportWorkflowParams {
+  importId: string;
+}
+
+export interface FatmanImportWorkflowBinding {
+  create(options: { id: string; params: FatmanImportWorkflowParams }): Promise<{ id: string; status?: string }>;
+  get(id: string): Promise<unknown>;
+}
+
 export interface Env {
   ENVIRONMENT?: "development" | "staging" | "production";
   APP_VERSION?: string;
@@ -102,6 +111,8 @@ export interface Env {
   FATMAN_INSTANCE_NAME?: string;
   FATMAN_EXPECTED_PAGES?: string;
   FATMAN_MONTHLY_QUERY_LIMIT?: string;
+  FATMAN_GCS_BUCKET?: string;
+  FATMAN_IMPORT?: FatmanImportWorkflowBinding;
   FATMAN_SEARCH?: AiSearchNamespace;
 }
 
