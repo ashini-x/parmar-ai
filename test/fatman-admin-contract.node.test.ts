@@ -1,10 +1,17 @@
 import { readFileSync } from "node:fs";
+import { fatmanAdminPage } from "../src/fatman/admin";
 import { describe, expect, it } from "vitest";
 
 describe("Fatman index rollout contract", () => {
   const source = readFileSync(new URL("../src/fatman/admin.ts", import.meta.url), "utf8");
   const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
   const storeSource = readFileSync(new URL("../src/core/job-store.ts", import.meta.url), "utf8");
+
+  it("injects the approved PDF fingerprint into the browser module scope", async () => {
+    const html = await fatmanAdminPage().text();
+
+    expect(html).toContain(`const EXPECTED_PDF_SHA256="8B183803FE8EE53087D731F7319519AF9AC5BB62B39B2D3110ACC3FE0AB59886";`);
+  });
 
   it("checks the approved PDF fingerprint before preparing the index", () => {
     const hashCheck = source.indexOf("if(sourceHash!==EXPECTED_PDF_SHA256)");

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased: Fatman PDF importer fix
+- Injected the approved PDF fingerprint into the browser-side import module so the full selected PDF can be validated before indexing begins.
+- Added regression coverage for the served admin page fingerprint.
+
 ## Unreleased: Photo Doubt Support (feature branch)
 - Added private Telegram photo doubts, including photo-only albums of up to 5 pictures, as one SSC doubt and one quota unit; albums over the limit are rejected.
 - Explicitly reject videos and mixed photo/video albums; rate-limit unsupported-video notices to prevent reply spam.
