@@ -1,10 +1,13 @@
 import type { AiSearchInstance, AiSearchItem, Env } from "../config/env";
+import { getGoogleAccessToken } from "../auth/google";
 import { getFatmanBookState, reserveFatmanSearchQuery, setFatmanBookState } from "../analytics/db";
 import { json } from "../http/response";
 
 const EXPECTED_PAGES = 538;
 const EXPECTED_PDF_SHA256 = "8B183803FE8EE53087D731F7319519AF9AC5BB62B39B2D3110ACC3FE0AB59886";
 const MAX_PAGE_BYTES = 2 * 1024 * 1024;
+const MAX_OCR_TEXT_CHARS = 120_000;
+const GOOGLE_VISION_URL = "https://vision.googleapis.com/v1/images:annotate";
 const PAGE_PREFIX = "fatman/pages/page-";
 
 export function fatmanAdminPage(): Response {
@@ -14,6 +17,27 @@ export function fatmanAdminPage(): Response {
       "cache-control": "no-store",
     },
   });
+}
+
+export async function testFatmanVision(env: Env): Promise<Response> {
+  if (!hasGoogleVisionBindings(env)) {
+    return json({ ok: false, error: "Google Cloud project and service-account credentials are not configured on the Worker." }, 503);
+  }
+
+  try {
+    const token = await getGoogleAccessToken(env);
+    const response = await callGoogleVision(env, token, {
+      requests: [{ features: [{ type: "DOCUMENT_TEXT_DETECTION" }] }],
+    });
+    const data = await googleResponseJson(response);
+    const requestError = googleVisionRequestError(data);
+    if (response.status === 400 || response.ok && (!requestError || isMissingImageValidation(requestError))) {
+      return json({ ok: true, provider: "google_vision", billableImages: 0 });
+    }
+    return googleVisionFailureResponse(response.status, data);
+  } catch (error) {
+    return json({ ok: false, error: safeError(error) }, 502);
+  }
 }
 
 export async function prepareFatmanIndex(env: Env): Promise<Response> {
@@ -78,6 +102,10 @@ export async function uploadFatmanPage(env: Env, request: Request, pageNumber: n
       return json({ ok: false, error: "invalid_jpeg" }, 415);
     }
 
+    if (!hasGoogleVisionBindings(env)) {
+      return json({ ok: false, page: pageNumber, error: "Google Cloud Vision is not configured on the Worker." }, 503);
+    }
+
     const instance = env.FATMAN_SEARCH!.get(env.FATMAN_INSTANCE_NAME!.trim());
     const key = pageKey(pageNumber);
     const existing = await instance.items.list({ search: key, per_page: 50, source: "builtin" });
@@ -89,10 +117,18 @@ export async function uploadFatmanPage(env: Env, request: Request, pageNumber: n
     if (pending) {
       return fatmanPageUploadResponse(pageNumber, await waitForFatmanItem(instance, pending));
     }
-    for (const item of exactMatches) await instance.items.delete(item.id);
 
-    const blob = new Blob([bytes], { type: "image/jpeg" });
-    const item = await instance.items.uploadAndPoll(key, blob, {
+    const recoverable = exactMatches.find((item) =>
+      item.status === "error" || item.status === "skipped" || item.status === "outdated");
+    let text: string;
+    if (recoverable) {
+      text = await recoverFatmanPageText(instance, recoverable);
+      await instance.items.delete(recoverable.id);
+    } else {
+      text = await recognizeFatmanPage(env, new Uint8Array(bytes), pageNumber);
+    }
+
+    const item = await instance.items.uploadAndPoll(key, text, {
       pollIntervalMs: 1_000,
       timeoutMs: 60_000,
     });
@@ -260,6 +296,137 @@ export async function disableFatmanIndex(env: Env): Promise<Response> {
   }
 }
 
+async function recognizeFatmanPage(env: Env, bytes: Uint8Array, pageNumber: number): Promise<string> {
+  const token = await getGoogleAccessToken(env);
+  const response = await callGoogleVision(env, token, {
+    requests: [{
+      image: { content: bytesToBase64(bytes) },
+      features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+    }],
+  });
+  const data = await googleResponseJson(response);
+  if (!response.ok) throw new Error(googleVisionErrorMessage(response.status, data));
+
+  const result = firstGoogleVisionResult(data);
+  if (!result) throw new Error("Google Vision returned no result for PDF page " + pageNumber + ".");
+  const requestError = asRecord(result.error);
+  if (requestError) throw new Error(googleVisionErrorMessage(response.status, { responses: [result] }));
+
+  const text = asRecord(result.fullTextAnnotation)?.text;
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("Google Vision found no readable text on PDF page " + pageNumber + ".");
+  }
+
+  const normalized = text.replace(/\u0000/g, "").replace(/\r\n?/g, "\n").trim();
+  if (normalized.length > MAX_OCR_TEXT_CHARS) {
+    throw new Error("Google Vision text for PDF page " + pageNumber + " exceeds the page text limit.");
+  }
+  return "Fatman 2nd Edition\nPDF page: " + pageNumber + "\n\n" + normalized + "\n";
+}
+
+async function callGoogleVision(env: Env, token: string, body: Record<string, unknown>): Promise<Response> {
+  const projectId = env.GCP_PROJECT_ID?.trim();
+  if (!projectId) throw new Error("GCP_PROJECT_ID is not configured on the Worker.");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    return await fetch(GOOGLE_VISION_URL, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer " + token,
+        "content-type": "application/json",
+        "x-goog-user-project": projectId,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Google Vision timed out after 30 seconds. Refresh status before retrying this page.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function googleResponseJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json() as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function firstGoogleVisionResult(data: unknown): Record<string, unknown> | undefined {
+  const responses = asRecord(data)?.responses;
+  if (!Array.isArray(responses)) return undefined;
+  const first = asRecord(responses[0]);
+  return first ?? undefined;
+}
+
+function googleVisionRequestError(data: unknown): Record<string, unknown> | undefined {
+  const outerError = asRecord(asRecord(data)?.error);
+  if (outerError) return outerError;
+  return asRecord(firstGoogleVisionResult(data)?.error) ?? undefined;
+}
+
+function isMissingImageValidation(error: Record<string, unknown>): boolean {
+  const code = error.code;
+  const message = typeof error.message === "string" ? error.message : "";
+  return code === 3 || /image.*(required|missing|specified)|missing.*image/iu.test(message);
+}
+
+function googleVisionFailureResponse(status: number, data: unknown): Response {
+  return json({ ok: false, error: googleVisionErrorMessage(status, data) }, status === 403 ? 503 : 502);
+}
+
+function googleVisionErrorMessage(status: number, data: unknown): string {
+  const error = googleVisionRequestError(data);
+  const code = typeof error?.status === "string" ? error.status : String(error?.code ?? "");
+  const message = typeof error?.message === "string" ? error.message : "";
+  const details = code + " " + message;
+
+  if (/SERVICE_DISABLED|has not been used|API is disabled|not enabled/iu.test(details)) {
+    return "Cloud Vision API is not enabled for the configured Google Cloud project. Enable Cloud Vision API, then test again.";
+  }
+  if (/USER_PROJECT_DENIED|serviceusage\\.services\\.use|quota project|user project/iu.test(details)) {
+    return "The Worker service account needs Service Usage Consumer access on the configured Google Cloud project.";
+  }
+  if (/BILLING_DISABLED|billing.*disabled|billing.*not enabled/iu.test(details)) {
+    return "Billing is not enabled for the configured Google Cloud project. Check the project billing setup before using Vision.";
+  }
+  return "Google Vision OCR failed (HTTP " + status + "): " + safeError(message || code || "Unknown Google Vision error.");
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 32_768;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+async function recoverFatmanPageText(instance: AiSearchInstance, item: AiSearchItem): Promise<string> {
+  const source = await instance.items.get(item.id).download();
+  if (!source.contentType.toLowerCase().startsWith("text/")) {
+    throw new Error("Cloudflare could not return the previous OCR text, so this page was not sent to Vision again.");
+  }
+  const text = await new Response(source.body).text();
+  if (!text.trim() || text.length > MAX_OCR_TEXT_CHARS) {
+    throw new Error("The previous OCR text could not be recovered safely, so this page was not sent to Vision again.");
+  }
+  return text;
+}
+
 function fatmanPageUploadResponse(pageNumber: number, item: AiSearchItem): Response {
   if (item.status === "error" || item.status === "skipped") {
     return json({
@@ -297,7 +464,7 @@ async function listFatmanPages(instance: AiSearchInstance): Promise<AiSearchItem
   let totalPages = 1;
   while (page <= totalPages && page <= 20) {
     const response = await instance.items.list({ page, per_page: 50, source: "builtin" });
-    items.push(...(response.result ?? []).filter((item) => item.key.startsWith(PAGE_PREFIX)));
+    items.push(...(response.result ?? []).filter((item) => item.key.startsWith(PAGE_PREFIX) && item.key.endsWith(".txt")));
     totalPages = Number(response.result_info?.total_pages ?? page);
     page += 1;
   }
@@ -312,11 +479,11 @@ function hasFatmanBindings(env: Env): boolean {
 }
 
 function pageKey(pageNumber: number): string {
-  return PAGE_PREFIX + String(pageNumber).padStart(6, "0") + ".jpg";
+  return PAGE_PREFIX + String(pageNumber).padStart(6, "0") + ".txt";
 }
 
 function pageNumberFromKey(key: string): number | undefined {
-  if (!key.startsWith(PAGE_PREFIX) || !key.endsWith(".jpg")) return undefined;
+  if (!key.startsWith(PAGE_PREFIX) || !key.endsWith(".txt")) return undefined;
   const value = key.slice(PAGE_PREFIX.length, -4);
   if (!/^[0-9]{1,6}$/.test(value)) return undefined;
   const page = Number(value);
