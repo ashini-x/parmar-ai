@@ -5,52 +5,43 @@ import { getActiveTelegramBot, getTelegramBotByConnectionId, hasTelegramBotRecor
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
 const CREATOR_NAME = "Quantum Labs";
-const CREATOR_EMAIL_URL = "https://parmar-ai.thenewtongs.workers.dev/contact";
+const CREATOR_CONTACT_URL = "https://parmar-ai.thenewtongs.workers.dev/contact";
 const CREATOR_FOOTER = "\n\nCreator: " + CREATOR_NAME;
-const CREATOR_FOOTER_LINK_OFFSET = "\n\nCreator: ".length;
-
-interface TelegramTextLinkEntity {
-  type: "text_link";
-  offset: number;
-  length: number;
-  url: string;
-}
 
 interface TelegramCreatorFooterMessage {
   text: string;
-  entities: TelegramTextLinkEntity[];
 }
 
 function withCreatorFooter(text: string, includeCreatorFooter = true): TelegramCreatorFooterMessage {
   if (!includeCreatorFooter) {
-    return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH), entities: [] };
+    return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH) };
   }
   const maxBodyLength = TELEGRAM_MAX_MESSAGE_LENGTH - CREATOR_FOOTER.length;
   const body = text.trim().slice(0, maxBodyLength);
-  return {
-    text: body + CREATOR_FOOTER,
-    entities: [{
-      type: "text_link",
-      offset: body.length + CREATOR_FOOTER_LINK_OFFSET,
-      length: CREATOR_NAME.length,
-      url: CREATOR_EMAIL_URL,
-    }],
-  };
+  return { text: body + CREATOR_FOOTER };
 }
 
-function withCreatorPollFooter(explanation: string): { text: string; entities: TelegramTextLinkEntity[] } {
+function withCreatorPollFooter(explanation: string): TelegramCreatorFooterMessage {
   const normalizedExplanation = explanation.trim().replace(/\s*\n+\s*/gu, " ");
   const body = normalizedExplanation.slice(0, 200 - CREATOR_FOOTER.length);
   const footer = body ? CREATOR_FOOTER : CREATOR_FOOTER.trimStart();
-  const linkOffset = body ? CREATOR_FOOTER_LINK_OFFSET : "Creator: ".length;
+  return { text: body + footer };
+}
+
+interface CreatorContactKeyboardMarkup {
+  inline_keyboard: Array<Array<{
+    text: string;
+    web_app: { url: string };
+  }>>;
+}
+
+function creatorContactMarkup(chatId: number, includeCreatorFooter = true): CreatorContactKeyboardMarkup | undefined {
+  if (!includeCreatorFooter || chatId <= 0) return undefined;
   return {
-    text: body + footer,
-    entities: [{
-      type: "text_link",
-      offset: body.length + linkOffset,
-      length: CREATOR_NAME.length,
-      url: CREATOR_EMAIL_URL,
-    }],
+    inline_keyboard: [[{
+      text: "Contact Quantum Labs",
+      web_app: { url: CREATOR_CONTACT_URL },
+    }]],
   };
 }
 
@@ -379,6 +370,7 @@ export async function sendTelegramQuiz(
   botConnectionId?: string,
 ): Promise<TelegramQuizResult> {
   const pollExplanation = withCreatorPollFooter(explanation);
+  const creatorMarkup = creatorContactMarkup(chatId);
   const result = await telegramApi<{
     message_id: number;
     poll?: { id: string };
@@ -392,7 +384,7 @@ export async function sendTelegramQuiz(
     allows_revoting: false,
     correct_option_ids: [...correctOptionIds].sort((a, b) => a - b),
     explanation: pollExplanation.text,
-    explanation_entities: pollExplanation.entities,
+    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
     ...(replyToMessageId ? {
       reply_parameters: {
         message_id: replyToMessageId,
@@ -450,10 +442,11 @@ export async function sendTelegramMessage(
   includeCreatorFooter = true,
 ): Promise<TelegramMessageResult> {
   const message = withCreatorFooter(text, includeCreatorFooter);
+  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
   const payload: Record<string, unknown> = {
     chat_id: chatId,
     text: message.text,
-    ...(message.entities.length ? { entities: message.entities } : {}),
+    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
     link_preview_options: { is_disabled: true },
   };
 
@@ -476,12 +469,13 @@ export async function editTelegramMessage(
   includeCreatorFooter = true,
 ): Promise<void> {
   const message = withCreatorFooter(text, includeCreatorFooter);
+  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
   try {
     await telegramApi(env, "editMessageText", {
       chat_id: chatId,
       message_id: messageId,
       text: message.text,
-      ...(message.entities.length ? { entities: message.entities } : {}),
+      ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
       link_preview_options: { is_disabled: true },
     }, botConnectionId);
   } catch (error) {
