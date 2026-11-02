@@ -155,7 +155,7 @@ export function clearAdminSession(): Response {
 }
 
 export function loginHtml(error = ""): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Parmar Admin Login</title><style>${baseCss()}</style></head><body><main class="login"><section class="card"><h1>Parmar AI Admin</h1><p class="muted">Private operations dashboard</p>${error ? `<div class="error">${escapeHtml(error)}</div>` : ""}<form method="post" action="/admin/login"><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">Sign in</button></form></section></main></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐) Admin Login</title><style>${baseCss()}</style></head><body><main class="login"><section class="card"><h1>परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐) Admin</h1><p class="muted">Private operations dashboard</p>${error ? `<div class="error">${escapeHtml(error)}</div>` : ""}<form method="post" action="/admin/login"><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">Sign in</button></form></section></main></body></html>`;
 }
 
 function baseCss(): string {
