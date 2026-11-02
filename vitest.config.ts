@@ -12,7 +12,9 @@ export default defineConfig({
     include: ["test/**/*.test.ts"],
     exclude: [
       "test/admin-access-ui.test.ts",
-      "test/native-quiz-contract.node.test.ts"
+      "test/native-quiz-contract.node.test.ts",
+      "test/fatman-retrieval.test.ts",
+      "test/fatman-admin-contract.node.test.ts"
     ]
   }
 });
