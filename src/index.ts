@@ -19,6 +19,7 @@ import {
   sendTelegramMessage,
   sendTelegramQuiz,
   stopTelegramPoll,
+  telegramApi,
   TelegramError,
   TelegramMediaError,
   downloadTelegramPhotos,
@@ -248,12 +249,14 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (isStart(text)) {
     queueAnalytics(ctx, "start", () => recordEvent(env, "start", analyticsUser));
+    ctx.waitUntil(bestEffortTelegram("start_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId)));
     await bestEffortTelegram("start", () => sendTelegramMessage(env, chatId, buildStartText()));
     return withRequestId(json({ ok: true }), requestId);
   }
 
   if (isHelp(text)) {
     queueAnalytics(ctx, "help", () => recordEvent(env, "help", analyticsUser));
+    ctx.waitUntil(bestEffortTelegram("help_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId)));
     await bestEffortTelegram("help", () => sendTelegramMessage(env, chatId, buildHelpText()));
     return withRequestId(json({ ok: true }), requestId);
   }
@@ -1325,14 +1328,12 @@ function titleCaseExam(value: string): string {
 
 function buildSetupCommands() {
   return [
-    { command: "start", description: `Start ${BOT_BRAND_NAME}` },
-    { command: "exam", description: "Set your SSC target exam" },
-    { command: "profile", description: "View your SSC study profile" },
-    { command: "reset", description: "Reset your study profile" },
-    { command: "delete_data", description: "Delete your stored Parmar data" },
-    { command: "help", description: "Show help" },
-    { command: "id", description: "Show your Telegram user ID" },
+    { command: "help", description: "Show help and commands" },
   ];
+}
+
+function syncTelegramCommandMenu(env: Env, botConnectionId: string): Promise<unknown> {
+  return telegramApi(env, "setMyCommands", { commands: buildSetupCommands() }, botConnectionId);
 }
 
 async function telegramSetup(request: Request, env: Env, requestId: string): Promise<Response> {

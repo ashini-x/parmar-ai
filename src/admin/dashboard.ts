@@ -682,13 +682,7 @@ async function connectTelegramBot(
 
 function buildTelegramCommands() {
   return [
-    { command: "start", description: "Start परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐)" },
-    { command: "exam", description: "Set your SSC target exam" },
-    { command: "profile", description: "View your SSC study profile" },
-    { command: "reset", description: "Reset your study profile" },
-    { command: "delete_data", description: "Delete your stored study data" },
-    { command: "help", description: "Show help" },
-    { command: "id", description: "Show your Telegram user ID" },
+    { command: "help", description: "Show help and commands" },
   ];
 }
 
