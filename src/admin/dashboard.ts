@@ -448,7 +448,7 @@ export async function adminAction(env: Env, request: Request): Promise<Response>
         await telegramAdminApi(token,"setWebhook",{
           url:webhookUrl,
           secret_token:env.TELEGRAM_WEBHOOK_SECRET.trim(),
-          allowed_updates:["message","poll_answer"],
+          allowed_updates:["message","poll_answer","business_connection","business_message"],
           drop_pending_updates:false,
           max_connections:100,
         });
@@ -459,7 +459,7 @@ export async function adminAction(env: Env, request: Request): Promise<Response>
       await telegramAdminApi(active.token,"setWebhook",{
         url:webhookUrl,
         secret_token:active.webhookSecret,
-        allowed_updates:["message","poll_answer"],
+        allowed_updates:["message","poll_answer","business_connection","business_message"],
         drop_pending_updates:false,
         max_connections:100,
       });
@@ -545,7 +545,7 @@ async function connectTelegramBot(
     await telegramAdminApi(candidateToken, "setWebhook", {
       url: origin + "/telegram/webhook",
       secret_token: active.webhookSecret,
-      allowed_updates: ["message", "poll_answer"],
+      allowed_updates: ["message", "poll_answer", "business_connection", "business_message"],
       drop_pending_updates: false,
       max_connections: 100,
     });
@@ -584,7 +584,7 @@ async function connectTelegramBot(
     await telegramAdminApiWithRetry(candidateToken, "setWebhook", {
       url: webhookUrl,
       secret_token: webhookSecret,
-      allowed_updates: ["message", "poll_answer"],
+      allowed_updates: ["message", "poll_answer", "business_connection", "business_message"],
       drop_pending_updates: willSwitch,
       max_connections: 100,
     }, {
@@ -656,7 +656,7 @@ async function connectTelegramBot(
         await telegramAdminApi(active.token, "setWebhook", {
           url: webhookUrl,
           secret_token: active.webhookSecret,
-          allowed_updates: ["message", "poll_answer"],
+          allowed_updates: ["message", "poll_answer", "business_connection", "business_message"],
           drop_pending_updates: false,
           max_connections: 100,
         });
