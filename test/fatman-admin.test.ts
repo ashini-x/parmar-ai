@@ -12,6 +12,7 @@ import {
   finalizeFatmanIndex,
   prepareFatmanIndex,
   previewFatmanIndex,
+  uploadFatmanPage,
 } from "../src/fatman/admin";
 
 describe("Fatman admin retrieval gate", () => {
@@ -21,12 +22,18 @@ describe("Fatman admin retrieval gate", () => {
     status: "completed",
   }));
   const itemsList = vi.fn();
+  const itemsUploadAndPoll = vi.fn();
+  const itemsGetInfo = vi.fn();
   const search = vi.fn();
   const namespaceList = vi.fn();
   const namespaceCreate = vi.fn();
   const instanceUpdate = vi.fn();
   const instance = {
-    items: { list: itemsList },
+    items: {
+      list: itemsList,
+      uploadAndPoll: itemsUploadAndPoll,
+      get: (itemId: string) => ({ info: () => itemsGetInfo(itemId) }),
+    },
     search,
     update: instanceUpdate,
   };
@@ -47,6 +54,8 @@ describe("Fatman admin retrieval gate", () => {
     namespaceList.mockResolvedValue({ result: [{ id: "fatman-test" }] });
     namespaceCreate.mockResolvedValue(instance);
     instanceUpdate.mockResolvedValue(undefined);
+    itemsUploadAndPoll.mockResolvedValue({ id: "new-page", key: "fatman/pages/page-000001.jpg", status: "completed" });
+    itemsGetInfo.mockResolvedValue({ id: "pending-page", key: "fatman/pages/page-000001.jpg", status: "completed" });
     itemsList.mockImplementation(async (options: { page?: number }) => {
       const page = options.page ?? 1;
       return {
@@ -70,6 +79,33 @@ describe("Fatman admin retrieval gate", () => {
     });
     analytics.reserveFatmanSearchQuery.mockResolvedValue({ allowed: true, queryCount: 1 });
     analytics.setFatmanBookState.mockResolvedValue(undefined);
+  });
+
+  it("surfaces asynchronous Cloudflare OCR failures and stops accepting the page", async () => {
+    itemsList.mockResolvedValue({ result: [] });
+    itemsUploadAndPoll.mockResolvedValue({
+      id: "failed-page",
+      key: "fatman/pages/page-000001.jpg",
+      status: "error",
+      error: "page_limit_reached: Free AI Search image processing is unavailable",
+    });
+    const request = new Request("https://worker.test/admin/api/fatman/page/1", {
+      method: "POST",
+      headers: { "content-type": "image/jpeg" },
+      body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
+    });
+
+    const response = await uploadFatmanPage(env, request, 1);
+    const result = await response.json() as any;
+
+    expect(response.status).toBe(422);
+    expect(result).toEqual({
+      ok: false,
+      page: 1,
+      status: "error",
+      error: "page_limit_reached: Free AI Search image processing is unavailable",
+    });
+    expect(itemsUploadAndPoll).toHaveBeenCalledTimes(1);
   });
 
   it("keeps OCR enabled when preparing an existing scanned-book index", async () => {
