@@ -301,6 +301,7 @@ const HTML = `<!doctype html>
 <script type="module">
 import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+const EXPECTED_PDF_SHA256=${JSON.stringify(EXPECTED_PDF_SHA256)};
 const statusEl=document.getElementById("status");
 const progressEl=document.getElementById("progress");
 const importButton=document.getElementById("import");
