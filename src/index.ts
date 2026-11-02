@@ -207,8 +207,11 @@ async function handleTelegramBusinessMessage(
   const businessConnectionId = message.business_connection_id?.trim();
   if (
     message.chat?.type !== "private" ||
+    typeof chatId !== "number" ||
     !Number.isSafeInteger(chatId) ||
+    typeof messageId !== "number" ||
     !Number.isSafeInteger(messageId) ||
+    typeof updateId !== "number" ||
     !Number.isSafeInteger(updateId) ||
     !businessConnectionId ||
     message.from?.is_bot ||
