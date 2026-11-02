@@ -178,7 +178,7 @@ export async function fatmanIndexStatus(env: Env): Promise<Response> {
       expectedPages: EXPECTED_PAGES,
       completedPages,
       queuedPages: pages.filter((item) => item.status === "queued" || item.status === "running").length,
-      failedPages: pages.filter((item) => item.status === "error" || item.status === "skipped").length,
+      failedPages: pages.filter((item) => item.status === "error" || item.status === "skipped" || item.status === "outdated").length,
       pages,
     });
   } catch (error) {
@@ -270,7 +270,7 @@ export async function finalizeFatmanIndex(env: Env, request: Request): Promise<R
         ok: false,
         error: "index_not_complete",
         completedPages: Array.from(pageByNumber.values()).filter((item) => item.status === "completed").length,
-        failedPages: Array.from(pageByNumber.values()).filter((item) => item.status === "error" || item.status === "skipped").length,
+        failedPages: Array.from(pageByNumber.values()).filter((item) => item.status === "error" || item.status === "skipped" || item.status === "outdated").length,
       }, 409);
     }
     await setFatmanBookState(env, {
@@ -378,7 +378,8 @@ function googleVisionRequestError(data: unknown): Record<string, unknown> | unde
 function isMissingImageValidation(error: Record<string, unknown>): boolean {
   const code = error.code;
   const message = typeof error.message === "string" ? error.message : "";
-  return code === 3 && /image.*(required|missing|specified|provided)|missing.*image/iu.test(message);
+  return (code === 3 || code === 400) &&
+    /image.*(required|missing|specified|provided)|missing.*image/iu.test(message);
 }
 
 function googleVisionFailureResponse(status: number, data: unknown): Response {
@@ -397,7 +398,7 @@ function googleVisionErrorMessage(status: number, data: unknown): string {
   if (/USER_PROJECT_DENIED|serviceusage\.services\.use|quota project|user project/iu.test(details)) {
     return "The Worker service account needs Service Usage Consumer access on the configured Google Cloud project.";
   }
-  if (/BILLING_DISABLED|billing.*disabled|billing.*not enabled/iu.test(details)) {
+  if (/BILLING_DISABLED|billing.*(disabled|not enabled|must be enabled)/iu.test(details)) {
     return "Billing is not enabled for the configured Google Cloud project. Check the project billing setup before using Vision.";
   }
   return "Google Vision OCR failed (HTTP " + status + "): " + safeError(message || code || "Unknown Google Vision error.");
@@ -431,7 +432,7 @@ async function recoverFatmanPageText(instance: AiSearchInstance, item: AiSearchI
 }
 
 function fatmanPageUploadResponse(pageNumber: number, item: AiSearchItem): Response {
-  if (item.status === "error" || item.status === "skipped") {
+  if (item.status === "error" || item.status === "skipped" || item.status === "outdated") {
     return json({
       ok: false,
       page: pageNumber,
