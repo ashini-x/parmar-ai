@@ -20,6 +20,12 @@ export async function prepareFatmanIndex(env: Env): Promise<Response> {
   try {
     const namespace = env.FATMAN_SEARCH!;
     const instanceName = env.FATMAN_INSTANCE_NAME!.trim();
+    const state = await getFatmanBookState(env);
+    await setFatmanBookState(env, {
+      enabled: false,
+      documentVersion: env.FATMAN_DOCUMENT_VERSION!.trim(),
+      indexedPages: state.indexedPages,
+    });
     const existing = await namespace.list();
     let instance: AiSearchInstance;
     if ((existing.result ?? []).some((item) => item.id === instanceName)) {
@@ -36,12 +42,6 @@ export async function prepareFatmanIndex(env: Env): Promise<Response> {
       });
     }
 
-    const state = await getFatmanBookState(env);
-    await setFatmanBookState(env, {
-      enabled: false,
-      documentVersion: env.FATMAN_DOCUMENT_VERSION!.trim(),
-      indexedPages: state.indexedPages,
-    });
     const pages = await listFatmanPages(instance);
     return json({
       ok: true,
