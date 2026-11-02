@@ -50,10 +50,14 @@ export async function isFatmanReady(env: Env): Promise<boolean> {
     threshold > 1
   ) return false;
 
-  const state = await getFatmanBookState(env);
-  return state.enabled &&
-    state.documentVersion === version &&
-    state.indexedPages === expectedPages;
+  try {
+    const state = await getFatmanBookState(env);
+    return state.enabled &&
+      state.documentVersion === version &&
+      state.indexedPages === expectedPages;
+  } catch {
+    return false;
+  }
 }
 
 export async function retrieveFatmanContext(env: Env, query: string): Promise<FatmanBookContext> {
