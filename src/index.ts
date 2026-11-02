@@ -31,6 +31,7 @@ import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getA
 
 const QUEUE_MAX_RETRIES = 10;
 const STATUS_TEXT = "Thinking…";
+const BOT_BRAND_NAME = "परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐)";
 const RATE_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
 const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
 const FINAL_FAILURE_TEXT = "Bhai, is waqt answer complete nahi ho paaya. Tumhara sawal retry hua hai; same doubt dobara bhejna. 🙏";
@@ -191,7 +192,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   const questionText = text || (photoFileId ? DEFAULT_PHOTO_QUESTION : "");
   if (chatType && chatType !== "private") {
     await bestEffortTelegram("group_scope", () =>
-      sendTelegramMessage(env, chatId, "Parmar AI abhi private chat mein SSC doubts ke liye optimized hai. Mujhe DM karke doubt bhejo. 📚", messageId),
+      sendTelegramMessage(env, chatId, `${BOT_BRAND_NAME} abhi private chat mein SSC doubts ke liye optimized hai. Mujhe DM karke doubt bhejo. 📚`, messageId),
     );
     return withRequestId(json({ ok: true, rejected: "private_chat_only" }), requestId);
   }
@@ -213,7 +214,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       await bestEffortTelegram("video_not_supported", () => sendTelegramMessage(
         env,
         chatId,
-        "Parmar AI sirf photos support karta hai—videos process nahi karta. SSC doubt ke liye ek photo ya maximum 5 photos ka album bhejo. 📸",
+        `${BOT_BRAND_NAME} sirf photos support karta hai—videos process nahi karta. SSC doubt ke liye ek photo ya maximum 5 photos ka album bhejo. 📸`,
         messageId,
         bot.connectionId,
       ));
@@ -273,14 +274,14 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
         body: JSON.stringify({ action: "delete_data" }),
       });
     }
-    await bestEffortTelegram("delete_data", () => sendTelegramMessage(env, chatId, "Tumhari Parmar AI ki stored study data aur history delete kar di gayi hai. Ab fresh start hoga. 🗑️"));
+    await bestEffortTelegram("delete_data", () => sendTelegramMessage(env, chatId, `Tumhari ${BOT_BRAND_NAME} ki stored study data aur history delete kar di gayi hai. Ab fresh start hoga. 🗑️`));
     return withRequestId(json({ ok: true, deleted: true }), requestId);
   }
 
   if (isReset(text)) {
     await jobStoreRequest(env, chatId, { action: "reset_profile" });
     queueAnalytics(ctx, "reset", () => recordEvent(env, "reset", analyticsUser));
-    await bestEffortTelegram("reset", () => sendTelegramMessage(env, chatId, "Theek hai. Tumhari Parmar SSC study profile reset kar di. Ab fresh tracking se shuru karte hain. 📚"));
+    await bestEffortTelegram("reset", () => sendTelegramMessage(env, chatId, `Theek hai. Tumhari ${BOT_BRAND_NAME} study profile reset kar di. Ab fresh tracking se shuru karte hain. 📚`));
     return withRequestId(json({ ok: true }), requestId);
   }
 
@@ -360,7 +361,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (await isUserSuspended(env, analyticsUser.telegramUserId)) {
     queueAnalytics(ctx, "suspended_user", () => recordEvent(env, "suspended_user_blocked", analyticsUser));
-    await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, "Abhi tumhara Parmar AI access temporarily paused hai. Admin se contact karo. 🙏", messageId));
+    await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo. 🙏`, messageId));
     return withRequestId(json({ ok: true, suspended: true }), requestId);
   }
 
@@ -1227,20 +1228,12 @@ async function getStudentUsage(env: Env, chatId: number, telegramUserId: number)
 function buildStartText(): string {
   return [
     "So Hello Everyone, umeed karta hoon aap sabhi thik honge!",
-    "",
-    "Parmar AI abhi SSC-focused study companion hai—especially GA/GS, History, Polity, Geography, Economy, Science, Static GK aur exam-oriented factual doubts ke liye. 📚",
-    "",
-    "SSC doubt text ya photo mein bhejo. Ek album mein maximum 5 photos bhejo; caption optional hai. Videos supported nahi hain.\nDaily AI questions: 20 per student.",
-    "",
-    "/exam cgl — target exam set karo",
-    "/profile — tumhari study profile",
-    "/help — commands",
+    "परमार्थAI: sawaal daago!",
   ].join("\n");
 }
-
 function buildHelpText(): string {
   return [
-    "Parmar AI — SSC-focused commands",
+    `${BOT_BRAND_NAME} — commands`,
     "",
     "/exam cgl — target exam set",
     "/profile — recent topics, attention areas aur revision queue",
@@ -1263,7 +1256,7 @@ function buildProfileText(profile: StudentProfile, usage: { dayCount: number; da
     .slice(0, 3);
 
   return [
-    "📚 Tumhari Parmar SSC Profile",
+    `📚 Tumhari ${BOT_BRAND_NAME} Study Profile`,
     `Target: ${profile.targetExam}`,
     `Questions tracked: ${profile.questionCount}`,
     `Today: ${usage.unlimited ? "Unlimited AI access" : `${usage.dayCount}/${usage.dailyLimit} questions`}`,
@@ -1273,7 +1266,7 @@ function buildProfileText(profile: StudentProfile, usage: { dayCount: number; da
     `Revision queue: ${revision.length ? revision.join(" → ") : "abhi build ho rahi hai"}`,
     `Learning signals: ${signals.length ? signals.map((item) => `${item.topic} (${item.confusionCount + item.weakCount})`).join(" • ") : "abhi enough evidence nahi"}`,
     "",
-    "Ye profile sirf tumhare Parmar AI questions se banti hai.",
+    `Ye profile sirf tumhare ${BOT_BRAND_NAME} questions se banti hai.`,
   ].join("\n");
 }
 
@@ -1292,7 +1285,7 @@ function buildStudyPlanText(profile: StudentProfile): string {
     "🎯 SSC ke liye abhi ye padhna sabse useful rahega:",
     ...priorities.map((topic, index) => `${index + 1}. ${topic}`),
     "",
-    "Reason: Parmar AI tumhare recent doubts aur repeated attention areas ko priority de raha hai—random syllabus dump nahi.",
+    `Reason: ${BOT_BRAND_NAME} tumhare recent doubts aur repeated attention areas ko priority de raha hai—random syllabus dump nahi.`,
   ].join("\n");
 }
 
@@ -1331,7 +1324,7 @@ function titleCaseExam(value: string): string {
 
 function buildSetupCommands() {
   return [
-    { command: "start", description: "Start Parmar AI" },
+    { command: "start", description: `Start ${BOT_BRAND_NAME}` },
     { command: "exam", description: "Set your SSC target exam" },
     { command: "profile", description: "View your SSC study profile" },
     { command: "reset", description: "Reset your study profile" },
