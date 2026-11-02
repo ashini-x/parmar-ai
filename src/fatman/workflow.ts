@@ -18,6 +18,27 @@ interface FatmanImportParams {
   importId: string;
 }
 
+function importIdFromPayload(payload: unknown): string {
+  let value: unknown = payload;
+  if (typeof value === "string") {
+    const raw = value.trim();
+    try {
+      value = JSON.parse(raw) as unknown;
+    } catch {
+      if (/^[a-f0-9-]{36}$/i.test(raw)) return raw;
+      throw new Error("The Fatman import workflow received invalid parameters.");
+    }
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("The Fatman import workflow received invalid parameters.");
+  }
+  const importId = (value as { importId?: unknown }).importId;
+  if (typeof importId !== "string" || !/^[a-f0-9-]{36}$/i.test(importId)) {
+    throw new Error("The Fatman import workflow received an invalid import ID.");
+  }
+  return importId;
+}
+
 async function indexOcrPage(env: Env, importId: string, page: number): Promise<{ page: number; status: string }> {
   const instanceName = env.FATMAN_INSTANCE_NAME?.trim();
   if (!instanceName || !env.FATMAN_SEARCH) throw new Error("Fatman AI Search is not configured.");
@@ -39,7 +60,7 @@ async function indexOcrPage(env: Env, importId: string, page: number): Promise<{
 
 export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportParams> {
   async run(event: WorkflowEvent<FatmanImportParams>, step: WorkflowStep): Promise<void> {
-    const importId = event.payload.importId;
+    const importId = importIdFromPayload(event.payload);
     try {
       const job = await getFatmanImportJob(this.env, importId);
       if (!job || Number(job.uploaded_bytes) !== Number(job.expected_size)) {
