@@ -8,12 +8,26 @@ const CREATOR_NAME = "Quantum Labs";
 const CREATOR_EMAIL_URL = "mailto:quantumcoremind@gmail.com";
 const CREATOR_FOOTER = "\n\nCreator: " + CREATOR_NAME;
 const CREATOR_FOOTER_HTML = "\n\nCreator: <a href=\"mailto:quantumcoremind@gmail.com\">Quantum Labs</a>";
+const CREATOR_FOOTER_LINK_OFFSET = "\n\nCreator: ".length;
+
+interface TelegramTextLinkEntity {
+  type: "text_link";
+  offset: number;
+  length: number;
+  url: string;
+}
+
+interface TelegramCreatorFooterMessage {
+  text: string;
+  richMessage?: boolean;
+  entities?: TelegramTextLinkEntity[];
+}
 
 function escapeTelegramHtml(text: string): string {
   return text.replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;");
 }
 
-function withCreatorFooter(text: string, includeCreatorFooter = true): { text: string; parseMode?: "HTML" } {
+function withCreatorFooter(text: string, includeCreatorFooter = true): TelegramCreatorFooterMessage {
   if (!includeCreatorFooter) {
     return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH) };
   }
@@ -21,17 +35,23 @@ function withCreatorFooter(text: string, includeCreatorFooter = true): { text: s
   const body = text.trim().slice(0, maxBodyLength);
   return {
     text: escapeTelegramHtml(body) + CREATOR_FOOTER_HTML,
-    parseMode: "HTML",
+    richMessage: true,
   };
 }
 
-function withCreatorPollFooter(explanation: string): { text: string; parseMode: "HTML" } {
+function withCreatorPollFooter(explanation: string): { text: string; entities: TelegramTextLinkEntity[] } {
   const normalizedExplanation = explanation.trim().replace(/\s*\n+\s*/gu, " ");
   const body = normalizedExplanation.slice(0, 200 - CREATOR_FOOTER.length);
-  const footer = body ? CREATOR_FOOTER_HTML : "Creator: <a href=\"mailto:quantumcoremind@gmail.com\">Quantum Labs</a>";
+  const footer = body ? CREATOR_FOOTER : CREATOR_FOOTER.trimStart();
+  const linkOffset = body ? CREATOR_FOOTER_LINK_OFFSET : "Creator: ".length;
   return {
-    text: escapeTelegramHtml(body) + footer,
-    parseMode: "HTML",
+    text: body + footer,
+    entities: [{
+      type: "text_link",
+      offset: body.length + linkOffset,
+      length: CREATOR_NAME.length,
+      url: CREATOR_EMAIL_URL,
+    }],
   };
 }
 
@@ -373,7 +393,7 @@ export async function sendTelegramQuiz(
     allows_revoting: false,
     correct_option_ids: [...correctOptionIds].sort((a, b) => a - b),
     explanation: pollExplanation.text,
-    explanation_parse_mode: pollExplanation.parseMode,
+    explanation_entities: pollExplanation.entities,
     ...(replyToMessageId ? {
       reply_parameters: {
         message_id: replyToMessageId,
@@ -431,21 +451,27 @@ export async function sendTelegramMessage(
   includeCreatorFooter = true,
 ): Promise<TelegramMessageResult> {
   const message = withCreatorFooter(text, includeCreatorFooter);
-  const payload: Record<string, unknown> = {
-    chat_id: chatId,
-    text: message.text,
-    ...(message.parseMode ? { parse_mode: message.parseMode } : {}),
-    link_preview_options: { is_disabled: true },
-  };
-
-  if (replyToMessageId) {
-    payload.reply_parameters = {
+  const replyParameters = replyToMessageId ? {
+    reply_parameters: {
       message_id: replyToMessageId,
       allow_sending_without_reply: true,
-    };
+    },
+  } : {};
+
+  if (message.richMessage) {
+    return telegramApi<TelegramMessageResult>(env, "sendRichMessage", {
+      chat_id: chatId,
+      rich_message: { html: message.text, skip_entity_detection: true },
+      ...replyParameters,
+    }, botConnectionId);
   }
 
-  return telegramApi<TelegramMessageResult>(env, "sendMessage", payload, botConnectionId);
+  return telegramApi<TelegramMessageResult>(env, "sendMessage", {
+    chat_id: chatId,
+    text: message.text,
+    link_preview_options: { is_disabled: true },
+    ...replyParameters,
+  }, botConnectionId);
 }
 
 export async function editTelegramMessage(
@@ -458,11 +484,14 @@ export async function editTelegramMessage(
 ): Promise<void> {
   const message = withCreatorFooter(text, includeCreatorFooter);
   try {
-    await telegramApi(env, "editMessageText", {
+    await telegramApi(env, "editMessageText", message.richMessage ? {
+      chat_id: chatId,
+      message_id: messageId,
+      rich_message: { html: message.text, skip_entity_detection: true },
+    } : {
       chat_id: chatId,
       message_id: messageId,
       text: message.text,
-      ...(message.parseMode ? { parse_mode: message.parseMode } : {}),
       link_preview_options: { is_disabled: true },
     }, botConnectionId);
   } catch (error) {
