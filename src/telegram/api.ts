@@ -14,11 +14,37 @@ function limitTelegramPollExplanation(explanation: string): string {
   return explanation.trim().replace(/\s*\n+\s*/gu, " ").slice(0, 200);
 }
 
+export interface TelegramInlineKeyboardMarkup {
+  inline_keyboard: Array<Array<Record<string, unknown>>>;
+}
+
 interface CreatorContactKeyboardMarkup {
   inline_keyboard: Array<Array<{
     text: string;
     web_app: { url: string };
   }>>;
+}
+
+export function buildFatmanModeMarkup(active: boolean): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[{
+      text: active ? "Exit Fatman" : "Enter Fatman",
+      callback_data: "fatman:toggle",
+    }]],
+  };
+}
+
+function mergeInlineKeyboard(
+  custom: TelegramInlineKeyboardMarkup | undefined,
+  creator: CreatorContactKeyboardMarkup | undefined,
+): TelegramInlineKeyboardMarkup | CreatorContactKeyboardMarkup | undefined {
+  if (!custom) return creator;
+  return {
+    inline_keyboard: [
+      ...custom.inline_keyboard,
+      ...(creator?.inline_keyboard ?? []),
+    ],
+  };
 }
 
 function creatorContactMarkup(chatId: number, includeCreatorFooter = true): CreatorContactKeyboardMarkup | undefined {
@@ -447,13 +473,15 @@ export async function sendTelegramMessage(
   replyToMessageId?: number,
   botConnectionId?: string,
   includeCreatorFooter = true,
+  replyMarkup?: TelegramInlineKeyboardMarkup,
 ): Promise<TelegramMessageResult> {
   const message = limitTelegramMessage(text);
   const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
+  const combinedMarkup = mergeInlineKeyboard(replyMarkup, creatorMarkup);
   const payload: Record<string, unknown> = {
     chat_id: chatId,
     text: message.text,
-    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
+    ...(combinedMarkup ? { reply_markup: combinedMarkup } : {}),
     link_preview_options: { is_disabled: true },
   };
 
