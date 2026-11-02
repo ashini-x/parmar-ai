@@ -107,8 +107,6 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
     const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
     const pdfPage = pageNumberFromKey(key);
     const text = typeof chunk.text === "string" ? cleanPassageText(chunk.text).slice(0, MAX_PASSAGE_CHARS) : "";
-      ? chunk.text.replace(/\s+/gu, " ").trim().slice(0, MAX_PASSAGE_CHARS)
-      : "";
     const score = finiteScore(chunk.score) ??
       finiteScore(chunk.scoring_details?.reranking_score) ??
       finiteScore(chunk.scoring_details?.vector_score);
