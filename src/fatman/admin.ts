@@ -222,7 +222,7 @@ function pageNumberFromKey(key: string): number | undefined {
 
 function safeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/[\\r\\n]+/gu, " ").slice(0, 240);
+  return message.replaceAll("\r", " ").replaceAll("\n", " ").slice(0, 240);
 }
 
 const HTML = `<!doctype html>
