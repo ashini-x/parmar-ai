@@ -137,6 +137,23 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_by TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS fatman_book_state (
+  singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+  enabled INTEGER NOT NULL DEFAULT 0,
+  document_version TEXT NOT NULL DEFAULT '',
+  indexed_pages INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT OR IGNORE INTO fatman_book_state (singleton_id, enabled, document_version, indexed_pages, updated_at)
+VALUES (1, 0, '', 0, 0);
+
+CREATE TABLE IF NOT EXISTS fatman_search_usage (
+  billing_month TEXT PRIMARY KEY,
+  query_count INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS telegram_bots (
   bot_connection_id TEXT PRIMARY KEY,
   bot_id INTEGER NOT NULL UNIQUE,
@@ -363,6 +380,61 @@ export async function ensureAnalyticsSchema(env: Env): Promise<void> {
       });
   }
   await schemaPromise;
+}
+
+export interface FatmanBookState {
+  enabled: boolean;
+  documentVersion: string;
+  indexedPages: number;
+  updatedAt: number;
+}
+
+export async function getFatmanBookState(env: Env): Promise<FatmanBookState> {
+  if (!env.DB) return { enabled: false, documentVersion: "", indexedPages: 0, updatedAt: 0 };
+  await ensureAnalyticsSchema(env);
+  const row = await env.DB.prepare(
+    "SELECT enabled, document_version, indexed_pages, updated_at FROM fatman_book_state WHERE singleton_id = 1"
+  ).first<{ enabled: number; document_version: string; indexed_pages: number; updated_at: number }>();
+  return {
+    enabled: row?.enabled === 1,
+    documentVersion: row?.document_version ?? "",
+    indexedPages: Number(row?.indexed_pages ?? 0),
+    updatedAt: Number(row?.updated_at ?? 0),
+  };
+}
+
+export async function setFatmanBookState(
+  env: Env,
+  state: { enabled: boolean; documentVersion: string; indexedPages: number },
+): Promise<void> {
+  if (!env.DB) throw new Error("The analytics database is not configured.");
+  await ensureAnalyticsSchema(env);
+  await env.DB.prepare(
+    "UPDATE fatman_book_state SET enabled = ?, document_version = ?, indexed_pages = ?, updated_at = ? WHERE singleton_id = 1"
+  ).bind(state.enabled ? 1 : 0, state.documentVersion, state.indexedPages, Date.now()).run();
+}
+
+export async function reserveFatmanSearchQuery(
+  env: Env,
+  monthlyLimit: number,
+  now = Date.now(),
+): Promise<{ allowed: boolean; queryCount: number }> {
+  if (!env.DB || !Number.isSafeInteger(monthlyLimit) || monthlyLimit < 1) {
+    return { allowed: false, queryCount: 0 };
+  }
+  await ensureAnalyticsSchema(env);
+  const month = new Date(now).toISOString().slice(0, 7);
+  const reserved = await env.DB.prepare(
+    "INSERT INTO fatman_search_usage (billing_month, query_count, updated_at) " +
+    "VALUES (?, 1, ?) ON CONFLICT(billing_month) DO UPDATE SET " +
+    "query_count = query_count + 1, updated_at = excluded.updated_at " +
+    "WHERE query_count < ? RETURNING query_count"
+  ).bind(month, now, monthlyLimit).first<{ query_count: number }>();
+  if (reserved) return { allowed: true, queryCount: Number(reserved.query_count) };
+  const existing = await env.DB.prepare(
+    "SELECT query_count FROM fatman_search_usage WHERE billing_month = ?"
+  ).bind(month).first<{ query_count: number }>();
+  return { allowed: false, queryCount: Number(existing?.query_count ?? monthlyLimit) };
 }
 
 export async function recordUserSeen(env: Env, user: AnalyticsUser, now = Date.now()): Promise<void> {
