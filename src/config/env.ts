@@ -94,6 +94,8 @@ export interface Env {
   FATMAN_DOCUMENT_VERSION?: string;
   FATMAN_MIN_SCORE?: string;
   FATMAN_INSTANCE_NAME?: string;
+  FATMAN_EXPECTED_PAGES?: string;
+  FATMAN_MONTHLY_QUERY_LIMIT?: string;
   FATMAN_SEARCH?: AiSearchNamespace;
 }
 
