@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased: Fatman async indexing failures
+- Wait for Cloudflare’s indexing result for each uploaded page and stop immediately when processing fails or remains pending.
+- Surface the provider’s page error in the admin status instead of continuing bulk uploads.
+
 ## Unreleased: Fatman PDF importer fix
 - Injected the approved PDF fingerprint into the browser-side import module so the full selected PDF can be validated before indexing begins.
 - Added regression coverage for the served admin page fingerprint.

@@ -24,7 +24,7 @@
 ## In development
 
 - Photo-only SSC doubts with optional captions and albums of up to 5 pictures; video uploads are rejected. This feature branch is not part of the v2.8.0 production release.
-- Fatman 2nd Edition book mode: the admin importer is deployed, but the index is not yet created. Book mode remains disabled until all 538 pages are indexed and three retrieval results are reviewed.
+- Fatman 2nd Edition book mode: the AI Search instance exists, but all 50 uploaded page items failed before vectorization. Book mode remains disabled until page processing works, all 538 pages are indexed, and three retrieval results are reviewed.
 
 ## Planned / not shipped
 

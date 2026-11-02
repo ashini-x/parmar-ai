@@ -38,6 +38,12 @@ export interface AiSearchInstance {
   update(args: { indexing_options?: { use_ocr?: boolean }; index_method?: { vector?: boolean; keyword?: boolean } }): Promise<unknown>;
   items: {
     upload(key: string, content: ReadableStream<Uint8Array> | ArrayBuffer | Blob | string, options?: { metadata?: Record<string, string | number | boolean> }): Promise<AiSearchItem>;
+    uploadAndPoll(key: string, content: ReadableStream<Uint8Array> | ArrayBuffer | Blob | string, options?: {
+      metadata?: Record<string, string | number | boolean>;
+      pollIntervalMs?: number;
+      timeoutMs?: number;
+    }): Promise<AiSearchItem>;
+    get(itemId: string): { info(): Promise<AiSearchItem> };
     list(options?: { page?: number; per_page?: number; status?: string; search?: string; source?: string }): Promise<{ result: AiSearchItem[]; result_info?: { total_count?: number; page?: number; per_page?: number; total_pages?: number } }>;
     delete(itemId: string): Promise<void>;
   };
