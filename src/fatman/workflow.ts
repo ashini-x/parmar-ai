@@ -1,6 +1,8 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import type { Env } from "../config/env";
+import { setFatmanBookState } from "../analytics/db";
 import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError } from "./recovery-policy";
+import { buildFatmanRetrievalProbe, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
 import { getGoogleAccessToken } from "../auth/google";
 import {
   cleanupFatmanGcsObjects,
@@ -17,7 +19,7 @@ import {
 
 interface FatmanImportParams {
   importId: string;
-  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor" | "retry_page";
+  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor" | "retry_page" | "quality_check";
   startPage?: number;
   endPage?: number;
   objectNames?: string[];
@@ -49,7 +51,7 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
     throw new Error("The Fatman import workflow received an invalid import ID.");
   }
   if (task !== undefined && task !== "resume_index" && task !== "index_chunk" && task !== "repair_chunk" &&
-      task !== "cleanup_chunk" && task !== "monitor" && task !== "retry_page") {
+      task !== "cleanup_chunk" && task !== "monitor" && task !== "retry_page" && task !== "quality_check") {
     throw new Error("The Fatman import workflow received an invalid task.");
   }
   return {
@@ -268,6 +270,80 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         return;
       }
 
+      if (params.task === "quality_check") {
+        const runId = params.runId;
+        const retryAttempt = params.retryAttempt ?? 0;
+        if (typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId) ||
+            !Number.isSafeInteger(retryAttempt) || retryAttempt < 0 || retryAttempt > FATMAN_PAGE_RETRY_LIMIT) {
+          throw new Error("The Fatman retrieval quality-check parameters are invalid.");
+        }
+
+        await step.sleep(
+          "wait before Fatman retrieval quality check " + retryAttempt,
+          retryAttempt === 0 ? "1 minute" : fatmanPageRetryDelay(retryAttempt),
+        );
+        let verification: { checkedPages: number[]; queryCount: number };
+        try {
+          verification = await step.do("verify three page-grounded Fatman retrieval probes", async () => {
+            const instanceName = this.env.FATMAN_INSTANCE_NAME?.trim();
+            if (!instanceName || !this.env.FATMAN_SEARCH) throw new Error("Fatman AI Search is not configured.");
+            const instance = this.env.FATMAN_SEARCH.get(instanceName);
+            const checkedPages: number[] = [];
+            for (const page of FATMAN_VERIFICATION_PAGES) {
+              const text = await readFatmanVisionOutput(this.env, importId, page);
+              const query = buildFatmanRetrievalProbe(text);
+              const result = await instance.search({
+                messages: [{ role: "user", content: query }],
+                ai_search_options: { retrieval: { max_num_results: 10, retrieval_type: "hybrid" } },
+              });
+              const expectedKey = "fatman/pages/page-" + String(page).padStart(6, "0") + ".txt";
+              const matched = (result.chunks ?? []).some((chunk) => chunk.item?.key === expectedKey);
+              if (!matched) throw new Error("Fatman retrieval QA could not match the expected source page " + page + ".");
+              checkedPages.push(page);
+            }
+            return { checkedPages, queryCount: checkedPages.length };
+          });
+        } catch (error) {
+          if (!isRetryableFatmanQualityFailure(error) || retryAttempt >= FATMAN_PAGE_RETRY_LIMIT) throw error;
+          const nextAttempt = retryAttempt + 1;
+          await step.do("schedule Fatman retrieval quality retry " + nextAttempt, async () =>
+            this.startChild(importId + "-" + runId + "-quality-" + nextAttempt + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
+              task: "quality_check",
+              importId,
+              runId,
+              retryAttempt: nextAttempt,
+            }));
+          return;
+        }
+
+        await step.do("activate Fatman after all 538 pages and retrieval probes pass", async () => {
+          await markFatmanImportCompleted(this.env, importId);
+          await setFatmanBookState(this.env, {
+            enabled: true,
+            documentVersion: this.env.FATMAN_DOCUMENT_VERSION?.trim() ?? "",
+            indexedPages: 538,
+          });
+          return { enabled: true, ...verification };
+        });
+
+        try {
+          const objectNames = await step.do("list temporary Fatman OCR objects after activation", async () =>
+            cleanupFatmanGcsObjects(this.env, importId));
+          for (let offset = 0, batch = 1; offset < objectNames.length; offset += 25, batch += 1) {
+            const names = objectNames.slice(offset, offset + 25);
+            await step.do("start Fatman post-activation cleanup batch " + batch, async () =>
+              this.startChild(importId + "-" + runId + "-cleanup-" + batch, {
+                task: "cleanup_chunk",
+                importId,
+                objectNames: names,
+              }));
+          }
+        } catch {
+          // Book mode is ready. Temporary OCR output can be removed by the bucket lifecycle policy.
+        }
+        return;
+      }
+
       if (params.task === "monitor") {
         const runId = params.runId;
         const monitorSequence = params.monitorSequence ?? 1;
@@ -292,25 +368,13 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         });
 
         if (completedPages === 538 && failedPages.length === 0) {
-          await step.do("mark Fatman import complete", async () => {
-            await markFatmanImportCompleted(this.env, importId);
-            return { completedPages: 538 };
-          });
-          try {
-            const objectNames = await step.do("list temporary Fatman OCR objects", async () =>
-              cleanupFatmanGcsObjects(this.env, importId));
-            for (let offset = 0, batch = 1; offset < objectNames.length; offset += 25, batch += 1) {
-              const names = objectNames.slice(offset, offset + 25);
-              await step.do("start Fatman cleanup batch " + batch, async () =>
-                this.startChild(importId + "-" + runId + "-cleanup-" + batch, {
-                  task: "cleanup_chunk",
-                  importId,
-                  objectNames: names,
-                }));
-            }
-          } catch {
-            // Indexing is complete. Temporary objects can be removed by the bucket lifecycle policy.
-          }
+          await step.do("launch autonomous Fatman retrieval quality verifier", async () =>
+            this.startChild(importId + "-" + runId + "-quality-0-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
+              task: "quality_check",
+              importId,
+              runId,
+              retryAttempt: 0,
+            }));
           return;
         }
 
