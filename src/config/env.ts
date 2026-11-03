@@ -57,7 +57,7 @@ export interface AiSearchNamespace {
 
 export interface FatmanImportWorkflowParams {
   importId: string;
-  task?: "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor";
+  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor";
   startPage?: number;
   endPage?: number;
   objectNames?: string[];
