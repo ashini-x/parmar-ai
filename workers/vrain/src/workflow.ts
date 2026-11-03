@@ -72,8 +72,6 @@ async function recordEvent(
   details: Record<string, unknown> = {},
 ): Promise<void> {
   const now = Date.now();
-  const document = await env.DB.prepare("SELECT collection_id FROM vrain_documents WHERE id=?")
-    .bind(documentId).first<{ collection_id: string }>();
   await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO vrain_activity_events (job_id,document_id,specialist,stage,event_type,status,message,detail_json,created_at) " +
@@ -84,7 +82,6 @@ async function recordEvent(
       "UPDATE vrain_jobs SET stage=?,last_heartbeat_at=?,attempt=MAX(attempt,?) WHERE document_id=?",
     ).bind(stage, now, Number(details.attempt ?? 0), documentId),
   ]);
-  void document;
 }
 
 async function updateDocument(
