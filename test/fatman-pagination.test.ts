@@ -9,7 +9,7 @@ describe("AI Search pagination", () => {
     };
     expect(nextAiSearchPage(response, 1, 50)).toBe(2);
     expect(nextAiSearchPage(response, 6, 50)).toBe(7);
-    expect(nextAiSearchPage({ ...response, result_info: { ...response.result_info, page: 7 } }, 7, 50)).toBeNull();
+    expect(nextAiSearchPage(response, 7, 50)).toBeNull();
   });
 
   it("falls back to full-page detection when pagination metadata is absent", () => {
