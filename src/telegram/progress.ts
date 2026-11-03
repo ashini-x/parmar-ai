@@ -202,6 +202,11 @@ export function createTelegramProgressUpdater(
   const sendLatest = (): Promise<void> => {
     if (inFlight) return inFlight;
     if (disabled || stopped || !latestText || latestRevision <= sentRevision) return Promise.resolve();
+    if (latestText === lastSentText) {
+      sentRevision = latestRevision;
+      waiters = resolveWaiters(waiters, sentRevision);
+      return Promise.resolve();
+    }
 
     const text = latestText;
     const revision = latestRevision;
@@ -234,6 +239,10 @@ export function createTelegramProgressUpdater(
     if (!latestText || latestText.length < 4) return sentRevision;
     latestKind = kind;
     latestRevision += 1;
+    if (drainTimer !== null) {
+      clearTimeout(drainTimer);
+      drainTimer = null;
+    }
     scheduleDrain();
     return latestRevision;
   };
