@@ -69,6 +69,7 @@ describe("BRVIN browser script contract", () => {
     expect(workflowSource).toContain("runBrvinVisionRetentionSupervisor");
     expect(workflowSource).toContain("workflow.auto_recovery_started");
     expect(workflowSource).toContain("created_at>=?");
+    expect(workflowSource).toContain(".bind(candidate.id, Date.now() - 60 * 60 * 1000).first<{ count: number }>()");
     expect(workflowSource).toContain('source_type !== "pdf"');
     expect(workflowSource).toContain('book.status !== "deleting" && book.status !== "delete_failed"');
     expect(workflowSource).toContain('"brvin/books/" + importId + "/pages/"');
