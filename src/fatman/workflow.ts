@@ -107,15 +107,14 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
   async run(event: WorkflowEvent<FatmanImportParams>, step: WorkflowStep): Promise<void> {
     const params = fatmanParamsFromPayload(event.payload);
     const importId = params.importId;
-    let job: FatmanImportJob | null = null;
+    let importedBook: FatmanImportJob | null = null;
     let expectedPages = 538;
     try {
-      const loadedJob = await getFatmanImportJob(this.env, importId);
-      if (!loadedJob || Number(loadedJob.uploaded_bytes) !== Number(loadedJob.expected_size)) {
+      const importJob = await getFatmanImportJob(this.env, importId);
+      if (!importJob || Number(importJob.uploaded_bytes) !== Number(importJob.expected_size)) {
         throw new Error("The complete private PDF upload could not be verified.");
       }
-      job = loadedJob;
-      const importJob = loadedJob;
+      importedBook = importJob;
       expectedPages = fatmanExpectedPageCount(importJob);
 
       if (params.task === "resume_index") {
