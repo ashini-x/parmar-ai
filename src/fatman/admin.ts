@@ -2,6 +2,7 @@ import type { AiSearchInstance, AiSearchItem, Env } from "../config/env";
 import { getGoogleAccessToken } from "../auth/google";
 import { getFatmanBookState, reserveFatmanSearchQuery, setFatmanBookState } from "../analytics/db";
 import { json } from "../http/response";
+import { nextAiSearchPage } from "./pagination";
 
 const EXPECTED_PAGES = 538;
 const EXPECTED_PDF_SHA256 = "8B183803FE8EE53087D731F7319519AF9AC5BB62B39B2D3110ACC3FE0AB59886";
@@ -459,12 +460,12 @@ function fatmanPageUploadResponse(pageNumber: number, item: AiSearchItem): Respo
 async function listFatmanPages(instance: AiSearchInstance): Promise<AiSearchItem[]> {
   const items: AiSearchItem[] = [];
   let page = 1;
-  let totalPages = 1;
-  while (page <= totalPages && page <= 20) {
+  while (page <= 20) {
     const response = await instance.items.list({ page, per_page: 50, source: "builtin" });
     items.push(...(response.result ?? []).filter((item) => item.key.startsWith(PAGE_PREFIX) && item.key.endsWith(".txt")));
-    totalPages = Number(response.result_info?.total_pages ?? page);
-    page += 1;
+    const nextPage = nextAiSearchPage(response, page, 50);
+    if (nextPage === null) break;
+    page = nextPage;
   }
   return items;
 }
