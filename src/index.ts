@@ -33,6 +33,7 @@ import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUse
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
 import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, testFatmanVision, uploadFatmanPage } from "./fatman/admin";
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
+import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
 import { completeFatmanUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
@@ -1997,10 +1998,12 @@ const worker = {
       if (url.pathname.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
         if (url.pathname === "/admin/api/fatman/monitor" && request.method === "GET") return fatmanMonitorStatus(env);
+        if (url.pathname === "/admin/api/fatman/qa" && request.method === "GET") return fatmanReleaseQaStatus(env);
         if (url.pathname === "/admin/api/fatman/status" && request.method === "GET") return fatmanIndexStatus(env);
         if (url.pathname === "/admin/api/fatman/upload/status" && request.method === "GET") return fatmanUploadStatus(env, url.searchParams.get("id"));
         if (request.method === "POST" && url.pathname.startsWith("/admin/api/fatman/")) {
           if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          if (url.pathname === "/admin/api/fatman/qa") return triggerFatmanReleaseQa(env);
           if (url.pathname === "/admin/api/fatman/vision/test") return testFatmanVision(env);
           if (url.pathname === "/admin/api/fatman/upload/start") return startFatmanUpload(env, request);
           const uploadChunkMatch = url.pathname.match(/^\/admin\/api\/fatman\/upload\/([a-f0-9-]+)\/chunk$/i);
