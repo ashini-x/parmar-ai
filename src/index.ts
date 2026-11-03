@@ -41,7 +41,7 @@ import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
 import { completeFatmanUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
-import { assignBrvinBookProjects, assignBrvinProjectCollections, createBrvinCollection, createBrvinProject, startBrvinBookUpload, brvinAdminPage, brvinImportStatus, brvinOverview } from "./brvin/admin";
+import { assignBrvinBookProjects, assignBrvinProjectCollections, createBrvinCollection, createBrvinProject, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview } from "./brvin/admin";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
@@ -2122,6 +2122,12 @@ const worker = {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
         return new Response(null, { status: 308, headers: { location: "/admin/brvin", "cache-control": "no-store" } });
+      }
+
+      if (url.pathname === "/admin/brvin/app.js") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        if (!(await requireAdmin(request, env))) return withRequestId(new Response("unauthorized", { status: 401, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } }), requestId);
+        return withRequestId(brvinAdminScript(), requestId);
       }
 
       if (url.pathname === "/admin/brvin") {

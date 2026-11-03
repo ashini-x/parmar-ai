@@ -17,9 +17,50 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 64);
 }
 
+const BRVIN_INLINE_SCRIPT_START = '<script type="module">';
+const BRVIN_INLINE_SCRIPT_END = "</script>";
+
+function brvinClientScriptSource(): string {
+  const start = HTML.indexOf(BRVIN_INLINE_SCRIPT_START);
+  if (start < 0) throw new Error("BRVIN client script marker is missing.");
+  const bodyStart = start + BRVIN_INLINE_SCRIPT_START.length;
+  const end = HTML.indexOf(BRVIN_INLINE_SCRIPT_END, bodyStart);
+  if (end < 0) throw new Error("BRVIN client script closing marker is missing.");
+  return HTML.slice(bodyStart, end);
+}
+
 export function brvinAdminPage(): Response {
-  return new Response(HTML, {
+  const start = HTML.indexOf(BRVIN_INLINE_SCRIPT_START);
+  const end = HTML.indexOf(BRVIN_INLINE_SCRIPT_END, start);
+  if (start < 0 || end < 0) throw new Error("BRVIN client script markers are missing.");
+  const html = HTML.slice(0, start) +
+    '<script src="/admin/brvin/app.js" defer></script>' +
+    HTML.slice(end + BRVIN_INLINE_SCRIPT_END.length);
+  return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
+export function brvinAdminScript(): Response {
+  const body = brvinClientScriptSource();
+  // Deliver a same-origin classic script rather than an inline ES module.
+  // This avoids inline-module restrictions in mobile browsers and makes the
+  // dashboard client independently observable in network diagnostics.
+  const script = [
+    "(async function brvinBoot(){",
+    body,
+    "})().catch(function(error){",
+    "  var label=document.getElementById('live-label');",
+    "  if(label) label.textContent='LIVE · startup error';",
+    "  console.error('BRVIN dashboard startup failed',error);",
+    "});",
+  ].join("\n");
+  return new Response(script, {
+    headers: {
+      "content-type": "application/javascript; charset=utf-8",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+    },
   });
 }
 

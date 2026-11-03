@@ -9,7 +9,7 @@ vi.mock("../src/analytics/db", () => ({
 }));
 
 import { retrieveBrvinProjectContext, BrvinRetrievalError } from "../src/brvin/retrieval";
-import { brvinAdminPage } from "../src/brvin/admin";
+import { brvinAdminPage, brvinAdminScript } from "../src/brvin/admin";
 
 describe("BRVIN governed retrieval", () => {
   const project = { id: "project-a", name: "Project A", slug: "project-a" };
@@ -98,19 +98,26 @@ describe("BRVIN governed retrieval", () => {
     const page = brvinAdminPage();
     const html = await page.text();
     expect(page.headers.get("cache-control")).toBe("no-store");
+    expect(html).toContain('<script src="/admin/brvin/app.js" defer></script>');
+    expect(html).not.toContain('<script type="module">');
+    const scriptResponse = brvinAdminScript();
+    expect(scriptResponse.headers.get("content-type")).toContain("application/javascript");
+    const script = await scriptResponse.text();
+    expect(script).toContain("BRVIN dashboard startup failed");
+    expect(script).toContain("await refresh()");
     expect(html).toContain("BRVIN");
-    expect(html).toContain("/admin/api/brvin/");
+    expect(script).toContain("/admin/api/brvin/");
     expect(html).not.toContain("Add to VRAIN");
     expect(html).toContain("Knowledge collections");
     expect(html).toContain("Live operations");
     expect(html).toContain("Specialist activity");
     expect(html).toContain("5-second refresh");
     expect(html).toContain("project access");
-    expect(html).toContain('const previousCollectionId=$("collection").value;');
-    expect(html).toContain('c.id==="general"');
-    expect(html).toContain("countSimplePdfPages(buffer)");
-    expect(html).toContain("The operation paused during ");
-    expect(html).not.toContain('import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs"');
-    expect(html).toContain('const pdfjsLib=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs")');
+    expect(script).toContain('const previousCollectionId=$("collection").value;');
+    expect(script).toContain('c.id==="general"');
+    expect(script).toContain("countSimplePdfPages(buffer)");
+    expect(script).toContain("The operation paused during ");
+    expect(script).not.toContain('import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs"');
+    expect(script).toContain('const pdfjsLib=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs")');
   });
 });
