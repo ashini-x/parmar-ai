@@ -106,7 +106,7 @@ describe("BRVIN governed retrieval", () => {
     expect(script).toContain("BRVIN dashboard startup failed");
     expect(script).toContain("await refresh()");
     expect(html).toContain("BRVIN");
-    expect(html).toContain("/admin/api/brvin/");
+    expect(script).toContain("/admin/api/brvin/");
     expect(html).not.toContain("Add to VRAIN");
     expect(html).toContain("Knowledge collections");
     expect(html).toContain("Live operations");
