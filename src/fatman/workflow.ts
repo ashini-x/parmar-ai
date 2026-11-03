@@ -1,7 +1,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import type { Env } from "../config/env";
 import { runFatmanReleaseQaForEnv } from "./release-qa-runner";
-import { recordBrvinActivity, setFatmanBookState } from "../analytics/db";
+import { ensureAnalyticsSchema, recordBrvinActivity, setFatmanBookState } from "../analytics/db";
 import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError } from "./recovery-policy";
 import { buildFatmanBookVerificationPages, buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
 import { getGoogleAccessToken } from "../auth/google";
@@ -16,6 +16,7 @@ import {
   markFatmanImportCompleted,
   markFatmanImportFailed,
   readFatmanVisionOutput,
+  resumeFatmanImport,
   setFatmanImportStatus,
   submitFatmanVision,
   updateFatmanImportProgress,
@@ -95,13 +96,141 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   const text = await readFatmanVisionOutput(env, job.id, page);
   const title = job.book_title?.trim() || "Fatman 2nd Edition 2026";
   const content = title + " | PDF page " + page + "\n\n" + text;
-  const indexed = job.book_id
-    ? await instance.items.upload(key, content, { metadata: { bookId: job.book_id, bookTitle: title, pdfPage: page } })
-    : await instance.items.upload(key, content);
+  // The shared AI Search instance has no custom_metadata schema. Cloudflare
+  // rejects undeclared metadata fields with invalid_metadata_format. Provenance
+  // is already losslessly carried by the page key (book UUID + PDF page), while
+  // the BRVIN registry (D1) owns title and access-control metadata.
+  const indexed = await instance.items.upload(key, content);
   if (indexed.status === "error" || indexed.status === "skipped" || indexed.status === "outdated") {
     throw new Error(indexed.error ? String(indexed.error) : "AI Search rejected PDF page " + page + " with status " + indexed.status + ".");
   }
   return { page, status: indexed.status };
+}
+
+/**
+ * Autonomous BRVIN recovery supervisor.
+ *
+ * A deployment can remediate a known permanent indexing defect while a saved
+ * Vision OCR result is still available. This supervisor detects only the
+ * previously observed invalid_metadata_format failure, waits until the
+ * current Workflow instance is terminal, and resumes the existing source
+ * without another PDF upload or another Vision OCR charge. It is deliberately
+ * capped at two resume events per import to avoid retry loops.
+ */
+export async function runBrvinRecoverySupervisor(env: Env): Promise<{
+  scanned: number; resumed: number; waiting: number; exhausted: number;
+}> {
+  if (!env.DB || !env.FATMAN_IMPORT) {
+    return { scanned: 0, resumed: 0, waiting: 0, exhausted: 0 };
+  }
+  await ensureAnalyticsSchema(env);
+  const result = await env.DB.prepare(
+    "SELECT j.id,j.status AS import_status,j.workflow_instance_id,j.error_message AS import_error," +
+    "j.updated_at,b.status AS book_status,b.error_message AS book_error " +
+    "FROM fatman_import_jobs j JOIN brvin_books b ON b.id=j.book_id " +
+    "WHERE j.book_id IS NOT NULL AND j.vision_operation IS NOT NULL " +
+    "AND j.uploaded_bytes=j.expected_size " +
+    "AND (j.status='failed' OR (j.status='processing' AND b.status='failed')) " +
+    "AND (COALESCE(j.error_message,'') LIKE '%invalid_metadata_format%' " +
+    "OR COALESCE(b.error_message,'') LIKE '%invalid_metadata_format%') " +
+    "ORDER BY j.updated_at ASC LIMIT 20",
+  ).all<{
+    id: string;
+    import_status: string;
+    workflow_instance_id: string | null;
+    import_error: string | null;
+    updated_at: number;
+    book_status: string;
+    book_error: string | null;
+  }>();
+  const candidates = result.results ?? [];
+  let resumed = 0;
+  let waiting = 0;
+  let exhausted = 0;
+  for (const candidate of candidates) {
+    const attempts = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM brvin_activity_events WHERE import_id=? AND event_type='workflow.resumed'",
+    ).bind(candidate.id).first<{ count: number }>();
+    const resumeCount = Number(attempts?.count ?? 0);
+    if (resumeCount >= 2) {
+      const prior = await env.DB.prepare(
+        "SELECT id FROM brvin_activity_events WHERE import_id=? AND event_type='workflow.recovery_exhausted' LIMIT 1",
+      ).bind(candidate.id).first<{ id: number }>();
+      if (!prior) {
+        await recordBrvinActivity(env, {
+          importId: candidate.id,
+          agent: "Recovery supervisor",
+          phase: "recovery",
+          eventType: "workflow.recovery_exhausted",
+          status: "failed",
+          message: "The automatic metadata-compatibility recovery limit was reached. The saved OCR result is preserved; no further retry loop was started.",
+          details: { resumeCount, reason: "invalid_metadata_format" },
+        }).catch(() => undefined);
+      }
+      exhausted += 1;
+      continue;
+    }
+
+    if (candidate.import_status === "processing") {
+      if (!candidate.workflow_instance_id) {
+        waiting += 1;
+        continue;
+      }
+      let workflowState: { status: string; error?: { message?: string } };
+      try {
+        workflowState = await env.FATMAN_IMPORT.get(candidate.workflow_instance_id).status();
+      } catch {
+        waiting += 1;
+        continue;
+      }
+      const terminal = ["errored", "failed", "terminated", "complete", "completed"].includes(
+        String(workflowState.status).toLowerCase(),
+      );
+      if (!terminal) {
+        waiting += 1;
+        continue;
+      }
+      const errorMessage = workflowState.error?.message ??
+        candidate.book_error ?? candidate.import_error ?? "The previous indexing workflow ended before the book became ready.";
+      await env.DB.batch([
+        env.DB.prepare(
+          "UPDATE fatman_import_jobs SET status='failed',error_message=?,updated_at=? " +
+          "WHERE id=? AND status='processing' AND workflow_instance_id=?",
+        ).bind(errorMessage, Date.now(), candidate.id, candidate.workflow_instance_id),
+        env.DB.prepare(
+          "UPDATE brvin_books SET status='failed',error_message=?,updated_at=? WHERE id=? AND status='failed'",
+        ).bind(errorMessage, Date.now(), candidate.id),
+      ]);
+    }
+
+    const response = await resumeFatmanImport(env, candidate.id);
+    let payload: { ok?: boolean; status?: string; error?: string; importId?: string } = {};
+    try { payload = await response.json() as typeof payload; } catch { /* retain empty payload */ }
+    if (response.ok && payload.ok === true && payload.status === "processing") {
+      resumed += 1;
+      await recordBrvinActivity(env, {
+        importId: candidate.id,
+        agent: "Recovery supervisor",
+        phase: "recovery",
+        eventType: "workflow.auto_recovery_started",
+        status: "running",
+        message: "The supervisor restarted page indexing from the saved Vision OCR output after the AI Search metadata contract was corrected.",
+        details: { resumeCount: resumeCount + 1, ocrReused: true, pdfReuploaded: false },
+      }).catch(() => undefined);
+    } else {
+      waiting += 1;
+      await recordBrvinActivity(env, {
+        importId: candidate.id,
+        agent: "Recovery supervisor",
+        phase: "recovery",
+        eventType: "workflow.auto_recovery_deferred",
+        status: "warning",
+        message: "The supervisor deferred automatic recovery because the import state changed or the workflow could not be restarted safely.",
+        details: { httpStatus: response.status, error: payload.error ?? null },
+      }).catch(() => undefined);
+    }
+  }
+  return { scanned: candidates.length, resumed, waiting, exhausted };
 }
 
 export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportParams> {
@@ -208,12 +337,20 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId)) {
           throw new Error("The Fatman page chunk parameters are invalid.");
         }
-        if (importJob.book_id) await recordBrvinActivity(this.env, {
-          importId, bookId: importJob.book_id, agent: "Page indexing specialist",
-          phase: "indexing", eventType: "index.chunk_started", status: "running",
-          message: "Indexing PDF pages " + startPage + "–" + endPage + ".",
-          details: { startPage, endPage, expectedPages },
-        }).catch(() => undefined);
+        if (importJob.book_id) {
+          await recordBrvinActivity(this.env, {
+            importId, bookId: importJob.book_id, agent: "Index contract validator",
+            phase: "indexing", eventType: "index.metadata_strategy", status: "completed",
+            message: "Page and book provenance will be carried by the BRVIN page key and registry; no undeclared AI Search custom metadata is sent.",
+            details: { strategy: "page_key_and_brvin_registry", metadataFields: 0 },
+          }).catch(() => undefined);
+          await recordBrvinActivity(this.env, {
+            importId, bookId: importJob.book_id, agent: "Page indexing specialist",
+            phase: "indexing", eventType: "index.chunk_started", status: "running",
+            message: "Indexing PDF pages " + startPage + "–" + endPage + ".",
+            details: { startPage, endPage, expectedPages },
+          }).catch(() => undefined);
+        }
         for (let page = startPage!; page <= endPage!; page += 1) {
           const pageNumber = page;
           try {
