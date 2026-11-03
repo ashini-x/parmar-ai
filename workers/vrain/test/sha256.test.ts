@@ -5,7 +5,7 @@ function hashChunks(chunks: string[]): string {
   const hash = new Sha256();
   const encoder = new TextEncoder();
   for (const chunk of chunks) hash.update(encoder.encode(chunk));
-  return hash.hex();
+  return hash.hex().toUpperCase();
 }
 
 describe("VRAIN streaming SHA-256", () => {
