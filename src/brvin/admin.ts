@@ -389,7 +389,7 @@ export async function clearBrvinKnowledgeSources(env: Env, request: Request): Pr
     await ensureAnalyticsSchema(env);
     const result = await env.DB.prepare(
       "SELECT b.id,b.title,b.status,b.source_type,b.search_prefix,b.indexed_pages,b.page_count," +
-      "j.status AS import_status,j.uploaded_bytes,j.expected_size " +
+      "j.status AS import_status,j.uploaded_bytes,j.expected_size,b.vision_output_deleted_at,b.vision_output_deletion_started_at " +
       "FROM brvin_books b JOIN fatman_import_jobs j ON j.id=b.id AND j.book_id=b.id " +
       "WHERE b.source_type='pdf' ORDER BY b.created_at"
     ).all<BrvinDeletionCandidate>();
@@ -399,7 +399,8 @@ export async function clearBrvinKnowledgeSources(env: Env, request: Request): Pr
     }
     const active = candidates.filter(candidate =>
       !DELETABLE_BOOK_STATUSES.includes(candidate.status) ||
-      !DELETABLE_IMPORT_STATUSES.includes(candidate.import_status)
+      !DELETABLE_IMPORT_STATUSES.includes(candidate.import_status) ||
+      candidate.vision_output_deletion_started_at !== null
     );
     if (active.length) {
       return json({
