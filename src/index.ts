@@ -13,6 +13,7 @@ import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } fr
 import { buildFatmanRetrievalQuery, formatFatmanCitations, isFatmanReady, retrieveFatmanContext, FatmanRetrievalError } from "./fatman/retrieval";
 import { logger } from "./core/logger";
 import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./telegram/progress";
+import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
   deleteTelegramMessage,
@@ -610,6 +611,19 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     }
     // A very late item in an already-flushed album is still answered as a
     // standalone photo instead of being dropped.
+  }
+
+  // An image without a caption has no defined task. Ask for the student's
+  // intent instead of spending a vision request trying to guess it.
+  if (photoFileId && !text) {
+    await bestEffortTelegram("photo_caption_required", () => sendTelegramMessage(
+      env,
+      chatId,
+      PHOTO_CAPTION_REQUIRED_TEXT,
+      messageId,
+      bot.connectionId,
+    ));
+    return withRequestId(json({ ok: true, rejected: "photo_caption_required" }), requestId);
   }
 
   const mcqRequest = isMcqRequest(text);

@@ -1,9 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
-import { DEFAULT_PHOTO_QUESTION, MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "../config/env";
+import { MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "../config/env";
 import { sendTelegramChatAction, sendTelegramMessage } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, isTelegramBotConnectionActive } from "../telegram/bot-store";
+import { getCaptionedPhotoQuestion, PHOTO_CAPTION_REQUIRED_TEXT } from "../telegram/photo-intent";
 
 const TYPING_HEARTBEAT_MS = 4_000;
 const TYPING_MAX_AGE_MS = 10 * 60 * 1_000;
@@ -19,7 +20,7 @@ const CONVERSATION_RESET_KEY = "conversation:resetAt";
 const PENDING_QUIZ_REQUEST_KEY = "pending:quiz-request";
 const PENDING_QUIZ_REQUEST_TTL_MS = 15 * 60 * 1_000;
 const PHOTO_ALBUM_SETTLE_MS = 2_500;
-const PHOTO_STATUS_TEXT = "✅ Photo doubt mil gaya. Tasveerein dekh raha hoon... 🤔";
+const PHOTO_STATUS_TEXT = "📸 Photo received…";
 const PHOTO_RATE_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
 const PHOTO_BURST_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
 const UNSUPPORTED_VIDEO_NOTICE_KEY = "meta:unsupported-video-notice";
@@ -465,7 +466,22 @@ export class JobDedupe extends DurableObject {
       return;
     }
     const updateId = Math.min(...photos.map((photo) => photo.updateId));
-    const question = photos.find((photo) => photo.caption)?.caption || DEFAULT_PHOTO_QUESTION;
+    const question = getCaptionedPhotoQuestion(photos.map((photo) => photo.caption));
+    if (!question) {
+      await sendTelegramMessage(
+        this.runtimeEnv,
+        album.chatId,
+        PHOTO_CAPTION_REQUIRED_TEXT,
+        photos[0].messageId,
+        album.botConnectionId,
+      );
+      album.state = "rejected";
+      album.photos = [];
+      album.flushAt = now;
+      await this.ctx.storage.put(key, album);
+      return;
+    }
+
     const begin = await this.beginJob({
       action: "begin",
       botConnectionId: album.botConnectionId,
