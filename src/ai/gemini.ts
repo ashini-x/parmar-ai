@@ -105,6 +105,8 @@ STRUCTURED OUTPUT
 
 export type ThinkingLevel = "LOW" | "MEDIUM" | "HIGH";
 export type PartialAnswerHandler = ((answer: string) => void) & {
+  /** Replace the in-flight Telegram message with a truthful high-level progress state. */
+  setStatus?(status: string): Promise<void>;
   flush(): Promise<void>;
 };
 
@@ -281,6 +283,14 @@ export async function generateGeminiAnswer(
 
   for (let attempt = 1; attempt <= MAX_INTERNAL_ATTEMPTS; attempt += 1) {
     try {
+      if (attempt > 1) {
+        await onPartialAnswer?.setStatus?.("Retrying with a fresh answer attempt…");
+      } else if (bookContext) {
+        await onPartialAnswer?.setStatus?.("Writing your page-cited answer…");
+      } else if (requiresGrounding) {
+        await onPartialAnswer?.setStatus?.("Checking current sources…");
+      }
+
       const result = await requestVertexGemini(
         env,
         endpoint,

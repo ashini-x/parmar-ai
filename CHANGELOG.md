@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased: Live Telegram progress states
+- Replaced the single generic wait label with contextual progress states for question understanding, Fatman retrieval and page review, current-source checks, image interpretation, quiz preparation, and safe retries.
+- Reuses the original Telegram status message for every state and then transitions it into the existing streamed answer, avoiding separate status-message clutter.
+- Serializes and coalesces edits to respect Telegram's practical edit cadence without dropping the latest answer chunk; progress edits remain best-effort and cannot interrupt generation.
+- Added regression tests for status-to-answer transitions, chunk coalescing, and Telegram edit failures.
+
 ## Unreleased: Fatman Google Vision OCR importer
 - Replaced Cloudflare image OCR with Google Cloud Vision Document Text Detection; extracted per-page text is indexed in the existing Cloudflare AI Search instance with exact PDF page metadata.
 - Added a zero-image Google Vision connectivity check, explicit confirmation of at least 538 remaining free OCR units, sequential page processing, and resumable page indexing.

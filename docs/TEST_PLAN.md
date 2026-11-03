@@ -5,6 +5,10 @@
 - `/help` returns.
 - `/id` returns a numeric ID.
 - Ordinary SSC fact answers normally.
+- The original Telegram `Thinking…` message transitions through truthful task-specific progress states, then becomes the streamed answer without sending duplicate status messages.
+- Fatman questions show retrieval and page-review states before answer chunks; grounded current-fact questions show a source-check state.
+- Image and quiz questions show their respective preparation states; retry attempts replace stale progress with a retry state.
+- Progress edits are serialized/coalesced; a Telegram edit failure does not interrupt generation or suppress the final answer.
 - Follow-up continuity works.
 - Simplification works.
 - `/profile` works.

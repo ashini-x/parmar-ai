@@ -12,6 +12,7 @@ import { getConfig } from "./config/env";
 import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } from "./core/job-store";
 import { buildFatmanRetrievalQuery, formatFatmanCitations, isFatmanReady, retrieveFatmanContext, FatmanRetrievalError } from "./fatman/retrieval";
 import { logger } from "./core/logger";
+import { createTelegramProgressUpdater } from "./telegram/progress";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
   deleteTelegramMessage,
@@ -829,6 +830,12 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
     const stopTypingHeartbeat = startTypingHeartbeat(env, job.chatId, job.requestId, job.botConnectionId);
     try {
       const startedAt = Date.now();
+      const updatePartialAnswer = claim.record.statusMessageId
+        ? createTelegramPartialAnswerUpdater(env, job, claim.record.statusMessageId)
+        : undefined;
+      await updatePartialAnswer?.setStatus?.(
+        message.attempts > 1 ? "Resuming your question…" : "Understanding your question…",
+      );
       const jobTelegramUserId = job.telegramUserId ?? job.chatId;
       ctx.waitUntil(recordUserSeen(env, { telegramUserId: jobTelegramUserId, chatId: job.chatId }));
       await recordQuestionStart(env, {
@@ -884,49 +891,64 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       let packet = claim.record.answerPacket;
 
       if (!packet) {
+        if (claim.record.photoFileIds?.length) {
+          await updatePartialAnswer?.setStatus?.("Reading the attached image…");
+        }
         const images = claim.record.photoFileIds?.length
           ? await downloadTelegramPhotos(env, claim.record.photoFileIds, job.botConnectionId)
           : [];
-        const updatePartialAnswer = claim.record.statusMessageId
-          ? createTelegramPartialAnswerUpdater(env, job, claim.record.statusMessageId)
-          : undefined;
+        if (images.length) {
+          await updatePartialAnswer?.setStatus?.("Interpreting the image and your question…");
+        }
         let generation: Awaited<ReturnType<typeof generateGeminiAnswer>> | undefined;
         if (fatmanMode && job.question === DEFAULT_PHOTO_QUESTION && images.length > 0) {
           packet = makeFatmanNoticePacket("Photo mil gaya. Fatman mein sahi page dhoondhne ke liye photo ke saath apna sawaal ya ek keyword bhi likho.");
-        } else if (fatmanMode && !(await isFatmanReady(env))) {
-          packet = makeFatmanNoticePacket("Fatman mode abhi available nahi hai. /help se usual study mode mein wapas aa jao.");
         } else if (fatmanMode) {
-          let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
-          try {
-            bookContext = await retrieveFatmanContext(env, buildFatmanRetrievalQuery(job.question, recentConversation));
-          } catch (error) {
-            if (error instanceof FatmanRetrievalError && !error.retryable) {
-              packet = makeFatmanNoticePacket(error.userMessage ?? "Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
-            } else {
-              throw error;
+          await updatePartialAnswer?.setStatus?.("Checking Fatman availability…");
+          if (!(await isFatmanReady(env))) {
+            packet = makeFatmanNoticePacket("Fatman mode abhi available nahi hai. /help se usual study mode mein wapas aa jao.");
+          } else {
+            await updatePartialAnswer?.setStatus?.("Searching Fatman 2nd Edition…");
+            let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
+            try {
+              bookContext = await retrieveFatmanContext(env, buildFatmanRetrievalQuery(job.question, recentConversation));
+            } catch (error) {
+              if (error instanceof FatmanRetrievalError && !error.retryable) {
+                packet = makeFatmanNoticePacket(error.userMessage ?? "Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
+              } else {
+                throw error;
+              }
+            }
+            if (!packet && bookContext && !bookContext.passages.length) {
+              packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
+            }
+            if (!packet && bookContext) {
+              await updatePartialAnswer?.setStatus?.("Reviewing the most relevant book pages…");
+              generation = await generateGeminiAnswer(
+                env,
+                job.question,
+                buildProfileContext(profile, recentConversation),
+                images,
+                updatePartialAnswer,
+                bookContext,
+              );
+              packet = generation.packet;
+              const citations = formatFatmanCitations(bookContext.passages, job.question, packet.answer);
+              packet.answer = appendFatmanCitations(packet.answer, citations);
+              packet.sscTakeaway = "";
+              packet.profileSignal = "neutral";
+              packet.profileNote = "";
+              packet.nextRevisionTopic = "";
             }
           }
-          if (!packet && bookContext && !bookContext.passages.length) {
-            packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
-          }
-          if (!packet && bookContext) {
-            generation = await generateGeminiAnswer(
-              env,
-              job.question,
-              buildProfileContext(profile, recentConversation),
-              images,
-              updatePartialAnswer,
-              bookContext,
-            );
-            packet = generation.packet;
-            const citations = formatFatmanCitations(bookContext.passages, job.question, packet.answer);
-            packet.answer = appendFatmanCitations(packet.answer, citations);
-            packet.sscTakeaway = "";
-            packet.profileSignal = "neutral";
-            packet.profileNote = "";
-            packet.nextRevisionTopic = "";
-          }
         } else {
+          await updatePartialAnswer?.setStatus?.(
+            isMcqRequest(job.question)
+              ? "Preparing your quiz…"
+              : images.length
+                ? "Preparing an answer from your image…"
+                : "Preparing a clear answer…",
+          );
           generation = await generateGeminiAnswer(
             env,
             job.question,
@@ -1413,57 +1435,16 @@ function createTelegramPartialAnswerUpdater(
   job: QuestionJob,
   statusMessageId: number,
 ): PartialAnswerHandler {
-  let latestText = "";
-  let lastSentText = "";
-  let lastSentAt = 0;
-  let disabled = false;
-  let inFlight: Promise<void> | null = null;
-
-  const scheduleUpdate = (): void => {
-    if (disabled || inFlight || latestText.length < 4 || latestText === lastSentText) return;
-    if (lastSentAt && Date.now() - lastSentAt < 800) return;
-
-    const text = latestText;
-    const request = (async (): Promise<void> => {
-      try {
-        await editTelegramMessage(env, job.chatId, statusMessageId, text, job.botConnectionId, false);
-        lastSentText = text;
-        lastSentAt = Date.now();
-      } catch (error) {
-        disabled = true;
-        logger.warn("telegram_partial_answer_stream_failed", {
-          requestId: job.requestId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    })();
-
-    inFlight = request;
-    void request.then(
-      () => {
-        if (inFlight === request) inFlight = null;
-        scheduleUpdate();
-      },
-      () => {
-        disabled = true;
-        if (inFlight === request) inFlight = null;
-      },
-    );
-  };
-
-  const update = (partialAnswer: string): void => {
-    latestText = partialAnswer.trimEnd().slice(0, 3_900);
-    scheduleUpdate();
-  };
-
-  return Object.assign(update, {
-    flush: async (): Promise<void> => {
-      while (inFlight) {
-        const request = inFlight;
-        await request;
-        if (inFlight === request) break;
-      }
-    },
+  return createTelegramProgressUpdater(async (text) => {
+    try {
+      await editTelegramMessage(env, job.chatId, statusMessageId, text, job.botConnectionId, false);
+    } catch (error) {
+      logger.warn("telegram_partial_answer_stream_failed", {
+        requestId: job.requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   });
 }
 
