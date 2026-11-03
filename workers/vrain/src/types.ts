@@ -16,6 +16,7 @@ export interface AiSearchItem {
 }
 
 export interface AiSearchInstance {
+  info(): Promise<Record<string, unknown>>;
   search(args: {
     messages: Array<{ role: "user"; content: string }>;
     ai_search_options?: {
@@ -47,6 +48,7 @@ export interface AiSearchInstance {
 
 export interface AiSearchNamespace {
   get(name: string): AiSearchInstance;
+  create(args: { id: string }): Promise<AiSearchInstance>;
 }
 
 export interface VrainWorkflowBinding {
