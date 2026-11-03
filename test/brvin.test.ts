@@ -110,5 +110,7 @@ describe("BRVIN governed retrieval", () => {
     expect(html).toContain('c.id==="general"');
     expect(html).toContain("countSimplePdfPages(buffer)");
     expect(html).toContain("The operation paused during ");
+    expect(html).not.toContain('import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs"');
+    expect(html).toContain('const pdfjsLib=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs")');
   });
 });
