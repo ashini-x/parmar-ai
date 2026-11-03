@@ -376,23 +376,22 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
 
         const storageDeletion = await step.do("delete this book's private PDF and Vision OCR object versions", async () =>
           deleteFatmanGcsObjectPrefix(this.env, importId, ""));
-        await step.do("record completed BRVIN book deletion", async () => {
+        await step.do("record external BRVIN assets removed", async () => {
           await recordBrvinActivity(this.env, {
             importId, bookId: importId, agent: "Deletion supervisor",
-            phase: "deletion", eventType: "book.deletion_completed", status: "completed",
-            message: "The original PDF, Vision OCR output and page-level AI Search items were deleted. The BRVIN book/import registry and project grants are now being removed.",
+            phase: "deletion", eventType: "book.external_assets_deleted", status: "completed",
+            message: "The original PDF, Vision OCR output and page-level AI Search items were removed. The BRVIN registry and access-grant cleanup is now running.",
             details: {
               title: book.title,
               searchItemsDeleted: indexedItems.length,
               searchPrefix: book.search_prefix,
               storage: storageDeletion,
-              projectGrantsRemoved: true,
             },
           });
           return true;
         });
 
-        const deletion = await this.env.DB!.batch([
+        await this.env.DB!.batch([
           this.env.DB!.prepare("DELETE FROM brvin_project_books WHERE book_id=?").bind(importId),
           this.env.DB!.prepare("DELETE FROM fatman_books WHERE id=?").bind(importId),
           this.env.DB!.prepare("DELETE FROM fatman_import_jobs WHERE id=? AND book_id=?").bind(importId, importId),
@@ -401,7 +400,18 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         const remainingBook = await this.env.DB!.prepare(
           "SELECT id FROM brvin_books WHERE id=? LIMIT 1"
         ).bind(importId).first<{ id: string }>();
-        if (remainingBook) throw new Error("External data was deleted but the BRVIN registry row remains; retry the deletion to finish database cleanup.");
+        const remainingJob = await this.env.DB!.prepare(
+          "SELECT id FROM fatman_import_jobs WHERE id=? AND book_id=? LIMIT 1"
+        ).bind(importId, importId).first<{ id: string }>();
+        if (remainingBook || remainingJob) {
+          throw new Error("External assets were deleted but one or more BRVIN/import registry rows remain; retry the deletion to finish database cleanup.");
+        }
+        await recordBrvinActivity(this.env, {
+          importId, bookId: importId, agent: "Deletion supervisor",
+          phase: "deletion", eventType: "book.deletion_completed", status: "completed",
+          message: "The PDF, Vision OCR output, AI Search pages, project grants, BRVIN book row and import records are deleted. The audit trail and project/collection definitions remain.",
+          details: { title: book.title, searchItemsDeleted: indexedItems.length, storage: storageDeletion },
+        });
         return;
       }
 
