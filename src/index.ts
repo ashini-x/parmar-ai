@@ -2167,7 +2167,6 @@ const worker = {
         }
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
         if (adminApiPath === "/admin/api/brvin/overview" && request.method === "GET") return brvinOverview(env);
-        if (adminApiPath === "/admin/api/brvin/diagnostics/storage" && request.method === "GET") return diagnoseFatmanGcsUpload(env);
         if (adminApiPath === "/admin/api/brvin/status" && request.method === "GET") return brvinImportStatus(env, url.searchParams.get("id"));
         if (adminApiPath === "/admin/api/fatman/monitor" && request.method === "GET") return fatmanMonitorStatus(env);
         if (adminApiPath === "/admin/api/fatman/library/books" && request.method === "GET") return fatmanLibraryBooks(env);
