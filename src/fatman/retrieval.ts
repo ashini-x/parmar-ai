@@ -12,11 +12,11 @@ const MAX_PASSAGE_CHARS = 4_500;
 const FATMAN_EXCERPT_WINDOW_CHARS = 1_100;
 const FATMAN_EXCERPT_WINDOW_STEP = 550;
 
-const FATMAN_VRAIN_READY_SOURCES_SQL =
-  "SELECT DISTINCT b.id,b.title FROM vrain_books b " +
-  "JOIN vrain_projects p ON p.slug='fatman' AND p.status='active' " +
-  "LEFT JOIN vrain_project_books pb ON pb.project_id=p.id AND pb.book_id=b.id " +
-  "LEFT JOIN vrain_project_collections pc ON pc.project_id=p.id AND pc.collection_id=b.collection_id " +
+const FATMAN_BRVIN_READY_SOURCES_SQL =
+  "SELECT DISTINCT b.id,b.title FROM brvin_books b " +
+  "JOIN brvin_projects p ON p.slug='fatman' AND p.status='active' " +
+  "LEFT JOIN brvin_project_books pb ON pb.project_id=p.id AND pb.book_id=b.id " +
+  "LEFT JOIN brvin_project_collections pc ON pc.project_id=p.id AND pc.collection_id=b.collection_id " +
   "WHERE b.status='ready' AND b.indexed_pages=b.page_count AND (pb.book_id IS NOT NULL OR pc.collection_id IS NOT NULL)";
 
 const FATMAN_QUERY_STOP_WORDS = new Set([
@@ -91,7 +91,7 @@ export async function isFatmanReady(env: Env): Promise<boolean> {
     const legacyReady = state.enabled &&
       state.documentVersion === env.FATMAN_DOCUMENT_VERSION?.trim() &&
       state.indexedPages === Number(env.FATMAN_EXPECTED_PAGES);
-    const authorized = await env.DB!.prepare(FATMAN_VRAIN_READY_SOURCES_SQL)
+    const authorized = await env.DB!.prepare(FATMAN_BRVIN_READY_SOURCES_SQL)
       .all<{ id: string; title: string }>();
     const sourceIds = new Set((authorized.results ?? []).map((book) => book.id));
     return (legacyReady && sourceIds.has("fatman-legacy-538")) ||
@@ -236,7 +236,7 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
   const legacyReady = state.enabled &&
     state.documentVersion === env.FATMAN_DOCUMENT_VERSION?.trim() &&
     state.indexedPages === Number(env.FATMAN_EXPECTED_PAGES);
-  const readyBookRows = await env.DB!.prepare(FATMAN_VRAIN_READY_SOURCES_SQL)
+  const readyBookRows = await env.DB!.prepare(FATMAN_BRVIN_READY_SOURCES_SQL)
     .all<{ id: string; title: string }>();
   const readyBookTitles = new Map((readyBookRows.results ?? []).map((book) => [book.id, book.title]));
   const fatmanLegacyAssigned = readyBookTitles.has("fatman-legacy-538");

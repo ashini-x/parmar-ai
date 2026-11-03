@@ -12,9 +12,9 @@ describe("Fatman multi-book library", () => {
 
   it("creates an isolated search key for every page in an additional book", () => {
     const job = { id: bookId, book_id: bookId, page_count: 125 };
-    expect(fatmanIndexPagePrefix(job)).toBe("vrain/books/" + bookId + "/pages/");
-    expect(fatmanIndexPageKey(job, 1)).toBe("vrain/books/" + bookId + "/pages/page-000001.txt");
-    expect(fatmanIndexPageKey(job, 125)).toBe("vrain/books/" + bookId + "/pages/page-000125.txt");
+    expect(fatmanIndexPagePrefix(job)).toBe("brvin/books/" + bookId + "/pages/");
+    expect(fatmanIndexPageKey(job, 1)).toBe("brvin/books/" + bookId + "/pages/page-000001.txt");
+    expect(fatmanIndexPageKey(job, 125)).toBe("brvin/books/" + bookId + "/pages/page-000125.txt");
     expect(fatmanExpectedPageCount(job)).toBe(125);
   });
 
@@ -25,10 +25,12 @@ describe("Fatman multi-book library", () => {
     expect(fatmanExpectedPageCount(legacyJob)).toBe(538);
   });
 
-  it("recognises legacy Fatman and VRAIN-owned multi-book page keys", () => {
+  it("recognises BRVIN page keys and keeps pre-rename keys readable", () => {
     expect(parseFatmanIndexPageKey("fatman/pages/page-000123.jpg")).toEqual({ page: 123 });
-    expect(parseFatmanIndexPageKey("vrain/books/" + bookId + "/pages/page-000007.txt"))
+    expect(parseFatmanIndexPageKey("brvin/books/" + bookId + "/pages/page-000007.txt"))
       .toEqual({ page: 7, bookId });
+    expect(parseFatmanIndexPageKey("vrain/books/" + bookId + "/pages/page-000009.txt"))
+      .toEqual({ page: 9, bookId });
     expect(parseFatmanIndexPageKey("fatman/books/" + bookId + "/pages/page-000008.txt"))
       .toEqual({ page: 8, bookId });
     expect(() => fatmanIndexPageKey({ id: bookId, book_id: bookId, page_count: 10 }, 0)).toThrow();

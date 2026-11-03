@@ -216,12 +216,12 @@ CREATE INDEX IF NOT EXISTS idx_fatman_release_qa_runs_completed
   ON fatman_release_qa_runs(document_version, completed_at DESC);
 
 
-CREATE TABLE IF NOT EXISTS vrain_migrations (
+CREATE TABLE IF NOT EXISTS brvin_migrations (
   migration_key TEXT PRIMARY KEY,
   applied_at INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS vrain_projects (
+CREATE TABLE IF NOT EXISTS brvin_projects (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
@@ -231,10 +231,10 @@ CREATE TABLE IF NOT EXISTS vrain_projects (
   updated_at INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_vrain_projects_status
-  ON vrain_projects(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_brvin_projects_status
+  ON brvin_projects(status, updated_at DESC);
 
-CREATE TABLE IF NOT EXISTS vrain_collections (
+CREATE TABLE IF NOT EXISTS brvin_collections (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
@@ -243,10 +243,10 @@ CREATE TABLE IF NOT EXISTS vrain_collections (
   updated_at INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_vrain_collections_status
-  ON vrain_collections(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_brvin_collections_status
+  ON brvin_collections(status, updated_at DESC);
 
-CREATE TABLE IF NOT EXISTS vrain_books (
+CREATE TABLE IF NOT EXISTS brvin_books (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   source_filename TEXT NOT NULL,
@@ -263,16 +263,16 @@ CREATE TABLE IF NOT EXISTS vrain_books (
   updated_at INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_vrain_books_collection
-  ON vrain_books(collection_id, status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_brvin_books_collection
+  ON brvin_books(collection_id, status, updated_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_vrain_books_status
-  ON vrain_books(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_brvin_books_status
+  ON brvin_books(status, updated_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_vrain_books_fingerprint
-  ON vrain_books(source_sha256, expected_size, created_at);
+CREATE INDEX IF NOT EXISTS idx_brvin_books_fingerprint
+  ON brvin_books(source_sha256, expected_size, created_at);
 
-CREATE TABLE IF NOT EXISTS vrain_project_books (
+CREATE TABLE IF NOT EXISTS brvin_project_books (
   project_id TEXT NOT NULL,
   book_id TEXT NOT NULL,
   created_at INTEGER NOT NULL,
@@ -280,10 +280,10 @@ CREATE TABLE IF NOT EXISTS vrain_project_books (
   PRIMARY KEY(project_id, book_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_vrain_project_books_book
-  ON vrain_project_books(book_id, project_id);
+CREATE INDEX IF NOT EXISTS idx_brvin_project_books_book
+  ON brvin_project_books(book_id, project_id);
 
-CREATE TABLE IF NOT EXISTS vrain_project_collections (
+CREATE TABLE IF NOT EXISTS brvin_project_collections (
   project_id TEXT NOT NULL,
   collection_id TEXT NOT NULL,
   created_at INTEGER NOT NULL,
@@ -291,10 +291,10 @@ CREATE TABLE IF NOT EXISTS vrain_project_collections (
   PRIMARY KEY(project_id, collection_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_vrain_project_collections_collection
-  ON vrain_project_collections(collection_id, project_id);
+CREATE INDEX IF NOT EXISTS idx_brvin_project_collections_collection
+  ON brvin_project_collections(collection_id, project_id);
 
-CREATE TABLE IF NOT EXISTS vrain_activity_events (
+CREATE TABLE IF NOT EXISTS brvin_activity_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   import_id TEXT,
   book_id TEXT,
@@ -308,14 +308,14 @@ CREATE TABLE IF NOT EXISTS vrain_activity_events (
   created_at INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_vrain_activity_created
-  ON vrain_activity_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_brvin_activity_created
+  ON brvin_activity_events(created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_vrain_activity_import
-  ON vrain_activity_events(import_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_brvin_activity_import
+  ON brvin_activity_events(import_id, id DESC);
 
-CREATE INDEX IF NOT EXISTS idx_vrain_activity_book
-  ON vrain_activity_events(book_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_brvin_activity_book
+  ON brvin_activity_events(book_id, id DESC);
 
 CREATE TABLE IF NOT EXISTS telegram_bots (
   bot_connection_id TEXT PRIMARY KEY,
@@ -548,35 +548,97 @@ async function ensureFatmanImportJobSchema(env: Env): Promise<void> {
 }
 
 
-async function ensureVrainCompatibilitySchema(env: Env): Promise<void> {
+
+const BRVIN_LEGACY_TABLE_RENAMES: ReadonlyArray<readonly [string, string]> = [
+  ["vrain_migrations", "brvin_migrations"],
+  ["vrain_projects", "brvin_projects"],
+  ["vrain_collections", "brvin_collections"],
+  ["vrain_books", "brvin_books"],
+  ["vrain_project_books", "brvin_project_books"],
+  ["vrain_project_collections", "brvin_project_collections"],
+  ["vrain_activity_events", "brvin_activity_events"],
+];
+
+const BRVIN_LEGACY_INDEX_NAMES = [
+  "idx_vrain_projects_status",
+  "idx_vrain_collections_status",
+  "idx_vrain_books_collection",
+  "idx_vrain_books_status",
+  "idx_vrain_books_fingerprint",
+  "idx_vrain_project_books_book",
+  "idx_vrain_project_collections_collection",
+  "idx_vrain_activity_created",
+  "idx_vrain_activity_import",
+  "idx_vrain_activity_book",
+] as const;
+
+/** Rename the original knowledge registry in place; existing grants, events and book rows are retained. */
+async function migrateLegacyBrvinTables(env: Env): Promise<void> {
+  if (!env.DB) return;
+  const db = env.DB;
+  const readTables = async () => {
+    const result = await db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all<{ name: string }>();
+    return new Set((result.results ?? []).map((row) => row.name));
+  };
+  const names = await readTables();
+
+  for (const [legacyName, brvinName] of BRVIN_LEGACY_TABLE_RENAMES) {
+    if (names.has(legacyName) && names.has(brvinName)) {
+      throw new Error("Both legacy and BRVIN registry tables exist for " + legacyName + "; refusing an unsafe merge.");
+    }
+    if (names.has(legacyName)) {
+      try {
+        await db.prepare("ALTER TABLE " + legacyName + " RENAME TO " + brvinName).run();
+      } catch (error) {
+        // Another Worker isolate may have completed the same idempotent rename concurrently.
+        const refreshed = await readTables();
+        if (refreshed.has(legacyName) || !refreshed.has(brvinName)) throw error;
+      }
+      names.delete(legacyName);
+      names.add(brvinName);
+    }
+  }
+
+  await db.batch(BRVIN_LEGACY_INDEX_NAMES.map((name) => db.prepare("DROP INDEX IF EXISTS " + name)));
+}
+
+async function ensureBrvinCompatibilitySchema(env: Env): Promise<void> {
   if (!env.DB) return;
   const db = env.DB;
   const now = Date.now();
 
+  // Carry forward the previous migration marker without re-importing existing books.
+  await db.prepare(
+    "INSERT OR IGNORE INTO brvin_migrations (migration_key, applied_at) SELECT ?, applied_at FROM brvin_migrations WHERE migration_key = ?"
+  ).bind("2026-11-03-fatman-books-to-brvin-v1", "2026-11-03-fatman-books-to-vrain-v1").run();
+  await db.prepare("DELETE FROM brvin_migrations WHERE migration_key = ?")
+    .bind("2026-11-03-fatman-books-to-vrain-v1").run();
+  await db.prepare("UPDATE brvin_projects SET description = REPLACE(description, 'VRAIN', 'BRVIN') WHERE description LIKE '%VRAIN%'").run();
+
   await db.batch([
     db.prepare(
-      "INSERT OR IGNORE INTO vrain_collections (id, name, description, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)"
+      "INSERT OR IGNORE INTO brvin_collections (id, name, description, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)"
     ).bind("general", "General Knowledge", "Shared reference material that can be assigned to selected projects.", now, now),
     db.prepare(
-      "INSERT OR IGNORE INTO vrain_collections (id, name, description, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)"
+      "INSERT OR IGNORE INTO brvin_collections (id, name, description, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)"
     ).bind("fatman-core", "Fatman Core", "The original reviewed Fatman reference volume.", now, now),
     db.prepare(
-      "INSERT OR IGNORE INTO vrain_projects (id, name, slug, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)"
-    ).bind("fatman", "Fatman", "fatman", "SSC learning assistant. Access is limited to explicitly assigned VRAIN knowledge.", now, now),
+      "INSERT OR IGNORE INTO brvin_projects (id, name, slug, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)"
+    ).bind("fatman", "Fatman", "fatman", "SSC learning assistant. Access is limited to explicitly assigned BRVIN knowledge.", now, now),
   ]);
 
   const migration = await db.prepare(
-    "SELECT migration_key FROM vrain_migrations WHERE migration_key = ?"
-  ).bind("2026-11-03-fatman-books-to-vrain-v1").first<{ migration_key: string }>();
+    "SELECT migration_key FROM brvin_migrations WHERE migration_key = ?"
+  ).bind("2026-11-03-fatman-books-to-brvin-v1").first<{ migration_key: string }>();
 
   if (!migration) {
     await db.prepare(
-      "INSERT OR IGNORE INTO vrain_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, error_message, collection_id, search_prefix, source_type, created_at, updated_at) " +
+      "INSERT OR IGNORE INTO brvin_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, error_message, collection_id, search_prefix, source_type, created_at, updated_at) " +
       "SELECT id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, error_message, 'general', 'fatman/books/' || id || '/pages/', 'pdf', created_at, updated_at FROM fatman_books"
     ).run();
 
     await db.prepare(
-      "INSERT OR IGNORE INTO vrain_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, collection_id, search_prefix, source_type, created_at, updated_at) " +
+      "INSERT OR IGNORE INTO brvin_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, collection_id, search_prefix, source_type, created_at, updated_at) " +
       "SELECT 'fatman-legacy-538', 'Fatman 2nd Edition', 'Built-in reviewed Fatman PDF', '', 0, 538, " +
       "CASE WHEN enabled = 1 AND indexed_pages = 538 THEN 'ready' ELSE 'needs_review' END, indexed_pages, " +
       "'fatman-core', 'fatman/pages/', 'legacy', updated_at, updated_at FROM fatman_book_state WHERE singleton_id = 1"
@@ -584,18 +646,18 @@ async function ensureVrainCompatibilitySchema(env: Env): Promise<void> {
 
     await db.batch([
       db.prepare(
-        "INSERT OR IGNORE INTO vrain_project_books (project_id, book_id, created_at, created_by) " +
-        "SELECT 'fatman', id, created_at, 'migration' FROM vrain_books WHERE source_type = 'pdf'"
+        "INSERT OR IGNORE INTO brvin_project_books (project_id, book_id, created_at, created_by) " +
+        "SELECT 'fatman', id, created_at, 'migration' FROM brvin_books WHERE source_type = 'pdf'"
       ),
       db.prepare(
-        "INSERT OR IGNORE INTO vrain_project_books (project_id, book_id, created_at, created_by) VALUES ('fatman', 'fatman-legacy-538', ?, 'migration')"
+        "INSERT OR IGNORE INTO brvin_project_books (project_id, book_id, created_at, created_by) VALUES ('fatman', 'fatman-legacy-538', ?, 'migration')"
       ).bind(now),
       db.prepare(
-        "INSERT OR IGNORE INTO vrain_project_collections (project_id, collection_id, created_at, created_by) VALUES ('fatman', 'fatman-core', ?, 'migration')"
+        "INSERT OR IGNORE INTO brvin_project_collections (project_id, collection_id, created_at, created_by) VALUES ('fatman', 'fatman-core', ?, 'migration')"
       ).bind(now),
       db.prepare(
-        "INSERT OR IGNORE INTO vrain_migrations (migration_key, applied_at) VALUES (?, ?)"
-      ).bind("2026-11-03-fatman-books-to-vrain-v1", now),
+        "INSERT OR IGNORE INTO brvin_migrations (migration_key, applied_at) VALUES (?, ?)"
+      ).bind("2026-11-03-fatman-books-to-brvin-v1", now),
     ]);
   }
 }
@@ -604,10 +666,11 @@ export async function ensureAnalyticsSchema(env: Env): Promise<void> {
   if (!env.DB) return;
   if (!schemaPromise) {
     schemaPromise = (async () => {
+      await migrateLegacyBrvinTables(env);
       await env.DB!.batch(splitSchemaStatements().map((sql) => env.DB!.prepare(sql)));
       await ensureQuizSessionSchema(env);
       await ensureFatmanImportJobSchema(env);
-      await ensureVrainCompatibilitySchema(env);
+      await ensureBrvinCompatibilitySchema(env);
     })()
       .then(() => undefined)
       .catch((error) => {
@@ -649,7 +712,7 @@ export async function setFatmanBookState(
     "UPDATE fatman_book_state SET enabled = ?, document_version = ?, indexed_pages = ?, updated_at = ? WHERE singleton_id = 1"
   ).bind(state.enabled ? 1 : 0, state.documentVersion, state.indexedPages, Date.now()).run();
   await env.DB.prepare(
-    "UPDATE vrain_books SET status = ?, indexed_pages = ?, updated_at = ? WHERE id = 'fatman-legacy-538'"
+    "UPDATE brvin_books SET status = ?, indexed_pages = ?, updated_at = ? WHERE id = 'fatman-legacy-538'"
   ).bind(state.enabled && state.indexedPages === 538 ? "ready" : "needs_review", state.indexedPages, Date.now()).run();
 }
 
@@ -1080,7 +1143,7 @@ export function getAnalyticsConfig(env: Env): { retentionDays: number } {
 }
 
 
-export interface VrainActivityInput {
+export interface BrvinActivityInput {
   importId?: string | null;
   bookId?: string | null;
   projectId?: string | null;
@@ -1093,8 +1156,8 @@ export interface VrainActivityInput {
   createdAt?: number;
 }
 
-/** Append-only operation telemetry used by the VRAIN live operations console. */
-export async function recordVrainActivity(env: Env, event: VrainActivityInput): Promise<void> {
+/** Append-only operation telemetry used by the BRVIN live operations console. */
+export async function recordBrvinActivity(env: Env, event: BrvinActivityInput): Promise<void> {
   if (!env.DB) return;
   await ensureAnalyticsSchema(env);
   const detailsJson = event.details ? JSON.stringify(event.details) : null;
@@ -1102,7 +1165,7 @@ export async function recordVrainActivity(env: Env, event: VrainActivityInput): 
     ? JSON.stringify({ truncated: true, preview: detailsJson.slice(0, 3_800) })
     : detailsJson;
   await env.DB.prepare(
-    "INSERT INTO vrain_activity_events (import_id, book_id, project_id, agent, phase, event_type, status, message, detail_json, created_at) " +
+    "INSERT INTO brvin_activity_events (import_id, book_id, project_id, agent, phase, event_type, status, message, detail_json, created_at) " +
     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
   ).bind(
     event.importId ?? null,

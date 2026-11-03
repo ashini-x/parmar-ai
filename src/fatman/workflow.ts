@@ -1,7 +1,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import type { Env } from "../config/env";
 import { runFatmanReleaseQaForEnv } from "./release-qa-runner";
-import { recordVrainActivity, setFatmanBookState } from "../analytics/db";
+import { recordBrvinActivity, setFatmanBookState } from "../analytics/db";
 import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError } from "./recovery-policy";
 import { buildFatmanBookVerificationPages, buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
 import { getGoogleAccessToken } from "../auth/google";
@@ -117,10 +117,10 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
       }
       importedBook = importJob;
       expectedPages = fatmanExpectedPageCount(importJob);
-      if (importJob.book_id) await recordVrainActivity(this.env, {
+      if (importJob.book_id) await recordBrvinActivity(this.env, {
         importId, bookId: importJob.book_id, agent: "Workflow orchestrator",
         phase: "workflow", eventType: "workflow.claimed", status: "running",
-        message: "The VRAIN processing workflow accepted this book and is coordinating its specialist stages.",
+        message: "The BRVIN processing workflow accepted this book and is coordinating its specialist stages.",
         details: { expectedPages, task: params.task ?? "ingest" },
       }).catch(() => undefined);
 
@@ -208,7 +208,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId)) {
           throw new Error("The Fatman page chunk parameters are invalid.");
         }
-        if (importJob.book_id) await recordVrainActivity(this.env, {
+        if (importJob.book_id) await recordBrvinActivity(this.env, {
           importId, bookId: importJob.book_id, agent: "Page indexing specialist",
           phase: "indexing", eventType: "index.chunk_started", status: "running",
           message: "Indexing PDF pages " + startPage + "–" + endPage + ".",
@@ -219,15 +219,15 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           try {
             await step.do("index Fatman PDF page " + pageNumber, async () =>
               indexOcrPage(this.env, importJob, pageNumber));
-            if (importJob.book_id) await recordVrainActivity(this.env, {
+            if (importJob.book_id) await recordBrvinActivity(this.env, {
               importId, bookId: importJob.book_id, agent: "Page indexing specialist",
               phase: "indexing", eventType: "index.page_completed", status: "completed",
-              message: "Page " + pageNumber + " was added to the VRAIN search index.",
+              message: "Page " + pageNumber + " was added to the BRVIN search index.",
               details: { page: pageNumber, totalPages: expectedPages },
             }).catch(() => undefined);
           } catch (error) {
             if (!isTransientFatmanIndexError(error)) throw error;
-            if (importJob.book_id) await recordVrainActivity(this.env, {
+            if (importJob.book_id) await recordBrvinActivity(this.env, {
               importId, bookId: importJob.book_id, agent: "Recovery specialist",
               phase: "recovery", eventType: "index.page_retry_scheduled", status: "warning",
               message: "Page " + pageNumber + " encountered a transient indexing issue; it has been handed to recovery.",
@@ -316,7 +316,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           throw new Error("The Fatman retrieval quality-check parameters are invalid.");
         }
 
-        if (importJob.book_id) await recordVrainActivity(this.env, {
+        if (importJob.book_id) await recordBrvinActivity(this.env, {
           importId, bookId: importJob.book_id, agent: "Retrieval QA specialist",
           phase: "verification", eventType: "qa.started", status: "running",
           message: "Page-grounded retrieval QA is checking whether indexed content can be retrieved from its original PDF pages.",
@@ -390,10 +390,10 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           return;
         }
 
-        if (importJob.book_id) await recordVrainActivity(this.env, {
+        if (importJob.book_id) await recordBrvinActivity(this.env, {
           importId, bookId: importJob.book_id, agent: "Retrieval QA specialist",
           phase: "verification", eventType: "qa.passed", status: "completed",
-          message: "Page-grounded retrieval QA passed. VRAIN can now expose this book to explicitly assigned projects.",
+          message: "Page-grounded retrieval QA passed. BRVIN can now expose this book to explicitly assigned projects.",
           details: { checkedPages: verification.checkedPages, queryCount: verification.queryCount },
         }).catch(() => undefined);
         let shouldCleanup = true;
@@ -489,7 +489,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           item.status === "error" || item.status === "skipped" || item.status === "outdated");
         await step.do("save Fatman indexing progress " + monitorSequence, async () => {
           await updateFatmanImportProgress(this.env, completedPages, importId);
-          if (importJob.book_id) await recordVrainActivity(this.env, {
+          if (importJob.book_id) await recordBrvinActivity(this.env, {
             importId, bookId: importJob.book_id, agent: "Index monitor specialist",
             phase: "indexing", eventType: "index.monitor_pass", status: failedPages.length ? "warning" : "running",
             message: "Index monitor checked " + completedPages + " of " + expectedPages + " pages; " + failedPages.length + " failed pages need attention.",
@@ -565,7 +565,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
       }
       if (!visionDone) throw new Error("Google Vision OCR did not finish within one hour.");
 
-      if (importJob.book_id) await recordVrainActivity(this.env, {
+      if (importJob.book_id) await recordBrvinActivity(this.env, {
         importId, bookId: importJob.book_id, agent: "Vision OCR specialist",
         phase: "ocr", eventType: "ocr.completed", status: "completed",
         message: "Google Cloud Vision completed document text detection for the uploaded PDF.",
@@ -605,10 +605,10 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
       } else if (params.task !== "cleanup_chunk") {
         await markFatmanImportFailed(this.env, importId, error).catch(() => undefined);
       }
-      if (importedBook?.book_id) await recordVrainActivity(this.env, {
+      if (importedBook?.book_id) await recordBrvinActivity(this.env, {
         importId, bookId: importedBook.book_id, agent: "Workflow supervisor",
         phase: "workflow", eventType: "workflow.exception", status: "failed",
-        message: "A VRAIN processing stage stopped: " + (error instanceof Error ? error.message : String(error)).slice(0, 400),
+        message: "A BRVIN processing stage stopped: " + (error instanceof Error ? error.message : String(error)).slice(0, 400),
         details: { task: params.task ?? "ingest" },
       }).catch(() => undefined);
       throw error;

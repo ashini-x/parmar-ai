@@ -1,5 +1,5 @@
 import type { Env } from "../config/env";
-import { ensureAnalyticsSchema, getFatmanBookState, recordVrainActivity, setFatmanBookState } from "../analytics/db";
+import { ensureAnalyticsSchema, getFatmanBookState, recordBrvinActivity, setFatmanBookState } from "../analytics/db";
 import { getGoogleAccessToken } from "../auth/google";
 import { json } from "../http/response";
 import { nextAiSearchPage } from "./pagination";
@@ -72,12 +72,12 @@ export async function setFatmanImportStatus(
     "error_message = ?, updated_at = ? WHERE id = ?"
   ).bind(status, id, values.errorMessage ?? null, Date.now(), id).run();
   await env.DB.prepare(
-    "UPDATE vrain_books SET status = ?, indexed_pages = COALESCE((SELECT indexed_pages FROM fatman_import_jobs WHERE id = ?), indexed_pages), " +
+    "UPDATE brvin_books SET status = ?, indexed_pages = COALESCE((SELECT indexed_pages FROM fatman_import_jobs WHERE id = ?), indexed_pages), " +
     "error_message = ?, updated_at = ? WHERE id = ?"
   ).bind(status, id, values.errorMessage ?? null, Date.now(), id).run();
   const eventJob = await getFatmanImportJob(env, id);
   if (eventJob?.book_id) {
-    await recordVrainActivity(env, {
+    await recordBrvinActivity(env, {
       importId: id, bookId: eventJob.book_id, agent: "Workflow supervisor",
       phase: status === "processing" ? "processing" : "job",
       eventType: "job.status_changed", status,
@@ -344,7 +344,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
     }
 
     const id = crypto.randomUUID().toLowerCase();
-    const objectName = "vrain/imports/" + id + "/source.pdf";
+    const objectName = "brvin/imports/" + id + "/source.pdf";
     const token = await getGoogleAccessToken(env);
     const response = await fetch(GCS_API + "/upload/storage/v1/b/" + encodeURIComponent(bucketName) + "/o?uploadType=resumable&name=" + encodeURIComponent(objectName), {
       method: "POST",
@@ -373,9 +373,9 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
         "VALUES (?, ?, ?, ?, ?, ?, 'uploading', 0, ?, ?)"
       ).bind(id, title, filename, sha256, size, pageCount, now, now),
       env.DB.prepare(
-        "INSERT INTO vrain_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, collection_id, search_prefix, source_type, created_at, updated_at) " +
+        "INSERT INTO brvin_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, collection_id, search_prefix, source_type, created_at, updated_at) " +
         "VALUES (?, ?, ?, ?, ?, ?, 'uploading', 0, 'general', ?, 'pdf', ?, ?)"
-      ).bind(id, title, filename, sha256, size, pageCount, "vrain/books/" + id + "/pages/", now, now),
+      ).bind(id, title, filename, sha256, size, pageCount, "brvin/books/" + id + "/pages/", now, now),
     ]);
     return json({ ok: true, importId: id, status: "uploading", uploadedBytes: 0, expectedSize: size, expectedPages: pageCount, bookTitle: title });
   } catch (error) {
@@ -440,12 +440,12 @@ export async function uploadFatmanChunk(env: Env, request: Request, importId: st
     await env.DB!.prepare("UPDATE fatman_import_jobs SET uploaded_bytes = ?, status = ?, updated_at = ? WHERE id = ?")
       .bind(uploadedBytes, status, Date.now(), importId).run();
     if (job.book_id) {
-      await env.DB!.prepare("UPDATE vrain_books SET status = ?, updated_at = ? WHERE id = ?")
+      await env.DB!.prepare("UPDATE brvin_books SET status = ?, updated_at = ? WHERE id = ?")
         .bind(status, Date.now(), job.book_id).run();
       const previousMilestone = Math.floor(Number(job.uploaded_bytes) / Number(job.expected_size) * 20);
       const currentMilestone = Math.floor(uploadedBytes / total * 20);
       if (status === "uploaded" || currentMilestone > previousMilestone) {
-        await recordVrainActivity(env, {
+        await recordBrvinActivity(env, {
           importId, bookId: job.book_id, agent: "Secure upload",
           phase: "upload", eventType: status === "uploaded" ? "upload.completed" : "upload.progress",
           status: status === "uploaded" ? "completed" : "running",
@@ -498,7 +498,7 @@ export async function completeFatmanUpload(env: Env, importId: string): Promise<
     }
     try {
       await workflow.create({ id: workflowId, params: { importId } });
-      if (job.book_id) await recordVrainActivity(env, {
+      if (job.book_id) await recordBrvinActivity(env, {
         importId, bookId: job.book_id, agent: "Workflow orchestrator", phase: "workflow",
         eventType: "workflow.started", status: "running",
         message: "The automated OCR, indexing and quality pipeline has started.",
@@ -547,7 +547,7 @@ export async function resumeFatmanImport(env: Env, importId: string): Promise<Re
 
     try {
       await workflow.create({ id: workflowId, params: { task: "resume_index", importId, runId } });
-      if (job.book_id) await recordVrainActivity(env, {
+      if (job.book_id) await recordBrvinActivity(env, {
         importId, bookId: job.book_id, agent: "Recovery supervisor", phase: "recovery",
         eventType: "workflow.resumed", status: "running",
         message: "The saved OCR result is being reused to resume indexing and verification.",
@@ -630,7 +630,7 @@ export async function submitFatmanVision(env: Env, importId: string): Promise<st
   const data = await response.json() as { name?: string };
   if (!data.name) throw new Error("Google Vision did not return an OCR operation ID.");
   await setFatmanImportStatus(env, importId, "processing", { visionOperation: data.name, errorMessage: null });
-  if (job.book_id) await recordVrainActivity(env, {
+  if (job.book_id) await recordBrvinActivity(env, {
     importId, bookId: job.book_id, agent: "Vision OCR specialist", phase: "ocr",
     eventType: "ocr.submitted", status: "running",
     message: "Google Cloud Vision accepted the asynchronous PDF text-detection job.",
@@ -682,9 +682,9 @@ export async function updateFatmanImportProgress(env: Env, indexedPages: number,
     if (job?.book_id) {
       await env.DB.prepare("UPDATE fatman_books SET indexed_pages = ?, status = 'processing', updated_at = ? WHERE id = ?")
         .bind(indexedPages, Date.now(), job.book_id).run();
-      await env.DB.prepare("UPDATE vrain_books SET indexed_pages = ?, status = 'processing', updated_at = ? WHERE id = ?")
+      await env.DB.prepare("UPDATE brvin_books SET indexed_pages = ?, status = 'processing', updated_at = ? WHERE id = ?")
         .bind(indexedPages, Date.now(), job.book_id).run();
-      await recordVrainActivity(env, {
+      await recordBrvinActivity(env, {
         importId, bookId: job.book_id, agent: "Page indexing specialist", phase: "indexing",
         eventType: "index.progress", status: "running",
         message: "Page indexing progress: " + indexedPages + " of " + fatmanExpectedPageCount(job) + " pages.",
@@ -712,10 +712,10 @@ export async function markFatmanImportFailed(env: Env, importId: string, error: 
     .bind(message, Date.now(), importId).run();
   await env.DB.prepare("UPDATE fatman_books SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?")
     .bind(message, Date.now(), importId).run();
-  await env.DB.prepare("UPDATE vrain_books SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?")
+  await env.DB.prepare("UPDATE brvin_books SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?")
     .bind(message, Date.now(), importId).run();
   const job = await getFatmanImportJob(env, importId).catch(() => null);
-  if (job?.book_id) await recordVrainActivity(env, {
+  if (job?.book_id) await recordBrvinActivity(env, {
     importId, bookId: job.book_id, agent: "Recovery supervisor", phase: "processing",
     eventType: "workflow.failed", status: "failed",
     message: "Processing stopped: " + message,
@@ -732,9 +732,9 @@ export async function markFatmanImportCompleted(env: Env, importId: string): Pro
   if (job?.book_id) {
     await env.DB.prepare("UPDATE fatman_books SET status = 'ready', indexed_pages = ?, error_message = NULL, updated_at = ? WHERE id = ?")
       .bind(pageCount, Date.now(), job.book_id).run();
-    await env.DB.prepare("UPDATE vrain_books SET status = 'ready', indexed_pages = ?, error_message = NULL, updated_at = ? WHERE id = ?")
+    await env.DB.prepare("UPDATE brvin_books SET status = 'ready', indexed_pages = ?, error_message = NULL, updated_at = ? WHERE id = ?")
       .bind(pageCount, Date.now(), job.book_id).run();
-    await recordVrainActivity(env, {
+    await recordBrvinActivity(env, {
       importId, bookId: job.book_id, agent: "Retrieval QA verifier", phase: "verification",
       eventType: "book.ready", status: "completed",
       message: "The book passed page-grounded retrieval verification and is ready for project assignment.",
