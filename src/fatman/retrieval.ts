@@ -146,8 +146,8 @@ export function buildFatmanSearchQueries(value: string): string[] {
 
   const comparison = /(?:compare|comparison|difference\s+between|differentiate|distinguish)\s+(.+?)\s+(?:with|and|versus|vs\.?)\s+(.+?)(?=,|\b(?:focusing|in terms|regarding|with respect|on)\b|$)/iu.exec(expandedQuery);
   if (comparison) {
-    const left = comparison[1].replace(/[^\\p{L}\\p{N}]+$/gu, "").trim();
-    const right = comparison[2].replace(/[^\\p{L}\\p{N}]+$/gu, "").trim();
+    const left = comparison[1].replace(/[^\p{L}\p{N}]+$/gu, "").trim();
+    const right = comparison[2].replace(/[^\p{L}\p{N}]+$/gu, "").trim();
     add(left + " features");
     add(right + " features");
   } else {
