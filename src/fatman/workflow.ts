@@ -278,7 +278,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             importId, bookId: importId, agent: "Storage retention supervisor",
             phase: "retention", eventType: "source.vision_ocr_deleted", status: "completed",
             message: "Google Vision OCR JSON output was removed from the private GCS OCR prefix. The original PDF and indexed search pages remain available.",
-            details: deletion,
+            details: { ...deletion },
           });
           return deletion;
         });
@@ -392,14 +392,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           "SELECT id FROM brvin_books WHERE id=? LIMIT 1"
         ).bind(importId).first<{ id: string }>();
         if (remainingBook) throw new Error("External data was deleted but the BRVIN registry row remains; retry the deletion to finish database cleanup.");
-        return {
-          deletedBookId: importId,
-          searchItemsDeleted: indexedItems.length,
-          storageVersionsDeleted: storageDeletion.objectVersionsDeleted,
-          softDeleteRetentionSeconds: storageDeletion.softDeleteRetentionSeconds,
-          projectGrantsRemoved: true,
-          databaseRowsChanged: deletion.reduce((sum, result) => sum + Number(result.meta?.changes ?? 0), 0),
-        };
+        return;
       }
 
       if (params.task === "parmarbot_test") {
