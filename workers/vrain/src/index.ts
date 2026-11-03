@@ -319,7 +319,7 @@ async function ensureSearchInstance(env: Env): Promise<void> {
 async function adminStartDocument(request: Request, env: Env): Promise<Response> {
   const input = await bodyJson<{
     title?: unknown; filename?: unknown; sha256?: unknown; size?: unknown;
-    pageCount?: unknown; collectionId?: unknown; language?: unknown;
+    pageCount?: unknown; collectionId?: unknown; language?: unknown; costConfirmed?: unknown;
   }>(request);
   const title = typeof input.title === "string" ? input.title.trim().slice(0, 160) : "";
   const filenameRaw = typeof input.filename === "string" ? input.filename.trim() : "";
@@ -333,6 +333,9 @@ async function adminStartDocument(request: Request, env: Env): Promise<Response>
   if (!/^[A-F0-9]{64}$/u.test(sha256)) return json({ ok: false, error: "invalid_sha256_fingerprint" }, 400);
   if (!Number.isSafeInteger(size) || size < 8 || size > maxBytes) return json({ ok: false, error: "pdf_size_out_of_range", maxBytes }, 413);
   if (!Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > maxPages) return json({ ok: false, error: "pdf_page_count_out_of_range", maxPages }, 400);
+  if (input.costConfirmed !== true) {
+    return json({ ok: false, error: "confirm_google_cloud_vision_ocr_cost" }, 400);
+  }
   const collectionId = typeof input.collectionId === "string" ? input.collectionId : "";
   const collection = await env.DB.prepare("SELECT id FROM vrain_collections WHERE id=? AND status='active'")
     .bind(collectionId).first<{ id: string }>();
