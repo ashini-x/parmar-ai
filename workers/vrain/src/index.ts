@@ -587,12 +587,18 @@ async function adminResume(env: Env, documentId: string): Promise<Response> {
   }
   const workflowId = documentId + "-owner-" + crypto.randomUUID().replaceAll("-", "").slice(0, 12);
   const now = Date.now();
-  await env.DB.batch([
-    env.DB.prepare("UPDATE vrain_documents SET status='waiting_retry',error_code=NULL,error_message=NULL,workflow_instance_id=?,updated_at=? WHERE id=?")
-      .bind(workflowId, now, documentId),
-    env.DB.prepare("UPDATE vrain_jobs SET state='waiting_retry',stage='owner_resume',workflow_instance_id=?,next_retry_at=?,last_heartbeat_at=? WHERE document_id=?")
-      .bind(workflowId, now, now, documentId),
-  ]);
+  const claimed = await env.DB.prepare(
+    "UPDATE vrain_documents SET status='waiting_retry',error_code=NULL,error_message=NULL,workflow_instance_id=?,updated_at=? " +
+    "WHERE id=? AND status IN ('waiting_retry','failed')",
+  ).bind(workflowId, now, documentId).run();
+  if (Number(claimed.meta.changes ?? 0) !== 1) {
+    const current = await env.DB.prepare("SELECT status FROM vrain_documents WHERE id=?")
+      .bind(documentId).first<{ status: string }>();
+    return json({ ok: false, error: "document_state_changed", status: current?.status ?? "unknown" }, 409);
+  }
+  await env.DB.prepare(
+    "UPDATE vrain_jobs SET state='waiting_retry',stage='owner_resume',workflow_instance_id=?,next_retry_at=?,last_heartbeat_at=? WHERE document_id=?",
+  ).bind(workflowId, now, now, documentId).run();
   await recordEvent(env, {
     documentId, specialist: "Owner", stage: "recovery", type: "recovery.owner_resume",
     status: "warning", message: "The owner requested a new processing attempt after reviewing the blocker.",
