@@ -3,7 +3,7 @@ import type { Env } from "../config/env";
 import { runFatmanReleaseQaForEnv } from "./release-qa-runner";
 import { setFatmanBookState } from "../analytics/db";
 import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError } from "./recovery-policy";
-import { buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
+import { buildFatmanBookVerificationPages, buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
 import { getGoogleAccessToken } from "../auth/google";
 import { fatmanExpectedPageCount, fatmanIndexPageKey } from "./library";
 import type { FatmanImportJob } from "./import";
@@ -303,12 +303,21 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             const checkedPages: number[] = [];
             const pageResults: Array<{ page: number; successfulProbe: number }> = [];
             const verificationPages = job.book_id
-              ? [...new Set([1, Math.max(1, Math.ceil(expectedPages / 2)), expectedPages])]
+              ? buildFatmanBookVerificationPages(expectedPages)
               : [...FATMAN_VERIFICATION_PAGES];
+            const requiredMatches = job.book_id ? Math.min(3, expectedPages) : verificationPages.length;
             let queryCount = 0;
             for (const page of verificationPages) {
               const text = await readFatmanVisionOutput(this.env, importId, page);
-              const probes = buildFatmanRetrievalProbes(text);
+              let probes: string[];
+              try {
+                probes = buildFatmanRetrievalProbes(text);
+              } catch (error) {
+                // Covers, blank pages and sparse front matter are not useful
+                // retrieval evidence; continue to the next distributed sample.
+                if (job.book_id && error instanceof Error && error.message.includes("fewer than six OCR words")) continue;
+                throw error;
+              }
               const expectedKey = fatmanIndexPageKey(job, page);
               let matchedProbe = 0;
               for (let index = 0; index < probes.length; index += 1) {
@@ -323,9 +332,15 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
                   break;
                 }
               }
-              if (!matchedProbe) throw new Error("Retrieval verification could not match the expected source page " + page + " after " + probes.length + " page-grounded queries.");
+              if (!matchedProbe) {
+                throw new Error("Fatman retrieval QA could not match the expected source page " + page + " after " + probes.length + " page-grounded queries.");
+              }
               checkedPages.push(page);
               pageResults.push({ page, successfulProbe: matchedProbe });
+              if (job.book_id && checkedPages.length >= requiredMatches) break;
+            }
+            if (job.book_id && checkedPages.length < requiredMatches) {
+              throw new Error("Fatman retrieval QA could not build enough OCR probes from readable pages.");
             }
             return { checkedPages, pageResults, queryCount };
           });
