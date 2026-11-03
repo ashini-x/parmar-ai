@@ -260,17 +260,27 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           throw new Error("Vision-output deletion is only available for a registered BRVIN PDF.");
         }
         const source = await this.env.DB!.prepare(
-          "SELECT status,source_type FROM brvin_books WHERE id=? LIMIT 1"
-        ).bind(importId).first<{ status: string; source_type: string }>();
-        if (!source || source.source_type !== "pdf" || source.status !== "ready") {
-          throw new Error("Delete OCR output only after the book is ready; the original PDF and index will be retained.");
+          "SELECT status,source_type,vision_output_deleted_at,vision_output_deletion_started_at FROM brvin_books WHERE id=? LIMIT 1"
+        ).bind(importId).first<{
+          status: string;
+          source_type: string;
+          vision_output_deleted_at: number | null;
+          vision_output_deletion_started_at: number | null;
+        }>();
+        if (!source || source.source_type !== "pdf" || source.status !== "ready" ||
+            source.vision_output_deleted_at || !source.vision_output_deletion_started_at) {
+          throw new Error("The book is not in the reserved OCR-only deletion state.");
         }
         const deletion = await step.do("delete private Google Vision OCR output", async () =>
           deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/"));
         await step.do("persist Vision OCR deletion state", async () => {
-          await this.env.DB!.prepare(
-            "UPDATE brvin_books SET vision_output_deleted_at=?,updated_at=? WHERE id=? AND status='ready'"
+          const updated = await this.env.DB!.prepare(
+            "UPDATE brvin_books SET vision_output_deleted_at=?,vision_output_deletion_started_at=NULL,updated_at=? " +
+            "WHERE id=? AND status='ready' AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NOT NULL"
           ).bind(Date.now(), Date.now(), importId).run();
+          if ((updated.meta?.changes ?? 0) !== 1) {
+            throw new Error("The BRVIN OCR deletion marker could not be finalized safely.");
+          }
           return { visionOutputDeleted: true };
         });
         await step.do("record Vision OCR output deletion", async () => {
@@ -983,6 +993,10 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         }).catch(() => undefined);
       } else if (params.task === "delete_vision_output") {
         const message = error instanceof Error ? error.message : String(error);
+        await this.env.DB?.prepare(
+          "UPDATE brvin_books SET vision_output_deletion_started_at=NULL,updated_at=? " +
+          "WHERE id=? AND vision_output_deleted_at IS NULL"
+        ).bind(Date.now(), importId).run().catch(() => undefined);
         await recordBrvinActivity(this.env, {
           importId, bookId: importedBook?.book_id ?? importId, agent: "Storage retention supervisor",
           phase: "retention", eventType: "source.vision_ocr_delete_failed", status: "failed",
