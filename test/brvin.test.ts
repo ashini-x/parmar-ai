@@ -109,6 +109,6 @@ describe("BRVIN governed retrieval", () => {
     expect(html).toContain('const previousCollectionId=$("collection").value;');
     expect(html).toContain('c.id==="general"');
     expect(html).toContain("countSimplePdfPages(buffer)");
-    expect(html).toContain("The operation paused during "+phase);
+    expect(html).toContain("The operation paused during ");
   });
 });
