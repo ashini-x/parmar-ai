@@ -490,7 +490,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           importId, bookId: importId, agent: "Deletion supervisor",
           phase: "deletion", eventType: "book.deletion_completed", status: "completed",
           message: "The PDF, Vision OCR output, AI Search pages, project grants, BRVIN book row and import records are deleted. The audit trail and project/collection definitions remain.",
-          details: { title: book.title, searchItemsDeleted: indexedItems.length, storage: storageDeletion },
+          details: { title: book.title, searchItemsDeleted: indexedItems.length, sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion },
         });
         return;
       }
