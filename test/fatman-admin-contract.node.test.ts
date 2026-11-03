@@ -5,8 +5,6 @@ import { describe, expect, it } from "vitest";
 describe("Fatman index rollout contract", () => {
   const source = readFileSync(new URL("../src/fatman/admin.ts", import.meta.url), "utf8");
   const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
-  const brvinAdminSource = readFileSync(new URL("../src/brvin/admin.ts", import.meta.url), "utf8");
-  const retrievalSource = readFileSync(new URL("../src/brvin/retrieval.ts", import.meta.url), "utf8");
   const storeSource = readFileSync(new URL("../src/core/job-store.ts", import.meta.url), "utf8");
 
   it("injects the approved PDF fingerprint into the browser module scope", async () => {
