@@ -59,6 +59,18 @@ The current native quiz flow is intentionally different from ordinary text answe
 7. Telegram's native result/explanation remains the student-facing vote result; Parmar does not send a duplicate result message.
 8. The result is retained in short conversation context for subsequent explanation/follow-up questions.
 
+## VRAIN standalone knowledge platform
+
+The standalone VRAIN Worker source now lives under [../workers/vrain](../workers/vrain/). It is a separate runtime and resource boundary from the current Parmar AI Worker. It is not deployed or cut over yet.
+
+| Document | Purpose |
+|---|---|
+| [VRAIN_PLATFORM_SPEC.md](VRAIN_PLATFORM_SPEC.md) | Detailed product boundary, owner/consumer security model, Google Cloud Vision OCR, page indexing, QA, recovery, API, D1 model, and migration architecture. |
+| [VRAIN_OPERATIONS_RUNBOOK.md](VRAIN_OPERATIONS_RUNBOOK.md) | Dedicated D1/GCS/Cloud Vision setup, secrets, deployment, source upload, monitoring, recovery, API-key rotation, and operational checks. |
+| [../workers/vrain/README.md](../workers/vrain/README.md) | Standalone Worker commands, required resources, authentication, and compatibility boundary. |
+
+The existing Parmar AI VRAIN implementation remains the deployed compatibility path until the new Worker passes an end-to-end multi-page OCR/retrieval test and a controlled cutover.
+
 ## Documentation maintenance rule
 
 Documentation must describe **deployed behavior, not aspirations**.
