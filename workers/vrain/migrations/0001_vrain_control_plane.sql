@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS vrain_documents (
   status TEXT NOT NULL DEFAULT 'uploading'
     CHECK (status IN ('uploading','uploaded','processing','waiting_retry','qa_failed','ready','failed','archived')),
   vision_operation TEXT,
+  vision_output_prefix TEXT,
+  ocr_repair_attempts INTEGER NOT NULL DEFAULT 0,
   workflow_instance_id TEXT,
   error_code TEXT,
   error_message TEXT,
@@ -141,3 +143,5 @@ CREATE TABLE IF NOT EXISTS vrain_schema_version (
 );
 INSERT OR IGNORE INTO vrain_schema_version(version, applied_at)
 VALUES (1, CAST(unixepoch('subsec') * 1000 AS INTEGER));
+INSERT OR IGNORE INTO vrain_collections(id,name,description,language,status,created_at,updated_at)
+VALUES ('general','General knowledge','Default collection for documents awaiting explicit project grants.','und','active',CAST(unixepoch('subsec') * 1000 AS INTEGER),CAST(unixepoch('subsec') * 1000 AS INTEGER));
