@@ -9,7 +9,7 @@ vi.mock("../src/analytics/db", () => ({
 }));
 
 import { retrieveBrvinProjectContext, BrvinRetrievalError } from "../src/brvin/retrieval";
-import { brvinAdminPage } from "../src/brvin/admin";
+import { brvinAdminPage, brvinAdminScript } from "../src/brvin/admin";
 
 describe("BRVIN governed retrieval", () => {
   const project = { id: "project-a", name: "Project A", slug: "project-a" };
@@ -98,6 +98,13 @@ describe("BRVIN governed retrieval", () => {
     const page = brvinAdminPage();
     const html = await page.text();
     expect(page.headers.get("cache-control")).toBe("no-store");
+    expect(html).toContain('<script src="/admin/brvin/app.js" defer></script>');
+    expect(html).not.toContain('<script type="module">');
+    const scriptResponse = brvinAdminScript();
+    expect(scriptResponse.headers.get("content-type")).toContain("application/javascript");
+    const script = await scriptResponse.text();
+    expect(script).toContain("BRVIN dashboard startup failed");
+    expect(script).toContain("await refresh()");
     expect(html).toContain("BRVIN");
     expect(html).toContain("/admin/api/brvin/");
     expect(html).not.toContain("Add to VRAIN");
