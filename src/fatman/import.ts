@@ -2,6 +2,7 @@ import type { Env } from "../config/env";
 import { ensureAnalyticsSchema, getFatmanBookState, setFatmanBookState } from "../analytics/db";
 import { getGoogleAccessToken } from "../auth/google";
 import { json } from "../http/response";
+import { nextAiSearchPage } from "./pagination";
 
 export const FATMAN_IMPORT_PAGES = 538;
 export const FATMAN_IMPORT_SHA256 = "8B183803FE8EE53087D731F7319519AF9AC5BB62B39B2D3110ACC3FE0AB59886";
@@ -516,11 +517,10 @@ export async function listFatmanIndexPages(env: Env): Promise<Array<{ page: numb
   const instance = env.FATMAN_SEARCH.get(env.FATMAN_INSTANCE_NAME.trim());
   const results: Array<{ page: number; status: string; error?: string }> = [];
   let page = 1;
-  let totalPages = 1;
-  while (page <= totalPages && page <= 20) {
+  while (page <= 20) {
     const response = await instance.items.list({ page, per_page: 50, source: "builtin" });
     for (const item of response.result ?? []) {
-      const match = item.key.match(/^fatman\/pages\/page-(\d{1,6})\.txt$/u);
+      const match = item.key.match(/^fatman\\/pages\\/page-(\\d{1,6})\\.txt$/u);
       if (!match) continue;
       const pageNumber = Number(match[1]);
       if (pageNumber < 1 || pageNumber > FATMAN_IMPORT_PAGES) continue;
@@ -531,8 +531,9 @@ export async function listFatmanIndexPages(env: Env): Promise<Array<{ page: numb
         results.push(candidate);
       }
     }
-    totalPages = Number(response.result_info?.total_pages ?? page);
-    page += 1;
+    const nextPage = nextAiSearchPage(response, page, 50);
+    if (nextPage === null) break;
+    page = nextPage;
   }
   return results.sort((a, b) => a.page - b.page);
 }
