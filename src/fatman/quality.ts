@@ -2,6 +2,17 @@ import { isTransientFatmanIndexError } from "./recovery-policy";
 
 export const FATMAN_VERIFICATION_PAGES = [54, 269, 485] as const;
 
+/** Spread book verification samples across the document, including its final page. */
+export function buildFatmanBookVerificationPages(pageCount: number): number[] {
+  if (!Number.isSafeInteger(pageCount) || pageCount < 1) {
+    throw new Error("The book page count is invalid for retrieval verification.");
+  }
+  const positions = [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95, 1];
+  return [...new Set(positions.map((ratio) =>
+    Math.max(1, Math.min(pageCount, Math.ceil(pageCount * ratio))),
+  ))];
+}
+
 const COMMON_WORDS = new Set([
   "about", "after", "again", "also", "among", "because", "been", "being", "between",
   "both", "could", "does", "each", "from", "have", "into", "more", "most", "other",
@@ -53,5 +64,8 @@ export function buildFatmanRetrievalProbe(text: string): string {
 
 export function isRetryableFatmanQualityFailure(error: unknown): boolean {
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
-  return isTransientFatmanIndexError(error) || message.includes("retrieval qa could not match");
+  return isTransientFatmanIndexError(error) ||
+    message.includes("retrieval qa could not match") ||
+    message.includes("retrieval verification could not match") ||
+    message.includes("retrieval qa could not build enough ocr probes");
 }
