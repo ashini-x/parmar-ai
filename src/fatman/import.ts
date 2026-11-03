@@ -3,7 +3,7 @@ import { ensureAnalyticsSchema, getFatmanBookState, setFatmanBookState } from ".
 import { getGoogleAccessToken } from "../auth/google";
 import { json } from "../http/response";
 import { nextAiSearchPage } from "./pagination";
-import { fatmanExpectedPageCount, fatmanIndexPageKey, fatmanIndexPagePrefix, parseFatmanIndexPageKey } from "./library";
+import { fatmanExpectedPageCount, fatmanIndexPagePrefix, parseFatmanIndexPageKey } from "./library";
 
 export const FATMAN_IMPORT_PAGES = 538;
 export const FATMAN_IMPORT_SHA256 = "8B183803FE8EE53087D731F7319519AF9AC5BB62B39B2D3110ACC3FE0AB59886";
