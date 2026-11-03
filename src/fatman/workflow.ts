@@ -121,7 +121,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
 
         if (startPage === undefined) {
           await step.do("start Fatman indexing monitor after recovery", async () =>
-            this.startChild(importId + "-" + runId + "-monitor-1", {
+            this.startChild(importId + "-" + runId + "-monitor-1-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "monitor",
               importId,
               runId,
@@ -131,7 +131,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         } else {
           const endPage = Math.min(538, startPage + 7);
           await step.do("start recovered Fatman page chunk " + startPage, async () =>
-            this.startChild(importId + "-" + runId + "-page-" + startPage, {
+            this.startChild(importId + "-" + runId + "-page-" + startPage + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "index_chunk",
               importId,
               startPage,
@@ -213,7 +213,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           const nextStart = endPage! + 1;
           const nextEnd = Math.min(538, nextStart + 7);
           await step.do("start next Fatman page chunk " + nextStart, async () =>
-            this.startChild(importId + "-" + runId + "-page-" + nextStart, {
+            this.startChild(importId + "-" + runId + "-page-" + nextStart + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "index_chunk",
               importId,
               startPage: nextStart,
@@ -222,7 +222,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             }));
         } else {
           await step.do("start Fatman indexing monitor", async () =>
-            this.startChild(importId + "-" + runId + "-monitor-1", {
+            this.startChild(importId + "-" + runId + "-monitor-1-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "monitor",
               importId,
               runId,
@@ -462,24 +462,52 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
   }
 
   private async startChild(id: string, params: FatmanImportParams): Promise<string> {
-    let childId: string;
-    try {
-      childId = (await this.env.FATMAN_IMPORT!.create({ id, params })).id;
-    } catch (error) {
+    let previousWorkflowId: string | null = null;
+    let pointerReserved = false;
+
+    // Reserve the D1 pointer BEFORE creating the child. A Workflow can start
+    // immediately after create() returns; updating afterwards lets a parent
+    // overwrite the newer child's pointer with its own already-completed ID.
+    if (this.env.DB && params.task !== "cleanup_chunk") {
       try {
-        childId = (await this.env.FATMAN_IMPORT!.get(id)).id;
+        const previous = await this.env.DB.prepare(
+          "SELECT workflow_instance_id FROM fatman_import_jobs WHERE id = ? AND status = 'processing'"
+        ).bind(params.importId).first<{ workflow_instance_id: string | null }>();
+        if (previous) {
+          previousWorkflowId = previous.workflow_instance_id;
+          const update = await this.env.DB.prepare(
+            "UPDATE fatman_import_jobs SET workflow_instance_id = ?, updated_at = ? WHERE id = ? AND status = 'processing'"
+          ).bind(id, Date.now(), params.importId).run();
+          pointerReserved = (update.meta?.changes ?? 0) > 0;
+        }
       } catch {
-        throw error;
+        // Workflow execution remains authoritative if the monitoring pointer is unavailable.
       }
     }
-    // Keep D1 pointed at the newest child. The monitor can then report the
-    // active worker/retry specialist rather than a completed parent workflow.
-    if (this.env.DB && params.task !== "cleanup_chunk") {
-      await this.env.DB.prepare(
-        "UPDATE fatman_import_jobs SET workflow_instance_id = ?, updated_at = ? WHERE id = ? AND status = 'processing'"
-      ).bind(childId, Date.now(), params.importId).run().catch(() => undefined);
+
+    try {
+      try {
+        return (await this.env.FATMAN_IMPORT!.create({ id, params })).id;
+      } catch (error) {
+        try {
+          return (await this.env.FATMAN_IMPORT!.get(id)).id;
+        } catch {
+          if (pointerReserved && this.env.DB) {
+            await this.env.DB.prepare(
+              "UPDATE fatman_import_jobs SET workflow_instance_id = ?, updated_at = ? WHERE id = ? AND workflow_instance_id = ? AND status = 'processing'"
+            ).bind(previousWorkflowId, Date.now(), params.importId, id).run().catch(() => undefined);
+          }
+          throw error;
+        }
+      }
+    } catch (error) {
+      if (pointerReserved && this.env.DB) {
+        await this.env.DB.prepare(
+          "UPDATE fatman_import_jobs SET workflow_instance_id = ?, updated_at = ? WHERE id = ? AND workflow_instance_id = ? AND status = 'processing'"
+        ).bind(previousWorkflowId, Date.now(), params.importId, id).run().catch(() => undefined);
+      }
+      throw error;
     }
-    return childId;
   }
 
   private async deleteObjects(objectNames: string[]): Promise<void> {
