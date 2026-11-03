@@ -671,8 +671,8 @@ export async function listFatmanIndexPages(env: Env, importId?: string): Promise
   const instance = env.FATMAN_SEARCH.get(env.FATMAN_INSTANCE_NAME.trim());
   const results: Array<{ page: number; status: string; error?: string }> = [];
   let page = 1;
-  while (page <= 20) {
-    const response = await instance.items.list({ page, per_page: 50, source: "builtin" });
+  while (page <= 100) {
+    const response = await instance.items.list({ page, per_page: 50, search: prefix, source: "builtin" });
     for (const item of response.result ?? []) {
       if (!item.key.startsWith(prefix)) continue;
       const parsed = parseFatmanIndexPageKey(item.key);
