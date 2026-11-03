@@ -51,7 +51,7 @@ function retryDelay(attempt: number): typeof RETRY_DELAYS[number] {
 function isRetryable(error: unknown): boolean {
   if (isRetryableGoogleError(error)) return true;
   const message = safeError(error).toLowerCase();
-  return /fetch failed|network|timeout|timed out|temporarily unavailable|http 408|http 409|http 429|http 5\d\d|search index.*not ready|indexing is still/iu.test(message);
+  return /fetch failed|network|timeout|timed out|temporarily unavailable|http 408|http 409|http 429|http 5\d\d|search index.*not ready|index is not yet returning|indexing is still/iu.test(message);
 }
 
 async function getDocument(env: Env, documentId: string): Promise<VrainDocument> {
