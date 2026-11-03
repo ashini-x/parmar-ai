@@ -107,12 +107,14 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
   async run(event: WorkflowEvent<FatmanImportParams>, step: WorkflowStep): Promise<void> {
     const params = fatmanParamsFromPayload(event.payload);
     const importId = params.importId;
+    let job: FatmanImportJob | null = null;
+    let expectedPages = 538;
     try {
-      const job = await getFatmanImportJob(this.env, importId);
+      job = await getFatmanImportJob(this.env, importId);
       if (!job || Number(job.uploaded_bytes) !== Number(job.expected_size)) {
         throw new Error("The complete private PDF upload could not be verified.");
       }
-      const expectedPages = fatmanExpectedPageCount(job);
+      expectedPages = fatmanExpectedPageCount(job);
 
       if (params.task === "resume_index") {
         const runId = params.runId;
@@ -426,7 +428,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
 
         await step.sleep("wait before Fatman indexing check " + monitorSequence, "1 minute");
         const pages = await step.do("check Fatman index status " + monitorSequence, async () =>
-          listFatmanIndexPages(this.env));
+          listFatmanIndexPages(this.env, importId));
         const byPage = new Map<number, { page: number; status: string; error?: string }>();
         for (const item of pages) byPage.set(item.page, item);
         const completedPages = pages.filter((item) => item.status === "completed").length;
@@ -448,7 +450,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           return;
         }
 
-        const missingPages = Array.from({ length: 538 }, (_, index) => index + 1)
+        const missingPages = Array.from({ length: expectedPages }, (_, index) => index + 1)
           .filter((page) => !byPage.has(page));
         const repairPages = [...new Set([...failedPages.map((item) => item.page), ...missingPages])].slice(0, 10);
         if (repairPages.length > 0) {
