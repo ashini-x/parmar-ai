@@ -71,7 +71,11 @@ Operational/admin events such as start, reset, profile view, study plan, daily-l
 - `deleting` / `delete_failed`: an administrator initiated full per-book purge; the source is excluded from retrieval while the background workflow removes provider objects and registry rows.
 - `legacy`: the built-in reviewed 538-page Fatman source is protected from imported-PDF archive and delete controls.
 
-Archive/restore updates the `brvin_books` and `fatman_books` status projections together. It does not delete the original PDF, Vision OCR response files, AI Search page items, or `brvin_project_books` grants. Full deletion retains operational deletion events in `brvin_activity_events` while removing the book’s own searchable data and grants.
+Archive/restore updates the `brvin_books` and `fatman_books` status projections together. It retains the source PDF, persistent AI Search page text/index, and `brvin_project_books` grants. Temporary Vision JSON is removed after the book becomes `ready` and retrieval QA passes.
+
+New source PDFs use `brvin/source-pdfs/<book-id>/source.pdf`. New temporary Vision output uses `brvin/temporary-vision-ocr/<book-id>/`; the Worker applies an age-30-day lifecycle Delete rule only to that temporary prefix. Legacy source objects under `brvin/imports/<book-id>/source.pdf` keep their historic `ocr/` child prefix until the retention supervisor cleans it after `ready`.
+
+Full deletion removes the source-PDF prefix and temporary Vision prefix separately, then removes only that book’s AI Search items, project grants and registry rows. Operational deletion events in `brvin_activity_events` and shared project/collection definitions are retained.
 
 ## Privileged access model
 

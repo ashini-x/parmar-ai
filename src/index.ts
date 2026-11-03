@@ -42,7 +42,7 @@ import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin
 import { completeFatmanUpload, diagnoseFatmanGcsUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 import { archiveBrvinBook, assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview } from "./brvin/admin";
-import { runBrvinRecoverySupervisor } from "./fatman/workflow";
+import { runBrvinRecoverySupervisor, runBrvinVisionRetentionSupervisor } from "./fatman/workflow";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
@@ -2248,6 +2248,14 @@ const worker = {
         logger.info("brvin_recovery_supervisor_completed", result);
       } catch (error) {
         logger.warn("brvin_recovery_supervisor_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      try {
+        const retention = await runBrvinVisionRetentionSupervisor(env);
+        logger.info("brvin_vision_retention_supervisor_completed", retention);
+      } catch (error) {
+        logger.warn("brvin_vision_retention_supervisor_failed", {
           error: error instanceof Error ? error.message : String(error),
         });
       }

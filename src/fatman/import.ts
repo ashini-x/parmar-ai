@@ -10,6 +10,9 @@ export const FATMAN_IMPORT_SHA256 = "8B183803FE8EE53087D731F7319519AF9AC5BB62B39
 const MAX_PDF_BYTES = 1024 * 1024 * 1024;
 const GCS_API = "https://storage.googleapis.com";
 const VISION_API = "https://vision.googleapis.com/v1";
+const BRVIN_SOURCE_PDF_ROOT = "brvin/source-pdfs/";
+const BRVIN_TEMP_VISION_OCR_ROOT = "brvin/temporary-vision-ocr/";
+const BRVIN_TEMP_VISION_OCR_RETENTION_DAYS = 30;
 
 export interface FatmanImportJob {
   id: string;
@@ -195,6 +198,7 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
       "storage.objects.get",
       "storage.objects.list",
       "storage.objects.delete",
+      "storage.buckets.update",
     ]) permissionUrl.searchParams.append("permissions", permission);
     const permissionResponse = await fetch(permissionUrl, {
       headers: { authorization: "Bearer " + token },
@@ -204,8 +208,9 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
     try { permissionData = JSON.parse(permissionText) as typeof permissionData; } catch { /* report HTTP status only */ }
     const granted = permissionData.permissions ?? [];
     const required = ["storage.objects.create", "storage.objects.get", "storage.objects.list", "storage.objects.delete"];
+    const lifecycleRuleUpdateGranted = granted.includes("storage.buckets.update");
     checks.permissions = permissionResponse.ok
-      ? { ok: true, granted, missing: required.filter(permission => !granted.includes(permission)) }
+      ? { ok: true, granted, missing: required.filter(permission => !granted.includes(permission)), lifecycleRuleUpdateGranted }
       : { ok: false, status: permissionResponse.status, error: permissionData.error?.message ?? permissionText.slice(0, 240) };
 
     const createGranted = granted.includes("storage.objects.create");
@@ -411,7 +416,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
     }
 
     const id = crypto.randomUUID().toLowerCase();
-    const objectName = "brvin/imports/" + id + "/source.pdf";
+    const objectName = BRVIN_SOURCE_PDF_ROOT + id + "/source.pdf";
     const token = await getGoogleAccessToken(env);
     const response = await fetch(GCS_API + "/upload/storage/v1/b/" + encodeURIComponent(bucketName) + "/o?uploadType=resumable&name=" + encodeURIComponent(objectName), {
       method: "POST",
@@ -652,6 +657,13 @@ export function fatmanImportObjectPrefix(job: Pick<FatmanImportJob, "source_obje
   return job.source_object.slice(0, slash + 1);
 }
 
+/** New imports use a global temporary root; old imports keep their legacy OCR subfolder. */
+export function fatmanVisionOutputPrefix(job: Pick<FatmanImportJob, "id" | "source_object">): string {
+  const sourcePrefix = fatmanImportObjectPrefix(job);
+  if (sourcePrefix === BRVIN_SOURCE_PDF_ROOT + job.id + "/") return BRVIN_TEMP_VISION_OCR_ROOT + job.id + "/";
+  return sourcePrefix + "ocr/";
+}
+
 export function fatmanOutputObjectName(importId: string, page: number, prefix = "fatman/imports/" + importId + "/"): string {
   return prefix + "ocr/output-" + page + "-to-" + page + ".json";
 }
@@ -659,7 +671,7 @@ export function fatmanOutputObjectName(importId: string, page: number, prefix = 
 export async function readFatmanVisionOutput(env: Env, importId: string, page: number): Promise<string> {
   const job = await getFatmanImportJob(env, importId);
   if (!job) throw new Error("Fatman import job disappeared.");
-  const objectName = fatmanOutputObjectName(importId, page, fatmanImportObjectPrefix(job));
+  const objectName = fatmanOutputObjectName(importId, page, fatmanVisionOutputPrefix(job));
   const token = await getGoogleAccessToken(env);
   const response = await fetch(GCS_API + "/storage/v1/b/" + encodeURIComponent(bucket(env)) + "/o/" + encodeURIComponent(objectName) + "?alt=media", {
     headers: { authorization: "Bearer " + token },
@@ -676,15 +688,95 @@ export async function readFatmanVisionOutput(env: Env, importId: string, page: n
   return text.slice(0, 120_000);
 }
 
+/**
+ * Keep OCR JSON under one global temporary prefix so Cloud Storage expiry can
+ * never match the separately stored source PDF tree. Existing unrelated
+ * lifecycle rules are preserved; broad Delete rules are rejected fail-closed.
+ */
+export async function ensureFatmanVisionLifecycleRule(env: Env): Promise<{ configured: true; created: boolean; prefix: string; ageDays: number }> {
+  const bucketName = bucket(env);
+  const token = await getGoogleAccessToken(env);
+  const prefix = BRVIN_TEMP_VISION_OCR_ROOT;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const metadataUrl = new URL(GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName));
+    metadataUrl.searchParams.set("fields", "name,metageneration,lifecycle");
+    const metadataResponse = await fetch(metadataUrl, { headers: { authorization: "Bearer " + token } });
+    if (!metadataResponse.ok) throw await gcsError(metadataResponse, "Could not inspect the bucket lifecycle configuration.");
+    const metadata = await metadataResponse.json() as {
+      metageneration?: string | number;
+      lifecycle?: { rule?: Array<{ action?: { type?: string }; condition?: { age?: number; matchesPrefix?: string[] } }> };
+    };
+    const rules = metadata.lifecycle?.rule ?? [];
+    const unsafeRule = rules.some((rule) => {
+      if (rule.action?.type !== "Delete") return false;
+      const prefixes = rule.condition?.matchesPrefix ?? [];
+      if (!prefixes.length) return true;
+      return prefixes.some((value) => {
+        const candidate = String(value);
+        return candidate === "brvin/" || candidate === "fatman/" ||
+          candidate === "brvin/imports/" || candidate === "fatman/imports/" ||
+          candidate.startsWith("brvin/source-pdfs/") || candidate.startsWith("fatman/source-pdfs/") ||
+          (candidate.startsWith("brvin/imports/") && !candidate.endsWith("/ocr/")) ||
+          (candidate.startsWith("fatman/imports/") && !candidate.endsWith("/ocr/"));
+      });
+    });
+    if (unsafeRule) {
+      throw new Error("An existing bucket Delete rule is broader than the temporary Vision OCR prefix. No lifecycle changes were made because it may include source PDFs.");
+    }
+    const hasSafeRule = rules.some((rule) => rule.action?.type === "Delete" &&
+      (rule.condition?.matchesPrefix ?? []).includes(prefix) &&
+      Number(rule.condition?.age ?? Number.MAX_SAFE_INTEGER) <= BRVIN_TEMP_VISION_OCR_RETENTION_DAYS);
+    if (hasSafeRule) return { configured: true, created: false, prefix, ageDays: BRVIN_TEMP_VISION_OCR_RETENTION_DAYS };
+    if (rules.length >= 1000) throw new Error("The bucket already has the maximum number of lifecycle rules.");
+    const nextRules = [...rules, { action: { type: "Delete" }, condition: { age: BRVIN_TEMP_VISION_OCR_RETENTION_DAYS, matchesPrefix: [prefix] } }];
+    const patchUrl = new URL(GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName));
+    patchUrl.searchParams.set("fields", "name,metageneration,lifecycle");
+    if (metadata.metageneration !== undefined) patchUrl.searchParams.set("ifMetagenerationMatch", String(metadata.metageneration));
+    const patchResponse = await fetch(patchUrl, {
+      method: "PATCH",
+      headers: { authorization: "Bearer " + token, "content-type": "application/json" },
+      body: JSON.stringify({ lifecycle: { rule: nextRules } }),
+    });
+    if (patchResponse.status === 412 && attempt === 0) continue;
+    if (!patchResponse.ok) throw await gcsError(patchResponse, "Could not add the temporary Vision OCR lifecycle rule.");
+    const updated = await patchResponse.json() as { lifecycle?: { rule?: Array<{ action?: { type?: string }; condition?: { age?: number; matchesPrefix?: string[] } }> } };
+    const verified = (updated.lifecycle?.rule ?? nextRules).some((rule) => rule.action?.type === "Delete" &&
+      (rule.condition?.matchesPrefix ?? []).includes(prefix) && Number(rule.condition?.age ?? 0) === BRVIN_TEMP_VISION_OCR_RETENTION_DAYS);
+    if (!verified) throw new Error("The temporary Vision OCR lifecycle rule could not be verified after update.");
+    return { configured: true, created: true, prefix, ageDays: BRVIN_TEMP_VISION_OCR_RETENTION_DAYS };
+  }
+  throw new Error("The bucket lifecycle configuration changed concurrently; retry the retention setup.");
+}
 export async function submitFatmanVision(env: Env, importId: string): Promise<string> {
   const job = await getFatmanImportJob(env, importId);
   if (!job) throw new Error("Fatman import job not found.");
   if (job.vision_operation) return job.vision_operation;
+  if (job.book_id) {
+    try {
+      const lifecycle = await ensureFatmanVisionLifecycleRule(env);
+      await recordBrvinActivity(env, {
+        importId, bookId: job.book_id, agent: "Storage retention supervisor",
+        phase: "retention", eventType: lifecycle.created ? "storage.vision_ocr_expiry_configured" : "storage.vision_ocr_expiry_verified",
+        status: "completed",
+        message: "Google Cloud Storage expiry is restricted to the dedicated temporary Vision OCR prefix. Source PDFs use a separate prefix and are not covered by this rule.",
+        details: lifecycle,
+      }).catch(() => undefined);
+    } catch (error) {
+      await recordBrvinActivity(env, {
+        importId, bookId: job.book_id, agent: "Storage retention supervisor",
+        phase: "retention", eventType: "storage.vision_ocr_expiry_configuration_deferred",
+        status: "warning",
+        message: "The temporary OCR expiry rule could not be applied. The book can still be processed; post-READY cleanup will remove its OCR files.",
+        details: { error: safeError(error), targetPrefix: BRVIN_TEMP_VISION_OCR_ROOT },
+      }).catch(() => undefined);
+      if (error instanceof Error && error.message.includes("existing bucket Delete rule is broader")) throw error;
+    }
+  }
   const request = {
     requests: [{
       inputConfig: { gcsSource: { uri: "gs://" + bucket(env) + "/" + job.source_object }, mimeType: "application/pdf" },
       features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-      outputConfig: { gcsDestination: { uri: "gs://" + bucket(env) + "/" + fatmanImportObjectPrefix(job) + "ocr/" }, batchSize: 1 },
+      outputConfig: { gcsDestination: { uri: "gs://" + bucket(env) + "/" + fatmanVisionOutputPrefix(job) }, batchSize: 1 },
     }],
   };
   const token = await getGoogleAccessToken(env);
@@ -768,7 +860,7 @@ export async function deleteFatmanGcsObjectPrefix(
     throw new Error("The BRVIN import registry does not match this deletion request.");
   }
   const rootPrefix = fatmanImportObjectPrefix(importJob);
-  const allowedRoots = ["brvin/imports/" + importId + "/", "fatman/imports/" + importId + "/"];
+  const allowedRoots = ["brvin/source-pdfs/" + importId + "/", "brvin/imports/" + importId + "/", "fatman/imports/" + importId + "/"];
   if (!allowedRoots.includes(rootPrefix)) {
     throw new Error("Refusing to delete a GCS prefix outside this book's private import directory.");
   }
@@ -793,7 +885,11 @@ export async function deleteFatmanGcsObjectPrefix(
   const softDeleteRetentionSeconds = Math.max(0, Number(bucketInfo.softDeletePolicy?.retentionDurationSeconds ?? 0) || 0);
   const retentionPolicySeconds = Math.max(0, Number(bucketInfo.retentionPolicy?.retentionPeriod ?? 0) || 0);
   const retentionPolicyLocked = bucketInfo.retentionPolicy?.isLocked === true;
-  const objectPrefix = rootPrefix + relativePrefix;
+  const objectPrefix = relativePrefix === "ocr/" ? fatmanVisionOutputPrefix(importJob) : rootPrefix;
+  const allowedVisionPrefixes = [rootPrefix + "ocr/", BRVIN_TEMP_VISION_OCR_ROOT + importId + "/"];
+  if (relativePrefix === "ocr/" && !allowedVisionPrefixes.includes(objectPrefix)) {
+    throw new Error("The Vision OCR prefix does not match this book's isolated temporary directory.");
+  }
 
   const objects: Array<{ name: string; generation: string; noncurrent: boolean }> = [];
   let pageToken = "";

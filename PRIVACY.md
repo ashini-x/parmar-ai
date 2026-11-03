@@ -18,6 +18,9 @@ Data is processed to answer questions, maintain private-chat continuity, enforce
 ## Retention
 Central D1 analytics uses the configured raw-retention period; the production baseline is 30 days for raw analytics content. Durable Object study-profile state has separate lifecycle semantics and is retained for personalization until reset or deletion under the application implementation. Image bytes are held in memory only while downloaded and sent for analysis; the application does not persist the image bytes. Telegram file identifiers are kept in Durable Object retry state until processing completes or the 48-hour job-retention cleanup runs. Album staging is also removed by that cleanup.
 
+## Knowledge-book retention
+For administrator-managed PDF books, the original PDF is held in private Google Cloud Storage under a per-book source prefix. Google Vision's intermediate JSON output is stored separately under a temporary prefix and is automatically removed after indexing and page-grounded retrieval verification pass. The persistent page text and search index remain available for project queries. A prefix-scoped 30-day lifecycle rule provides a safety net for temporary OCR objects; source PDFs are not in that lifecycle prefix. Administrators can request a full per-book deletion separately. Cloud Storage soft-delete, retention, or provider backups may delay irreversible erasure.
+
 ## Deletion
 The product provides a student data-deletion command. Deletion applies to records controlled by the application and reachable Durable Object state. It does not guarantee deletion from Telegram, Cloudflare, Google Cloud, backups, legal records, or other provider-controlled systems.
 
