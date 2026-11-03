@@ -250,7 +250,7 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
   }
 
   passages.sort((a, b) => b.score - a.score);
-  return { passages, pageImages: [] };
+  return { passages, pageImages: [], searchCount: 1 };
 }
 
 
@@ -271,7 +271,7 @@ export function buildFatmanRetrievalQuery(
     "Previous student question: " + latest.question.slice(0, 400),
     "Previous Fatman answer for reference resolution only: " + latest.answer.slice(0, 900),
     "Current student follow-up: " + normalizedQuestion,
-  ].join("\\n");
+  ].join("\n");
 }
 
 function isFatmanFollowUp(question: string): boolean {
