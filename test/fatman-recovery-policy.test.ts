@@ -20,7 +20,7 @@ describe("Fatman self-healing retry policy", () => {
   it("uses bounded exponential backoff for up to twelve attempts", () => {
     expect(FATMAN_PAGE_RETRY_LIMIT).toBe(12);
     expect(fatmanPageRetryDelay(1)).toBe("30 seconds");
-    expect(fatmanPageRetryDelay(2)).toBe("1 minutes");
+    expect(fatmanPageRetryDelay(2)).toBe("1 minute");
     expect(fatmanPageRetryDelay(6)).toBe("15 minutes");
     expect(fatmanPageRetryDelay(99)).toBe("15 minutes");
   });
