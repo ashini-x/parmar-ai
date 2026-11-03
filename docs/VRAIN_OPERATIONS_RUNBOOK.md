@@ -120,9 +120,12 @@ Example body:
   "size": 12345678,
   "pageCount": 538,
   "collectionId": "<collection-uuid>",
-  "language": "hi"
+  "language": "hi",
+  "costConfirmed": true
 }
 ~~~
+
+Set costConfirmed to true only after acknowledging that Google Cloud Vision OCR may incur charges. The API rejects upload starts without this acknowledgement.
 
 Use the returned documentId. The Worker keeps the GCS resumable upload URI private.
 
