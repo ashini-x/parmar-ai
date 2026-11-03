@@ -186,10 +186,17 @@ export function createTelegramProgressUpdater(
 
     const interval = latestKind === "status" ? statusIntervalMs : answerIntervalMs;
     const elapsed = lastSentAt === null ? interval : Date.now() - lastSentAt;
+    const waitMs = lastSentAt === null && latestKind === "answer"
+      ? answerIntervalMs
+      : Math.max(0, interval - elapsed);
+    if (waitMs === 0) {
+      void sendLatest();
+      return;
+    }
     drainTimer = sleepTimer(() => {
       drainTimer = null;
       void sendLatest();
-    }, Math.max(0, interval - elapsed));
+    }, waitMs);
   };
 
   const sendLatest = (): Promise<void> => {
