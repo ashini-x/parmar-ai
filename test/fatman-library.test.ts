@@ -6,6 +6,7 @@ import {
   parseFatmanIndexPageKey,
 } from "../src/fatman/library";
 import { fatmanLibraryAdminPage } from "../src/fatman/library-admin";
+import { fatmanVisionOutputPrefix } from "../src/fatman/import";
 
 describe("Fatman multi-book library", () => {
   const bookId = "11111111-2222-4333-8444-555555555555";
@@ -18,6 +19,16 @@ describe("Fatman multi-book library", () => {
     expect(fatmanExpectedPageCount(job)).toBe(125);
   });
 
+  it("separates new source PDFs from temporary Vision OCR outputs", () => {
+    const newJob = { id: bookId, source_object: "brvin/source-pdfs/" + bookId + "/source.pdf" };
+    expect(newJob.source_object).toBe("brvin/source-pdfs/" + bookId + "/source.pdf");
+    expect(fatmanVisionOutputPrefix(newJob)).toBe("brvin/temporary-vision-ocr/" + bookId + "/");
+  });
+
+  it("continues to find Vision OCR output for books uploaded before the prefix split", () => {
+    const legacyJob = { id: bookId, source_object: "brvin/imports/" + bookId + "/source.pdf" };
+    expect(fatmanVisionOutputPrefix(legacyJob)).toBe("brvin/imports/" + bookId + "/ocr/");
+  });
   it("keeps the original 538-page import in its original namespace", () => {
     const legacyJob = { id: bookId, book_id: null, page_count: null };
     expect(fatmanIndexPagePrefix(legacyJob)).toBe("fatman/pages/");

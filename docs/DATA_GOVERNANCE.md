@@ -43,13 +43,17 @@ Any new persistent store must define its deletion behavior before release. Nativ
 
 ### Imported knowledge books
 
-Imported BRVIN PDF books have three separate administrator actions:
+Imported BRVIN PDF books keep durable knowledge separate from temporary OCR processing output:
 
-- **Archive** changes only the book status. Project retrieval is disabled because retrieval accepts only books in `ready` state. The original PDF, Google Vision OCR output, AI Search page items, project grants, and book metadata remain stored.
-- **Restore** returns an archived, fully indexed book to `ready`; its existing project grants become effective again. Archive and restore do not start another OCR job or delete stored book data.
-- **Delete book** runs the per-book background purge. It removes only that book’s AI Search page items, private Google Cloud Storage object generations, project grants, and book/import registry rows. Shared AI Search namespaces, other books, projects, collections, and operational audit events are preserved. Google Cloud Storage soft-delete or retention policies may delay irreversible erasure after live objects are deleted.
+- **Source PDF:** Stored under `brvin/source-pdfs/<book-id>/`. It remains available after ingestion for download, audit, and future reprocessing.
+- **Temporary Vision output:** Google Vision JSON responses are written under `brvin/temporary-vision-ocr/<book-id>/`. After all pages are indexed and page-grounded retrieval QA passes, a separate background workflow deletes only that book’s temporary OCR prefix.
+- **Persistent knowledge:** Extracted page text is uploaded into the book-specific Cloudflare AI Search items and index. Project queries use these persistent indexed pages; they do not read the temporary Vision JSON files.
+- **Safety-net expiry:** The Worker adds a Google Cloud Storage lifecycle Delete rule scoped only to `brvin/temporary-vision-ocr/`, with a 30-day age condition. Existing unrelated rules are preserved. Before adding the rule, the Worker rejects any existing broad Delete rule that could include the source-PDF tree. If the service account lacks bucket-update permission, the immediate post-READY cleanup still runs, while the lifecycle-rule configuration is reported as deferred.
+- **Legacy imports:** Existing books that used `brvin/imports/<book-id>/ocr/` remain readable during processing. The scheduled retention supervisor finds READY legacy books and removes only their old `ocr/` subfolder; it does not remove the sibling `source.pdf`.
+- **Archive / restore:** Archive changes only the book status and disables retrieval. The original PDF, indexed page text, search index, and project grants remain. Restore returns a fully indexed archived book to `ready`.
+- **Delete book:** The explicit per-book purge removes that book’s source PDF, temporary Vision output, AI Search page items, project grants, and book/import registry rows. Shared namespaces, other books, projects, collections, and operational audit events are preserved.
 
-Google Vision OCR JSON output is deliberately retained after successful indexing so the book can be re-indexed without another OCR run. An administrator may separately use **Delete OCR files** after a book is ready; that operation retains the original PDF and searchable AI Search page items. It is not automatic on successful ingestion.
+Cloud Storage lifecycle actions run asynchronously, and soft-delete or retention policies may keep deleted object generations recoverable for a period. The direct post-READY workflow performs the primary cleanup; the lifecycle rule is a bounded safety net, not the retrieval data store.
 
 ### Access control
 

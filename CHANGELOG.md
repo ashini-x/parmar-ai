@@ -1,3 +1,8 @@
+## Unreleased: Automatic post-READY Vision OCR retention
+- New book uploads store source PDFs under `brvin/source-pdfs/<book-id>/` and temporary Vision JSON under `brvin/temporary-vision-ocr/<book-id>/`.
+- Once all pages are indexed and retrieval QA passes, a separate background workflow deletes only the temporary OCR prefix. Persistent AI Search page text/chunks remain available for project retrieval; source PDFs and project grants remain intact.
+- Added a 30-day Cloud Storage lifecycle Delete rule scoped only to the temporary OCR prefix, preserving existing unrelated lifecycle rules and refusing broad rules that may include source PDFs. Added a five-minute retry supervisor and migrated cleanup for READY books using the legacy per-book `ocr/` layout.
+
 ## Unreleased: BRVIN book archive and restore
 - Added reversible archive/restore controls for fully indexed imported PDF books. Archived books are excluded from project retrieval while their PDF, Vision OCR output, AI Search pages, and project grants remain intact.
 - Archived books can still use the existing protected per-book purge. Built-in Fatman sources remain protected; OCR-only cleanup remains an explicit administrator action to preserve re-indexing and recovery options.

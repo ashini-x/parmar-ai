@@ -11,6 +11,7 @@ import type { FatmanImportJob } from "./import";
 import {
   cleanupFatmanGcsObjects,
   deleteFatmanGcsObjectPrefix,
+  ensureFatmanVisionLifecycleRule,
   fatmanImportObjectPrefix,
   getFatmanImportJob,
   getFatmanVisionOperation,
@@ -235,6 +236,81 @@ export async function runBrvinRecoverySupervisor(env: Env): Promise<{
   return { scanned: candidates.length, resumed, waiting, exhausted };
 }
 
+async function startBrvinVisionOutputCleanup(env: Env, importId: string, trigger: string): Promise<{ started: boolean; reason?: string; workflowId?: string }> {
+  if (!env.DB || !env.FATMAN_IMPORT) return { started: false, reason: "retention_services_unavailable" };
+  const now = Date.now();
+  const reserved = await env.DB.prepare(
+    "UPDATE brvin_books SET vision_output_deletion_started_at=?,updated_at=? " +
+    "WHERE id=? AND source_type='pdf' AND status IN ('ready','archived') " +
+    "AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NULL " +
+    "AND EXISTS (SELECT 1 FROM fatman_import_jobs j JOIN fatman_books f ON f.id=j.id " +
+      "WHERE j.id=brvin_books.id AND j.book_id=brvin_books.id AND j.status='completed' " +
+      "AND j.uploaded_bytes=j.expected_size AND j.indexed_pages=brvin_books.page_count " +
+      "AND f.status=brvin_books.status AND f.indexed_pages=f.page_count)"
+  ).bind(now, now, importId).run();
+  if ((reserved.meta?.changes ?? 0) !== 1) return { started: false, reason: "not_ready_or_already_cleaned" };
+  const workflowId = importId + "-ocr-cleanup-" + crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+  try {
+    await env.FATMAN_IMPORT.create({ id: workflowId, params: { importId, task: "delete_vision_output" } });
+  } catch (error) {
+    await env.DB.prepare(
+      "UPDATE brvin_books SET vision_output_deletion_started_at=NULL,updated_at=? " +
+      "WHERE id=? AND status='ready' AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at=?"
+    ).bind(Date.now(), importId, now).run().catch(() => undefined);
+    await recordBrvinActivity(env, {
+      importId, bookId: importId, agent: "Storage retention supervisor", phase: "retention",
+      eventType: "source.vision_ocr_auto_cleanup_deferred", status: "warning",
+      message: "The book is ready and its PDF/search index are retained, but the temporary Vision OCR cleanup workflow could not be started. The scheduled retention supervisor will retry.",
+      details: { trigger, error: error instanceof Error ? error.message : String(error) },
+    }).catch(() => undefined);
+    return { started: false, reason: "workflow_create_failed" };
+  }
+  await recordBrvinActivity(env, {
+    importId, bookId: importId, agent: "Storage retention supervisor", phase: "retention",
+    eventType: "source.vision_ocr_auto_cleanup_started", status: "running",
+    message: "Retrieval QA passed. The original PDF, persistent indexed OCR text and project grants are retained; temporary Google Vision JSON is being removed.",
+    details: { trigger, workflowId, sourcePdfRetained: true, searchIndexRetained: true, projectGrantsRetained: true },
+  }).catch(() => undefined);
+  return { started: true, workflowId };
+}
+
+/**
+ * Retry post-READY OCR cleanup and maintain a 30-day lifecycle safety net for
+ * the dedicated temporary Vision prefix. Existing ready books are migrated too.
+ */
+export async function runBrvinVisionRetentionSupervisor(env: Env): Promise<{ scanned: number; started: number; deferred: number; paused: number; lifecycleRule: string }> {
+  if (!env.DB || !env.FATMAN_IMPORT) return { scanned: 0, started: 0, deferred: 0, paused: 0, lifecycleRule: "not_configured" };
+  await ensureAnalyticsSchema(env);
+  const candidates = await env.DB.prepare(
+    "SELECT b.id,b.title,b.updated_at FROM brvin_books b " +
+    "JOIN fatman_import_jobs j ON j.id=b.id AND j.book_id=b.id " +
+    "JOIN fatman_books f ON f.id=b.id " +
+    "WHERE b.source_type='pdf' AND b.status IN ('ready','archived') AND f.status=b.status " +
+    "AND j.status='completed' AND j.uploaded_bytes=j.expected_size " +
+    "AND j.indexed_pages=b.page_count AND f.indexed_pages=f.page_count " +
+    "AND b.vision_output_deleted_at IS NULL AND b.vision_output_deletion_started_at IS NULL " +
+    "AND b.updated_at<=? ORDER BY b.updated_at ASC LIMIT 25"
+  ).bind(Date.now() - 4 * 60 * 1000).all<{ id: string; title: string; updated_at: number }>();
+  const rows = candidates.results ?? [];
+  let lifecycleRule = "verified_or_configured";
+  if (rows.length) {
+    try { await ensureFatmanVisionLifecycleRule(env); }
+    catch (error) { lifecycleRule = "deferred: " + (error instanceof Error ? error.message : String(error)).slice(0, 220); }
+  }
+  let started = 0;
+  let deferred = 0;
+  let paused = 0;
+  for (const candidate of rows) {
+    const failures = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM brvin_activity_events WHERE book_id=? AND event_type='source.vision_ocr_delete_failed'"
+    ).bind(candidate.id).first<{ count: number }>();
+    if (Number(failures?.count ?? 0) >= 5) { paused += 1; continue; }
+    const result = await startBrvinVisionOutputCleanup(env, candidate.id, "scheduled_retention_supervisor");
+    if (result.started) started += 1;
+    else if (result.reason === "workflow_create_failed") deferred += 1;
+  }
+  return { scanned: rows.length, started, deferred, paused, lifecycleRule };
+}
 export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportParams> {
   async run(event: WorkflowEvent<FatmanImportParams>, step: WorkflowStep): Promise<void> {
     const params = fatmanParamsFromPayload(event.payload);
@@ -267,7 +343,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           vision_output_deleted_at: number | null;
           vision_output_deletion_started_at: number | null;
         }>();
-        if (!source || source.source_type !== "pdf" || source.status !== "ready" ||
+        if (!source || source.source_type !== "pdf" || (source.status !== "ready" && source.status !== "archived") ||
             source.vision_output_deleted_at || !source.vision_output_deletion_started_at) {
           throw new Error("The book is not in the reserved OCR-only deletion state.");
         }
@@ -276,7 +352,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         await step.do("persist Vision OCR deletion state", async () => {
           const updated = await this.env.DB!.prepare(
             "UPDATE brvin_books SET vision_output_deleted_at=?,vision_output_deletion_started_at=NULL,updated_at=? " +
-            "WHERE id=? AND status='ready' AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NOT NULL"
+            "WHERE id=? AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NOT NULL"
           ).bind(Date.now(), Date.now(), importId).run();
           if ((updated.meta?.changes ?? 0) !== 1) {
             throw new Error("The BRVIN OCR deletion marker could not be finalized safely.");
@@ -315,6 +391,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           throw new Error("The indexed-page prefix does not match this book; refusing cross-book deletion.");
         }
         const allowedStoragePrefixes = [
+          "brvin/source-pdfs/" + importId + "/",
           "brvin/imports/" + importId + "/",
           "fatman/imports/" + importId + "/",
         ];
@@ -374,18 +451,21 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           throw new Error("AI Search still lists " + remainingSearchItems.length + " page items for this book.");
         }
 
-        const storageDeletion = await step.do("delete this book's private PDF and Vision OCR object versions", async () =>
+        const sourceStorageDeletion = await step.do("delete the book source-PDF object versions", async () =>
           deleteFatmanGcsObjectPrefix(this.env, importId, ""));
+        const visionStorageDeletion = await step.do("delete the book temporary Vision OCR object versions", async () =>
+          deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/"));
         await step.do("record external BRVIN assets removed", async () => {
           await recordBrvinActivity(this.env, {
             importId, bookId: importId, agent: "Deletion supervisor",
             phase: "deletion", eventType: "book.external_assets_deleted", status: "completed",
-            message: "The original PDF, Vision OCR output and page-level AI Search items were removed. The BRVIN registry and access-grant cleanup is now running.",
+            message: "The source PDF, temporary Vision OCR output and page-level AI Search items were removed. The BRVIN registry and access-grant cleanup is now running.",
             details: {
               title: book.title,
               searchItemsDeleted: indexedItems.length,
               searchPrefix: book.search_prefix,
-              storage: storageDeletion,
+              sourceStorage: sourceStorageDeletion,
+              visionOcrStorage: visionStorageDeletion,
             },
           });
           return true;
@@ -773,6 +853,8 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             await markFatmanImportCompleted(this.env, importId);
             return { ready: true, checkedPages: verification.checkedPages };
           });
+          await step.do("schedule automatic temporary Vision OCR cleanup after READY", async () =>
+            startBrvinVisionOutputCleanup(this.env, importId, "retrieval_qa_passed"));
         } else {
           const releaseQa = await step.do("run six-category real-user Fatman release QA", async () =>
             runFatmanReleaseQaForEnv(this.env, importId + "-" + runId + "-release-qa-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8)));
@@ -802,9 +884,15 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         if (importJob.book_id) {
           await recordBrvinActivity(this.env, {
             importId, bookId: importJob.book_id, agent: "Source retention supervisor",
-            phase: "retention", eventType: "source.retained", status: "completed",
-            message: "The original PDF and Google Vision OCR output remain in private storage for future BRVIN consumers and recovery.",
-            details: { sourcePrefix: fatmanImportObjectPrefix(importJob), deletion: "explicit_admin_action" },
+            phase: "retention", eventType: "source.pdf_and_index_retained", status: "completed",
+            message: "The original PDF and persistent AI Search page text/index remain stored. Temporary Vision OCR JSON is automatically removed after READY; the separate source-PDF prefix is never included in OCR expiry.",
+            details: {
+              sourcePrefix: fatmanImportObjectPrefix(importJob),
+              visionOutputPrefix: "brvin/temporary-vision-ocr/" + importId + "/",
+              deletion: "automatic_after_retrieval_qa",
+              sourcePdfRetained: true,
+              searchablePageTextRetained: true,
+            },
           }).catch(() => undefined);
           return;
         }

@@ -66,3 +66,34 @@ describe("BRVIN imported-book archive controls", () => {
     expect(brvinAdminSource).toContain('b.status==="archived"');
   });
 });
+
+describe("BRVIN automatic Vision OCR retention", () => {
+  const importSource = readFileSync(new URL("../src/fatman/import.ts", import.meta.url), "utf8");
+  const workflowSource = readFileSync(new URL("../src/fatman/workflow.ts", import.meta.url), "utf8");
+  const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+
+  it("uses isolated source-PDF and temporary Vision output prefixes", () => {
+    expect(importSource).toContain('const objectName = BRVIN_SOURCE_PDF_ROOT + id + "/source.pdf";');
+    expect(importSource).toContain('BRVIN_TEMP_VISION_OCR_ROOT + job.id + "/"');
+    expect(importSource).toContain('condition: { age: BRVIN_TEMP_VISION_OCR_RETENTION_DAYS, matchesPrefix: [prefix] }');
+    expect(importSource).toContain("An existing bucket Delete rule is broader than the temporary Vision OCR prefix");
+    expect(importSource).toContain('"storage.buckets.update"');
+  });
+
+  it("starts OCR-only deletion only after retrieval QA marks the imported book READY", () => {
+    const readyMarker = workflowSource.indexOf("mark additional book ready after retrieval verification");
+    const cleanupMarker = workflowSource.indexOf("schedule automatic temporary Vision OCR cleanup after READY");
+    expect(readyMarker).toBeGreaterThanOrEqual(0);
+    expect(cleanupMarker).toBeGreaterThan(readyMarker);
+    expect(workflowSource).toContain("startBrvinVisionOutputCleanup(this.env, importId, \"retrieval_qa_passed\")");
+    expect(workflowSource).toContain("runBrvinVisionRetentionSupervisor");
+    expect(workerSource).toContain("runBrvinVisionRetentionSupervisor(env)");
+  });
+
+  it("keeps full-book purge aware of both separate GCS prefixes", () => {
+    expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "")');
+    expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/")');
+    expect(workflowSource).toContain("sourceStorageDeletion");
+    expect(workflowSource).toContain("visionOcrStorage");
+  });
+});
