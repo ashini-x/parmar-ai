@@ -2,6 +2,7 @@ import type { AiSearchInstance, AiSearchItem, Env } from "../config/env";
 import { getGoogleAccessToken } from "../auth/google";
 import { getFatmanBookState, reserveFatmanSearchQuery, setFatmanBookState } from "../analytics/db";
 import { json } from "../http/response";
+import { nextAiSearchPage } from "./pagination";
 
 const EXPECTED_PAGES = 538;
 const EXPECTED_PDF_SHA256 = "8B183803FE8EE53087D731F7319519AF9AC5BB62B39B2D3110ACC3FE0AB59886";
@@ -459,12 +460,12 @@ function fatmanPageUploadResponse(pageNumber: number, item: AiSearchItem): Respo
 async function listFatmanPages(instance: AiSearchInstance): Promise<AiSearchItem[]> {
   const items: AiSearchItem[] = [];
   let page = 1;
-  let totalPages = 1;
-  while (page <= totalPages && page <= 20) {
+  while (page <= 20) {
     const response = await instance.items.list({ page, per_page: 50, source: "builtin" });
     items.push(...(response.result ?? []).filter((item) => item.key.startsWith(PAGE_PREFIX) && item.key.endsWith(".txt")));
-    totalPages = Number(response.result_info?.total_pages ?? page);
-    page += 1;
+    const nextPage = nextAiSearchPage(response, page, 50);
+    if (nextPage === null) break;
+    page = nextPage;
   }
   return items;
 }
@@ -508,7 +509,7 @@ const HTML = `<!doctype html>
 <label class="review"><input id="quota-confirmed" type="checkbox"><span>I verified that at least 538 free Google Vision Document Text Detection units remain this month. I will not start the import if I cannot confirm this.</span></label>
 <div class="row"><input id="pdf" type="file" accept="application/pdf"><button id="import" class="button">Import or resume</button><button id="resume-index" class="button alt" hidden>Resume indexing</button><button id="refresh" class="button alt">Refresh status</button><button id="disable" class="button alt">Disable book mode</button></div>
 <div id="storage-access" class="note"></div><progress id="progress" value="0" max="538"></progress><p id="status">Checking index status…</p>
-<h2>Review retrieval</h2><p class="sub">After all pages finish, run three different searches using facts you can verify in the book. Review the returned text and PDF page for each before enabling.</p><div class="row"><textarea id="preview-query" placeholder="Enter a fact or phrase you can verify in the book"></textarea><button id="preview" class="button alt">Preview search</button></div><div id="preview-results"></div><label class="review"><input id="reviewed" type="checkbox"><span>I checked the currently displayed text and PDF page against the book.</span></label><button id="enable" class="button" disabled>Review 0/3 searches</button>
+<h2>Review retrieval</h2><p class="sub">After all 538 pages finish, the server automatically verifies three page-grounded retrieval probes across the beginning, middle and end of the book. Book mode activates only when each search returns its expected PDF page. You can still run manual spot checks below.</p><div class="row"><textarea id="preview-query" placeholder="Enter a fact or phrase you can verify in the book"></textarea><button id="preview" class="button alt">Preview search</button></div><div id="preview-results"></div><label class="review"><input id="reviewed" type="checkbox"><span>I checked the currently displayed text and PDF page against the book.</span></label><button id="enable" class="button" disabled>Review 0/3 searches</button>
 <div class="note">Only an administrator can open this page. Importing disables book mode. Enablement requires all 538 pages and three distinct reviewed search results.</div></main>
 <script type="module">
 import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";

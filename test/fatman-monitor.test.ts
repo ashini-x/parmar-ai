@@ -153,5 +153,7 @@ describe("Fatman live monitor", () => {
     expect(html).toContain("Not submitted yet");
     expect(html).toContain("Google Vision OCR");
     expect(html).toContain("Cloudflare Workflow");
+    expect(html).toContain("pdfTransferComplete");
+    expect(html).toContain("server-side supervisor coordinates page indexing");
   });
 });
