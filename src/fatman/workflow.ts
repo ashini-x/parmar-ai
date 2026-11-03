@@ -2,7 +2,7 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloud
 import type { Env } from "../config/env";
 import { setFatmanBookState } from "../analytics/db";
 import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError } from "./recovery-policy";
-import { buildFatmanRetrievalProbe, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
+import { buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
 import { getGoogleAccessToken } from "../auth/google";
 import {
   cleanupFatmanGcsObjects,
@@ -291,19 +291,30 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             if (!instanceName || !this.env.FATMAN_SEARCH) throw new Error("Fatman AI Search is not configured.");
             const instance = this.env.FATMAN_SEARCH.get(instanceName);
             const checkedPages: number[] = [];
+            const pageResults: Array<{ page: number; successfulProbe: number }> = [];
+            let queryCount = 0;
             for (const page of FATMAN_VERIFICATION_PAGES) {
               const text = await readFatmanVisionOutput(this.env, importId, page);
-              const query = buildFatmanRetrievalProbe(text);
-              const result = await instance.search({
-                messages: [{ role: "user", content: query }],
-                ai_search_options: { retrieval: { max_num_results: 10, retrieval_type: "hybrid" } },
-              });
+              const probes = buildFatmanRetrievalProbes(text);
               const expectedKey = "fatman/pages/page-" + String(page).padStart(6, "0") + ".txt";
-              const matched = (result.chunks ?? []).some((chunk) => chunk.item?.key === expectedKey);
-              if (!matched) throw new Error("Fatman retrieval QA could not match the expected source page " + page + ".");
+              let matchedProbe = 0;
+              for (let index = 0; index < probes.length; index += 1) {
+                queryCount += 1;
+                const result = await instance.search({
+                  messages: [{ role: "user", content: probes[index] }],
+                  ai_search_options: { retrieval: { max_num_results: 50, retrieval_type: "hybrid" } },
+                });
+                const matched = (result.chunks ?? []).some((chunk) => chunk.item?.key === expectedKey);
+                if (matched) {
+                  matchedProbe = index + 1;
+                  break;
+                }
+              }
+              if (!matchedProbe) throw new Error("Fatman retrieval QA could not match the expected source page " + page + " after " + probes.length + " page-grounded queries.");
               checkedPages.push(page);
+              pageResults.push({ page, successfulProbe: matchedProbe });
             }
-            return { checkedPages, queryCount: checkedPages.length };
+            return { checkedPages, pageResults, queryCount };
           });
         } catch (error) {
           if (!isRetryableFatmanQualityFailure(error)) throw error;
