@@ -295,7 +295,21 @@ export async function runBrvinVisionRetentionSupervisor(env: Env): Promise<{ sca
   let lifecycleRule = "verified_or_configured";
   if (rows.length) {
     try { await ensureFatmanVisionLifecycleRule(env); }
-    catch (error) { lifecycleRule = "deferred: " + (error instanceof Error ? error.message : String(error)).slice(0, 220); }
+    catch (error) {
+      const message = (error instanceof Error ? error.message : String(error)).slice(0, 400);
+      lifecycleRule = "deferred: " + message.slice(0, 220);
+      for (const candidate of rows) {
+        const prior = await env.DB.prepare(
+          "SELECT id FROM brvin_activity_events WHERE book_id=? AND event_type='storage.vision_ocr_expiry_configuration_deferred' AND created_at>=? LIMIT 1"
+        ).bind(candidate.id, Date.now() - 24 * 60 * 60 * 1000).first<{ id: number }>();
+        if (!prior) await recordBrvinActivity(env, {
+          importId: candidate.id, bookId: candidate.id, agent: "Storage retention supervisor",
+          phase: "retention", eventType: "storage.vision_ocr_expiry_configuration_deferred", status: "warning",
+          message: "Direct post-READY OCR cleanup remains active, but the 30-day GCS lifecycle safety-net rule could not be inspected or installed. Grant storage.buckets.get and storage.buckets.update to the ingestion service account on the source bucket.",
+          details: { error: message, targetPrefix: "brvin/temporary-vision-ocr/", requiredPermissions: ["storage.buckets.get", "storage.buckets.update"] },
+        }).catch(() => undefined);
+      }
+    }
   }
   let started = 0;
   let deferred = 0;

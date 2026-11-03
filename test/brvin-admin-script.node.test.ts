@@ -10,6 +10,9 @@ describe("BRVIN browser script contract", () => {
     expect(importSource).toContain("export async function diagnoseFatmanGcsUpload");
     expect(importSource).toContain("storage.objects.create");
     expect(importSource).toContain("storage.objects.delete");
+    expect(importSource).toContain('"storage.buckets.get"');
+    expect(importSource).toContain('"storage.buckets.update"');
+    expect(importSource).toContain("lifecycleRuleManagementGranted");
     expect(importSource).toContain("Does not create, overwrite, or delete any GCS objects.");
     expect(workerSource).toContain("/admin/api/brvin/diagnostics/storage");
     expect(workerSource).toContain("diagnoseFatmanGcsUpload(env)");

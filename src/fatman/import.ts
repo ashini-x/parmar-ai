@@ -198,6 +198,7 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
       "storage.objects.get",
       "storage.objects.list",
       "storage.objects.delete",
+      "storage.buckets.get",
       "storage.buckets.update",
     ]) permissionUrl.searchParams.append("permissions", permission);
     const permissionResponse = await fetch(permissionUrl, {
@@ -208,9 +209,11 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
     try { permissionData = JSON.parse(permissionText) as typeof permissionData; } catch { /* report HTTP status only */ }
     const granted = permissionData.permissions ?? [];
     const required = ["storage.objects.create", "storage.objects.get", "storage.objects.list", "storage.objects.delete"];
+    const lifecycleRuleGetGranted = granted.includes("storage.buckets.get");
     const lifecycleRuleUpdateGranted = granted.includes("storage.buckets.update");
+    const lifecycleRuleManagementGranted = lifecycleRuleGetGranted && lifecycleRuleUpdateGranted;
     checks.permissions = permissionResponse.ok
-      ? { ok: true, granted, missing: required.filter(permission => !granted.includes(permission)), lifecycleRuleUpdateGranted }
+      ? { ok: true, granted, missing: required.filter(permission => !granted.includes(permission)), lifecycleRuleGetGranted, lifecycleRuleUpdateGranted, lifecycleRuleManagementGranted }
       : { ok: false, status: permissionResponse.status, error: permissionData.error?.message ?? permissionText.slice(0, 240) };
 
     const createGranted = granted.includes("storage.objects.create");
