@@ -196,6 +196,217 @@ function parseDetails(value: unknown): Record<string, unknown> | undefined {
   } catch { return undefined; }
 }
 
+interface BrvinDeletionCandidate {
+  id: string;
+  title: string;
+  status: string;
+  source_type: string;
+  search_prefix: string;
+  import_status: string;
+  uploaded_bytes: number;
+  expected_size: number;
+  indexed_pages: number;
+  page_count: number;
+}
+
+const DELETABLE_BOOK_STATUSES = ["ready", "failed", "completed", "delete_failed"];
+const DELETABLE_IMPORT_STATUSES = ["completed", "failed", "delete_failed"];
+
+async function findBrvinDeletionCandidate(env: Env, bookId: string): Promise<BrvinDeletionCandidate | null> {
+  if (!env.DB) return null;
+  return env.DB.prepare(
+    "SELECT b.id,b.title,b.status,b.source_type,b.search_prefix,b.indexed_pages,b.page_count," +
+    "j.status AS import_status,j.uploaded_bytes,j.expected_size " +
+    "FROM brvin_books b JOIN fatman_import_jobs j ON j.id=b.id AND j.book_id=b.id WHERE b.id=? LIMIT 1"
+  ).bind(bookId).first<BrvinDeletionCandidate>();
+}
+
+async function startBrvinDeletionWorkflow(
+  env: Env,
+  candidate: BrvinDeletionCandidate,
+  mode: "book" | "vision_output",
+): Promise<{ workflowId: string; status: "deleting" | "vision_output_deleting" }> {
+  if (!env.DB || !env.FATMAN_IMPORT || !env.FATMAN_SEARCH || !env.FATMAN_INSTANCE_NAME?.trim()) {
+    throw new Error("BRVIN deletion services are not fully configured.");
+  }
+  if (candidate.source_type !== "pdf") {
+    throw new Error("Built-in or legacy knowledge sources are protected from imported-book deletion.");
+  }
+  if (!/^[a-f0-9-]{36}$/iu.test(candidate.id) ||
+      !["brvin/books/" + candidate.id + "/pages/", "fatman/books/" + candidate.id + "/pages/"].includes(candidate.search_prefix)) {
+    throw new Error("The book's registered search prefix is invalid; deletion was refused.");
+  }
+  if (Number(candidate.uploaded_bytes) !== Number(candidate.expected_size) || Number(candidate.expected_size) <= 0) {
+    throw new Error("The original PDF upload is incomplete; finish or repair the upload before deleting this book.");
+  }
+
+  const workflowId = candidate.id + (mode === "book" ? "-delete-" : "-ocr-delete-") +
+    crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+
+  if (mode === "vision_output") {
+    if (candidate.status !== "ready" || candidate.import_status !== "completed" ||
+        Number(candidate.indexed_pages) !== Number(candidate.page_count)) {
+      throw new Error("OCR-only cleanup is available only after the book is ready and all pages passed retrieval QA.");
+    }
+    await env.FATMAN_IMPORT.create({
+      id: workflowId,
+      params: { importId: candidate.id, task: "delete_vision_output" },
+    });
+    await recordBrvinActivity(env, {
+      importId: candidate.id, bookId: candidate.id, agent: "Storage retention supervisor",
+      phase: "retention", eventType: "source.vision_ocr_deletion_requested", status: "running",
+      message: "An administrator requested deletion of saved Google Vision OCR output only. The original PDF and indexed pages will be retained.",
+      details: { mode: "vision_output_only", originalPdfRetained: true, indexedPagesRetained: true },
+    }).catch(() => undefined);
+    return { workflowId, status: "vision_output_deleting" };
+  }
+
+  if (!DELETABLE_BOOK_STATUSES.includes(candidate.status) ||
+      !DELETABLE_IMPORT_STATUSES.includes(candidate.import_status)) {
+    throw new Error("This book is uploading or processing. Wait until its workflow finishes before deleting it.");
+  }
+
+  const now = Date.now();
+  const transition = await env.DB.batch([
+    env.DB.prepare(
+      "UPDATE brvin_books SET status='deleting',error_message=NULL,updated_at=? " +
+      "WHERE id=? AND source_type='pdf' AND status=?"
+    ).bind(now, candidate.id, candidate.status),
+    env.DB.prepare(
+      "UPDATE fatman_import_jobs SET status='deleting',workflow_instance_id=?,error_message=NULL,updated_at=? " +
+      "WHERE id=? AND book_id=? AND status=? AND uploaded_bytes=expected_size"
+    ).bind(workflowId, now, candidate.id, candidate.id, candidate.import_status),
+  ]);
+  const bookChanges = Number(transition[0]?.meta?.changes ?? 0);
+  const importChanges = Number(transition[1]?.meta?.changes ?? 0);
+  if (bookChanges !== 1 || importChanges !== 1) {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE brvin_books SET status=?,updated_at=? WHERE id=? AND status='deleting'")
+        .bind(candidate.status, Date.now(), candidate.id),
+      env.DB.prepare("UPDATE fatman_import_jobs SET status=?,workflow_instance_id=NULL,updated_at=? WHERE id=? AND status='deleting' AND workflow_instance_id=?")
+        .bind(candidate.import_status, Date.now(), candidate.id, workflowId),
+    ]);
+    throw new Error("The book changed state during deletion setup. Refresh the dashboard and try again.");
+  }
+
+  try {
+    await env.FATMAN_IMPORT.create({
+      id: workflowId,
+      params: { importId: candidate.id, task: "delete_book" },
+    });
+  } catch (error) {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE brvin_books SET status=?,error_message=NULL,updated_at=? WHERE id=? AND status='deleting'")
+        .bind(candidate.status, Date.now(), candidate.id),
+      env.DB.prepare("UPDATE fatman_import_jobs SET status=?,workflow_instance_id=NULL,error_message=NULL,updated_at=? WHERE id=? AND status='deleting' AND workflow_instance_id=?")
+        .bind(candidate.import_status, Date.now(), candidate.id, workflowId),
+    ]);
+    throw error;
+  }
+
+  await recordBrvinActivity(env, {
+    importId: candidate.id, bookId: candidate.id, agent: "Deletion supervisor",
+    phase: "deletion", eventType: "book.deletion_requested", status: "running",
+    message: "An administrator requested complete deletion of this book, its private PDF, Vision OCR output, indexed pages, access grants and BRVIN registry records.",
+    details: {
+      title: candidate.title,
+      mode: "full_book",
+      searchPrefix: candidate.search_prefix,
+      gcsPrefix: "book-specific import prefix",
+    },
+  }).catch(() => undefined);
+  return { workflowId, status: "deleting" };
+}
+
+export async function deleteBrvinBook(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { bookId?: unknown; confirmTitle?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid deletion request." }, 400); }
+  const bookId = typeof body.bookId === "string" ? body.bookId.trim() : "";
+  const confirmTitle = typeof body.confirmTitle === "string" ? body.confirmTitle.trim() : "";
+  if (!/^[a-f0-9-]{36}$/iu.test(bookId)) return json({ ok: false, error: "Choose a valid BRVIN book." }, 400);
+  try {
+    await ensureAnalyticsSchema(env);
+    const candidate = await findBrvinDeletionCandidate(env, bookId);
+    if (!candidate) return json({ ok: false, error: "This imported BRVIN book or its import record could not be found." }, 404);
+    if (confirmTitle !== candidate.title) return json({ ok: false, error: "The confirmation title does not match the book name." }, 400);
+    const result = await startBrvinDeletionWorkflow(env, candidate, "book");
+    return json({ ok: true, bookId, title: candidate.title, ...result }, 202);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function deleteBrvinVisionOutput(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { bookId?: unknown; confirmTitle?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid OCR cleanup request." }, 400); }
+  const bookId = typeof body.bookId === "string" ? body.bookId.trim() : "";
+  const confirmTitle = typeof body.confirmTitle === "string" ? body.confirmTitle.trim() : "";
+  if (!/^[a-f0-9-]{36}$/iu.test(bookId)) return json({ ok: false, error: "Choose a valid BRVIN book." }, 400);
+  try {
+    await ensureAnalyticsSchema(env);
+    const candidate = await findBrvinDeletionCandidate(env, bookId);
+    if (!candidate) return json({ ok: false, error: "This imported BRVIN book or its import record could not be found." }, 404);
+    if (confirmTitle !== candidate.title) return json({ ok: false, error: "The confirmation title does not match the book name." }, 400);
+    const result = await startBrvinDeletionWorkflow(env, candidate, "vision_output");
+    return json({ ok: true, bookId, title: candidate.title, ...result }, 202);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function clearBrvinKnowledgeSources(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { confirmation?: unknown; expectedCount?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid clear request." }, 400); }
+  if (body.confirmation !== "DELETE ALL BRVIN BOOKS") {
+    return json({ ok: false, error: "Type DELETE ALL BRVIN BOOKS exactly to confirm this operation." }, 400);
+  }
+  const expectedCount = Number(body.expectedCount);
+  if (!Number.isInteger(expectedCount) || expectedCount < 0 || expectedCount > 100) {
+    return json({ ok: false, error: "Clear all supports up to 100 imported books per operation. Use individual deletion for larger libraries." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const result = await env.DB.prepare(
+      "SELECT b.id,b.title,b.status,b.source_type,b.search_prefix,b.indexed_pages,b.page_count," +
+      "j.status AS import_status,j.uploaded_bytes,j.expected_size " +
+      "FROM brvin_books b JOIN fatman_import_jobs j ON j.id=b.id AND j.book_id=b.id " +
+      "WHERE b.source_type='pdf' ORDER BY b.created_at"
+    ).all<BrvinDeletionCandidate>();
+    const candidates = result.results ?? [];
+    if (candidates.length !== expectedCount) {
+      return json({ ok: false, error: "The source count changed since the confirmation prompt. Refresh and try again.", currentCount: candidates.length }, 409);
+    }
+    const active = candidates.filter(candidate =>
+      !DELETABLE_BOOK_STATUSES.includes(candidate.status) ||
+      !DELETABLE_IMPORT_STATUSES.includes(candidate.import_status)
+    );
+    if (active.length) {
+      return json({
+        ok: false,
+        error: "One or more books are still uploading or processing. Wait for those workflows to finish, then clear all sources.",
+        activeBooks: active.map(candidate => ({ id: candidate.id, title: candidate.title, status: candidate.status })),
+      }, 409);
+    }
+    const started: Array<{ id: string; title: string; workflowId: string }> = [];
+    const errors: Array<{ id: string; title: string; error: string }> = [];
+    for (const candidate of candidates) {
+      try {
+        const result = await startBrvinDeletionWorkflow(env, candidate, "book");
+        started.push({ id: candidate.id, title: candidate.title, workflowId: result.workflowId });
+      } catch (error) {
+        errors.push({ id: candidate.id, title: candidate.title, error: friendlyError(error) });
+      }
+    }
+    return json({
+      ok: errors.length === 0,
+      startedCount: started.length,
+      failedToStartCount: errors.length,
+      started,
+      errors,
+      note: "Project and collection definitions and audit events are preserved. Each book is independently deleted by its background workflow.",
+    }, errors.length ? 207 : 202);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 502); }
+}
+
 export async function brvinImportStatus(env: Env, importId: string | null): Promise<Response> {
   if (!importId || !/^[a-f0-9-]{36}$/iu.test(importId)) return json({ ok: false, error: "Choose a valid book import." }, 400);
   try {
