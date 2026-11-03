@@ -108,7 +108,7 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "SELECT j.id,j.status,j.uploaded_bytes,j.expected_size,j.indexed_pages,j.error_message,j.workflow_instance_id," +
         "j.vision_operation,j.created_at,j.updated_at,b.title,b.page_count,b.collection_id " +
         "FROM fatman_import_jobs j JOIN brvin_books b ON b.id=j.id " +
-        "WHERE j.status IN ('uploading','uploaded','processing','failed') " +
+        "WHERE j.status IN ('uploading','uploaded','processing','failed','deleting','delete_failed') " +
         "ORDER BY j.updated_at DESC LIMIT 30"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
@@ -256,6 +256,7 @@ async function startBrvinDeletionWorkflow(
       importId: candidate.id, bookId: candidate.id, agent: "Storage retention supervisor",
       phase: "retention", eventType: "source.vision_ocr_deletion_requested", status: "running",
       message: "An administrator requested deletion of saved Google Vision OCR output only. The original PDF and indexed pages will be retained.",
+      status: "info",
       details: { mode: "vision_output_only", originalPdfRetained: true, indexedPagesRetained: true },
     }).catch(() => undefined);
     return { workflowId, status: "vision_output_deleting" };
@@ -683,7 +684,7 @@ function renderBooks(list,projects){$("book-count").textContent=list.length+" so
  const progress=pct(b.indexedPages,b.pageCount);
  const action=b.status==="uploading"||b.status==="uploaded"||b.status==="processing"||b.status==="failed"||b.status==="delete_failed"
   ?'<button class="btn" data-view="'+esc(b.id)+'">Operations</button> ':"";
- const manage='<button class="btn" data-access="'+esc(b.id)+'">Direct access</button>';
+ const manage=b.status==="deleting"?'':'<button class="btn" data-access="'+esc(b.id)+'">Direct access</button>';
  let deletion="";
  if(b.sourceType==="pdf"&&b.status==="ready"){
   deletion='<button class="btn" data-delete-ocr="'+esc(b.id)+'">Delete OCR files</button> <button class="btn danger" data-delete-book="'+esc(b.id)+'">Delete book</button>';
@@ -704,10 +705,11 @@ function renderBooks(list,projects){$("book-count").textContent=list.length+" so
  $("books").querySelectorAll("[data-delete-ocr]").forEach(button=>button.addEventListener("click",()=>deleteVisionOutput(button.dataset.deleteOcr,button)));
 }
 function renderJobs(list){$("jobs").innerHTML=list.length?list.map(j=>{
+ const deleting=j.status==="deleting"||j.status==="delete_failed";
  const percent=j.status==="uploading"?pct(j.uploadedBytes,j.expectedBytes):pct(j.indexedPages,j.pageCount);
- const label=j.status==="uploading"?fmtBytes(j.uploadedBytes)+" / "+fmtBytes(j.expectedBytes):j.indexedPages+" / "+j.pageCount+" pages";
- return '<div class="tile" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(j.title)+'</strong>'+statusPill(j.status)+'</div><p>'+esc(label)+' · '+percent+'% · updated '+esc(time(j.updatedAt))+'</p><div class="bar"><i style="width:'+percent+'%"></i></div>'+(j.error?'<p class="error">'+esc(j.error)+'</p>':"")+'<div style="margin-top:8px"><button class="btn" data-view="'+esc(j.id)+'">Inspect pipeline</button>'+(j.status==="failed"&&j.hasOcrOperation?'<button class="btn" data-resume="'+esc(j.id)+'" style="margin-left:5px">Resume</button>':"")+'</div></div>';
- }).join(""):'<div class="empty">No active processing jobs. New BRVIN operations will appear here.</div>';
+ const label=deleting?"Removing AI Search pages and private PDF/OCR storage":j.status==="uploading"?fmtBytes(j.uploadedBytes)+" / "+fmtBytes(j.expectedBytes):j.indexedPages+" / "+j.pageCount+" pages";
+ return '<div class="tile" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(j.title)+'</strong>'+statusPill(j.status)+'</div><p>'+esc(label)+(deleting?"":" · "+percent+"% · updated "+esc(time(j.updatedAt)))+'</p>'+(deleting?"":'<div class="bar"><i style="width:'+percent+'%"></i></div>')+(j.error?'<p class="error">'+esc(j.error)+'</p>':"")+'<div style="margin-top:8px"><button class="btn" data-view="'+esc(j.id)+'">Inspect pipeline</button>'+(j.status==="failed"&&j.hasOcrOperation?'<button class="btn" data-resume="'+esc(j.id)+'" style="margin-left:5px">Resume</button>':"")+'</div></div>';
+ }).join(""):'<div class="empty">No active processing or deletion jobs. New BRVIN operations will appear here.</div>';
  $("jobs").querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>showImport(b.dataset.view)));
  $("jobs").querySelectorAll("[data-resume]").forEach(b=>b.addEventListener("click",()=>resumeImport(b.dataset.resume)));
 }
