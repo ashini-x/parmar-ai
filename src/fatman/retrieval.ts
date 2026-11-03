@@ -7,7 +7,9 @@ const MAX_SEARCH_VARIANTS = 3;
 const MAX_CITATION_PAGES = 5;
 const MAX_PASSAGES = 8;
 const MAX_PAGES = 6;
-const MAX_PASSAGE_CHARS = 2_000;
+const MAX_PASSAGE_CHARS = 4_500;
+const FATMAN_EXCERPT_WINDOW_CHARS = 1_100;
+const FATMAN_EXCERPT_WINDOW_STEP = 550;
 
 const FATMAN_QUERY_STOP_WORDS = new Set([
   "a", "about", "after", "all", "also", "an", "and", "are", "as", "at", "be", "because",
@@ -219,12 +221,16 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
   for (const chunk of chunks) {
     const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
     const pdfPage = pageNumberFromKey(key);
-    const text = typeof chunk.text === "string" ? cleanPassageText(chunk.text).slice(0, MAX_PASSAGE_CHARS) : "";
+    const fullText = typeof chunk.text === "string" ? cleanPassageText(chunk.text) : "";
     const score = finiteScore(chunk.score) ??
       finiteScore(chunk.scoring_details?.reranking_score) ??
       finiteScore(chunk.scoring_details?.vector_score);
-    if (!pdfPage || !text || score === undefined || score < minScore) continue;
-    if (!isFatmanPassageRelevant(normalizedQuery, text)) continue;
+    if (!pdfPage || !fullText || score === undefined || score < minScore) continue;
+    if (!isFatmanPassageRelevant(normalizedQuery, fullText)) continue;
+    // Test relevance against the entire OCR result before clipping. Long pages
+    // must retain distant evidence (for example Plassey, Buxar and Allahabad)
+    // instead of silently discarding everything after the first 2,000 chars.
+    const text = extractFatmanEvidenceExcerpt(normalizedQuery, fullText, MAX_PASSAGE_CHARS);
 
     const id = typeof chunk.id === "string" && chunk.id
       ? chunk.id
@@ -390,6 +396,83 @@ function pageNumberFromKey(key: string): number | undefined {
   if (!match) return undefined;
   const page = Number(match[1]);
   return Number.isSafeInteger(page) && page > 0 ? page : undefined;
+}
+
+/**
+ * Selects evidence-bearing windows across a long OCR page. The old first-N
+ * character slice hid facts later on the same page, even when hybrid search
+ * had found the correct page. Greedy term coverage keeps multiple distant
+ * sections while avoiding repeated overlapping windows.
+ */
+export function extractFatmanEvidenceExcerpt(
+  query: string,
+  value: string,
+  maxChars = MAX_PASSAGE_CHARS,
+): string {
+  const text = cleanPassageText(value);
+  if (text.length <= maxChars) return text;
+
+  const queryTerms = meaningfulFatmanTerms(query);
+  if (!queryTerms.size) return text.slice(0, maxChars);
+
+  const windows: Array<{ start: number; end: number; terms: Set<string> }> = [];
+  for (let start = 0; start < text.length; start += FATMAN_EXCERPT_WINDOW_STEP) {
+    const end = Math.min(text.length, start + FATMAN_EXCERPT_WINDOW_CHARS);
+    const windowText = text.slice(start, end);
+    const windowTerms = meaningfulFatmanTerms(windowText);
+    const matchedTerms = new Set([...queryTerms].filter((term) => windowTerms.has(term)));
+    if (matchedTerms.size) windows.push({ start, end, terms: matchedTerms });
+    if (end === text.length) break;
+  }
+
+  if (!windows.length) return text.slice(0, maxChars);
+
+  const selected: Array<{ start: number; end: number; terms: Set<string> }> = [];
+  const covered = new Set<string>();
+  let usedChars = 0;
+  const maxWindows = Math.max(1, Math.ceil(maxChars / FATMAN_EXCERPT_WINDOW_CHARS));
+
+  while (selected.length < maxWindows && usedChars < maxChars) {
+    let best: typeof windows[number] | undefined;
+    let bestScore = 0;
+
+    for (const candidate of windows) {
+      if (selected.includes(candidate)) continue;
+      const overlap = selected.reduce((total, item) =>
+        total + Math.max(0, Math.min(item.end, candidate.end) - Math.max(item.start, candidate.start)), 0);
+      if (overlap > FATMAN_EXCERPT_WINDOW_CHARS * 0.45) continue;
+
+      const newTerms = [...candidate.terms].filter((term) => !covered.has(term));
+      const score = newTerms.length + candidate.terms.size * 0.08 - overlap / FATMAN_EXCERPT_WINDOW_CHARS;
+      if (score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+
+    if (!best || bestScore <= 0) break;
+    selected.push(best);
+    best.terms.forEach((term) => covered.add(term));
+    usedChars += best.end - best.start;
+  }
+
+  if (!selected.length) return text.slice(0, maxChars);
+
+  const ordered = selected.sort((a, b) => a.start - b.start);
+  const pieces: string[] = [];
+  let previousEnd = -1;
+  let remaining = maxChars;
+  for (const window of ordered) {
+    const start = Math.max(window.start, previousEnd);
+    if (start >= window.end || remaining <= 0) continue;
+    const piece = text.slice(start, Math.min(window.end, start + remaining));
+    if (piece) {
+      pieces.push(piece);
+      remaining -= piece.length;
+      previousEnd = start + piece.length;
+    }
+  }
+  return pieces.join(" … ");
 }
 
 function cleanPassageText(value: string): string {
