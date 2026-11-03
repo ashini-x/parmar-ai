@@ -17,9 +17,45 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 64);
 }
 
+const BRVIN_INLINE_SCRIPT_START = '<script type="module">';
+const BRVIN_INLINE_SCRIPT_END = "</script>";
+
+function brvinClientScriptSource(): string {
+  const start = HTML.indexOf(BRVIN_INLINE_SCRIPT_START);
+  if (start < 0) throw new Error("BRVIN client script marker is missing.");
+  const bodyStart = start + BRVIN_INLINE_SCRIPT_START.length;
+  const end = HTML.indexOf(BRVIN_INLINE_SCRIPT_END, bodyStart);
+  if (end < 0) throw new Error("BRVIN client script closing marker is missing.");
+  return HTML.slice(bodyStart, end);
+}
+
 export function brvinAdminPage(): Response {
-  return new Response(HTML, {
+  const html = HTML.replace(
+    /<script type="module">[\\s\\S]*?<\\/script>/u,
+    '<script src="/admin/brvin/app.js" defer></script>',
+  );
+  return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
+export function brvinAdminScript(): Response {
+  const body = brvinClientScriptSource();
+  // A same-origin classic script is more compatible with mobile browsers and
+  // is not dependent on inline-module execution. Wrap top-level await in an
+  // async boot function and surface fatal startup errors in the live label.
+  const script = "(async function brvinBoot(){\\n" + body +
+    "\\n})().catch(function(error){\\n" +
+    "  var label=document.getElementById('live-label');\\n" +
+    "  if(label) label.textContent='LIVE · startup error';\\n" +
+    "  console.error('BRVIN dashboard startup failed',error);\\n" +
+    "});";
+  return new Response(script, {
+    headers: {
+      "content-type": "application/javascript; charset=utf-8",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+    },
   });
 }
 
