@@ -187,14 +187,25 @@ export async function streamObjectSha256(env: Env, objectName: string): Promise<
   if (!response.ok || !response.body) throw await responseError(response, "Could not stream the source PDF for SHA-256 verification");
   const hash = new Sha256();
   const reader = response.body.getReader();
+  let prefix = new Uint8Array(0);
   try {
     while (true) {
       const result = await reader.read();
       if (result.done) break;
+      if (prefix.length < 5) {
+        const take = Math.min(5 - prefix.length, result.value.length);
+        const next = new Uint8Array(prefix.length + take);
+        next.set(prefix);
+        next.set(result.value.subarray(0, take), prefix.length);
+        prefix = next;
+      }
       hash.update(result.value);
     }
   } finally {
     reader.releaseLock();
+  }
+  if (new TextDecoder().decode(prefix) !== "%PDF-") {
+    throw new GoogleServiceError("The uploaded object does not contain a valid PDF file signature.", 422);
   }
   return hash.hex().toUpperCase();
 }
