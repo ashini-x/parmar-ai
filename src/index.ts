@@ -41,7 +41,7 @@ import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
 import { completeFatmanUpload, diagnoseFatmanGcsUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
-import { assignBrvinBookProjects, assignBrvinProjectCollections, createBrvinCollection, createBrvinProject, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview } from "./brvin/admin";
+import { assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview } from "./brvin/admin";
 import { runBrvinRecoverySupervisor } from "./fatman/workflow";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
@@ -2173,6 +2173,9 @@ const worker = {
           if (adminApiPath === "/admin/api/brvin/projects") return createBrvinProject(env, request);
           if (adminApiPath === "/admin/api/brvin/collections") return createBrvinCollection(env, request);
           if (adminApiPath === "/admin/api/brvin/books/assign") return assignBrvinBookProjects(env, request);
+          if (adminApiPath === "/admin/api/brvin/books/delete") return deleteBrvinBook(env, request);
+          if (adminApiPath === "/admin/api/brvin/books/delete-vision-output") return deleteBrvinVisionOutput(env, request);
+          if (adminApiPath === "/admin/api/brvin/clear") return clearBrvinKnowledgeSources(env, request);
           if (adminApiPath === "/admin/api/brvin/projects/collections") return assignBrvinProjectCollections(env, request);
           const chunkMatch = adminApiPath.match(/^\/admin\/api\/brvin\/upload\/([a-f0-9-]+)\/chunk$/i);
           if (chunkMatch) return uploadFatmanChunk(env, request, chunkMatch[1]);
