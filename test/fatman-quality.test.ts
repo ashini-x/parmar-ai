@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildFatmanBookVerificationPages,
   buildFatmanRetrievalProbe,
   buildFatmanRetrievalProbes,
   FATMAN_VERIFICATION_PAGES,
@@ -9,6 +10,13 @@ import {
 describe("Fatman retrieval readiness checks", () => {
   it("samples pages across the beginning, middle and end of the book", () => {
     expect(FATMAN_VERIFICATION_PAGES).toEqual([54, 269, 485]);
+  });
+
+  it("spreads additional-book samples across short and long PDFs", () => {
+    expect(buildFatmanBookVerificationPages(1)).toEqual([1]);
+    expect(buildFatmanBookVerificationPages(2)).toEqual([1, 2]);
+    expect(buildFatmanBookVerificationPages(100)).toEqual([5, 20, 35, 50, 65, 80, 95, 100]);
+    expect(() => buildFatmanBookVerificationPages(0)).toThrow();
   });
 
   it("builds multiple compact queries using only terms present in OCR", () => {
