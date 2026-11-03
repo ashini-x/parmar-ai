@@ -2,6 +2,7 @@ import type { AiUsageRecord, AnswerPacket, ConversationTurn, Env, GeminiGenerati
 import type { FatmanBookContext } from "../fatman/retrieval";
 import { GoogleAuthError, getGoogleAccessToken } from "../auth/google";
 import { getConfig, MAX_QUIZ_BATCH_SIZE, type QuizItem } from "../config/env";
+import { TELEGRAM_PROGRESS_LABELS } from "../telegram/progress";
 
 const DEFAULT_LOCATION = "global";
 const DEFAULT_MODEL = "gemini-3.8-flash";
@@ -284,11 +285,11 @@ export async function generateGeminiAnswer(
   for (let attempt = 1; attempt <= MAX_INTERNAL_ATTEMPTS; attempt += 1) {
     try {
       if (attempt > 1) {
-        await onPartialAnswer?.setStatus?.("Retrying with a fresh answer attempt…");
+        await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.retrying);
       } else if (bookContext) {
-        await onPartialAnswer?.setStatus?.("Writing your page-cited answer…");
+        await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.writingAnswer);
       } else if (requiresGrounding) {
-        await onPartialAnswer?.setStatus?.("Checking current sources…");
+        await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingSources);
       }
 
       const result = await requestVertexGemini(
