@@ -49,9 +49,14 @@ async function getAccessToken(env: Env): Promise<string> {
       exp: now + 3600,
     })));
     const unsigned = header + "." + claims;
+    const privateKeyBytes = decodePem(privateKey);
+    const privateKeyBuffer = privateKeyBytes.buffer.slice(
+      privateKeyBytes.byteOffset,
+      privateKeyBytes.byteOffset + privateKeyBytes.byteLength,
+    ) as ArrayBuffer;
     const key = await crypto.subtle.importKey(
       "pkcs8",
-      decodePem(privateKey),
+      privateKeyBuffer,
       { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
       false,
       ["sign"],
