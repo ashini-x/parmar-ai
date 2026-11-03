@@ -527,7 +527,7 @@ function isBotIdentityQuestion(question: string): boolean {
 }
 
 function buildUserPrompt(question: string, context: ProfileContext, requiresGrounding: boolean, isCompletionRetry: boolean, requestedQuizCount: number, bookContext?: FatmanBookContext): string {
-  if (bookContext) return buildFatmanUserPrompt(question, bookContext, isCompletionRetry, profileContext.recentConversation);
+  if (bookContext) return buildFatmanUserPrompt(question, bookContext, isCompletionRetry, context.recentConversation);
   const profile = context.profile;
   const latestTurn = context.recentConversation.at(-1);
   const likelyFollowUp = isLikelyFollowUp(question, context.recentConversation);
