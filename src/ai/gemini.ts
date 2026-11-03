@@ -587,6 +587,7 @@ function buildFatmanUserPrompt(question: string, context: FatmanBookContext, isC
     "Do not invent or include page numbers. The application will append verified source pages.",
     "Set responseMode to text. If the user asks for MCQs, give them as text and ground every item in these excerpts.",
     isCompletionRetry ? "Return a complete, concise answer. Do not refer to an earlier draft." : "",
+    context.qaRepairHint ? context.qaRepairHint : "",
     "",
     "RETRIEVED FATMAN EXCERPTS:",
     excerpts,
