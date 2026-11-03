@@ -76,7 +76,7 @@ describe("Fatman real-user release QA", () => {
   });
 
   it("uses a bounded answer-repair pass when fact coverage is incomplete", async () => {
-    const answer = vi.fn(async (question: string) => ({ answer: answerFor(question) }));
+    const answer = vi.fn(async (question: string, _context: FatmanBookContext, _repairHint?: string) => ({ answer: answerFor(question) }));
     answer.mockImplementationOnce(async () => ({ answer: "The Battle happened in Bengal." }));
     const retrieval = goodDependencies().retrieve;
     const report = await runFatmanReleaseQa({
