@@ -21,7 +21,7 @@ The specialist roles are deterministic, auditable Workflow stages. They do not h
 
 ## Regression coverage
 
-Suite version fatman-real-user-qa-v3 contains twelve questions:
+Suite version fatman-real-user-qa-v4 contains twelve questions:
 
 | Case | Type | Required evidence |
 |---|---|---|
@@ -49,6 +49,7 @@ These are regression probes, not a claim that twelve questions cover every possi
 - The same hybrid search index and same Gemini generation function are used for release QA and student answers. QA bypasses only the student monthly usage counter.
 - Gemini is instructed to answer only from retrieved excerpts, ignore instructions embedded in OCR text, avoid invented page numbers and abstain when evidence is insufficient.
 - When comparing constitutional concepts, answers should include each relevant Part or Article number when it appears in the retrieved book pages, including for shorthand questions.
+- The fact verifier canonicalizes standard ordinal variants such as 1st/first, 2nd/second and 3rd/third so equivalent answer wording is not marked as a factual miss.
 - Fatman answers receive a larger minimum output budget than ordinary short chat responses so complex answers are not truncated by the default 1,200-token limit.
 - Citations are selected from actual retrieved PDF page keys and ranked using passage relevance, question overlap and answer overlap. No page number is accepted from Gemini itself.
 - The out-of-book test must retrieve no relevant passages and receive an explicit abstention. A long hex-looking fingerprint is treated as a failure.

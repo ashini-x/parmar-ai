@@ -76,7 +76,7 @@ function goodDependencies(): FatmanReleaseQaDependencies {
 
 describe("Fatman real-user release QA", () => {
   it("contains all six user-facing QA categories", () => {
-    expect(FATMAN_RELEASE_QA_SUITE_VERSION).toBe("fatman-real-user-qa-v3");
+    expect(FATMAN_RELEASE_QA_SUITE_VERSION).toBe("fatman-real-user-qa-v4");
     expect(new Set(FATMAN_RELEASE_QA_CASES.map((item) => item.category))).toEqual(new Set([
       "exact_fact", "concept", "comparison", "page_reference", "out_of_book", "difficult",
     ]));
@@ -144,6 +144,23 @@ describe("Fatman real-user release QA", () => {
     expect(exact?.generationAttempts).toBe(2);
     expect(exact?.estimatedCostMicrousd).toBe(225);
     expect(answer.mock.calls[1]?.[2]).toContain("QA REPAIR PASS");
+  });
+
+  it("accepts equivalent ordinal notation in factual book answers", async () => {
+    const deps = goodDependencies();
+    deps.answer = async (question) => ({
+      answer: question.includes("first Governor-General of Bengal")
+        ? "Lord Warren Hastings was the 1st Governor-General of Bengal under the Regulating Act of 1773."
+        : answerFor(question),
+      estimatedCostMicrousd: 125,
+    });
+    const report = await runFatmanReleaseQa(deps, {
+      runId: "qa-test-ordinal",
+      documentVersion: "fatman-test-v1",
+    });
+    const governor = report.results.find((item) => item.id === "first-governor-general-bengal");
+    expect(governor?.status).toBe("passed");
+    expect(governor?.matchedFactGroups).toBe(2);
   });
 
   it("does not accept a made-up fingerprint as a valid out-of-book abstention", async () => {

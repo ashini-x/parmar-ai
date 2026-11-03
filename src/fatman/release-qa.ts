@@ -4,7 +4,7 @@ import {
   type FatmanBookContext,
 } from "./retrieval";
 
-export const FATMAN_RELEASE_QA_SUITE_VERSION = "fatman-real-user-qa-v3";
+export const FATMAN_RELEASE_QA_SUITE_VERSION = "fatman-real-user-qa-v4";
 
 export interface FatmanReleaseQaCase {
   id: string;
@@ -377,7 +377,14 @@ function countMatchedFactGroups(answer: string, groups: string[][]): number {
 }
 
 function normalizeForFactMatch(value: string): string {
-  return value.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").replace(/\s+/gu, " ").trim();
+  return value.toLowerCase()
+    .normalize("NFKC")
+    .replace(/\b1st\b/gu, "first")
+    .replace(/\b2nd\b/gu, "second")
+    .replace(/\b3rd\b/gu, "third")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
 }
 
 function isSafeFatmanAbstention(answer: string): boolean {
