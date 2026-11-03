@@ -13,11 +13,14 @@ import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } fr
 import { buildFatmanRetrievalQuery, formatFatmanCitations, isFatmanReady, retrieveFatmanContext, FatmanRetrievalError } from "./fatman/retrieval";
 import { logger } from "./core/logger";
 import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./telegram/progress";
+import { parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
+import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
 import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
   deleteTelegramMessage,
   editTelegramMessage,
+  editTelegramMessageReplyMarkup,
   sendTelegramChatAction,
   sendTelegramMessage,
   sendTelegramBusinessMessage,
@@ -280,8 +283,9 @@ async function handleFatmanModeCallback(
   try {
     const chatId = callback.message?.chat?.id;
     const senderId = callback.from?.id;
+    const action = parseFatmanModeAction(callback.data);
     if (
-      callback.data !== "fatman:toggle" ||
+      !action ||
       !isSafeInteger(chatId) ||
       callback.message?.chat?.type !== "private" ||
       !isSafeInteger(senderId) ||
@@ -290,19 +294,49 @@ async function handleFatmanModeCallback(
       await answerCallback("This control is only available in your private chat.", true);
       return;
     }
-    if (!(await isFatmanReady(env))) {
+
+    const current = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId });
+    const active = resolveFatmanModeTarget(action, current.active);
+    // Exiting must remain possible even if the book index becomes unavailable.
+    if (active && !current.active && !(await isFatmanReady(env))) {
       await answerCallback("Fatman mode is not available yet.", true);
       return;
     }
 
-    const current = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId });
-    const active = !current.active;
     await jobStoreRequest(env, chatId, { action: "set_fatman_mode", botConnectionId, active });
-    await answerCallback(active ? "Fatman mode on." : "Usual study mode on.");
-    const confirmation = active
-      ? "Fatman mode is on. Answers now use the book and include page citations."
-      : "Fatman mode is off. Answers now use the usual study mode.";
-    await sendTelegramMessage(env, chatId, confirmation, undefined, botConnectionId, true, buildFatmanModeMarkup(active));
+    await answerCallback(
+      active
+        ? (current.active ? "Fatman mode is already on." : "Fatman mode on.")
+        : (current.active ? "Fatman mode off." : "Fatman mode is already off."),
+    );
+
+    if (isSafeInteger(callback.message?.message_id)) {
+      try {
+        await editTelegramMessageReplyMarkup(
+          env,
+          chatId,
+          callback.message!.message_id!,
+          buildFatmanModeMarkup(active),
+          botConnectionId,
+        );
+      } catch (error) {
+        logger.warn("fatman_mode_keyboard_refresh_failed", {
+          requestId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    await sendTelegramMessage(
+      env,
+      chatId,
+      active
+        ? "✅ Fatman Mode is ON. New doubts will use the book and page citations."
+        : "✅ Fatman Mode is OFF. New doubts will use the usual SSC study mode.",
+      undefined,
+      botConnectionId,
+      true,
+    );
   } catch (error) {
     logger.warn("fatman_mode_callback_failed", {
       requestId,
@@ -461,9 +495,57 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     ctx.waitUntil(bestEffortTelegram("help_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId)));
     const mode = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId }).catch(() => ({ ok: true as const, active: false }));
     const fatmanReady = await isFatmanReady(env);
-    const markup = fatmanReady ? buildFatmanModeMarkup(mode.active) : undefined;
-    await bestEffortTelegram("help", () => sendTelegramMessage(env, chatId, buildHelpText(), undefined, bot.connectionId, true, markup));
+    const callbackWebhookReady = fatmanReady
+      ? await syncTelegramWebhookForCallbacks(request, env, bot, requestId)
+      : false;
+    const markup = fatmanReady && callbackWebhookReady ? buildFatmanModeMarkup(mode.active) : undefined;
+    const helpText = buildHelpText() + (
+      !fatmanReady
+        ? "\n\nFatman Mode is currently unavailable. You can still use /fatman off to leave the mode."
+        : callbackWebhookReady
+          ? "\n\nUse the buttons below or /fatman on and /fatman off to switch book mode."
+          : "\n\nButton sync failed. Use /fatman on or /fatman off as a backup."
+    );
+    await bestEffortTelegram("help", () => sendTelegramMessage(env, chatId, helpText, undefined, bot.connectionId, true, markup));
     return withRequestId(json({ ok: true }), requestId);
+  }
+
+  const fatmanCommand = parseFatmanModeCommand(text);
+  if (fatmanCommand) {
+    const current = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, {
+      action: "get_fatman_mode",
+      botConnectionId: bot.connectionId,
+    });
+    const desiredActive = fatmanCommand === "on" ? true : fatmanCommand === "off" ? false : current.active;
+    if (desiredActive && !current.active && !(await isFatmanReady(env))) {
+      await bestEffortTelegram("fatman_command_unavailable", () => sendTelegramMessage(
+        env,
+        chatId,
+        "Fatman Mode is not available right now. Usual study mode is still active.",
+        messageId,
+        bot.connectionId,
+      ));
+      return withRequestId(json({ ok: true, fatmanUnavailable: true }), requestId);
+    }
+    await jobStoreRequest(env, chatId, {
+      action: "set_fatman_mode",
+      botConnectionId: bot.connectionId,
+      active: desiredActive,
+    });
+    const ready = desiredActive ? await isFatmanReady(env) : false;
+    const commandText = desiredActive
+      ? (current.active ? "Fatman Mode is already ON." : "✅ Fatman Mode is ON. New doubts will use the book and page citations.")
+      : (current.active ? "✅ Fatman Mode is OFF. New doubts will use the usual SSC study mode." : "Fatman Mode is already OFF.");
+    await bestEffortTelegram("fatman_command", () => sendTelegramMessage(
+      env,
+      chatId,
+      commandText,
+      messageId,
+      bot.connectionId,
+      true,
+      ready ? buildFatmanModeMarkup(desiredActive) : undefined,
+    ));
+    return withRequestId(json({ ok: true, fatmanMode: desiredActive }), requestId);
   }
 
   if (/^\/id$/i.test(text)) {
@@ -1534,6 +1616,7 @@ function buildHelpText(): string {
     "View your SSC study profile /profile",
     "Reset your study profile /reset",
     "Delete your study data /delete_data",
+    "Fatman book mode /fatman on /fatman off",
   ].join("\n\n");
 }
 
@@ -1625,6 +1708,29 @@ function syncTelegramCommandMenu(env: Env, botConnectionId: string): Promise<unk
   return telegramApi(env, "setMyCommands", { commands: buildSetupCommands() }, botConnectionId);
 }
 
+async function syncTelegramWebhookForCallbacks(
+  request: Request,
+  env: Env,
+  bot: { token: string; webhookSecret: string },
+  requestId: string,
+): Promise<boolean> {
+  try {
+    const webhookUrl = new URL(request.url).origin + "/telegram/webhook";
+    const result = await telegramSetupMethod(
+      env,
+      "setWebhook",
+      buildTelegramWebhookSetupPayload(webhookUrl, bot.webhookSecret, bot.token),
+    );
+    return result === true;
+  } catch (error) {
+    logger.warn("telegram_callback_webhook_sync_failed", {
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
 async function telegramSetup(request: Request, env: Env, requestId: string): Promise<Response> {
   if (!env.TELEGRAM_SETUP_SECRET) {
     return withRequestId(json({ ok: false, error: "telegram_setup_not_configured" }, 500), requestId);
@@ -1644,14 +1750,11 @@ async function telegramSetup(request: Request, env: Env, requestId: string): Pro
 
   const url = new URL(request.url);
   const webhookUrl = url.origin + "/telegram/webhook";
-  const webhookResult = await telegramSetupMethod(env, "setWebhook", {
-    url: webhookUrl,
-    secret_token: webhookSecret,
-    allowed_updates: ["message", "poll_answer", "business_connection", "business_message", "callback_query"],
-    drop_pending_updates: false,
-    max_connections: 100,
-    botTokenOverride: token,
-  });
+  const webhookResult = await telegramSetupMethod(
+    env,
+    "setWebhook",
+    buildTelegramWebhookSetupPayload(webhookUrl, webhookSecret, token),
+  );
 
   const commandsResult = await telegramSetupMethod(env, "setMyCommands", {
     commands: buildSetupCommands(),
