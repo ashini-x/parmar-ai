@@ -1,5 +1,6 @@
 import type { Env } from "../config/env";
 import { json } from "../http/response";
+import { ensureAnalyticsSchema } from "../analytics/db";
 import {
   startFatmanLibraryUpload as startLibraryUpload,
   getFatmanImportJob,
@@ -18,6 +19,7 @@ export function fatmanLibraryAdminPage(): Response {
 export async function fatmanLibraryBooks(env: Env): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The book database is not configured." }, 503);
   try {
+    await ensureAnalyticsSchema(env);
     const rows = await env.DB.prepare(
       "SELECT b.id, b.title, b.source_filename, b.source_sha256, b.expected_size, b.page_count, b.status, b.indexed_pages, b.error_message, b.created_at, b.updated_at, " +
       "j.status AS import_status, j.uploaded_bytes, j.vision_operation " +
