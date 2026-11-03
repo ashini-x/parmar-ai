@@ -19,7 +19,7 @@ import {
 
 interface FatmanImportParams {
   importId: string;
-  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor" | "retry_page" | "quality_check";
+  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor" | "retry_page" | "quality_check" | "release_qa";
   startPage?: number;
   endPage?: number;
   objectNames?: string[];
@@ -51,7 +51,7 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
     throw new Error("The Fatman import workflow received an invalid import ID.");
   }
   if (task !== undefined && task !== "resume_index" && task !== "index_chunk" && task !== "repair_chunk" &&
-      task !== "cleanup_chunk" && task !== "monitor" && task !== "retry_page" && task !== "quality_check") {
+      task !== "cleanup_chunk" && task !== "monitor" && task !== "retry_page" && task !== "quality_check" && task !== "release_qa") {
     throw new Error("The Fatman import workflow received an invalid task.");
   }
   return {
