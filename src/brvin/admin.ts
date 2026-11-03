@@ -92,7 +92,7 @@ export async function brvinOverview(env: Env): Promise<Response> {
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
         "SELECT b.id,b.title,b.source_filename,b.page_count,b.indexed_pages,b.status,b.error_message,b.collection_id," +
-        "b.search_prefix,b.source_type,b.vision_output_deleted_at,b.created_at,b.updated_at,c.name AS collection_name " +
+        "b.search_prefix,b.source_type,b.vision_output_deleted_at,b.vision_output_deletion_started_at,b.created_at,b.updated_at,c.name AS collection_name " +
         "FROM brvin_books b LEFT JOIN brvin_collections c ON c.id=b.collection_id " +
         "ORDER BY b.updated_at DESC LIMIT 200"
       ).all<Record<string, unknown>>(),
@@ -160,6 +160,7 @@ export async function brvinOverview(env: Env): Promise<Response> {
         collectionId: String(row.collection_id), collectionName: String(row.collection_name ?? "Unassigned"),
         searchPrefix: String(row.search_prefix), sourceType: String(row.source_type),
         visionOcrDeleted: row.vision_output_deleted_at !== null && row.vision_output_deleted_at !== undefined,
+        visionOcrDeleting: row.vision_output_deletion_started_at !== null && row.vision_output_deletion_started_at !== undefined,
         directProjects: directByBook.get(String(row.id)) ?? [],
         collectionProjects: collectionProjectMap.get(String(row.collection_id)) ?? [],
         projects: [...(directByBook.get(String(row.id)) ?? []), ...(collectionProjectMap.get(String(row.collection_id)) ?? []).filter(project =>
@@ -209,6 +210,7 @@ interface BrvinDeletionCandidate {
   indexed_pages: number;
   page_count: number;
   vision_output_deleted_at: number | null;
+  vision_output_deletion_started_at: number | null;
 }
 
 const DELETABLE_BOOK_STATUSES = ["ready", "failed", "completed", "delete_failed"];
@@ -218,7 +220,7 @@ async function findBrvinDeletionCandidate(env: Env, bookId: string): Promise<Brv
   if (!env.DB) return null;
   return env.DB.prepare(
     "SELECT b.id,b.title,b.status,b.source_type,b.search_prefix,b.indexed_pages,b.page_count," +
-    "j.status AS import_status,j.uploaded_bytes,j.expected_size,b.vision_output_deleted_at " +
+    "j.status AS import_status,j.uploaded_bytes,j.expected_size,b.vision_output_deleted_at,b.vision_output_deletion_started_at " +
     "FROM brvin_books b JOIN fatman_import_jobs j ON j.id=b.id AND j.book_id=b.id WHERE b.id=? LIMIT 1"
   ).bind(bookId).first<BrvinDeletionCandidate>();
 }
@@ -250,10 +252,24 @@ async function startBrvinDeletionWorkflow(
         Number(candidate.indexed_pages) !== Number(candidate.page_count)) {
       throw new Error("OCR-only cleanup is available only after the book is ready and all pages passed retrieval QA.");
     }
-    await env.FATMAN_IMPORT.create({
-      id: workflowId,
-      params: { importId: candidate.id, task: "delete_vision_output" },
-    });
+    if (candidate.vision_output_deleted_at) throw new Error("Vision OCR output has already been removed for this book.");
+    if (candidate.vision_output_deletion_started_at) throw new Error("Vision OCR cleanup is already running for this book.");
+    const reserved = await env.DB.prepare(
+      "UPDATE brvin_books SET vision_output_deletion_started_at=?,updated_at=? " +
+      "WHERE id=? AND status='ready' AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NULL"
+    ).bind(Date.now(), Date.now(), candidate.id).run();
+    if ((reserved.meta?.changes ?? 0) !== 1) throw new Error("The book changed state. Refresh the dashboard and retry.");
+    try {
+      await env.FATMAN_IMPORT.create({
+        id: workflowId,
+        params: { importId: candidate.id, task: "delete_vision_output" },
+      });
+    } catch (error) {
+      await env.DB.prepare(
+        "UPDATE brvin_books SET vision_output_deletion_started_at=NULL,updated_at=? WHERE id=? AND vision_output_deleted_at IS NULL"
+      ).bind(Date.now(), candidate.id).run().catch(() => undefined);
+      throw error;
+    }
     await recordBrvinActivity(env, {
       importId: candidate.id, bookId: candidate.id, agent: "Storage retention supervisor",
       phase: "retention", eventType: "source.vision_ocr_deletion_requested", status: "info",
@@ -263,6 +279,9 @@ async function startBrvinDeletionWorkflow(
     return { workflowId, status: "vision_output_deleting" };
   }
 
+  if (candidate.vision_output_deletion_started_at) {
+    throw new Error("Vision OCR cleanup is running. Wait for it to finish before deleting the full book.");
+  }
   if (!DELETABLE_BOOK_STATUSES.includes(candidate.status) ||
       !DELETABLE_IMPORT_STATUSES.includes(candidate.import_status)) {
     throw new Error("This book is uploading or processing. Wait until its workflow finishes before deleting it.");
@@ -692,7 +711,9 @@ function renderBooks(list,projects){$("book-count").textContent=list.length+" so
   ?'<button class="btn" data-view="'+esc(b.id)+'">Operations</button> ':"";
  const manage=b.status==="deleting"?'':'<button class="btn" data-access="'+esc(b.id)+'">Direct access</button>';
  let deletion="";
- if(b.sourceType==="pdf"&&b.status==="ready"){
+ if(b.sourceType==="pdf"&&b.status==="ready"&&b.visionOcrDeleting){
+  deletion='<span class="muted">OCR cleanup running…</span>';
+ }else if(b.sourceType==="pdf"&&b.status==="ready"){
   deletion=(b.visionOcrDeleted?'<span class="muted">OCR files removed</span> ':'<button class="btn" data-delete-ocr="'+esc(b.id)+'">Delete OCR files</button> ')+'<button class="btn danger" data-delete-book="'+esc(b.id)+'">Delete book</button>';
  }else if(b.sourceType==="pdf"&&(b.status==="failed"||b.status==="delete_failed"||b.status==="completed")){
   deletion='<button class="btn danger" data-delete-book="'+esc(b.id)+'">'+(b.status==="delete_failed"?"Retry deletion":"Delete book")+'</button>';
