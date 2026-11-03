@@ -108,6 +108,8 @@ export type ThinkingLevel = "LOW" | "MEDIUM" | "HIGH";
 export type PartialAnswerHandler = ((answer: string) => void) & {
   /** Replace the in-flight Telegram message with a truthful high-level progress state. */
   setStatus?(status: string): Promise<void>;
+  /** Stop status rotation before delivering the completed answer or failure. */
+  stop?(): Promise<void>;
   flush(): Promise<void>;
 };
 
