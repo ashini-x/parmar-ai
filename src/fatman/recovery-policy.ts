@@ -6,10 +6,11 @@ export function isTransientFatmanIndexError(error: unknown): boolean {
 }
 
 /** Exponential cooldown: 30s, 1m, 2m, 4m, 8m, then capped at 15m. */
-export function fatmanPageRetryDelay(attempt: number): string {
+const RETRY_DELAYS = ["30 seconds", "1 minute", "2 minutes", "4 minutes", "8 minutes", "15 minutes"] as const;
+export type FatmanPageRetryDelay = (typeof RETRY_DELAYS)[number];
+
+export function fatmanPageRetryDelay(attempt: number): FatmanPageRetryDelay {
   const safeAttempt = Number.isSafeInteger(attempt) ? Math.max(1, Math.min(FATMAN_PAGE_RETRY_LIMIT, attempt)) : 1;
-  const seconds = Math.min(900, 30 * 2 ** (safeAttempt - 1));
-  if (seconds < 60) return seconds + " seconds";
-  const minutes = Math.floor(seconds / 60);
-  return minutes + (minutes === 1 ? " minute" : " minutes");
+  const index = Math.min(RETRY_DELAYS.length - 1, safeAttempt - 1);
+  return RETRY_DELAYS[index] as FatmanPageRetryDelay;
 }
