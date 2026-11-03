@@ -477,5 +477,5 @@ $("upload").addEventListener("click",uploadBook);$("refresh").addEventListener("
 $("create-project").addEventListener("click",async()=>{try{await post("projects",{name:$("project-name").value,description:$("project-desc").value});$("project-name").value="";$("project-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("create-collection").addEventListener("click",async()=>{try{await post("collections",{name:$("collection-name").value,description:$("collection-desc").value});$("collection-name").value="";$("collection-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("save-project-access").addEventListener("click",async()=>{try{const projectId=$("project-access").value;if(!projectId)throw new Error("Create or choose a project first.");const collectionIds=[...$("collection-checks").querySelectorAll("input:checked")].map(i=>i.value);await post("projects/collections",{projectId,collectionIds});await refresh();}catch(e){alert(e.message);}});
-await refresh();refreshLoop=setInterval(async()=>{await refresh();if(activeImportId&&$("modal").classList.contains("open"))await showImport(activeImportId).catch(()=>{});},5000);
+await refresh();setInterval(async()=>{await refresh();if(activeImportId&&$("modal").classList.contains("open"))await showImport(activeImportId).catch(()=>{});},5000);
 </script></body></html>`;

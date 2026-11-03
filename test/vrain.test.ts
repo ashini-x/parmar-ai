@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const ensure = vi.hoisted(() => vi.fn(async () => undefined));
-vi.mock("../src/analytics/db", () => ({ ensureAnalyticsSchema: ensure }));
+vi.mock("../src/analytics/db", () => ({
+  ensureAnalyticsSchema: ensure,
+  getFatmanBookState: vi.fn(),
+  recordVrainActivity: vi.fn(),
+  setFatmanBookState: vi.fn(),
+}));
 
 import { retrieveVrainProjectContext, VrainRetrievalError } from "../src/vrain/retrieval";
 import { vrainAdminPage } from "../src/vrain/admin";
