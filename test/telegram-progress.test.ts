@@ -4,7 +4,8 @@ import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "../src/
 describe("Telegram live progress updater", () => {
   it("keeps every progress label short and on one line for mobile", () => {
     for (const [name, label] of Object.entries(TELEGRAM_PROGRESS_LABELS)) {
-      expect(label, name).not.toMatch(/[\\r\\n]/u);
+      expect(label, name).not.toContain("\\n");
+      expect(label, name).not.toContain("\\r");
       expect(Array.from(label).length, name).toBeLessThanOrEqual(22);
     }
   });
