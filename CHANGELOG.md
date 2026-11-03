@@ -1,3 +1,9 @@
+## Unreleased: Looping Telegram progress feedback
+- Long-running progress phases now rotate through compact, phase-accurate one-line variants instead of leaving a stale status on screen.
+- Genuine phase changes are applied faster (500 ms minimum interval); streamed answer chunks remain separately throttled and coalesced (850 ms).
+- If answer streaming pauses, the same message temporarily returns to a writing cycle and resumes the cumulative answer when the next chunk arrives.
+- Progress timers stop before final delivery, preventing a late status edit from overwriting a completed answer.
+
 # Changelog
 
 ## Unreleased: Mobile-safe Telegram progress labels
