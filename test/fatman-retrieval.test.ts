@@ -21,6 +21,13 @@ import {
 
 describe("Fatman page retrieval", () => {
   const search = vi.fn();
+  const readyBookRows: Array<{ id: string; title: string }> = [];
+  const db = {
+    prepare: vi.fn(() => ({
+      all: vi.fn(async () => ({ results: readyBookRows })),
+      first: vi.fn(async () => readyBookRows[0] ?? null),
+    })),
+  };
   const env = {
     FATMAN_ENABLED: "true",
     FATMAN_DOCUMENT_VERSION: "fatman-test-v1",
@@ -28,7 +35,7 @@ describe("Fatman page retrieval", () => {
     FATMAN_EXPECTED_PAGES: "538",
     FATMAN_MIN_SCORE: "0.2",
     FATMAN_MONTHLY_QUERY_LIMIT: "800",
-    DB: {},
+    DB: db,
     FATMAN_SEARCH: {
       get: () => ({ search }),
     },
@@ -36,6 +43,7 @@ describe("Fatman page retrieval", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    readyBookRows.splice(0, readyBookRows.length);
     analytics.getFatmanBookState.mockResolvedValue({
       enabled: true,
       documentVersion: "fatman-test-v1",
@@ -101,6 +109,39 @@ describe("Fatman page retrieval", () => {
     expect(formatFatmanCitations(context.passages)).toBe(
       "Source: Fatman 2nd Edition, PDF p. 123 (book p. 17).",
     );
+  });
+
+  it("retrieves only a verified additional book and cites its own title", async () => {
+    const bookId = "11111111-2222-4333-8444-555555555555";
+    readyBookRows.push({ id: bookId, title: "Polity Reference" });
+    analytics.getFatmanBookState.mockResolvedValue({
+      enabled: false,
+      documentVersion: "fatman-test-v1",
+      indexedPages: 0,
+    });
+    search.mockResolvedValue({
+      chunks: [{
+        id: "polity-page-7",
+        text: "Fundamental rights are guaranteed by Part III of the Indian Constitution.",
+        score: 0.91,
+        item: {
+          key: "fatman/books/" + bookId + "/pages/page-000007.txt",
+          metadata: { bookId, bookTitle: "Polity Reference" },
+        },
+      }],
+    });
+
+    const context = await retrieveFatmanContext(env, "Fundamental rights");
+
+    expect(context.passages).toEqual([
+      expect.objectContaining({
+        id: "polity-page-7",
+        pdfPage: 7,
+        bookId,
+        bookTitle: "Polity Reference",
+      }),
+    ]);
+    expect(formatFatmanCitations(context.passages)).toBe("Source: Polity Reference, PDF p. 7.");
   });
 
   it("does not query AI Search after the monthly search allowance is exhausted", async () => {
