@@ -910,36 +910,36 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           } else {
             await updatePartialAnswer?.setStatus("Searching Fatman 2nd Edition…");
             let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
-          try {
-            bookContext = await retrieveFatmanContext(env, buildFatmanRetrievalQuery(job.question, recentConversation));
-          } catch (error) {
-            if (error instanceof FatmanRetrievalError && !error.retryable) {
-              packet = makeFatmanNoticePacket(error.userMessage ?? "Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
-            } else {
-              throw error;
+            try {
+              bookContext = await retrieveFatmanContext(env, buildFatmanRetrievalQuery(job.question, recentConversation));
+            } catch (error) {
+              if (error instanceof FatmanRetrievalError && !error.retryable) {
+                packet = makeFatmanNoticePacket(error.userMessage ?? "Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
+              } else {
+                throw error;
+              }
             }
-          }
-          if (!packet && bookContext && !bookContext.passages.length) {
-            packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
-          }
-          if (!packet && bookContext) {
-            await updatePartialAnswer?.setStatus("Reviewing the most relevant book pages…");
-            generation = await generateGeminiAnswer(
-              env,
-              job.question,
-              buildProfileContext(profile, recentConversation),
-              images,
-              updatePartialAnswer,
-              bookContext,
-            );
-            packet = generation.packet;
-            const citations = formatFatmanCitations(bookContext.passages, job.question, packet.answer);
-            packet.answer = appendFatmanCitations(packet.answer, citations);
-            packet.sscTakeaway = "";
-            packet.profileSignal = "neutral";
-            packet.profileNote = "";
-            packet.nextRevisionTopic = "";
-          }
+            if (!packet && bookContext && !bookContext.passages.length) {
+              packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
+            }
+            if (!packet && bookContext) {
+              await updatePartialAnswer?.setStatus("Reviewing the most relevant book pages…");
+              generation = await generateGeminiAnswer(
+                env,
+                job.question,
+                buildProfileContext(profile, recentConversation),
+                images,
+                updatePartialAnswer,
+                bookContext,
+              );
+              packet = generation.packet;
+              const citations = formatFatmanCitations(bookContext.passages, job.question, packet.answer);
+              packet.answer = appendFatmanCitations(packet.answer, citations);
+              packet.sscTakeaway = "";
+              packet.profileSignal = "neutral";
+              packet.profileNote = "";
+              packet.nextRevisionTopic = "";
+            }
           }
         } else {
           await updatePartialAnswer?.setStatus(
