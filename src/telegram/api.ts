@@ -27,10 +27,16 @@ interface CreatorContactKeyboardMarkup {
 
 export function buildFatmanModeMarkup(active: boolean): TelegramInlineKeyboardMarkup {
   return {
-    inline_keyboard: [[{
-      text: active ? "Exit Fatman" : "Enter Fatman",
-      callback_data: "fatman:toggle",
-    }]],
+    inline_keyboard: [[
+      {
+        text: active ? "Fatman ON ✓" : "Enter Fatman",
+        callback_data: "fatman:enter",
+      },
+      {
+        text: "Exit Fatman",
+        callback_data: "fatman:exit",
+      },
+    ]],
   };
 }
 
@@ -493,6 +499,28 @@ export async function sendTelegramMessage(
   }
 
   return telegramApi<TelegramMessageResult>(env, "sendMessage", payload, botConnectionId);
+}
+
+export async function editTelegramMessageReplyMarkup(
+  env: Env,
+  chatId: number,
+  messageId: number,
+  replyMarkup: TelegramInlineKeyboardMarkup,
+  botConnectionId?: string,
+  includeCreatorFooter = true,
+): Promise<void> {
+  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
+  const combinedMarkup = mergeInlineKeyboard(replyMarkup, creatorMarkup);
+  try {
+    await telegramApi(env, "editMessageReplyMarkup", {
+      chat_id: chatId,
+      message_id: messageId,
+      ...(combinedMarkup ? { reply_markup: combinedMarkup } : {}),
+    }, botConnectionId);
+  } catch (error) {
+    if (error instanceof TelegramError && error.message.toLowerCase().includes("message is not modified")) return;
+    throw error;
+  }
 }
 
 export async function editTelegramMessage(
