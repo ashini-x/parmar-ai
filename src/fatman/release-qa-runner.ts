@@ -1,8 +1,8 @@
 import type { Env, ProfileContext } from "../config/env";
-import { recordFatmanReleaseQaRun } from "../analytics/db";
+import { recordFatmanReleaseQaRun, recordFatmanReleaseQaRunStarted } from "../analytics/db";
 import { generateGeminiAnswer } from "../ai/gemini";
 import { retrieveFatmanQaContext } from "./retrieval";
-import { runFatmanReleaseQa } from "./release-qa";
+import { runFatmanReleaseQa, FATMAN_RELEASE_QA_SUITE_VERSION } from "./release-qa";
 
 const QA_PROFILE: ProfileContext = {
   profile: {
@@ -28,6 +28,8 @@ export async function runFatmanReleaseQaForEnv(
 ): Promise<Awaited<ReturnType<typeof runFatmanReleaseQa>>> {
   const documentVersion = env.FATMAN_DOCUMENT_VERSION?.trim();
   if (!documentVersion) throw new Error("Fatman document version is not configured for release QA.");
+
+  await recordFatmanReleaseQaRunStarted(env, runId, documentVersion, FATMAN_RELEASE_QA_SUITE_VERSION);
 
   const report = await runFatmanReleaseQa({
     retrieve: (query) => retrieveFatmanQaContext(env, query),
