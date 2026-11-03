@@ -153,7 +153,7 @@ export async function runBrvinRecoverySupervisor(env: Env): Promise<{
   for (const candidate of candidates) {
     const attempts = await env.DB.prepare(
       "SELECT COUNT(*) AS count FROM brvin_activity_events WHERE import_id=? AND event_type='workflow.resumed'",
-    ).bind(candidate.id).first<{ count: number }>();
+    ).bind(candidate.id, Date.now() - 60 * 60 * 1000).first<{ count: number }>();
     const resumeCount = Number(attempts?.count ?? 0);
     if (resumeCount >= 2) {
       const prior = await env.DB.prepare(
@@ -316,7 +316,7 @@ export async function runBrvinVisionRetentionSupervisor(env: Env): Promise<{ sca
   let paused = 0;
   for (const candidate of rows) {
     const failures = await env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM brvin_activity_events WHERE book_id=? AND event_type='source.vision_ocr_delete_failed'"
+      "SELECT COUNT(*) AS count FROM brvin_activity_events WHERE book_id=? AND event_type='source.vision_ocr_delete_failed' AND created_at>=?"
     ).bind(candidate.id).first<{ count: number }>();
     if (Number(failures?.count ?? 0) >= 5) { paused += 1; continue; }
     const result = await startBrvinVisionOutputCleanup(env, candidate.id, "scheduled_retention_supervisor");
