@@ -366,7 +366,7 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
             const normalizedKey = "vrain/books/" + documentId + "/ocr/page-" + String(page).padStart(6, "0") + ".txt";
             const text = await readTextObject(this.env, normalizedKey);
             pageTexts.set(page, text);
-            if (text.trim().split(/\s+/u).length >= 6) checks.push(page);
+            if (buildProbe(text)) checks.push(page);
             if (checks.length >= Math.max(5, minimumChecks)) break;
           }
           const qaPages = checks.slice(0, Math.max(5, minimumChecks));
