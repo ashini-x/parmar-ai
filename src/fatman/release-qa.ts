@@ -4,7 +4,7 @@ import {
   type FatmanBookContext,
 } from "./retrieval";
 
-export const FATMAN_RELEASE_QA_SUITE_VERSION = "fatman-real-user-qa-v2";
+export const FATMAN_RELEASE_QA_SUITE_VERSION = "fatman-real-user-qa-v3";
 
 export interface FatmanReleaseQaCase {
   id: string;
@@ -42,7 +42,7 @@ export const FATMAN_RELEASE_QA_CASES: readonly FatmanReleaseQaCase[] = [
   {
     id: "comparison-equality",
     category: "comparison",
-    question: "Compare Fundamental Rights with Directive Principles of State Policy, focusing on enforceability and their constitutional roles.",
+    question: "Compare Fundamental Rights (Part III) with Directive Principles of State Policy (Part IV), focusing on enforceability and their constitutional roles.",
     queryCandidates: [
       "Fundamental Rights justiciable and Directive Principles of State Policy non justiciable compare",
       "Fundamental Rights Part III Article 12-35 legally enforceable and DPSP Part IV Article 36-51 non-justiciable political democracy social economic democracy",
@@ -102,7 +102,7 @@ export const FATMAN_RELEASE_QA_CASES: readonly FatmanReleaseQaCase[] = [
   {
     id: "abbreviated-fr-dpsp-comparison",
     category: "comparison",
-    question: "What is the difference between FR and DPSP?",
+    question: "What is the difference between FR and DPSP, and which Parts of the Constitution contain them?",
     queryCandidates: [
       "What is the difference between FR and DPSP?",
       "Fundamental Rights versus Directive Principles enforceability",
@@ -193,6 +193,7 @@ const ANSWER_REPAIR_HINT = [
   "Be explicit about the distinguishing facts, dates, names, and cause/effect relationship when they appear in the excerpts.",
   "If the excerpts do not support a requested detail, say that it is not stated. Do not use outside knowledge to fill gaps.",
   "Keep the answer under 100 words or four short sentences unless the question explicitly asks for a longer explanation.",
+  "For any comparison of constitutional concepts, explicitly state the relevant Part or Article for each concept when it appears in the retrieved excerpts.",
 ].join(" ");
 
 const ABSTENTION_MARKERS = [
