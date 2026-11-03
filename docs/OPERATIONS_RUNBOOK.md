@@ -32,3 +32,17 @@ Rotate at the provider, update Cloudflare, and validate the affected integration
 
 ## Rollback
 Use the last verified Cloudflare version. Do not treat an ad-hoc edited working directory as a rollback artifact.
+
+## Add another book to Fatman
+
+Use the administrator-only **Book library** page at `/admin/fatman/books` (also linked from `/admin`).
+
+1. Select the PDF. The page reads the page count and calculates a SHA-256 fingerprint in the browser; the title is prefilled from the file name and can be edited.
+2. Confirm the notice that Google Cloud Vision OCR may incur usage charges, then choose **Add book to Fatman**.
+3. Keep the page open until the secure upload finishes. After that, OCR, chunked indexing, recovery and retrieval verification run in Cloudflare Workflows.
+4. The Book library shows each title, page count, indexed-page progress and current status. Use **View** to inspect an in-progress job. Use **Resume** for a completed upload whose OCR/indexing needs recovery.
+5. If the browser closes during file transfer, select the same PDF again. Its fingerprint lets the resumable uploader continue the existing transfer or start a fresh one if the session expired.
+
+Additional books use unique `fatman/books/{bookId}/pages/page-000001.txt` keys in the existing Fatman AI Search instance. They do not overwrite the original `fatman/pages/` entries or change the original reviewed 538-page import/release gate. Only books whose page indexing and retrieval checks pass are exposed to Fatman answers.
+
+The legacy `/admin/fatman` importer and `/admin/fatman/monitor` remain available for the original reviewed PDF. Do not give administrators GCP credentials or bucket access to use the Book library; missing service configuration must be handled by an infrastructure administrator.

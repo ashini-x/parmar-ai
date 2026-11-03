@@ -1,5 +1,6 @@
 import type { AiSearchChunk, ConversationTurn, Env, GeminiImageInput } from "../config/env";
 import { getFatmanBookState, reserveFatmanSearchQuery } from "../analytics/db";
+import { parseFatmanIndexPageKey } from "./library";
 
 const MAX_MATCHES = 12;
 const MAX_QA_MATCHES = 50;
@@ -26,6 +27,8 @@ export interface FatmanPassage {
   pdfPage: number;
   printedPage?: string;
   section?: string;
+  bookId?: string;
+  bookTitle?: string;
   text: string;
   score: number;
 }
@@ -78,9 +81,14 @@ export async function isFatmanReady(env: Env): Promise<boolean> {
   if (!hasFatmanConfiguration(env)) return false;
   try {
     const state = await getFatmanBookState(env);
-    return state.enabled &&
+    const legacyReady = state.enabled &&
       state.documentVersion === env.FATMAN_DOCUMENT_VERSION?.trim() &&
       state.indexedPages === Number(env.FATMAN_EXPECTED_PAGES);
+    if (legacyReady) return true;
+    const additionalBook = await env.DB!.prepare(
+      "SELECT id FROM fatman_books WHERE status = 'ready' AND indexed_pages = page_count LIMIT 1"
+    ).first<{ id: string }>();
+    return Boolean(additionalBook?.id);
   } catch {
     return false;
   }
@@ -215,45 +223,59 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
   const minScore = Number(env.FATMAN_MIN_SCORE);
   const passages: FatmanPassage[] = [];
   const seenIds = new Set<string>();
-  const pageCounts = new Map<number, number>();
-  const allowedPages = new Set<number>();
+  const pageCounts = new Map<string, number>();
+  const allowedPages = new Set<string>();
+  const state = await getFatmanBookState(env);
+  const legacyReady = state.enabled &&
+    state.documentVersion === env.FATMAN_DOCUMENT_VERSION?.trim() &&
+    state.indexedPages === Number(env.FATMAN_EXPECTED_PAGES);
+  const readyBookRows = await env.DB!.prepare(
+    "SELECT id, title FROM fatman_books WHERE status = 'ready' AND indexed_pages = page_count"
+  ).all<{ id: string; title: string }>();
+  const readyBookTitles = new Map((readyBookRows.results ?? []).map((book) => [book.id, book.title]));
 
   for (const chunk of chunks) {
     const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
-    const pdfPage = pageNumberFromKey(key);
+    const parsedKey = parseFatmanIndexPageKey(key);
+    const pdfPage = parsedKey?.page;
     const fullText = typeof chunk.text === "string" ? cleanPassageText(chunk.text) : "";
     const score = finiteScore(chunk.score) ??
       finiteScore(chunk.scoring_details?.reranking_score) ??
       finiteScore(chunk.scoring_details?.vector_score);
     if (!pdfPage || !fullText || score === undefined || score < minScore) continue;
     if (!isFatmanPassageRelevant(normalizedQuery, fullText)) continue;
-    // Test relevance against the entire OCR result before clipping. Long pages
-    // must retain distant evidence (for example Plassey, Buxar and Allahabad)
-    // instead of silently discarding everything after the first 2,000 chars.
+    // Test relevance against the entire OCR result before clipping.
     const text = extractFatmanEvidenceExcerpt(normalizedQuery, fullText, MAX_PASSAGE_CHARS);
 
     const id = typeof chunk.id === "string" && chunk.id
       ? chunk.id
       : key + ":" + text.slice(0, 80);
     if (seenIds.has(id)) continue;
-    if (!allowedPages.has(pdfPage) && allowedPages.size >= MAX_PAGES) continue;
-    const pageCount = pageCounts.get(pdfPage) ?? 0;
+    const metadata = chunk.item?.metadata;
+    const bookId = parsedKey?.bookId;
+    if (bookId ? !readyBookTitles.has(bookId) : !legacyReady) continue;
+    const sourceKey = bookId ?? "fatman-legacy";
+    const pageKey = sourceKey + ":" + pdfPage;
+    if (!allowedPages.has(pageKey) && allowedPages.size >= MAX_PAGES) continue;
+    const pageCount = pageCounts.get(pageKey) ?? 0;
     if (pageCount >= 2) continue;
 
-    const metadata = chunk.item?.metadata;
     const printedPage = cleanMetadataText(metadata?.printedPage, 20);
     const section = cleanMetadataText(metadata?.section, 120);
+    const bookTitle = bookId ? (cleanMetadataText(metadata?.bookTitle, 160) ?? readyBookTitles.get(bookId) ?? "Additional reference book") : undefined;
     passages.push({
       id,
       pdfPage,
+      ...(bookId ? { bookId } : {}),
+      ...(bookTitle ? { bookTitle } : {}),
       ...(printedPage ? { printedPage } : {}),
       ...(section ? { section } : {}),
       text,
       score,
     });
     seenIds.add(id);
-    allowedPages.add(pdfPage);
-    pageCounts.set(pdfPage, pageCount + 1);
+    allowedPages.add(pageKey);
+    pageCounts.set(pageKey, pageCount + 1);
     if (passages.length >= MAX_PASSAGES) break;
   }
 
@@ -326,17 +348,19 @@ export function mergeFatmanContexts(contexts: FatmanBookContext[]): FatmanBookCo
   const passages: FatmanPassage[] = [];
   const ids = new Set<string>();
   const fingerprints = new Set<string>();
-  const pageCounts = new Map<number, number>();
+  const pageCounts = new Map<string, number>();
 
   for (const passage of candidates) {
-    const fingerprint = passage.pdfPage + ":" + passage.text.toLowerCase().replace(/\s+/gu, " ").slice(0, 180);
+    const sourceKey = passage.bookId ?? "fatman-legacy";
+    const pageKey = sourceKey + ":" + passage.pdfPage;
+    const fingerprint = pageKey + ":" + passage.text.toLowerCase().replace(/\s+/gu, " ").slice(0, 180);
     if (ids.has(passage.id) || fingerprints.has(fingerprint)) continue;
-    const pageCount = pageCounts.get(passage.pdfPage) ?? 0;
+    const pageCount = pageCounts.get(pageKey) ?? 0;
     if (pageCount >= 2 || (pageCount === 0 && pageCounts.size >= MAX_PAGES)) continue;
 
     ids.add(passage.id);
     fingerprints.add(fingerprint);
-    pageCounts.set(passage.pdfPage, pageCount + 1);
+    pageCounts.set(pageKey, pageCount + 1);
     passages.push(passage);
     if (passages.length >= MAX_PASSAGES) break;
   }
@@ -350,14 +374,22 @@ export function formatFatmanCitations(
   question = "",
   answer = "",
 ): string {
-  const byPdfPage = new Map<number, {
+  const byBookPage = new Map<string, {
+    bookId?: string;
+    bookTitle: string;
+    pdfPage: number;
     printedPage?: string;
     score: number;
     text: string;
   }>();
   for (const passage of passages) {
-    const current = byPdfPage.get(passage.pdfPage);
-    byPdfPage.set(passage.pdfPage, {
+    const sourceKey = passage.bookId ?? "fatman-legacy";
+    const key = sourceKey + ":" + passage.pdfPage;
+    const current = byBookPage.get(key);
+    byBookPage.set(key, {
+      bookId: passage.bookId,
+      bookTitle: passage.bookTitle ?? "Fatman 2nd Edition",
+      pdfPage: passage.pdfPage,
       printedPage: current?.printedPage ?? passage.printedPage,
       score: Math.max(current?.score ?? 0, passage.score),
       text: current ? current.text + " " + passage.text : passage.text,
@@ -366,7 +398,7 @@ export function formatFatmanCitations(
 
   const questionTerms = meaningfulFatmanTerms(question);
   const answerTerms = meaningfulFatmanTerms(answer);
-  const ranked = [...byPdfPage.entries()].map(([pdfPage, source]) => {
+  const ranked = [...byBookPage.values()].map((source) => {
     const passageTerms = meaningfulFatmanTerms(source.text);
     const questionOverlap = [...questionTerms].filter((term) => passageTerms.has(term)).length;
     const answerOverlap = [...answerTerms].filter((term) => passageTerms.has(term)).length;
@@ -377,25 +409,27 @@ export function formatFatmanCitations(
       ? answerOverlap / Math.min(answerTerms.size, 12)
       : 0;
     const relevance = source.score * 0.4 + questionCoverage * 0.2 + answerCoverage * 0.4;
-    return { pdfPage, printedPage: source.printedPage, relevance };
+    return { ...source, relevance };
   });
 
   const refs = ranked
-    .sort((a, b) => b.relevance - a.relevance || a.pdfPage - b.pdfPage)
+    .sort((a, b) => b.relevance - a.relevance || a.bookTitle.localeCompare(b.bookTitle) || a.pdfPage - b.pdfPage)
     .slice(0, MAX_CITATION_PAGES)
-    .sort((a, b) => a.pdfPage - b.pdfPage)
-    .map(({ pdfPage, printedPage }) => printedPage
-      ? "PDF p. " + pdfPage + " (book p. " + printedPage + ")"
-      : "PDF p. " + pdfPage);
-  return refs.length ? "Source: Fatman 2nd Edition, " + refs.join("; ") + "." : "";
-}
-
-function pageNumberFromKey(key: string): number | undefined {
-  if (!key.startsWith("fatman/pages/")) return undefined;
-  const match = /^fatman\/pages\/page-(\d{1,6})\.(?:jpg|jpeg|pdf|txt)$/iu.exec(key);
-  if (!match) return undefined;
-  const page = Number(match[1]);
-  return Number.isSafeInteger(page) && page > 0 ? page : undefined;
+    .sort((a, b) => a.bookTitle.localeCompare(b.bookTitle) || a.pdfPage - b.pdfPage)
+    .map((source) => ({
+      bookTitle: source.bookTitle,
+      pageRef: source.printedPage
+        ? "PDF p. " + source.pdfPage + " (book p. " + source.printedPage + ")"
+        : "PDF p. " + source.pdfPage,
+    }));
+  const grouped = new Map<string, string[]>();
+  for (const item of refs) {
+    const list = grouped.get(item.bookTitle) ?? [];
+    list.push(item.pageRef);
+    grouped.set(item.bookTitle, list);
+  }
+  const sources = [...grouped.entries()].map(([bookTitle, pages]) => bookTitle + ", " + pages.join("; "));
+  return sources.length ? "Source: " + sources.join("; ") + "." : "";
 }
 
 /**

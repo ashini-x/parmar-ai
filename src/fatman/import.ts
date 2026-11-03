@@ -3,6 +3,7 @@ import { ensureAnalyticsSchema, getFatmanBookState, setFatmanBookState } from ".
 import { getGoogleAccessToken } from "../auth/google";
 import { json } from "../http/response";
 import { nextAiSearchPage } from "./pagination";
+import { fatmanExpectedPageCount, fatmanIndexPagePrefix, parseFatmanIndexPageKey } from "./library";
 
 export const FATMAN_IMPORT_PAGES = 538;
 export const FATMAN_IMPORT_SHA256 = "8B183803FE8EE53087D731F7319519AF9AC5BB62B39B2D3110ACC3FE0AB59886";
@@ -24,6 +25,9 @@ export interface FatmanImportJob {
   error_message: string | null;
   created_at: number;
   updated_at: number;
+  book_id?: string | null;
+  book_title?: string | null;
+  page_count?: number | null;
 }
 
 function bucket(env: Env): string {
@@ -63,6 +67,10 @@ export async function setFatmanImportStatus(
     "error_message = ?, updated_at = ? WHERE id = ?"
   ).bind(status, values.visionOperation ?? null, values.workflowInstanceId ?? null, values.indexedPages ?? null,
     values.errorMessage ?? null, Date.now(), id).run();
+  await env.DB.prepare(
+    "UPDATE fatman_books SET status = ?, indexed_pages = COALESCE((SELECT indexed_pages FROM fatman_import_jobs WHERE id = ?), indexed_pages), " +
+    "error_message = ?, updated_at = ? WHERE id = ?"
+  ).bind(status, id, values.errorMessage ?? null, Date.now(), id).run();
 }
 
 export async function fatmanUploadStatus(env: Env, id?: string | null, includeLivePipelineStatus = false): Promise<Response> {
@@ -72,7 +80,7 @@ export async function fatmanUploadStatus(env: Env, id?: string | null, includeLi
     await ensureAnalyticsSchema(env);
     const job = id && validId(id)
       ? await getFatmanImportJob(env, id)
-      : await env.DB.prepare("SELECT * FROM fatman_import_jobs ORDER BY created_at DESC LIMIT 1").first<FatmanImportJob>();
+      : await env.DB.prepare("SELECT * FROM fatman_import_jobs WHERE book_id IS NULL ORDER BY created_at DESC LIMIT 1").first<FatmanImportJob>();
     let pipeline: { vision: Record<string, unknown>; workflow: Record<string, unknown> } | undefined;
     if (includeLivePipelineStatus) {
       const vision: Record<string, unknown> = job?.vision_operation
@@ -114,7 +122,10 @@ export async function fatmanUploadStatus(env: Env, id?: string | null, includeLi
         expectedSize: Number(job.expected_size),
         uploadedBytes: Number(job.uploaded_bytes),
         indexedPages: Number(job.indexed_pages),
-        expectedPages: FATMAN_IMPORT_PAGES,
+        expectedPages: fatmanExpectedPageCount(job),
+        bookId: job.book_id ?? null,
+        bookTitle: job.book_title ?? null,
+        isLibraryBook: Boolean(job.book_id),
         hasVisionOperation: Boolean(job.vision_operation),
         workflowInstanceId: job.workflow_instance_id ?? null,
         createdAt: Number(job.created_at),
@@ -239,6 +250,121 @@ export async function startFatmanUpload(env: Env, request: Request): Promise<Res
   }
 }
 
+/** Starts the reusable multi-book importer. The legacy 538-page hash-locked endpoint remains separate. */
+export async function startFatmanLibraryUpload(env: Env, request: Request): Promise<Response> {
+  if (!env.DB || !env.FATMAN_SEARCH || !env.FATMAN_IMPORT) {
+    return json({ ok: false, error: "The book processing service is not fully configured. Contact the administrator." }, 503);
+  }
+  let body: { title?: unknown; filename?: unknown; sha256?: unknown; size?: unknown; pageCount?: unknown; costConfirmed?: unknown };
+  try {
+    body = await request.json() as typeof body;
+  } catch {
+    return json({ ok: false, error: "The upload details could not be read. Please try again." }, 400);
+  }
+  const title = typeof body.title === "string" ? body.title.replace(/\s+/gu, " ").trim().slice(0, 160) : "";
+  const filenameRaw = typeof body.filename === "string" ? body.filename.trim() : "";
+  const filename = filenameRaw.split(/[\\/]/u).pop()?.slice(0, 255) ?? "";
+  const sha256 = typeof body.sha256 === "string" ? body.sha256.toUpperCase() : "";
+  const size = Number(body.size);
+  const pageCount = Number(body.pageCount);
+  if (!title) return json({ ok: false, error: "Enter a name for this book." }, 400);
+  if (!/^[A-F0-9]{64}$/u.test(sha256)) return json({ ok: false, error: "The PDF fingerprint is invalid. Select the PDF again." }, 400);
+  if (!Number.isSafeInteger(size) || size < 8 || size > MAX_PDF_BYTES) {
+    return json({ ok: false, error: "Choose a PDF between 8 bytes and 1 GB." }, 413);
+  }
+  if (!filename || filename.length > 255) return json({ ok: false, error: "The PDF file name is invalid." }, 400);
+  if (!Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > 2_000) {
+    return json({ ok: false, error: "This PDF must contain between 1 and 2,000 pages." }, 400);
+  }
+  if (body.costConfirmed !== true) {
+    return json({ ok: false, error: "Confirm that you understand Google Cloud OCR may incur usage charges." }, 400);
+  }
+  if (!env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim() || !env.GCP_PROJECT_ID?.trim()) {
+    return json({ ok: false, error: "The secure PDF reader is not configured. Contact the administrator." }, 503);
+  }
+
+  try {
+    const bucketName = bucket(env);
+    await ensureAnalyticsSchema(env);
+    const latest = await env.DB.prepare(
+      "SELECT * FROM fatman_import_jobs WHERE source_sha256 = ? AND expected_size = ? AND book_id IS NOT NULL ORDER BY created_at DESC LIMIT 1"
+    ).bind(sha256, size).first<FatmanImportJob>();
+
+    if (latest && (latest.status === "uploaded" || latest.status === "processing" || latest.status === "completed")) {
+      return json({
+        ok: true, importId: latest.id, status: latest.status,
+        uploadedBytes: Number(latest.uploaded_bytes), expectedSize: Number(latest.expected_size),
+        expectedPages: fatmanExpectedPageCount(latest), bookTitle: latest.book_title ?? title,
+      });
+    }
+    if (latest?.status === "uploading" && latest.upload_session_uri) {
+      const token = await getGoogleAccessToken(env);
+      try {
+        const uploadedBytes = await probeUploadSession(latest.upload_session_uri, size, token);
+        const status = uploadedBytes === size ? "uploaded" : "uploading";
+        await env.DB.prepare("UPDATE fatman_import_jobs SET uploaded_bytes = ?, status = ?, updated_at = ? WHERE id = ?")
+          .bind(uploadedBytes, status, Date.now(), latest.id).run();
+        await env.DB.prepare("UPDATE fatman_books SET status = ?, updated_at = ? WHERE id = ?")
+          .bind(status, Date.now(), latest.id).run();
+        return json({
+          ok: true, importId: latest.id, status, uploadedBytes, expectedSize: size,
+          expectedPages: fatmanExpectedPageCount(latest), bookTitle: latest.book_title ?? title,
+        });
+      } catch (error) {
+        const message = safeError(error);
+        if (!/HTTP 404|HTTP 410|not found|expired/iu.test(message)) throw error;
+        await env.DB.prepare("UPDATE fatman_import_jobs SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?")
+          .bind("The previous secure upload expired. Select the same PDF to start a fresh transfer.", Date.now(), latest.id).run();
+        await env.DB.prepare("UPDATE fatman_books SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?")
+          .bind("The previous secure upload expired.", Date.now(), latest.id).run();
+      }
+    }
+    if (latest?.status === "failed" && latest.vision_operation &&
+        Number(latest.uploaded_bytes) === Number(latest.expected_size)) {
+      return json({
+        ok: true, importId: latest.id, status: "failed",
+        uploadedBytes: Number(latest.uploaded_bytes), expectedSize: size,
+        expectedPages: fatmanExpectedPageCount(latest), bookTitle: latest.book_title ?? title,
+        canResume: true,
+      });
+    }
+
+    const id = crypto.randomUUID().toLowerCase();
+    const objectName = "fatman/imports/" + id + "/source.pdf";
+    const token = await getGoogleAccessToken(env);
+    const response = await fetch(GCS_API + "/upload/storage/v1/b/" + encodeURIComponent(bucketName) + "/o?uploadType=resumable&name=" + encodeURIComponent(objectName), {
+      method: "POST",
+      headers: {
+        authorization: "Bearer " + token,
+        "content-type": "application/json; charset=utf-8",
+        "x-upload-content-type": "application/pdf",
+        "x-upload-content-length": String(size),
+      },
+      body: JSON.stringify({
+        name: objectName,
+        metadata: { sha256, bookId: id, bookTitle: title, pageCount: String(pageCount), sourceFilename: filename },
+      }),
+    });
+    if (!response.ok) throw await gcsError(response, "Could not start the secure PDF upload.");
+    const sessionUri = response.headers.get("location");
+    if (!sessionUri || !sessionUri.startsWith("https://")) throw new Error("Google Cloud Storage did not return a secure resumable upload session.");
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO fatman_import_jobs (id, source_object, source_sha256, expected_size, uploaded_bytes, upload_session_uri, status, indexed_pages, created_at, updated_at, book_id, book_title, page_count) " +
+        "VALUES (?, ?, ?, ?, 0, ?, 'uploading', 0, ?, ?, ?, ?, ?)"
+      ).bind(id, objectName, sha256, size, sessionUri, now, now, id, title, pageCount),
+      env.DB.prepare(
+        "INSERT INTO fatman_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, created_at, updated_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?, 'uploading', 0, ?, ?)"
+      ).bind(id, title, filename, sha256, size, pageCount, now, now),
+    ]);
+    return json({ ok: true, importId: id, status: "uploading", uploadedBytes: 0, expectedSize: size, expectedPages: pageCount, bookTitle: title });
+  } catch (error) {
+    return json({ ok: false, error: safeError(error) }, 502);
+  }
+}
+
 export async function uploadFatmanChunk(env: Env, request: Request, importId: string): Promise<Response> {
   if (!validId(importId) || !env.DB) return json({ ok: false, error: "invalid_import_id" }, 400);
   try {
@@ -331,6 +457,8 @@ export async function completeFatmanUpload(env: Env, importId: string): Promise<
     const workflowId = importId + "-" + crypto.randomUUID().slice(0, 8);
     await db.prepare("UPDATE fatman_import_jobs SET status = 'processing', workflow_instance_id = ?, error_message = NULL, updated_at = ? WHERE id = ? AND status = 'uploaded'")
       .bind(workflowId, Date.now(), importId).run();
+    await db.prepare("UPDATE fatman_books SET status = 'processing', error_message = NULL, updated_at = ? WHERE id = (SELECT book_id FROM fatman_import_jobs WHERE id = ?)")
+      .bind(Date.now(), importId).run();
     const refreshed = await getFatmanImportJob(env, importId);
     if (refreshed?.status !== "processing" || refreshed.workflow_instance_id !== workflowId) {
       return json({ ok: true, status: refreshed?.status ?? "unknown", importId });
@@ -371,6 +499,8 @@ export async function resumeFatmanImport(env: Env, importId: string): Promise<Re
       "UPDATE fatman_import_jobs SET status = 'processing', workflow_instance_id = ?, error_message = NULL, updated_at = ? " +
       "WHERE id = ? AND status = 'failed' AND vision_operation IS NOT NULL AND uploaded_bytes = expected_size"
     ).bind(workflowId, Date.now(), importId).run();
+    await db.prepare("UPDATE fatman_books SET status = 'processing', error_message = NULL, updated_at = ? WHERE id = (SELECT book_id FROM fatman_import_jobs WHERE id = ?)")
+      .bind(Date.now(), importId).run();
     const refreshed = await getFatmanImportJob(env, importId);
     if (refreshed?.status !== "processing" || refreshed.workflow_instance_id !== workflowId) {
       return json({ ok: true, status: refreshed?.status ?? "unknown", importId });
@@ -483,11 +613,22 @@ export async function cleanupFatmanGcsObjects(env: Env, importId: string): Promi
   return objectNames;
 }
 
-export async function updateFatmanImportProgress(env: Env, indexedPages: number): Promise<void> {
+export async function updateFatmanImportProgress(env: Env, indexedPages: number, importId?: string): Promise<void> {
   if (!env.DB) return;
   await ensureAnalyticsSchema(env);
-  await env.DB.prepare("UPDATE fatman_import_jobs SET indexed_pages = ?, updated_at = ? WHERE status = 'processing'")
-    .bind(indexedPages, Date.now()).run();
+  if (importId) {
+    await env.DB.prepare("UPDATE fatman_import_jobs SET indexed_pages = ?, updated_at = ? WHERE id = ? AND status = 'processing'")
+      .bind(indexedPages, Date.now(), importId).run();
+    const job = await getFatmanImportJob(env, importId);
+    if (job?.book_id) {
+      await env.DB.prepare("UPDATE fatman_books SET indexed_pages = ?, status = 'processing', updated_at = ? WHERE id = ?")
+        .bind(indexedPages, Date.now(), job.book_id).run();
+      return;
+    }
+  } else {
+    await env.DB.prepare("UPDATE fatman_import_jobs SET indexed_pages = ?, updated_at = ? WHERE status = 'processing' AND book_id IS NULL")
+      .bind(indexedPages, Date.now()).run();
+  }
   const state = await getFatmanBookState(env);
   await setFatmanBookState(env, {
     enabled: false,
@@ -499,31 +640,45 @@ export async function updateFatmanImportProgress(env: Env, indexedPages: number)
 export async function markFatmanImportFailed(env: Env, importId: string, error: unknown): Promise<void> {
   if (!env.DB) return;
   await ensureAnalyticsSchema(env);
+  const message = safeError(error);
   await env.DB.prepare("UPDATE fatman_import_jobs SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?")
-    .bind(safeError(error), Date.now(), importId).run();
+    .bind(message, Date.now(), importId).run();
+  await env.DB.prepare("UPDATE fatman_books SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?")
+    .bind(message, Date.now(), importId).run();
 }
 
 export async function markFatmanImportCompleted(env: Env, importId: string): Promise<void> {
   if (!env.DB) return;
   await ensureAnalyticsSchema(env);
+  const job = await getFatmanImportJob(env, importId);
+  const pageCount = job ? fatmanExpectedPageCount(job) : FATMAN_IMPORT_PAGES;
   await env.DB.prepare("UPDATE fatman_import_jobs SET status = 'completed', indexed_pages = ?, error_message = NULL, updated_at = ? WHERE id = ?")
-    .bind(FATMAN_IMPORT_PAGES, Date.now(), importId).run();
-  const state = await getFatmanBookState(env);
-  await setFatmanBookState(env, { enabled: false, documentVersion: env.FATMAN_DOCUMENT_VERSION?.trim() ?? "", indexedPages: FATMAN_IMPORT_PAGES });
+    .bind(pageCount, Date.now(), importId).run();
+  if (job?.book_id) {
+    await env.DB.prepare("UPDATE fatman_books SET status = 'ready', indexed_pages = ?, error_message = NULL, updated_at = ? WHERE id = ?")
+      .bind(pageCount, Date.now(), job.book_id).run();
+    return;
+  }
+  await getFatmanBookState(env);
+  await setFatmanBookState(env, { enabled: false, documentVersion: env.FATMAN_DOCUMENT_VERSION?.trim() ?? "", indexedPages: pageCount });
 }
 
-export async function listFatmanIndexPages(env: Env): Promise<Array<{ page: number; status: string; error?: string }>> {
+export async function listFatmanIndexPages(env: Env, importId?: string): Promise<Array<{ page: number; status: string; error?: string }>> {
   if (!env.FATMAN_SEARCH || !env.FATMAN_INSTANCE_NAME?.trim()) throw new Error("Fatman AI Search is not configured.");
+  const job = importId ? await getFatmanImportJob(env, importId) : null;
+  const expectedPages = job ? fatmanExpectedPageCount(job) : FATMAN_IMPORT_PAGES;
+  const prefix = job ? fatmanIndexPagePrefix(job) : "fatman/pages/";
   const instance = env.FATMAN_SEARCH.get(env.FATMAN_INSTANCE_NAME.trim());
   const results: Array<{ page: number; status: string; error?: string }> = [];
   let page = 1;
-  while (page <= 20) {
-    const response = await instance.items.list({ page, per_page: 50, source: "builtin" });
+  while (page <= 100) {
+    const response = await instance.items.list({ page, per_page: 50, search: prefix, source: "builtin" });
     for (const item of response.result ?? []) {
-      const match = item.key.match(/^fatman\/pages\/page-(\d{1,6})\.txt$/u);
-      if (!match) continue;
-      const pageNumber = Number(match[1]);
-      if (pageNumber < 1 || pageNumber > FATMAN_IMPORT_PAGES) continue;
+      if (!item.key.startsWith(prefix)) continue;
+      const parsed = parseFatmanIndexPageKey(item.key);
+      if (!parsed || parsed.page < 1 || parsed.page > expectedPages) continue;
+      if (job?.book_id && parsed.bookId !== job.book_id) continue;
+      const pageNumber = parsed.page;
       const existing = results.find((candidate) => candidate.page === pageNumber);
       const candidate = { page: pageNumber, status: item.status, error: item.error ? safeError(item.error) : undefined };
       if (!existing || statusPriority(candidate.status) > statusPriority(existing.status)) {

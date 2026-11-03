@@ -40,6 +40,7 @@ import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanI
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
 import { completeFatmanUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
+import { fatmanLibraryAdminPage, fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
@@ -2116,6 +2117,12 @@ const worker = {
         return fatmanAdminPage();
       }
 
+      if (url.pathname === "/admin/fatman/books") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+        return fatmanLibraryAdminPage();
+      }
+
       if (url.pathname === "/admin/fatman/monitor") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -2131,6 +2138,8 @@ const worker = {
       if (url.pathname.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
         if (url.pathname === "/admin/api/fatman/monitor" && request.method === "GET") return fatmanMonitorStatus(env);
+        if (url.pathname === "/admin/api/fatman/library/books" && request.method === "GET") return fatmanLibraryBooks(env);
+        if (url.pathname === "/admin/api/fatman/library/status" && request.method === "GET") return fatmanLibraryImportStatus(env, url.searchParams.get("id"));
         if (url.pathname === "/admin/api/fatman/qa" && request.method === "GET") return fatmanReleaseQaStatus(env);
         if (url.pathname === "/admin/api/fatman/status" && request.method === "GET") return fatmanIndexStatus(env);
         if (url.pathname === "/admin/api/fatman/upload/status" && request.method === "GET") return fatmanUploadStatus(env, url.searchParams.get("id"));
@@ -2138,6 +2147,7 @@ const worker = {
           if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
           if (url.pathname === "/admin/api/fatman/qa") return triggerFatmanReleaseQa(env);
           if (url.pathname === "/admin/api/fatman/vision/test") return testFatmanVision(env);
+          if (url.pathname === "/admin/api/fatman/library/upload/start") return startFatmanLibraryUpload(env, request);
           if (url.pathname === "/admin/api/fatman/upload/start") return startFatmanUpload(env, request);
           const uploadChunkMatch = url.pathname.match(/^\/admin\/api\/fatman\/upload\/([a-f0-9-]+)\/chunk$/i);
           if (uploadChunkMatch) return uploadFatmanChunk(env, request, uploadChunkMatch[1]);

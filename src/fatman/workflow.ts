@@ -3,8 +3,10 @@ import type { Env } from "../config/env";
 import { runFatmanReleaseQaForEnv } from "./release-qa-runner";
 import { setFatmanBookState } from "../analytics/db";
 import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError } from "./recovery-policy";
-import { buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
+import { buildFatmanBookVerificationPages, buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
 import { getGoogleAccessToken } from "../auth/google";
+import { fatmanExpectedPageCount, fatmanIndexPageKey } from "./library";
+import type { FatmanImportJob } from "./import";
 import {
   cleanupFatmanGcsObjects,
   getFatmanImportJob,
@@ -75,11 +77,11 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
 }
 
 
-async function indexOcrPage(env: Env, importId: string, page: number): Promise<{ page: number; status: string }> {
+async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promise<{ page: number; status: string }> {
   const instanceName = env.FATMAN_INSTANCE_NAME?.trim();
   if (!instanceName || !env.FATMAN_SEARCH) throw new Error("Fatman AI Search is not configured.");
   const instance = env.FATMAN_SEARCH.get(instanceName);
-  const key = "fatman/pages/page-" + String(page).padStart(6, "0") + ".txt";
+  const key = fatmanIndexPageKey(job, page);
   const found = await instance.items.list({ search: key, per_page: 50, source: "builtin" });
   const exact = (found.result ?? []).filter((item) => item.key === key);
   const keep = exact.find((item) => item.status === "completed") ??
@@ -89,8 +91,12 @@ async function indexOcrPage(env: Env, importId: string, page: number): Promise<{
     await instance.items.delete(item.id);
   }
   if (keep) return { page, status: keep.status };
-  const text = await readFatmanVisionOutput(env, importId, page);
-  const indexed = await instance.items.upload(key, "Fatman 2nd Edition 2026 | PDF page " + page + "\n\n" + text);
+  const text = await readFatmanVisionOutput(env, job.id, page);
+  const title = job.book_title?.trim() || "Fatman 2nd Edition 2026";
+  const content = title + " | PDF page " + page + "\n\n" + text;
+  const indexed = job.book_id
+    ? await instance.items.upload(key, content, { metadata: { bookId: job.book_id, bookTitle: title, pdfPage: page } })
+    : await instance.items.upload(key, content);
   if (indexed.status === "error" || indexed.status === "skipped" || indexed.status === "outdated") {
     throw new Error(indexed.error ? String(indexed.error) : "AI Search rejected PDF page " + page + " with status " + indexed.status + ".");
   }
@@ -101,11 +107,15 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
   async run(event: WorkflowEvent<FatmanImportParams>, step: WorkflowStep): Promise<void> {
     const params = fatmanParamsFromPayload(event.payload);
     const importId = params.importId;
+    let importedBook: FatmanImportJob | null = null;
+    let expectedPages = 538;
     try {
-      const job = await getFatmanImportJob(this.env, importId);
-      if (!job || Number(job.uploaded_bytes) !== Number(job.expected_size)) {
+      const importJob = await getFatmanImportJob(this.env, importId);
+      if (!importJob || Number(importJob.uploaded_bytes) !== Number(importJob.expected_size)) {
         throw new Error("The complete private PDF upload could not be verified.");
       }
+      importedBook = importJob;
+      expectedPages = fatmanExpectedPageCount(importJob);
 
       if (params.task === "resume_index") {
         const runId = params.runId;
@@ -113,11 +123,11 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           throw new Error("The Fatman index recovery parameters are invalid.");
         }
         const pages = await step.do("find incomplete Fatman index pages", async () =>
-          listFatmanIndexPages(this.env));
+          listFatmanIndexPages(this.env, importId));
         const completedPages = new Set(pages
           .filter((item) => item.status === "completed")
           .map((item) => item.page));
-        const startPage = Array.from({ length: 538 }, (_, index) => index + 1)
+        const startPage = Array.from({ length: expectedPages }, (_, index) => index + 1)
           .find((page) => !completedPages.has(page));
 
         if (startPage === undefined) {
@@ -130,7 +140,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
               repairPass: 0,
             }));
         } else {
-          const endPage = Math.min(538, startPage + 7);
+          const endPage = Math.min(expectedPages, startPage + 7);
           await step.do("start recovered Fatman page chunk " + startPage, async () =>
             this.startChild(importId + "-" + runId + "-page-" + startPage + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "index_chunk",
@@ -147,7 +157,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         const page = params.page;
         const retryAttempt = params.retryAttempt;
         const runId = params.runId;
-        if (!Number.isSafeInteger(page) || page! < 1 || page! > 538 ||
+        if (!Number.isSafeInteger(page) || page! < 1 || page! > expectedPages ||
             !Number.isSafeInteger(retryAttempt) || retryAttempt! < 1 || retryAttempt! > FATMAN_PAGE_RETRY_LIMIT ||
             typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId)) {
           throw new Error("The Fatman page-retry parameters are invalid.");
@@ -156,7 +166,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         await step.sleep("cool down before retrying Fatman page " + page + " (attempt " + retryAttempt + ")", fatmanPageRetryDelay(retryAttempt!));
         try {
           await step.do("retry indexing Fatman PDF page " + page, async () =>
-            indexOcrPage(this.env, importId, page!));
+            indexOcrPage(this.env, importJob, page!));
         } catch (error) {
           if (!isTransientFatmanIndexError(error)) throw error;
           // After the initial backoff ladder, keep checking every 15 minutes
@@ -187,7 +197,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         const endPage = params.endPage;
         const runId = params.runId;
         if (!Number.isSafeInteger(startPage) || !Number.isSafeInteger(endPage) ||
-            startPage! < 1 || endPage! > 538 || endPage! < startPage! || endPage! - startPage! >= 8 ||
+            startPage! < 1 || endPage! > expectedPages || endPage! < startPage! || endPage! - startPage! >= 8 ||
             typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId)) {
           throw new Error("The Fatman page chunk parameters are invalid.");
         }
@@ -195,7 +205,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           const pageNumber = page;
           try {
             await step.do("index Fatman PDF page " + pageNumber, async () =>
-              indexOcrPage(this.env, importId, pageNumber));
+              indexOcrPage(this.env, importJob, pageNumber));
           } catch (error) {
             if (!isTransientFatmanIndexError(error)) throw error;
             await step.do("hand Fatman page " + pageNumber + " to the recovery specialist", async () =>
@@ -210,9 +220,9 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           }
         }
 
-        if (endPage! < 538) {
+        if (endPage! < expectedPages) {
           const nextStart = endPage! + 1;
-          const nextEnd = Math.min(538, nextStart + 7);
+          const nextEnd = Math.min(expectedPages, nextStart + 7);
           await step.do("start next Fatman page chunk " + nextStart, async () =>
             this.startChild(importId + "-" + runId + "-page-" + nextStart + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "index_chunk",
@@ -240,7 +250,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         const monitorSequence = params.monitorSequence;
         const repairPass = params.repairPass ?? 0;
         if (pages.length < 1 || pages.length > 10 ||
-            pages.some((page) => !Number.isSafeInteger(page) || page < 1 || page > 538) ||
+            pages.some((page) => !Number.isSafeInteger(page) || page < 1 || page > expectedPages) ||
             typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId) ||
             !Number.isSafeInteger(monitorSequence) || monitorSequence! < 1 ||
             !Number.isSafeInteger(repairPass) || repairPass < 1 || repairPass > 12) {
@@ -248,7 +258,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         }
         for (const page of [...new Set(pages)]) {
           try {
-            await step.do("repair Fatman PDF page " + page, async () => indexOcrPage(this.env, importId, page));
+            await step.do("repair Fatman PDF page " + page, async () => indexOcrPage(this.env, importJob, page));
           } catch (error) {
             if (!isTransientFatmanIndexError(error)) throw error;
             await step.do("hand failed repair page " + page + " to the recovery specialist", async () =>
@@ -287,17 +297,29 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         );
         let verification: { checkedPages: number[]; queryCount: number };
         try {
-          verification = await step.do("verify three page-grounded Fatman retrieval probes", async () => {
+          verification = await step.do("verify page-grounded retrieval for this book", async () => {
             const instanceName = this.env.FATMAN_INSTANCE_NAME?.trim();
             if (!instanceName || !this.env.FATMAN_SEARCH) throw new Error("Fatman AI Search is not configured.");
             const instance = this.env.FATMAN_SEARCH.get(instanceName);
             const checkedPages: number[] = [];
             const pageResults: Array<{ page: number; successfulProbe: number }> = [];
+            const verificationPages = importJob.book_id
+              ? buildFatmanBookVerificationPages(expectedPages)
+              : [...FATMAN_VERIFICATION_PAGES];
+            const requiredMatches = importJob.book_id ? Math.min(3, expectedPages) : verificationPages.length;
             let queryCount = 0;
-            for (const page of FATMAN_VERIFICATION_PAGES) {
+            for (const page of verificationPages) {
               const text = await readFatmanVisionOutput(this.env, importId, page);
-              const probes = buildFatmanRetrievalProbes(text);
-              const expectedKey = "fatman/pages/page-" + String(page).padStart(6, "0") + ".txt";
+              let probes: string[];
+              try {
+                probes = buildFatmanRetrievalProbes(text);
+              } catch (error) {
+                // Covers, blank pages and sparse front matter are not useful
+                // retrieval evidence; continue to the next distributed sample.
+                if (importJob.book_id && error instanceof Error && error.message.includes("fewer than six OCR words")) continue;
+                throw error;
+              }
+              const expectedKey = fatmanIndexPageKey(importJob, page);
               let matchedProbe = 0;
               for (let index = 0; index < probes.length; index += 1) {
                 queryCount += 1;
@@ -311,9 +333,15 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
                   break;
                 }
               }
-              if (!matchedProbe) throw new Error("Fatman retrieval QA could not match the expected source page " + page + " after " + probes.length + " page-grounded queries.");
+              if (!matchedProbe) {
+                throw new Error("Fatman retrieval QA could not match the expected source page " + page + " after " + probes.length + " page-grounded queries.");
+              }
               checkedPages.push(page);
               pageResults.push({ page, successfulProbe: matchedProbe });
+              if (importJob.book_id && checkedPages.length >= requiredMatches) break;
+            }
+            if (importJob.book_id && checkedPages.length < requiredMatches) {
+              throw new Error("Fatman retrieval QA could not build enough OCR probes from readable pages.");
             }
             return { checkedPages, pageResults, queryCount };
           });
@@ -321,7 +349,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           if (!isRetryableFatmanQualityFailure(error)) throw error;
           // Keep the final delay capped at 15 minutes and retry unattended.
           const nextAttempt = Math.min(FATMAN_PAGE_RETRY_LIMIT, retryAttempt + 1);
-          await step.do("schedule Fatman retrieval quality retry " + nextAttempt, async () =>
+          await step.do("schedule book retrieval verification retry " + nextAttempt, async () =>
             this.startChild(importId + "-" + runId + "-quality-" + nextAttempt + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "quality_check",
               importId,
@@ -331,28 +359,36 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           return;
         }
 
-        const releaseQa = await step.do("run six-category real-user Fatman release QA", async () =>
-          runFatmanReleaseQaForEnv(this.env, importId + "-" + runId + "-release-qa-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8)));
-
-        await step.do("release supervisor applies the six-category QA decision", async () => {
-          await markFatmanImportCompleted(this.env, importId);
-          await setFatmanBookState(this.env, {
-            enabled: releaseQa.status === "passed",
-            documentVersion: this.env.FATMAN_DOCUMENT_VERSION?.trim() ?? "",
-            indexedPages: 538,
+        let shouldCleanup = true;
+        if (importJob.book_id) {
+          await step.do("mark additional book ready after retrieval verification", async () => {
+            await markFatmanImportCompleted(this.env, importId);
+            return { ready: true, checkedPages: verification.checkedPages };
           });
-          return {
-            enabled: releaseQa.status === "passed",
-            qaStatus: releaseQa.status,
-            passedCases: releaseQa.passedCases,
-            totalCases: releaseQa.totalCases,
-            failedCases: releaseQa.failedCases,
-          };
-        });
+        } else {
+          const releaseQa = await step.do("run six-category real-user Fatman release QA", async () =>
+            runFatmanReleaseQaForEnv(this.env, importId + "-" + runId + "-release-qa-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8)));
 
-        // Keep OCR source objects private and available for repair when the
-        // release suite detects a regression. Cleanup is only safe after approval.
-        if (releaseQa.status !== "passed") return;
+          await step.do("release supervisor applies the six-category QA decision", async () => {
+            await markFatmanImportCompleted(this.env, importId);
+            await setFatmanBookState(this.env, {
+              enabled: releaseQa.status === "passed",
+              documentVersion: this.env.FATMAN_DOCUMENT_VERSION?.trim() ?? "",
+              indexedPages: expectedPages,
+            });
+            return {
+              enabled: releaseQa.status === "passed",
+              qaStatus: releaseQa.status,
+              passedCases: releaseQa.passedCases,
+              totalCases: releaseQa.totalCases,
+              failedCases: releaseQa.failedCases,
+            };
+          });
+          shouldCleanup = releaseQa.status === "passed";
+        }
+
+        // Preserve the private GCS source and OCR output until retrieval checks pass.
+        if (!shouldCleanup) return;
 
         try {
           const objectNames = await step.do("list temporary Fatman OCR objects after activation", async () =>
@@ -383,7 +419,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           await setFatmanBookState(this.env, {
             enabled: report.status === "passed",
             documentVersion: this.env.FATMAN_DOCUMENT_VERSION?.trim() ?? "",
-            indexedPages: 538,
+            indexedPages: expectedPages,
           });
           return {
             enabled: report.status === "passed",
@@ -408,18 +444,18 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
 
         await step.sleep("wait before Fatman indexing check " + monitorSequence, "1 minute");
         const pages = await step.do("check Fatman index status " + monitorSequence, async () =>
-          listFatmanIndexPages(this.env));
+          listFatmanIndexPages(this.env, importId));
         const byPage = new Map<number, { page: number; status: string; error?: string }>();
         for (const item of pages) byPage.set(item.page, item);
         const completedPages = pages.filter((item) => item.status === "completed").length;
         const failedPages = pages.filter((item) =>
           item.status === "error" || item.status === "skipped" || item.status === "outdated");
         await step.do("save Fatman indexing progress " + monitorSequence, async () => {
-          await updateFatmanImportProgress(this.env, completedPages);
+          await updateFatmanImportProgress(this.env, completedPages, importId);
           return { completedPages };
         });
 
-        if (completedPages === 538 && failedPages.length === 0) {
+        if (completedPages === expectedPages && failedPages.length === 0) {
           await step.do("launch autonomous Fatman retrieval quality verifier", async () =>
             this.startChild(importId + "-" + runId + "-quality-0-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "quality_check",
@@ -430,7 +466,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           return;
         }
 
-        const missingPages = Array.from({ length: 538 }, (_, index) => index + 1)
+        const missingPages = Array.from({ length: expectedPages }, (_, index) => index + 1)
           .filter((page) => !byPage.has(page));
         const repairPages = [...new Set([...failedPages.map((item) => item.page), ...missingPages])].slice(0, 10);
         if (repairPages.length > 0) {
@@ -498,21 +534,24 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           task: "index_chunk",
           importId,
           startPage: 1,
-          endPage: 8,
+          endPage: Math.min(8, expectedPages),
           runId: indexingRunId,
         }));
       return;
     } catch (error) {
       if (params.task === "quality_check" || params.task === "release_qa") {
-        // QA errors must fail closed for book mode without rewriting a fully
-        // completed 538-page import as an upload/indexing failure.
-        await setFatmanBookState(this.env, {
-          enabled: false,
-          documentVersion: this.env.FATMAN_DOCUMENT_VERSION?.trim() ?? "",
-          indexedPages: 538,
-        }).catch(() => undefined);
-        if (params.task === "quality_check") {
-          await markFatmanImportCompleted(this.env, importId).catch(() => undefined);
+        if (importedBook?.book_id) {
+          // Additional books remain separate from the original Fatman rollout gate.
+          await markFatmanImportFailed(this.env, importId, error).catch(() => undefined);
+        } else {
+          await setFatmanBookState(this.env, {
+            enabled: false,
+            documentVersion: this.env.FATMAN_DOCUMENT_VERSION?.trim() ?? "",
+            indexedPages: expectedPages,
+          }).catch(() => undefined);
+          if (params.task === "quality_check") {
+            await markFatmanImportCompleted(this.env, importId).catch(() => undefined);
+          }
         }
       } else if (params.task !== "cleanup_chunk") {
         await markFatmanImportFailed(this.env, importId, error).catch(() => undefined);
