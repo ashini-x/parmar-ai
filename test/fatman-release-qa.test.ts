@@ -44,7 +44,6 @@ function goodDependencies(): FatmanReleaseQaDependencies {
       if (query.includes("SHA-256")) return context([]);
       if (query.includes("President")) return context([227]);
       if (query.includes("Fundamental Rights") && query.includes("Directive Principles")) return context([213, 218]);
-      if (query.includes("Fundamental Rights") && query.includes("Directive Principles")) return context([213, 218]);
       if (query.includes("Treaty") || query.includes("Buxar")) return context([168]);
       if (query.includes("Plassey") || query.includes("Robert Clive")) return context([168]);
       return context([]);
@@ -77,7 +76,6 @@ describe("Fatman real-user release QA", () => {
   });
 
   it("uses a bounded answer-repair pass when fact coverage is incomplete", async () => {
-    const deps = goodDependencies();
     const answer = vi.fn()
       .mockResolvedValueOnce({ answer: "The Battle happened in Bengal." })
       .mockResolvedValue({ answer: answerFor("Who led the East India Company forces at the Battle of Plassey, and who was the Nawab of Bengal?") });
@@ -89,7 +87,7 @@ describe("Fatman real-user release QA", () => {
     const exact = report.results.find((item) => item.id === "exact-plassey-fact");
     expect(exact?.status).toBe("passed");
     expect(exact?.generationAttempts).toBe(2);
-    expect(answer).toHaveBeenCalledTimes(7);
+    expect(answer).toHaveBeenCalledTimes(4);
     expect(answer.mock.calls[1]?.[2]).toContain("QA REPAIR PASS");
   });
 
