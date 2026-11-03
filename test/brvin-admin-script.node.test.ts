@@ -1,8 +1,20 @@
 import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { brvinAdminScript } from "../src/brvin/admin";
+import { readFileSync } from "node:fs";
 
 describe("BRVIN browser script contract", () => {
+  it("exposes an authenticated read-only storage diagnostic without mutating GCS objects", () => {
+    const importSource = readFileSync(new URL("../src/fatman/import.ts", import.meta.url), "utf8");
+    const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+    expect(importSource).toContain("export async function diagnoseFatmanGcsUpload");
+    expect(importSource).toContain("storage.objects.create");
+    expect(importSource).toContain("storage.objects.delete");
+    expect(importSource).toContain("Does not create, overwrite, or delete any GCS objects.");
+    expect(workerSource).toContain("/admin/api/brvin/diagnostics/storage");
+    expect(workerSource).toContain("diagnoseFatmanGcsUpload(env)");
+  });
+
   it("serves JavaScript that parses before delivery to browsers", async () => {
     const script = await brvinAdminScript().text();
     const parsed = ts.createSourceFile(
