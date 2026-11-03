@@ -4,7 +4,7 @@ import {
   type FatmanBookContext,
 } from "./retrieval";
 
-export const FATMAN_RELEASE_QA_SUITE_VERSION = "fatman-real-user-qa-v1";
+export const FATMAN_RELEASE_QA_SUITE_VERSION = "fatman-real-user-qa-v2";
 
 export interface FatmanReleaseQaCase {
   id: string;
@@ -91,6 +91,57 @@ export const FATMAN_RELEASE_QA_CASES: readonly FatmanReleaseQaCase[] = [
     expectedPages: [168],
     requiredFactGroups: [["1757"], ["1764"], ["1765"], ["Diwani"], ["Buxar"]],
   },
+  {
+    id: "short-article-79-lookup",
+    category: "concept",
+    question: "What is Article 79?",
+    queryCandidates: ["What is Article 79?", "Article 79 Indian Constitution"],
+    expectedPages: [227],
+    requiredFactGroups: [["President"], ["Rajya Sabha"], ["Lok Sabha"]],
+  },
+  {
+    id: "abbreviated-fr-dpsp-comparison",
+    category: "comparison",
+    question: "What is the difference between FR and DPSP?",
+    queryCandidates: [
+      "What is the difference between FR and DPSP?",
+      "Fundamental Rights versus Directive Principles enforceability",
+    ],
+    expectedPages: [213, 218],
+    requiredFactGroups: [["Part III"], ["Part IV"], ["justiciable"], ["non-justiciable"]],
+  },
+  {
+    id: "subsidiary-alliance-natural-question",
+    category: "exact_fact",
+    question: "Who introduced the Subsidiary Alliance?",
+    queryCandidates: ["Who introduced the Subsidiary Alliance?", "Lord Wellesley Subsidiary Alliance 1798"],
+    expectedPages: [169],
+    requiredFactGroups: [["Lord Wellesley"], ["1798"]],
+  },
+  {
+    id: "first-governor-general-bengal",
+    category: "exact_fact",
+    question: "Who was the first Governor-General of Bengal?",
+    queryCandidates: ["Who was the first Governor-General of Bengal?", "Warren Hastings first Governor General of Bengal"],
+    expectedPages: [197],
+    requiredFactGroups: [["Warren Hastings"], ["first Governor General of Bengal"]],
+  },
+  {
+    id: "cornwallis-land-revenue-question",
+    category: "exact_fact",
+    question: "Which land revenue system did Lord Cornwallis introduce?",
+    queryCandidates: ["Which land revenue system did Lord Cornwallis introduce?", "Lord Cornwallis Permanent Settlement 1793"],
+    expectedPages: [174],
+    requiredFactGroups: [["Permanent Settlement"], ["1793"]],
+  },
+  {
+    id: "plassey-cause-explanation",
+    category: "concept",
+    question: "Why did the British win the Battle of Plassey?",
+    queryCandidates: ["Why did the British win the Battle of Plassey?", "Battle of Plassey Mir Jafar joined hands with British"],
+    expectedPages: [168],
+    requiredFactGroups: [["Mir Jafar"], ["Robert Clive"], ["joined hands", "betray"]],
+  },
 ];
 
 export interface FatmanReleaseQaAnswer {
@@ -141,6 +192,7 @@ const ANSWER_REPAIR_HINT = [
   "QA REPAIR PASS: Re-read all supplied Fatman excerpts and answer every part of the student's question that those excerpts support.",
   "Be explicit about the distinguishing facts, dates, names, and cause/effect relationship when they appear in the excerpts.",
   "If the excerpts do not support a requested detail, say that it is not stated. Do not use outside knowledge to fill gaps.",
+  "Keep the answer under 100 words or four short sentences unless the question explicitly asks for a longer explanation.",
 ].join(" ");
 
 const ABSTENTION_MARKERS = [
@@ -193,11 +245,12 @@ async function runCase(
   // Retrieval specialist: try the primary query and deterministic repair queries
   // until all expected pages are present or the bounded candidate list is used.
   for (const query of qaCase.queryCandidates) {
-    queryCount += 1;
     try {
       const context = await dependencies.retrieve(query);
+      queryCount += Math.max(1, Math.floor(context.searchCount ?? 1));
       contexts.push(context);
     } catch (error) {
+      queryCount += 1;
       retrievalError = error instanceof Error ? error.message : String(error);
       continue;
     }
@@ -252,11 +305,19 @@ async function runCase(
       answerText = "";
       answerStatus = "failed";
       answerError = error instanceof Error ? error.message : String(error);
+      if (error && typeof error === "object") {
+        const detail = error as { retryable?: boolean; usageRecords?: Array<{ estimatedCostMicrousd?: number }> };
+        estimatedCostMicrousd += (detail.usageRecords ?? []).reduce(
+          (total, usage) => total + Math.max(0, Math.floor(usage.estimatedCostMicrousd ?? 0)),
+          0,
+        );
+        if (attempt === 0 && detail.retryable === true) continue;
+      }
       break;
     }
     estimatedCostMicrousd += Math.max(0, Math.floor(generated.estimatedCostMicrousd ?? 0));
     answerText = generated.answer.trim().slice(0, 3_900);
-    const citations = formatFatmanCitations(bookContext.passages);
+    const citations = formatFatmanCitations(bookContext.passages, qaCase.question, answerText);
     const combined = answerText + (citations ? "\n\n" + citations : "");
     citedPages = pagesMentionedByCitation(combined);
 

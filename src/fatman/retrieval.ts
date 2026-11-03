@@ -1,8 +1,10 @@
-import type { AiSearchChunk, Env, GeminiImageInput } from "../config/env";
+import type { AiSearchChunk, ConversationTurn, Env, GeminiImageInput } from "../config/env";
 import { getFatmanBookState, reserveFatmanSearchQuery } from "../analytics/db";
 
 const MAX_MATCHES = 12;
 const MAX_QA_MATCHES = 50;
+const MAX_SEARCH_VARIANTS = 3;
+const MAX_CITATION_PAGES = 5;
 const MAX_PASSAGES = 8;
 const MAX_PAGES = 6;
 const MAX_PASSAGE_CHARS = 2_000;
@@ -29,6 +31,8 @@ export interface FatmanPassage {
 export interface FatmanBookContext {
   passages: FatmanPassage[];
   pageImages: GeminiImageInput[];
+  /** Number of hybrid AI Search requests used to assemble this context. */
+  searchCount?: number;
   /** Optional retry guidance used only by the internal QA answer-repair pass. */
   qaRepairHint?: string;
 }
@@ -101,12 +105,13 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
     );
   }
 
-  return searchFatmanContext(env, normalizedQuery, MAX_MATCHES);
+  return searchFatmanQueries(env, buildFatmanSearchQueries(normalizedQuery), MAX_MATCHES);
 }
 
 /**
- * Internal release QA uses the same index, hybrid retrieval and relevance rules
- * as live answers, but does not consume a student's monthly search allowance.
+ * Internal release QA uses the same index, query expansion, hybrid retrieval and
+ * relevance rules as live answers, but does not consume a student's monthly
+ * search allowance.
  */
 export async function retrieveFatmanQaContext(env: Env, query: string): Promise<FatmanBookContext> {
   if (!(await isFatmanIndexed(env))) {
@@ -114,7 +119,74 @@ export async function retrieveFatmanQaContext(env: Env, query: string): Promise<
   }
   const normalizedQuery = normalizeFatmanQuery(query);
   if (!normalizedQuery) throw new FatmanRetrievalError("Fatman QA search query is empty.", false);
-  return searchFatmanContext(env, normalizedQuery, MAX_QA_MATCHES);
+  return searchFatmanQueries(env, buildFatmanSearchQueries(normalizedQuery), MAX_QA_MATCHES);
+}
+
+/**
+ * Resolve short article lookups, comparison operands and common exam shorthand
+ * into a small bounded set of search phrases. The phrases are search hints only:
+ * they never become answer facts and every result still passes lexical relevance.
+ */
+export function buildFatmanSearchQueries(value: string): string[] {
+  const query = normalizeFatmanQuery(value);
+  if (!query) return [];
+
+  const variants: string[] = [];
+  const add = (candidate: string) => {
+    const normalized = normalizeFatmanQuery(candidate);
+    if (normalized && !variants.some((item) => item.toLowerCase() === normalized.toLowerCase())) {
+      variants.push(normalized);
+    }
+  };
+  add(query);
+
+  const expandedQuery = expandFatmanAliases(query);
+  const article = /\barticle\s+(\d{1,3}[a-z]?)\b/iu.exec(expandedQuery);
+  if (article) add("Article " + article[1] + " Indian Constitution");
+
+  const comparison = /(?:compare|comparison|difference\s+between|differentiate|distinguish)\s+(.+?)\s+(?:with|and|versus|vs\.?)\s+(.+?)(?=,|\b(?:focusing|in terms|regarding|with respect|on)\b|$)/iu.exec(expandedQuery);
+  if (comparison) {
+    const left = comparison[1].replace(/[^\p{L}\p{N}]+$/gu, "").trim();
+    const right = comparison[2].replace(/[^\p{L}\p{N}]+$/gu, "").trim();
+    add(left + " features");
+    add(right + " features");
+  } else {
+    if (expandedQuery !== query) add(expandedQuery);
+    const compact = expandedQuery
+      .replace(/\b(?:what|is|are|the|a|an|of|to|for|in|on|at|by|with|from|and|or|please|explain|describe|tell|me|about|can|could|would|should|does|do|did|was|were|who|why|how|which)\b/giu, " ")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .replace(/\s+/gu, " ")
+      .trim();
+    if (compact && compact.toLowerCase() !== query.toLowerCase()) add(compact);
+  }
+
+  return variants.slice(0, MAX_SEARCH_VARIANTS);
+}
+
+function expandFatmanAliases(value: string): string {
+  let expanded = value.replace(/\bDPSPs?\b/giu, "Directive Principles of State Policy");
+  if (/\bDPSP\b/iu.test(value) && /\bFR\b/iu.test(value)) {
+    expanded = expanded.replace(/\bFR\b/giu, "Fundamental Rights");
+  }
+  return expanded;
+}
+
+async function searchFatmanQueries(
+  env: Env,
+  queries: string[],
+  maxResults: number,
+): Promise<FatmanBookContext> {
+  const results = await Promise.allSettled(
+    queries.slice(0, MAX_SEARCH_VARIANTS).map((query) => searchFatmanContext(env, query, maxResults)),
+  );
+  const contexts = results
+    .filter((result): result is PromiseFulfilledResult<FatmanBookContext> => result.status === "fulfilled")
+    .map((result) => result.value);
+  if (!contexts.length) {
+    const failure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+    if (failure) throw failure.reason;
+  }
+  return { ...mergeFatmanContexts(contexts), searchCount: results.length };
 }
 
 async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults: number): Promise<FatmanBookContext> {
@@ -179,7 +251,37 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
     if (passages.length >= MAX_PASSAGES) break;
   }
 
-  return { passages, pageImages: [] };
+  passages.sort((a, b) => b.score - a.score);
+  return { passages, pageImages: [], searchCount: 1 };
+}
+
+
+/**
+ * Supplies the immediately previous Fatman exchange only when a student sends
+ * a context-dependent follow-up. It is retrieval context, not trusted evidence:
+ * Gemini must still ground the answer in the newly retrieved book passages.
+ */
+export function buildFatmanRetrievalQuery(
+  question: string,
+  recentConversation: ConversationTurn[] = [],
+): string {
+  const normalizedQuestion = normalizeFatmanQuery(question);
+  const latest = recentConversation.at(-1);
+  if (!latest || !isFatmanFollowUp(normalizedQuestion)) return normalizedQuestion;
+
+  return [
+    "Previous student question: " + latest.question.slice(0, 400),
+    "Previous Fatman answer for reference resolution only: " + latest.answer.slice(0, 900),
+    "Current student follow-up: " + normalizedQuestion,
+  ].join("\n");
+}
+
+function isFatmanFollowUp(question: string): boolean {
+  const normalized = question.toLowerCase().replace(/\s+/gu, " ").trim();
+  if (!normalized) return false;
+  return /^(?:and\s+)?(?:why|how|what about|what next|which one|who was that|who is that|what does that|how so|why so|give an example|example please|explain more|simpler|in simple words|what about it|and then)\b/iu.test(normalized) ||
+    /^(?:it|that|this|they|those|these|same|there)\b/iu.test(normalized) ||
+    /^(?:can you explain|explain that|explain this|tell me more|continue|go on)\b/iu.test(normalized);
 }
 
 export function isFatmanPassageRelevant(query: string, passage: string): boolean {
@@ -212,32 +314,71 @@ function normalizeFatmanQuery(query: string): string {
 }
 
 export function mergeFatmanContexts(contexts: FatmanBookContext[]): FatmanBookContext {
+  const candidates = contexts.flatMap((context) => context.passages)
+    .slice()
+    .sort((a, b) => b.score - a.score);
   const passages: FatmanPassage[] = [];
   const ids = new Set<string>();
-  const pages = new Set<number>();
-  for (const context of contexts) {
-    for (const passage of context.passages) {
-      if (ids.has(passage.id) || (!pages.has(passage.pdfPage) && pages.size >= MAX_PAGES)) continue;
-      const pageCount = passages.filter((item) => item.pdfPage === passage.pdfPage).length;
-      if (pageCount >= 2) continue;
-      ids.add(passage.id);
-      pages.add(passage.pdfPage);
-      passages.push(passage);
-      if (passages.length >= MAX_PASSAGES) return { passages, pageImages: [] };
-    }
+  const fingerprints = new Set<string>();
+  const pageCounts = new Map<number, number>();
+
+  for (const passage of candidates) {
+    const fingerprint = passage.pdfPage + ":" + passage.text.toLowerCase().replace(/\s+/gu, " ").slice(0, 180);
+    if (ids.has(passage.id) || fingerprints.has(fingerprint)) continue;
+    const pageCount = pageCounts.get(passage.pdfPage) ?? 0;
+    if (pageCount >= 2 || (pageCount === 0 && pageCounts.size >= MAX_PAGES)) continue;
+
+    ids.add(passage.id);
+    fingerprints.add(fingerprint);
+    pageCounts.set(passage.pdfPage, pageCount + 1);
+    passages.push(passage);
+    if (passages.length >= MAX_PASSAGES) break;
   }
-  return { passages, pageImages: [] };
+
+  const searchCount = contexts.reduce((total, context) => total + (context.searchCount ?? 0), 0);
+  return { passages, pageImages: [], ...(searchCount ? { searchCount } : {}) };
 }
 
-export function formatFatmanCitations(passages: FatmanPassage[]): string {
-  const byPdfPage = new Map<number, string | undefined>();
+export function formatFatmanCitations(
+  passages: FatmanPassage[],
+  question = "",
+  answer = "",
+): string {
+  const byPdfPage = new Map<number, {
+    printedPage?: string;
+    score: number;
+    text: string;
+  }>();
   for (const passage of passages) {
-    if (!byPdfPage.has(passage.pdfPage)) byPdfPage.set(passage.pdfPage, passage.printedPage);
+    const current = byPdfPage.get(passage.pdfPage);
+    byPdfPage.set(passage.pdfPage, {
+      printedPage: current?.printedPage ?? passage.printedPage,
+      score: Math.max(current?.score ?? 0, passage.score),
+      text: current ? current.text + " " + passage.text : passage.text,
+    });
   }
-  const refs = [...byPdfPage.entries()]
-    .sort(([a], [b]) => a - b)
-    .slice(0, 3)
-    .map(([pdfPage, printedPage]) => printedPage
+
+  const questionTerms = meaningfulFatmanTerms(question);
+  const answerTerms = meaningfulFatmanTerms(answer);
+  const ranked = [...byPdfPage.entries()].map(([pdfPage, source]) => {
+    const passageTerms = meaningfulFatmanTerms(source.text);
+    const questionOverlap = [...questionTerms].filter((term) => passageTerms.has(term)).length;
+    const answerOverlap = [...answerTerms].filter((term) => passageTerms.has(term)).length;
+    const questionCoverage = questionTerms.size
+      ? questionOverlap / Math.min(questionTerms.size, 8)
+      : 0;
+    const answerCoverage = answerTerms.size
+      ? answerOverlap / Math.min(answerTerms.size, 12)
+      : 0;
+    const relevance = source.score * 0.4 + questionCoverage * 0.2 + answerCoverage * 0.4;
+    return { pdfPage, printedPage: source.printedPage, relevance };
+  });
+
+  const refs = ranked
+    .sort((a, b) => b.relevance - a.relevance || a.pdfPage - b.pdfPage)
+    .slice(0, MAX_CITATION_PAGES)
+    .sort((a, b) => a.pdfPage - b.pdfPage)
+    .map(({ pdfPage, printedPage }) => printedPage
       ? "PDF p. " + pdfPage + " (book p. " + printedPage + ")"
       : "PDF p. " + pdfPage);
   return refs.length ? "Source: Fatman 2nd Edition, " + refs.join("; ") + "." : "";
