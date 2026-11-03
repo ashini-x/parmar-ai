@@ -57,9 +57,11 @@ describe("BRVIN browser script contract", () => {
     expect(envSource).toContain('| "parmarbot_test" | "delete_book" | "delete_vision_output";');
     expect(workflowSource).toContain('retrieveFatmanContext(this.env, probe.query)');
     expect(workflowSource).toContain('eventType: "bot.retrieval_test_passed"');
-    expect(workflowSource).toContain('eventType: "source.retained"');
+    expect(workflowSource).toContain('eventType: "source.pdf_and_index_retained"');
     expect(workflowSource).toContain("if (importJob.book_id) {");
-    expect(workflowSource).toContain("deletion: \"explicit_admin_action\"");
+    expect(workflowSource).toContain("deletion: \"automatic_after_retrieval_qa\"");
+    expect(workflowSource).toContain("schedule automatic temporary Vision OCR cleanup after READY");
+    expect(workflowSource).toContain("runBrvinVisionRetentionSupervisor");
     expect(workflowSource).toContain("workflow.auto_recovery_started");
     expect(workflowSource).toContain('source_type !== "pdf"');
     expect(workflowSource).toContain('book.status !== "deleting" && book.status !== "delete_failed"');
