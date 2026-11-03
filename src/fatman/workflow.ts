@@ -285,7 +285,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
               details: {
                 expectedPage: probe.expectedPage,
                 returnedPages: context.passages.filter(p => p.bookId === importJob.book_id).map(p => p.pdfPage),
-                searchedSources: context.passages.filter(p => p.bookId === importJob.book_id).length,
+                returnedPassages: context.passages.filter(p => p.bookId === importJob.book_id).length,
               },
             }).catch(() => undefined);
             throw new Error("Parmarbot BRVIN retrieval did not return test PDF page " + probe.expectedPage + ".");
@@ -304,7 +304,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
               expectedPage: probe.expectedPage,
               returnedPage: match.pdfPage,
               score: match.score,
-              searchedSources: context.searchedSources,
+              searchCount: context.searchCount ?? null,
             },
           }).catch(() => undefined);
         }
