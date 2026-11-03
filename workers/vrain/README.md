@@ -10,7 +10,7 @@ The Worker includes:
 - a single-owner control-plane API;
 - project and collection records;
 - project-scoped, hashed, revocable read API keys;
-- private resumable Google Cloud Storage upload relay;
+- private resumable Google Cloud Storage upload relay with explicit OCR cost acknowledgement;
 - server-side PDF signature and SHA-256 verification;
 - Google Cloud Vision asynchronous PDF DOCUMENT_TEXT_DETECTION;
 - private page-normalized OCR objects;
