@@ -4,6 +4,7 @@ import { runFatmanReleaseQaForEnv } from "./release-qa-runner";
 import { ensureAnalyticsSchema, recordBrvinActivity, setFatmanBookState } from "../analytics/db";
 import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError } from "./recovery-policy";
 import { buildFatmanBookVerificationPages, buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
+import { retrieveFatmanContext } from "./retrieval";
 import { getGoogleAccessToken } from "../auth/google";
 import { fatmanExpectedPageCount, fatmanIndexPageKey } from "./library";
 import type { FatmanImportJob } from "./import";
@@ -24,7 +25,7 @@ import {
 
 interface FatmanImportParams {
   importId: string;
-  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor" | "retry_page" | "quality_check" | "release_qa";
+  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor" | "retry_page" | "quality_check" | "release_qa" | "parmarbot_test";
   startPage?: number;
   endPage?: number;
   objectNames?: string[];
@@ -56,7 +57,7 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
     throw new Error("The Fatman import workflow received an invalid import ID.");
   }
   if (task !== undefined && task !== "resume_index" && task !== "index_chunk" && task !== "repair_chunk" &&
-      task !== "cleanup_chunk" && task !== "monitor" && task !== "retry_page" && task !== "quality_check" && task !== "release_qa") {
+      task !== "cleanup_chunk" && task !== "monitor" && task !== "retry_page" && task !== "quality_check" && task !== "release_qa" && task !== "parmarbot_test") {
     throw new Error("The Fatman import workflow received an invalid task.");
   }
   return {
@@ -252,6 +253,78 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         message: "The BRVIN processing workflow accepted this book and is coordinating its specialist stages.",
         details: { expectedPages, task: params.task ?? "ingest" },
       }).catch(() => undefined);
+
+      if (params.task === "parmarbot_test") {
+        if (!importJob.book_id) throw new Error("Parmarbot integration tests require a BRVIN-registered book.");
+        const probes = [
+          {
+            expectedPage: 1,
+            query: "rain garden choosing site slope drainage water collection location",
+          },
+          {
+            expectedPage: 2,
+            query: "four profile layers plant canopy mulch engineered soil native subsoil",
+          },
+          {
+            expectedPage: 3,
+            query: "highest priority post-storm checks clear inlet drawdown overflow route",
+          },
+        ];
+        const verified: Array<{ query: string; expectedPage: number; returnedPage: number; score: number }> = [];
+        for (const probe of probes) {
+          const context = await step.do("Parmarbot retrieves BRVIN source page " + probe.expectedPage, async () =>
+            retrieveFatmanContext(this.env, probe.query));
+          const match = context.passages.find((passage) =>
+            passage.bookId === importJob.book_id && passage.pdfPage === probe.expectedPage
+          );
+          if (!match) {
+            await recordBrvinActivity(this.env, {
+              importId, bookId: importJob.book_id, agent: "Parmarbot integration verifier",
+              phase: "bot-test", eventType: "bot.retrieval_probe_failed", status: "failed",
+              message: "Parmarbot's project-scoped retrieval did not return the expected Rain Gardens source page.",
+              details: {
+                expectedPage: probe.expectedPage,
+                returnedPages: context.passages.filter(p => p.bookId === importJob.book_id).map(p => p.pdfPage),
+                searchedSources: context.passages.filter(p => p.bookId === importJob.book_id).length,
+              },
+            }).catch(() => undefined);
+            throw new Error("Parmarbot BRVIN retrieval did not return test PDF page " + probe.expectedPage + ".");
+          }
+          verified.push({
+            query: probe.query,
+            expectedPage: probe.expectedPage,
+            returnedPage: match.pdfPage,
+            score: match.score,
+          });
+          await recordBrvinActivity(this.env, {
+            importId, bookId: importJob.book_id, agent: "Parmarbot integration verifier",
+            phase: "bot-test", eventType: "bot.retrieval_probe_passed", status: "completed",
+            message: "Parmarbot's live Fatman-mode retrieval helper returned the expected BRVIN page.",
+            details: {
+              expectedPage: probe.expectedPage,
+              returnedPage: match.pdfPage,
+              score: match.score,
+              searchedSources: context.searchedSources,
+            },
+          }).catch(() => undefined);
+        }
+        await step.do("Parmarbot integration supervisor records full retrieval pass", async () => {
+          await recordBrvinActivity(this.env, {
+            importId, bookId: importJob.book_id, agent: "Parmarbot integration supervisor",
+            phase: "bot-test", eventType: "bot.retrieval_test_passed", status: "completed",
+            message: "Parmarbot's production retrieval helper passed all three page-grounded BRVIN integration probes.",
+            details: {
+              projectSlug: "fatman",
+              testedPages: verified.map(item => item.returnedPage),
+              queryCount: verified.length,
+              transportTested: false,
+              answerGenerationTested: false,
+            },
+          });
+          return { passed: true, testedPages: verified.map(item => item.returnedPage), queryCount: verified.length };
+        });
+        return;
+      }
 
       if (params.task === "resume_index") {
         const runId = params.runId;
@@ -561,7 +634,21 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           shouldCleanup = releaseQa.status === "passed";
         }
 
-        // Preserve the private GCS source and OCR output until retrieval checks pass.
+        // BRVIN is a governed, reusable knowledge repository: retain its original
+        // PDF and OCR output after QA so future consumers, audits and re-indexing
+        // do not require another user upload or another Vision OCR charge.
+        // Only the legacy one-off Fatman release keeps its historical temp cleanup.
+        if (importJob.book_id) {
+          await recordBrvinActivity(this.env, {
+            importId, bookId: importJob.book_id, agent: "Source retention supervisor",
+            phase: "retention", eventType: "source.retained", status: "completed",
+            message: "The original PDF and Google Vision OCR output remain in private storage for future BRVIN consumers and recovery.",
+            details: { sourcePrefix: fatmanImportObjectPrefix(importJob), deletion: "explicit_admin_action" },
+          }).catch(() => undefined);
+          return;
+        }
+
+        // Preserve legacy Fatman cleanup behavior after its release QA passes.
         if (!shouldCleanup) return;
 
         try {
@@ -739,7 +826,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             await markFatmanImportCompleted(this.env, importId).catch(() => undefined);
           }
         }
-      } else if (params.task !== "cleanup_chunk") {
+      } else if (params.task !== "cleanup_chunk" && params.task !== "parmarbot_test") {
         await markFatmanImportFailed(this.env, importId, error).catch(() => undefined);
       }
       if (importedBook?.book_id) await recordBrvinActivity(this.env, {
