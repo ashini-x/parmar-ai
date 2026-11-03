@@ -238,6 +238,7 @@ async function runCase(
   let answerStatus: "passed" | "failed" = "failed";
   let matchedFactGroups = 0;
   let citedPages: number[] = [];
+  let answerError: string | undefined;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     generationAttempts += 1;
     let generated: FatmanReleaseQaAnswer;
@@ -250,7 +251,7 @@ async function runCase(
     } catch (error) {
       answerText = "";
       answerStatus = "failed";
-      retrievalError = error instanceof Error ? error.message : String(error);
+      answerError = error instanceof Error ? error.message : String(error);
       break;
     }
     estimatedCostMicrousd += Math.max(0, Math.floor(generated.estimatedCostMicrousd ?? 0));
@@ -285,7 +286,7 @@ async function runCase(
     queryCount,
     generationAttempts,
     estimatedCostMicrousd,
-    ...(answerStatus === "failed" ? { error: retrievalError ?? (qaCase.expectAbstention
+    ...(answerStatus === "failed" ? { error: answerError ?? (qaCase.expectAbstention
       ? "The answer did not clearly abstain from unsupported book claims."
       : "The answer missed required facts or failed to cite its verified source pages.") } : {}),
     ...(answerText ? { answerExcerpt: answerText.slice(0, 600) } : {}),
