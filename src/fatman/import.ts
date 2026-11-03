@@ -520,7 +520,7 @@ export async function listFatmanIndexPages(env: Env): Promise<Array<{ page: numb
   while (page <= 20) {
     const response = await instance.items.list({ page, per_page: 50, source: "builtin" });
     for (const item of response.result ?? []) {
-      const match = item.key.match(/^fatman\\/pages\\/page-(\\d{1,6})\\.txt$/u);
+      const match = item.key.match(/^fatman\/pages\/page-(\d{1,6})\.txt$/u);
       if (!match) continue;
       const pageNumber = Number(match[1]);
       if (pageNumber < 1 || pageNumber > FATMAN_IMPORT_PAGES) continue;
