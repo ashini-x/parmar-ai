@@ -10,6 +10,7 @@ vi.mock("../src/analytics/db", () => analytics);
 import {
   buildFatmanRetrievalQuery,
   buildFatmanSearchQueries,
+  extractFatmanEvidenceExcerpt,
   FatmanRetrievalError,
   formatFatmanCitations,
   isFatmanPassageRelevant,
@@ -139,6 +140,28 @@ describe("Fatman page retrieval", () => {
 
   it("does not invent a citation when no passages were retrieved", () => {
     expect(formatFatmanCitations([])).toBe("");
+  });
+
+  it("preserves matching evidence that appears late in a long OCR page", () => {
+    const filler = "General historical notes that do not address the student's question. ".repeat(35);
+    const ocrPage = [
+      "Battle of Plassey took place in 1757 and Robert Clive led the East India Company.",
+      filler,
+      "The Battle of Buxar was fought in 1764 and the British forces were led by Hector Munro.",
+      filler,
+      "The Treaty of Allahabad was signed in 1765. The Company received the Diwani revenue rights of Bengal, Bihar and Orissa.",
+    ].join(" ");
+    const excerpt = extractFatmanEvidenceExcerpt(
+      "Battle of Plassey 1757 Buxar 1764 Treaty of Allahabad 1765 Diwani",
+      ocrPage,
+      2_200,
+    );
+
+    expect(excerpt.length).toBeLessThanOrEqual(2_200);
+    expect(excerpt).toContain("Plassey");
+    expect(excerpt).toContain("Buxar");
+    expect(excerpt).toContain("Allahabad");
+    expect(excerpt).toContain("Diwani");
   });
 
   it("expands short Article lookups and common FR/DPSP shorthand", () => {
