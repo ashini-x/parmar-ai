@@ -250,7 +250,6 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
         operationDone = await runWithRecovery(this.env, step, documentId, "vision_poll_" + pollCount,
           "Google Cloud Vision OCR specialist", async () => {
             const result = await getVisionOperation(this.env, visionOperation!);
-            if (result.error) throw new Error(result.error);
             return result.done;
           });
         if (!operationDone) {
