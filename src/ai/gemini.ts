@@ -1,4 +1,4 @@
-import type { AiUsageRecord, AnswerPacket, Env, GeminiGenerationResult, GeminiImageInput, ProfileContext } from "../config/env";
+import type { AiUsageRecord, AnswerPacket, ConversationTurn, Env, GeminiGenerationResult, GeminiImageInput, ProfileContext } from "../config/env";
 import type { FatmanBookContext } from "../fatman/retrieval";
 import { GoogleAuthError, getGoogleAccessToken } from "../auth/google";
 import { getConfig, MAX_QUIZ_BATCH_SIZE, type QuizItem } from "../config/env";
