@@ -13,18 +13,25 @@ describe("Telegram live progress updater", () => {
       edits.push(text);
     }, 800);
 
-    update.setStatus("Searching Fatman 2nd Edition…");
-    await update.flush();
+    await update.setStatus("Searching Fatman 2nd Edition…");
     expect(edits).toEqual(["Searching Fatman 2nd Edition…"]);
 
-    update.setStatus("Reviewing the most relevant book pages…");
+    const reviewState = update.setStatus("Reviewing the most relevant book pages…");
+    await vi.advanceTimersByTimeAsync(800);
+    await reviewState;
+    expect(edits.at(-1)).toBe("Reviewing the most relevant book pages…");
+
     update("The Battle of Plassey was fought in 1757.");
     await vi.advanceTimersByTimeAsync(800);
     await update.flush();
 
-    // The interim state is safely coalesced when answer text arrives before
-    // Telegram's next edit window; the latest useful content is never lost.
+    // The same editor receives each progress state and then the streamed text.
     expect(edits.at(-1)).toBe("The Battle of Plassey was fought in 1757.");
+    expect(edits).toEqual([
+      "Searching Fatman 2nd Edition…",
+      "Reviewing the most relevant book pages…",
+      "The Battle of Plassey was fought in 1757.",
+    ]);
     expect(edits).not.toContain("Thinking…");
   });
 
