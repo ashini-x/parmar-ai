@@ -149,6 +149,6 @@ CREATE TABLE IF NOT EXISTS vrain_schema_version (
   applied_at INTEGER NOT NULL
 );
 INSERT OR IGNORE INTO vrain_schema_version(version, applied_at)
-VALUES (1, CAST(unixepoch('subsec') * 1000 AS INTEGER));
+VALUES (1, (CAST(strftime('%s','now') AS INTEGER) * 1000));
 INSERT OR IGNORE INTO vrain_collections(id,name,description,language,status,created_at,updated_at)
-VALUES ('general','General knowledge','Default collection for documents awaiting explicit project grants.','und','active',CAST(unixepoch('subsec') * 1000 AS INTEGER),CAST(unixepoch('subsec') * 1000 AS INTEGER));
+VALUES ('00000000-0000-4000-8000-000000000001','General knowledge','Default collection for documents awaiting explicit project grants.','und','active',(CAST(strftime('%s','now') AS INTEGER) * 1000),(CAST(strftime('%s','now') AS INTEGER) * 1000));
