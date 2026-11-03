@@ -50,6 +50,7 @@ The production request path separates admission, durable state, model execution,
 - Structured AnswerPacket validation before delivery.
 - Gemini / Vertex AI integration with retry classification.
 - Telegram typing/status lifecycle and recovery.
+- Contextual progress states in the same Telegram message, transitioning into chunked answer streaming without separate status-message spam.
 - Best-effort personalization and analytics isolation so secondary failures do not unnecessarily block a valid student response.
 - Protected server-side administrative mutations.
 
