@@ -126,7 +126,8 @@ export async function createResumableUpload(
   return uri;
 }
 
-export async function probeUploadSession(uri: string, size: number, token: string): Promise<number> {
+export async function probeUploadSession(env: Env, uri: string, size: number): Promise<number> {
+  const token = await getAccessToken(env);
   const response = await fetch(uri, {
     method: "PUT",
     headers: { authorization: "Bearer " + token, "content-range": "bytes */" + size },
