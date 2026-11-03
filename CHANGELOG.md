@@ -6,7 +6,7 @@
 - Serializes and coalesces edits to respect Telegram's practical edit cadence without dropping the latest answer chunk; progress edits remain best-effort and cannot interrupt generation.
 - Added regression tests for status-to-answer transitions, chunk coalescing, and Telegram edit failures.
 
- Unreleased: Fatman Google Vision OCR importer
+## Unreleased: Fatman Google Vision OCR importer
 - Replaced Cloudflare image OCR with Google Cloud Vision Document Text Detection; extracted per-page text is indexed in the existing Cloudflare AI Search instance with exact PDF page metadata.
 - Added a zero-image Google Vision connectivity check, explicit confirmation of at least 538 remaining free OCR units, sequential page processing, and resumable page indexing.
 - Let Cloudflare index extracted text asynchronously while the admin page polls overall progress, so normal indexing delays do not stop page uploads.
