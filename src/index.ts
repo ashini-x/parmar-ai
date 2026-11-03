@@ -39,7 +39,7 @@ import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./
 import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, testFatmanVision, uploadFatmanPage } from "./fatman/admin";
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
-import { completeFatmanUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
+import { completeFatmanUpload, diagnoseFatmanGcsUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 import { assignBrvinBookProjects, assignBrvinProjectCollections, createBrvinCollection, createBrvinProject, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview } from "./brvin/admin";
 export { FatmanImportWorkflow } from "./fatman/workflow";
@@ -2158,6 +2158,7 @@ const worker = {
       if (adminApiPath.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
         if (adminApiPath === "/admin/api/brvin/overview" && request.method === "GET") return brvinOverview(env);
+        if (adminApiPath === "/admin/api/brvin/diagnostics/storage" && request.method === "GET") return diagnoseFatmanGcsUpload(env);
         if (adminApiPath === "/admin/api/brvin/status" && request.method === "GET") return brvinImportStatus(env, url.searchParams.get("id"));
         if (adminApiPath === "/admin/api/fatman/monitor" && request.method === "GET") return fatmanMonitorStatus(env);
         if (adminApiPath === "/admin/api/fatman/library/books" && request.method === "GET") return fatmanLibraryBooks(env);
