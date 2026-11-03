@@ -138,20 +138,20 @@ export function buildFatmanSearchQueries(value: string): string[] {
   };
   add(query);
 
-  const article = /\\barticle\\s+(\\d{1,3}[a-z]?)\\b/iu.exec(query);
+  const expandedQuery = expandFatmanAliases(query);
+  const article = /\barticle\s+(\d{1,3}[a-z]?)\b/iu.exec(expandedQuery);
   if (article) add("Article " + article[1] + " Indian Constitution");
 
-  const comparison = /(?:compare|comparison|difference\\s+between|differentiate|distinguish)\\s+(.+?)\\s+(?:with|and|versus|vs\\.?)\\s+(.+?)(?=,|\\b(?:focusing|in terms|regarding|with respect|on)\\b|$)/iu.exec(query);
+  const comparison = /(?:compare|comparison|difference\s+between|differentiate|distinguish)\s+(.+?)\s+(?:with|and|versus|vs\.?)\s+(.+?)(?=,|\b(?:focusing|in terms|regarding|with respect|on)\b|$)/iu.exec(expandedQuery);
   if (comparison) {
-    add(expandFatmanAliases(comparison[1]) + " features");
-    add(expandFatmanAliases(comparison[2]) + " features");
+    add(comparison[1] + " features");
+    add(comparison[2] + " features");
   } else {
-    const expanded = expandFatmanAliases(query);
-    if (expanded !== query) add(expanded);
-    const compact = query
-      .replace(/\\b(?:what|is|are|the|a|an|of|to|for|in|on|at|by|with|from|and|or|please|explain|describe|tell|me|about|can|could|would|should|does|do|did|was|were|who|why|how|which)\\b/giu, " ")
-      .replace(/[^\\p{L}\\p{N}]+/gu, " ")
-      .replace(/\\s+/gu, " ")
+    if (expandedQuery !== query) add(expandedQuery);
+    const compact = expandedQuery
+      .replace(/\b(?:what|is|are|the|a|an|of|to|for|in|on|at|by|with|from|and|or|please|explain|describe|tell|me|about|can|could|would|should|does|do|did|was|were|who|why|how|which)\b/giu, " ")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .replace(/\s+/gu, " ")
       .trim();
     if (compact && compact.toLowerCase() !== query.toLowerCase()) add(compact);
   }
@@ -160,9 +160,9 @@ export function buildFatmanSearchQueries(value: string): string[] {
 }
 
 function expandFatmanAliases(value: string): string {
-  let expanded = value.replace(/\\bDPSPs?\\b/giu, "Directive Principles of State Policy");
-  if (/\\bDPSP\\b/iu.test(value) && /\\bFR\\b/iu.test(expanded)) {
-    expanded = expanded.replace(/\\bFR\\b/giu, "Fundamental Rights");
+  let expanded = value.replace(/\bDPSPs?\b/giu, "Directive Principles of State Policy");
+  if (/\bDPSP\b/iu.test(value) && /\bFR\b/iu.test(value)) {
+    expanded = expanded.replace(/\bFR\b/giu, "Fundamental Rights");
   }
   return expanded;
 }
@@ -273,11 +273,11 @@ export function buildFatmanRetrievalQuery(
 }
 
 function isFatmanFollowUp(question: string): boolean {
-  const normalized = question.toLowerCase().replace(/\\s+/gu, " ").trim();
+  const normalized = question.toLowerCase().replace(/\s+/gu, " ").trim();
   if (!normalized) return false;
-  return /^(?:and\\s+)?(?:why|how|what about|what next|which one|who was that|who is that|what does that|how so|why so|give an example|example please|explain more|simpler|in simple words|what about it|and then)\\b/iu.test(normalized) ||
-    /^(?:it|that|this|they|those|these|same|there)\\b/iu.test(normalized) ||
-    /^(?:can you explain|explain that|explain this|tell me more|continue|go on)\\b/iu.test(normalized);
+  return /^(?:and\\s+)?(?:why|how|what about|what next|which one|who was that|who is that|what does that|how so|why so|give an example|example please|explain more|simpler|in simple words|what about it|and then)\b/iu.test(normalized) ||
+    /^(?:it|that|this|they|those|these|same|there)\b/iu.test(normalized) ||
+    /^(?:can you explain|explain that|explain this|tell me more|continue|go on)\b/iu.test(normalized);
 }
 
 export function isFatmanPassageRelevant(query: string, passage: string): boolean {
@@ -319,7 +319,7 @@ export function mergeFatmanContexts(contexts: FatmanBookContext[]): FatmanBookCo
   const pageCounts = new Map<number, number>();
 
   for (const passage of candidates) {
-    const fingerprint = passage.pdfPage + ":" + passage.text.toLowerCase().replace(/\\s+/gu, " ").slice(0, 180);
+    const fingerprint = passage.pdfPage + ":" + passage.text.toLowerCase().replace(/\s+/gu, " ").slice(0, 180);
     if (ids.has(passage.id) || fingerprints.has(fingerprint)) continue;
     const pageCount = pageCounts.get(passage.pdfPage) ?? 0;
     if (pageCount >= 2 || (pageCount === 0 && pageCounts.size >= MAX_PAGES)) continue;
