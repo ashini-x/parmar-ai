@@ -293,52 +293,64 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
         throw new RetryHandoffError("vision_coverage", "Vision OCR output is missing " + missingPages.length + " page(s); a fresh OCR operation was queued.");
       }
 
-      for (let page = 1; page <= document.page_count; page += 1) {
-        const pageNumber = page;
-        const sourceOutput = pageToObject.get(pageNumber);
-        if (!sourceOutput) throw new NonRetryableError("Google Vision OCR output disappeared for PDF page " + pageNumber + ".");
-        await runWithRecovery(this.env, step, documentId, "persist_ocr_page_" + pageNumber,
+      const OCR_BATCH_SIZE = 10;
+      for (let startPage = 1; startPage <= document.page_count; startPage += OCR_BATCH_SIZE) {
+        const endPage = Math.min(document.page_count, startPage + OCR_BATCH_SIZE - 1);
+        await runWithRecovery(this.env, step, documentId, "persist_ocr_pages_" + startPage + "_" + endPage,
           "Document extraction specialist", async () => {
-            const pageText = await readVisionPageText(this.env, sourceOutput, pageNumber);
-            const normalizedKey = "vrain/books/" + documentId + "/ocr/page-" + String(pageNumber).padStart(6, "0") + ".txt";
-            await uploadTextObject(this.env, normalizedKey, pageText);
+            await Promise.all(Array.from({ length: endPage - startPage + 1 }, async (_, offset) => {
+              const pageNumber = startPage + offset;
+              const sourceOutput = pageToObject.get(pageNumber);
+              if (!sourceOutput) throw new NonRetryableError("Google Vision OCR output disappeared for PDF page " + pageNumber + ".");
+              const pageText = await readVisionPageText(this.env, sourceOutput, pageNumber);
+              const normalizedKey = "vrain/books/" + documentId + "/ocr/page-" + String(pageNumber).padStart(6, "0") + ".txt";
+              await uploadTextObject(this.env, normalizedKey, pageText);
+            }));
+            await recordEvent(this.env, documentId, "Document extraction specialist", "normalization",
+              "ocr.pages_normalized", "completed", "VRAIN persisted normalized OCR text for PDF pages " + startPage + "–" + endPage + ".",
+              { startPage, endPage, pageCount: document.page_count });
           });
       }
 
       const searchName = this.env.VRAIN_SEARCH_INSTANCE?.trim() || "vrain-knowledge-v1";
       const search = this.env.VRAIN_SEARCH.get(searchName);
-      for (let page = 1; page <= document.page_count; page += 1) {
-        const pageNumber = page;
-        await runWithRecovery(this.env, step, documentId, "index_page_" + pageNumber,
+      const INDEX_BATCH_SIZE = 5;
+      for (let startPage = 1; startPage <= document.page_count; startPage += INDEX_BATCH_SIZE) {
+        const endPage = Math.min(document.page_count, startPage + INDEX_BATCH_SIZE - 1);
+        await runWithRecovery(this.env, step, documentId, "index_pages_" + startPage + "_" + endPage,
           "Page indexing specialist", async () => {
-            const pageStartedAt = Date.now();
-            const normalizedKey = "vrain/books/" + documentId + "/ocr/page-" + String(pageNumber).padStart(6, "0") + ".txt";
-            const text = await readTextObject(this.env, normalizedKey);
-            const key = "vrain/books/" + documentId + "/pages/page-" + String(pageNumber).padStart(6, "0") + ".txt";
-            const indexed = await search.items.uploadAndPoll(
-              key,
-              document.title + " | PDF page " + pageNumber + " | language " + document.language + "\n\n" +
-                (text || "[No machine-readable text was detected on this PDF page.]"),
-              {
-                metadata: { documentId, documentTitle: document.title, pdfPage: pageNumber, language: document.language },
-                pollIntervalMs: 2_000,
-                timeoutMs: 120_000,
-              },
-            );
-            if (indexed.status !== "completed") throw new Error(indexed.error ?? "AI Search did not complete indexing for PDF page " + pageNumber + ".");
-            const elapsedMs = Date.now() - pageStartedAt;
-            await recordEvent(this.env, documentId, "Page indexing specialist", "indexing",
-              "index.page_completed", "completed", "PDF page " + pageNumber + " was indexed and acknowledged by AI Search.",
-              { page: pageNumber, pageCount: document.page_count, elapsedMs });
-            await this.env.DB.prepare("UPDATE vrain_documents SET indexed_pages=MAX(indexed_pages,?),updated_at=? WHERE id=?")
-              .bind(pageNumber, Date.now(), documentId).run();
+            const startedAt = Date.now();
+            await Promise.all(Array.from({ length: endPage - startPage + 1 }, async (_, offset) => {
+              const pageNumber = startPage + offset;
+              const normalizedKey = "vrain/books/" + documentId + "/ocr/page-" + String(pageNumber).padStart(6, "0") + ".txt";
+              const text = await readTextObject(this.env, normalizedKey);
+              const key = "vrain/books/" + documentId + "/pages/page-" + String(pageNumber).padStart(6, "0") + ".txt";
+              const indexed = await search.items.uploadAndPoll(
+                key,
+                document.title + " | PDF page " + pageNumber + " | language " + document.language + "\n\n" +
+                  (text || "[No machine-readable text was detected on this PDF page.]"),
+                {
+                  metadata: { documentId, documentTitle: document.title, pdfPage: pageNumber, language: document.language },
+                  pollIntervalMs: 2_000,
+                  timeoutMs: 120_000,
+                },
+              );
+              if (indexed.status !== "completed") throw new Error(indexed.error ?? "AI Search did not complete indexing for PDF page " + pageNumber + ".");
+            }));
+            const elapsedMs = Date.now() - startedAt;
+            const averagePageMs = Math.max(1, Math.round(elapsedMs / (endPage - startPage + 1)));
+            for (let pageNumber = startPage; pageNumber <= endPage; pageNumber += 1) {
+              await this.env.DB.prepare("UPDATE vrain_documents SET indexed_pages=MAX(indexed_pages,?),updated_at=? WHERE id=?")
+                .bind(pageNumber, Date.now(), documentId).run();
+              await recordEvent(this.env, documentId, "Page indexing specialist", "indexing",
+                "index.page_completed", "completed", "PDF page " + pageNumber + " was indexed and acknowledged by AI Search.",
+                { page: pageNumber, pageCount: document.page_count, elapsedMs: averagePageMs });
+            }
             await this.env.DB.prepare("UPDATE vrain_jobs SET stage='indexing',last_heartbeat_at=? WHERE document_id=?")
               .bind(Date.now(), documentId).run();
-            if (pageNumber === 1 || pageNumber % 10 === 0 || pageNumber === document.page_count) {
-              await recordEvent(this.env, documentId, "Page indexing specialist", "indexing",
-                "index.progress", "running", "Indexed " + pageNumber + " of " + document.page_count + " PDF pages.",
-                { indexedPages: pageNumber, pageCount: document.page_count, percent: Math.floor(pageNumber / document.page_count * 100) });
-            }
+            await recordEvent(this.env, documentId, "Page indexing specialist", "indexing",
+              "index.progress", "running", "Indexed " + endPage + " of " + document.page_count + " PDF pages.",
+              { indexedPages: endPage, pageCount: document.page_count, percent: Math.floor(endPage / document.page_count * 100) });
           });
       }
 
