@@ -47,10 +47,12 @@ describe("BRVIN browser script contract", () => {
     const workflowSource = readFileSync(new URL("../src/fatman/workflow.ts", import.meta.url), "utf8");
     const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
     const wranglerConfig = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+    const envSource = readFileSync(new URL("../src/config/env.ts", import.meta.url), "utf8");
     expect(workflowSource).toContain("const indexed = await instance.items.upload(key, content);");
     expect(workflowSource).not.toContain("metadata: { bookId: job.book_id, bookTitle: title, pdfPage: page }");
     expect(workflowSource).toContain("export async function runBrvinRecoverySupervisor");
     expect(workflowSource).toContain('task !== "parmarbot_test"');
+    expect(envSource).toContain('| "parmarbot_test";');
     expect(workflowSource).toContain('retrieveFatmanContext(this.env, probe.query)');
     expect(workflowSource).toContain('eventType: "bot.retrieval_test_passed"');
     expect(workflowSource).toContain('eventType: "source.retained"');
