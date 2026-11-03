@@ -20,6 +20,9 @@ function context(pages: number[]): FatmanBookContext {
 }
 
 function answerFor(question: string): string {
+  if (question.includes("Trace the relationship")) {
+    return "The Battle of Plassey took place in 1757, the Battle of Buxar in 1764, and the Treaty of Allahabad in 1765. The treaty granted the East India Company Diwani revenue rights.";
+  }
   if (question.includes("Battle of Plassey")) {
     return "The Battle of Plassey was fought by East India Company forces led by Robert Clive against Siraj-ud-Daulah, the Nawab of Bengal.";
   }
@@ -31,9 +34,6 @@ function answerFor(question: string): string {
   }
   if (question.includes("exact SHA-256")) {
     return "The exact SHA-256 fingerprint is not found in the retrieved Fatman pages, so I cannot confirm it.";
-  }
-  if (question.includes("Trace the relationship")) {
-    return "The Battle of Plassey took place in 1757, the Battle of Buxar in 1764, and the Treaty of Allahabad in 1765. The treaty granted the East India Company Diwani revenue rights.";
   }
   return "Robert Clive and Siraj-ud-Daulah were involved in the Battle of Plassey.";
 }
@@ -76,10 +76,9 @@ describe("Fatman real-user release QA", () => {
   });
 
   it("uses a bounded answer-repair pass when fact coverage is incomplete", async () => {
-    const answer = vi.fn()
-      .mockResolvedValueOnce({ answer: "The Battle happened in Bengal." })
-      .mockResolvedValue({ answer: answerFor("Who led the East India Company forces at the Battle of Plassey, and who was the Nawab of Bengal?") });
-    const retrieval = vi.fn(async () => context([168]));
+    const answer = vi.fn(async (question: string) => ({ answer: answerFor(question) }));
+    answer.mockImplementationOnce(async () => ({ answer: "The Battle happened in Bengal." }));
+    const retrieval = goodDependencies().retrieve;
     const report = await runFatmanReleaseQa({
       retrieve: retrieval,
       answer,
@@ -87,7 +86,7 @@ describe("Fatman real-user release QA", () => {
     const exact = report.results.find((item) => item.id === "exact-plassey-fact");
     expect(exact?.status).toBe("passed");
     expect(exact?.generationAttempts).toBe(2);
-    expect(answer).toHaveBeenCalledTimes(4);
+    expect(answer).toHaveBeenCalledTimes(7);
     expect(answer.mock.calls[1]?.[2]).toContain("QA REPAIR PASS");
   });
 
