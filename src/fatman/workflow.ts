@@ -81,7 +81,7 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   const instanceName = env.FATMAN_INSTANCE_NAME?.trim();
   if (!instanceName || !env.FATMAN_SEARCH) throw new Error("Fatman AI Search is not configured.");
   const instance = env.FATMAN_SEARCH.get(instanceName);
-  const key = fatmanIndexPageKey(job, page);
+  const key = fatmanIndexPageKey(importJob, page);
   const found = await instance.items.list({ search: key, per_page: 50, source: "builtin" });
   const exact = (found.result ?? []).filter((item) => item.key === key);
   const keep = exact.find((item) => item.status === "completed") ??
@@ -94,8 +94,8 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   const text = await readFatmanVisionOutput(env, job.id, page);
   const title = job.book_title?.trim() || "Fatman 2nd Edition 2026";
   const content = title + " | PDF page " + page + "\n\n" + text;
-  const indexed = job.book_id
-    ? await instance.items.upload(key, content, { metadata: { bookId: job.book_id, bookTitle: title, pdfPage: page } })
+  const indexed = importJob.book_id
+    ? await instance.items.upload(key, content, { metadata: { bookId: importJob.book_id, bookTitle: title, pdfPage: page } })
     : await instance.items.upload(key, content);
   if (indexed.status === "error" || indexed.status === "skipped" || indexed.status === "outdated") {
     throw new Error(indexed.error ? String(indexed.error) : "AI Search rejected PDF page " + page + " with status " + indexed.status + ".");
@@ -110,11 +110,13 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
     let job: FatmanImportJob | null = null;
     let expectedPages = 538;
     try {
-      job = await getFatmanImportJob(this.env, importId);
-      if (!job || Number(job.uploaded_bytes) !== Number(job.expected_size)) {
+      const loadedJob = await getFatmanImportJob(this.env, importId);
+      if (!loadedJob || Number(loadedJob.uploaded_bytes) !== Number(loadedJob.expected_size)) {
         throw new Error("The complete private PDF upload could not be verified.");
       }
-      expectedPages = fatmanExpectedPageCount(job);
+      job = loadedJob;
+      const importJob = loadedJob;
+      expectedPages = fatmanExpectedPageCount(importJob);
 
       if (params.task === "resume_index") {
         const runId = params.runId;
@@ -165,7 +167,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         await step.sleep("cool down before retrying Fatman page " + page + " (attempt " + retryAttempt + ")", fatmanPageRetryDelay(retryAttempt!));
         try {
           await step.do("retry indexing Fatman PDF page " + page, async () =>
-            indexOcrPage(this.env, job, page!));
+            indexOcrPage(this.env, importJob, page!));
         } catch (error) {
           if (!isTransientFatmanIndexError(error)) throw error;
           // After the initial backoff ladder, keep checking every 15 minutes
