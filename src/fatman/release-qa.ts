@@ -245,11 +245,12 @@ async function runCase(
   // Retrieval specialist: try the primary query and deterministic repair queries
   // until all expected pages are present or the bounded candidate list is used.
   for (const query of qaCase.queryCandidates) {
-    queryCount += 1;
     try {
       const context = await dependencies.retrieve(query);
+      queryCount += Math.max(1, Math.floor(context.searchCount ?? 1));
       contexts.push(context);
     } catch (error) {
+      queryCount += 1;
       retrievalError = error instanceof Error ? error.message : String(error);
       continue;
     }
