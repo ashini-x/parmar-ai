@@ -8,7 +8,8 @@ export function buildFatmanRetrievalProbe(text: string): string {
     .replace(/\\s+/gu, " ")
     .trim()
     .split(" ")
-    .filter((word) => word.replace(/[^\\p{L}\\p{N}]/gu, "").length >= 3);
+    .map((word) => word.replace(/[^\\p{L}\\p{N}'-]/gu, ""))
+    .filter((word) => word.length >= 3);
 
   if (words.length < 6) {
     throw new Error("Fatman retrieval QA cannot build a probe from fewer than six OCR words.");
