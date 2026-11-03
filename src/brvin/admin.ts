@@ -436,7 +436,7 @@ const $=id=>document.getElementById(id),API="/admin/api/brvin/",UPLOAD="/admin/a
 let model=null,selectedFile=null,activeImportId=null,uploadBusy=false;
 function say(message,error=false){$("upload-status").textContent=message;$("upload-status").classList.toggle("error",error);}
 async function api(path,options={}){const response=await fetch(path,{...options,credentials:"same-origin"});let data={};try{data=await response.json();}catch{}if(!response.ok||data.ok!==true)throw new Error(data.error||"Request failed (HTTP "+response.status+").");return data;}
-function post(path,body){return api(path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});}
+function post(path,body){return api(API+path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});}
 function esc(value){return String(value??"").replace(/[&<>"']/gu,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function fmtBytes(value){let n=Number(value||0);if(n<1024)return n+" B";const u=["KB","MB","GB"];let i=0;n/=1024;while(n>=1024&&i<u.length-1){n/=1024;i++;}return n.toFixed(1)+" "+u[i];}
 function time(value){return value?new Date(Number(value)).toLocaleString():"—";}

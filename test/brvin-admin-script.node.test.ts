@@ -13,8 +13,9 @@ describe("BRVIN browser script contract", () => {
     expect(importSource).toContain("Does not create, overwrite, or delete any GCS objects.");
     expect(workerSource).toContain("/admin/api/brvin/diagnostics/storage");
     expect(workerSource).toContain("diagnoseFatmanGcsUpload(env)");
-    expect(workerSource).toContain("x-brvin-diagnostic-token");
-    expect(workerSource).toContain("tokenAuthorized");
+    expect(workerSource).not.toContain("x-brvin-diagnostic-token");
+    expect(workerSource).not.toContain("BRVIN_DIAGNOSTIC_TOKEN");
+    expect(workerSource.match(/adminApiPath === "\/admin\/api\/brvin\/diagnostics\/storage"/gu) ?? []).toHaveLength(1);
   });
 
   it("serves JavaScript that parses before delivery to browsers", async () => {
@@ -43,5 +44,10 @@ describe("BRVIN browser script contract", () => {
     }
 
     expect(parsed.parseDiagnostics).toHaveLength(0);
+    expect(script).toContain('const $=id=>document.getElementById(id),API="/admin/api/brvin/"');
+    expect(script).toContain('function post(path,body){return api(API+path,');
+    expect(script).toContain('post("upload/start"');
+    expect(script).toContain('post("projects"');
+    expect(script).toContain('post("collections"');
   });
 });
