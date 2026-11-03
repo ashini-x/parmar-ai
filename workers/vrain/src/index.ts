@@ -394,12 +394,23 @@ async function adminUploadChunk(request: Request, env: Env, documentId: string):
     return json({ ok: false, error: "invalid_chunk_range" }, 400);
   }
   if (Number.isFinite(declared) && declared > MAX_CHUNK_BYTES) return json({ ok: false, error: "chunk_too_large" }, 413);
+  const offset = await probeUploadSession(env, document.gcs_upload_uri, total);
+  if (offset >= total) {
+    const now = Date.now();
+    await env.DB.prepare("UPDATE vrain_documents SET uploaded_bytes=?,status='uploaded',updated_at=? WHERE id=? AND status='uploading'")
+      .bind(total, now, documentId).run();
+    await recordEvent(env, {
+      documentId, specialist: "Secure upload", stage: "upload", type: "upload.reconciled",
+      status: "completed", message: "VRAIN reconciled a completed GCS upload after a lost client response.",
+      details: { uploadedBytes: total, expectedBytes: total, recoveredFromRemoteOffset: true },
+    });
+    return json({ ok: true, uploadedBytes: total, expectedBytes: total, status: "uploaded", reconciled: true });
+  }
+  if (offset !== start) return json({ ok: false, error: "upload_offset_mismatch", uploadedBytes: offset }, 409);
   const bytes = await readBoundedBody(request, MAX_CHUNK_BYTES);
   if (bytes.byteLength < 1 || bytes.byteLength > MAX_CHUNK_BYTES || start + bytes.byteLength > total) {
     return json({ ok: false, error: "chunk_size_out_of_range" }, 413);
   }
-  const offset = await probeUploadSession(env, document.gcs_upload_uri, total);
-  if (offset !== start) return json({ ok: false, error: "upload_offset_mismatch", uploadedBytes: offset }, 409);
   const result = await uploadChunk(env, document.gcs_upload_uri, bytes, start, total);
   await env.DB.prepare("UPDATE vrain_documents SET uploaded_bytes=?,status=?,updated_at=? WHERE id=? AND status='uploading'")
     .bind(result.uploadedBytes, result.complete ? "uploaded" : "uploading", Date.now(), documentId).run();
