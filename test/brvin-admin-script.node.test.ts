@@ -82,6 +82,11 @@ describe("BRVIN browser script contract", () => {
     expect(workflowSource).toContain('eventType: "book.deletion_completed"');
     expect(workflowSource).toContain('eventType: "book.deletion_failed"');
     expect(workflowSource).toContain('eventType: "source.vision_ocr_deleted"');
+    expect(workflowSource).toContain("vision_output_deletion_started_at");
+    expect(workflowSource).toContain("vision_output_deleted_at=?");
+    expect(adminSource).toContain("visionOcrDeleting");
+    expect(adminSource).toContain("candidate.vision_output_deletion_started_at");
+    expect(analyticsSource).toContain("ALTER TABLE brvin_books ADD COLUMN vision_output_deletion_started_at INTEGER");
     expect(workerSource).toContain("/admin/api/brvin/books/delete");
     expect(workerSource).toContain("/admin/api/brvin/books/delete-vision-output");
     expect(workerSource).toContain("/admin/api/brvin/clear");
