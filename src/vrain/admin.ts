@@ -124,7 +124,10 @@ export async function vrainOverview(env: Env): Promise<Response> {
         status: String(row.status), error: row.error_message ? String(row.error_message) : undefined,
         collectionId: String(row.collection_id), collectionName: String(row.collection_name ?? "Unassigned"),
         searchPrefix: String(row.search_prefix), sourceType: String(row.source_type),
-        projects: directByBook.get(String(row.id)) ?? [],
+        directProjects: directByBook.get(String(row.id)) ?? [],
+        collectionProjects: collectionProjectMap.get(String(row.collection_id)) ?? [],
+        projects: [...(directByBook.get(String(row.id)) ?? []), ...(collectionProjectMap.get(String(row.collection_id)) ?? []).filter(project =>
+          !(directByBook.get(String(row.id)) ?? []).some(direct => direct.id === project.id))],
         createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
       })),
       jobs: (jobs.results ?? []).map((row) => ({
@@ -224,7 +227,6 @@ export async function startVrainBookUpload(env: Env, request: Request): Promise<
     const statements = [
       env.DB.prepare("UPDATE vrain_books SET collection_id=?,updated_at=? WHERE id=?").bind(collectionId, now, payload.importId),
       env.DB.prepare("DELETE FROM vrain_project_books WHERE book_id=?").bind(payload.importId),
-      env.DB.prepare("DELETE FROM vrain_project_collections WHERE project_id='fatman' AND collection_id=? AND ?='never'").bind(collectionId, "guard"),
     ];
     for (const projectId of projectIds) {
       statements.push(env.DB.prepare(
@@ -373,7 +375,7 @@ const HTML = `<!doctype html>
 <div class="field"><label>PDF document</label><label class="drop" for="pdf"><span><strong>Choose PDF from this device</strong><small>Private resumable upload · OCR costs may apply</small><input id="pdf" type="file" accept="application/pdf"></span></label><div class="file" id="file-info">No PDF selected.</div></div>
 <div class="field"><label>Grant project access (optional)</label><div class="checks" id="project-checks"><span class="muted">Loading projects…</span></div></div>
 <label class="check"><input type="checkbox" id="cost"> I understand Google Cloud Vision OCR may incur usage charges.</label>
-<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" id="upload" disabled>Add to VRAIN</button><button class="btn" id="resume" disabled>Resume selected job</button></div><progress class="progress" id="progress" value="0" max="100"></progress><p class="statusline" id="upload-status" aria-live="polite">Choose a PDF to start. Processing continues on the server after upload completes.</p>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" id="upload" disabled>Add to VRAIN</button></div><progress class="progress" id="progress" value="0" max="100"></progress><p class="statusline" id="upload-status" aria-live="polite">Choose a PDF to start. Processing continues on the server after upload completes.</p>
 <div class="steps"><div class="step" id="step-upload"><b>01 · Secure upload</b><small>Private object storage</small></div><div class="step" id="step-ocr"><b>02 · Vision OCR</b><small>Document text detection</small></div><div class="step" id="step-index"><b>03 · Indexing</b><small>Page-level search</small></div><div class="step" id="step-qa"><b>04 · Retrieval QA</b><small>Source-page verification</small></div><div class="step" id="step-ready"><b>05 · Ready</b><small>Project access enabled</small></div></div>
 <div class="notice">VRAIN does not automatically share every book with every project. A book is searchable only after indexing and retrieval QA pass, and only for projects explicitly assigned the book or its collection.</div></section>
 <section class="panel"><div class="panel-head"><h2>Knowledge sources</h2><span class="muted" id="book-count">—</span></div><div class="tablewrap"><table class="table"><thead><tr><th>Source</th><th>Collection</th><th>Indexed</th><th>Status</th><th>Project access</th><th></th></tr></thead><tbody id="books"><tr><td class="empty" colspan="6">Loading knowledge registry…</td></tr></tbody></table></div></section>
@@ -416,13 +418,14 @@ function renderCollections(list){$("collections").innerHTML=list.length?list.map
 function renderProjects(list){$("projects").innerHTML=list.length?list.map(p=>'<div class="tile"><strong>'+esc(p.name)+'</strong> '+statusPill(p.status)+'<p>'+esc(p.description||"No description")+'</p><small>Direct books: '+p.directBooks+' · via collections: '+p.collectionBooks+' · slug '+esc(p.slug)+'</small></div>').join(""):'<div class="empty">No projects have been registered.</div>';
  $("project-checks").innerHTML=list.filter(p=>p.status==="active").map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.id)+'"> '+esc(p.name)+'</label>').join("")||'<span class="muted">No active projects. Create one below.</span>';
  $("project-access").innerHTML=list.filter(p=>p.status==="active").map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");
+ $("project-access").onchange=()=>{const p=list.find(item=>item.id===$("project-access").value);const allowed=new Set((model?.collections||[]).filter(c=>c.projects.some(link=>link.id===p?.id)).map(c=>c.id));$("collection-checks").querySelectorAll("input").forEach(input=>input.checked=allowed.has(input.value));};
 }
 function renderBooks(list,projects){$("book-count").textContent=list.length+" sources";$("books").innerHTML=list.length?list.map(b=>{
- const access=b.projects.map(p=>p.name).join(", ")||"No direct access";
+ const access=b.projects.map(p=>p.name).join(", ")||"No project access";
  const progress=pct(b.indexedPages,b.pageCount);
  const action=b.status==="uploading"||b.status==="uploaded"||b.status==="processing"||b.status==="failed"
   ?'<button class="btn" data-view="'+esc(b.id)+'">Operations</button> ':"";
- const manage='<button class="btn" data-access="'+esc(b.id)+'">Access</button>';
+ const manage='<button class="btn" data-access="'+esc(b.id)+'">Direct access</button>';
  return '<tr><td><strong>'+esc(b.title)+'</strong><div class="muted">'+esc(b.filename)+'</div><div class="bar"><i style="width:'+progress+'%"></i></div></td><td>'+esc(b.collectionName)+'</td><td>'+b.indexedPages+'/'+b.pageCount+'</td><td>'+statusPill(b.status)+(b.error?'<div class="error">'+esc(b.error)+'</div>':"")+'</td><td>'+esc(access)+'</td><td>'+action+manage+'</td></tr>';
  }).join(""):'<tr><td class="empty" colspan="6">No knowledge sources yet. Add the first PDF above.</td></tr>';
  $("books").querySelectorAll("[data-view]").forEach(button=>button.addEventListener("click",()=>showImport(button.dataset.view)));
@@ -454,7 +457,7 @@ async function showImport(id){activeImportId=id;try{const d=await api(API+"statu
  $("modal-body").innerHTML='<div class="metrics" style="grid-template-columns:repeat(3,1fr)"><div class="metric"><span>State</span><strong style="font-size:17px">'+esc(job.status)+'</strong></div><div class="metric"><span>Indexed</span><strong style="font-size:17px">'+job.indexedPages+'/'+job.expectedPages+'</strong></div><div class="metric"><span>Upload</span><strong style="font-size:17px">'+pct(job.uploadedBytes,job.expectedSize)+'%</strong></div></div><p class="muted">Vision OCR: '+esc(d.pipeline?.vision?.status||"not started")+' · Workflow: '+esc(d.pipeline?.workflow?.status||"not started")+'</p><div class="timeline">'+(d.events||[]).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong><p>'+esc(e.message)+'</p><small>'+esc(time(e.createdAt))+'</small></div></div>').join("")+'</div>';
  $("modal").classList.add("open");
  }catch(e){say(e.message,true);}}
-async function editBookAccess(id){const book=model.books.find(b=>b.id===id);if(!book)return;const selected=new Set(book.projects.map(p=>p.id));
+async function editBookAccess(id){const book=model.books.find(b=>b.id===id);if(!book)return;const selected=new Set((book.directProjects||[]).map(p=>p.id));
  $("modal-title").textContent="Project access · "+book.title;
  $("modal-body").innerHTML='<p class="muted">Choose exactly which projects can retrieve this source. Saving replaces its direct project assignments.</p><div class="checks" id="access-choices">'+model.projects.filter(p=>p.status==="active").map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.id)+'" '+(selected.has(p.id)?"checked":"")+'> '+esc(p.name)+'</label>').join("")+'</div><button class="btn primary" id="save-book-access" style="margin-top:12px">Save access</button>';
  $("modal").classList.add("open");
@@ -477,7 +480,5 @@ $("upload").addEventListener("click",uploadBook);$("refresh").addEventListener("
 $("create-project").addEventListener("click",async()=>{try{await post("projects",{name:$("project-name").value,description:$("project-desc").value});$("project-name").value="";$("project-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("create-collection").addEventListener("click",async()=>{try{await post("collections",{name:$("collection-name").value,description:$("collection-desc").value});$("collection-name").value="";$("collection-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("save-project-access").addEventListener("click",async()=>{try{const projectId=$("project-access").value;if(!projectId)throw new Error("Create or choose a project first.");const collectionIds=[...$("collection-checks").querySelectorAll("input:checked")].map(i=>i.value);await post("projects/collections",{projectId,collectionIds});await refresh();}catch(e){alert(e.message);}});
-$("resume").addEventListener("click",()=>{if(activeImportId)resumeImport(activeImportId);});
-async function tick(){await refresh();if(activeImportId)await showImportEvents(activeImportId).catch(()=>{});}
-await refresh();refreshLoop=setInterval(refresh,5000);
+await refresh();refreshLoop=setInterval(async()=>{await refresh();if(activeImportId&&$("modal").classList.contains("open"))await showImport(activeImportId).catch(()=>{});},5000);
 </script></body></html>`;
