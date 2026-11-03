@@ -842,9 +842,10 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
     }
 
     const stopTypingHeartbeat = startTypingHeartbeat(env, job.chatId, job.requestId, job.botConnectionId);
+    let updatePartialAnswer: PartialAnswerHandler | undefined;
     try {
       const startedAt = Date.now();
-      const updatePartialAnswer = claim.record.statusMessageId
+      updatePartialAnswer = claim.record.statusMessageId
         ? createTelegramPartialAnswerUpdater(env, job, claim.record.statusMessageId)
         : undefined;
       await updatePartialAnswer?.setStatus?.(
@@ -1068,6 +1069,9 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         message.ack();
         continue;
       }
+      // Stop the status cycle and await any in-flight edit before the final
+      // answer or quiz replaces/deletes this same Telegram message.
+      await updatePartialAnswer?.stop?.();
       let statusMessageHandled = false;
       let questionDeliveryFailed = false;
       if (packet.responseMode === "quiz") {
@@ -1214,6 +1218,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       });
       message.ack();
     } catch (error) {
+      await updatePartialAnswer?.stop?.();
       const retryable = isRetryableJobError(error);
       logger.error("question_processing_failed", {
         requestId: job.requestId,
@@ -1276,6 +1281,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         message.retry({ delaySeconds: Math.min(300, queueRetryDelay(message.attempts)) });
       }
     } finally {
+      await updatePartialAnswer?.stop?.();
       stopTypingHeartbeat();
     }
   }
