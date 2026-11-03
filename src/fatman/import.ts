@@ -693,6 +693,25 @@ export async function readFatmanVisionOutput(env: Env, importId: string, page: n
  * never match the separately stored source PDF tree. Existing unrelated
  * lifecycle rules are preserved; broad Delete rules are rejected fail-closed.
  */
+export function isUnsafeFatmanVisionLifecycleDeletePrefix(value: string): boolean {
+  const candidate = value.trim();
+  if (!candidate) return true;
+  const sourceRoots = [
+    "brvin/source-pdfs/",
+    "brvin/imports/",
+    "fatman/source-pdfs/",
+    "fatman/imports/",
+  ];
+  const overlapsSource = sourceRoots.some((root) => candidate.startsWith(root) || root.startsWith(candidate));
+  if (!overlapsSource) return false;
+  const legacyImportRoots = ["brvin/imports/", "fatman/imports/"];
+  const legacyOcrOnly = legacyImportRoots.some((root) => {
+    if (!candidate.startsWith(root)) return false;
+    const segments = candidate.slice(root.length).split("/").filter(Boolean);
+    return segments.length >= 2 && segments[1] === "ocr";
+  });
+  return !legacyOcrOnly;
+}
 export async function ensureFatmanVisionLifecycleRule(env: Env): Promise<{ configured: true; created: boolean; prefix: string; ageDays: number }> {
   const bucketName = bucket(env);
   const token = await getGoogleAccessToken(env);
@@ -711,14 +730,7 @@ export async function ensureFatmanVisionLifecycleRule(env: Env): Promise<{ confi
       if (rule.action?.type !== "Delete") return false;
       const prefixes = rule.condition?.matchesPrefix ?? [];
       if (!prefixes.length) return true;
-      return prefixes.some((value) => {
-        const candidate = String(value);
-        return candidate === "brvin/" || candidate === "fatman/" ||
-          candidate === "brvin/imports/" || candidate === "fatman/imports/" ||
-          candidate.startsWith("brvin/source-pdfs/") || candidate.startsWith("fatman/source-pdfs/") ||
-          (candidate.startsWith("brvin/imports/") && !candidate.endsWith("/ocr/")) ||
-          (candidate.startsWith("fatman/imports/") && !candidate.endsWith("/ocr/"));
-      });
+      return prefixes.some((value) => isUnsafeFatmanVisionLifecycleDeletePrefix(String(value)));
     });
     if (unsafeRule) {
       throw new Error("An existing bucket Delete rule is broader than the temporary Vision OCR prefix. No lifecycle changes were made because it may include source PDFs.");
