@@ -12,6 +12,8 @@ describe("BRVIN browser script contract", () => {
     expect(importSource).toContain("storage.objects.delete");
     expect(importSource).toContain("Does not create, overwrite, or delete any GCS objects.");
     expect(workerSource).toContain("/admin/api/brvin/diagnostics/storage");
+    expect(workerSource).toContain("x-brvin-diagnostic-token");
+    expect(workerSource).toContain("tokenAuthorized || (await requireAdmin(request, env))".replace("tokenAuthorized || (await requireAdmin(request, env))","tokenAuthorized"));
     expect(workerSource).toContain("diagnoseFatmanGcsUpload(env)");
   });
 
