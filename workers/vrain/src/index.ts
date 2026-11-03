@@ -341,9 +341,47 @@ async function adminStartDocument(request: Request, env: Env): Promise<Response>
     ? input.language : "und";
 
   const duplicate = await env.DB.prepare(
-    "SELECT id,title,status,page_count FROM vrain_documents WHERE source_sha256=? AND expected_size=? AND status NOT IN ('archived','failed') ORDER BY created_at DESC LIMIT 1",
-  ).bind(sha256, size).first<{ id: string; title: string; status: string; page_count: number }>();
-  if (duplicate) return json({ ok: true, duplicate: true, document: duplicate, message: "This exact PDF fingerprint is already registered." });
+    "SELECT id,title,status,page_count,gcs_upload_uri,uploaded_bytes FROM vrain_documents WHERE source_sha256=? AND expected_size=? AND status NOT IN ('archived','failed') ORDER BY created_at DESC LIMIT 1",
+  ).bind(sha256, size).first<{
+    id: string; title: string; status: string; page_count: number;
+    gcs_upload_uri: string | null; uploaded_bytes: number;
+  }>();
+  if (duplicate) {
+    if (duplicate.status === "uploading" && duplicate.gcs_upload_uri) {
+      try {
+        const offset = await probeUploadSession(env, duplicate.gcs_upload_uri, size);
+        const status = offset === size ? "uploaded" : "uploading";
+        const now = Date.now();
+        await env.DB.prepare("UPDATE vrain_documents SET uploaded_bytes=?,status=?,updated_at=? WHERE id=? AND status='uploading'")
+          .bind(offset, status, now, duplicate.id).run();
+        return json({
+          ok: true, duplicate: true, documentId: duplicate.id, status,
+          uploadedBytes: offset, expectedBytes: size, pageCount: duplicate.page_count,
+          message: "The same PDF is already registered. VRAIN reconciled its resumable upload offset.",
+        });
+      } catch (error) {
+        if (!/http 404|http 410|not found|expired|session.*invalid/iu.test(safeMessage(error))) throw error;
+        const now = Date.now();
+        await env.DB.batch([
+          env.DB.prepare("UPDATE vrain_documents SET status='failed',error_code='UPLOAD_SESSION_EXPIRED',error_message=?,updated_at=? WHERE id=? AND status='uploading'")
+            .bind("The previous GCS resumable upload session expired. A fresh transfer is required.", now, duplicate.id),
+          env.DB.prepare("UPDATE vrain_jobs SET state='failed',stage='upload_expired',error_code='UPLOAD_SESSION_EXPIRED',error_message=?,last_heartbeat_at=?,completed_at=? WHERE document_id=?")
+            .bind("The previous GCS resumable upload session expired.", now, now, duplicate.id),
+        ]);
+        await recordEvent(env, {
+          documentId: duplicate.id, specialist: "Recovery specialist", stage: "upload",
+          type: "upload.session_expired", status: "warning",
+          message: "The old resumable upload session expired. VRAIN is creating a new session for the same PDF fingerprint.",
+        });
+      }
+    } else {
+      return json({
+        ok: true, duplicate: true, documentId: duplicate.id, status: duplicate.status,
+        pageCount: duplicate.page_count,
+        message: "This exact PDF fingerprint is already registered. Continue monitoring its existing VRAIN document record.",
+      });
+    }
+  }
 
   await ensureSearchInstance(env);
   const id = crypto.randomUUID();
