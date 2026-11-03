@@ -298,7 +298,10 @@ async function handleFatmanModeCallback(
     const current = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId });
     const active = resolveFatmanModeTarget(action, current.active);
     // Exiting must remain possible even if the book index becomes unavailable.
-    if (active && !current.active && !(await isFatmanReady(env))) {
+    if (active && !(await isFatmanReady(env))) {
+      if (current.active) {
+        await jobStoreRequest(env, chatId, { action: "set_fatman_mode", botConnectionId, active: false });
+      }
       await answerCallback("Fatman mode is not available yet.", true);
       return;
     }
@@ -516,8 +519,42 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       action: "get_fatman_mode",
       botConnectionId: bot.connectionId,
     });
-    const desiredActive = fatmanCommand === "on" ? true : fatmanCommand === "off" ? false : current.active;
-    if (desiredActive && !current.active && !(await isFatmanReady(env))) {
+    if (fatmanCommand === "status") {
+      const ready = await isFatmanReady(env);
+      const active = current.active && ready;
+      if (current.active && !ready) {
+        await jobStoreRequest(env, chatId, {
+          action: "set_fatman_mode",
+          botConnectionId: bot.connectionId,
+          active: false,
+        });
+      }
+      await bestEffortTelegram("fatman_status", () => sendTelegramMessage(
+        env,
+        chatId,
+        !ready
+          ? "Fatman Mode is unavailable right now. It is OFF; usual study mode remains available."
+          : active
+            ? "Fatman Mode is ON. New doubts will use the book and page citations."
+            : "Fatman Mode is OFF. New doubts will use the usual SSC study mode.",
+        messageId,
+        bot.connectionId,
+        true,
+        ready ? buildFatmanModeMarkup(active) : undefined,
+      ));
+      return withRequestId(json({ ok: true, fatmanMode: active }), requestId);
+    }
+
+    const desiredActive = fatmanCommand === "on";
+    const ready = desiredActive ? await isFatmanReady(env) : false;
+    if (desiredActive && !ready) {
+      if (current.active) {
+        await jobStoreRequest(env, chatId, {
+          action: "set_fatman_mode",
+          botConnectionId: bot.connectionId,
+          active: false,
+        });
+      }
       await bestEffortTelegram("fatman_command_unavailable", () => sendTelegramMessage(
         env,
         chatId,
@@ -532,7 +569,6 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       botConnectionId: bot.connectionId,
       active: desiredActive,
     });
-    const ready = desiredActive ? await isFatmanReady(env) : false;
     const commandText = desiredActive
       ? (current.active ? "Fatman Mode is already ON." : "✅ Fatman Mode is ON. New doubts will use the book and page citations.")
       : (current.active ? "✅ Fatman Mode is OFF. New doubts will use the usual SSC study mode." : "Fatman Mode is already OFF.");
