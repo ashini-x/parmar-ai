@@ -1815,7 +1815,7 @@ async function telegramSetupMethod(env: Env, method: string, payload: Record<str
   const requestPayload = { ...payload };
   delete requestPayload.botTokenOverride;
 
-  const activeBot = await getActiveTelegramBot(env);
+  const activeBot = botTokenOverride ? null : await getActiveTelegramBot(env);
   const token = botTokenOverride ?? activeBot?.token ?? env.TELEGRAM_BOT_TOKEN?.trim();
   if (!token) throw new TelegramError("Telegram bot is not configured.");
 
