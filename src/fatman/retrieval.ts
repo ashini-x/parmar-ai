@@ -275,7 +275,7 @@ export function buildFatmanRetrievalQuery(
 function isFatmanFollowUp(question: string): boolean {
   const normalized = question.toLowerCase().replace(/\s+/gu, " ").trim();
   if (!normalized) return false;
-  return /^(?:and\\s+)?(?:why|how|what about|what next|which one|who was that|who is that|what does that|how so|why so|give an example|example please|explain more|simpler|in simple words|what about it|and then)\b/iu.test(normalized) ||
+  return /^(?:and\s+)?(?:why|how|what about|what next|which one|who was that|who is that|what does that|how so|why so|give an example|example please|explain more|simpler|in simple words|what about it|and then)\b/iu.test(normalized) ||
     /^(?:it|that|this|they|those|these|same|there)\b/iu.test(normalized) ||
     /^(?:can you explain|explain that|explain this|tell me more|continue|go on)\b/iu.test(normalized);
 }
