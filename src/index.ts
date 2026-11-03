@@ -40,7 +40,7 @@ import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanI
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
 import { completeFatmanUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
-import { fatmanLibraryAdminPage, fatmanLibraryBooks, startFatmanLibraryUpload } from "./fatman/library-admin";
+import { fatmanLibraryAdminPage, fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
@@ -2139,6 +2139,7 @@ const worker = {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
         if (url.pathname === "/admin/api/fatman/monitor" && request.method === "GET") return fatmanMonitorStatus(env);
         if (url.pathname === "/admin/api/fatman/library/books" && request.method === "GET") return fatmanLibraryBooks(env);
+        if (url.pathname === "/admin/api/fatman/library/status" && request.method === "GET") return fatmanLibraryImportStatus(env, url.searchParams.get("id"));
         if (url.pathname === "/admin/api/fatman/qa" && request.method === "GET") return fatmanReleaseQaStatus(env);
         if (url.pathname === "/admin/api/fatman/status" && request.method === "GET") return fatmanIndexStatus(env);
         if (url.pathname === "/admin/api/fatman/upload/status" && request.method === "GET") return fatmanUploadStatus(env, url.searchParams.get("id"));
