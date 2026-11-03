@@ -6,6 +6,7 @@ import {
 import { NonRetryableError } from "cloudflare:workflows";
 import type { Env, VrainDocument } from "./types";
 import {
+  getObjectMetadata,
   getVisionOperation,
   googleRetryMessage,
   isRetryableGoogleError,
@@ -227,14 +228,14 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
       let document = await step.do("load VRAIN document", async () => getDocument(this.env, documentId));
       if (!["processing", "waiting_retry"].includes(document.status)) return;
       await updateDocument(this.env, documentId, { status: "processing", error_code: null, error_message: null });
-      await this.env.DB.prepare("UPDATE vrain_jobs SET state='processing',last_heartbeat_at=?,workflow_instance_id=? WHERE document_id=?")
-        .bind(Date.now(), this.ctx?.instanceId ?? null, documentId).run().catch(() => undefined);
+      await this.env.DB.prepare("UPDATE vrain_jobs SET state='processing',last_heartbeat_at=? WHERE document_id=?")
+        .bind(Date.now(), documentId).run().catch(() => undefined);
 
       await runWithRecovery(this.env, step, documentId, "verify_source", "Source integrity specialist", async () => {
         const metadata = await this.env.DB.prepare("SELECT expected_size,source_sha256,gcs_object FROM vrain_documents WHERE id=?")
           .bind(documentId).first<{ expected_size: number; source_sha256: string; gcs_object: string }>();
         if (!metadata) throw new NonRetryableError("The source registry record is missing.");
-        const object = await (await import("./google")).getObjectMetadata(this.env, metadata.gcs_object);
+        const object = await getObjectMetadata(this.env, metadata.gcs_object);
         if (object.size !== Number(metadata.expected_size)) throw new Error("Uploaded PDF size does not match the declared source size.");
         const actualHash = await streamObjectSha256(this.env, metadata.gcs_object);
         if (actualHash !== metadata.source_sha256.toUpperCase()) {
