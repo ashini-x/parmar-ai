@@ -41,6 +41,7 @@ import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
 import { completeFatmanUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryAdminPage, fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
+import { assignVrainBookProjects, assignVrainProjectCollections, createVrainCollection, createVrainProject, startVrainBookUpload, vrainAdminPage, vrainImportStatus, vrainOverview } from "./vrain/admin";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
@@ -2117,10 +2118,16 @@ const worker = {
         return fatmanAdminPage();
       }
 
+      if (url.pathname === "/admin/vrain") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+        return vrainAdminPage();
+      }
+
       if (url.pathname === "/admin/fatman/books") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
-        return fatmanLibraryAdminPage();
+        return new Response(null, { status: 308, headers: { location: "/admin/vrain", "cache-control": "no-store" } });
       }
 
       if (url.pathname === "/admin/fatman/monitor") {
@@ -2137,12 +2144,28 @@ const worker = {
 
       if (url.pathname.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
+        if (url.pathname === "/admin/api/vrain/overview" && request.method === "GET") return vrainOverview(env);
+        if (url.pathname === "/admin/api/vrain/status" && request.method === "GET") return vrainImportStatus(env, url.searchParams.get("id"));
         if (url.pathname === "/admin/api/fatman/monitor" && request.method === "GET") return fatmanMonitorStatus(env);
         if (url.pathname === "/admin/api/fatman/library/books" && request.method === "GET") return fatmanLibraryBooks(env);
         if (url.pathname === "/admin/api/fatman/library/status" && request.method === "GET") return fatmanLibraryImportStatus(env, url.searchParams.get("id"));
         if (url.pathname === "/admin/api/fatman/qa" && request.method === "GET") return fatmanReleaseQaStatus(env);
         if (url.pathname === "/admin/api/fatman/status" && request.method === "GET") return fatmanIndexStatus(env);
         if (url.pathname === "/admin/api/fatman/upload/status" && request.method === "GET") return fatmanUploadStatus(env, url.searchParams.get("id"));
+        if (request.method === "POST" && url.pathname.startsWith("/admin/api/vrain/")) {
+          if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          if (url.pathname === "/admin/api/vrain/upload/start") return startVrainBookUpload(env, request);
+          if (url.pathname === "/admin/api/vrain/projects") return createVrainProject(env, request);
+          if (url.pathname === "/admin/api/vrain/collections") return createVrainCollection(env, request);
+          if (url.pathname === "/admin/api/vrain/books/assign") return assignVrainBookProjects(env, request);
+          if (url.pathname === "/admin/api/vrain/projects/collections") return assignVrainProjectCollections(env, request);
+          const chunkMatch = url.pathname.match(/^\\/admin\\/api\\/vrain\\/upload\\/([a-f0-9-]+)\\/chunk$/i);
+          if (chunkMatch) return uploadFatmanChunk(env, request, chunkMatch[1]);
+          const resumeMatch = url.pathname.match(/^\\/admin\\/api\\/vrain\\/upload\\/([a-f0-9-]+)\\/resume$/i);
+          if (resumeMatch) return resumeFatmanImport(env, resumeMatch[1]);
+          const completeMatch = url.pathname.match(/^\\/admin\\/api\\/vrain\\/upload\\/([a-f0-9-]+)\\/complete$/i);
+          if (completeMatch) return completeFatmanUpload(env, completeMatch[1]);
+        }
         if (request.method === "POST" && url.pathname.startsWith("/admin/api/fatman/")) {
           if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
           if (url.pathname === "/admin/api/fatman/qa") return triggerFatmanReleaseQa(env);
