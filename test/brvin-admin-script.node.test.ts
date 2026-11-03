@@ -44,6 +44,15 @@ describe("BRVIN browser script contract", () => {
     }
 
     expect(parsed.parseDiagnostics).toHaveLength(0);
+    const workflowSource = readFileSync(new URL("../src/fatman/workflow.ts", import.meta.url), "utf8");
+    const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+    const wranglerConfig = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+    expect(workflowSource).toContain("const indexed = await instance.items.upload(key, content);");
+    expect(workflowSource).not.toContain("metadata: { bookId: job.book_id, bookTitle: title, pdfPage: page }");
+    expect(workflowSource).toContain("export async function runBrvinRecoverySupervisor");
+    expect(workflowSource).toContain("workflow.auto_recovery_started");
+    expect(workerSource).toContain('controller.cron === "*/5 * * * *"');
+    expect(wranglerConfig).toContain('"*/5 * * * *"');
     expect(script).toContain('const $=id=>document.getElementById(id),API="/admin/api/brvin/"');
     expect(script).toContain('function post(path,body){return api(API+path,');
     expect(script).toContain('post("upload/start"');

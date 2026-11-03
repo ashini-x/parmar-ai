@@ -42,6 +42,7 @@ import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin
 import { completeFatmanUpload, diagnoseFatmanGcsUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 import { assignBrvinBookProjects, assignBrvinProjectCollections, createBrvinCollection, createBrvinProject, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview } from "./brvin/admin";
+import { runBrvinRecoverySupervisor } from "./fatman/workflow";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
@@ -2236,7 +2237,18 @@ const worker = {
     await handleQuestionBatch(batch, env, ctx);
   },
 
-  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    if (controller.cron === "*/5 * * * *") {
+      try {
+        const result = await runBrvinRecoverySupervisor(env);
+        logger.info("brvin_recovery_supervisor_completed", result);
+      } catch (error) {
+        logger.warn("brvin_recovery_supervisor_failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      return;
+    }
     try {
       await cleanupAnalytics(env, getAnalyticsConfig(env).retentionDays);
     } catch (error) {
