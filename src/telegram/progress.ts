@@ -1,5 +1,5 @@
 export type TelegramProgressUpdater = ((text: string) => void) & {
-  setStatus(status: string): void;
+  setStatus(status: string): Promise<void>;
   flush(): Promise<void>;
 };
 
@@ -64,11 +64,11 @@ export function createTelegramProgressUpdater(
     void drain();
   }) as TelegramProgressUpdater;
 
-  update.setStatus = (status: string): void => {
+  update.setStatus = async (status: string): Promise<void> => {
     const normalized = status.trim().slice(0, 3_900);
     if (!normalized || disabled || normalized.length < 4) return;
     latestText = normalized;
-    void drain();
+    await drain();
   };
 
   update.flush = async (): Promise<void> => {
