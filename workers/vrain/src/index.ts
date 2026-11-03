@@ -243,6 +243,29 @@ async function adminGrant(
   return json({ ok: true, granted: !remove, projectId, resourceId, kind });
 }
 
+async function ensureSearchInstance(env: Env): Promise<void> {
+  const name = env.VRAIN_SEARCH_INSTANCE?.trim() || "vrain-knowledge-v1";
+  const instance = env.VRAIN_SEARCH.get(name);
+  try {
+    await instance.info();
+    return;
+  } catch (readError) {
+    try {
+      await env.VRAIN_SEARCH.create({ id: name });
+      await env.VRAIN_SEARCH.get(name).info();
+      return;
+    } catch (createError) {
+      try {
+        // A simultaneous owner action may have created it between info() and create().
+        await env.VRAIN_SEARCH.get(name).info();
+        return;
+      } catch {
+        throw new Error("VRAIN AI Search instance could not be verified or created: " + safeMessage(createError || readError));
+      }
+    }
+  }
+}
+
 async function adminStartDocument(request: Request, env: Env): Promise<Response> {
   const input = await bodyJson<{
     title?: unknown; filename?: unknown; sha256?: unknown; size?: unknown;
@@ -272,6 +295,7 @@ async function adminStartDocument(request: Request, env: Env): Promise<Response>
   ).bind(sha256, size).first<{ id: string; title: string; status: string; page_count: number }>();
   if (duplicate) return json({ ok: true, duplicate: true, document: duplicate, message: "This exact PDF fingerprint is already registered." });
 
+  await ensureSearchInstance(env);
   const id = crypto.randomUUID();
   const objectName = "vrain/imports/" + id + "/source.pdf";
   const metadata = await createResumableUpload(env, objectName, size, {
