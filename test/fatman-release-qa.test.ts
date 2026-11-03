@@ -76,7 +76,7 @@ function goodDependencies(): FatmanReleaseQaDependencies {
 
 describe("Fatman real-user release QA", () => {
   it("contains all six user-facing QA categories", () => {
-    expect(FATMAN_RELEASE_QA_SUITE_VERSION).toBe("fatman-real-user-qa-v2");
+    expect(FATMAN_RELEASE_QA_SUITE_VERSION).toBe("fatman-real-user-qa-v3");
     expect(new Set(FATMAN_RELEASE_QA_CASES.map((item) => item.category))).toEqual(new Set([
       "exact_fact", "concept", "comparison", "page_reference", "out_of_book", "difficult",
     ]));
