@@ -2,9 +2,20 @@ import type { AiSearchChunk, Env, GeminiImageInput } from "../config/env";
 import { getFatmanBookState, reserveFatmanSearchQuery } from "../analytics/db";
 
 const MAX_MATCHES = 12;
+const MAX_QA_MATCHES = 50;
 const MAX_PASSAGES = 8;
 const MAX_PAGES = 6;
 const MAX_PASSAGE_CHARS = 2_000;
+
+const FATMAN_QUERY_STOP_WORDS = new Set([
+  "a", "about", "after", "all", "also", "an", "and", "are", "as", "at", "be", "because",
+  "been", "being", "between", "both", "but", "by", "can", "could", "did", "do", "does",
+  "for", "from", "had", "has", "have", "how", "in", "into", "is", "it", "its", "of",
+  "on", "or", "our", "please", "should", "that", "the", "their", "them", "there", "these",
+  "this", "those", "to", "was", "were", "what", "when", "where", "which", "who", "why",
+  "will", "with", "would", "you", "your", "pdf", "page", "fatman", "edition", "second",
+  "2nd", "2026", "book", "chapter", "explain", "describe", "tell", "me", "about",
+]);
 
 export interface FatmanPassage {
   id: string;
@@ -18,6 +29,8 @@ export interface FatmanPassage {
 export interface FatmanBookContext {
   passages: FatmanPassage[];
   pageImages: GeminiImageInput[];
+  /** Optional retry guidance used only by the internal QA answer-repair pass. */
+  qaRepairHint?: string;
 }
 
 export class FatmanRetrievalError extends Error {
@@ -32,40 +45,47 @@ export class FatmanRetrievalError extends Error {
   }
 }
 
-export async function isFatmanReady(env: Env): Promise<boolean> {
+function hasFatmanConfiguration(env: Env): boolean {
   const version = env.FATMAN_DOCUMENT_VERSION?.trim();
   const instanceName = env.FATMAN_INSTANCE_NAME?.trim();
   const expectedPages = Number(env.FATMAN_EXPECTED_PAGES);
   const threshold = Number(env.FATMAN_MIN_SCORE);
-  if (
-    env.FATMAN_ENABLED?.trim().toLowerCase() !== "true" ||
-    !version ||
-    !instanceName ||
-    !env.FATMAN_SEARCH ||
-    !env.DB ||
-    !Number.isSafeInteger(expectedPages) ||
-    expectedPages < 1 ||
-    !Number.isFinite(threshold) ||
-    threshold < 0 ||
-    threshold > 1
-  ) return false;
+  return env.FATMAN_ENABLED?.trim().toLowerCase() === "true" &&
+    Boolean(version && instanceName && env.FATMAN_SEARCH && env.DB) &&
+    Number.isSafeInteger(expectedPages) && expectedPages > 0 &&
+    Number.isFinite(threshold) && threshold >= 0 && threshold <= 1;
+}
 
+/** Checks the durable indexed state without requiring the public book-mode flag to be enabled. */
+export async function isFatmanIndexed(env: Env): Promise<boolean> {
+  if (!hasFatmanConfiguration(env)) return false;
+  try {
+    const state = await getFatmanBookState(env);
+    return state.documentVersion === env.FATMAN_DOCUMENT_VERSION?.trim() &&
+      state.indexedPages === Number(env.FATMAN_EXPECTED_PAGES);
+  } catch {
+    return false;
+  }
+}
+
+export async function isFatmanReady(env: Env): Promise<boolean> {
+  if (!hasFatmanConfiguration(env)) return false;
   try {
     const state = await getFatmanBookState(env);
     return state.enabled &&
-      state.documentVersion === version &&
-      state.indexedPages === expectedPages;
+      state.documentVersion === env.FATMAN_DOCUMENT_VERSION?.trim() &&
+      state.indexedPages === Number(env.FATMAN_EXPECTED_PAGES);
   } catch {
     return false;
   }
 }
 
 export async function retrieveFatmanContext(env: Env, query: string): Promise<FatmanBookContext> {
-  if (!(await isFatmanReady(env)) || !env.FATMAN_SEARCH) {
+  if (!(await isFatmanReady(env))) {
     throw new FatmanRetrievalError("Fatman retrieval is not configured.", false);
   }
 
-  const normalizedQuery = query.replace(/\s+/gu, " ").trim().slice(0, 4_000);
+  const normalizedQuery = normalizeFatmanQuery(query);
   if (!normalizedQuery) throw new FatmanRetrievalError("Fatman search query is empty.", false);
 
   const configuredLimit = Number(env.FATMAN_MONTHLY_QUERY_LIMIT);
@@ -81,14 +101,31 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
     );
   }
 
+  return searchFatmanContext(env, normalizedQuery, MAX_MATCHES);
+}
+
+/**
+ * Internal release QA uses the same index, hybrid retrieval and relevance rules
+ * as live answers, but does not consume a student's monthly search allowance.
+ */
+export async function retrieveFatmanQaContext(env: Env, query: string): Promise<FatmanBookContext> {
+  if (!(await isFatmanIndexed(env))) {
+    throw new FatmanRetrievalError("Fatman QA requires the configured 538-page index.", false);
+  }
+  const normalizedQuery = normalizeFatmanQuery(query);
+  if (!normalizedQuery) throw new FatmanRetrievalError("Fatman QA search query is empty.", false);
+  return searchFatmanContext(env, normalizedQuery, MAX_QA_MATCHES);
+}
+
+async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults: number): Promise<FatmanBookContext> {
   let chunks: AiSearchChunk[];
   try {
-    const instance = env.FATMAN_SEARCH.get(env.FATMAN_INSTANCE_NAME!.trim());
+    const instance = env.FATMAN_SEARCH!.get(env.FATMAN_INSTANCE_NAME!.trim());
     const result = await instance.search({
       messages: [{ role: "user", content: normalizedQuery }],
       ai_search_options: {
         retrieval: {
-          max_num_results: MAX_MATCHES,
+          max_num_results: maxResults,
           retrieval_type: "hybrid",
         },
       },
@@ -115,6 +152,7 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
       finiteScore(chunk.scoring_details?.reranking_score) ??
       finiteScore(chunk.scoring_details?.vector_score);
     if (!pdfPage || !text || score === undefined || score < minScore) continue;
+    if (!isFatmanPassageRelevant(normalizedQuery, text)) continue;
 
     const id = typeof chunk.id === "string" && chunk.id
       ? chunk.id
@@ -141,6 +179,53 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
     if (passages.length >= MAX_PASSAGES) break;
   }
 
+  return { passages, pageImages: [] };
+}
+
+export function isFatmanPassageRelevant(query: string, passage: string): boolean {
+  const queryTerms = meaningfulFatmanTerms(query);
+  if (queryTerms.size === 0) return false;
+  const passageTerms = meaningfulFatmanTerms(passage);
+  let overlap = 0;
+  for (const term of queryTerms) {
+    if (passageTerms.has(term)) overlap += 1;
+  }
+  // Short keyword lookups need one match; natural-language and multi-part
+  // questions need at least two independent content terms.
+  return overlap >= (queryTerms.size <= 2 ? 1 : 2);
+}
+
+function meaningfulFatmanTerms(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .normalize("NFKC")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim()
+      .split(/\s+/u)
+      .filter((term) => term.length >= 2 && !FATMAN_QUERY_STOP_WORDS.has(term)),
+  );
+}
+
+function normalizeFatmanQuery(query: string): string {
+  return query.replace(/\s+/gu, " ").trim().slice(0, 4_000);
+}
+
+export function mergeFatmanContexts(contexts: FatmanBookContext[]): FatmanBookContext {
+  const passages: FatmanPassage[] = [];
+  const ids = new Set<string>();
+  const pages = new Set<number>();
+  for (const context of contexts) {
+    for (const passage of context.passages) {
+      if (ids.has(passage.id) || (!pages.has(passage.pdfPage) && pages.size >= MAX_PAGES)) continue;
+      const pageCount = passages.filter((item) => item.pdfPage === passage.pdfPage).length;
+      if (pageCount >= 2) continue;
+      ids.add(passage.id);
+      pages.add(passage.pdfPage);
+      passages.push(passage);
+      if (passages.length >= MAX_PASSAGES) return { passages, pageImages: [] };
+    }
+  }
   return { passages, pageImages: [] };
 }
 
