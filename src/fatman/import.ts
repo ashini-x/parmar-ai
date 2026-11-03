@@ -208,7 +208,7 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
     let permissionData: { permissions?: string[]; error?: { message?: string } } = {};
     try { permissionData = JSON.parse(permissionText) as typeof permissionData; } catch { /* report HTTP status only */ }
     const granted = permissionData.permissions ?? [];
-    const required = ["storage.objects.create", "storage.objects.get", "storage.objects.list", "storage.objects.delete"];
+    const required = ["storage.objects.create", "storage.objects.get", "storage.objects.list", "storage.objects.delete", "storage.buckets.get"];
     const lifecycleRuleGetGranted = granted.includes("storage.buckets.get");
     const lifecycleRuleUpdateGranted = granted.includes("storage.buckets.update");
     const lifecycleRuleManagementGranted = lifecycleRuleGetGranted && lifecycleRuleUpdateGranted;
@@ -217,7 +217,7 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
       : { ok: false, status: permissionResponse.status, error: permissionData.error?.message ?? permissionText.slice(0, 240) };
 
     const createGranted = granted.includes("storage.objects.create");
-    const permissionCheckPassed = permissionResponse.ok && createGranted;
+    const permissionCheckPassed = permissionResponse.ok && required.every(permission => granted.includes(permission));
     const bucketCheckPassed = metadataResponse.ok || permissionCheckPassed;
     return json({
       ok: bucketCheckPassed && permissionCheckPassed,
