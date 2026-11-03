@@ -833,7 +833,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       const updatePartialAnswer = claim.record.statusMessageId
         ? createTelegramPartialAnswerUpdater(env, job, claim.record.statusMessageId)
         : undefined;
-      await updatePartialAnswer?.setStatus(
+      await updatePartialAnswer?.setStatus?.(
         message.attempts > 1 ? "Resuming your question…" : "Understanding your question…",
       );
       const jobTelegramUserId = job.telegramUserId ?? job.chatId;
@@ -892,23 +892,23 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
 
       if (!packet) {
         if (claim.record.photoFileIds?.length) {
-          await updatePartialAnswer?.setStatus("Reading the attached image…");
+          await updatePartialAnswer?.setStatus?.("Reading the attached image…");
         }
         const images = claim.record.photoFileIds?.length
           ? await downloadTelegramPhotos(env, claim.record.photoFileIds, job.botConnectionId)
           : [];
         if (images.length) {
-          await updatePartialAnswer?.setStatus("Interpreting the image and your question…");
+          await updatePartialAnswer?.setStatus?.("Interpreting the image and your question…");
         }
         let generation: Awaited<ReturnType<typeof generateGeminiAnswer>> | undefined;
         if (fatmanMode && job.question === DEFAULT_PHOTO_QUESTION && images.length > 0) {
           packet = makeFatmanNoticePacket("Photo mil gaya. Fatman mein sahi page dhoondhne ke liye photo ke saath apna sawaal ya ek keyword bhi likho.");
         } else if (fatmanMode) {
-          await updatePartialAnswer?.setStatus("Checking Fatman availability…");
+          await updatePartialAnswer?.setStatus?.("Checking Fatman availability…");
           if (!(await isFatmanReady(env))) {
             packet = makeFatmanNoticePacket("Fatman mode abhi available nahi hai. /help se usual study mode mein wapas aa jao.");
           } else {
-            await updatePartialAnswer?.setStatus("Searching Fatman 2nd Edition…");
+            await updatePartialAnswer?.setStatus?.("Searching Fatman 2nd Edition…");
             let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
             try {
               bookContext = await retrieveFatmanContext(env, buildFatmanRetrievalQuery(job.question, recentConversation));
@@ -923,7 +923,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
               packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
             }
             if (!packet && bookContext) {
-              await updatePartialAnswer?.setStatus("Reviewing the most relevant book pages…");
+              await updatePartialAnswer?.setStatus?.("Reviewing the most relevant book pages…");
               generation = await generateGeminiAnswer(
                 env,
                 job.question,
@@ -942,7 +942,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             }
           }
         } else {
-          await updatePartialAnswer?.setStatus(
+          await updatePartialAnswer?.setStatus?.(
             isMcqRequest(job.question)
               ? "Preparing your quiz…"
               : images.length
