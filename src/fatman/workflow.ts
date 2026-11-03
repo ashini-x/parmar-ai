@@ -317,7 +317,7 @@ export async function runBrvinVisionRetentionSupervisor(env: Env): Promise<{ sca
   for (const candidate of rows) {
     const failures = await env.DB.prepare(
       "SELECT COUNT(*) AS count FROM brvin_activity_events WHERE book_id=? AND event_type='source.vision_ocr_delete_failed' AND created_at>=?"
-    ).bind(candidate.id).first<{ count: number }>();
+    ).bind(candidate.id, Date.now() - 60 * 60 * 1000).first<{ count: number }>();
     if (Number(failures?.count ?? 0) >= 5) { paused += 1; continue; }
     const result = await startBrvinVisionOutputCleanup(env, candidate.id, "scheduled_retention_supervisor");
     if (result.started) started += 1;
