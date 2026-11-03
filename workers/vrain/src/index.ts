@@ -636,7 +636,11 @@ async function recoverDueJobs(env: Env): Promise<{ scanned: number; restarted: n
         const current = await env.INGEST_WORKFLOW.get(row.workflow_instance_id);
         const status = await current.status();
         if (!["errored", "terminated", "complete", "completed"].includes(status.status)) continue;
-      } catch { /* Missing/expired Workflow instance: claim and rebuild from the D1 checkpoint. */ }
+      } catch (error) {
+        // Only rebuild when the instance is genuinely missing/expired. A transient
+        // status API outage must not cause two active workflows for the same source.
+        if (!/not found|does not exist|no such instance|expired|http 404|status 404/iu.test(safeMessage(error))) continue;
+      }
     }
     const workflowId = row.document_id + "-recovery-" + crypto.randomUUID().replaceAll("-", "").slice(0, 12);
     const claim = await env.DB.prepare(
