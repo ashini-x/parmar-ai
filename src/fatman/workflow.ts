@@ -157,8 +157,10 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           await step.do("retry indexing Fatman PDF page " + page, async () =>
             indexOcrPage(this.env, importId, page!));
         } catch (error) {
-          if (!isTransientFatmanIndexError(error) || retryAttempt! >= FATMAN_PAGE_RETRY_LIMIT) throw error;
-          const nextAttempt = retryAttempt! + 1;
+          if (!isTransientFatmanIndexError(error)) throw error;
+          // After the initial backoff ladder, keep checking every 15 minutes
+          // until AI Search recovers. Do not turn an outage into manual work.
+          const nextAttempt = Math.min(FATMAN_PAGE_RETRY_LIMIT, retryAttempt! + 1);
           await step.do("schedule Fatman page retry " + nextAttempt, async () =>
             this.startChild(importId + "-" + runId + "-retry-page-" + page + "-" + nextAttempt + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "retry_page",
@@ -304,8 +306,9 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             return { checkedPages, queryCount: checkedPages.length };
           });
         } catch (error) {
-          if (!isRetryableFatmanQualityFailure(error) || retryAttempt >= FATMAN_PAGE_RETRY_LIMIT) throw error;
-          const nextAttempt = retryAttempt + 1;
+          if (!isRetryableFatmanQualityFailure(error)) throw error;
+          // Keep the final delay capped at 15 minutes and retry unattended.
+          const nextAttempt = Math.min(FATMAN_PAGE_RETRY_LIMIT, retryAttempt + 1);
           await step.do("schedule Fatman retrieval quality retry " + nextAttempt, async () =>
             this.startChild(importId + "-" + runId + "-quality-" + nextAttempt + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "quality_check",
@@ -382,11 +385,8 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           .filter((page) => !byPage.has(page));
         const repairPages = [...new Set([...failedPages.map((item) => item.page), ...missingPages])].slice(0, 10);
         if (repairPages.length > 0) {
-          if (repairPass >= 12) {
-            throw new Error("Fatman AI Search still has missing or failed pages after twelve repair passes.");
-          }
           const nextSequence = monitorSequence + 1;
-          const nextRepairPass = repairPass + 1;
+          const nextRepairPass = Math.min(12, repairPass + 1);
           await step.do("repair missing Fatman page batch " + nextSequence, async () =>
             this.startChild(importId + "-" + runId + "-repair-" + monitorSequence, {
               task: "repair_chunk",
