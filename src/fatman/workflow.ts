@@ -16,7 +16,7 @@ import {
 
 interface FatmanImportParams {
   importId: string;
-  task?: "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor";
+  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor";
   startPage?: number;
   endPage?: number;
   objectNames?: string[];
@@ -45,7 +45,7 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
   if (typeof importId !== "string" || !/^[a-f0-9-]{36}$/i.test(importId)) {
     throw new Error("The Fatman import workflow received an invalid import ID.");
   }
-  if (task !== undefined && task !== "index_chunk" && task !== "repair_chunk" &&
+  if (task !== undefined && task !== "resume_index" && task !== "index_chunk" && task !== "repair_chunk" &&
       task !== "cleanup_chunk" && task !== "monitor") {
     throw new Error("The Fatman import workflow received an invalid task.");
   }
@@ -94,6 +94,42 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
       const job = await getFatmanImportJob(this.env, importId);
       if (!job || Number(job.uploaded_bytes) !== Number(job.expected_size)) {
         throw new Error("The complete private PDF upload could not be verified.");
+      }
+
+      if (params.task === "resume_index") {
+        const runId = params.runId;
+        if (typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId)) {
+          throw new Error("The Fatman index recovery parameters are invalid.");
+        }
+        const pages = await step.do("find incomplete Fatman index pages", async () =>
+          listFatmanIndexPages(this.env));
+        const completedPages = new Set(pages
+          .filter((item) => item.status === "completed")
+          .map((item) => item.page));
+        const startPage = Array.from({ length: 538 }, (_, index) => index + 1)
+          .find((page) => !completedPages.has(page));
+
+        if (startPage === undefined) {
+          await step.do("start Fatman indexing monitor after recovery", async () =>
+            this.startChild(importId + "-" + runId + "-monitor-1", {
+              task: "monitor",
+              importId,
+              runId,
+              monitorSequence: 1,
+              repairPass: 0,
+            }));
+        } else {
+          const endPage = Math.min(538, startPage + 7);
+          await step.do("start recovered Fatman page chunk " + startPage, async () =>
+            this.startChild(importId + "-" + runId + "-page-" + startPage, {
+              task: "index_chunk",
+              importId,
+              startPage,
+              endPage,
+              runId,
+            }));
+        }
+        return;
       }
 
       if (params.task === "index_chunk") {
