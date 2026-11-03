@@ -5,7 +5,7 @@ describe("Telegram photo intent", () => {
   it("does not invent a question for a captionless photo or album", () => {
     expect(getCaptionedPhotoQuestion([])).toBeNull();
     expect(getCaptionedPhotoQuestion([""])).toBeNull();
-    expect(getCaptionedPhotoQuestion(["   ", "\\n"])).toBeNull();
+    expect(getCaptionedPhotoQuestion(["   ", "\t"])).toBeNull();
   });
 
   it("uses the first non-empty caption in a Telegram album", () => {
