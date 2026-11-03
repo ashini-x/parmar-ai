@@ -13,7 +13,7 @@ import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } fr
 import { buildFatmanRetrievalQuery, formatFatmanCitations, isFatmanReady, retrieveFatmanContext, FatmanRetrievalError } from "./fatman/retrieval";
 import { logger } from "./core/logger";
 import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./telegram/progress";
-import { parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
+import { buildFatmanHelpFooter, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
 import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
 import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
@@ -502,13 +502,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       ? await syncTelegramWebhookForCallbacks(request, env, bot, requestId)
       : false;
     const markup = fatmanReady && callbackWebhookReady ? buildFatmanModeMarkup(mode.active) : undefined;
-    const helpText = buildHelpText() + (
-      !fatmanReady
-        ? "\n\nFatman Mode is currently unavailable. You can still use /fatman off to leave the mode."
-        : callbackWebhookReady
-          ? "\n\nUse the buttons below or /fatman on and /fatman off to switch book mode."
-          : "\n\nButton sync failed. Use /fatman on or /fatman off as a backup."
-    );
+    const helpText = buildHelpText() + "\n\n" + buildFatmanHelpFooter(fatmanReady, callbackWebhookReady);
     await bestEffortTelegram("help", () => sendTelegramMessage(env, chatId, helpText, undefined, bot.connectionId, true, markup));
     return withRequestId(json({ ok: true }), requestId);
   }
@@ -1652,7 +1646,6 @@ function buildHelpText(): string {
     "View your SSC study profile /profile",
     "Reset your study profile /reset",
     "Delete your study data /delete_data",
-    "Fatman book mode /fatman on /fatman off",
   ].join("\n\n");
 }
 

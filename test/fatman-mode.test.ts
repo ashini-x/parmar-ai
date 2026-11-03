@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "../src/telegram/fatman-mode";
+import { buildFatmanHelpFooter, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "../src/telegram/fatman-mode";
 
 describe("Fatman mode controls", () => {
+  it("shows only the requested button instruction in student-facing help", () => {
+    expect(buildFatmanHelpFooter(true, true)).toBe(
+      "Use the buttons below to enter and exit the Fatman book to find facts.",
+    );
+    expect(buildFatmanHelpFooter(false, false)).not.toContain("/fatman");
+    expect(buildFatmanHelpFooter(true, false)).not.toContain("/fatman on");
+  });
+
   it("uses explicit enter and exit callback actions", () => {
     expect(parseFatmanModeAction("fatman:enter")).toBe("enter");
     expect(parseFatmanModeAction("fatman:exit")).toBe("exit");

@@ -19,3 +19,10 @@ export function parseFatmanModeCommand(text: string): "on" | "off" | "status" | 
   if (!match) return null;
   return (match[1]?.toLowerCase() as "on" | "off" | "status" | undefined) ?? "status";
 }
+
+/** Student-facing copy for the /help keyboard; slash-command fallbacks stay out of the UI. */
+export function buildFatmanHelpFooter(ready: boolean, callbackWebhookReady: boolean): string {
+  if (!ready) return "Fatman Mode is temporarily unavailable. Usual SSC study mode is active.";
+  if (!callbackWebhookReady) return "Fatman buttons are temporarily unavailable. Please try /help again.";
+  return "Use the buttons below to enter and exit the Fatman book to find facts.";
+}
