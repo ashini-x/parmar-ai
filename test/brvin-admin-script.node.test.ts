@@ -54,7 +54,7 @@ describe("BRVIN browser script contract", () => {
     expect(workflowSource).not.toContain("metadata: { bookId: job.book_id, bookTitle: title, pdfPage: page }");
     expect(workflowSource).toContain("export async function runBrvinRecoverySupervisor");
     expect(workflowSource).toContain('task !== "parmarbot_test"');
-    expect(envSource).toContain('| "parmarbot_test";');
+    expect(envSource).toContain('| "parmarbot_test" | "delete_book" | "delete_vision_output";');
     expect(workflowSource).toContain('retrieveFatmanContext(this.env, probe.query)');
     expect(workflowSource).toContain('eventType: "bot.retrieval_test_passed"');
     expect(workflowSource).toContain('eventType: "source.retained"');
