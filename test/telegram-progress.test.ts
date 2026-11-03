@@ -1,61 +1,100 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "../src/telegram/progress";
+import {
+  createTelegramProgressUpdater,
+  TELEGRAM_PROGRESS_CYCLES,
+  TELEGRAM_PROGRESS_LABELS,
+} from "../src/telegram/progress";
 
 describe("Telegram live progress updater", () => {
-  it("keeps every progress label short and on one line for mobile", () => {
-    for (const [name, label] of Object.entries(TELEGRAM_PROGRESS_LABELS)) {
-      expect(label, name).not.toContain("\n");
-      expect(label, name).not.toContain("\r");
-      expect(Array.from(label).length, name).toBeLessThanOrEqual(22);
-    }
-  });
-
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("transitions the same message from a status into streamed answer text", async () => {
+  it("keeps every progress label and loop variant short and on one line", () => {
+    const allLabels = [
+      ...Object.values(TELEGRAM_PROGRESS_LABELS),
+      ...Object.values(TELEGRAM_PROGRESS_CYCLES).flat(),
+    ];
+    for (const label of allLabels) {
+      expect(label).not.toContain("\n");
+      expect(label).not.toContain("\r");
+      expect(Array.from(label).length).toBeLessThanOrEqual(22);
+    }
+  });
+
+  it("cycles status variants while a phase remains active", async () => {
     vi.useFakeTimers();
     const edits: string[] = [];
-    const update = createTelegramProgressUpdater(async (text) => {
+    const update = createTelegramProgressUpdater((text) => {
       edits.push(text);
-    }, 800);
+      return Promise.resolve();
+    });
+
+    await update.setStatus(TELEGRAM_PROGRESS_LABELS.understanding);
+    expect(edits).toEqual([TELEGRAM_PROGRESS_LABELS.understanding]);
+
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(edits.at(-1)).toBe("Reviewing question…");
+
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(edits.at(-1)).toBe("Identifying topic…");
+
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(edits.at(-1)).toBe(TELEGRAM_PROGRESS_LABELS.understanding);
+
+    await update.stop();
+    const editCount = edits.length;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(edits).toHaveLength(editCount);
+  });
+
+  it("applies phase changes faster than streamed answer chunks", async () => {
+    vi.useFakeTimers();
+    const edits: string[] = [];
+    const update = createTelegramProgressUpdater((text) => {
+      edits.push(text);
+      return Promise.resolve();
+    });
 
     await update.setStatus(TELEGRAM_PROGRESS_LABELS.searchingFatman);
-    expect(edits).toEqual([TELEGRAM_PROGRESS_LABELS.searchingFatman]);
-
-    const reviewState = update.setStatus(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
-    await vi.advanceTimersByTimeAsync(800);
-    await reviewState;
+    const phaseChange = update.setStatus(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
+    await vi.advanceTimersByTimeAsync(499);
+    expect(edits).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await phaseChange;
     expect(edits.at(-1)).toBe(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
 
     update("The Battle of Plassey was fought in 1757.");
-    await vi.advanceTimersByTimeAsync(800);
+    await vi.advanceTimersByTimeAsync(849);
+    expect(edits.at(-1)).toBe(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
+    await vi.advanceTimersByTimeAsync(1);
     await update.flush();
-
-    // The same editor receives each progress state and then the streamed text.
     expect(edits.at(-1)).toBe("The Battle of Plassey was fought in 1757.");
-    expect(edits).toEqual([
-      TELEGRAM_PROGRESS_LABELS.searchingFatman,
-      TELEGRAM_PROGRESS_LABELS.checkingBookPages,
-      "The Battle of Plassey was fought in 1757.",
-    ]);
-    expect(edits).not.toContain("Thinking…");
+
+    await update.stop();
   });
 
-  it("serializes rapid answer chunks and sends the latest complete snapshot", async () => {
+  it("coalesces rapid answer chunks and shows a writing cycle after an idle pause", async () => {
     vi.useFakeTimers();
     const edits: string[] = [];
-    const update = createTelegramProgressUpdater(async (text) => {
+    const update = createTelegramProgressUpdater((text) => {
       edits.push(text);
-    }, 800);
+      return Promise.resolve();
+    });
 
-    update("The");
+    update("The answer");
     update("The correct answer is Article 79.");
-    await vi.advanceTimersByTimeAsync(800);
-    await update.flush();
-
+    await vi.advanceTimersByTimeAsync(850);
     expect(edits).toEqual(["The correct answer is Article 79."]);
+
+    await vi.advanceTimersByTimeAsync(2_300);
+    expect(edits.at(-1)).toBe(TELEGRAM_PROGRESS_LABELS.writingAnswer);
+
+    update("The correct answer is Article 79. It was adopted in 1949.");
+    await vi.advanceTimersByTimeAsync(850);
+    expect(edits.at(-1)).toBe("The correct answer is Article 79. It was adopted in 1949.");
+
+    await update.stop();
   });
 
   it("keeps answer generation independent when a Telegram edit fails", async () => {
@@ -63,13 +102,15 @@ describe("Telegram live progress updater", () => {
     const edit = vi.fn(async () => {
       throw new Error("Telegram edit rejected");
     });
-    const update = createTelegramProgressUpdater(edit, 800);
+    const update = createTelegramProgressUpdater(edit);
 
-    update.setStatus(TELEGRAM_PROGRESS_LABELS.checkingSources);
+    await update.setStatus(TELEGRAM_PROGRESS_LABELS.checkingSources);
     await expect(update.flush()).resolves.toBeUndefined();
     update("A later answer chunk");
     await update.flush();
+    await vi.advanceTimersByTimeAsync(5_000);
 
     expect(edit).toHaveBeenCalledTimes(1);
+    await update.stop();
   });
 });
