@@ -139,11 +139,13 @@ async function runWithRecovery<T>(
   throw new RetryHandoffError(stage, safeError(lastError));
 }
 
-function pageNumberFromObjectName(name: string): number | undefined {
+function pageRangeFromObjectName(name: string): { start: number; end: number } | undefined {
   const match = /output-(\d+)-to-(\d+)\.json$/iu.exec(name);
   if (!match) return undefined;
   const start = Number(match[1]);
-  return Number.isSafeInteger(start) && start > 0 ? start : undefined;
+  const end = Number(match[2]);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 1 || end < start) return undefined;
+  return { start, end };
 }
 
 function normalizeOcrText(value: unknown): string {
@@ -151,38 +153,15 @@ function normalizeOcrText(value: unknown): string {
   return value.replace(/\u0000/gu, "").replace(/\r\n?/gu, "\n").trim().slice(0, 120_000);
 }
 
-async function readVisionPages(env: Env, document: VrainDocument, outputPrefix: string): Promise<Map<number, string>> {
-  const objects = (await listObjects(env, outputPrefix)).filter((name) => name.toLowerCase().endsWith(".json"));
-  const pages = new Map<number, string>();
-  for (const objectName of objects) {
-    const output = await readJsonObject<VisionOutput>(env, objectName);
-    const fallbackPage = pageNumberFromObjectName(objectName);
-    const response = output.responses?.[0];
-    const page = Number(output.context?.pageNumber ?? fallbackPage);
-    if (!Number.isSafeInteger(page) || page < 1 || page > document.page_count) continue;
-    if (response?.error?.message) {
-      throw new Error("Google Vision reported a page extraction error on PDF page " + page + ": " + response.error.message);
-    }
-    pages.set(page, normalizeOcrText(response?.fullTextAnnotation?.text));
+async function readVisionPageText(env: Env, objectName: string, page: number): Promise<string> {
+  const output = await readJsonObject<VisionOutput>(env, objectName);
+  const contextPage = Number(output.context?.pageNumber ?? page);
+  if (contextPage !== page) throw new Error("Google Vision returned an unexpected PDF page number.");
+  const response = output.responses?.[0];
+  if (response?.error?.message) {
+    throw new Error("Google Vision reported a page extraction error on PDF page " + page + ": " + response.error.message);
   }
-  return pages;
-}
-
-function buildProbe(text: string): string | undefined {
-  const words = text
-    .normalize("NFKC")
-    .replace(/\s+/gu, " ")
-    .split(" ")
-    .map((word) => word.replace(/[^\p{L}\p{N}'-]/gu, ""))
-    .filter((word) => word.length >= 3);
-  if (words.length < 6) return undefined;
-  const start = Math.max(0, Math.floor(words.length / 2) - 6);
-  return words.slice(start, start + 12).join(" ").slice(0, 240);
-}
-
-function verificationPages(pageCount: number): number[] {
-  const ratios = [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95, 1];
-  return [...new Set(ratios.map((ratio) => Math.max(1, Math.min(pageCount, Math.ceil(pageCount * ratio)))) )];
+  return normalizeOcrText(response?.fullTextAnnotation?.text);
 }
 
 async function markWaitingRetry(env: Env, documentId: string, stage: string, error: string): Promise<void> {
@@ -285,10 +264,21 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
         "ocr.completed", "completed", "Google Cloud Vision completed the asynchronous OCR operation.",
         { operation: visionOperation });
 
-      let pages = await runWithRecovery(this.env, step, documentId, "read_ocr_output",
-        "Document extraction specialist", async () => readVisionPages(this.env, document, outputPrefix));
+      const outputObjects = await runWithRecovery(this.env, step, documentId, "list_ocr_output",
+        "Document extraction specialist", async () =>
+          (await listObjects(this.env, outputPrefix)).filter((name) => name.toLowerCase().endsWith(".json")));
+      const pageToObject = new Map<number, string>();
+      for (const objectName of outputObjects) {
+        const range = pageRangeFromObjectName(objectName);
+        if (!range) continue;
+        for (let page = range.start; page <= range.end; page += 1) pageToObject.set(page, objectName);
+      }
+      const extraPages = [...pageToObject.keys()].filter((page) => page > document.page_count);
+      if (extraPages.length) {
+        throw new NonRetryableError("The declared PDF page count is lower than the page count Google Cloud Vision actually processed. Extra pages: " + extraPages.slice(0, 20).join(", "));
+      }
       const missingPages = Array.from({ length: document.page_count }, (_, index) => index + 1)
-        .filter((page) => !pages.has(page));
+        .filter((page) => !pageToObject.has(page));
       if (missingPages.length) {
         const repairCount = Number((document as VrainDocument & { ocr_repair_attempts?: number }).ocr_repair_attempts ?? 0);
         if (repairCount >= 2) {
@@ -304,10 +294,13 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
       }
 
       for (let page = 1; page <= document.page_count; page += 1) {
-        const pageText = pages.get(page) ?? "";
-        await runWithRecovery(this.env, step, documentId, "persist_ocr_page_" + page,
+        const pageNumber = page;
+        const sourceOutput = pageToObject.get(pageNumber);
+        if (!sourceOutput) throw new NonRetryableError("Google Vision OCR output disappeared for PDF page " + pageNumber + ".");
+        await runWithRecovery(this.env, step, documentId, "persist_ocr_page_" + pageNumber,
           "Document extraction specialist", async () => {
-            const normalizedKey = "vrain/books/" + documentId + "/ocr/page-" + String(page).padStart(6, "0") + ".txt";
+            const pageText = await readVisionPageText(this.env, sourceOutput, pageNumber);
+            const normalizedKey = "vrain/books/" + documentId + "/ocr/page-" + String(pageNumber).padStart(6, "0") + ".txt";
             await uploadTextObject(this.env, normalizedKey, pageText);
           });
       }
@@ -318,7 +311,9 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
         const pageNumber = page;
         await runWithRecovery(this.env, step, documentId, "index_page_" + pageNumber,
           "Page indexing specialist", async () => {
-            const text = pages.get(pageNumber) ?? "";
+            const pageStartedAt = Date.now();
+            const normalizedKey = "vrain/books/" + documentId + "/ocr/page-" + String(pageNumber).padStart(6, "0") + ".txt";
+            const text = await readTextObject(this.env, normalizedKey);
             const key = "vrain/books/" + documentId + "/pages/page-" + String(pageNumber).padStart(6, "0") + ".txt";
             const indexed = await search.items.uploadAndPoll(
               key,
@@ -331,6 +326,10 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
               },
             );
             if (indexed.status !== "completed") throw new Error(indexed.error ?? "AI Search did not complete indexing for PDF page " + pageNumber + ".");
+            const elapsedMs = Date.now() - pageStartedAt;
+            await recordEvent(this.env, documentId, "Page indexing specialist", "indexing",
+              "index.page_completed", "completed", "PDF page " + pageNumber + " was indexed and acknowledged by AI Search.",
+              { page: pageNumber, pageCount: document.page_count, elapsedMs });
             await this.env.DB.prepare("UPDATE vrain_documents SET indexed_pages=MAX(indexed_pages,?),updated_at=? WHERE id=?")
               .bind(pageNumber, Date.now(), documentId).run();
             await this.env.DB.prepare("UPDATE vrain_jobs SET stage='indexing',last_heartbeat_at=? WHERE document_id=?")
@@ -346,19 +345,24 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
       await runWithRecovery(this.env, step, documentId, "retrieval_qa",
         "Retrieval QA specialist", async () => {
           const selected = verificationPages(document.page_count);
-          const readable = selected.filter((page) => (pages.get(page) ?? "").trim().split(/\s+/u).length >= 6);
-          const checks = readable.slice(0, 5);
-          if (checks.length < Math.min(3, document.page_count)) {
-            const extra = Array.from(pages.entries())
-              .filter(([page, text]) => !selected.includes(page) && text.trim().split(/\s+/u).length >= 6)
-              .map(([page]) => page);
-            checks.push(...extra.slice(0, Math.max(0, 3 - checks.length)));
+          const checks: number[] = [];
+          const minimumChecks = Math.min(3, document.page_count);
+          const checkOrder = [...selected, ...Array.from({ length: document.page_count }, (_, index) => index + 1)
+            .filter((page) => !selected.includes(page))];
+          const pageTexts = new Map<number, string>();
+          for (const page of checkOrder) {
+            const normalizedKey = "vrain/books/" + documentId + "/ocr/page-" + String(page).padStart(6, "0") + ".txt";
+            const text = await readTextObject(this.env, normalizedKey);
+            pageTexts.set(page, text);
+            if (text.trim().split(/\s+/u).length >= 6) checks.push(page);
+            if (checks.length >= Math.max(5, minimumChecks)) break;
           }
-          if (checks.length < Math.min(3, document.page_count)) {
+          const qaPages = checks.slice(0, Math.max(5, minimumChecks));
+          if (qaPages.length < minimumChecks) {
             throw new NonRetryableError("The PDF does not contain enough readable OCR text for page-grounded retrieval QA.");
           }
-          for (const page of checks) {
-            const probe = buildProbe(pages.get(page) ?? "");
+          for (const page of qaPages) {
+            const probe = buildProbe(pageTexts.get(page) ?? "");
             if (!probe) continue;
             const result = await search.search({
               messages: [{ role: "user", content: probe }],
@@ -366,7 +370,7 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
             });
             const expectedKey = "vrain/books/" + documentId + "/pages/page-" + String(page).padStart(6, "0") + ".txt";
             const match = (result.chunks ?? []).some((chunk) => chunk.item?.key === expectedKey);
-            if (!match) throw new Error("Retrieval QA did not recover the expected source page " + page + ".");
+            if (!match) throw new Error("The AI Search index is not yet returning expected PDF source page " + page + ".");
           }
           const allIndexed = await this.env.DB.prepare(
             "SELECT indexed_pages,page_count,status FROM vrain_documents WHERE id=?",
@@ -376,7 +380,7 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
           }
           await recordEvent(this.env, documentId, "Retrieval QA specialist", "verification",
             "qa.passed", "completed", "Distributed page-grounded retrieval probes recovered their exact source PDF pages.",
-            { checkedPages: checks, indexedPages: allIndexed.indexed_pages, pageCount: allIndexed.page_count });
+            { checkedPages: qaPages, indexedPages: allIndexed.indexed_pages, pageCount: allIndexed.page_count });
         });
 
       await step.do("publish verified VRAIN document", async () => {
