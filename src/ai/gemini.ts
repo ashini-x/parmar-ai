@@ -105,6 +105,8 @@ STRUCTURED OUTPUT
 
 export type ThinkingLevel = "LOW" | "MEDIUM" | "HIGH";
 export type PartialAnswerHandler = ((answer: string) => void) & {
+  /** Replace the in-flight Telegram message with a truthful high-level progress state. */
+  setStatus?(status: string): void;
   flush(): Promise<void>;
 };
 
