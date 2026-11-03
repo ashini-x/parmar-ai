@@ -42,17 +42,19 @@ export const FATMAN_RELEASE_QA_CASES: readonly FatmanReleaseQaCase[] = [
   {
     id: "comparison-equality",
     category: "comparison",
-    question: "Compare equality before law with equal protection of law. Which is the negative concept and which comes from the UK and USA?",
+    question: "Compare Fundamental Rights with Directive Principles of State Policy, focusing on enforceability and their constitutional roles.",
     queryCandidates: [
-      "Equality before Law negative concept taken from UK Equal Protection of Law positive concept taken from USA",
-      "Article 14 equality before law negative UK equal protection positive USA",
+      "Fundamental Rights justiciable and Directive Principles of State Policy non justiciable compare",
+      "Fundamental Rights Part III Article 12-35 legally enforceable and DPSP Part IV Article 36-51 non-justiciable political democracy social economic democracy",
     ],
-    expectedPages: [213],
+    expectedPages: [213, 218],
     requiredFactGroups: [
-      ["negative concept", "negative"],
-      ["UK", "United Kingdom", "Britain"],
-      ["positive concept", "positive"],
-      ["USA", "United States"],
+      ["justiciable", "legally enforceable"],
+      ["non-justiciable", "not legally enforceable"],
+      ["Part III"],
+      ["Part IV"],
+      ["political democracy"],
+      ["social and economic democracy", "welfare state"],
     ],
   },
   {
