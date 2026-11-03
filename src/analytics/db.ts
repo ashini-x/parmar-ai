@@ -633,6 +633,9 @@ async function ensureBrvinCompatibilitySchema(env: Env): Promise<void> {
   if (!(bookColumns.results ?? []).some(column => column.name === "vision_output_deleted_at")) {
     await db.prepare("ALTER TABLE brvin_books ADD COLUMN vision_output_deleted_at INTEGER").run();
   }
+  if (!(bookColumns.results ?? []).some(column => column.name === "vision_output_deletion_started_at")) {
+    await db.prepare("ALTER TABLE brvin_books ADD COLUMN vision_output_deletion_started_at INTEGER").run();
+  }
   await db.prepare(
     "INSERT OR IGNORE INTO brvin_migrations (migration_key, applied_at) VALUES (?, ?)"
   ).bind("2026-11-04-brvin-vision-output-deleted-at-v1", Date.now()).run();
