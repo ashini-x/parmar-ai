@@ -57,11 +57,20 @@ export interface AiSearchNamespace {
 
 export interface FatmanImportWorkflowParams {
   importId: string;
+  task?: "index_chunk" | "cleanup_chunk";
+  startPage?: number;
+  endPage?: number;
+  objectNames?: string[];
+}
+
+export interface FatmanImportWorkflowInstance {
+  id: string;
+  status(): Promise<{ status: string; error?: { message?: string } }>;
 }
 
 export interface FatmanImportWorkflowBinding {
-  create(options: { id: string; params: FatmanImportWorkflowParams }): Promise<{ id: string; status?: string }>;
-  get(id: string): Promise<unknown>;
+  create(options: { id: string; params: FatmanImportWorkflowParams }): Promise<FatmanImportWorkflowInstance>;
+  get(id: string): Promise<FatmanImportWorkflowInstance>;
 }
 
 export interface Env {
