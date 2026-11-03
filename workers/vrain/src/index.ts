@@ -364,7 +364,7 @@ async function adminStartDocument(request: Request, env: Env): Promise<Response>
       ).bind(id, title, filename, sha256, size, objectName, metadata, pageCount, collectionId, language, now, now),
       env.DB.prepare(
         "INSERT INTO vrain_jobs(id,document_id,state,stage,attempt,last_heartbeat_at,started_at) VALUES (?,?, 'uploading','upload',0,?,?)",
-      ).bind(crypto.randomUUID(), id, now, now),
+      ).bind(id, id, now, now),
       env.DB.prepare(
         "INSERT INTO vrain_activity_events(job_id,document_id,specialist,stage,event_type,status,message,detail_json,created_at) " +
         "VALUES (?,?, 'Secure upload','upload','upload.started','running','A resumable private Google Cloud Storage upload was created.',?,?)",
