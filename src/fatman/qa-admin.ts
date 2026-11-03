@@ -29,6 +29,10 @@ export async function triggerFatmanReleaseQa(env: Env): Promise<Response> {
     }>();
 
     const state = await getFatmanBookState(env);
+    const latest = await getLatestFatmanReleaseQaRun(env);
+    if (latest?.status === "running" && Date.now() - latest.startedAt < 30 * 60 * 1_000) {
+      return json({ ok: false, error: "A Fatman release QA run is already in progress.", latest }, 409);
+    }
     if (
       !job ||
       job.status !== "completed" ||
