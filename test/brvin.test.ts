@@ -113,11 +113,11 @@ describe("BRVIN governed retrieval", () => {
     expect(html).toContain("Specialist activity");
     expect(html).toContain("5-second refresh");
     expect(html).toContain("project access");
-    expect(html).toContain('const previousCollectionId=$("collection").value;');
-    expect(html).toContain('c.id==="general"');
-    expect(html).toContain("countSimplePdfPages(buffer)");
-    expect(html).toContain("The operation paused during ");
-    expect(html).not.toContain('import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs"');
-    expect(html).toContain('const pdfjsLib=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs")');
+    expect(script).toContain('const previousCollectionId=$("collection").value;');
+    expect(script).toContain('c.id==="general"');
+    expect(script).toContain("countSimplePdfPages(buffer)");
+    expect(script).toContain("The operation paused during ");
+    expect(script).not.toContain('import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs"');
+    expect(script).toContain('const pdfjsLib=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs")');
   });
 });
