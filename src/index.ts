@@ -10,7 +10,7 @@ import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, Co
 import { DEFAULT_PHOTO_QUESTION, MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "./config/env";
 import { getConfig } from "./config/env";
 import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } from "./core/job-store";
-import { formatFatmanCitations, isFatmanReady, retrieveFatmanContext, FatmanRetrievalError } from "./fatman/retrieval";
+import { buildFatmanRetrievalQuery, formatFatmanCitations, isFatmanReady, retrieveFatmanContext, FatmanRetrievalError } from "./fatman/retrieval";
 import { logger } from "./core/logger";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
@@ -898,7 +898,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         } else if (fatmanMode) {
           let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
           try {
-            bookContext = await retrieveFatmanContext(env, job.question);
+            bookContext = await retrieveFatmanContext(env, buildFatmanRetrievalQuery(job.question, recentConversation));
           } catch (error) {
             if (error instanceof FatmanRetrievalError && !error.retryable) {
               packet = makeFatmanNoticePacket(error.userMessage ?? "Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
@@ -919,7 +919,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
               bookContext,
             );
             packet = generation.packet;
-            const citations = formatFatmanCitations(bookContext.passages);
+            const citations = formatFatmanCitations(bookContext.passages, job.question, packet.answer);
             packet.answer = appendFatmanCitations(packet.answer, citations);
             packet.sscTakeaway = "";
             packet.profileSignal = "neutral";
