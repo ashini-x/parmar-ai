@@ -344,7 +344,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         }
 
         let shouldCleanup = true;
-        if (job.book_id) {
+        if (job?.book_id) {
           await step.do("mark additional book ready after retrieval verification", async () => {
             await markFatmanImportCompleted(this.env, importId);
             return { ready: true, checkedPages: verification.checkedPages };
@@ -403,7 +403,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           await setFatmanBookState(this.env, {
             enabled: report.status === "passed",
             documentVersion: this.env.FATMAN_DOCUMENT_VERSION?.trim() ?? "",
-            indexedPages: 538,
+            indexedPages: expectedPages,
           });
           return {
             enabled: report.status === "passed",
@@ -524,7 +524,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
       return;
     } catch (error) {
       if (params.task === "quality_check" || params.task === "release_qa") {
-        if (job.book_id) {
+        if (job?.book_id) {
           // Additional books remain separate from the original Fatman rollout gate.
           await markFatmanImportFailed(this.env, importId, error).catch(() => undefined);
         } else {
