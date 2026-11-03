@@ -89,9 +89,9 @@ describe("Fatman real-user release QA", () => {
       documentVersion: "fatman-test-v1",
     });
     expect(report.status).toBe("passed");
-    expect(report.passedCases).toBe(6);
+    expect(report.passedCases).toBe(12);
     expect(report.failedCases).toBe(0);
-    expect(report.totalCases).toBe(6);
+    expect(report.totalCases).toBe(12);
     expect(report.queryCount).toBeGreaterThanOrEqual(6);
     expect(report.estimatedCostMicrousd).toBeGreaterThan(0);
     expect(report.results.map((item) => item.id)).toEqual(FATMAN_RELEASE_QA_CASES.map((item) => item.id));
@@ -108,7 +108,7 @@ describe("Fatman real-user release QA", () => {
     const exact = report.results.find((item) => item.id === "exact-plassey-fact");
     expect(exact?.status).toBe("passed");
     expect(exact?.generationAttempts).toBe(2);
-    expect(answer).toHaveBeenCalledTimes(7);
+    expect(answer).toHaveBeenCalledTimes(13);
     expect(answer.mock.calls[1]?.[2]).toContain("QA REPAIR PASS");
   });
 
