@@ -3,6 +3,7 @@ import { json } from "../http/response";
 import {
   startFatmanLibraryUpload as startLibraryUpload,
   getFatmanImportJob,
+  fatmanUploadStatus,
 } from "./import";
 
 export function fatmanLibraryAdminPage(): Response {
@@ -18,8 +19,9 @@ export async function fatmanLibraryBooks(env: Env): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The book database is not configured." }, 503);
   try {
     const rows = await env.DB.prepare(
-      "SELECT id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, error_message, created_at, updated_at " +
-      "FROM fatman_books ORDER BY created_at DESC LIMIT 100"
+      "SELECT b.id, b.title, b.source_filename, b.source_sha256, b.expected_size, b.page_count, b.status, b.indexed_pages, b.error_message, b.created_at, b.updated_at, " +
+      "j.status AS import_status, j.uploaded_bytes, j.vision_operation " +
+      "FROM fatman_books b LEFT JOIN fatman_import_jobs j ON j.id = b.id ORDER BY b.created_at DESC LIMIT 100"
     ).all<{
       id: string;
       title: string;
@@ -32,6 +34,9 @@ export async function fatmanLibraryBooks(env: Env): Promise<Response> {
       error_message: string | null;
       created_at: number;
       updated_at: number;
+      import_status?: string | null;
+      uploaded_bytes?: number | null;
+      vision_operation?: string | null;
     }>();
     return json({
       ok: true,
@@ -45,6 +50,8 @@ export async function fatmanLibraryBooks(env: Env): Promise<Response> {
         indexedPages: Number(book.indexed_pages),
         status: book.status,
         error: book.error_message ?? undefined,
+        canResume: book.import_status === "failed" && Boolean(book.vision_operation) &&
+          Number(book.uploaded_bytes) === Number(book.expected_size),
         createdAt: Number(book.created_at),
         updatedAt: Number(book.updated_at),
       })),
@@ -65,8 +72,7 @@ export async function fatmanLibraryImportStatus(env: Env, importId: string | nul
   try {
     const job = await getFatmanImportJob(env, importId);
     if (!job || !job.book_id) return json({ ok: false, error: "This book import could not be found." }, 404);
-    const status = await import("./import").then(({ fatmanUploadStatus }) => fatmanUploadStatus(env, importId, true));
-    return status;
+    return fatmanUploadStatus(env, importId, true);
   } catch (error) {
     return json({ ok: false, error: friendlyError(error) }, 502);
   }
@@ -94,12 +100,12 @@ const HTML = `<!doctype html>
 <label class="field" for="book-title">Book name</label><input class="input" id="book-title" maxlength="160" placeholder="For example, Indian Polity – Reference Book">
 <label class="field">PDF file</label><label class="drop" for="book-pdf"><span><strong>Choose a PDF from this device</strong><small>PDF format · up to 1 GB</small><input id="book-pdf" type="file" accept="application/pdf"></span></label><div class="fileinfo" id="file-info">No PDF selected.</div>
 <label class="check"><input type="checkbox" id="cost-confirmed"><span>I understand that reading this PDF uses Google Cloud OCR and may incur usage charges on the connected Google Cloud project.</span></label>
-<div class="row"><button class="btn primary" id="upload" disabled>Add book to Fatman</button><button class="btn" id="refresh">Refresh status</button></div>
+<div class="row"><button class="btn primary" id="upload" disabled>Add book to Fatman</button><button class="btn" id="refresh">Refresh status</button><button class="btn" id="resume-index" hidden>Resume processing</button></div>
 <progress class="progress" id="progress" value="0" max="100"></progress><p class="status" id="status" aria-live="polite">Choose a PDF to begin. You can leave and return later; the server continues OCR and indexing after upload.</p>
 <div class="steps"><div class="step" id="step-upload"><b>1 · Secure upload</b><span>PDF transferred</span></div><div class="step" id="step-ocr"><b>2 · Read PDF</b><span>Google Vision OCR</span></div><div class="step" id="step-index"><b>3 · Build search</b><span>Page indexing</span></div><div class="step" id="step-ready"><b>4 · Verify</b><span>Ready for questions</span></div></div>
 <div class="alert">Keep this page open while the PDF is uploading. Once the upload reaches 100%, OCR and indexing continue on the server even when you close this page. A failed transfer can be resumed by selecting the same PDF again.</div>
 </section>
-<section class="card"><div class="row" style="justify-content:space-between;margin:0 0 10px"><div><h2>Books already added</h2><p class="sub">Each book is tracked separately. Completed books become searchable in Fatman.</p></div><button class="btn" id="refresh-books">Refresh list</button></div><div class="table-wrap"><table class="books"><thead><tr><th>Book</th><th>Pages indexed</th><th>Status</th><th>Last updated</th></tr></thead><tbody id="books"><tr><td colspan="4" class="empty">Loading your book library…</td></tr></tbody></table></div></section>
+<section class="card"><div class="row" style="justify-content:space-between;margin:0 0 10px"><div><h2>Books already added</h2><p class="sub">Each book is tracked separately. Completed books become searchable in Fatman.</p></div><button class="btn" id="refresh-books">Refresh list</button></div><div class="table-wrap"><table class="books"><thead><tr><th>Book</th><th>Pages indexed</th><th>Status</th><th>Last updated</th><th></th></tr></thead><tbody id="books"><tr><td colspan="5" class="empty">Loading your book library…</td></tr></tbody></table></div></section>
 <p class="footer">Administrator-only page · Existing Fatman 2nd Edition import remains unchanged.</p>
 </main>
 <script type="module">
@@ -133,7 +139,7 @@ function renderStages(job,pipeline){
 function formatBytes(value){const n=Number(value||0);if(n<1024)return n+" B";const units=["KB","MB","GB"];let x=n/1024,i=0;while(x>=1024&&i<units.length-1){x/=1024;i++;}return x.toFixed(1)+" "+units[i];}
 async function refreshCurrent(){
  if(!activeImportId)return;
- const data=await api(ROOT+"upload/status?id="+encodeURIComponent(activeImportId));
+ const data=await api(LIB+"status?id="+encodeURIComponent(activeImportId));
  const job=data.import;if(!job)return;
  lastStatus=data;renderStages(job,data.pipeline);
  const pct=job.expectedSize?Math.floor(job.uploadedBytes/job.expectedSize*100):0;
@@ -153,9 +159,9 @@ async function refreshCurrent(){
 async function refreshBooks(){
  try{
   const data=await api(LIB+"books");const tbody=el("books");tbody.replaceChildren();
-  if(!data.books.length){const row=document.createElement("tr"),cell=document.createElement("td");cell.colSpan=4;cell.className="empty";cell.textContent="No books have been added yet.";row.append(cell);tbody.append(row);return;}
+  if(!data.books.length){const row=document.createElement("tr"),cell=document.createElement("td");cell.colSpan=5;cell.className="empty";cell.textContent="No books have been added yet.";row.append(cell);tbody.append(row);return;}
   for(const book of data.books){
-   const row=document.createElement("tr"),name=document.createElement("td"),pages=document.createElement("td"),state=document.createElement("td"),updated=document.createElement("td");
+   const row=document.createElement("tr"),name=document.createElement("td"),pages=document.createElement("td"),state=document.createElement("td"),updated=document.createElement("td"),actions=document.createElement("td");
    const strong=document.createElement("strong");strong.textContent=book.title;name.append(strong);
    const small=document.createElement("div");small.className="muted";small.textContent=book.filename||"";name.append(small);
    pages.textContent=book.indexedPages+" / "+book.pageCount;
@@ -197,6 +203,7 @@ async function uploadBook(){
    title:titleInput.value.trim(),filename:file.name,sha256:info.sha256,size:file.size,pageCount:info.pageCount,costConfirmed:true
   })});
   activeImportId=started.importId;
+  if(started.canResume){await api(ROOT+"upload/"+encodeURIComponent(activeImportId)+"/resume",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});await refreshCurrent();return;}
   if(started.status==="ready"||started.status==="completed"){await refreshCurrent();return;}
   if(started.status==="processing"||started.status==="uploaded"){
    if(started.status==="uploaded")await api(ROOT+"upload/"+encodeURIComponent(activeImportId)+"/complete",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
@@ -223,6 +230,7 @@ async function uploadBook(){
 }
 uploadButton.addEventListener("click",uploadBook);
 el("refresh").addEventListener("click",()=>refreshCurrent().catch(e=>say(e.message,true)));
+el("resume-index").addEventListener("click",async()=>{if(!activeImportId)return;try{await api(ROOT+"upload/"+encodeURIComponent(activeImportId)+"/resume",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});await refreshCurrent();}catch(error){say("Could not resume: "+error.message,true);}});
 el("refresh-books").addEventListener("click",refreshBooks);
 refreshBooks();
 </script></body></html>`;
