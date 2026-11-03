@@ -40,7 +40,7 @@ import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanI
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
 import { completeFatmanUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
-import { fatmanLibraryAdminPage, fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
+import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 import { assignVrainBookProjects, assignVrainProjectCollections, createVrainCollection, createVrainProject, startVrainBookUpload, vrainAdminPage, vrainImportStatus, vrainOverview } from "./vrain/admin";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
@@ -2159,11 +2159,11 @@ const worker = {
           if (url.pathname === "/admin/api/vrain/collections") return createVrainCollection(env, request);
           if (url.pathname === "/admin/api/vrain/books/assign") return assignVrainBookProjects(env, request);
           if (url.pathname === "/admin/api/vrain/projects/collections") return assignVrainProjectCollections(env, request);
-          const chunkMatch = url.pathname.match(/^\\/admin\\/api\\/vrain\\/upload\\/([a-f0-9-]+)\\/chunk$/i);
+          const chunkMatch = url.pathname.match(/^\/admin\/api\/vrain\/upload\/([a-f0-9-]+)\/chunk$/i);
           if (chunkMatch) return uploadFatmanChunk(env, request, chunkMatch[1]);
-          const resumeMatch = url.pathname.match(/^\\/admin\\/api\\/vrain\\/upload\\/([a-f0-9-]+)\\/resume$/i);
+          const resumeMatch = url.pathname.match(/^\/admin\/api\/vrain\/upload\/([a-f0-9-]+)\/resume$/i);
           if (resumeMatch) return resumeFatmanImport(env, resumeMatch[1]);
-          const completeMatch = url.pathname.match(/^\\/admin\\/api\\/vrain\\/upload\\/([a-f0-9-]+)\\/complete$/i);
+          const completeMatch = url.pathname.match(/^\/admin\/api\/vrain\/upload\/([a-f0-9-]+)\/complete$/i);
           if (completeMatch) return completeFatmanUpload(env, completeMatch[1]);
         }
         if (request.method === "POST" && url.pathname.startsWith("/admin/api/fatman/")) {

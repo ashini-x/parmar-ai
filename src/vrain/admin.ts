@@ -7,12 +7,6 @@ import {
   startFatmanLibraryUpload,
 } from "../fatman/import";
 
-interface VrainBookRow {
-  id: string; title: string; source_filename: string; page_count: number; indexed_pages: number;
-  status: string; error_message: string | null; collection_id: string; search_prefix: string;
-  source_type: string; created_at: number; updated_at: number;
-}
-
 function friendlyError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.replace(/[\r\n]+/gu, " ").slice(0, 240);
@@ -214,9 +208,12 @@ export async function startVrainBookUpload(env: Env, request: Request): Promise<
       title: body.title, filename: body.filename, sha256: body.sha256, size: body.size,
       pageCount: body.pageCount, costConfirmed: body.costConfirmed,
     };
+    const forwardedHeaders = new Headers(request.headers);
+    forwardedHeaders.set("content-type", "application/json");
+    forwardedHeaders.delete("content-length");
     const forwarded = new Request(request.url, {
       method: "POST",
-      headers: request.headers,
+      headers: forwardedHeaders,
       body: JSON.stringify(uploadPayload),
     });
     const response = await startFatmanLibraryUpload(env, forwarded);
@@ -397,7 +394,7 @@ const HTML = `<!doctype html>
 import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
 pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
 const $=id=>document.getElementById(id),API="/admin/api/vrain/",UPLOAD="/admin/api/vrain/upload/";
-let model=null,selectedFile=null,activeImportId=null,uploadBusy=false,refreshLoop=null;
+let model=null,selectedFile=null,activeImportId=null,uploadBusy=false;
 function say(message,error=false){$("upload-status").textContent=message;$("upload-status").classList.toggle("error",error);}
 async function api(path,options={}){const response=await fetch(path,{...options,credentials:"same-origin"});let data={};try{data=await response.json();}catch{}if(!response.ok||data.ok!==true)throw new Error(data.error||"Request failed (HTTP "+response.status+").");return data;}
 function post(path,body){return api(path,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});}
@@ -439,7 +436,8 @@ function renderJobs(list){$("jobs").innerHTML=list.length?list.map(j=>{
  $("jobs").querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>showImport(b.dataset.view)));
  $("jobs").querySelectorAll("[data-resume]").forEach(b=>b.addEventListener("click",()=>resumeImport(b.dataset.resume)));
 }
-function renderEvents(list){$("events").innerHTML=list.length?list.slice(0,60).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong>'+statusPill(e.status)+'</div><p>'+esc(e.message)+'</p><small>'+esc(time(e.createdAt))+' · '+esc(e.type)+'</small></div></div>').join(""):'<div class="empty">No operation events recorded yet.</div>';}
+function detailText(details){if(!details||typeof details!=="object")return"";return Object.entries(details).map(([key,value])=>key+": "+(typeof value==="object"?JSON.stringify(value):String(value))).join(" · ").slice(0,700);}
+function renderEvents(list){$("events").innerHTML=list.length?list.slice(0,60).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong>'+statusPill(e.status)+'</div><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+' · '+esc(e.type)+'</small></div></div>').join(""):'<div class="empty">No operation events recorded yet.</div>';}
 function render(){if(!model)return;renderMetrics(model.stats);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
 async function refresh(){try{model=await api(API+"overview");render();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
 function stage(id,state){$("step-"+id).className="step"+(state?" "+state:"");}
@@ -454,7 +452,7 @@ function renderJob(job,pipeline){const uploaded=job.uploadedBytes>=job.expectedS
 }
 async function showImport(id){activeImportId=id;try{const d=await api(API+"status?id="+encodeURIComponent(id));const job=d.import;if(!job)throw new Error("Import not found.");
  renderJob(job,d.pipeline);$("modal-title").textContent=job.bookTitle||"VRAIN operations";
- $("modal-body").innerHTML='<div class="metrics" style="grid-template-columns:repeat(3,1fr)"><div class="metric"><span>State</span><strong style="font-size:17px">'+esc(job.status)+'</strong></div><div class="metric"><span>Indexed</span><strong style="font-size:17px">'+job.indexedPages+'/'+job.expectedPages+'</strong></div><div class="metric"><span>Upload</span><strong style="font-size:17px">'+pct(job.uploadedBytes,job.expectedSize)+'%</strong></div></div><p class="muted">Vision OCR: '+esc(d.pipeline?.vision?.status||"not started")+' · Workflow: '+esc(d.pipeline?.workflow?.status||"not started")+'</p><div class="timeline">'+(d.events||[]).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong><p>'+esc(e.message)+'</p><small>'+esc(time(e.createdAt))+'</small></div></div>').join("")+'</div>';
+ $("modal-body").innerHTML='<div class="metrics" style="grid-template-columns:repeat(3,1fr)"><div class="metric"><span>State</span><strong style="font-size:17px">'+esc(job.status)+'</strong></div><div class="metric"><span>Indexed</span><strong style="font-size:17px">'+job.indexedPages+'/'+job.expectedPages+'</strong></div><div class="metric"><span>Upload</span><strong style="font-size:17px">'+pct(job.uploadedBytes,job.expectedSize)+'%</strong></div></div><p class="muted">Vision OCR: '+esc(d.pipeline?.vision?.status||"not started")+' · Workflow: '+esc(d.pipeline?.workflow?.status||"not started")+'</p><div class="timeline">'+(d.events||[]).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+'</small></div></div>').join("")+'</div>';
  $("modal").classList.add("open");
  }catch(e){say(e.message,true);}}
 async function editBookAccess(id){const book=model.books.find(b=>b.id===id);if(!book)return;const selected=new Set((book.directProjects||[]).map(p=>p.id));
@@ -463,7 +461,6 @@ async function editBookAccess(id){const book=model.books.find(b=>b.id===id);if(!
  $("modal").classList.add("open");
  $("save-book-access").addEventListener("click",async()=>{const projectIds=[...$("access-choices").querySelectorAll("input:checked")].map(i=>i.value);try{await post("books/assign",{bookId:id,projectIds});$("modal").classList.remove("open");await refresh();}catch(e){alert(e.message);}});
 }
-async function showImportEvents(id){await showImport(id);}
 async function resumeImport(id){try{await post("upload/"+encodeURIComponent(id)+"/resume",{});activeImportId=id;await showImport(id);await refresh();}catch(e){say(e.message,true);}}
 $("close-modal").addEventListener("click",()=>$("modal").classList.remove("open"));
 $("modal").addEventListener("click",e=>{if(e.target===$("modal"))$("modal").classList.remove("open");});

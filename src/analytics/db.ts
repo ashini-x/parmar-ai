@@ -1097,6 +1097,10 @@ export interface VrainActivityInput {
 export async function recordVrainActivity(env: Env, event: VrainActivityInput): Promise<void> {
   if (!env.DB) return;
   await ensureAnalyticsSchema(env);
+  const detailsJson = event.details ? JSON.stringify(event.details) : null;
+  const safeDetailsJson = detailsJson && detailsJson.length > 4_000
+    ? JSON.stringify({ truncated: true, preview: detailsJson.slice(0, 3_800) })
+    : detailsJson;
   await env.DB.prepare(
     "INSERT INTO vrain_activity_events (import_id, book_id, project_id, agent, phase, event_type, status, message, detail_json, created_at) " +
     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -1109,7 +1113,7 @@ export async function recordVrainActivity(env: Env, event: VrainActivityInput): 
     event.eventType.slice(0, 100),
     (event.status ?? "info").slice(0, 32),
     event.message.slice(0, 500),
-    event.details ? JSON.stringify(event.details).slice(0, 4_000) : null,
+    safeDetailsJson,
     event.createdAt ?? Date.now(),
   ).run();
 }
