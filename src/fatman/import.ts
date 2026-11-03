@@ -821,7 +821,8 @@ export async function deleteFatmanGcsObjectPrefix(
     const query = new URLSearchParams();
     // In a versioned bucket, delete each enumerated generation, not just the live object.
     if (versioningEnabled) query.set("generation", object.generation);
-    const suffix = query.size ? "?" + query.toString() : "";
+    const encodedQuery = query.toString();
+    const suffix = encodedQuery ? "?" + encodedQuery : "";
     const response = await fetch(
       GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) +
       "/o/" + encodeURIComponent(object.name) + suffix,
