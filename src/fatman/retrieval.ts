@@ -223,8 +223,8 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
   const minScore = Number(env.FATMAN_MIN_SCORE);
   const passages: FatmanPassage[] = [];
   const seenIds = new Set<string>();
-  const pageCounts = new Map<number, number>();
-  const allowedPages = new Set<number>();
+  const pageCounts = new Map<string, number>();
+  const allowedPages = new Set<string>();
 
   for (const chunk of chunks) {
     const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
