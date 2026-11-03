@@ -157,6 +157,73 @@ export async function fatmanUploadStatus(env: Env, id?: string | null, includeLi
   }
 }
 
+/**
+ * Read-only production diagnostic for the reusable BRVIN upload path.
+ * Does not create, overwrite, or delete any GCS objects.
+ */
+export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
+  const checks: Record<string, unknown> = {
+    bucketConfigured: Boolean(env.FATMAN_GCS_BUCKET?.trim()),
+    serviceAccountConfigured: Boolean(env.GCP_CLIENT_EMAIL?.trim() && env.GCP_PRIVATE_KEY?.trim()),
+    projectConfigured: Boolean(env.GCP_PROJECT_ID?.trim()),
+  };
+  let stage = "configuration";
+  try {
+    const bucketName = bucket(env);
+    stage = "google_oauth";
+    const token = await getGoogleAccessToken(env);
+    checks.oauth = { ok: true };
+
+    stage = "gcs_bucket_metadata";
+    const metadataResponse = await fetch(
+      GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) + "?fields=name,location,storageClass,projectNumber",
+      { headers: { authorization: "Bearer " + token } },
+    );
+    const metadataText = await metadataResponse.text();
+    let metadata: Record<string, unknown> = {};
+    try { metadata = JSON.parse(metadataText) as Record<string, unknown>; } catch { /* report HTTP status only */ }
+    checks.bucket = metadataResponse.ok
+      ? { ok: true, name: metadata.name ?? bucketName, location: metadata.location ?? null, storageClass: metadata.storageClass ?? null, projectNumber: metadata.projectNumber ?? null }
+      : { ok: false, status: metadataResponse.status, error: String((metadata.error as Record<string, unknown> | undefined)?.message ?? metadataText.slice(0, 240)) };
+
+    stage = "gcs_object_permissions";
+    const permissionUrl = new URL(
+      GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) + "/iam/testPermissions",
+    );
+    for (const permission of [
+      "storage.objects.create",
+      "storage.objects.get",
+      "storage.objects.list",
+      "storage.objects.delete",
+    ]) permissionUrl.searchParams.append("permissions", permission);
+    const permissionResponse = await fetch(permissionUrl, {
+      headers: { authorization: "Bearer " + token },
+    });
+    const permissionText = await permissionResponse.text();
+    let permissionData: { permissions?: string[]; error?: { message?: string } } = {};
+    try { permissionData = JSON.parse(permissionText) as typeof permissionData; } catch { /* report HTTP status only */ }
+    const granted = permissionData.permissions ?? [];
+    const required = ["storage.objects.create", "storage.objects.get", "storage.objects.list", "storage.objects.delete"];
+    checks.permissions = permissionResponse.ok
+      ? { ok: true, granted, missing: required.filter(permission => !granted.includes(permission)) }
+      : { ok: false, status: permissionResponse.status, error: permissionData.error?.message ?? permissionText.slice(0, 240) };
+
+    const createGranted = granted.includes("storage.objects.create");
+    const permissionCheckPassed = permissionResponse.ok && createGranted;
+    const bucketCheckPassed = metadataResponse.ok || permissionCheckPassed;
+    return json({
+      ok: bucketCheckPassed && permissionCheckPassed,
+      stage: "complete",
+      bucketName,
+      checks,
+      uploadStartReady: bucketCheckPassed && createGranted,
+    });
+  } catch (error) {
+    checks.failure = safeError(error);
+    return json({ ok: false, stage, checks, error: safeError(error) }, 502);
+  }
+}
+
 async function gcsError(response: Response, fallback: string): Promise<Error> {
   const text = (await response.text().catch(() => "")).slice(0, 800);
   let detail = "";
