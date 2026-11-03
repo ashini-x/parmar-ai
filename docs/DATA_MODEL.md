@@ -62,6 +62,17 @@ Operational analytics projection for accepted questions and their final processi
 ### `events`
 Operational/admin events such as start, reset, profile view, study plan, daily-limit reached, and burst-limit reached.
 
+## BRVIN book lifecycle
+
+`brvin_books` is the project-governed registry for imported PDF sources. `fatman_books` and `fatman_import_jobs` retain the ingestion/runtime projection for each imported book.
+
+- `ready`: OCR/indexing and page-grounded retrieval verification passed; assigned projects may retrieve the book.
+- `archived`: the book remains stored, indexed and assigned, but project retrieval excludes it because retrieval admits only `ready` books.
+- `deleting` / `delete_failed`: an administrator initiated full per-book purge; the source is excluded from retrieval while the background workflow removes provider objects and registry rows.
+- `legacy`: the built-in reviewed 538-page Fatman source is protected from imported-PDF archive and delete controls.
+
+Archive/restore updates the `brvin_books` and `fatman_books` status projections together. It does not delete the original PDF, Vision OCR response files, AI Search page items, or `brvin_project_books` grants. Full deletion retains operational deletion events in `brvin_activity_events` while removing the book’s own searchable data and grants.
+
 ## Privileged access model
 
 There are three layers:
