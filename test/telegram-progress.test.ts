@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createTelegramProgressUpdater } from "../src/telegram/progress";
+import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "../src/telegram/progress";
 
 describe("Telegram live progress updater", () => {
+  it("keeps every progress label short and on one line for mobile", () => {
+    for (const [name, label] of Object.entries(TELEGRAM_PROGRESS_LABELS)) {
+      expect(label, name).not.toContain("\n");
+      expect(label, name).not.toContain("\r");
+      expect(Array.from(label).length, name).toBeLessThanOrEqual(22);
+    }
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -13,13 +21,13 @@ describe("Telegram live progress updater", () => {
       edits.push(text);
     }, 800);
 
-    await update.setStatus("Searching Fatman 2nd Edition…");
-    expect(edits).toEqual(["Searching Fatman 2nd Edition…"]);
+    await update.setStatus(TELEGRAM_PROGRESS_LABELS.searchingFatman);
+    expect(edits).toEqual([TELEGRAM_PROGRESS_LABELS.searchingFatman]);
 
-    const reviewState = update.setStatus("Reviewing the most relevant book pages…");
+    const reviewState = update.setStatus(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
     await vi.advanceTimersByTimeAsync(800);
     await reviewState;
-    expect(edits.at(-1)).toBe("Reviewing the most relevant book pages…");
+    expect(edits.at(-1)).toBe(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
 
     update("The Battle of Plassey was fought in 1757.");
     await vi.advanceTimersByTimeAsync(800);
@@ -28,8 +36,8 @@ describe("Telegram live progress updater", () => {
     // The same editor receives each progress state and then the streamed text.
     expect(edits.at(-1)).toBe("The Battle of Plassey was fought in 1757.");
     expect(edits).toEqual([
-      "Searching Fatman 2nd Edition…",
-      "Reviewing the most relevant book pages…",
+      TELEGRAM_PROGRESS_LABELS.searchingFatman,
+      TELEGRAM_PROGRESS_LABELS.checkingBookPages,
       "The Battle of Plassey was fought in 1757.",
     ]);
     expect(edits).not.toContain("Thinking…");
@@ -57,7 +65,7 @@ describe("Telegram live progress updater", () => {
     });
     const update = createTelegramProgressUpdater(edit, 800);
 
-    update.setStatus("Checking current sources…");
+    update.setStatus(TELEGRAM_PROGRESS_LABELS.checkingSources);
     await expect(update.flush()).resolves.toBeUndefined();
     update("A later answer chunk");
     await update.flush();

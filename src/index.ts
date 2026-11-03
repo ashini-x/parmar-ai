@@ -12,7 +12,7 @@ import { getConfig } from "./config/env";
 import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } from "./core/job-store";
 import { buildFatmanRetrievalQuery, formatFatmanCitations, isFatmanReady, retrieveFatmanContext, FatmanRetrievalError } from "./fatman/retrieval";
 import { logger } from "./core/logger";
-import { createTelegramProgressUpdater } from "./telegram/progress";
+import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./telegram/progress";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
   deleteTelegramMessage,
@@ -834,7 +834,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         ? createTelegramPartialAnswerUpdater(env, job, claim.record.statusMessageId)
         : undefined;
       await updatePartialAnswer?.setStatus?.(
-        message.attempts > 1 ? "Resuming your question…" : "Understanding your question…",
+        message.attempts > 1 ? TELEGRAM_PROGRESS_LABELS.resuming : TELEGRAM_PROGRESS_LABELS.understanding,
       );
       const jobTelegramUserId = job.telegramUserId ?? job.chatId;
       ctx.waitUntil(recordUserSeen(env, { telegramUserId: jobTelegramUserId, chatId: job.chatId }));
@@ -892,23 +892,23 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
 
       if (!packet) {
         if (claim.record.photoFileIds?.length) {
-          await updatePartialAnswer?.setStatus?.("Reading the attached image…");
+          await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.readingImage);
         }
         const images = claim.record.photoFileIds?.length
           ? await downloadTelegramPhotos(env, claim.record.photoFileIds, job.botConnectionId)
           : [];
         if (images.length) {
-          await updatePartialAnswer?.setStatus?.("Interpreting the image and your question…");
+          await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.analyzingImage);
         }
         let generation: Awaited<ReturnType<typeof generateGeminiAnswer>> | undefined;
         if (fatmanMode && job.question === DEFAULT_PHOTO_QUESTION && images.length > 0) {
           packet = makeFatmanNoticePacket("Photo mil gaya. Fatman mein sahi page dhoondhne ke liye photo ke saath apna sawaal ya ek keyword bhi likho.");
         } else if (fatmanMode) {
-          await updatePartialAnswer?.setStatus?.("Checking Fatman availability…");
+          await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingFatman);
           if (!(await isFatmanReady(env))) {
             packet = makeFatmanNoticePacket("Fatman mode abhi available nahi hai. /help se usual study mode mein wapas aa jao.");
           } else {
-            await updatePartialAnswer?.setStatus?.("Searching Fatman 2nd Edition…");
+            await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.searchingFatman);
             let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
             try {
               bookContext = await retrieveFatmanContext(env, buildFatmanRetrievalQuery(job.question, recentConversation));
@@ -923,7 +923,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
               packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
             }
             if (!packet && bookContext) {
-              await updatePartialAnswer?.setStatus?.("Reviewing the most relevant book pages…");
+              await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
               generation = await generateGeminiAnswer(
                 env,
                 job.question,
@@ -944,10 +944,10 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         } else {
           await updatePartialAnswer?.setStatus?.(
             isMcqRequest(job.question)
-              ? "Preparing your quiz…"
+              ? TELEGRAM_PROGRESS_LABELS.preparingQuiz
               : images.length
-                ? "Preparing an answer from your image…"
-                : "Preparing a clear answer…",
+                ? TELEGRAM_PROGRESS_LABELS.preparingAnswer
+                : TELEGRAM_PROGRESS_LABELS.preparingAnswer,
           );
           generation = await generateGeminiAnswer(
             env,

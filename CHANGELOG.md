@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased: Mobile-safe Telegram progress labels
+- Shortened every live status to 22 characters or fewer and removed long explanatory phrases so each progress state is designed to fit a single line in Telegram mobile bubbles.
+- Centralized the labels and added a regression test for both the one-line constraint and maximum length.
+
 ## Unreleased: Live Telegram progress states
 - Replaced the single generic wait label with contextual progress states for question understanding, Fatman retrieval and page review, current-source checks, image interpretation, quiz preparation, and safe retries.
 - Reuses the original Telegram status message for every state and then transitions it into the existing streamed answer, avoiding separate status-message clutter.

@@ -1,3 +1,19 @@
+/** Keep each live status compact enough to stay on one line in Telegram mobile bubbles. */
+export const TELEGRAM_PROGRESS_LABELS = {
+  understanding: "Understanding…",
+  resuming: "Resuming…",
+  readingImage: "Reading image…",
+  analyzingImage: "Analyzing image…",
+  checkingFatman: "Checking Fatman…",
+  searchingFatman: "Searching Fatman…",
+  checkingBookPages: "Checking book pages…",
+  writingAnswer: "Writing answer…",
+  checkingSources: "Checking sources…",
+  retrying: "Retrying…",
+  preparingQuiz: "Preparing quiz…",
+  preparingAnswer: "Preparing answer…",
+} as const;
+
 export type TelegramProgressUpdater = ((text: string) => void) & {
   setStatus(status: string): Promise<void>;
   flush(): Promise<void>;

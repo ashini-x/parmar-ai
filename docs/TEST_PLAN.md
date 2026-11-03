@@ -9,6 +9,7 @@
 - Fatman questions show retrieval and page-review states before answer chunks; grounded current-fact questions show a source-check state.
 - Image and quiz questions show their respective preparation states; retry attempts replace stale progress with a retry state.
 - Progress edits are serialized/coalesced; a Telegram edit failure does not interrupt generation or suppress the final answer.
+- Every progress label stays on one line: no line breaks and no more than 22 characters.
 - Follow-up continuity works.
 - Simplification works.
 - `/profile` works.
