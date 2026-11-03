@@ -5,11 +5,10 @@ export const FATMAN_VERIFICATION_PAGES = [54, 269, 485] as const;
 /** Build a page-grounded exact-term retrieval probe from OCR text. */
 export function buildFatmanRetrievalProbe(text: string): string {
   const words = text
-    .replace(/\\s+/gu, " ")
+    .replace(/\s+/gu, " ")
     .trim()
     .split(" ")
-    .map((word) => word.replace(/[^\\p{L}\\p{N}'-]/gu, ""))
-    .filter((word) => word.length >= 3);
+     .map((word) => word.replace(/[^\p{L}\p{N}\x27-]/gu, ""))    .filter((word) => word.length >= 3);
 
   if (words.length < 6) {
     throw new Error("Fatman retrieval QA cannot build a probe from fewer than six OCR words.");
