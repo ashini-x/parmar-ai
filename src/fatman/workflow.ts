@@ -194,7 +194,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           } catch (error) {
             if (!isTransientFatmanIndexError(error)) throw error;
             await step.do("hand Fatman page " + pageNumber + " to the recovery specialist", async () =>
-              this.startChild(importId + "-" + runId + "-retry-page-" + pageNumber + "-1-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8)", {
+              this.startChild(importId + "-" + runId + "-retry-page-" + pageNumber + "-1-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
                 task: "retry_page",
                 importId,
                 page: pageNumber,
@@ -247,7 +247,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           } catch (error) {
             if (!isTransientFatmanIndexError(error)) throw error;
             await step.do("hand failed repair page " + page + " to the recovery specialist", async () =>
-              this.startChild(importId + "-" + runId + "-retry-page-" + page + "-1-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8)", {
+              this.startChild(importId + "-" + runId + "-retry-page-" + page + "-1-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
                 task: "retry_page",
                 importId,
                 page,
