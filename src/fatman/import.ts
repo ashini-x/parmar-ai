@@ -64,7 +64,7 @@ export async function setFatmanImportStatus(
     values.errorMessage ?? null, Date.now(), id).run();
 }
 
-export async function fatmanUploadStatus(env: Env, id?: string | null): Promise<Response> {
+export async function fatmanUploadStatus(env: Env, id?: string | null, includeLivePipelineStatus = false): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "D1 is required for Fatman imports." }, 503);
   if (id && !validId(id)) return json({ ok: false, error: "invalid_import_id" }, 400);
   try {
@@ -72,6 +72,39 @@ export async function fatmanUploadStatus(env: Env, id?: string | null): Promise<
     const job = id && validId(id)
       ? await getFatmanImportJob(env, id)
       : await env.DB.prepare("SELECT * FROM fatman_import_jobs ORDER BY created_at DESC LIMIT 1").first<FatmanImportJob>();
+    let pipeline: { vision: Record<string, unknown>; workflow: Record<string, unknown> } | undefined;
+    if (includeLivePipelineStatus) {
+      const vision: Record<string, unknown> = job?.vision_operation
+        ? { status: "unknown", operation: job.vision_operation }
+        : { status: "not_started" };
+      const workflow: Record<string, unknown> = job?.workflow_instance_id
+        ? { status: "unknown", id: job.workflow_instance_id }
+        : { status: "not_started" };
+      if (job?.vision_operation && job.status !== "completed") {
+        try {
+          const result = await getFatmanVisionOperation(env, job.vision_operation);
+          vision.status = result.done ? "completed" : "running";
+          if (result.error) vision.error = result.error;
+        } catch (error) {
+          vision.status = "unknown";
+          vision.error = safeError(error);
+        }
+      } else if (job?.vision_operation && job.status === "completed") {
+        vision.status = "completed";
+      }
+      if (job?.workflow_instance_id && env.FATMAN_IMPORT) {
+        try {
+          const instance = await env.FATMAN_IMPORT.get(job.workflow_instance_id);
+          const result = await instance.status();
+          workflow.status = result.status;
+          if (result.error?.message) workflow.error = safeError(result.error.message);
+        } catch (error) {
+          workflow.status = "unknown";
+          workflow.error = safeError(error);
+        }
+      }
+      pipeline = { vision, workflow };
+    }
     return json({
       ok: true,
       import: job ? {
@@ -81,6 +114,9 @@ export async function fatmanUploadStatus(env: Env, id?: string | null): Promise<
         uploadedBytes: Number(job.uploaded_bytes),
         indexedPages: Number(job.indexed_pages),
         expectedPages: FATMAN_IMPORT_PAGES,
+        hasVisionOperation: Boolean(job.vision_operation),
+        workflowInstanceId: job.workflow_instance_id ?? null,
+        createdAt: Number(job.created_at),
         canResume: job.status === "failed" && Boolean(job.vision_operation) &&
           Number(job.uploaded_bytes) === Number(job.expected_size),
         error: job.error_message ?? undefined,
@@ -88,6 +124,7 @@ export async function fatmanUploadStatus(env: Env, id?: string | null): Promise<
       } : null,
       serviceAccountEmail: env.GCP_CLIENT_EMAIL?.trim() || null,
       bucketConfigured: Boolean(env.FATMAN_GCS_BUCKET?.trim()),
+      ...(pipeline ? { pipeline } : {}),
     });
   } catch (error) {
     return json({ ok: false, error: safeError(error) }, 502);
