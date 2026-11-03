@@ -364,7 +364,7 @@ export async function clearBrvinKnowledgeSources(env: Env, request: Request): Pr
   }
   const expectedCount = Number(body.expectedCount);
   if (!Number.isInteger(expectedCount) || expectedCount < 0 || expectedCount > 100) {
-    return json({ ok: false, error: "Clear all supports up to 100 imported books per operation. Use individual deletion for larger libraries." }, 400);
+    return json({ ok: false, error: "Bulk clear handles up to 100 imported books per confirmation. Clear the library in batches of 100 or delete individual books." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
@@ -399,14 +399,18 @@ export async function clearBrvinKnowledgeSources(env: Env, request: Request): Pr
         errors.push({ id: candidate.id, title: candidate.title, error: friendlyError(error) });
       }
     }
+    if (!started.length && errors.length) {
+      return json({ ok: false, error: "No book deletion workflows could be started.", errors }, 409);
+    }
     return json({
-      ok: errors.length === 0,
+      ok: true,
+      complete: errors.length === 0,
       startedCount: started.length,
       failedToStartCount: errors.length,
       started,
       errors,
-      note: "Project and collection definitions and audit events are preserved. Each book is independently deleted by its background workflow.",
-    }, errors.length ? 207 : 202);
+      note: "Only imported PDF books are included. The built-in Fatman source, project and collection definitions, and audit events are preserved. Each book is independently deleted by its background workflow.",
+    }, 202);
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 502); }
 }
 
@@ -630,7 +634,7 @@ const HTML = `<!doctype html>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn primary" id="upload" disabled>Add to BRVIN</button></div><progress class="progress" id="progress" value="0" max="100"></progress><p class="statusline" id="upload-status" aria-live="polite">Choose a PDF to start. Processing continues on the server after upload completes.</p>
 <div class="steps"><div class="step" id="step-upload"><b>01 · Secure upload</b><small>Private object storage</small></div><div class="step" id="step-ocr"><b>02 · Vision OCR</b><small>Document text detection</small></div><div class="step" id="step-index"><b>03 · Indexing</b><small>Page-level search</small></div><div class="step" id="step-qa"><b>04 · Retrieval QA</b><small>Source-page verification</small></div><div class="step" id="step-ready"><b>05 · Ready</b><small>Project access enabled</small></div></div>
 <div class="notice">BRVIN does not automatically share every book with every project. A book is searchable only after indexing and retrieval QA pass, and only for projects explicitly assigned the book or its collection.</div></section>
-<section class="panel"><div class="panel-head"><div><h2>Knowledge sources</h2><span class="muted" id="book-count">—</span></div><button class="btn danger" id="clear-brvin">Clear all knowledge sources</button></div><div class="tablewrap"><table class="table"><thead><tr><th>Source</th><th>Collection</th><th>Indexed</th><th>Status</th><th>Project access</th><th>Actions</th></tr></thead><tbody id="books"><tr><td class="empty" colspan="6">Loading knowledge registry…</td></tr></tbody></table></div><div class="notice">Original PDFs and Google Vision OCR JSON are retained in private Google Cloud Storage after indexing. “Delete OCR files” keeps the PDF and searchable pages; “Delete book” removes the PDF, OCR output, AI Search pages, project grants and registry rows. “Clear all” deletes every imported BRVIN book but keeps project/collection definitions and the audit trail. Google Cloud Storage soft-delete or retention policies may retain deleted object generations temporarily.</div></section>
+<section class="panel"><div class="panel-head"><div><h2>Knowledge sources</h2><span class="muted" id="book-count">—</span></div><button class="btn danger" id="clear-brvin">Clear all imported books</button></div><div class="tablewrap"><table class="table"><thead><tr><th>Source</th><th>Collection</th><th>Indexed</th><th>Status</th><th>Project access</th><th>Actions</th></tr></thead><tbody id="books"><tr><td class="empty" colspan="6">Loading knowledge registry…</td></tr></tbody></table></div><div class="notice">Original PDFs and Google Vision OCR JSON are retained in private Google Cloud Storage after indexing. “Delete OCR files” keeps the PDF and searchable pages; “Delete book” removes the PDF, OCR output, AI Search pages, project grants and registry rows. “Clear all imported books” removes every imported PDF book; it does not delete the protected built-in 538-page Fatman reference. Project/collection definitions and the audit trail remain. Google Cloud Storage soft-delete may retain deleted object generations until their hard-delete time; locked or active retention policies can block deletion.</div></section>
 <section class="panel"><div class="panel-head"><h2>Knowledge collections</h2><span class="muted">Logical organisation · not automatically shared</span></div><div id="collections" class="collection-grid"></div></section>
 <section class="panel"><div class="panel-head"><h2>Connected projects</h2><span class="muted">Explicit knowledge access</span></div><div id="projects" class="project-grid"></div></section>
 </div><div>
@@ -848,13 +852,14 @@ async function deleteVisionOutput(bookId,button){
 async function clearAllBrvinBooks(){
  const books=(model?.books||[]).filter(book=>book.sourceType==="pdf");
  if(!books.length){alert("There are no imported BRVIN books to clear.");return;}
- if(!confirm("Start permanent deletion for all "+books.length+" imported BRVIN books?\\n\\nThis removes all their AI Search items, private PDFs, Vision OCR output, access grants and book/import rows. Projects, collections and the audit trail are kept. Active uploads or processing jobs will block this operation."))return;
+ if(books.length>100){alert("Bulk clear handles up to 100 books per confirmation. This library has "+books.length+" imported books. Delete them in batches of 100 or use the individual Delete book actions.");return;}
+ if(!confirm("Start deletion for all "+books.length+" imported BRVIN PDF books?\\n\\nThis removes their AI Search items, private PDFs, Vision OCR output, project grants and book/import records. The built-in 538-page Fatman reference, projects, collections and audit trail are preserved. Google Cloud Storage may retain recoverable copies until the soft-delete period ends. Active uploads or processing jobs will block this operation."))return;
  const typed=prompt('Type exactly DELETE ALL BRVIN BOOKS to confirm.');
  if(typed!=="DELETE ALL BRVIN BOOKS"){alert("Confirmation did not match. Nothing was deleted.");return;}
  const button=$("clear-brvin");button.disabled=true;
  try{
   const result=await post("clear",{confirmation:typed,expectedCount:books.length});
-  alert("Bulk deletion started for "+result.startedCount+" of "+books.length+" books. Each book is being deleted by its own background workflow. Check the status column and Specialist activity for completion.");
+  alert("Bulk deletion started for "+result.startedCount+" of "+books.length+" books. "+(result.failedToStartCount?result.failedToStartCount+" could not start; see the returned errors. ":"")+"Each book is being deleted by its own background workflow. Check the status column and Specialist activity for completion.");
   await refresh();
  }catch(error){alert(error.message);}
  finally{button.disabled=false;}
