@@ -50,6 +50,12 @@ describe("BRVIN browser script contract", () => {
     expect(workflowSource).toContain("const indexed = await instance.items.upload(key, content);");
     expect(workflowSource).not.toContain("metadata: { bookId: job.book_id, bookTitle: title, pdfPage: page }");
     expect(workflowSource).toContain("export async function runBrvinRecoverySupervisor");
+    expect(workflowSource).toContain('task !== "parmarbot_test"');
+    expect(workflowSource).toContain('retrieveFatmanContext(this.env, probe.query)');
+    expect(workflowSource).toContain('eventType: "bot.retrieval_test_passed"');
+    expect(workflowSource).toContain('eventType: "source.retained"');
+    expect(workflowSource).toContain("if (importJob.book_id) {");
+    expect(workflowSource).toContain("deletion: \"explicit_admin_action\"");
     expect(workflowSource).toContain("workflow.auto_recovery_started");
     expect(workerSource).toContain('controller.cron === "*/5 * * * *"');
     expect(wranglerConfig).toContain('"*/5 * * * *"');
