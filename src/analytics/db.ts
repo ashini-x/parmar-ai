@@ -167,11 +167,34 @@ CREATE TABLE IF NOT EXISTS fatman_import_jobs (
   indexed_pages INTEGER NOT NULL DEFAULT 0,
   error_message TEXT,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
+  updated_at INTEGER NOT NULL,
+  book_id TEXT,
+  book_title TEXT,
+  page_count INTEGER NOT NULL DEFAULT 538
 );
 
 CREATE INDEX IF NOT EXISTS idx_fatman_import_jobs_hash_created
   ON fatman_import_jobs(source_sha256, expected_size, created_at);
+
+CREATE TABLE IF NOT EXISTS fatman_books (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  source_filename TEXT NOT NULL,
+  source_sha256 TEXT NOT NULL,
+  expected_size INTEGER NOT NULL,
+  page_count INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  indexed_pages INTEGER NOT NULL DEFAULT 0,
+  error_message TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_fatman_books_status_updated
+  ON fatman_books(status, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_fatman_books_fingerprint
+  ON fatman_books(source_sha256, expected_size, created_at);
 
 CREATE TABLE IF NOT EXISTS fatman_release_qa_runs (
   run_id TEXT PRIMARY KEY,
@@ -404,12 +427,31 @@ async function ensureQuizSessionSchema(env: Env): Promise<void> {
   }
 }
 
+async function ensureFatmanImportJobSchema(env: Env): Promise<void> {
+  if (!env.DB) return;
+  // Existing installations have the single-book import table already. Add the
+  // optional metadata in place so the original 538-page import remains valid.
+  const columns = await env.DB.prepare("SELECT name FROM pragma_table_info('fatman_import_jobs')").all<{ name: string }>();
+  const names = new Set((columns.results ?? []).map((column) => column.name));
+  const additions: Array<[string, string]> = [
+    ["book_id", "TEXT"],
+    ["book_title", "TEXT"],
+    ["page_count", "INTEGER NOT NULL DEFAULT 538"],
+  ];
+  for (const [name, definition] of additions) {
+    if (!names.has(name)) {
+      await env.DB.prepare("ALTER TABLE fatman_import_jobs ADD COLUMN " + name + " " + definition).run();
+    }
+  }
+}
+
 export async function ensureAnalyticsSchema(env: Env): Promise<void> {
   if (!env.DB) return;
   if (!schemaPromise) {
     schemaPromise = (async () => {
       await env.DB!.batch(splitSchemaStatements().map((sql) => env.DB!.prepare(sql)));
       await ensureQuizSessionSchema(env);
+      await ensureFatmanImportJobSchema(env);
     })()
       .then(() => undefined)
       .catch((error) => {
