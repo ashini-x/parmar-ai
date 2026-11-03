@@ -14,6 +14,7 @@ const JSON_HEADERS = {
 const MAX_CHUNK_BYTES = 8 * 1024 * 1024;
 const encoder = new TextEncoder();
 
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: JSON_HEADERS });
 }
@@ -59,10 +60,46 @@ function validId(value: string): boolean {
 
 async function bodyJson<T>(request: Request): Promise<T> {
   const contentType = request.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().includes("application/json")) throw new Error("content_type_must_be_application_json");
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new VrainHttpError(415, "content_type_must_be_application_json");
+  }
   const length = Number(request.headers.get("content-length") ?? "0");
-  if (Number.isFinite(length) && length > 64 * 1024) throw new Error("request_body_too_large");
-  return await request.json() as T;
+  if (Number.isFinite(length) && length > 64 * 1024) {
+    throw new VrainHttpError(413, "request_body_too_large");
+  }
+  try {
+    return await request.json() as T;
+  } catch {
+    throw new VrainHttpError(400, "invalid_json_body");
+  }
+}
+
+async function readBoundedBody(request: Request, maxBytes: number): Promise<ArrayBuffer> {
+  if (!request.body) throw new VrainHttpError(400, "upload_chunk_body_required");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      total += part.value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel("VRAIN upload chunk exceeds the configured size limit");
+        throw new VrainHttpError(413, "chunk_too_large");
+      }
+      chunks.push(part.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output.buffer;
 }
 
 async function ownerOnly(request: Request, env: Env): Promise<boolean> {
@@ -90,8 +127,20 @@ async function apiKeyProject(
   let scopes: unknown;
   try { scopes = JSON.parse(row.scopes_json); } catch { return null; }
   if (!Array.isArray(scopes) || !scopes.includes(requiredScope)) return null;
+  const now = Date.now();
+  await env.DB.prepare(
+    "INSERT INTO vrain_api_usage_windows(key_id,window_started_at,request_count) VALUES (?,?,1) " +
+    "ON CONFLICT(key_id) DO UPDATE SET " +
+    "request_count=CASE WHEN vrain_api_usage_windows.window_started_at<=? THEN 1 ELSE vrain_api_usage_windows.request_count+1 END, " +
+    "window_started_at=CASE WHEN vrain_api_usage_windows.window_started_at<=? THEN excluded.window_started_at ELSE vrain_api_usage_windows.window_started_at END",
+  ).bind(row.key_id, now, now - 60_000, now - 60_000).run();
+  const usage = await env.DB.prepare("SELECT request_count FROM vrain_api_usage_windows WHERE key_id=?")
+    .bind(row.key_id).first<{ request_count: number }>();
+  if (Number(usage?.request_count ?? 0) > 120) {
+    throw new VrainHttpError(429, "api_key_rate_limit_exceeded_120_requests_per_minute");
+  }
   await env.DB.prepare("UPDATE vrain_api_keys SET last_used_at=? WHERE id=?")
-    .bind(Date.now(), row.key_id).run();
+    .bind(now, row.key_id).run();
   return { id: row.id, name: row.name, slug: row.slug };
 }
 
@@ -345,7 +394,7 @@ async function adminUploadChunk(request: Request, env: Env, documentId: string):
     return json({ ok: false, error: "invalid_chunk_range" }, 400);
   }
   if (Number.isFinite(declared) && declared > MAX_CHUNK_BYTES) return json({ ok: false, error: "chunk_too_large" }, 413);
-  const bytes = await request.arrayBuffer();
+  const bytes = await readBoundedBody(request, MAX_CHUNK_BYTES);
   if (bytes.byteLength < 1 || bytes.byteLength > MAX_CHUNK_BYTES || start + bytes.byteLength > total) {
     return json({ ok: false, error: "chunk_size_out_of_range" }, 413);
   }
@@ -708,12 +757,18 @@ export default {
     if (url.pathname.startsWith("/v1/admin/")) {
       if (!(await ownerOnly(request, env))) return json({ ok: false, error: "owner_authentication_required" }, 401);
       try { return await ownerRoute(request, env, url); }
-      catch (error) { return json({ ok: false, error: safeMessage(error) }, 502); }
+      catch (error) {
+        const status = error instanceof VrainHttpError ? error.status : 502;
+        return json({ ok: false, error: safeMessage(error) }, status);
+      }
     }
 
     if (url.pathname.startsWith("/v1/knowledge/")) {
       try { return await consumerRoute(request, env, url); }
-      catch (error) { return json({ ok: false, error: safeMessage(error) }, 502); }
+      catch (error) {
+        const status = error instanceof VrainHttpError ? error.status : 502;
+        return json({ ok: false, error: safeMessage(error) }, status);
+      }
     }
     return json({ ok: false, error: "not_found" }, 404);
   },
