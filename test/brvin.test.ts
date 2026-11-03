@@ -106,7 +106,7 @@ describe("BRVIN governed retrieval", () => {
     const script = await scriptResponse.text();
     expect(script).toContain("BRVIN dashboard startup failed");
     expect(script).toContain("await refresh()");
-    const parsedScript = ts.createSourceFile("brvin-app.js", script, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+    const parsedScript = ts.createSourceFile("brvin-app.js", script, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS) as ts.SourceFile & { parseDiagnostics: readonly ts.Diagnostic[] };
     if (parsedScript.parseDiagnostics.length) {
       const diagnostic = parsedScript.parseDiagnostics[0];
       const position = parsedScript.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
