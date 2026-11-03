@@ -16,10 +16,14 @@ import {
 
 interface FatmanImportParams {
   importId: string;
-  task?: "index_chunk" | "cleanup_chunk";
+  task?: "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor";
   startPage?: number;
   endPage?: number;
   objectNames?: string[];
+  pages?: number[];
+  runId?: string;
+  monitorSequence?: number;
+  repairPass?: number;
 }
 
 function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
@@ -41,7 +45,8 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
   if (typeof importId !== "string" || !/^[a-f0-9-]{36}$/i.test(importId)) {
     throw new Error("The Fatman import workflow received an invalid import ID.");
   }
-  if (task !== undefined && task !== "index_chunk" && task !== "cleanup_chunk") {
+  if (task !== undefined && task !== "index_chunk" && task !== "repair_chunk" &&
+      task !== "cleanup_chunk" && task !== "monitor") {
     throw new Error("The Fatman import workflow received an invalid task.");
   }
   return {
@@ -52,8 +57,15 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
     objectNames: Array.isArray(record.objectNames) && record.objectNames.every((name) => typeof name === "string")
       ? record.objectNames as string[]
       : undefined,
+    pages: Array.isArray(record.pages) && record.pages.every((page) => typeof page === "number")
+      ? record.pages as number[]
+      : undefined,
+    runId: typeof record.runId === "string" ? record.runId : undefined,
+    monitorSequence: typeof record.monitorSequence === "number" ? record.monitorSequence : undefined,
+    repairPass: typeof record.repairPass === "number" ? record.repairPass : undefined,
   };
 }
+
 
 async function indexOcrPage(env: Env, importId: string, page: number): Promise<{ page: number; status: string }> {
   const instanceName = env.FATMAN_INSTANCE_NAME?.trim();
@@ -87,15 +99,147 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
       if (params.task === "index_chunk") {
         const startPage = params.startPage;
         const endPage = params.endPage;
+        const runId = params.runId;
         if (!Number.isSafeInteger(startPage) || !Number.isSafeInteger(endPage) ||
-            startPage! < 1 || endPage! > 538 || endPage! < startPage! || endPage! - startPage! >= 8) {
-          throw new Error("The Fatman page chunk range is invalid.");
+            startPage! < 1 || endPage! > 538 || endPage! < startPage! || endPage! - startPage! >= 8 ||
+            typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId)) {
+          throw new Error("The Fatman page chunk parameters are invalid.");
         }
         for (let page = startPage!; page <= endPage!; page += 1) {
           const pageNumber = page;
           await step.do("index Fatman PDF page " + pageNumber, async () =>
             indexOcrPage(this.env, importId, pageNumber));
         }
+
+        if (endPage! < 538) {
+          const nextStart = endPage! + 1;
+          const nextEnd = Math.min(538, nextStart + 7);
+          await step.do("start next Fatman page chunk " + nextStart, async () =>
+            this.startChild(importId + "-" + runId + "-page-" + nextStart, {
+              task: "index_chunk",
+              importId,
+              startPage: nextStart,
+              endPage: nextEnd,
+              runId,
+            }));
+        } else {
+          await step.do("start Fatman indexing monitor", async () =>
+            this.startChild(importId + "-" + runId + "-monitor-1", {
+              task: "monitor",
+              importId,
+              runId,
+              monitorSequence: 1,
+              repairPass: 0,
+            }));
+        }
+        return;
+      }
+
+      if (params.task === "repair_chunk") {
+        const pages = params.pages ?? [];
+        const runId = params.runId;
+        const monitorSequence = params.monitorSequence;
+        const repairPass = params.repairPass ?? 0;
+        if (pages.length < 1 || pages.length > 10 ||
+            pages.some((page) => !Number.isSafeInteger(page) || page < 1 || page > 538) ||
+            typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId) ||
+            !Number.isSafeInteger(monitorSequence) || monitorSequence! < 1 ||
+            !Number.isSafeInteger(repairPass) || repairPass < 1 || repairPass > 3) {
+          throw new Error("The Fatman repair task parameters are invalid.");
+        }
+        for (const page of [...new Set(pages)]) {
+          await step.do("repair Fatman PDF page " + page, async () => indexOcrPage(this.env, importId, page));
+        }
+        await step.do("continue Fatman index monitoring", async () =>
+          this.startChild(importId + "-" + runId + "-monitor-" + monitorSequence, {
+            task: "monitor",
+            importId,
+            runId,
+            monitorSequence,
+            repairPass,
+          }));
+        return;
+      }
+
+      if (params.task === "monitor") {
+        const runId = params.runId;
+        const monitorSequence = params.monitorSequence ?? 1;
+        const repairPass = params.repairPass ?? 0;
+        if (typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId) ||
+            !Number.isSafeInteger(monitorSequence) || monitorSequence < 1 ||
+            !Number.isSafeInteger(repairPass) || repairPass < 0 || repairPass > 3) {
+          throw new Error("The Fatman index monitor parameters are invalid.");
+        }
+
+        await step.sleep("wait before Fatman indexing check " + monitorSequence, "1 minute");
+        const pages = await step.do("check Fatman index status " + monitorSequence, async () =>
+          listFatmanIndexPages(this.env));
+        const byPage = new Map<number, { page: number; status: string; error?: string }>();
+        for (const item of pages) byPage.set(item.page, item);
+        const completedPages = pages.filter((item) => item.status === "completed").length;
+        const failedPages = pages.filter((item) =>
+          item.status === "error" || item.status === "skipped" || item.status === "outdated");
+        await step.do("save Fatman indexing progress " + monitorSequence, async () => {
+          await updateFatmanImportProgress(this.env, completedPages);
+          return { completedPages };
+        });
+
+        if (completedPages === 538 && failedPages.length === 0) {
+          await step.do("mark Fatman import complete", async () => {
+            await markFatmanImportCompleted(this.env, importId);
+            return { completedPages: 538 };
+          });
+          try {
+            const objectNames = await step.do("list temporary Fatman OCR objects", async () =>
+              cleanupFatmanGcsObjects(this.env, importId));
+            for (let offset = 0, batch = 1; offset < objectNames.length; offset += 25, batch += 1) {
+              const names = objectNames.slice(offset, offset + 25);
+              await step.do("start Fatman cleanup batch " + batch, async () =>
+                this.startChild(importId + "-" + runId + "-cleanup-" + batch, {
+                  task: "cleanup_chunk",
+                  importId,
+                  objectNames: names,
+                }));
+            }
+          } catch {
+            // Indexing is complete. Temporary objects can be removed by the bucket lifecycle policy.
+          }
+          return;
+        }
+
+        if (failedPages.length > 10) {
+          throw new Error("AI Search reported " + failedPages.length + " failed pages. The import stopped to avoid overwhelming the index.");
+        }
+        const missingPages = Array.from({ length: 538 }, (_, index) => index + 1)
+          .filter((page) => !byPage.has(page));
+        const repairPages = [...new Set([...failedPages.map((item) => item.page), ...missingPages])].slice(0, 10);
+        if (repairPages.length > 0) {
+          if (repairPass >= 3) {
+            throw new Error("Fatman AI Search still has missing or failed pages after three repair passes.");
+          }
+          const nextSequence = monitorSequence + 1;
+          const nextRepairPass = repairPass + 1;
+          await step.do("repair missing Fatman page batch " + nextSequence, async () =>
+            this.startChild(importId + "-" + runId + "-repair-" + monitorSequence, {
+              task: "repair_chunk",
+              importId,
+              pages: repairPages,
+              runId,
+              monitorSequence: nextSequence,
+              repairPass: nextRepairPass,
+            }));
+          return;
+        }
+
+        const nextSequence = monitorSequence + 1;
+        await step.do("schedule next Fatman index check " + nextSequence, async () =>
+          this.startChild(importId + "-" + runId + "-monitor-" + nextSequence, {
+            task: "monitor",
+            importId,
+            runId,
+            monitorSequence: nextSequence,
+            repairPass,
+          }));
         return;
       }
 
@@ -132,109 +276,32 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
 
       const indexingRunId = await step.do("create Fatman indexing run ID", async () =>
         crypto.randomUUID().replaceAll("-", "").slice(0, 8));
-      const pagesPerChunk = 8;
-      for (let startPage = 1; startPage <= 538; startPage += pagesPerChunk) {
-        const endPage = Math.min(538, startPage + pagesPerChunk - 1);
-        const childId = importId + "-" + indexingRunId + "-page-" + startPage;
-        const startedId = await step.do("start Fatman page chunk " + startPage, async () => {
-          try {
-            return (await this.env.FATMAN_IMPORT!.create({
-              id: childId,
-              params: { task: "index_chunk", importId, startPage, endPage },
-            })).id;
-          } catch (error) {
-            try {
-              return (await this.env.FATMAN_IMPORT!.get(childId)).id;
-            } catch {
-              throw error;
-            }
-          }
-        });
-
-        let chunkComplete = false;
-        for (let attempt = 1; attempt <= 30; attempt += 1) {
-          const chunkStatus = await step.do("check Fatman page chunk " + startPage + " attempt " + attempt, async () => {
-            const instance = await this.env.FATMAN_IMPORT!.get(startedId);
-            const status = await instance.status();
-            return { status: status.status, error: status.error?.message ?? null };
-          });
-          if (chunkStatus.status === "complete") {
-            chunkComplete = true;
-            break;
-          }
-          if (chunkStatus.status === "errored" || chunkStatus.status === "terminated" ||
-              chunkStatus.status === "paused" || chunkStatus.status === "unknown") {
-            throw new Error("Fatman page chunk " + startPage + "-" + endPage + " stopped: " +
-              (chunkStatus.error || chunkStatus.status) + ".");
-          }
-          if (attempt < 30) {
-            await step.sleep("wait for Fatman page chunk " + startPage + " attempt " + attempt, "10 seconds");
-          }
-        }
-        if (!chunkComplete) {
-          throw new Error("Fatman page chunk " + startPage + "-" + endPage + " did not finish within five minutes.");
-        }
-      }
-
-      let complete = false;
-      const repairCounts = new Map<number, number>();
-      for (let attempt = 1; attempt <= 30; attempt += 1) {
-        const pages = await step.do("check Fatman index status " + attempt, async () => listFatmanIndexPages(this.env));
-        const completedPages = pages.filter((item) => item.status === "completed").length;
-        const failedPages = pages.filter((item) => item.status === "error" || item.status === "skipped" || item.status === "outdated");
-        await step.do("save Fatman progress " + attempt, async () => {
-          await updateFatmanImportProgress(this.env, completedPages);
-          return { completedPages };
-        });
-        if (completedPages === 538 && failedPages.length === 0) {
-          complete = true;
-          break;
-        }
-        if (failedPages.length > 10) {
-          throw new Error("AI Search reported " + failedPages.length + " failed pages. The import stopped to avoid overwhelming the index.");
-        }
-        if (failedPages.length > 0) {
-          for (const failed of failedPages) {
-            const retryCount = repairCounts.get(failed.page) ?? 0;
-            if (retryCount >= 3) throw new Error("Fatman AI Search repeatedly failed PDF page " + failed.page + ".");
-            repairCounts.set(failed.page, retryCount + 1);
-            await step.do("retry failed Fatman page " + failed.page + " cycle " + (retryCount + 1), async () =>
-              indexOcrPage(this.env, importId, failed.page));
-          }
-        }
-        if (attempt < 30) await step.sleep("wait for Fatman index " + attempt, "1 minute");
-      }
-      if (!complete) throw new Error("Fatman AI Search did not complete all 538 pages within 30 minutes.");
-      await step.do("mark Fatman import complete", async () => {
-        await markFatmanImportCompleted(this.env, importId);
-        return { completedPages: 538 };
-      });
-      try {
-        const objectNames = await step.do("list temporary Fatman OCR objects", async () => cleanupFatmanGcsObjects(this.env, importId));
-        for (let offset = 0, batch = 1; offset < objectNames.length; offset += 25, batch += 1) {
-          const names = objectNames.slice(offset, offset + 25);
-          const childId = importId + "-" + indexingRunId + "-cleanup-" + batch;
-          await step.do("start Fatman cleanup batch " + batch, async () => {
-            try {
-              const instance = await this.env.FATMAN_IMPORT!.create({
-                id: childId,
-                params: { task: "cleanup_chunk", importId, objectNames: names },
-              });
-              return { instanceId: instance.id };
-            } catch {
-              const instance = await this.env.FATMAN_IMPORT!.get(childId);
-              return { instanceId: instance.id };
-            }
-          });
-        }
-      } catch {
-        // Indexed content is complete; temporary GCS cleanup can be retried by lifecycle policy.
-      }
+      await step.do("start first Fatman page chunk", async () =>
+        this.startChild(importId + "-" + indexingRunId + "-page-1", {
+          task: "index_chunk",
+          importId,
+          startPage: 1,
+          endPage: 8,
+          runId: indexingRunId,
+        }));
+      return;
     } catch (error) {
       if (params.task !== "cleanup_chunk") {
         await markFatmanImportFailed(this.env, importId, error).catch(() => undefined);
       }
       throw error;
+    }
+  }
+
+  private async startChild(id: string, params: FatmanImportParams): Promise<string> {
+    try {
+      return (await this.env.FATMAN_IMPORT!.create({ id, params })).id;
+    } catch (error) {
+      try {
+        return (await this.env.FATMAN_IMPORT!.get(id)).id;
+      } catch {
+        throw error;
+      }
     }
   }
 
