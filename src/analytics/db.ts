@@ -215,6 +215,108 @@ CREATE TABLE IF NOT EXISTS fatman_release_qa_runs (
 CREATE INDEX IF NOT EXISTS idx_fatman_release_qa_runs_completed
   ON fatman_release_qa_runs(document_version, completed_at DESC);
 
+
+CREATE TABLE IF NOT EXISTS vrain_migrations (
+  migration_key TEXT PRIMARY KEY,
+  applied_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS vrain_projects (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  slug TEXT NOT NULL UNIQUE,
+  description TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vrain_projects_status
+  ON vrain_projects(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS vrain_collections (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vrain_collections_status
+  ON vrain_collections(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS vrain_books (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  source_filename TEXT NOT NULL,
+  source_sha256 TEXT NOT NULL DEFAULT '',
+  expected_size INTEGER NOT NULL DEFAULT 0,
+  page_count INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  indexed_pages INTEGER NOT NULL DEFAULT 0,
+  error_message TEXT,
+  collection_id TEXT NOT NULL DEFAULT 'general',
+  search_prefix TEXT NOT NULL,
+  source_type TEXT NOT NULL DEFAULT 'pdf',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vrain_books_collection
+  ON vrain_books(collection_id, status, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_vrain_books_status
+  ON vrain_books(status, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_vrain_books_fingerprint
+  ON vrain_books(source_sha256, expected_size, created_at);
+
+CREATE TABLE IF NOT EXISTS vrain_project_books (
+  project_id TEXT NOT NULL,
+  book_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  created_by TEXT,
+  PRIMARY KEY(project_id, book_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vrain_project_books_book
+  ON vrain_project_books(book_id, project_id);
+
+CREATE TABLE IF NOT EXISTS vrain_project_collections (
+  project_id TEXT NOT NULL,
+  collection_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  created_by TEXT,
+  PRIMARY KEY(project_id, collection_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vrain_project_collections_collection
+  ON vrain_project_collections(collection_id, project_id);
+
+CREATE TABLE IF NOT EXISTS vrain_activity_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  import_id TEXT,
+  book_id TEXT,
+  project_id TEXT,
+  agent TEXT NOT NULL,
+  phase TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  message TEXT NOT NULL,
+  detail_json TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_vrain_activity_created
+  ON vrain_activity_events(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_vrain_activity_import
+  ON vrain_activity_events(import_id, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_vrain_activity_book
+  ON vrain_activity_events(book_id, id DESC);
+
 CREATE TABLE IF NOT EXISTS telegram_bots (
   bot_connection_id TEXT PRIMARY KEY,
   bot_id INTEGER NOT NULL UNIQUE,
@@ -445,6 +547,59 @@ async function ensureFatmanImportJobSchema(env: Env): Promise<void> {
   }
 }
 
+
+async function ensureVrainCompatibilitySchema(env: Env): Promise<void> {
+  if (!env.DB) return;
+  const db = env.DB;
+  const now = Date.now();
+
+  await db.batch([
+    db.prepare(
+      "INSERT OR IGNORE INTO vrain_collections (id, name, description, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)"
+    ).bind("general", "General Knowledge", "Shared reference material that can be assigned to selected projects.", now, now),
+    db.prepare(
+      "INSERT OR IGNORE INTO vrain_collections (id, name, description, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)"
+    ).bind("fatman-core", "Fatman Core", "The original reviewed Fatman reference volume.", now, now),
+    db.prepare(
+      "INSERT OR IGNORE INTO vrain_projects (id, name, slug, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)"
+    ).bind("fatman", "Fatman", "fatman", "SSC learning assistant. Access is limited to explicitly assigned VRAIN knowledge.", now, now),
+  ]);
+
+  const migration = await db.prepare(
+    "SELECT migration_key FROM vrain_migrations WHERE migration_key = ?"
+  ).bind("2026-11-03-fatman-books-to-vrain-v1").first<{ migration_key: string }>();
+
+  if (!migration) {
+    await db.prepare(
+      "INSERT OR IGNORE INTO vrain_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, error_message, collection_id, search_prefix, source_type, created_at, updated_at) " +
+      "SELECT id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, error_message, 'general', 'fatman/books/' || id || '/pages/', 'pdf', created_at, updated_at FROM fatman_books"
+    ).run();
+
+    await db.prepare(
+      "INSERT OR IGNORE INTO vrain_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, collection_id, search_prefix, source_type, created_at, updated_at) " +
+      "SELECT 'fatman-legacy-538', 'Fatman 2nd Edition', 'Built-in reviewed Fatman PDF', '', 0, 538, " +
+      "CASE WHEN enabled = 1 AND indexed_pages = 538 THEN 'ready' ELSE 'needs_review' END, indexed_pages, " +
+      "'fatman-core', 'fatman/pages/', 'legacy', updated_at, updated_at FROM fatman_book_state WHERE singleton_id = 1"
+    ).run();
+
+    await db.batch([
+      db.prepare(
+        "INSERT OR IGNORE INTO vrain_project_books (project_id, book_id, created_at, created_by) " +
+        "SELECT 'fatman', id, created_at, 'migration' FROM vrain_books WHERE source_type = 'pdf'"
+      ),
+      db.prepare(
+        "INSERT OR IGNORE INTO vrain_project_books (project_id, book_id, created_at, created_by) VALUES ('fatman', 'fatman-legacy-538', ?, 'migration')"
+      ).bind(now),
+      db.prepare(
+        "INSERT OR IGNORE INTO vrain_project_collections (project_id, collection_id, created_at, created_by) VALUES ('fatman', 'fatman-core', ?, 'migration')"
+      ).bind(now),
+      db.prepare(
+        "INSERT OR IGNORE INTO vrain_migrations (migration_key, applied_at) VALUES (?, ?)"
+      ).bind("2026-11-03-fatman-books-to-vrain-v1", now),
+    ]);
+  }
+}
+
 export async function ensureAnalyticsSchema(env: Env): Promise<void> {
   if (!env.DB) return;
   if (!schemaPromise) {
@@ -452,6 +607,7 @@ export async function ensureAnalyticsSchema(env: Env): Promise<void> {
       await env.DB!.batch(splitSchemaStatements().map((sql) => env.DB!.prepare(sql)));
       await ensureQuizSessionSchema(env);
       await ensureFatmanImportJobSchema(env);
+      await ensureVrainCompatibilitySchema(env);
     })()
       .then(() => undefined)
       .catch((error) => {
@@ -492,6 +648,9 @@ export async function setFatmanBookState(
   await env.DB.prepare(
     "UPDATE fatman_book_state SET enabled = ?, document_version = ?, indexed_pages = ?, updated_at = ? WHERE singleton_id = 1"
   ).bind(state.enabled ? 1 : 0, state.documentVersion, state.indexedPages, Date.now()).run();
+  await env.DB.prepare(
+    "UPDATE vrain_books SET status = ?, indexed_pages = ?, updated_at = ? WHERE id = 'fatman-legacy-538'"
+  ).bind(state.enabled && state.indexedPages === 538 ? "ready" : "needs_review", state.indexedPages, Date.now()).run();
 }
 
 export interface FatmanReleaseQaRunSummary {
@@ -918,6 +1077,45 @@ export async function cleanupAnalytics(env: Env, retentionDays: number): Promise
 export function getAnalyticsConfig(env: Env): { retentionDays: number } {
   const value = Number.parseInt(env.ANALYTICS_RAW_RETENTION_DAYS ?? "30", 10);
   return { retentionDays: Number.isFinite(value) && value > 0 ? value : 30 };
+}
+
+
+export interface VrainActivityInput {
+  importId?: string | null;
+  bookId?: string | null;
+  projectId?: string | null;
+  agent: string;
+  phase: string;
+  eventType: string;
+  status?: string;
+  message: string;
+  details?: Record<string, unknown>;
+  createdAt?: number;
+}
+
+/** Append-only operation telemetry used by the VRAIN live operations console. */
+export async function recordVrainActivity(env: Env, event: VrainActivityInput): Promise<void> {
+  if (!env.DB) return;
+  await ensureAnalyticsSchema(env);
+  const detailsJson = event.details ? JSON.stringify(event.details) : null;
+  const safeDetailsJson = detailsJson && detailsJson.length > 4_000
+    ? JSON.stringify({ truncated: true, preview: detailsJson.slice(0, 3_800) })
+    : detailsJson;
+  await env.DB.prepare(
+    "INSERT INTO vrain_activity_events (import_id, book_id, project_id, agent, phase, event_type, status, message, detail_json, created_at) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(
+    event.importId ?? null,
+    event.bookId ?? null,
+    event.projectId ?? null,
+    event.agent.slice(0, 80),
+    event.phase.slice(0, 80),
+    event.eventType.slice(0, 100),
+    (event.status ?? "info").slice(0, 32),
+    event.message.slice(0, 500),
+    safeDetailsJson,
+    event.createdAt ?? Date.now(),
+  ).run();
 }
 
 function splitSchemaStatements(): string[] {

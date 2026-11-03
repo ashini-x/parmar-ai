@@ -1,5 +1,5 @@
 import type { Env } from "../config/env";
-import { ensureAnalyticsSchema, getFatmanBookState, setFatmanBookState } from "../analytics/db";
+import { ensureAnalyticsSchema, getFatmanBookState, recordVrainActivity, setFatmanBookState } from "../analytics/db";
 import { getGoogleAccessToken } from "../auth/google";
 import { json } from "../http/response";
 import { nextAiSearchPage } from "./pagination";
@@ -71,6 +71,20 @@ export async function setFatmanImportStatus(
     "UPDATE fatman_books SET status = ?, indexed_pages = COALESCE((SELECT indexed_pages FROM fatman_import_jobs WHERE id = ?), indexed_pages), " +
     "error_message = ?, updated_at = ? WHERE id = ?"
   ).bind(status, id, values.errorMessage ?? null, Date.now(), id).run();
+  await env.DB.prepare(
+    "UPDATE vrain_books SET status = ?, indexed_pages = COALESCE((SELECT indexed_pages FROM fatman_import_jobs WHERE id = ?), indexed_pages), " +
+    "error_message = ?, updated_at = ? WHERE id = ?"
+  ).bind(status, id, values.errorMessage ?? null, Date.now(), id).run();
+  const eventJob = await getFatmanImportJob(env, id);
+  if (eventJob?.book_id) {
+    await recordVrainActivity(env, {
+      importId: id, bookId: eventJob.book_id, agent: "Workflow supervisor",
+      phase: status === "processing" ? "processing" : "job",
+      eventType: "job.status_changed", status,
+      message: status === "processing" ? "The background processing workflow is active." : "Import status changed to " + status + ".",
+      details: { indexedPages: Number(eventJob.indexed_pages), pageCount: fatmanExpectedPageCount(eventJob) },
+    }).catch(() => undefined);
+  }
 }
 
 export async function fatmanUploadStatus(env: Env, id?: string | null, includeLivePipelineStatus = false): Promise<Response> {
@@ -330,7 +344,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
     }
 
     const id = crypto.randomUUID().toLowerCase();
-    const objectName = "fatman/imports/" + id + "/source.pdf";
+    const objectName = "vrain/imports/" + id + "/source.pdf";
     const token = await getGoogleAccessToken(env);
     const response = await fetch(GCS_API + "/upload/storage/v1/b/" + encodeURIComponent(bucketName) + "/o?uploadType=resumable&name=" + encodeURIComponent(objectName), {
       method: "POST",
@@ -358,6 +372,10 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
         "INSERT INTO fatman_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, created_at, updated_at) " +
         "VALUES (?, ?, ?, ?, ?, ?, 'uploading', 0, ?, ?)"
       ).bind(id, title, filename, sha256, size, pageCount, now, now),
+      env.DB.prepare(
+        "INSERT INTO vrain_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, collection_id, search_prefix, source_type, created_at, updated_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?, 'uploading', 0, 'general', ?, 'pdf', ?, ?)"
+      ).bind(id, title, filename, sha256, size, pageCount, "vrain/books/" + id + "/pages/", now, now),
     ]);
     return json({ ok: true, importId: id, status: "uploading", uploadedBytes: 0, expectedSize: size, expectedPages: pageCount, bookTitle: title });
   } catch (error) {
@@ -421,6 +439,21 @@ export async function uploadFatmanChunk(env: Env, request: Request, importId: st
     }
     await env.DB!.prepare("UPDATE fatman_import_jobs SET uploaded_bytes = ?, status = ?, updated_at = ? WHERE id = ?")
       .bind(uploadedBytes, status, Date.now(), importId).run();
+    if (job.book_id) {
+      await env.DB!.prepare("UPDATE vrain_books SET status = ?, updated_at = ? WHERE id = ?")
+        .bind(status, Date.now(), job.book_id).run();
+      const previousMilestone = Math.floor(Number(job.uploaded_bytes) / Number(job.expected_size) * 20);
+      const currentMilestone = Math.floor(uploadedBytes / total * 20);
+      if (status === "uploaded" || currentMilestone > previousMilestone) {
+        await recordVrainActivity(env, {
+          importId, bookId: job.book_id, agent: "Secure upload",
+          phase: "upload", eventType: status === "uploaded" ? "upload.completed" : "upload.progress",
+          status: status === "uploaded" ? "completed" : "running",
+          message: status === "uploaded" ? "The PDF was transferred to private object storage." : "Secure PDF upload reached " + Math.floor(uploadedBytes / total * 100) + "%.",
+          details: { uploadedBytes, expectedBytes: total, percent: Math.floor(uploadedBytes / total * 100) },
+        }).catch(() => undefined);
+      }
+    }
     return json({ ok: true, uploadedBytes, status });
   } catch (error) {
     return json({ ok: false, error: safeError(error) }, 502);
@@ -465,6 +498,12 @@ export async function completeFatmanUpload(env: Env, importId: string): Promise<
     }
     try {
       await workflow.create({ id: workflowId, params: { importId } });
+      if (job.book_id) await recordVrainActivity(env, {
+        importId, bookId: job.book_id, agent: "Workflow orchestrator", phase: "workflow",
+        eventType: "workflow.started", status: "running",
+        message: "The automated OCR, indexing and quality pipeline has started.",
+        details: { workflowId },
+      }).catch(() => undefined);
     } catch (error) {
       try {
         await workflow.get(workflowId);
@@ -508,6 +547,12 @@ export async function resumeFatmanImport(env: Env, importId: string): Promise<Re
 
     try {
       await workflow.create({ id: workflowId, params: { task: "resume_index", importId, runId } });
+      if (job.book_id) await recordVrainActivity(env, {
+        importId, bookId: job.book_id, agent: "Recovery supervisor", phase: "recovery",
+        eventType: "workflow.resumed", status: "running",
+        message: "The saved OCR result is being reused to resume indexing and verification.",
+        details: { workflowId, indexedPages: Number(job.indexed_pages) },
+      }).catch(() => undefined);
     } catch (error) {
       try {
         await workflow.get(workflowId);
@@ -534,14 +579,20 @@ export function gcsBucketName(env: Env): string {
   return bucket(env);
 }
 
-export function fatmanOutputObjectName(importId: string, page: number): string {
-  return "fatman/imports/" + importId + "/ocr/output-" + page + "-to-" + page + ".json";
+export function fatmanImportObjectPrefix(job: Pick<FatmanImportJob, "source_object">): string {
+  const slash = job.source_object.lastIndexOf("/");
+  if (slash < 1) throw new Error("The import source object path is invalid.");
+  return job.source_object.slice(0, slash + 1);
+}
+
+export function fatmanOutputObjectName(importId: string, page: number, prefix = "fatman/imports/" + importId + "/"): string {
+  return prefix + "ocr/output-" + page + "-to-" + page + ".json";
 }
 
 export async function readFatmanVisionOutput(env: Env, importId: string, page: number): Promise<string> {
   const job = await getFatmanImportJob(env, importId);
   if (!job) throw new Error("Fatman import job disappeared.");
-  const objectName = fatmanOutputObjectName(importId, page);
+  const objectName = fatmanOutputObjectName(importId, page, fatmanImportObjectPrefix(job));
   const token = await getGoogleAccessToken(env);
   const response = await fetch(GCS_API + "/storage/v1/b/" + encodeURIComponent(bucket(env)) + "/o/" + encodeURIComponent(objectName) + "?alt=media", {
     headers: { authorization: "Bearer " + token },
@@ -566,7 +617,7 @@ export async function submitFatmanVision(env: Env, importId: string): Promise<st
     requests: [{
       inputConfig: { gcsSource: { uri: "gs://" + bucket(env) + "/" + job.source_object }, mimeType: "application/pdf" },
       features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
-      outputConfig: { gcsDestination: { uri: "gs://" + bucket(env) + "/fatman/imports/" + importId + "/ocr/" }, batchSize: 1 },
+      outputConfig: { gcsDestination: { uri: "gs://" + bucket(env) + "/" + fatmanImportObjectPrefix(job) + "ocr/" }, batchSize: 1 },
     }],
   };
   const token = await getGoogleAccessToken(env);
@@ -579,6 +630,12 @@ export async function submitFatmanVision(env: Env, importId: string): Promise<st
   const data = await response.json() as { name?: string };
   if (!data.name) throw new Error("Google Vision did not return an OCR operation ID.");
   await setFatmanImportStatus(env, importId, "processing", { visionOperation: data.name, errorMessage: null });
+  if (job.book_id) await recordVrainActivity(env, {
+    importId, bookId: job.book_id, agent: "Vision OCR specialist", phase: "ocr",
+    eventType: "ocr.submitted", status: "running",
+    message: "Google Cloud Vision accepted the asynchronous PDF text-detection job.",
+    details: { operation: data.name, pageCount: fatmanExpectedPageCount(job) },
+  }).catch(() => undefined);
   return data.name;
 }
 
@@ -596,7 +653,9 @@ export async function getFatmanVisionOperation(env: Env, operationName: string):
 export async function cleanupFatmanGcsObjects(env: Env, importId: string): Promise<string[]> {
   const bucketName = bucket(env);
   const token = await getGoogleAccessToken(env);
-  const prefix = "fatman/imports/" + importId + "/";
+  const job = await getFatmanImportJob(env, importId);
+  if (!job) throw new Error("Fatman import job not found during cleanup.");
+  const prefix = fatmanImportObjectPrefix(job);
   let pageToken = "";
   const objectNames: string[] = [];
   do {
@@ -623,6 +682,14 @@ export async function updateFatmanImportProgress(env: Env, indexedPages: number,
     if (job?.book_id) {
       await env.DB.prepare("UPDATE fatman_books SET indexed_pages = ?, status = 'processing', updated_at = ? WHERE id = ?")
         .bind(indexedPages, Date.now(), job.book_id).run();
+      await env.DB.prepare("UPDATE vrain_books SET indexed_pages = ?, status = 'processing', updated_at = ? WHERE id = ?")
+        .bind(indexedPages, Date.now(), job.book_id).run();
+      await recordVrainActivity(env, {
+        importId, bookId: job.book_id, agent: "Page indexing specialist", phase: "indexing",
+        eventType: "index.progress", status: "running",
+        message: "Page indexing progress: " + indexedPages + " of " + fatmanExpectedPageCount(job) + " pages.",
+        details: { indexedPages, pageCount: fatmanExpectedPageCount(job), percent: Math.floor(indexedPages / fatmanExpectedPageCount(job) * 100) },
+      }).catch(() => undefined);
       return;
     }
   } else {
@@ -645,6 +712,14 @@ export async function markFatmanImportFailed(env: Env, importId: string, error: 
     .bind(message, Date.now(), importId).run();
   await env.DB.prepare("UPDATE fatman_books SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?")
     .bind(message, Date.now(), importId).run();
+  await env.DB.prepare("UPDATE vrain_books SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?")
+    .bind(message, Date.now(), importId).run();
+  const job = await getFatmanImportJob(env, importId).catch(() => null);
+  if (job?.book_id) await recordVrainActivity(env, {
+    importId, bookId: job.book_id, agent: "Recovery supervisor", phase: "processing",
+    eventType: "workflow.failed", status: "failed",
+    message: "Processing stopped: " + message,
+  }).catch(() => undefined);
 }
 
 export async function markFatmanImportCompleted(env: Env, importId: string): Promise<void> {
@@ -657,6 +732,14 @@ export async function markFatmanImportCompleted(env: Env, importId: string): Pro
   if (job?.book_id) {
     await env.DB.prepare("UPDATE fatman_books SET status = 'ready', indexed_pages = ?, error_message = NULL, updated_at = ? WHERE id = ?")
       .bind(pageCount, Date.now(), job.book_id).run();
+    await env.DB.prepare("UPDATE vrain_books SET status = 'ready', indexed_pages = ?, error_message = NULL, updated_at = ? WHERE id = ?")
+      .bind(pageCount, Date.now(), job.book_id).run();
+    await recordVrainActivity(env, {
+      importId, bookId: job.book_id, agent: "Retrieval QA verifier", phase: "verification",
+      eventType: "book.ready", status: "completed",
+      message: "The book passed page-grounded retrieval verification and is ready for project assignment.",
+      details: { indexedPages: pageCount },
+    }).catch(() => undefined);
     return;
   }
   await getFatmanBookState(env);

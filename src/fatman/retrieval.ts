@@ -12,6 +12,13 @@ const MAX_PASSAGE_CHARS = 4_500;
 const FATMAN_EXCERPT_WINDOW_CHARS = 1_100;
 const FATMAN_EXCERPT_WINDOW_STEP = 550;
 
+const FATMAN_VRAIN_READY_SOURCES_SQL =
+  "SELECT DISTINCT b.id,b.title FROM vrain_books b " +
+  "JOIN vrain_projects p ON p.slug='fatman' AND p.status='active' " +
+  "LEFT JOIN vrain_project_books pb ON pb.project_id=p.id AND pb.book_id=b.id " +
+  "LEFT JOIN vrain_project_collections pc ON pc.project_id=p.id AND pc.collection_id=b.collection_id " +
+  "WHERE b.status='ready' AND b.indexed_pages=b.page_count AND (pb.book_id IS NOT NULL OR pc.collection_id IS NOT NULL)";
+
 const FATMAN_QUERY_STOP_WORDS = new Set([
   "a", "about", "after", "all", "also", "an", "and", "are", "as", "at", "be", "because",
   "been", "being", "between", "both", "but", "by", "can", "could", "did", "do", "does",
@@ -84,11 +91,11 @@ export async function isFatmanReady(env: Env): Promise<boolean> {
     const legacyReady = state.enabled &&
       state.documentVersion === env.FATMAN_DOCUMENT_VERSION?.trim() &&
       state.indexedPages === Number(env.FATMAN_EXPECTED_PAGES);
-    if (legacyReady) return true;
-    const additionalBook = await env.DB!.prepare(
-      "SELECT id FROM fatman_books WHERE status = 'ready' AND indexed_pages = page_count LIMIT 1"
-    ).first<{ id: string }>();
-    return Boolean(additionalBook?.id);
+    const authorized = await env.DB!.prepare(FATMAN_VRAIN_READY_SOURCES_SQL)
+      .all<{ id: string; title: string }>();
+    const sourceIds = new Set((authorized.results ?? []).map((book) => book.id));
+    return (legacyReady && sourceIds.has("fatman-legacy-538")) ||
+      [...sourceIds].some((id) => id !== "fatman-legacy-538");
   } catch {
     return false;
   }
@@ -229,10 +236,10 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
   const legacyReady = state.enabled &&
     state.documentVersion === env.FATMAN_DOCUMENT_VERSION?.trim() &&
     state.indexedPages === Number(env.FATMAN_EXPECTED_PAGES);
-  const readyBookRows = await env.DB!.prepare(
-    "SELECT id, title FROM fatman_books WHERE status = 'ready' AND indexed_pages = page_count"
-  ).all<{ id: string; title: string }>();
+  const readyBookRows = await env.DB!.prepare(FATMAN_VRAIN_READY_SOURCES_SQL)
+    .all<{ id: string; title: string }>();
   const readyBookTitles = new Map((readyBookRows.results ?? []).map((book) => [book.id, book.title]));
+  const fatmanLegacyAssigned = readyBookTitles.has("fatman-legacy-538");
 
   for (const chunk of chunks) {
     const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
@@ -253,7 +260,7 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
     if (seenIds.has(id)) continue;
     const metadata = chunk.item?.metadata;
     const bookId = parsedKey?.bookId;
-    if (bookId ? !readyBookTitles.has(bookId) : !legacyReady) continue;
+    if (bookId ? !readyBookTitles.has(bookId) : (!legacyReady || !fatmanLegacyAssigned)) continue;
     const sourceKey = bookId ?? "fatman-legacy";
     const pageKey = sourceKey + ":" + pdfPage;
     if (!allowedPages.has(pageKey) && allowedPages.size >= MAX_PAGES) continue;

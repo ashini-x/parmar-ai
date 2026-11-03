@@ -44,6 +44,7 @@ describe("Fatman page retrieval", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     readyBookRows.splice(0, readyBookRows.length);
+    readyBookRows.push({ id: "fatman-legacy-538", title: "Fatman 2nd Edition" });
     analytics.getFatmanBookState.mockResolvedValue({
       enabled: true,
       documentVersion: "fatman-test-v1",
@@ -125,7 +126,7 @@ describe("Fatman page retrieval", () => {
         text: "Fundamental rights are guaranteed by Part III of the Indian Constitution.",
         score: 0.91,
         item: {
-          key: "fatman/books/" + bookId + "/pages/page-000007.txt",
+          key: "vrain/books/" + bookId + "/pages/page-000007.txt",
           metadata: { bookId, bookTitle: "Polity Reference" },
         },
       }],
