@@ -31,6 +31,8 @@ export interface FatmanPassage {
 export interface FatmanBookContext {
   passages: FatmanPassage[];
   pageImages: GeminiImageInput[];
+  /** Number of hybrid AI Search requests used to assemble this context. */
+  searchCount?: number;
   /** Optional retry guidance used only by the internal QA answer-repair pass. */
   qaRepairHint?: string;
 }
@@ -182,7 +184,7 @@ async function searchFatmanQueries(
     const failure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
     if (failure) throw failure.reason;
   }
-  return mergeFatmanContexts(contexts);
+  return { ...mergeFatmanContexts(contexts), searchCount: results.length };
 }
 
 async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults: number): Promise<FatmanBookContext> {
@@ -331,7 +333,8 @@ export function mergeFatmanContexts(contexts: FatmanBookContext[]): FatmanBookCo
     if (passages.length >= MAX_PASSAGES) break;
   }
 
-  return { passages, pageImages: [] };
+  const searchCount = contexts.reduce((total, context) => total + (context.searchCount ?? 0), 0);
+  return { passages, pageImages: [], ...(searchCount ? { searchCount } : {}) };
 }
 
 export function formatFatmanCitations(
