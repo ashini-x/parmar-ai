@@ -213,7 +213,7 @@ interface BrvinDeletionCandidate {
   vision_output_deletion_started_at: number | null;
 }
 
-const DELETABLE_BOOK_STATUSES = ["ready", "failed", "completed", "delete_failed"];
+const DELETABLE_BOOK_STATUSES = ["ready", "failed", "completed", "delete_failed", "archived"];
 const DELETABLE_IMPORT_STATUSES = ["completed", "failed", "delete_failed"];
 
 async function findBrvinDeletionCandidate(env: Env, bookId: string): Promise<BrvinDeletionCandidate | null> {
@@ -374,6 +374,76 @@ export async function deleteBrvinVisionOutput(env: Env, request: Request): Promi
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
+/**
+ * Archive/restore imported PDFs without deleting the source, OCR output, index, or project grants.
+ * Project retrieval only exposes status='ready', so this status change is the access gate.
+ */
+export async function archiveBrvinBook(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { bookId?: unknown; action?: unknown };
+  try { body = await request.json() as typeof body; }
+  catch { return json({ ok: false, error: "Invalid archive request." }, 400); }
+  const bookId = typeof body.bookId === "string" ? body.bookId.trim() : "";
+  const action = body.action === "archive" || body.action === "restore" ? body.action : null;
+  if (!/^[a-f0-9-]{36}$/iu.test(bookId)) return json({ ok: false, error: "Choose a valid imported book." }, 400);
+  if (!action) return json({ ok: false, error: "Choose archive or restore." }, 400);
+  try {
+    await ensureAnalyticsSchema(env);
+    const candidate = await env.DB.prepare(
+      "SELECT b.id,b.title,b.status,b.source_type,b.indexed_pages,b.page_count,b.vision_output_deletion_started_at," +
+      "j.status AS import_status,j.uploaded_bytes,j.expected_size,f.status AS fatman_status " +
+      "FROM brvin_books b JOIN fatman_import_jobs j ON j.id=b.id AND j.book_id=b.id " +
+      "JOIN fatman_books f ON f.id=b.id WHERE b.id=? LIMIT 1"
+    ).bind(bookId).first<{
+      id: string; title: string; status: string; source_type: string;
+      indexed_pages: number; page_count: number; vision_output_deletion_started_at: number | null;
+      import_status: string; uploaded_bytes: number; expected_size: number; fatman_status: string;
+    }>();
+    if (!candidate) return json({ ok: false, error: "This imported book or its paired import records could not be found." }, 404);
+    if (candidate.source_type !== "pdf") return json({ ok: false, error: "Built-in and legacy knowledge sources cannot be archived or restored here." }, 409);
+    const expectedStatus = action === "archive" ? "ready" : "archived";
+    const nextStatus = action === "archive" ? "archived" : "ready";
+    if (candidate.status !== expectedStatus || candidate.fatman_status !== expectedStatus) {
+      return json({ ok: false, error: action === "archive" ? "Only a fully ready book can be archived." : "Only an archived book can be restored." }, 409);
+    }
+    if (candidate.import_status !== "completed" || Number(candidate.expected_size) <= 0 ||
+        Number(candidate.uploaded_bytes) !== Number(candidate.expected_size) ||
+        Number(candidate.indexed_pages) !== Number(candidate.page_count) || Number(candidate.page_count) <= 0) {
+      return json({ ok: false, error: "The complete PDF and verified page index are required before changing archive state." }, 409);
+    }
+    if (candidate.vision_output_deletion_started_at !== null && candidate.vision_output_deletion_started_at !== undefined) {
+      return json({ ok: false, error: "Wait for OCR file cleanup to finish before changing archive state." }, 409);
+    }
+    const now = Date.now();
+    const updates = await env.DB.batch([
+      env.DB.prepare("UPDATE brvin_books SET status=?,updated_at=? WHERE id=? AND source_type='pdf' AND status=? AND vision_output_deletion_started_at IS NULL").bind(nextStatus, now, bookId, expectedStatus),
+      env.DB.prepare("UPDATE fatman_books SET status=?,updated_at=? WHERE id=? AND status=?").bind(nextStatus, now, bookId, expectedStatus),
+    ]);
+    const bookChanges = Number(updates[0]?.meta?.changes ?? 0);
+    const fatmanChanges = Number(updates[1]?.meta?.changes ?? 0);
+    if (bookChanges !== 1 || fatmanChanges !== 1) {
+      const rollback = [];
+      if (bookChanges === 1) rollback.push(
+        env.DB.prepare("UPDATE brvin_books SET status=?,updated_at=? WHERE id=? AND status=?").bind(expectedStatus, Date.now(), bookId, nextStatus),
+      );
+      if (fatmanChanges === 1) rollback.push(
+        env.DB.prepare("UPDATE fatman_books SET status=?,updated_at=? WHERE id=? AND status=?").bind(expectedStatus, Date.now(), bookId, nextStatus),
+      );
+      if (rollback.length) await env.DB.batch(rollback).catch(() => undefined);
+      return json({ ok: false, error: "The book changed state during this request. Refresh the library and try again." }, 409);
+    }
+    await recordBrvinActivity(env, {
+      importId: bookId, bookId, agent: "BRVIN archive control", phase: "governance",
+      eventType: action === "archive" ? "book.archived" : "book.restored", status: "completed",
+      message: action === "archive"
+        ? "The book was archived. Its source PDF, Vision OCR output, indexed pages and project grants were retained; retrieval is disabled until restoration."
+        : "The archived book was restored. Its retained indexed pages and existing project grants are available to assigned projects again.",
+      details: { action, title: candidate.title, sourceRetained: true, ocrOutputRetained: true, indexedPagesRetained: true, projectGrantsRetained: true, retrievalAvailable: action === "restore" },
+    });
+    return json({ ok: true, bookId, title: candidate.title, status: nextStatus, retrievalAvailable: action === "restore",
+      retained: ["source_pdf", "vision_ocr_output", "ai_search_pages", "project_grants"] });
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 502); }
+}
 export async function clearBrvinKnowledgeSources(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
   let body: { confirmation?: unknown; expectedCount?: unknown };
@@ -641,7 +711,7 @@ const HTML = `<!doctype html>
 <title>BRVIN · Knowledge Intelligence</title>
 <style>
 :root{color-scheme:light;--bg:#f5f6f8;--panel:#fff;--ink:#151922;--muted:#707987;--line:#e5e8ed;--accent:#202a3a;--blue:#3769d6;--green:#16845b;--amber:#a86a09;--red:#b83a3a;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-size:14px}button,input,select,textarea{font:inherit}.shell{max-width:1480px;margin:auto;padding:26px 22px 58px}.top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap;margin-bottom:22px}.eyebrow{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);font-weight:800}.brand{font-size:32px;font-weight:730;letter-spacing:-.055em;margin:4px 0}.subtitle{color:var(--muted);margin:0;line-height:1.5}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);padding:9px 12px;cursor:pointer;font-size:12px;font-weight:700}.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}.btn:disabled{opacity:.45;cursor:wait}.live{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);font-weight:700}.live i{width:7px;height:7px;background:#18a36b;border-radius:50%;box-shadow:0 0 0 4px #18a36b1b}.metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:20px 0}.metric,.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;box-shadow:0 4px 22px #121c2b05}.metric{padding:15px}.metric span{display:block;color:var(--muted);font-size:11px}.metric strong{display:block;font-size:25px;letter-spacing:-.04em;margin-top:7px}.metric small{color:var(--muted);font-size:10px}.layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(360px,.85fr);gap:14px}.panel{padding:17px;margin-bottom:14px;min-width:0}.panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.panel h2{font-size:14px;margin:0;letter-spacing:-.01em}.muted{color:var(--muted)}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{display:flex;flex-direction:column;gap:6px;margin:10px 0}.field label{font-size:11px;font-weight:750;color:#4c5664}.field input,.field select,.field textarea{width:100%;border:1px solid #dfe3e9;background:#fff;border-radius:9px;padding:10px 11px;outline:none}.field input:focus,.field select:focus,.field textarea:focus{border-color:#8ea8e9;box-shadow:0 0 0 3px #3769d617}.drop{display:flex;align-items:center;justify-content:center;min-height:112px;border:1px dashed #bfc8d5;border-radius:12px;background:#fafbfd;text-align:center;padding:16px;cursor:pointer}.drop strong{display:block}.drop small{color:var(--muted)}.drop input{position:absolute;width:1px;height:1px;opacity:0}.checks{display:flex;gap:8px;flex-wrap:wrap;max-height:90px;overflow:auto;border:1px solid var(--line);padding:9px;border-radius:9px}.check{display:inline-flex;gap:6px;align-items:center;font-size:11px;color:#44505e}.file{font-size:11px;color:var(--muted);margin-top:6px;overflow-wrap:anywhere}.progress{height:7px;width:100%;margin-top:12px}.statusline{font-size:12px;color:var(--muted);min-height:20px;margin:8px 0}.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:11px}.step{border:1px solid var(--line);border-radius:9px;background:#fafbfd;padding:9px 7px;min-width:0}.step b{display:block;font-size:10px}.step small{display:block;font-size:9px;color:var(--muted);margin-top:4px}.step.active{background:#f2f6ff;border-color:#c6d5f8}.step.done{background:#f1faf5;border-color:#c4e6d2}.step.failed{background:#fff4f4;border-color:#f0caca}.tablewrap{overflow:auto}.table{width:100%;border-collapse:collapse;font-size:11px}.table th,.table td{padding:10px 8px;border-bottom:1px solid #edf0f3;text-align:left;vertical-align:top}.table th{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap}.pill{display:inline-block;padding:4px 7px;border-radius:99px;background:#eef1f5;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.pill.ready,.pill.completed{background:#e8f7ef;color:#17794f}.pill.failed,.pill.delete_failed{background:#fff0f0;color:#a63232}.pill.deleting{background:#fff6e9;color:#92600b}.btn.danger{border-color:#e8c9c9;color:#a63232;background:#fff8f8}.pill.processing,.pill.uploading,.pill.uploaded,.pill.running{background:#eef4ff;color:#315da9}.pill.warning,.pill.needs_review{background:#fff6e9;color:#92600b}.collection-grid,.project-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.tile{border:1px solid var(--line);border-radius:11px;padding:12px;min-width:0}.tile strong{font-size:12px}.tile p{font-size:10px;color:var(--muted);line-height:1.5;margin:5px 0}.tile small{font-size:10px;color:var(--muted)}.timeline{display:flex;flex-direction:column;gap:0}.event{display:grid;grid-template-columns:10px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #edf0f3}.event:last-child{border-bottom:0}.rail{width:7px;height:7px;border-radius:50%;background:#8da5d2;margin-top:4px}.event.failed .rail{background:var(--red)}.event.completed .rail{background:var(--green)}.event strong{font-size:11px}.event p{margin:3px 0;color:#566171;font-size:11px;line-height:1.45}.event small{font-size:9px;color:var(--muted)}.empty{text-align:center;padding:22px;color:var(--muted);font-size:11px}.bar{height:5px;background:#edf0f4;border-radius:99px;overflow:hidden;margin-top:5px}.bar i{display:block;height:100%;background:var(--blue)}.notice{background:#f6f8fb;border:1px solid var(--line);padding:10px;border-radius:10px;color:#647083;font-size:10px;line-height:1.5;margin-top:10px}.error{color:var(--red)}.modal{display:none;position:fixed;inset:0;background:#0e172b60;z-index:20;padding:20px;overflow:auto}.modal.open{display:block}.modalbox{max-width:720px;margin:5vh auto;background:#fff;border-radius:16px;padding:18px;max-height:85vh;overflow:auto}.modalhead{display:flex;justify-content:space-between;align-items:center}.hide{display:none!important}@media(max-width:1050px){.metrics{grid-template-columns:repeat(3,1fr)}.layout{grid-template-columns:1fr}}@media(max-width:620px){.shell{padding:17px 12px 40px}.brand{font-size:27px}.metrics{grid-template-columns:repeat(2,1fr)}.formgrid,.collection-grid,.project-grid{grid-template-columns:1fr}.steps{grid-template-columns:repeat(2,1fr)}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-size:14px}button,input,select,textarea{font:inherit}.shell{max-width:1480px;margin:auto;padding:26px 22px 58px}.top{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap;margin-bottom:22px}.eyebrow{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);font-weight:800}.brand{font-size:32px;font-weight:730;letter-spacing:-.055em;margin:4px 0}.subtitle{color:var(--muted);margin:0;line-height:1.5}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);padding:9px 12px;cursor:pointer;font-size:12px;font-weight:700}.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}.btn:disabled{opacity:.45;cursor:wait}.live{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);font-weight:700}.live i{width:7px;height:7px;background:#18a36b;border-radius:50%;box-shadow:0 0 0 4px #18a36b1b}.metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:20px 0}.metric,.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;box-shadow:0 4px 22px #121c2b05}.metric{padding:15px}.metric span{display:block;color:var(--muted);font-size:11px}.metric strong{display:block;font-size:25px;letter-spacing:-.04em;margin-top:7px}.metric small{color:var(--muted);font-size:10px}.layout{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(360px,.85fr);gap:14px}.panel{padding:17px;margin-bottom:14px;min-width:0}.panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.panel h2{font-size:14px;margin:0;letter-spacing:-.01em}.muted{color:var(--muted)}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{display:flex;flex-direction:column;gap:6px;margin:10px 0}.field label{font-size:11px;font-weight:750;color:#4c5664}.field input,.field select,.field textarea{width:100%;border:1px solid #dfe3e9;background:#fff;border-radius:9px;padding:10px 11px;outline:none}.field input:focus,.field select:focus,.field textarea:focus{border-color:#8ea8e9;box-shadow:0 0 0 3px #3769d617}.drop{display:flex;align-items:center;justify-content:center;min-height:112px;border:1px dashed #bfc8d5;border-radius:12px;background:#fafbfd;text-align:center;padding:16px;cursor:pointer}.drop strong{display:block}.drop small{color:var(--muted)}.drop input{position:absolute;width:1px;height:1px;opacity:0}.checks{display:flex;gap:8px;flex-wrap:wrap;max-height:90px;overflow:auto;border:1px solid var(--line);padding:9px;border-radius:9px}.check{display:inline-flex;gap:6px;align-items:center;font-size:11px;color:#44505e}.file{font-size:11px;color:var(--muted);margin-top:6px;overflow-wrap:anywhere}.progress{height:7px;width:100%;margin-top:12px}.statusline{font-size:12px;color:var(--muted);min-height:20px;margin:8px 0}.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:11px}.step{border:1px solid var(--line);border-radius:9px;background:#fafbfd;padding:9px 7px;min-width:0}.step b{display:block;font-size:10px}.step small{display:block;font-size:9px;color:var(--muted);margin-top:4px}.step.active{background:#f2f6ff;border-color:#c6d5f8}.step.done{background:#f1faf5;border-color:#c4e6d2}.step.failed{background:#fff4f4;border-color:#f0caca}.tablewrap{overflow:auto}.table{width:100%;border-collapse:collapse;font-size:11px}.table th,.table td{padding:10px 8px;border-bottom:1px solid #edf0f3;text-align:left;vertical-align:top}.table th{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap}.pill{display:inline-block;padding:4px 7px;border-radius:99px;background:#eef1f5;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.pill.ready,.pill.completed{background:#e8f7ef;color:#17794f}.pill.failed,.pill.delete_failed{background:#fff0f0;color:#a63232}.pill.archived{background:#eef2f7;color:#566273}.pill.deleting{background:#fff6e9;color:#92600b}.btn.danger{border-color:#e8c9c9;color:#a63232;background:#fff8f8}.pill.processing,.pill.uploading,.pill.uploaded,.pill.running{background:#eef4ff;color:#315da9}.pill.warning,.pill.needs_review{background:#fff6e9;color:#92600b}.collection-grid,.project-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.tile{border:1px solid var(--line);border-radius:11px;padding:12px;min-width:0}.tile strong{font-size:12px}.tile p{font-size:10px;color:var(--muted);line-height:1.5;margin:5px 0}.tile small{font-size:10px;color:var(--muted)}.timeline{display:flex;flex-direction:column;gap:0}.event{display:grid;grid-template-columns:10px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid #edf0f3}.event:last-child{border-bottom:0}.rail{width:7px;height:7px;border-radius:50%;background:#8da5d2;margin-top:4px}.event.failed .rail{background:var(--red)}.event.completed .rail{background:var(--green)}.event strong{font-size:11px}.event p{margin:3px 0;color:#566171;font-size:11px;line-height:1.45}.event small{font-size:9px;color:var(--muted)}.empty{text-align:center;padding:22px;color:var(--muted);font-size:11px}.bar{height:5px;background:#edf0f4;border-radius:99px;overflow:hidden;margin-top:5px}.bar i{display:block;height:100%;background:var(--blue)}.notice{background:#f6f8fb;border:1px solid var(--line);padding:10px;border-radius:10px;color:#647083;font-size:10px;line-height:1.5;margin-top:10px}.error{color:var(--red)}.modal{display:none;position:fixed;inset:0;background:#0e172b60;z-index:20;padding:20px;overflow:auto}.modal.open{display:block}.modalbox{max-width:720px;margin:5vh auto;background:#fff;border-radius:16px;padding:18px;max-height:85vh;overflow:auto}.modalhead{display:flex;justify-content:space-between;align-items:center}.hide{display:none!important}@media(max-width:1050px){.metrics{grid-template-columns:repeat(3,1fr)}.layout{grid-template-columns:1fr}}@media(max-width:620px){.shell{padding:17px 12px 40px}.brand{font-size:27px}.metrics{grid-template-columns:repeat(2,1fr)}.formgrid,.collection-grid,.project-grid{grid-template-columns:1fr}.steps{grid-template-columns:repeat(2,1fr)}}
 </style></head><body><main class="shell">
 <header class="top"><div><div class="eyebrow">Parmar AI · Knowledge Infrastructure</div><h1 class="brand">BRVIN</h1><p class="subtitle">The central knowledge brain. One governed repository, selectively connected to each project.</p></div><div class="actions"><span class="live"><i></i><span id="live-label">LIVE · connecting</span></span><button class="btn" id="refresh">Refresh</button><a class="btn" href="/admin">Admin home</a><button class="btn" id="logout">Sign out</button></div></header>
 <div class="metrics" id="metrics"><div class="metric"><span>Knowledge sources</span><strong>—</strong><small>Across all collections</small></div><div class="metric"><span>Collections</span><strong>—</strong><small>Governed groups</small></div><div class="metric"><span>Projects</span><strong>—</strong><small>Independent consumers</small></div><div class="metric"><span>Indexed pages</span><strong>—</strong><small>Verified / total</small></div><div class="metric"><span>Active pipelines</span><strong>—</strong><small>Running now</small></div><div class="metric"><span>Needs attention</span><strong>—</strong><small>Failed or blocked</small></div></div>
@@ -711,12 +781,13 @@ function renderBooks(list,projects){$("book-count").textContent=list.length+" so
  const action=b.status==="uploading"||b.status==="uploaded"||b.status==="processing"||b.status==="failed"||b.status==="delete_failed"
   ?'<button class="btn" data-view="'+esc(b.id)+'">Operations</button> ':"";
  const manage=b.status==="deleting"?'':'<button class="btn" data-access="'+esc(b.id)+'">Direct access</button>';
+ const archiveAction=b.sourceType==="pdf"&&b.status==="ready"?'<button class="btn" data-book-archive="'+esc(b.id)+'">Archive</button> ':b.sourceType==="pdf"&&b.status==="archived"?'<button class="btn" data-book-restore="'+esc(b.id)+'">Restore</button> ':'';
  let deletion="";
  if(b.sourceType==="pdf"&&b.status==="ready"&&b.visionOcrDeleting){
   deletion='<span class="muted">OCR cleanup running…</span>';
  }else if(b.sourceType==="pdf"&&b.status==="ready"){
   deletion=(b.visionOcrDeleted?'<span class="muted">OCR files removed</span> ':'<button class="btn" data-delete-ocr="'+esc(b.id)+'">Delete OCR files</button> ')+'<button class="btn danger" data-delete-book="'+esc(b.id)+'">Delete book</button>';
- }else if(b.sourceType==="pdf"&&(b.status==="failed"||b.status==="delete_failed"||b.status==="completed")){
+ }else if(b.sourceType==="pdf"&&(b.status==="failed"||b.status==="delete_failed"||b.status==="completed"||b.status==="archived")){
   deletion='<button class="btn danger" data-delete-book="'+esc(b.id)+'">'+(b.status==="delete_failed"?"Retry deletion":"Delete book")+'</button>';
  }else if(b.status==="deleting"){
   deletion='<span class="muted">Deletion running…</span>';
@@ -725,11 +796,13 @@ function renderBooks(list,projects){$("book-count").textContent=list.length+" so
  }else{
   deletion='<span class="muted">Available after processing</span>';
  }
- return '<tr><td><strong>'+esc(b.title)+'</strong><div class="muted">'+esc(b.filename)+'</div><div class="bar"><i style="width:'+progress+'%"></i></div></td><td>'+esc(b.collectionName)+'</td><td>'+b.indexedPages+'/'+b.pageCount+'</td><td>'+statusPill(b.status)+(b.error?'<div class="error">'+esc(b.error)+'</div>':"")+'</td><td>'+esc(access)+'</td><td>'+action+manage+'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">'+deletion+'</div></td></tr>';
+ return '<tr><td><strong>'+esc(b.title)+'</strong><div class="muted">'+esc(b.filename)+'</div><div class="bar"><i style="width:'+progress+'%"></i></div></td><td>'+esc(b.collectionName)+'</td><td>'+b.indexedPages+'/'+b.pageCount+'</td><td>'+statusPill(b.status)+(b.error?'<div class="error">'+esc(b.error)+'</div>':"")+'</td><td>'+esc(access)+'</td><td>'+action+manage+archiveAction+'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">'+deletion+'</div></td></tr>';
  }).join(""):'<tr><td class="empty" colspan="6">No knowledge sources yet. Add the first PDF above.</td></tr>';
  $("books").querySelectorAll("[data-view]").forEach(button=>button.addEventListener("click",()=>showImport(button.dataset.view)));
  $("books").querySelectorAll("[data-access]").forEach(button=>button.addEventListener("click",()=>editBookAccess(button.dataset.access)));
  $("books").querySelectorAll("[data-delete-book]").forEach(button=>button.addEventListener("click",()=>deleteBook(button.dataset.deleteBook,button)));
+ $("books").querySelectorAll("[data-book-archive]").forEach(button=>button.addEventListener("click",()=>archiveBook(button.dataset.bookArchive,"archive",button)));
+ $("books").querySelectorAll("[data-book-restore]").forEach(button=>button.addEventListener("click",()=>archiveBook(button.dataset.bookRestore,"restore",button)));
  $("books").querySelectorAll("[data-delete-ocr]").forEach(button=>button.addEventListener("click",()=>deleteVisionOutput(button.dataset.deleteOcr,button)));
 }
 function renderJobs(list){$("jobs").innerHTML=list.length?list.map(j=>{
@@ -844,6 +917,23 @@ async function uploadBook(){
   console.error("BRVIN upload failed during "+phase,e);
   say("The operation paused during "+phase+": "+message+" Select the same PDF again to resume when possible.",true);
  }finally{uploadBusy=false;$("upload").disabled=!selectedFile;}
+}
+async function archiveBook(bookId,action,button){
+ const book=model?.books?.find(item=>item.id===bookId);
+ if(!book)return;
+ const isArchive=action==="archive";
+ const message=isArchive
+  ?"Archive “"+book.title+"”? The PDF, OCR output, indexed pages and project assignments will be retained. Projects will stop retrieving it until you restore it."
+  :"Restore “"+book.title+"”? Existing project assignments will become active for retrieval again."; 
+ if(!confirm(message))return;
+ button.disabled=true;
+ try{
+  await post("books/archive",{bookId,action});
+  alert(isArchive
+   ?"“"+book.title+"” is archived. Its data remains stored and the book can be restored later."
+   :"“"+book.title+"” is restored and available to its previously assigned projects.");
+  await refresh();
+ }catch(error){alert(error.message);button.disabled=false;}
 }
 async function deleteBook(bookId,button){
  const book=model?.books?.find(item=>item.id===bookId);

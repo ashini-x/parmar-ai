@@ -45,3 +45,24 @@ describe("Fatman index rollout contract", () => {
     expect(importHandler).not.toContain('api("finalize"');
   });
 });
+
+describe("BRVIN imported-book archive controls", () => {
+  const brvinAdminSource = readFileSync(new URL("../src/brvin/admin.ts", import.meta.url), "utf8");
+  const retrievalSource = readFileSync(new URL("../src/brvin/retrieval.ts", import.meta.url), "utf8");
+  const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+  it("archives and restores only complete imported PDF books without deleting their contents", () => {
+    expect(brvinAdminSource).toContain("export async function archiveBrvinBook");
+    expect(brvinAdminSource).toContain("candidate.import_status !== \"completed\"");
+    expect(brvinAdminSource).toContain("candidate.indexed_pages");
+    expect(brvinAdminSource).toContain("sourceRetained: true");
+    expect(brvinAdminSource).toContain("data-book-archive");
+    expect(brvinAdminSource).toContain("data-book-restore");
+    expect(retrievalSource).toContain("WHERE b.status='ready'");
+    expect(workerSource).toContain('adminApiPath === "/admin/api/brvin/books/archive"');
+  });
+
+  it("keeps archived PDFs eligible for the existing full-purge workflow", () => {
+    expect(brvinAdminSource).toContain('"delete_failed", "archived"');
+    expect(brvinAdminSource).toContain('b.status==="archived"');
+  });
+});
