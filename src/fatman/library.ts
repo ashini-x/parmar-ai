@@ -6,15 +6,14 @@ export interface FatmanPageIndexJob {
   page_count?: number | null;
 }
 
-/** VRAIN owns all new book page keys; the historical Fatman keyspaces remain readable. */
+/** New books use isolated page-key prefixes inside the shared Fatman Search index. */
 export function fatmanIndexPagePrefix(job: FatmanPageIndexJob): string {
   return job.book_id
-    ? "vrain/books/" + job.book_id + "/pages/"
+    ? "fatman/books/" + job.book_id + "/pages/"
     : "fatman/pages/";
 }
 
 export function fatmanIndexPageKey(job: FatmanPageIndexJob, page: number): string {
-  if (!Number.isSafeInteger(page) || page < 1) throw new Error("PDF page numbers start at one.");
   return fatmanIndexPagePrefix(job) + "page-" + String(page).padStart(6, "0") + ".txt";
 }
 
@@ -30,7 +29,7 @@ export function parseFatmanIndexPageKey(key: string): { page: number; bookId?: s
     const page = Number(legacy[1]);
     return Number.isSafeInteger(page) && page > 0 ? { page } : undefined;
   }
-  const book = /^(?:vrain|fatman)\/books\/([a-f0-9-]{36})\/pages\/page-(\d{1,6})\.txt$/iu.exec(key);
+  const book = /^fatman\/books\/([a-f0-9-]{36})\/pages\/page-(\d{1,6})\.txt$/iu.exec(key);
   if (!book) return undefined;
   const page = Number(book[2]);
   return Number.isSafeInteger(page) && page > 0 ? { page, bookId: book[1] } : undefined;
