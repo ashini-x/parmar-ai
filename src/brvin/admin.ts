@@ -30,10 +30,12 @@ function brvinClientScriptSource(): string {
 }
 
 export function brvinAdminPage(): Response {
-  const html = HTML.replace(
-    /<script type="module">[\\s\\S]*?<\\/script>/u,
-    '<script src="/admin/brvin/app.js" defer></script>',
-  );
+  const start = HTML.indexOf(BRVIN_INLINE_SCRIPT_START);
+  const end = HTML.indexOf(BRVIN_INLINE_SCRIPT_END, start);
+  if (start < 0 || end < 0) throw new Error("BRVIN client script markers are missing.");
+  const html = HTML.slice(0, start) +
+    '<script src="/admin/brvin/app.js" defer></script>' +
+    HTML.slice(end + BRVIN_INLINE_SCRIPT_END.length);
   return new Response(html, {
     headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
   });
@@ -41,15 +43,18 @@ export function brvinAdminPage(): Response {
 
 export function brvinAdminScript(): Response {
   const body = brvinClientScriptSource();
-  // A same-origin classic script is more compatible with mobile browsers and
-  // is not dependent on inline-module execution. Wrap top-level await in an
-  // async boot function and surface fatal startup errors in the live label.
-  const script = "(async function brvinBoot(){\\n" + body +
-    "\\n})().catch(function(error){\\n" +
-    "  var label=document.getElementById('live-label');\\n" +
-    "  if(label) label.textContent='LIVE · startup error';\\n" +
-    "  console.error('BRVIN dashboard startup failed',error);\\n" +
-    "});";
+  // Deliver a same-origin classic script rather than an inline ES module.
+  // This avoids inline-module restrictions in mobile browsers and makes the
+  // dashboard client independently observable in network diagnostics.
+  const script = [
+    "(async function brvinBoot(){",
+    body,
+    "})().catch(function(error){",
+    "  var label=document.getElementById('live-label');",
+    "  if(label) label.textContent='LIVE · startup error';",
+    "  console.error('BRVIN dashboard startup failed',error);",
+    "});",
+  ].join("\n");
   return new Response(script, {
     headers: {
       "content-type": "application/javascript; charset=utf-8",
