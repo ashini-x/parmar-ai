@@ -314,7 +314,17 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
       const searchName = this.env.VRAIN_SEARCH_INSTANCE?.trim() || "vrain-knowledge-v1";
       const search = this.env.VRAIN_SEARCH.get(searchName);
       const INDEX_BATCH_SIZE = 5;
-      for (let startPage = 1; startPage <= document.page_count; startPage += INDEX_BATCH_SIZE) {
+      const indexCheckpoint = await this.env.DB.prepare("SELECT indexed_pages FROM vrain_documents WHERE id=?")
+        .bind(documentId).first<{ indexed_pages: number }>();
+      const indexedThrough = Math.max(0, Number(indexCheckpoint?.indexed_pages ?? 0));
+      const firstUncommittedBatch = Math.floor(indexedThrough / INDEX_BATCH_SIZE) * INDEX_BATCH_SIZE + 1;
+      if (firstUncommittedBatch > 1) {
+        await recordEvent(this.env, documentId, "Recovery specialist", "indexing",
+          "index.checkpoint_resumed", "completed",
+          "VRAIN is resuming indexing from the first uncommitted page batch.",
+          { indexedThrough, resumeAtPage: firstUncommittedBatch });
+      }
+      for (let startPage = firstUncommittedBatch; startPage <= document.page_count; startPage += INDEX_BATCH_SIZE) {
         const endPage = Math.min(document.page_count, startPage + INDEX_BATCH_SIZE - 1);
         await runWithRecovery(this.env, step, documentId, "index_pages_" + startPage + "_" + endPage,
           "Page indexing specialist", async () => {
