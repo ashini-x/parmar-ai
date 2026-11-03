@@ -113,6 +113,8 @@ export interface Env {
   ADMIN_DASHBOARD_USER?: string;
   ADMIN_DASHBOARD_PASSWORD?: string;
   ADMIN_SESSION_SECRET?: string;
+  /** Short-lived, read-only BRVIN storage diagnostic token; unset after diagnosis. */
+  BRVIN_DIAGNOSTIC_TOKEN?: string;
   BOT_OWNER_TELEGRAM_USER_ID?: string;
   ADMIN_TELEGRAM_USER_IDS?: string;
   UNLIMITED_AI_TELEGRAM_USER_IDS?: string;
