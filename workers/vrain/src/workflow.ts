@@ -397,11 +397,14 @@ export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
 
       await step.do("publish verified VRAIN document", async () => {
         const now = Date.now();
+        const published = await this.env.DB.prepare(
+          "UPDATE vrain_documents SET status='ready',error_code=NULL,error_message=NULL,published_at=?,updated_at=? " +
+          "WHERE id=? AND indexed_pages=page_count AND status='processing'",
+        ).bind(now, now, documentId).run();
+        if (Number(published.meta.changes ?? 0) !== 1) {
+          throw new NonRetryableError("The final publication gate refused the source because it is no longer processing or its full page index is incomplete.");
+        }
         await this.env.DB.batch([
-          this.env.DB.prepare(
-            "UPDATE vrain_documents SET status='ready',error_code=NULL,error_message=NULL,published_at=?,updated_at=? " +
-            "WHERE id=? AND indexed_pages=page_count",
-          ).bind(now, now, documentId),
           this.env.DB.prepare(
             "UPDATE vrain_jobs SET state='ready',stage='published',last_heartbeat_at=?,completed_at=?,next_retry_at=NULL " +
             "WHERE document_id=?",
