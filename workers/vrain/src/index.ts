@@ -437,15 +437,17 @@ async function adminCompleteUpload(env: Env, documentId: string): Promise<Respon
   }
   const workflowId = documentId + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 12);
   const now = Date.now();
-  await env.DB.batch([
-    env.DB.prepare("UPDATE vrain_documents SET status='processing',workflow_instance_id=?,error_code=NULL,error_message=NULL,updated_at=? WHERE id=? AND status='uploaded'")
-      .bind(workflowId, now, documentId),
-    env.DB.prepare("UPDATE vrain_jobs SET state='processing',stage='source_verification',workflow_instance_id=?,last_heartbeat_at=?,next_retry_at=NULL WHERE document_id=?")
-      .bind(workflowId, now, documentId),
-  ]);
-  const refreshed = await env.DB.prepare("SELECT status,workflow_instance_id FROM vrain_documents WHERE id=?")
-    .bind(documentId).first<{ status: string; workflow_instance_id: string }>();
-  if (refreshed?.workflow_instance_id !== workflowId) return json({ ok: true, documentId, status: refreshed?.status ?? "unknown" });
+  const claimed = await env.DB.prepare(
+    "UPDATE vrain_documents SET status='processing',workflow_instance_id=?,error_code=NULL,error_message=NULL,updated_at=? WHERE id=? AND status='uploaded'",
+  ).bind(workflowId, now, documentId).run();
+  if (!claimed.meta.changes) {
+    const current = await env.DB.prepare("SELECT status,workflow_instance_id FROM vrain_documents WHERE id=?")
+      .bind(documentId).first<{ status: string; workflow_instance_id: string | null }>();
+    return json({ ok: true, documentId, status: current?.status ?? "unknown", workflowId: current?.workflow_instance_id ?? null });
+  }
+  await env.DB.prepare(
+    "UPDATE vrain_jobs SET state='processing',stage='source_verification',workflow_instance_id=?,last_heartbeat_at=?,next_retry_at=NULL WHERE document_id=?",
+  ).bind(workflowId, now, documentId).run();
   try {
     await env.INGEST_WORKFLOW.create({ id: workflowId, params: { documentId } });
     await recordEvent(env, {
@@ -548,10 +550,6 @@ async function adminResume(env: Env, documentId: string): Promise<Response> {
   return json({ ok: true, documentId, status: "waiting_retry", message: "The automatic recovery worker will resume this document on its next sweep." }, 202);
 }
 
-function tokens(value: string): string[] {
-  return value.toLocaleLowerCase().normalize("NFKC").match(/[\p{L}\p{N}]{2,}/gu) ?? [];
-}
-
 async function consumerSources(env: Env, projectId: string): Promise<Array<{ id: string; title: string; search_prefix: string; page_count: number }>> {
   const result = await env.DB.prepare(
     "SELECT DISTINCT d.id,d.title,d.page_count FROM vrain_documents d " +
@@ -586,7 +584,6 @@ async function consumerRetrieve(request: Request, project: { id: string; name: s
     messages: [{ role: "user", content: query }],
     ai_search_options: { retrieval: { max_num_results: 50, retrieval_type: "hybrid" } },
   });
-  const queryTerms = new Set(tokens(query));
   const scoreFloor = Math.min(1, Math.max(0, Number(env.VRAIN_MIN_RETRIEVAL_SCORE ?? "0.2")));
   const seen = new Set<string>();
   const passages: VrainPassage[] = [];
@@ -601,7 +598,7 @@ async function consumerRetrieve(request: Request, project: { id: string; name: s
     const score = Number(chunk.score ?? chunk.scoring_details?.reranking_score ?? chunk.scoring_details?.vector_score);
     if (Number.isFinite(score) && score < scoreFloor) continue;
     const text = typeof chunk.text === "string" ? chunk.text.replace(/\u0000/gu, "").replace(/\s+/gu, " ").trim().slice(0, 4_500) : "";
-    if (!text || !tokens(text).some((token) => queryTerms.has(token))) continue;
+    if (!text) continue;
     const id = typeof chunk.id === "string" && chunk.id ? chunk.id : key + ":" + text.slice(0, 80);
     if (seen.has(id)) continue;
     seen.add(id);
