@@ -8,7 +8,7 @@
 - The original Telegram `Thinking…` message transitions through truthful task-specific progress states, then becomes the streamed answer without sending duplicate status messages.
 - Fatman questions show retrieval and page-review states before answer chunks; grounded current-fact questions show a source-check state.
 - Image and quiz questions show their respective preparation states; retry attempts replace stale progress with a retry state.
-- Progress edits are serialized/coalesced; a Telegram edit failure does not interrupt generation or suppress the final answer.
+- Long-running phases rotate concise, phase-accurate status variants every 2.5 seconds; answer-stream pauses temporarily show a writing cycle.
 - Every progress label stays on one line: no line breaks and no more than 22 characters.
 - Follow-up continuity works.
 - Simplification works.
