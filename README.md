@@ -51,6 +51,7 @@ The production request path separates admission, durable state, model execution,
 - Gemini / Vertex AI integration with retry classification.
 - Telegram typing/status lifecycle and recovery.
 - Contextual progress states in the same Telegram message, cycling through short phase-accurate variants during slow operations and transitioning into chunked answer streaming without separate status-message spam.
+- Explicit Fatman Mode controls with separate Enter/Exit buttons, webhook callback self-sync from `/help`, and `/fatman on|off|status` text fallbacks.
 - Best-effort personalization and analytics isolation so secondary failures do not unnecessarily block a valid student response.
 - Protected server-side administrative mutations.
 
