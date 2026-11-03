@@ -423,10 +423,6 @@ export function formatFatmanCitations(
   return sources.length ? "Source: " + sources.join("; ") + "." : "";
 }
 
-function pageNumberFromKey(key: string): number | undefined {
-  return parseFatmanIndexPageKey(key)?.page;
-}
-
 /**
  * Selects evidence-bearing windows across a long OCR page. The old first-N
  * character slice hid facts later on the same page, even when hybrid search
