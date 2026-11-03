@@ -20,6 +20,24 @@ function context(pages: number[]): FatmanBookContext {
 }
 
 function answerFor(question: string): string {
+  if (question.includes("What is Article 79")) {
+    return "Article 79 states that the Parliament of India consists of the President and two Houses: the Rajya Sabha and the Lok Sabha.";
+  }
+  if (question.includes("difference between FR and DPSP")) {
+    return "Fundamental Rights in Part III are justiciable and legally enforceable. Directive Principles in Part IV are non-justiciable and guide the State toward social and economic welfare.";
+  }
+  if (question.includes("Subsidiary Alliance")) {
+    return "Lord Wellesley introduced the Subsidiary Alliance in 1798.";
+  }
+  if (question.includes("first Governor-General of Bengal")) {
+    return "Lord Warren Hastings was the first Governor-General of Bengal.";
+  }
+  if (question.includes("land revenue system")) {
+    return "Lord Cornwallis introduced the Permanent Settlement in 1793.";
+  }
+  if (question.includes("Why did the British win")) {
+    return "Mir Jafar, the military commander of Siraj-ud-Daulah, joined hands with the British. East India Company forces led by Robert Clive defeated the Nawab.";
+  }
   if (question.includes("Trace the relationship")) {
     return "The Battle of Plassey took place in 1757, the Battle of Buxar in 1764, and the Treaty of Allahabad in 1765. The treaty granted the East India Company Diwani revenue rights.";
   }
@@ -42,9 +60,13 @@ function goodDependencies(): FatmanReleaseQaDependencies {
   return {
     retrieve: async (query) => {
       if (query.includes("SHA-256")) return context([]);
+      if (query.includes("Article 79")) return context([227]);
+      if (query.includes("Subsidiary Alliance")) return context([169]);
+      if (query.includes("Governor-General of Bengal") || query.includes("Warren Hastings")) return context([197]);
+      if (query.includes("Permanent Settlement") || query.includes("Cornwallis")) return context([174]);
       if (query.includes("President")) return context([227]);
       if (query.includes("Fundamental Rights") && query.includes("Directive Principles")) return context([213, 218]);
-      if (query.includes("Treaty") || query.includes("Buxar")) return context([168]);
+      if (query.includes("Treaty") || query.includes("Buxar") || query.includes("Plassey")) return context([168]);
       if (query.includes("Plassey") || query.includes("Robert Clive")) return context([168]);
       return context([]);
     },
@@ -54,11 +76,11 @@ function goodDependencies(): FatmanReleaseQaDependencies {
 
 describe("Fatman real-user release QA", () => {
   it("contains all six user-facing QA categories", () => {
-    expect(FATMAN_RELEASE_QA_SUITE_VERSION).toBe("fatman-real-user-qa-v1");
+    expect(FATMAN_RELEASE_QA_SUITE_VERSION).toBe("fatman-real-user-qa-v2");
     expect(new Set(FATMAN_RELEASE_QA_CASES.map((item) => item.category))).toEqual(new Set([
       "exact_fact", "concept", "comparison", "page_reference", "out_of_book", "difficult",
     ]));
-    expect(FATMAN_RELEASE_QA_CASES).toHaveLength(6);
+    expect(FATMAN_RELEASE_QA_CASES).toHaveLength(12);
   });
 
   it("passes exact facts, concepts, comparisons, page references, abstention and a multi-step question", async () => {
@@ -102,6 +124,26 @@ describe("Fatman real-user release QA", () => {
     expect(report.status).toBe("failed");
     expect(report.failedCases).toBeGreaterThan(0);
     expect(report.results.every((item) => item.retrievalStatus === "failed")).toBe(true);
+  });
+
+  it("retries one retryable Gemini failure with the bounded repair instruction", async () => {
+    const firstFailure = Object.assign(new Error("Vertex AI response hit the output limit."), {
+      retryable: true,
+      usageRecords: [{ estimatedCostMicrousd: 225 }],
+    });
+    const answer = vi.fn()
+      .mockRejectedValueOnce(firstFailure)
+      .mockResolvedValue({ answer: answerFor("Who led the East India Company forces at the Battle of Plassey, and who was the Nawab of Bengal?") });
+    const deps = goodDependencies();
+    const report = await runFatmanReleaseQa({
+      retrieve: deps.retrieve,
+      answer,
+    }, { runId: "qa-test-retry", documentVersion: "fatman-test-v1" });
+    const exact = report.results.find((item) => item.id === "exact-plassey-fact");
+    expect(exact?.status).toBe("passed");
+    expect(exact?.generationAttempts).toBe(2);
+    expect(exact?.estimatedCostMicrousd).toBe(225);
+    expect(answer.mock.calls[1]?.[2]).toContain("QA REPAIR PASS");
   });
 
   it("does not accept a made-up fingerprint as a valid out-of-book abstention", async () => {
