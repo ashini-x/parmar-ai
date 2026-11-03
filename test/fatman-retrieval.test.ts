@@ -8,6 +8,8 @@ const analytics = vi.hoisted(() => ({
 vi.mock("../src/analytics/db", () => analytics);
 
 import {
+  buildFatmanRetrievalQuery,
+  buildFatmanSearchQueries,
   FatmanRetrievalError,
   formatFatmanCitations,
   isFatmanPassageRelevant,
@@ -73,8 +75,14 @@ describe("Fatman page retrieval", () => {
   it("uses hybrid retrieval, filters weak/non-book hits, and preserves the exact PDF page", async () => {
     const context = await retrieveFatmanContext(env, "  Battle   of Plassey ");
 
-    expect(search).toHaveBeenCalledWith({
+    expect(search).toHaveBeenNthCalledWith(1, {
       messages: [{ role: "user", content: "Battle of Plassey" }],
+      ai_search_options: {
+        retrieval: { max_num_results: 12, retrieval_type: "hybrid" },
+      },
+    });
+    expect(search).toHaveBeenNthCalledWith(2, {
+      messages: [{ role: "user", content: "Battle Plassey" }],
       ai_search_options: {
         retrieval: { max_num_results: 12, retrieval_type: "hybrid" },
       },
@@ -118,18 +126,62 @@ describe("Fatman page retrieval", () => {
 
   it("runs internal QA retrieval without consuming a student's monthly search allowance", async () => {
     const context = await retrieveFatmanQaContext(env, "Battle of Plassey 1757");
-    expect(search).toHaveBeenCalledWith({
+    expect(search).toHaveBeenNthCalledWith(1, {
       messages: [{ role: "user", content: "Battle of Plassey 1757" }],
       ai_search_options: {
         retrieval: { max_num_results: 50, retrieval_type: "hybrid" },
       },
     });
+    expect(search).toHaveBeenCalledTimes(2);
     expect(analytics.reserveFatmanSearchQuery).not.toHaveBeenCalled();
     expect(context.passages).toHaveLength(1);
   });
 
   it("does not invent a citation when no passages were retrieved", () => {
     expect(formatFatmanCitations([])).toBe("");
+  });
+
+  it("expands short Article lookups and common FR/DPSP shorthand", () => {
+    expect(buildFatmanSearchQueries("What is Article 79?")).toEqual([
+      "What is Article 79?",
+      "Article 79 Indian Constitution",
+      "Article 79",
+    ]);
+    expect(buildFatmanSearchQueries("What is the difference between FR and DPSP?")).toEqual([
+      "What is the difference between FR and DPSP?",
+      "Fundamental Rights features",
+      "Directive Principles of State Policy features",
+    ]);
+  });
+
+  it("uses the previous Fatman exchange only for context-dependent follow-ups", () => {
+    const turns = [{
+      question: "Who introduced the Subsidiary Alliance?",
+      answer: "Lord Wellesley introduced it in 1798.",
+    }];
+    expect(buildFatmanRetrievalQuery("Why?", turns)).toContain("Previous student question: Who introduced the Subsidiary Alliance?");
+    expect(buildFatmanRetrievalQuery("Why?", turns)).toContain("Current student follow-up: Why?");
+    expect(buildFatmanRetrievalQuery("What is photosynthesis?", turns)).toBe("What is photosynthesis?");
+  });
+
+  it("ranks citations by question and answer evidence instead of lowest PDF page numbers", () => {
+    const citation = formatFatmanCitations([
+      { id: "irrelevant", pdfPage: 133, text: "Unrelated geography material about rivers and mountains.", score: 0.95 },
+      { id: "plassey", pdfPage: 168, text: "Battle of Plassey in 1757. East India Company forces led by Robert Clive fought Siraj-ud-Daulah.", score: 0.58 },
+      { id: "other", pdfPage: 160, text: "Unrelated rulers and dynasties in medieval India.", score: 0.72 },
+    ], "Battle of Plassey Robert Clive", "At Plassey, Robert Clive led the East India Company forces against Siraj-ud-Daulah.");
+    expect(citation).toContain("PDF p. 168");
+  });
+
+  it("cites both sides of a comparison when the lower-scoring page supports the answer", () => {
+    const citation = formatFatmanCitations([
+      { id: "rights", pdfPage: 213, text: "Fundamental Rights Part III are justiciable and legally enforceable.", score: 0.55 },
+      { id: "dpsp-classification", pdfPage: 219, text: "Directive Principles promote social and economic welfare and a welfare state.", score: 0.54 },
+      { id: "dpsp", pdfPage: 218, text: "Part IV Directive Principles of State Policy are non-justiciable and not legally enforceable.", score: 0.42 },
+    ], "Compare Fundamental Rights Part III with Directive Principles Part IV and their enforceability",
+    "Fundamental Rights in Part III are justiciable and legally enforceable. Directive Principles in Part IV are non-justiciable and guide the State toward social and economic welfare.");
+    expect(citation).toContain("PDF p. 213");
+    expect(citation).toContain("PDF p. 218");
   });
 
   it("fails closed when the D1 book state cannot be read", async () => {
