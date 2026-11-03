@@ -81,7 +81,7 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   const instanceName = env.FATMAN_INSTANCE_NAME?.trim();
   if (!instanceName || !env.FATMAN_SEARCH) throw new Error("Fatman AI Search is not configured.");
   const instance = env.FATMAN_SEARCH.get(instanceName);
-  const key = fatmanIndexPageKey(importJob, page);
+  const key = fatmanIndexPageKey(job, page);
   const found = await instance.items.list({ search: key, per_page: 50, source: "builtin" });
   const exact = (found.result ?? []).filter((item) => item.key === key);
   const keep = exact.find((item) => item.status === "completed") ??
@@ -94,8 +94,8 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   const text = await readFatmanVisionOutput(env, job.id, page);
   const title = job.book_title?.trim() || "Fatman 2nd Edition 2026";
   const content = title + " | PDF page " + page + "\n\n" + text;
-  const indexed = importJob.book_id
-    ? await instance.items.upload(key, content, { metadata: { bookId: importJob.book_id, bookTitle: title, pdfPage: page } })
+  const indexed = job.book_id
+    ? await instance.items.upload(key, content, { metadata: { bookId: job.book_id, bookTitle: title, pdfPage: page } })
     : await instance.items.upload(key, content);
   if (indexed.status === "error" || indexed.status === "skipped" || indexed.status === "outdated") {
     throw new Error(indexed.error ? String(indexed.error) : "AI Search rejected PDF page " + page + " with status " + indexed.status + ".");
@@ -206,7 +206,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           const pageNumber = page;
           try {
             await step.do("index Fatman PDF page " + pageNumber, async () =>
-              indexOcrPage(this.env, job, pageNumber));
+              indexOcrPage(this.env, importJob, pageNumber));
           } catch (error) {
             if (!isTransientFatmanIndexError(error)) throw error;
             await step.do("hand Fatman page " + pageNumber + " to the recovery specialist", async () =>
@@ -259,7 +259,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         }
         for (const page of [...new Set(pages)]) {
           try {
-            await step.do("repair Fatman PDF page " + page, async () => indexOcrPage(this.env, job, page));
+            await step.do("repair Fatman PDF page " + page, async () => indexOcrPage(this.env, importJob, page));
           } catch (error) {
             if (!isTransientFatmanIndexError(error)) throw error;
             await step.do("hand failed repair page " + page + " to the recovery specialist", async () =>
@@ -304,10 +304,10 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             const instance = this.env.FATMAN_SEARCH.get(instanceName);
             const checkedPages: number[] = [];
             const pageResults: Array<{ page: number; successfulProbe: number }> = [];
-            const verificationPages = job.book_id
+            const verificationPages = importJob.book_id
               ? buildFatmanBookVerificationPages(expectedPages)
               : [...FATMAN_VERIFICATION_PAGES];
-            const requiredMatches = job.book_id ? Math.min(3, expectedPages) : verificationPages.length;
+            const requiredMatches = importJob.book_id ? Math.min(3, expectedPages) : verificationPages.length;
             let queryCount = 0;
             for (const page of verificationPages) {
               const text = await readFatmanVisionOutput(this.env, importId, page);
@@ -317,10 +317,10 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
               } catch (error) {
                 // Covers, blank pages and sparse front matter are not useful
                 // retrieval evidence; continue to the next distributed sample.
-                if (job.book_id && error instanceof Error && error.message.includes("fewer than six OCR words")) continue;
+                if (importJob.book_id && error instanceof Error && error.message.includes("fewer than six OCR words")) continue;
                 throw error;
               }
-              const expectedKey = fatmanIndexPageKey(job, page);
+              const expectedKey = fatmanIndexPageKey(importJob, page);
               let matchedProbe = 0;
               for (let index = 0; index < probes.length; index += 1) {
                 queryCount += 1;
@@ -339,9 +339,9 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
               }
               checkedPages.push(page);
               pageResults.push({ page, successfulProbe: matchedProbe });
-              if (job.book_id && checkedPages.length >= requiredMatches) break;
+              if (importJob.book_id && checkedPages.length >= requiredMatches) break;
             }
-            if (job.book_id && checkedPages.length < requiredMatches) {
+            if (importJob.book_id && checkedPages.length < requiredMatches) {
               throw new Error("Fatman retrieval QA could not build enough OCR probes from readable pages.");
             }
             return { checkedPages, pageResults, queryCount };
