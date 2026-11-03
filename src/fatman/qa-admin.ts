@@ -19,7 +19,7 @@ export async function triggerFatmanReleaseQa(env: Env): Promise<Response> {
   try {
     await ensureAnalyticsSchema(env);
     const job = await env.DB.prepare(
-      "SELECT id, status, expected_size, uploaded_bytes, indexed_pages FROM fatman_import_jobs ORDER BY updated_at DESC LIMIT 1"
+      "SELECT id, status, expected_size, uploaded_bytes, indexed_pages FROM fatman_import_jobs WHERE book_id IS NULL ORDER BY updated_at DESC LIMIT 1"
     ).first<{
       id: string;
       status: string;
