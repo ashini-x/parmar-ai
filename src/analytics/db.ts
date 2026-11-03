@@ -627,6 +627,19 @@ async function ensureBrvinCompatibilitySchema(env: Env): Promise<void> {
     ).bind("fatman", "Fatman", "fatman", "SSC learning assistant. Access is limited to explicitly assigned BRVIN knowledge.", now, now),
   ]);
 
+  // Records whether Vision OCR JSON was explicitly removed while the
+  // original PDF and indexed page set remain available.
+  const bookColumns = await db.prepare("PRAGMA table_info(brvin_books)").all<{ name: string }>();
+  if (!(bookColumns.results ?? []).some(column => column.name === "vision_output_deleted_at")) {
+    await db.prepare("ALTER TABLE brvin_books ADD COLUMN vision_output_deleted_at INTEGER").run();
+  }
+  if (!(bookColumns.results ?? []).some(column => column.name === "vision_output_deletion_started_at")) {
+    await db.prepare("ALTER TABLE brvin_books ADD COLUMN vision_output_deletion_started_at INTEGER").run();
+  }
+  await db.prepare(
+    "INSERT OR IGNORE INTO brvin_migrations (migration_key, applied_at) VALUES (?, ?)"
+  ).bind("2026-11-04-brvin-vision-output-deleted-at-v1", Date.now()).run();
+
   const migration = await db.prepare(
     "SELECT migration_key FROM brvin_migrations WHERE migration_key = ?"
   ).bind("2026-11-03-fatman-books-to-brvin-v1").first<{ migration_key: string }>();

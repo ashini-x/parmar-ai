@@ -739,6 +739,184 @@ export async function cleanupFatmanGcsObjects(env: Env, importId: string): Promi
   return objectNames;
 }
 
+export interface FatmanGcsPrefixDeletionResult {
+  prefix: string;
+  objectVersionsFound: number;
+  objectVersionsDeleted: number;
+  versioningEnabled: boolean;
+  softDeleteRetentionSeconds: number;
+  retentionPolicySeconds: number;
+  retentionPolicyLocked: boolean;
+  softDeletedObjects: number;
+  latestHardDeleteTime: string | null;
+}
+
+/**
+ * Delete every generation of a BRVIN import's private GCS objects.
+ * relativePrefix is intentionally constrained to "" (PDF + OCR) or "ocr/" (OCR only).
+ * Google Cloud Storage soft-delete policies may retain deleted generations until
+ * hardDeleteTime; the result reports that retention rather than claiming immediate erasure.
+ */
+export async function deleteFatmanGcsObjectPrefix(
+  env: Env,
+  importId: string,
+  relativePrefix: "" | "ocr/" = "",
+): Promise<FatmanGcsPrefixDeletionResult> {
+  if (!env.DB) throw new Error("D1 is required to resolve the BRVIN source object prefix.");
+  const importJob = await getFatmanImportJob(env, importId);
+  if (!importJob?.book_id || importJob.book_id !== importId) {
+    throw new Error("The BRVIN import registry does not match this deletion request.");
+  }
+  const rootPrefix = fatmanImportObjectPrefix(importJob);
+  const allowedRoots = ["brvin/imports/" + importId + "/", "fatman/imports/" + importId + "/"];
+  if (!allowedRoots.includes(rootPrefix)) {
+    throw new Error("Refusing to delete a GCS prefix outside this book's private import directory.");
+  }
+  if (relativePrefix !== "" && relativePrefix !== "ocr/") {
+    throw new Error("The requested GCS deletion prefix is not allowed.");
+  }
+
+  const bucketName = bucket(env);
+  const token = await getGoogleAccessToken(env);
+  const bucketResponse = await fetch(
+    GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) +
+    "?fields=name,versioning,softDeletePolicy,retentionPolicy",
+    { headers: { authorization: "Bearer " + token } },
+  );
+  if (!bucketResponse.ok) throw await gcsError(bucketResponse, "Could not inspect the private BRVIN storage policy.");
+  const bucketInfo = await bucketResponse.json() as {
+    versioning?: { enabled?: boolean };
+    softDeletePolicy?: { retentionDurationSeconds?: string | number };
+    retentionPolicy?: { retentionPeriod?: string | number; isLocked?: boolean };
+  };
+  const versioningEnabled = bucketInfo.versioning?.enabled === true;
+  const softDeleteRetentionSeconds = Math.max(0, Number(bucketInfo.softDeletePolicy?.retentionDurationSeconds ?? 0) || 0);
+  const retentionPolicySeconds = Math.max(0, Number(bucketInfo.retentionPolicy?.retentionPeriod ?? 0) || 0);
+  const retentionPolicyLocked = bucketInfo.retentionPolicy?.isLocked === true;
+  const objectPrefix = rootPrefix + relativePrefix;
+
+  const objects: Array<{ name: string; generation: string; noncurrent: boolean }> = [];
+  let pageToken = "";
+  do {
+    const query = new URLSearchParams({
+      prefix: objectPrefix,
+      maxResults: "1000",
+      versions: "true",
+      fields: "items(name,generation,timeDeleted),nextPageToken",
+    });
+    if (pageToken) query.set("pageToken", pageToken);
+    const response = await fetch(
+      GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) + "/o?" + query.toString(),
+      { headers: { authorization: "Bearer " + token } },
+    );
+    if (!response.ok) throw await gcsError(response, "Could not inventory private BRVIN source and OCR objects.");
+    const data = await response.json() as {
+      items?: Array<{ name?: string; generation?: string | number; timeDeleted?: string }>;
+      nextPageToken?: string;
+    };
+    for (const item of data.items ?? []) {
+      if (!item.name?.startsWith(objectPrefix) || item.generation === undefined) continue;
+      objects.push({
+        name: item.name,
+        generation: String(item.generation),
+        noncurrent: Boolean(item.timeDeleted),
+      });
+    }
+    pageToken = data.nextPageToken ?? "";
+  } while (pageToken);
+
+  let objectVersionsDeleted = 0;
+  for (const object of objects) {
+    const query = new URLSearchParams();
+    // With versioning enabled, delete each exact generation. If versioning is
+    // now disabled but old noncurrent generations remain, delete those by
+    // generation as well; delete the current generation by name so soft-delete
+    // policy can retain it according to the bucket's configured behavior.
+    if (versioningEnabled || object.noncurrent) query.set("generation", object.generation);
+    const encodedQuery = query.toString();
+    const suffix = encodedQuery ? "?" + encodedQuery : "";
+    const response = await fetch(
+      GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) +
+      "/o/" + encodeURIComponent(object.name) + suffix,
+      { method: "DELETE", headers: { authorization: "Bearer " + token } },
+    );
+    if (response.status === 404) continue;
+    if (!response.ok) throw await gcsError(response, "Could not delete a private BRVIN source or Vision OCR object.");
+    objectVersionsDeleted += 1;
+  }
+
+  let softDeletedObjects = 0;
+  let latestHardDeleteTime: string | null = null;
+  if (softDeleteRetentionSeconds > 0) {
+    let softPageToken = "";
+    do {
+      const query = new URLSearchParams({
+        prefix: objectPrefix,
+        maxResults: "1000",
+        softDeleted: "true",
+        fields: "items(name,generation,hardDeleteTime),nextPageToken",
+      });
+      if (softPageToken) query.set("pageToken", softPageToken);
+      const response = await fetch(
+        GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) + "/o?" + query.toString(),
+        { headers: { authorization: "Bearer " + token } },
+      );
+      if (!response.ok) throw await gcsError(response, "Could not verify Google Cloud Storage soft-delete retention.");
+      const data = await response.json() as {
+        items?: Array<{ name?: string; hardDeleteTime?: string }>;
+        nextPageToken?: string;
+      };
+      for (const item of data.items ?? []) {
+        if (!item.name?.startsWith(objectPrefix)) continue;
+        softDeletedObjects += 1;
+        if (item.hardDeleteTime && (!latestHardDeleteTime || item.hardDeleteTime > latestHardDeleteTime)) {
+          latestHardDeleteTime = item.hardDeleteTime;
+        }
+      }
+      softPageToken = data.nextPageToken ?? "";
+    } while (softPageToken);
+  }
+
+  // Verify that no live/noncurrent object generations remain under the exact book prefix.
+  let remainingVersions = 0;
+  let verifyPageToken = "";
+  do {
+    const query = new URLSearchParams({
+      prefix: objectPrefix,
+      maxResults: "1000",
+      versions: "true",
+      fields: "items(name,generation),nextPageToken",
+    });
+    if (verifyPageToken) query.set("pageToken", verifyPageToken);
+    const response = await fetch(
+      GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) + "/o?" + query.toString(),
+      { headers: { authorization: "Bearer " + token } },
+    );
+    if (!response.ok) throw await gcsError(response, "Could not verify BRVIN source and OCR object deletion.");
+    const data = await response.json() as {
+      items?: Array<{ name?: string }>;
+      nextPageToken?: string;
+    };
+    remainingVersions += (data.items ?? []).filter(item => item.name?.startsWith(objectPrefix)).length;
+    verifyPageToken = data.nextPageToken ?? "";
+  } while (verifyPageToken);
+  if (remainingVersions > 0) {
+    throw new Error("Google Cloud Storage still lists " + remainingVersions + " live object versions under this book's private prefix.");
+  }
+
+  return {
+    prefix: objectPrefix,
+    objectVersionsFound: objects.length,
+    objectVersionsDeleted,
+    versioningEnabled,
+    softDeleteRetentionSeconds,
+    retentionPolicySeconds,
+    retentionPolicyLocked,
+    softDeletedObjects,
+    latestHardDeleteTime,
+  };
+}
+
 export async function updateFatmanImportProgress(env: Env, indexedPages: number, importId?: string): Promise<void> {
   if (!env.DB) return;
   await ensureAnalyticsSchema(env);

@@ -10,6 +10,7 @@ import { fatmanExpectedPageCount, fatmanIndexPageKey } from "./library";
 import type { FatmanImportJob } from "./import";
 import {
   cleanupFatmanGcsObjects,
+  deleteFatmanGcsObjectPrefix,
   fatmanImportObjectPrefix,
   getFatmanImportJob,
   getFatmanVisionOperation,
@@ -25,7 +26,7 @@ import {
 
 interface FatmanImportParams {
   importId: string;
-  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor" | "retry_page" | "quality_check" | "release_qa" | "parmarbot_test";
+  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor" | "retry_page" | "quality_check" | "release_qa" | "parmarbot_test" | "delete_book" | "delete_vision_output";
   startPage?: number;
   endPage?: number;
   objectNames?: string[];
@@ -57,7 +58,7 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
     throw new Error("The Fatman import workflow received an invalid import ID.");
   }
   if (task !== undefined && task !== "resume_index" && task !== "index_chunk" && task !== "repair_chunk" &&
-      task !== "cleanup_chunk" && task !== "monitor" && task !== "retry_page" && task !== "quality_check" && task !== "release_qa" && task !== "parmarbot_test") {
+      task !== "cleanup_chunk" && task !== "monitor" && task !== "retry_page" && task !== "quality_check" && task !== "release_qa" && task !== "parmarbot_test" && task !== "delete_book" && task !== "delete_vision_output") {
     throw new Error("The Fatman import workflow received an invalid task.");
   }
   return {
@@ -253,6 +254,166 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         message: "The BRVIN processing workflow accepted this book and is coordinating its specialist stages.",
         details: { expectedPages, task: params.task ?? "ingest" },
       }).catch(() => undefined);
+
+      if (params.task === "delete_vision_output") {
+        if (!importJob.book_id || importJob.book_id !== importId) {
+          throw new Error("Vision-output deletion is only available for a registered BRVIN PDF.");
+        }
+        const source = await this.env.DB!.prepare(
+          "SELECT status,source_type,vision_output_deleted_at,vision_output_deletion_started_at FROM brvin_books WHERE id=? LIMIT 1"
+        ).bind(importId).first<{
+          status: string;
+          source_type: string;
+          vision_output_deleted_at: number | null;
+          vision_output_deletion_started_at: number | null;
+        }>();
+        if (!source || source.source_type !== "pdf" || source.status !== "ready" ||
+            source.vision_output_deleted_at || !source.vision_output_deletion_started_at) {
+          throw new Error("The book is not in the reserved OCR-only deletion state.");
+        }
+        const deletion = await step.do("delete private Google Vision OCR output", async () =>
+          deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/"));
+        await step.do("persist Vision OCR deletion state", async () => {
+          const updated = await this.env.DB!.prepare(
+            "UPDATE brvin_books SET vision_output_deleted_at=?,vision_output_deletion_started_at=NULL,updated_at=? " +
+            "WHERE id=? AND status='ready' AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NOT NULL"
+          ).bind(Date.now(), Date.now(), importId).run();
+          if ((updated.meta?.changes ?? 0) !== 1) {
+            throw new Error("The BRVIN OCR deletion marker could not be finalized safely.");
+          }
+          return { visionOutputDeleted: true };
+        });
+        await step.do("record Vision OCR output deletion", async () => {
+          await recordBrvinActivity(this.env, {
+            importId, bookId: importId, agent: "Storage retention supervisor",
+            phase: "retention", eventType: "source.vision_ocr_deleted", status: "completed",
+            message: "Google Vision OCR JSON output was removed from the private GCS OCR prefix. The original PDF and indexed search pages remain available.",
+            details: { ...deletion },
+          });
+          return deletion;
+        });
+        return;
+      }
+
+      if (params.task === "delete_book") {
+        if (!importJob.book_id || importJob.book_id !== importId) {
+          throw new Error("This deletion request does not match a registered BRVIN book.");
+        }
+        const book = await this.env.DB!.prepare(
+          "SELECT id,title,source_type,search_prefix,status FROM brvin_books WHERE id=? LIMIT 1"
+        ).bind(importId).first<{
+          id: string; title: string; source_type: string; search_prefix: string; status: string;
+        }>();
+        if (!book || book.source_type !== "pdf") {
+          throw new Error("Built-in or legacy knowledge sources cannot be deleted through the imported-book control.");
+        }
+        const allowedSearchPrefixes = [
+          "brvin/books/" + importId + "/pages/",
+          "fatman/books/" + importId + "/pages/",
+        ];
+        if (!allowedSearchPrefixes.includes(book.search_prefix)) {
+          throw new Error("The indexed-page prefix does not match this book; refusing cross-book deletion.");
+        }
+        const allowedStoragePrefixes = [
+          "brvin/imports/" + importId + "/",
+          "fatman/imports/" + importId + "/",
+        ];
+        if (!allowedStoragePrefixes.includes(fatmanImportObjectPrefix(importJob))) {
+          throw new Error("The private storage prefix does not match this book; refusing cross-book deletion.");
+        }
+        if (book.status !== "deleting" && book.status !== "delete_failed") {
+          throw new Error("The BRVIN book is not in a deletable state.");
+        }
+
+        const instance = this.env.FATMAN_SEARCH!.get(this.env.FATMAN_INSTANCE_NAME!.trim());
+        const indexedItems = await step.do("inventory only this book's AI Search items", async () => {
+          const matches: Array<{ id: string; key: string }> = [];
+          let page = 1;
+          for (;;) {
+            if (page > 10_000) throw new Error("AI Search item inventory exceeded the safety page limit.");
+            const response = await instance.items.list({ page, per_page: 100, source: "builtin" });
+            const rows = response.result ?? [];
+            for (const item of rows) {
+              if (item.key.startsWith(book.search_prefix)) matches.push({ id: item.id, key: item.key });
+            }
+            const totalPages = response.result_info?.total_pages;
+            if (typeof totalPages === "number" && totalPages > 0 && page >= totalPages) break;
+            if (rows.length < 100) break;
+            page += 1;
+          }
+          return matches;
+        });
+
+        for (let offset = 0, batch = 1; offset < indexedItems.length; offset += 25, batch += 1) {
+          const items = indexedItems.slice(offset, offset + 25);
+          if (items.some(item => !item.key.startsWith(book.search_prefix))) {
+            throw new Error("An AI Search deletion batch contained an item outside this book's prefix.");
+          }
+          await step.do("delete this book's AI Search page batch " + batch, async () => {
+            for (const item of items) await instance.items.delete(item.id);
+            return { deleted: items.length, keys: items.map(item => item.key) };
+          });
+        }
+
+        const remainingSearchItems = await step.do("verify this book has no indexed AI Search items", async () => {
+          const matches: string[] = [];
+          let page = 1;
+          for (;;) {
+            if (page > 10_000) throw new Error("AI Search verification exceeded the safety page limit.");
+            const response = await instance.items.list({ page, per_page: 100, source: "builtin" });
+            const rows = response.result ?? [];
+            for (const item of rows) if (item.key.startsWith(book.search_prefix)) matches.push(item.key);
+            const totalPages = response.result_info?.total_pages;
+            if (typeof totalPages === "number" && totalPages > 0 && page >= totalPages) break;
+            if (rows.length < 100) break;
+            page += 1;
+          }
+          return matches;
+        });
+        if (remainingSearchItems.length) {
+          throw new Error("AI Search still lists " + remainingSearchItems.length + " page items for this book.");
+        }
+
+        const storageDeletion = await step.do("delete this book's private PDF and Vision OCR object versions", async () =>
+          deleteFatmanGcsObjectPrefix(this.env, importId, ""));
+        await step.do("record external BRVIN assets removed", async () => {
+          await recordBrvinActivity(this.env, {
+            importId, bookId: importId, agent: "Deletion supervisor",
+            phase: "deletion", eventType: "book.external_assets_deleted", status: "completed",
+            message: "The original PDF, Vision OCR output and page-level AI Search items were removed. The BRVIN registry and access-grant cleanup is now running.",
+            details: {
+              title: book.title,
+              searchItemsDeleted: indexedItems.length,
+              searchPrefix: book.search_prefix,
+              storage: storageDeletion,
+            },
+          });
+          return true;
+        });
+
+        await this.env.DB!.batch([
+          this.env.DB!.prepare("DELETE FROM brvin_project_books WHERE book_id=?").bind(importId),
+          this.env.DB!.prepare("DELETE FROM fatman_books WHERE id=?").bind(importId),
+          this.env.DB!.prepare("DELETE FROM fatman_import_jobs WHERE id=? AND book_id=?").bind(importId, importId),
+          this.env.DB!.prepare("DELETE FROM brvin_books WHERE id=? AND source_type='pdf'").bind(importId),
+        ]);
+        const remainingBook = await this.env.DB!.prepare(
+          "SELECT id FROM brvin_books WHERE id=? LIMIT 1"
+        ).bind(importId).first<{ id: string }>();
+        const remainingJob = await this.env.DB!.prepare(
+          "SELECT id FROM fatman_import_jobs WHERE id=? AND book_id=? LIMIT 1"
+        ).bind(importId, importId).first<{ id: string }>();
+        if (remainingBook || remainingJob) {
+          throw new Error("External assets were deleted but one or more BRVIN/import registry rows remain; retry the deletion to finish database cleanup.");
+        }
+        await recordBrvinActivity(this.env, {
+          importId, bookId: importId, agent: "Deletion supervisor",
+          phase: "deletion", eventType: "book.deletion_completed", status: "completed",
+          message: "The PDF, Vision OCR output, AI Search pages, project grants, BRVIN book row and import records are deleted. The audit trail and project/collection definitions remain.",
+          details: { title: book.title, searchItemsDeleted: indexedItems.length, storage: storageDeletion },
+        });
+        return;
+      }
 
       if (params.task === "parmarbot_test") {
         if (!importJob.book_id) throw new Error("Parmarbot integration tests require a BRVIN-registered book.");
@@ -826,6 +987,32 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             await markFatmanImportCompleted(this.env, importId).catch(() => undefined);
           }
         }
+      } else if (params.task === "delete_book") {
+        const message = error instanceof Error ? error.message : String(error);
+        await this.env.DB?.batch([
+          this.env.DB.prepare("UPDATE brvin_books SET status='delete_failed',error_message=?,updated_at=? WHERE id=?")
+            .bind(message.slice(0, 400), Date.now(), importId),
+          this.env.DB.prepare("UPDATE fatman_import_jobs SET status='delete_failed',error_message=?,updated_at=? WHERE id=?")
+            .bind(message.slice(0, 400), Date.now(), importId),
+        ]).catch(() => undefined);
+        await recordBrvinActivity(this.env, {
+          importId, bookId: importedBook?.book_id ?? importId, agent: "Deletion supervisor",
+          phase: "deletion", eventType: "book.deletion_failed", status: "failed",
+          message: "Book deletion stopped safely; the source remains inaccessible and the admin can retry after resolving the reported issue.",
+          details: { error: message.slice(0, 400), retryable: true },
+        }).catch(() => undefined);
+      } else if (params.task === "delete_vision_output") {
+        const message = error instanceof Error ? error.message : String(error);
+        await this.env.DB?.prepare(
+          "UPDATE brvin_books SET vision_output_deletion_started_at=NULL,updated_at=? " +
+          "WHERE id=? AND vision_output_deleted_at IS NULL"
+        ).bind(Date.now(), importId).run().catch(() => undefined);
+        await recordBrvinActivity(this.env, {
+          importId, bookId: importedBook?.book_id ?? importId, agent: "Storage retention supervisor",
+          phase: "retention", eventType: "source.vision_ocr_delete_failed", status: "failed",
+          message: "Vision OCR output could not be fully deleted; the original PDF and indexed book remain unchanged.",
+          details: { error: message.slice(0, 400), retryable: true },
+        }).catch(() => undefined);
       } else if (params.task !== "cleanup_chunk" && params.task !== "parmarbot_test") {
         await markFatmanImportFailed(this.env, importId, error).catch(() => undefined);
       }
