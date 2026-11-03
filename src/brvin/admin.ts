@@ -391,8 +391,6 @@ const HTML = `<!doctype html>
 </main>
 <div class="modal" id="modal"><div class="modalbox"><div class="modalhead"><h2 id="modal-title">Book operations</h2><button class="btn" id="close-modal">Close</button></div><div id="modal-body"></div></div></div>
 <script type="module">
-import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
-pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+pdfjsLib.version+"/pdf.worker.min.mjs";
 const $=id=>document.getElementById(id),API="/admin/api/brvin/",UPLOAD="/admin/api/brvin/upload/";
 let model=null,selectedFile=null,activeImportId=null,uploadBusy=false;
 function say(message,error=false){$("upload-status").textContent=message;$("upload-status").classList.toggle("error",error);}
@@ -492,6 +490,10 @@ async function inspect(file){
  const hash=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,"0")).join("").toUpperCase();
  let pageCount=0;
  try{
+  // PDF.js is optional for dashboard startup. Load it only when a PDF is selected,
+  // so a blocked/slow third-party CDN cannot prevent BRVIN's D1 dashboard from connecting.
+  const pdfjsLib=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs");
+  pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+pdfjsLib.version+"/pdf.worker.min.mjs";
   const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buffer)}).promise;
   pageCount=pdf.numPages;
   await pdf.destroy();
