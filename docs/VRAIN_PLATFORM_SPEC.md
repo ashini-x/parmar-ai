@@ -101,7 +101,7 @@ This is an owner-only control-plane credential. It must never appear in browser 
 
 The Parmar AI server may call owner endpoints using a server-side secret or an authenticated Worker service binding in a later integration. It must not relay the owner token to a browser.
 
-There are no other VRAIN human accounts in this version. There is no public project-creation endpoint.
+There are no other VRAIN human accounts in this version. There is no public project-creation endpoint. The owner token is a private bootstrap credential, not a multi-tenant login system. Self-service workspaces, user identities, memberships, invitations, per-workspace quotas/billing, and an owner console for external customers are deliberately not implemented in this first Worker. The data and project model is prepared for a future workspace layer, but opening project creation to arbitrary users requires that authentication and quota boundary first.
 
 ### 3.2 Projects and collections
 
@@ -436,7 +436,8 @@ Base URL is the standalone Worker's deployed HTTPS URL. Owner endpoints require 
   "size": 12345678,
   "pageCount": 538,
   "collectionId": "<collection-uuid>",
-  "language": "hi"
+  "language": "hi",
+  "costConfirmed": true
 }
 ~~~
 
