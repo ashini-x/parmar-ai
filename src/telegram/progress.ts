@@ -59,14 +59,14 @@ export function createTelegramProgressUpdater(
 
   const update = ((text: string): void => {
     const normalized = String(text).trimEnd().slice(0, 3_900);
-    if (!normalized || disabled) return;
+    if (!normalized || disabled || normalized.length < 4) return;
     latestText = normalized;
     void drain();
   }) as TelegramProgressUpdater;
 
   update.setStatus = (status: string): void => {
     const normalized = status.trim().slice(0, 3_900);
-    if (!normalized || disabled) return;
+    if (!normalized || disabled || normalized.length < 4) return;
     latestText = normalized;
     void drain();
   };
