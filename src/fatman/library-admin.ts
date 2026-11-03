@@ -170,7 +170,8 @@ async function refreshBooks(){
    const pill=document.createElement("span");pill.className="pill "+book.status;pill.textContent=humanStatus(book.status);state.append(pill);
    if(book.error){const err=document.createElement("div");err.className="muted";err.textContent=book.error;state.append(err);}
    updated.textContent=new Date(book.updatedAt).toLocaleString();
-   if(book.canResume){const resume=document.createElement("button");resume.type="button";resume.className="btn";resume.textContent="Resume";resume.addEventListener("click",async()=>{activeImportId=book.id;say("Resuming the saved OCR and indexing job…");try{await api(ROOT+"upload/"+encodeURIComponent(book.id)+"/resume",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});await refreshCurrent();}catch(error){say("Could not resume: "+error.message,true);}});actions.append(resume);}
+   if(book.status==="uploading"||book.status==="processing"||book.status==="failed"||book.canResume){const view=document.createElement("button");view.type="button";view.className="btn";view.textContent="View";view.addEventListener("click",()=>{activeImportId=book.id;refreshCurrent().catch(error=>say("Could not load status: "+error.message,true));});actions.append(view);}
+   if(book.canResume){const resume=document.createElement("button");resume.type="button";resume.className="btn";resume.style.marginLeft="5px";resume.textContent="Resume";resume.addEventListener("click",async()=>{activeImportId=book.id;say("Resuming the saved OCR and indexing job…");try{await api(ROOT+"upload/"+encodeURIComponent(book.id)+"/resume",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});await refreshCurrent();}catch(error){say("Could not resume: "+error.message,true);}});actions.append(resume);}
    row.append(name,pages,state,updated,actions);tbody.append(row);
   }
  }catch(error){el("books").textContent="Could not load book list: "+error.message;}
@@ -236,4 +237,5 @@ el("refresh").addEventListener("click",()=>refreshCurrent().catch(e=>say(e.messa
 el("resume-index").addEventListener("click",async()=>{if(!activeImportId)return;try{await api(ROOT+"upload/"+encodeURIComponent(activeImportId)+"/resume",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});await refreshCurrent();}catch(error){say("Could not resume: "+error.message,true);}});
 el("refresh-books").addEventListener("click",refreshBooks);
 refreshBooks();
+setInterval(()=>refreshBooks(),15000);
 </script></body></html>`;
