@@ -160,7 +160,7 @@ export function formatFatmanCitations(passages: FatmanPassage[]): string {
 
 function pageNumberFromKey(key: string): number | undefined {
   if (!key.startsWith("fatman/pages/")) return undefined;
-  const match = /^fatman\/pages\/page-(\d{1,6})\.(?:jpg|jpeg|pdf)$/iu.exec(key);
+  const match = /^fatman\/pages\/page-(\d{1,6})\.(?:jpg|jpeg|pdf|txt)$/iu.exec(key);
   if (!match) return undefined;
   const page = Number(match[1]);
   return Number.isSafeInteger(page) && page > 0 ? page : undefined;
