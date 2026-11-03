@@ -327,7 +327,8 @@ export async function resumeFatmanImport(env: Env, importId: string): Promise<Re
       return json({ ok: false, error: "This import has no complete saved OCR result to resume." }, 409);
     }
 
-    const workflowId = importId + "-" + crypto.randomUUID().slice(0, 8);
+    const runId = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
+    const workflowId = importId + "-" + runId + "-resume";
     await db.prepare(
       "UPDATE fatman_import_jobs SET status = 'processing', workflow_instance_id = ?, error_message = NULL, updated_at = ? " +
       "WHERE id = ? AND status = 'failed' AND vision_operation IS NOT NULL AND uploaded_bytes = expected_size"
@@ -338,7 +339,7 @@ export async function resumeFatmanImport(env: Env, importId: string): Promise<Re
     }
 
     try {
-      await workflow.create({ id: workflowId, params: { importId } });
+      await workflow.create({ id: workflowId, params: { task: "resume_index", importId, runId } });
     } catch (error) {
       try {
         await workflow.get(workflowId);
