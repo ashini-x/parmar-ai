@@ -1,3 +1,6 @@
+## Unreleased: Harden source-PDF lifecycle prefix guard
+- Treat unterminated ancestor prefixes such as `brvin` and `brvin/source-pdfs` as broad matches that could include source PDFs. Permit only the dedicated temporary Vision prefix and exact legacy per-book `ocr/` subtrees.
+
 ## Unreleased: Automatic post-READY Vision OCR retention
 - New book uploads store source PDFs under `brvin/source-pdfs/<book-id>/` and temporary Vision JSON under `brvin/temporary-vision-ocr/<book-id>/`.
 - Once all pages are indexed and retrieval QA passes, a separate background workflow deletes only the temporary OCR prefix. Persistent AI Search page text/chunks remain available for project retrieval; source PDFs and project grants remain intact.

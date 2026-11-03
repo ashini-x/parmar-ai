@@ -198,6 +198,7 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
       "storage.objects.get",
       "storage.objects.list",
       "storage.objects.delete",
+      "storage.buckets.get",
       "storage.buckets.update",
     ]) permissionUrl.searchParams.append("permissions", permission);
     const permissionResponse = await fetch(permissionUrl, {
@@ -208,9 +209,11 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
     try { permissionData = JSON.parse(permissionText) as typeof permissionData; } catch { /* report HTTP status only */ }
     const granted = permissionData.permissions ?? [];
     const required = ["storage.objects.create", "storage.objects.get", "storage.objects.list", "storage.objects.delete"];
+    const lifecycleRuleGetGranted = granted.includes("storage.buckets.get");
     const lifecycleRuleUpdateGranted = granted.includes("storage.buckets.update");
+    const lifecycleRuleManagementGranted = lifecycleRuleGetGranted && lifecycleRuleUpdateGranted;
     checks.permissions = permissionResponse.ok
-      ? { ok: true, granted, missing: required.filter(permission => !granted.includes(permission)), lifecycleRuleUpdateGranted }
+      ? { ok: true, granted, missing: required.filter(permission => !granted.includes(permission)), lifecycleRuleGetGranted, lifecycleRuleUpdateGranted, lifecycleRuleManagementGranted }
       : { ok: false, status: permissionResponse.status, error: permissionData.error?.message ?? permissionText.slice(0, 240) };
 
     const createGranted = granted.includes("storage.objects.create");
@@ -693,6 +696,25 @@ export async function readFatmanVisionOutput(env: Env, importId: string, page: n
  * never match the separately stored source PDF tree. Existing unrelated
  * lifecycle rules are preserved; broad Delete rules are rejected fail-closed.
  */
+export function isUnsafeFatmanVisionLifecycleDeletePrefix(value: string): boolean {
+  const candidate = value.trim();
+  if (!candidate) return true;
+  const sourceRoots = [
+    "brvin/source-pdfs/",
+    "brvin/imports/",
+    "fatman/source-pdfs/",
+    "fatman/imports/",
+  ];
+  const overlapsSource = sourceRoots.some((root) => candidate.startsWith(root) || root.startsWith(candidate));
+  if (!overlapsSource) return false;
+  const legacyImportRoots = ["brvin/imports/", "fatman/imports/"];
+  const legacyOcrOnly = legacyImportRoots.some((root) => {
+    if (!candidate.startsWith(root)) return false;
+    const segments = candidate.slice(root.length).split("/").filter(Boolean);
+    return segments.length >= 2 && segments[1] === "ocr";
+  });
+  return !legacyOcrOnly;
+}
 export async function ensureFatmanVisionLifecycleRule(env: Env): Promise<{ configured: true; created: boolean; prefix: string; ageDays: number }> {
   const bucketName = bucket(env);
   const token = await getGoogleAccessToken(env);
@@ -711,14 +733,7 @@ export async function ensureFatmanVisionLifecycleRule(env: Env): Promise<{ confi
       if (rule.action?.type !== "Delete") return false;
       const prefixes = rule.condition?.matchesPrefix ?? [];
       if (!prefixes.length) return true;
-      return prefixes.some((value) => {
-        const candidate = String(value);
-        return candidate === "brvin/" || candidate === "fatman/" ||
-          candidate === "brvin/imports/" || candidate === "fatman/imports/" ||
-          candidate.startsWith("brvin/source-pdfs/") || candidate.startsWith("fatman/source-pdfs/") ||
-          (candidate.startsWith("brvin/imports/") && !candidate.endsWith("/ocr/")) ||
-          (candidate.startsWith("fatman/imports/") && !candidate.endsWith("/ocr/"));
-      });
+      return prefixes.some((value) => isUnsafeFatmanVisionLifecycleDeletePrefix(String(value)));
     });
     if (unsafeRule) {
       throw new Error("An existing bucket Delete rule is broader than the temporary Vision OCR prefix. No lifecycle changes were made because it may include source PDFs.");

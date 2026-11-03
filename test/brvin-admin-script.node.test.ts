@@ -10,6 +10,9 @@ describe("BRVIN browser script contract", () => {
     expect(importSource).toContain("export async function diagnoseFatmanGcsUpload");
     expect(importSource).toContain("storage.objects.create");
     expect(importSource).toContain("storage.objects.delete");
+    expect(importSource).toContain('"storage.buckets.get"');
+    expect(importSource).toContain('"storage.buckets.update"');
+    expect(importSource).toContain("lifecycleRuleManagementGranted");
     expect(importSource).toContain("Does not create, overwrite, or delete any GCS objects.");
     expect(workerSource).toContain("/admin/api/brvin/diagnostics/storage");
     expect(workerSource).toContain("diagnoseFatmanGcsUpload(env)");
@@ -63,6 +66,7 @@ describe("BRVIN browser script contract", () => {
     expect(workflowSource).toContain("schedule automatic temporary Vision OCR cleanup after READY");
     expect(workflowSource).toContain("runBrvinVisionRetentionSupervisor");
     expect(workflowSource).toContain("workflow.auto_recovery_started");
+    expect(workflowSource).toContain("created_at>=?");
     expect(workflowSource).toContain('source_type !== "pdf"');
     expect(workflowSource).toContain('book.status !== "deleting" && book.status !== "delete_failed"');
     expect(workflowSource).toContain('"brvin/books/" + importId + "/pages/"');

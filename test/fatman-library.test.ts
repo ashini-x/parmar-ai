@@ -6,7 +6,7 @@ import {
   parseFatmanIndexPageKey,
 } from "../src/fatman/library";
 import { fatmanLibraryAdminPage } from "../src/fatman/library-admin";
-import { fatmanVisionOutputPrefix } from "../src/fatman/import";
+import { fatmanVisionOutputPrefix, isUnsafeFatmanVisionLifecycleDeletePrefix } from "../src/fatman/import";
 
 describe("Fatman multi-book library", () => {
   const bookId = "11111111-2222-4333-8444-555555555555";
@@ -28,6 +28,20 @@ describe("Fatman multi-book library", () => {
   it("continues to find Vision OCR output for books uploaded before the prefix split", () => {
     const legacyJob = { id: bookId, source_object: "brvin/imports/" + bookId + "/source.pdf" };
     expect(fatmanVisionOutputPrefix(legacyJob)).toBe("brvin/imports/" + bookId + "/ocr/");
+  });
+  it("rejects lifecycle Delete prefixes that overlap any source-PDF root", () => {
+    for (const prefix of ["brvin", "brvin/", "brvin/source-pdfs", "brvin/source-pdfs/" + bookId + "/",
+      "brvin/imports", "brvin/imports/" + bookId + "/", "fatman", "fatman/imports/"]) {
+      expect(isUnsafeFatmanVisionLifecycleDeletePrefix(prefix)).toBe(true);
+    }
+  });
+
+  it("allows only the new temporary Vision tree and legacy per-book OCR subtree", () => {
+    for (const prefix of ["brvin/temporary-vision-ocr/", "brvin/temporary-vision-ocr/" + bookId + "/",
+      "brvin/imports/" + bookId + "/ocr/", "brvin/imports/" + bookId + "/ocr/2026/"]) {
+      expect(isUnsafeFatmanVisionLifecycleDeletePrefix(prefix)).toBe(false);
+    }
+    expect(isUnsafeFatmanVisionLifecycleDeletePrefix("")).toBe(true);
   });
   it("keeps the original 538-page import in its original namespace", () => {
     const legacyJob = { id: bookId, book_id: null, page_count: null };
