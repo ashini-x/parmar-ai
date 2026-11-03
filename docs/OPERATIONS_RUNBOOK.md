@@ -33,16 +33,31 @@ Rotate at the provider, update Cloudflare, and validate the affected integration
 ## Rollback
 Use the last verified Cloudflare version. Do not treat an ad-hoc edited working directory as a rollback artifact.
 
-## Add another book to Fatman
+## VRAIN knowledge operations
 
-Use the administrator-only **Book library** page at `/admin/fatman/books` (also linked from `/admin`).
+Use the administrator-only **VRAIN** console at `/admin/vrain` (also linked from `/admin`). The former `/admin/fatman/books` address redirects to VRAIN.
 
-1. Select the PDF. The page reads the page count and calculates a SHA-256 fingerprint in the browser; the title is prefilled from the file name and can be edited.
-2. Confirm the notice that Google Cloud Vision OCR may incur usage charges, then choose **Add book to Fatman**.
-3. Keep the page open until the secure upload finishes. After that, OCR, chunked indexing, recovery and retrieval verification run in Cloudflare Workflows.
-4. The Book library shows each title, page count, indexed-page progress and current status. Use **View** to inspect an in-progress job. Use **Resume** for a completed upload whose OCR/indexing needs recovery.
-5. If the browser closes during file transfer, select the same PDF again. Its fingerprint lets the resumable uploader continue the existing transfer or start a fresh one if the session expired.
+### Add a knowledge source
+1. Enter a source title and choose a collection. The title defaults from the PDF filename if left blank.
+2. Optionally select one or more projects to grant direct access. Leaving the selection empty does not grant the book to any project.
+3. Choose the PDF. The browser validates the PDF header, calculates its SHA-256 fingerprint and reads its page count. Current upload guardrails are 1 GB and 2,000 pages per PDF.
+4. Confirm the Google Cloud Vision OCR cost notice and start the secure resumable upload.
+5. Keep the page open until transfer completes. OCR, indexing, recovery and retrieval QA continue in Cloudflare Workflows after the transfer is complete.
 
-Additional books use unique `fatman/books/{bookId}/pages/page-000001.txt` keys in the existing Fatman AI Search instance. They do not overwrite the original `fatman/pages/` entries or change the original reviewed 538-page import/release gate. Only books whose page indexing and retrieval checks pass are exposed to Fatman answers.
+### Observe live specialist work
+The right-hand VRAIN operations console refreshes every five seconds from the D1 event ledger. It shows real workflow events (not simulated agent activity): secure upload milestones, Vision OCR submission/completion, page-index progress and repairs, retrieval QA, recovery and readiness. Open **Operations** for a book to inspect its per-import event history and live Vision/Workflow status. The books list shows the registry status and indexed/expected pages.
 
-The legacy `/admin/fatman` importer and `/admin/fatman/monitor` remain available for the original reviewed PDF. Do not give administrators GCP credentials or bucket access to use the Book library; missing service configuration must be handled by an infrastructure administrator.
+### Manage project knowledge boundaries
+- A collection organises sources but does not make them globally searchable.
+- Assign a collection to a project to grant that project access to every verified book in that collection.
+- Direct book grants can be managed independently for exceptions.
+- Access is additive: a project can see a book through a direct book grant or through a collection grant.
+- A newly created project has no book access until an administrator assigns sources.
+- Fatman is pre-registered as a VRAIN project. Its existing reviewed 538-page source and the previously managed Fatman reference books are migrated into its grants. Newly uploaded documents are not automatically added to Fatman's knowledge unless selected or added to one of Fatman's assigned collections.
+
+### Recovery and failure handling
+If the browser closes during transfer, select the same PDF again so the fingerprint can resume the secure upload or start a fresh transfer if the GCS session expired. If the upload completed but indexing failed, use **Resume** from the job's operations controls when the saved Vision OCR result is available. If retrieval QA fails, the book remains unavailable to project retrieval until it passes.
+
+Do not give administrators GCP credentials or direct bucket access. Do not mark a source ready manually or bypass its retrieval verification. The VRAIN console and APIs require the existing admin session; mutating API requests enforce same-origin CSRF checks. The shared D1 registry is migrated idempotently when analytics schema initialization runs.
+
+The legacy `/admin/fatman` importer and `/admin/fatman/monitor` remain for the original reviewed Fatman PDF. They do not become the generic VRAIN ingestion surface.

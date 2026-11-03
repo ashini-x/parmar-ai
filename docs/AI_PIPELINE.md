@@ -106,10 +106,21 @@ When the model requires an internal retry, each genuine model attempt is recorde
 The usage ledger is asynchronous and isolated from answer delivery; analytics failure must not prevent a valid answer from reaching Telegram.
 
 
-## Reusable multi-book ingestion
+## VRAIN central knowledge
 
-The original Fatman 2nd Edition import remains hash-locked to its reviewed 538-page PDF. Additional reference books use the administrator-only Book library at `/admin/fatman/books` and the same private resumable GCS upload, Google Vision asynchronous PDF OCR, `FatmanImportWorkflow`, and D1 progress ledger.
+VRAIN is the platform-level knowledge service. A PDF is ingested once into the central repository, assigned to a collection, OCR-processed, indexed by page and made eligible for retrieval only after page-grounded QA succeeds. The original Fatman 2nd Edition remains in its reviewed legacy namespace; no source is re-uploaded or silently re-keyed during the compatibility migration.
 
-Each additional book has a `fatman_books` registry record and import-job metadata for its title, fingerprint and page count. Its AI Search pages are written under `fatman/books/{bookId}/pages/`; the legacy book keeps its existing `fatman/pages/` keys. Workflow chunking, retry, repair, monitoring, page-grounded retrieval verification and completion use the job's own page count instead of assuming 538.
+The administrator-only VRAIN console is at `/admin/vrain`. It manages:
+- **Knowledge sources:** book/document registry, fingerprint, page count, indexed-page count, processing state and error state.
+- **Collections:** logical groups of documents. Collection membership alone does not grant every project access.
+- **Projects:** explicit project identities and access grants.
+- **Governance:** direct book-to-project grants and project-to-collection grants. A project has no knowledge access by default.
+- **Operations:** append-only specialist-stage telemetry for secure upload, Vision OCR, page indexing, monitor/repair, recovery, retrieval QA and readiness. The browser refreshes the operational view every five seconds from D1.
 
-Live retrieval reads the shared Fatman Search index but admits only the original book when its release gate is enabled and additional books whose D1 registry status is `ready` with all pages indexed. Additional-book results retain book identity and return citations using the registered title and PDF page. An incomplete or failed book therefore cannot become answer evidence.
+New PDFs use private resumable GCS objects under `vrain/imports/{importId}/`, and VRAIN-owned AI Search keys under `vrain/books/{bookId}/pages/`. Existing additional Fatman book keys under `fatman/books/{bookId}/pages/` remain resolvable during migration; the built-in reviewed source remains under `fatman/pages/`. OCR outputs and cleanup derive their object prefix from the import's stored source path, so legacy and VRAIN jobs do not cross-delete one another.
+
+The existing Cloudflare Workflow remains the durable execution engine: async Google Vision OCR, page batches, bounded retry/repair, index monitoring, distributed page-grounded retrieval probes and temporary OCR-object cleanup. A book is marked `ready` only after all expected pages are indexed and retrieval QA passes. Failures remain visible for administrator recovery and do not become retrieval evidence.
+
+Retrieval is project-scoped server-side. A request resolves an active VRAIN project, computes its directly assigned books and books in assigned collections, then admits only `ready` sources with `indexed_pages = page_count`. Search hits are filtered again against the allowed source prefixes before passages/citations are returned. Fatman uses its own `fatman` VRAIN project grants. Future products should call the shared VRAIN retrieval service with their own registered project slug; they must not query the shared AI Search namespace directly.
+
+The current implementation uses the existing D1 database, GCS bucket, Cloudflare Workflow and shared AI Search namespace to avoid resource duplication. Project access is isolated logically at the service boundary and index-key prefix; deployments that require hard tenant isolation can later allocate a dedicated namespace/bucket without changing the project/collection model.
