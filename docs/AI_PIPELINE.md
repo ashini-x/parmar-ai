@@ -104,3 +104,12 @@ After each successful Vertex HTTP response, Gemini usage metadata is normalized 
 When the model requires an internal retry, each genuine model attempt is recorded. Accounting uses `(update_id, queue_attempt, attempt)` as a duplicate-safe key so queue redelivery cannot double-count the same model attempt.
 
 The usage ledger is asynchronous and isolated from answer delivery; analytics failure must not prevent a valid answer from reaching Telegram.
+
+
+## Reusable multi-book ingestion
+
+The original Fatman 2nd Edition import remains hash-locked to its reviewed 538-page PDF. Additional reference books use the administrator-only Book library at `/admin/fatman/books` and the same private resumable GCS upload, Google Vision asynchronous PDF OCR, `FatmanImportWorkflow`, and D1 progress ledger.
+
+Each additional book has a `fatman_books` registry record and import-job metadata for its title, fingerprint and page count. Its AI Search pages are written under `fatman/books/{bookId}/pages/`; the legacy book keeps its existing `fatman/pages/` keys. Workflow chunking, retry, repair, monitoring, page-grounded retrieval verification and completion use the job's own page count instead of assuming 538.
+
+Live retrieval reads the shared Fatman Search index but admits only the original book when its release gate is enabled and additional books whose D1 registry status is `ready` with all pages indexed. Additional-book results retain book identity and return citations using the registered title and PDF page. An incomplete or failed book therefore cannot become answer evidence.
