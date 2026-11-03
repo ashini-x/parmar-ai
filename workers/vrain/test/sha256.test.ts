@@ -21,10 +21,11 @@ describe("VRAIN streaming SHA-256", () => {
     expect(hashChunks(["a", "b", "c"])).toBe("BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD");
   });
 
-  it("handles input spanning several complete compression blocks", () => {
+  it("matches the platform SHA-256 implementation for a long multi-block input", async () => {
     const text = "The quick brown fox jumps over the lazy dog. ".repeat(100);
-    expect(hashChunks([text.slice(0, 17), text.slice(17, 131), text.slice(131)]))
-      .toBe(hashChunks([text]));
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    const expected = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+    expect(hashChunks([text.slice(0, 17), text.slice(17, 131), text.slice(131)])).toBe(expected);
   });
 
   it("rejects updates after finalization", () => {
