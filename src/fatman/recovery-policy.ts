@@ -9,5 +9,7 @@ export function isTransientFatmanIndexError(error: unknown): boolean {
 export function fatmanPageRetryDelay(attempt: number): string {
   const safeAttempt = Number.isSafeInteger(attempt) ? Math.max(1, Math.min(FATMAN_PAGE_RETRY_LIMIT, attempt)) : 1;
   const seconds = Math.min(900, 30 * 2 ** (safeAttempt - 1));
-  return seconds < 60 ? seconds + " seconds" : Math.floor(seconds / 60) + " minutes";
+  if (seconds < 60) return seconds + " seconds";
+  const minutes = Math.floor(seconds / 60);
+  return minutes + (minutes === 1 ? " minute" : " minutes");
 }
