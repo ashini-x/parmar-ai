@@ -13,6 +13,8 @@ describe("BRVIN browser script contract", () => {
     expect(importSource).toContain("Does not create, overwrite, or delete any GCS objects.");
     expect(workerSource).toContain("/admin/api/brvin/diagnostics/storage");
     expect(workerSource).toContain("diagnoseFatmanGcsUpload(env)");
+    expect(workerSource).toContain("x-brvin-diagnostic-token");
+    expect(workerSource).toContain("tokenAuthorized");
   });
 
   it("serves JavaScript that parses before delivery to browsers", async () => {
