@@ -518,9 +518,9 @@ $("pdf").addEventListener("change",()=>{selectedFile=$("pdf").files?.[0]||null;i
 function countSimplePdfPages(buffer){
  if(buffer.byteLength>32*1024*1024)return 0;
  const source=new TextDecoder("latin1").decode(buffer);
- const leafPages=source.match(/\/Type\s*\/Page\b/gu)?.length??0;
+ const leafPages=source.match(/\\/Type\\s*\\/Page\\b/gu)?.length??0;
  if(leafPages>0)return leafPages;
- const pageTree=source.match(/\/Type\s*\/Pages\b[\s\S]{0,8192}?\/Count\s+(\d+)/u);
+ const pageTree=source.match(/\\/Type\\s*\\/Pages\\b[\\s\\S]{0,8192}?\\/Count\\s+(\\d+)/u);
  return pageTree?Number(pageTree[1]):0;
 }
 async function inspect(file){
