@@ -1,0 +1,413 @@
+import {
+  WorkflowEntrypoint,
+  type WorkflowEvent,
+  type WorkflowStep,
+} from "cloudflare:workers";
+import { NonRetryableError } from "cloudflare:workflows";
+import type { Env, VrainDocument } from "./types";
+import {
+  getVisionOperation,
+  googleRetryMessage,
+  isRetryableGoogleError,
+  listObjects,
+  readJsonObject,
+  readTextObject,
+  streamObjectSha256,
+  submitVisionPdf,
+  uploadTextObject,
+} from "./google";
+
+const MAX_ATTEMPTS_PER_WORKFLOW = 8;
+const RETRY_DELAYS = ["30 seconds", "1 minute", "2 minutes", "4 minutes", "8 minutes", "15 minutes"] as const;
+
+interface VisionOutput {
+  context?: { pageNumber?: number };
+  responses?: Array<{
+    fullTextAnnotation?: { text?: string };
+    error?: { message?: string };
+  }>;
+}
+
+interface DocumentJob {
+  documentId: string;
+}
+
+class RetryHandoffError extends Error {
+  constructor(readonly stage: string, message: string) {
+    super(message);
+    this.name = "RetryHandoffError";
+  }
+}
+
+function safeError(error: unknown): string {
+  return googleRetryMessage(error).slice(0, 300);
+}
+
+function retryDelay(attempt: number): typeof RETRY_DELAYS[number] {
+  return RETRY_DELAYS[Math.min(RETRY_DELAYS.length - 1, Math.max(0, attempt - 1))];
+}
+
+function isRetryable(error: unknown): boolean {
+  if (isRetryableGoogleError(error)) return true;
+  const message = safeError(error).toLowerCase();
+  return /fetch failed|network|timeout|timed out|temporarily unavailable|http 408|http 409|http 429|http 5\d\d|search index.*not ready|indexing is still/iu.test(message);
+}
+
+async function getDocument(env: Env, documentId: string): Promise<VrainDocument> {
+  const document = await env.DB.prepare("SELECT * FROM vrain_documents WHERE id = ?")
+    .bind(documentId).first<VrainDocument>();
+  if (!document) throw new NonRetryableError("VRAIN document does not exist.");
+  return document;
+}
+
+async function recordEvent(
+  env: Env,
+  documentId: string,
+  specialist: string,
+  stage: string,
+  eventType: string,
+  status: string,
+  message: string,
+  details: Record<string, unknown> = {},
+): Promise<void> {
+  const now = Date.now();
+  const document = await env.DB.prepare("SELECT collection_id FROM vrain_documents WHERE id=?")
+    .bind(documentId).first<{ collection_id: string }>();
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO vrain_activity_events (job_id,document_id,specialist,stage,event_type,status,message,detail_json,created_at) " +
+      "VALUES (?,?,?,?,?,?,?,?,?)",
+    ).bind(documentId, documentId, specialist, stage, eventType, status, message, JSON.stringify(details), now),
+    env.DB.prepare("UPDATE vrain_documents SET updated_at=? WHERE id=?").bind(now, documentId),
+    env.DB.prepare(
+      "UPDATE vrain_jobs SET stage=?,last_heartbeat_at=?,attempt=MAX(attempt,?) WHERE document_id=?",
+    ).bind(stage, now, Number(details.attempt ?? 0), documentId),
+  ]);
+  void document;
+}
+
+async function updateDocument(
+  env: Env,
+  documentId: string,
+  values: Partial<Pick<VrainDocument, "status" | "vision_operation" | "workflow_instance_id" | "indexed_pages" | "error_code" | "error_message" | "published_at">> & Record<string, unknown>,
+): Promise<void> {
+  const allowed = [
+    "status", "vision_operation", "workflow_instance_id", "indexed_pages",
+    "error_code", "error_message", "published_at", "vision_output_prefix",
+    "ocr_repair_attempts",
+  ] as const;
+  const entries = Object.entries(values).filter(([key]) => (allowed as readonly string[]).includes(key));
+  if (!entries.length) return;
+  const assignments = entries.map(([key]) => key + "=?").join(",");
+  await env.DB.prepare("UPDATE vrain_documents SET " + assignments + ",updated_at=? WHERE id=?")
+    .bind(...entries.map(([, value]) => value), Date.now(), documentId).run();
+}
+
+async function runWithRecovery<T>(
+  env: Env,
+  step: WorkflowStep,
+  documentId: string,
+  stage: string,
+  specialist: string,
+  action: (attempt: number) => Promise<T>,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_WORKFLOW; attempt += 1) {
+    try {
+      await recordEvent(env, documentId, specialist, stage, stage + ".attempt_started", "running",
+        specialist + " is executing " + stage + ".", { attempt });
+      return await step.do(
+        stage + " attempt " + attempt,
+        { retries: { limit: 0 }, timeout: "30 minutes" },
+        async () => action(attempt),
+      );
+    } catch (error) {
+      lastError = error;
+      if (!isRetryable(error)) throw new NonRetryableError(safeError(error));
+      const message = safeError(error);
+      await step.do("record " + stage + " retry " + attempt, async () => {
+        await recordEvent(env, documentId, "Recovery specialist", stage, "recovery.retry_scheduled", "warning",
+          "A recoverable error was detected. VRAIN will repair or retry this stage automatically.",
+          { attempt, error: message, nextDelay: retryDelay(attempt) });
+      });
+      if (attempt < MAX_ATTEMPTS_PER_WORKFLOW) {
+        await step.sleep("cooldown " + stage + " retry " + attempt, retryDelay(attempt));
+      }
+    }
+  }
+  throw new RetryHandoffError(stage, safeError(lastError));
+}
+
+function pageNumberFromObjectName(name: string): number | undefined {
+  const match = /output-(\d+)-to-(\d+)\.json$/iu.exec(name);
+  if (!match) return undefined;
+  const start = Number(match[1]);
+  return Number.isSafeInteger(start) && start > 0 ? start : undefined;
+}
+
+function normalizeOcrText(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.replace(/\u0000/gu, "").replace(/\r\n?/gu, "\n").trim().slice(0, 120_000);
+}
+
+async function readVisionPages(env: Env, document: VrainDocument, outputPrefix: string): Promise<Map<number, string>> {
+  const objects = (await listObjects(env, outputPrefix)).filter((name) => name.toLowerCase().endsWith(".json"));
+  const pages = new Map<number, string>();
+  for (const objectName of objects) {
+    const output = await readJsonObject<VisionOutput>(env, objectName);
+    const fallbackPage = pageNumberFromObjectName(objectName);
+    const response = output.responses?.[0];
+    const page = Number(output.context?.pageNumber ?? fallbackPage);
+    if (!Number.isSafeInteger(page) || page < 1 || page > document.page_count) continue;
+    if (response?.error?.message) {
+      throw new Error("Google Vision reported a page extraction error on PDF page " + page + ": " + response.error.message);
+    }
+    pages.set(page, normalizeOcrText(response?.fullTextAnnotation?.text));
+  }
+  return pages;
+}
+
+function buildProbe(text: string): string | undefined {
+  const words = text
+    .normalize("NFKC")
+    .replace(/\s+/gu, " ")
+    .split(" ")
+    .map((word) => word.replace(/[^\p{L}\p{N}'-]/gu, ""))
+    .filter((word) => word.length >= 3);
+  if (words.length < 6) return undefined;
+  const start = Math.max(0, Math.floor(words.length / 2) - 6);
+  return words.slice(start, start + 12).join(" ").slice(0, 240);
+}
+
+function verificationPages(pageCount: number): number[] {
+  const ratios = [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95, 1];
+  return [...new Set(ratios.map((ratio) => Math.max(1, Math.min(pageCount, Math.ceil(pageCount * ratio)))) )];
+}
+
+async function markWaitingRetry(env: Env, documentId: string, stage: string, error: string): Promise<void> {
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE vrain_documents SET status='waiting_retry',error_code='RECOVERABLE',error_message=?,updated_at=? WHERE id=?")
+      .bind(error, now, documentId),
+    env.DB.prepare("UPDATE vrain_jobs SET state='waiting_retry',stage=?,next_retry_at=?,last_heartbeat_at=?,error_code='RECOVERABLE',error_message=? WHERE document_id=?")
+      .bind(stage, now + 5 * 60_000, now, error, documentId),
+    env.DB.prepare(
+      "INSERT INTO vrain_activity_events (job_id,document_id,specialist,stage,event_type,status,message,detail_json,created_at) " +
+      "VALUES (?,?,?,?,?,?,?,?,?)",
+    ).bind(documentId, documentId, "Recovery supervisor", stage, "recovery.handoff", "warning",
+      "This workflow reached its safe retry budget. The job remains queued for automatic recovery; no owner action is required.",
+      JSON.stringify({ error, nextCheck: now + 5 * 60_000 }), now),
+  ]);
+}
+
+async function markFailed(env: Env, documentId: string, error: string): Promise<void> {
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare("UPDATE vrain_documents SET status='failed',error_code='NON_RETRYABLE',error_message=?,updated_at=? WHERE id=?")
+      .bind(error, now, documentId),
+    env.DB.prepare("UPDATE vrain_jobs SET state='failed',error_code='NON_RETRYABLE',error_message=?,last_heartbeat_at=?,completed_at=? WHERE document_id=?")
+      .bind(error, now, now, documentId),
+    env.DB.prepare(
+      "INSERT INTO vrain_activity_events (job_id,document_id,specialist,stage,event_type,status,message,detail_json,created_at) " +
+      "VALUES (?,?,?,?,?,?,?,?,?)",
+    ).bind(documentId, documentId, "Final supervisor", "processing", "workflow.blocked", "failed",
+      "The source or configuration has a non-retryable blocker. The source was not published.",
+      JSON.stringify({ error }), now),
+  ]);
+}
+
+export class VrainIngestWorkflow extends WorkflowEntrypoint<Env, DocumentJob> {
+  async run(event: WorkflowEvent<DocumentJob>, step: WorkflowStep): Promise<void> {
+    const documentId = event.payload.documentId;
+    if (typeof documentId !== "string" || !/^[a-f0-9-]{36}$/iu.test(documentId)) {
+      throw new NonRetryableError("The VRAIN ingestion workflow received an invalid document ID.");
+    }
+
+    try {
+      let document = await step.do("load VRAIN document", async () => getDocument(this.env, documentId));
+      if (!["processing", "waiting_retry"].includes(document.status)) return;
+      await updateDocument(this.env, documentId, { status: "processing", error_code: null, error_message: null });
+      await this.env.DB.prepare("UPDATE vrain_jobs SET state='processing',last_heartbeat_at=?,workflow_instance_id=? WHERE document_id=?")
+        .bind(Date.now(), this.ctx?.instanceId ?? null, documentId).run().catch(() => undefined);
+
+      await runWithRecovery(this.env, step, documentId, "verify_source", "Source integrity specialist", async () => {
+        const metadata = await this.env.DB.prepare("SELECT expected_size,source_sha256,gcs_object FROM vrain_documents WHERE id=?")
+          .bind(documentId).first<{ expected_size: number; source_sha256: string; gcs_object: string }>();
+        if (!metadata) throw new NonRetryableError("The source registry record is missing.");
+        const object = await (await import("./google")).getObjectMetadata(this.env, metadata.gcs_object);
+        if (object.size !== Number(metadata.expected_size)) throw new Error("Uploaded PDF size does not match the declared source size.");
+        const actualHash = await streamObjectSha256(this.env, metadata.gcs_object);
+        if (actualHash !== metadata.source_sha256.toUpperCase()) {
+          throw new NonRetryableError("The uploaded PDF SHA-256 does not match the verified intake fingerprint.");
+        }
+        await recordEvent(this.env, documentId, "Source integrity specialist", "verification",
+          "source.sha256_verified", "completed", "The private GCS object size and server-computed SHA-256 match the intake record.",
+          { size: object.size, sha256: actualHash });
+      });
+
+      document = await getDocument(this.env, documentId);
+      let visionOperation = document.vision_operation;
+      let outputPrefix = String((document as VrainDocument & { vision_output_prefix?: string }).vision_output_prefix ?? "");
+
+      if (!visionOperation) {
+        outputPrefix = "vrain/imports/" + documentId + "/ocr/" + crypto.randomUUID().replaceAll("-", "") + "/";
+        visionOperation = await runWithRecovery(this.env, step, documentId, "vision_submit", "Google Cloud Vision OCR specialist", async () => {
+          const operation = await submitVisionPdf(this.env, document.gcs_object, outputPrefix);
+          await this.env.DB.prepare(
+            "UPDATE vrain_documents SET vision_operation=?,vision_output_prefix=?,updated_at=? WHERE id=?",
+          ).bind(operation, outputPrefix, Date.now(), documentId).run();
+          return operation;
+        });
+        await recordEvent(this.env, documentId, "Google Cloud Vision OCR specialist", "ocr",
+          "ocr.submitted", "running", "Google Cloud Vision accepted asynchronous PDF Document Text Detection.",
+          { operation: visionOperation, pageCount: document.page_count });
+      }
+
+      let operationDone = false;
+      let pollCount = 0;
+      while (!operationDone) {
+        pollCount += 1;
+        operationDone = await runWithRecovery(this.env, step, documentId, "vision_poll_" + pollCount,
+          "Google Cloud Vision OCR specialist", async () => {
+            const result = await getVisionOperation(this.env, visionOperation!);
+            if (result.error) throw new Error(result.error);
+            return result.done;
+          });
+        if (!operationDone) {
+          await recordEvent(this.env, documentId, "Google Cloud Vision OCR specialist", "ocr",
+            "ocr.poll", "running", "Google Cloud Vision is still processing the PDF.",
+            { pollCount });
+          await step.sleep("wait for Google Vision poll " + pollCount, "1 minute");
+        }
+      }
+      await recordEvent(this.env, documentId, "Google Cloud Vision OCR specialist", "ocr",
+        "ocr.completed", "completed", "Google Cloud Vision completed the asynchronous OCR operation.",
+        { operation: visionOperation });
+
+      let pages = await runWithRecovery(this.env, step, documentId, "read_ocr_output",
+        "Document extraction specialist", async () => readVisionPages(this.env, document, outputPrefix));
+      const missingPages = Array.from({ length: document.page_count }, (_, index) => index + 1)
+        .filter((page) => !pages.has(page));
+      if (missingPages.length) {
+        const repairCount = Number((document as VrainDocument & { ocr_repair_attempts?: number }).ocr_repair_attempts ?? 0);
+        if (repairCount >= 2) {
+          throw new NonRetryableError("Google Cloud Vision repeatedly returned incomplete page coverage. Missing PDF pages: " + missingPages.slice(0, 20).join(", "));
+        }
+        await this.env.DB.prepare(
+          "UPDATE vrain_documents SET vision_operation=NULL,vision_output_prefix=NULL,ocr_repair_attempts=ocr_repair_attempts+1,updated_at=? WHERE id=?",
+        ).bind(Date.now(), documentId).run();
+        await recordEvent(this.env, documentId, "Recovery specialist", "ocr_repair",
+          "ocr.coverage_repair", "warning", "OCR output did not cover every expected PDF page. VRAIN is resubmitting Vision OCR.",
+          { missingPages: missingPages.slice(0, 50), repairAttempt: repairCount + 1 });
+        throw new RetryHandoffError("vision_coverage", "Vision OCR output is missing " + missingPages.length + " page(s); a fresh OCR operation was queued.");
+      }
+
+      for (let page = 1; page <= document.page_count; page += 1) {
+        const pageText = pages.get(page) ?? "";
+        await runWithRecovery(this.env, step, documentId, "persist_ocr_page_" + page,
+          "Document extraction specialist", async () => {
+            const normalizedKey = "vrain/books/" + documentId + "/ocr/page-" + String(page).padStart(6, "0") + ".txt";
+            await uploadTextObject(this.env, normalizedKey, pageText);
+          });
+      }
+
+      const searchName = this.env.VRAIN_SEARCH_INSTANCE?.trim() || "vrain-knowledge-v1";
+      const search = this.env.VRAIN_SEARCH.get(searchName);
+      for (let page = 1; page <= document.page_count; page += 1) {
+        const pageNumber = page;
+        await runWithRecovery(this.env, step, documentId, "index_page_" + pageNumber,
+          "Page indexing specialist", async () => {
+            const text = pages.get(pageNumber) ?? "";
+            const key = "vrain/books/" + documentId + "/pages/page-" + String(pageNumber).padStart(6, "0") + ".txt";
+            const indexed = await search.items.uploadAndPoll(
+              key,
+              document.title + " | PDF page " + pageNumber + " | language " + document.language + "\n\n" +
+                (text || "[No machine-readable text was detected on this PDF page.]"),
+              {
+                metadata: { documentId, documentTitle: document.title, pdfPage: pageNumber, language: document.language },
+                pollIntervalMs: 2_000,
+                timeoutMs: 120_000,
+              },
+            );
+            if (indexed.status !== "completed") throw new Error(indexed.error ?? "AI Search did not complete indexing for PDF page " + pageNumber + ".");
+            await this.env.DB.prepare("UPDATE vrain_documents SET indexed_pages=MAX(indexed_pages,?),updated_at=? WHERE id=?")
+              .bind(pageNumber, Date.now(), documentId).run();
+            await this.env.DB.prepare("UPDATE vrain_jobs SET stage='indexing',last_heartbeat_at=? WHERE document_id=?")
+              .bind(Date.now(), documentId).run();
+            if (pageNumber === 1 || pageNumber % 10 === 0 || pageNumber === document.page_count) {
+              await recordEvent(this.env, documentId, "Page indexing specialist", "indexing",
+                "index.progress", "running", "Indexed " + pageNumber + " of " + document.page_count + " PDF pages.",
+                { indexedPages: pageNumber, pageCount: document.page_count, percent: Math.floor(pageNumber / document.page_count * 100) });
+            }
+          });
+      }
+
+      await runWithRecovery(this.env, step, documentId, "retrieval_qa",
+        "Retrieval QA specialist", async () => {
+          const selected = verificationPages(document.page_count);
+          const readable = selected.filter((page) => (pages.get(page) ?? "").trim().split(/\s+/u).length >= 6);
+          const checks = readable.slice(0, 5);
+          if (checks.length < Math.min(3, document.page_count)) {
+            const extra = Array.from(pages.entries())
+              .filter(([page, text]) => !selected.includes(page) && text.trim().split(/\s+/u).length >= 6)
+              .map(([page]) => page);
+            checks.push(...extra.slice(0, Math.max(0, 3 - checks.length)));
+          }
+          if (checks.length < Math.min(3, document.page_count)) {
+            throw new NonRetryableError("The PDF does not contain enough readable OCR text for page-grounded retrieval QA.");
+          }
+          for (const page of checks) {
+            const probe = buildProbe(pages.get(page) ?? "");
+            if (!probe) continue;
+            const result = await search.search({
+              messages: [{ role: "user", content: probe }],
+              ai_search_options: { retrieval: { max_num_results: 50, retrieval_type: "hybrid" } },
+            });
+            const expectedKey = "vrain/books/" + documentId + "/pages/page-" + String(page).padStart(6, "0") + ".txt";
+            const match = (result.chunks ?? []).some((chunk) => chunk.item?.key === expectedKey);
+            if (!match) throw new Error("Retrieval QA did not recover the expected source page " + page + ".");
+          }
+          const allIndexed = await this.env.DB.prepare(
+            "SELECT indexed_pages,page_count,status FROM vrain_documents WHERE id=?",
+          ).bind(documentId).first<{ indexed_pages: number; page_count: number; status: string }>();
+          if (!allIndexed || Number(allIndexed.indexed_pages) !== Number(allIndexed.page_count)) {
+            throw new Error("The document index does not cover every expected PDF page.");
+          }
+          await recordEvent(this.env, documentId, "Retrieval QA specialist", "verification",
+            "qa.passed", "completed", "Distributed page-grounded retrieval probes recovered their exact source PDF pages.",
+            { checkedPages: checks, indexedPages: allIndexed.indexed_pages, pageCount: allIndexed.page_count });
+        });
+
+      await step.do("publish verified VRAIN document", async () => {
+        const now = Date.now();
+        await this.env.DB.batch([
+          this.env.DB.prepare(
+            "UPDATE vrain_documents SET status='ready',error_code=NULL,error_message=NULL,published_at=?,updated_at=? " +
+            "WHERE id=? AND indexed_pages=page_count",
+          ).bind(now, now, documentId),
+          this.env.DB.prepare(
+            "UPDATE vrain_jobs SET state='ready',stage='published',last_heartbeat_at=?,completed_at=?,next_retry_at=NULL " +
+            "WHERE document_id=?",
+          ).bind(now, now, documentId),
+          this.env.DB.prepare(
+            "INSERT INTO vrain_activity_events (job_id,document_id,specialist,stage,event_type,status,message,detail_json,created_at) " +
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+          ).bind(documentId, documentId, "Final supervisor", "publication", "document.ready", "completed",
+            "The document passed integrity, OCR coverage, full-page indexing and page-grounded retrieval QA. It is now eligible for project grants.",
+            JSON.stringify({ pageCount: document.page_count }), now),
+        ]);
+      });
+    } catch (error) {
+      if (error instanceof RetryHandoffError) {
+        await markWaitingRetry(this.env, documentId, error.stage, error.message);
+        return;
+      }
+      const message = safeError(error);
+      if (error instanceof NonRetryableError || !isRetryable(error)) {
+        await markFailed(this.env, documentId, message);
+        return;
+      }
+      await markWaitingRetry(this.env, documentId, "workflow", message);
+    }
+  }
+}
