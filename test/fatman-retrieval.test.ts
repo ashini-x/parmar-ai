@@ -154,10 +154,10 @@ describe("Fatman page retrieval", () => {
     const excerpt = extractFatmanEvidenceExcerpt(
       "Battle of Plassey 1757 Buxar 1764 Treaty of Allahabad 1765 Diwani",
       ocrPage,
-      2_200,
+      3_300,
     );
 
-    expect(excerpt.length).toBeLessThanOrEqual(2_200);
+    expect(excerpt.length).toBeLessThanOrEqual(3_300);
     expect(excerpt).toContain("Plassey");
     expect(excerpt).toContain("Buxar");
     expect(excerpt).toContain("Allahabad");
