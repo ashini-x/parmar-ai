@@ -145,7 +145,7 @@ Current implementation properties:
 
 Consumer keys do not receive upload, project-admin, collection-admin, key-management, or publication permissions. Separate write scopes are deliberately not part of this API.
 
-A production deployment should also apply Cloudflare rate-limiting rules and monitor key usage. The current source records last-used time but does not yet implement a per-key quota ledger.
+The Worker currently enforces a rolling limit of 120 requests per minute per consumer key using the D1 usage-window ledger, and records the key's last-used time. A production deployment should also apply Cloudflare edge rate-limiting rules as a second layer.
 
 ## 4. Document ingestion contract
 
@@ -467,6 +467,7 @@ The standalone D1 migration creates:
 - vrain_project_documents: explicit direct grants;
 - vrain_project_collections: explicit collection grants;
 - vrain_api_keys: hashed project key records, scopes, expiry and revocation;
+- vrain_api_usage_windows: per-key rolling request counters;
 - vrain_jobs: durable stage, attempt, heartbeat, workflow, next retry and error checkpoint;
 - vrain_activity_events: append-only specialist events;
 - vrain_audit_log: owner mutations;
@@ -518,7 +519,8 @@ Included in this branch:
 - owner-only project, collection, grant and API-key endpoints;
 - project-scoped read-only consumer API;
 - job event history and provisional measured ETA;
-- worker-specific SHA-256 tests and CI checks.
+- worker-specific SHA-256 tests and CI checks;
+- per-key rolling request limit.
 
 Not yet deployed/verified:
 - a real dedicated VRAIN D1 ID;
