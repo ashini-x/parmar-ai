@@ -26,8 +26,8 @@ function answerFor(question: string): string {
   if (question.includes("integral part of Parliament")) {
     return "The President is an integral part of Parliament because no Bill becomes law without the President's assent.";
   }
-  if (question.includes("Compare equality before law")) {
-    return "Equality before law is a negative concept from the UK, while equal protection of law is a positive concept from the USA.";
+  if (question.includes("Compare Fundamental Rights")) {
+    return "Fundamental Rights in Part III are justiciable and legally enforceable, promoting political democracy. Directive Principles in Part IV are non-justiciable and support social and economic democracy and a welfare state.";
   }
   if (question.includes("exact SHA-256")) {
     return "The exact SHA-256 fingerprint is not found in the retrieved Fatman pages, so I cannot confirm it.";
@@ -43,7 +43,7 @@ function goodDependencies(): FatmanReleaseQaDependencies {
     retrieve: async (query) => {
       if (query.includes("SHA-256")) return context([]);
       if (query.includes("President")) return context([227]);
-      if (query.includes("Equality") || query.includes("Article 14")) return context([213]);
+      if (query.includes("Fundamental Rights") && query.includes("Directive Principles")) return context([213, 218]);
       if (query.includes("Fundamental Rights") && query.includes("Directive Principles")) return context([213, 218]);
       if (query.includes("Treaty") || query.includes("Buxar")) return context([168]);
       if (query.includes("Plassey") || query.includes("Robert Clive")) return context([168]);
