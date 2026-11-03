@@ -1,5 +1,6 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import type { Env } from "../config/env";
+import { runFatmanReleaseQaForEnv } from "./release-qa-runner";
 import { setFatmanBookState } from "../analytics/db";
 import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError } from "./recovery-policy";
 import { buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
@@ -19,7 +20,7 @@ import {
 
 interface FatmanImportParams {
   importId: string;
-  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor" | "retry_page" | "quality_check";
+  task?: "resume_index" | "index_chunk" | "repair_chunk" | "cleanup_chunk" | "monitor" | "retry_page" | "quality_check" | "release_qa";
   startPage?: number;
   endPage?: number;
   objectNames?: string[];
@@ -51,7 +52,7 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
     throw new Error("The Fatman import workflow received an invalid import ID.");
   }
   if (task !== undefined && task !== "resume_index" && task !== "index_chunk" && task !== "repair_chunk" &&
-      task !== "cleanup_chunk" && task !== "monitor" && task !== "retry_page" && task !== "quality_check") {
+      task !== "cleanup_chunk" && task !== "monitor" && task !== "retry_page" && task !== "quality_check" && task !== "release_qa") {
     throw new Error("The Fatman import workflow received an invalid task.");
   }
   return {
@@ -330,15 +331,28 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           return;
         }
 
-        await step.do("activate Fatman after all 538 pages and retrieval probes pass", async () => {
+        const releaseQa = await step.do("run six-category real-user Fatman release QA", async () =>
+          runFatmanReleaseQaForEnv(this.env, importId + "-" + runId + "-release-qa-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8)));
+
+        await step.do("release supervisor applies the six-category QA decision", async () => {
           await markFatmanImportCompleted(this.env, importId);
           await setFatmanBookState(this.env, {
-            enabled: true,
+            enabled: releaseQa.status === "passed",
             documentVersion: this.env.FATMAN_DOCUMENT_VERSION?.trim() ?? "",
             indexedPages: 538,
           });
-          return { enabled: true, ...verification };
+          return {
+            enabled: releaseQa.status === "passed",
+            qaStatus: releaseQa.status,
+            passedCases: releaseQa.passedCases,
+            totalCases: releaseQa.totalCases,
+            failedCases: releaseQa.failedCases,
+          };
         });
+
+        // Keep OCR source objects private and available for repair when the
+        // release suite detects a regression. Cleanup is only safe after approval.
+        if (releaseQa.status !== "passed") return;
 
         try {
           const objectNames = await step.do("list temporary Fatman OCR objects after activation", async () =>
@@ -355,6 +369,30 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         } catch {
           // Book mode is ready. Temporary OCR output can be removed by the bucket lifecycle policy.
         }
+        return;
+      }
+
+      if (params.task === "release_qa") {
+        const runId = params.runId;
+        if (typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId)) {
+          throw new Error("The Fatman release QA parameters are invalid.");
+        }
+        const report = await step.do("run scheduled six-category Fatman regression QA", async () =>
+          runFatmanReleaseQaForEnv(this.env, importId + "-" + runId + "-release-qa"));
+        await step.do("release supervisor reconciles live book-mode access", async () => {
+          await setFatmanBookState(this.env, {
+            enabled: report.status === "passed",
+            documentVersion: this.env.FATMAN_DOCUMENT_VERSION?.trim() ?? "",
+            indexedPages: 538,
+          });
+          return {
+            enabled: report.status === "passed",
+            status: report.status,
+            passedCases: report.passedCases,
+            totalCases: report.totalCases,
+            failedCases: report.failedCases,
+          };
+        });
         return;
       }
 
@@ -465,7 +503,18 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         }));
       return;
     } catch (error) {
-      if (params.task !== "cleanup_chunk") {
+      if (params.task === "quality_check" || params.task === "release_qa") {
+        // QA errors must fail closed for book mode without rewriting a fully
+        // completed 538-page import as an upload/indexing failure.
+        await setFatmanBookState(this.env, {
+          enabled: false,
+          documentVersion: this.env.FATMAN_DOCUMENT_VERSION?.trim() ?? "",
+          indexedPages: 538,
+        }).catch(() => undefined);
+        if (params.task === "quality_check") {
+          await markFatmanImportCompleted(this.env, importId).catch(() => undefined);
+        }
+      } else if (params.task !== "cleanup_chunk") {
         await markFatmanImportFailed(this.env, importId, error).catch(() => undefined);
       }
       throw error;

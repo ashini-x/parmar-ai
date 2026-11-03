@@ -98,6 +98,7 @@ describe("Fatman live monitor", () => {
     expect(result.pipeline.vision.status).toBe("completed");
     expect(result.pipeline.workflow.status).toBe("running");
     expect(result.documentVersion).toBe("fatman-test-v1");
+    expect(result.qa).toBeNull();
     expect(Date.parse(result.checkedAt)).not.toBeNaN();
     expect(sources.fatmanUploadStatus).toHaveBeenCalledWith(env, null, true);
   });
@@ -153,6 +154,9 @@ describe("Fatman live monitor", () => {
     expect(html).toContain("Not submitted yet");
     expect(html).toContain("Google Vision OCR");
     expect(html).toContain("Cloudflare Workflow");
+    expect(html).toContain("Real-user release QA");
+    expect(html).toContain("/admin/api/fatman/qa");
+    expect(html).toContain("Run QA now");
     expect(html).toContain("pdfTransferComplete");
     expect(html).toContain("server-side supervisor coordinates page indexing");
   });

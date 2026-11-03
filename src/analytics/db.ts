@@ -173,6 +173,25 @@ CREATE TABLE IF NOT EXISTS fatman_import_jobs (
 CREATE INDEX IF NOT EXISTS idx_fatman_import_jobs_hash_created
   ON fatman_import_jobs(source_sha256, expected_size, created_at);
 
+CREATE TABLE IF NOT EXISTS fatman_release_qa_runs (
+  run_id TEXT PRIMARY KEY,
+  document_version TEXT NOT NULL,
+  suite_version TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('running','passed','failed')),
+  total_cases INTEGER NOT NULL DEFAULT 0,
+  passed_cases INTEGER NOT NULL DEFAULT 0,
+  failed_cases INTEGER NOT NULL DEFAULT 0,
+  query_count INTEGER NOT NULL DEFAULT 0,
+  generation_attempts INTEGER NOT NULL DEFAULT 0,
+  estimated_cost_microusd INTEGER NOT NULL DEFAULT 0,
+  results_json TEXT NOT NULL DEFAULT '[]',
+  started_at INTEGER NOT NULL,
+  completed_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_fatman_release_qa_runs_completed
+  ON fatman_release_qa_runs(document_version, completed_at DESC);
+
 CREATE TABLE IF NOT EXISTS telegram_bots (
   bot_connection_id TEXT PRIMARY KEY,
   bot_id INTEGER NOT NULL UNIQUE,
@@ -431,6 +450,126 @@ export async function setFatmanBookState(
   await env.DB.prepare(
     "UPDATE fatman_book_state SET enabled = ?, document_version = ?, indexed_pages = ?, updated_at = ? WHERE singleton_id = 1"
   ).bind(state.enabled ? 1 : 0, state.documentVersion, state.indexedPages, Date.now()).run();
+}
+
+export interface FatmanReleaseQaRunSummary {
+  runId: string;
+  documentVersion: string;
+  suiteVersion: string;
+  status: "running" | "passed" | "failed";
+  totalCases: number;
+  passedCases: number;
+  failedCases: number;
+  queryCount: number;
+  generationAttempts: number;
+  estimatedCostMicrousd: number;
+  results: unknown[];
+  startedAt: number;
+  completedAt: number | null;
+}
+
+export async function recordFatmanReleaseQaRunStarted(
+  env: Env,
+  runId: string,
+  documentVersion: string,
+  suiteVersion: string,
+  startedAt = Date.now(),
+): Promise<void> {
+  if (!env.DB) throw new Error("D1 is required to store Fatman release QA status.");
+  await ensureAnalyticsSchema(env);
+  const result = await env.DB.prepare(
+    "INSERT INTO fatman_release_qa_runs (run_id, document_version, suite_version, status, total_cases, passed_cases, failed_cases, query_count, generation_attempts, estimated_cost_microusd, results_json, started_at, completed_at) " +
+    "VALUES (?, ?, ?, 'running', 0, 0, 0, 0, 0, 0, '[]', ?, NULL) " +
+    "ON CONFLICT(run_id) DO UPDATE SET status='running', results_json='[]', completed_at=NULL, started_at=excluded.started_at"
+  ).bind(runId, documentVersion, suiteVersion, startedAt).run();
+  if (!result.success) throw new Error("D1 did not confirm the Fatman release QA start.");
+}
+
+export async function recordFatmanReleaseQaRun(
+  env: Env,
+  report: {
+    runId: string;
+    documentVersion: string;
+    suiteVersion: string;
+    status: "passed" | "failed";
+    totalCases: number;
+    passedCases: number;
+    failedCases: number;
+    queryCount: number;
+    generationAttempts: number;
+    estimatedCostMicrousd: number;
+    results: unknown[];
+    startedAt: number;
+    completedAt: number;
+  },
+): Promise<void> {
+  if (!env.DB) throw new Error("D1 is required to store Fatman release QA results.");
+  await ensureAnalyticsSchema(env);
+  const result = await env.DB.prepare(
+    "INSERT INTO fatman_release_qa_runs (run_id, document_version, suite_version, status, total_cases, passed_cases, failed_cases, query_count, generation_attempts, estimated_cost_microusd, results_json, started_at, completed_at) " +
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+    "ON CONFLICT(run_id) DO UPDATE SET status=excluded.status, total_cases=excluded.total_cases, passed_cases=excluded.passed_cases, failed_cases=excluded.failed_cases, query_count=excluded.query_count, generation_attempts=excluded.generation_attempts, estimated_cost_microusd=excluded.estimated_cost_microusd, results_json=excluded.results_json, completed_at=excluded.completed_at"
+  ).bind(
+    report.runId,
+    report.documentVersion,
+    report.suiteVersion,
+    report.status,
+    report.totalCases,
+    report.passedCases,
+    report.failedCases,
+    report.queryCount,
+    report.generationAttempts,
+    report.estimatedCostMicrousd,
+    JSON.stringify(report.results).slice(0, 48_000),
+    report.startedAt,
+    report.completedAt,
+  ).run();
+  if (!result.success) throw new Error("D1 did not confirm the Fatman release QA result write.");
+}
+
+export async function getLatestFatmanReleaseQaRun(env: Env): Promise<FatmanReleaseQaRunSummary | null> {
+  if (!env.DB) return null;
+  await ensureAnalyticsSchema(env);
+  const row = await env.DB.prepare(
+    "SELECT run_id, document_version, suite_version, status, total_cases, passed_cases, failed_cases, query_count, generation_attempts, estimated_cost_microusd, results_json, started_at, completed_at FROM fatman_release_qa_runs ORDER BY started_at DESC LIMIT 1"
+  ).first<{
+    run_id: string;
+    document_version: string;
+    suite_version: string;
+    status: "running" | "passed" | "failed";
+    total_cases: number;
+    passed_cases: number;
+    failed_cases: number;
+    query_count: number;
+    generation_attempts: number;
+    estimated_cost_microusd: number;
+    results_json: string;
+    started_at: number;
+    completed_at: number | null;
+  }>();
+  if (!row) return null;
+  let results: unknown[] = [];
+  try {
+    const parsed = JSON.parse(row.results_json) as unknown;
+    if (Array.isArray(parsed)) results = parsed;
+  } catch {
+    results = [];
+  }
+  return {
+    runId: row.run_id,
+    documentVersion: row.document_version,
+    suiteVersion: row.suite_version,
+    status: row.status,
+    totalCases: Number(row.total_cases),
+    passedCases: Number(row.passed_cases),
+    failedCases: Number(row.failed_cases),
+    queryCount: Number(row.query_count),
+    generationAttempts: Number(row.generation_attempts),
+    estimatedCostMicrousd: Number(row.estimated_cost_microusd),
+    results,
+    startedAt: Number(row.started_at),
+    completedAt: row.completed_at === null ? null : Number(row.completed_at),
+  };
 }
 
 export async function reserveFatmanSearchQuery(

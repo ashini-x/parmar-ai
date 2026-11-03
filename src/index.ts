@@ -28,11 +28,12 @@ import {
   buildFatmanModeMarkup,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
-import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
+import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, ensureAnalyticsSchema, getLatestFatmanReleaseQaRun, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
 import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, testFatmanVision, uploadFatmanPage } from "./fatman/admin";
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
+import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
 import { completeFatmanUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
@@ -1997,10 +1998,12 @@ const worker = {
       if (url.pathname.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
         if (url.pathname === "/admin/api/fatman/monitor" && request.method === "GET") return fatmanMonitorStatus(env);
+        if (url.pathname === "/admin/api/fatman/qa" && request.method === "GET") return fatmanReleaseQaStatus(env);
         if (url.pathname === "/admin/api/fatman/status" && request.method === "GET") return fatmanIndexStatus(env);
         if (url.pathname === "/admin/api/fatman/upload/status" && request.method === "GET") return fatmanUploadStatus(env, url.searchParams.get("id"));
         if (request.method === "POST" && url.pathname.startsWith("/admin/api/fatman/")) {
           if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          if (url.pathname === "/admin/api/fatman/qa") return triggerFatmanReleaseQa(env);
           if (url.pathname === "/admin/api/fatman/vision/test") return testFatmanVision(env);
           if (url.pathname === "/admin/api/fatman/upload/start") return startFatmanUpload(env, request);
           const uploadChunkMatch = url.pathname.match(/^\/admin\/api\/fatman\/upload\/([a-f0-9-]+)\/chunk$/i);
@@ -2058,6 +2061,58 @@ const worker = {
       await cleanupAnalytics(env, getAnalyticsConfig(env).retentionDays);
     } catch (error) {
       logger.warn("analytics_cleanup_failed", { error: error instanceof Error ? error.message : String(error) });
+    }
+
+    try {
+      if (
+        !env.DB ||
+        !env.FATMAN_IMPORT ||
+        env.FATMAN_ENABLED?.trim().toLowerCase() !== "true" ||
+        !env.FATMAN_DOCUMENT_VERSION?.trim()
+      ) return;
+
+      await ensureAnalyticsSchema(env);
+      const importJob = await env.DB.prepare(
+        "SELECT id, status, expected_size, uploaded_bytes, indexed_pages FROM fatman_import_jobs ORDER BY updated_at DESC LIMIT 1"
+      ).first<{
+        id: string;
+        status: string;
+        expected_size: number;
+        uploaded_bytes: number;
+        indexed_pages: number;
+      }>();
+      if (
+        !importJob ||
+        importJob.status !== "completed" ||
+        Number(importJob.uploaded_bytes) !== Number(importJob.expected_size) ||
+        Number(importJob.indexed_pages) !== 538
+      ) return;
+
+      const now = Date.now();
+      const latest = await getLatestFatmanReleaseQaRun(env);
+      if (latest && latest.documentVersion === env.FATMAN_DOCUMENT_VERSION.trim()) {
+        const age = now - latest.startedAt;
+        if (latest.status === "running" && age < 60 * 60 * 1_000) return;
+        if (latest.status !== "running" && age < 20 * 60 * 60 * 1_000) return;
+      }
+
+      const day = new Date(now).toISOString().slice(0, 10).replace(/-/gu, "");
+      await env.FATMAN_IMPORT.create({
+        id: "fatman-qa-" + day,
+        params: {
+          task: "release_qa",
+          importId: importJob.id,
+          runId: day,
+        },
+      });
+      logger.info("fatman_scheduled_release_qa_started", {
+        importId: importJob.id,
+        documentVersion: env.FATMAN_DOCUMENT_VERSION.trim(),
+      });
+    } catch (error) {
+      logger.warn("fatman_scheduled_release_qa_failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   },
 };
