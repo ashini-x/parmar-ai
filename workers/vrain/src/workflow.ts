@@ -117,11 +117,12 @@ async function runWithRecovery<T>(
     try {
       await recordEvent(env, documentId, specialist, stage, stage + ".attempt_started", "running",
         specialist + " is executing " + stage + ".", { attempt });
-      return await step.do(
+      const value = await step.do(
         stage + " attempt " + attempt,
         { retries: { limit: 0, delay: "1 second" }, timeout: "30 minutes" },
-        async () => action(attempt),
-      ) as T;
+        async () => (await action(attempt)) as never,
+      );
+      return value as T;
     } catch (error) {
       lastError = error;
       if (!isRetryable(error)) throw new NonRetryableError(safeError(error));
