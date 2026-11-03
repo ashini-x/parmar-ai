@@ -12,6 +12,19 @@ describe("Fatman retrieval readiness checks", () => {
     expect(FATMAN_VERIFICATION_PAGES).toEqual([54, 269, 485]);
   });
 
+  it("spreads additional-book checks across the whole PDF", () => {
+    expect(buildFatmanBookVerificationPages(1)).toEqual([1]);
+    expect(buildFatmanBookVerificationPages(2)).toEqual([1, 2]);
+    expect(buildFatmanBookVerificationPages(100)).toEqual([5, 20, 35, 50, 65, 80, 95, 100]);
+    expect(() => buildFatmanBookVerificationPages(0)).toThrow();
+  });
+
+  it("retries when a sampled page has not become retrievable yet", () => {
+    expect(isRetryableFatmanQualityFailure(
+      new Error("Fatman retrieval QA could not match the expected source page 12"),
+    )).toBe(true);
+  });
+
   it("spreads additional-book samples across short and long PDFs", () => {
     expect(buildFatmanBookVerificationPages(1)).toEqual([1]);
     expect(buildFatmanBookVerificationPages(2)).toEqual([1, 2]);
