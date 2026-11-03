@@ -225,6 +225,14 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
   const seenIds = new Set<string>();
   const pageCounts = new Map<string, number>();
   const allowedPages = new Set<string>();
+  const state = await getFatmanBookState(env);
+  const legacyReady = state.enabled &&
+    state.documentVersion === env.FATMAN_DOCUMENT_VERSION?.trim() &&
+    state.indexedPages === Number(env.FATMAN_EXPECTED_PAGES);
+  const readyBookRows = await env.DB!.prepare(
+    "SELECT id, title FROM fatman_books WHERE status = 'ready' AND indexed_pages = page_count"
+  ).all<{ id: string; title: string }>();
+  const readyBookTitles = new Map((readyBookRows.results ?? []).map((book) => [book.id, book.title]));
 
   for (const chunk of chunks) {
     const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
@@ -245,6 +253,7 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
     if (seenIds.has(id)) continue;
     const metadata = chunk.item?.metadata;
     const bookId = parsedKey?.bookId;
+    if (bookId ? !readyBookTitles.has(bookId) : !legacyReady) continue;
     const sourceKey = bookId ?? "fatman-legacy";
     const pageKey = sourceKey + ":" + pdfPage;
     if (!allowedPages.has(pageKey) && allowedPages.size >= MAX_PAGES) continue;
@@ -253,7 +262,7 @@ async function searchFatmanContext(env: Env, normalizedQuery: string, maxResults
 
     const printedPage = cleanMetadataText(metadata?.printedPage, 20);
     const section = cleanMetadataText(metadata?.section, 120);
-    const bookTitle = bookId ? (cleanMetadataText(metadata?.bookTitle, 160) ?? "Additional reference book") : undefined;
+    const bookTitle = bookId ? (cleanMetadataText(metadata?.bookTitle, 160) ?? readyBookTitles.get(bookId) ?? "Additional reference book") : undefined;
     passages.push({
       id,
       pdfPage,
