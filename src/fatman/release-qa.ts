@@ -200,7 +200,7 @@ async function runCase(
       continue;
     }
     const current = mergeFatmanContexts(contexts);
-    if (qaCase.expectAbstention || includesAllPages(current, qaCase.expectedPages)) break;
+    if (!qaCase.expectAbstention && includesAllPages(current, qaCase.expectedPages)) break;
   }
 
   const bookContext = mergeFatmanContexts(contexts);
@@ -238,11 +238,19 @@ async function runCase(
   let citedPages: number[] = [];
   for (let attempt = 0; attempt < 2; attempt += 1) {
     generationAttempts += 1;
-    const generated = await dependencies.answer(
-      qaCase.question,
-      bookContext,
-      attempt === 1 ? ANSWER_REPAIR_HINT : undefined,
-    );
+    let generated: FatmanReleaseQaAnswer;
+    try {
+      generated = await dependencies.answer(
+        qaCase.question,
+        bookContext,
+        attempt === 1 ? ANSWER_REPAIR_HINT : undefined,
+      );
+    } catch (error) {
+      answerText = "";
+      answerStatus = "failed";
+      retrievalError = error instanceof Error ? error.message : String(error);
+      break;
+    }
     estimatedCostMicrousd += Math.max(0, Math.floor(generated.estimatedCostMicrousd ?? 0));
     answerText = generated.answer.trim().slice(0, 3_900);
     const citations = formatFatmanCitations(bookContext.passages);
@@ -275,9 +283,9 @@ async function runCase(
     queryCount,
     generationAttempts,
     estimatedCostMicrousd,
-    ...(answerStatus === "failed" ? { error: qaCase.expectAbstention
+    ...(answerStatus === "failed" ? { error: retrievalError ?? (qaCase.expectAbstention
       ? "The answer did not clearly abstain from unsupported book claims."
-      : "The answer missed required facts or failed to cite its verified source pages." } : {}),
+      : "The answer missed required facts or failed to cite its verified source pages.") } : {}),
     ...(answerText ? { answerExcerpt: answerText.slice(0, 600) } : {}),
   };
 }
