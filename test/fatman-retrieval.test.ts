@@ -10,8 +10,10 @@ vi.mock("../src/analytics/db", () => analytics);
 import {
   FatmanRetrievalError,
   formatFatmanCitations,
+  isFatmanPassageRelevant,
   isFatmanReady,
   retrieveFatmanContext,
+  retrieveFatmanQaContext,
 } from "../src/fatman/retrieval";
 
 describe("Fatman page retrieval", () => {
@@ -101,6 +103,29 @@ describe("Fatman page retrieval", () => {
       userMessage: "Fatman search has reached this month's free usage limit. Use /help to return to usual study mode.",
     });
     expect(search).not.toHaveBeenCalled();
+  });
+
+  it("filters vector-only matches that have no meaningful overlap with the student's query", () => {
+    expect(isFatmanPassageRelevant(
+      "exact SHA-256 fingerprint Cloudflare API token used to deploy this PDF",
+      "Fatman 2nd Edition 2026 | PDF page 165 MODERN HISTORY",
+    )).toBe(false);
+    expect(isFatmanPassageRelevant(
+      "Battle of Plassey 1757 Robert Clive",
+      "Fatman 2nd Edition 2026 | PDF page 168 Battle of Plassey (1757) East India Company force led by Robert Clive.",
+    )).toBe(true);
+  });
+
+  it("runs internal QA retrieval without consuming a student's monthly search allowance", async () => {
+    const context = await retrieveFatmanQaContext(env, "Battle of Plassey 1757");
+    expect(search).toHaveBeenCalledWith({
+      messages: [{ role: "user", content: "Battle of Plassey 1757" }],
+      ai_search_options: {
+        retrieval: { max_num_results: 50, retrieval_type: "hybrid" },
+      },
+    });
+    expect(analytics.reserveFatmanSearchQuery).not.toHaveBeenCalled();
+    expect(context.passages).toHaveLength(1);
   });
 
   it("does not invent a citation when no passages were retrieved", () => {
