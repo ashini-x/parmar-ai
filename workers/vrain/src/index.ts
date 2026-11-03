@@ -1,3 +1,4 @@
+export { VrainIngestWorkflow } from "./workflow";
 import type { Env, VrainDocument, VrainPassage } from "./types";
 import {
   createResumableUpload,
