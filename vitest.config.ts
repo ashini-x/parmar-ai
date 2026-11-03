@@ -15,7 +15,8 @@ export default defineConfig({
       "test/native-quiz-contract.node.test.ts",
       "test/fatman-retrieval.test.ts",
       "test/fatman-admin-contract.node.test.ts",
-      "test/fatman-admin.test.ts"
+      "test/fatman-admin.test.ts",
+      "test/brvin-admin-script.node.test.ts"
     ]
   }
 });
