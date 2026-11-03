@@ -178,7 +178,7 @@ export async function runBrvinRecoverySupervisor(env: Env): Promise<{
       }
       let workflowState: { status: string; error?: { message?: string } };
       try {
-        workflowState = await env.FATMAN_IMPORT.get(candidate.workflow_instance_id).status();
+        workflowState = await (await env.FATMAN_IMPORT.get(candidate.workflow_instance_id)).status();
       } catch {
         waiting += 1;
         continue;
