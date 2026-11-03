@@ -468,6 +468,23 @@ export interface FatmanReleaseQaRunSummary {
   completedAt: number | null;
 }
 
+export async function recordFatmanReleaseQaRunStarted(
+  env: Env,
+  runId: string,
+  documentVersion: string,
+  suiteVersion: string,
+  startedAt = Date.now(),
+): Promise<void> {
+  if (!env.DB) throw new Error("D1 is required to store Fatman release QA status.");
+  await ensureAnalyticsSchema(env);
+  const result = await env.DB.prepare(
+    "INSERT INTO fatman_release_qa_runs (run_id, document_version, suite_version, status, total_cases, passed_cases, failed_cases, query_count, generation_attempts, estimated_cost_microusd, results_json, started_at, completed_at) " +
+    "VALUES (?, ?, ?, 'running', 0, 0, 0, 0, 0, 0, '[]', ?, NULL) " +
+    "ON CONFLICT(run_id) DO UPDATE SET status='running', results_json='[]', completed_at=NULL, started_at=excluded.started_at"
+  ).bind(runId, documentVersion, suiteVersion, startedAt).run();
+  if (!result.success) throw new Error("D1 did not confirm the Fatman release QA start.");
+}
+
 export async function recordFatmanReleaseQaRun(
   env: Env,
   report: {
