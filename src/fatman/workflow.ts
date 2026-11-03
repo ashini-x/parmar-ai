@@ -267,6 +267,12 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         }
         const deletion = await step.do("delete private Google Vision OCR output", async () =>
           deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/"));
+        await step.do("persist Vision OCR deletion state", async () => {
+          await this.env.DB!.prepare(
+            "UPDATE brvin_books SET vision_output_deleted_at=?,updated_at=? WHERE id=? AND status='ready'"
+          ).bind(Date.now(), Date.now(), importId).run();
+          return { visionOutputDeleted: true };
+        });
         await step.do("record Vision OCR output deletion", async () => {
           await recordBrvinActivity(this.env, {
             importId, bookId: importId, agent: "Storage retention supervisor",
