@@ -2,7 +2,7 @@ import type { AiSearchChunk, Env } from "../config/env";
 import { ensureAnalyticsSchema } from "../analytics/db";
 import { parseFatmanIndexPageKey } from "../fatman/library";
 
-export interface VrainPassage {
+export interface BrvinPassage {
   id: string;
   bookId: string;
   bookTitle: string;
@@ -11,23 +11,23 @@ export interface VrainPassage {
   score: number;
 }
 
-export interface VrainProjectContext {
+export interface BrvinProjectContext {
   project: { id: string; name: string; slug: string };
-  passages: VrainPassage[];
+  passages: BrvinPassage[];
   searchedSources: number;
 }
 
-interface VrainSource {
+interface BrvinSource {
   id: string;
   title: string;
   search_prefix: string;
 }
 
-export class VrainRetrievalError extends Error {
+export class BrvinRetrievalError extends Error {
   readonly retryable: boolean;
   constructor(message: string, retryable = false) {
     super(message);
-    this.name = "VrainRetrievalError";
+    this.name = "BrvinRetrievalError";
     this.retryable = retryable;
   }
 }
@@ -47,34 +47,34 @@ function terms(value: string): string[] {
 }
 
 /**
- * VRAIN project retrieval is fail-closed: only verified books reachable through
+ * BRVIN project retrieval is fail-closed: only verified books reachable through
  * an explicit direct-book or collection grant can be searched or cited.
  */
-export async function retrieveVrainProjectContext(
+export async function retrieveBrvinProjectContext(
   env: Env,
   projectSlug: string,
   query: string,
-): Promise<VrainProjectContext> {
+): Promise<BrvinProjectContext> {
   if (!env.DB || !env.FATMAN_SEARCH || !env.FATMAN_INSTANCE_NAME?.trim()) {
-    throw new VrainRetrievalError("VRAIN retrieval is not configured.");
+    throw new BrvinRetrievalError("BRVIN retrieval is not configured.");
   }
   const normalized = cleanText(query, 2_000);
-  if (!normalized) throw new VrainRetrievalError("VRAIN search query is empty.");
+  if (!normalized) throw new BrvinRetrievalError("BRVIN search query is empty.");
 
   try {
     await ensureAnalyticsSchema(env);
     const project = await env.DB.prepare(
-      "SELECT id,name,slug FROM vrain_projects WHERE slug=? AND status='active' LIMIT 1"
+      "SELECT id,name,slug FROM brvin_projects WHERE slug=? AND status='active' LIMIT 1"
     ).bind(projectSlug).first<{ id: string; name: string; slug: string }>();
-    if (!project) throw new VrainRetrievalError("This project is not registered with VRAIN.");
+    if (!project) throw new BrvinRetrievalError("This project is not registered with BRVIN.");
 
     const grants = await env.DB.prepare(
-      "SELECT DISTINCT b.id,b.title,b.search_prefix FROM vrain_books b " +
-      "JOIN vrain_projects p ON p.id=? AND p.status='active' " +
-      "LEFT JOIN vrain_project_books pb ON pb.project_id=p.id AND pb.book_id=b.id " +
-      "LEFT JOIN vrain_project_collections pc ON pc.project_id=p.id AND pc.collection_id=b.collection_id " +
+      "SELECT DISTINCT b.id,b.title,b.search_prefix FROM brvin_books b " +
+      "JOIN brvin_projects p ON p.id=? AND p.status='active' " +
+      "LEFT JOIN brvin_project_books pb ON pb.project_id=p.id AND pb.book_id=b.id " +
+      "LEFT JOIN brvin_project_collections pc ON pc.project_id=p.id AND pc.collection_id=b.collection_id " +
       "WHERE b.status='ready' AND b.indexed_pages=b.page_count AND (pb.book_id IS NOT NULL OR pc.collection_id IS NOT NULL)"
-    ).bind(project.id).all<VrainSource>();
+    ).bind(project.id).all<BrvinSource>();
     const sources = grants.results ?? [];
     if (!sources.length) return { project, passages: [], searchedSources: 0 };
 
@@ -87,13 +87,13 @@ export async function retrieveVrainProjectContext(
         ai_search_options: { retrieval: { max_num_results: 50, retrieval_type: "hybrid" } },
       });
     } catch (error) {
-      throw new VrainRetrievalError(error instanceof Error ? error.message : String(error), true);
+      throw new BrvinRetrievalError(error instanceof Error ? error.message : String(error), true);
     }
 
     const queryTerms = new Set(terms(normalized));
     const minScoreValue = Number(env.FATMAN_MIN_SCORE ?? "0.2");
     const minScore = Number.isFinite(minScoreValue) ? Math.min(1,Math.max(0,minScoreValue)) : 0.2;
-    const passages: VrainPassage[] = [];
+    const passages: BrvinPassage[] = [];
     const seen = new Set<string>();
     for (const chunk of result.chunks ?? []) {
       const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
@@ -122,20 +122,20 @@ export async function retrieveVrainProjectContext(
     passages.sort((a,b)=>b.score-a.score);
     return { project, passages, searchedSources: sources.length };
   } catch (error) {
-    if (error instanceof VrainRetrievalError) throw error;
-    throw new VrainRetrievalError(error instanceof Error ? error.message : String(error), true);
+    if (error instanceof BrvinRetrievalError) throw error;
+    throw new BrvinRetrievalError(error instanceof Error ? error.message : String(error), true);
   }
 }
 
 /** Useful for admin/test diagnostics without exposing document text. */
-export async function listVrainProjectSources(env: Env, projectSlug: string): Promise<Array<{ id: string; title: string; pageCount: number }>> {
-  if (!env.DB) throw new VrainRetrievalError("VRAIN database is not configured.");
+export async function listBrvinProjectSources(env: Env, projectSlug: string): Promise<Array<{ id: string; title: string; pageCount: number }>> {
+  if (!env.DB) throw new BrvinRetrievalError("BRVIN database is not configured.");
   await ensureAnalyticsSchema(env);
   const result = await env.DB.prepare(
-    "SELECT DISTINCT b.id,b.title,b.page_count FROM vrain_books b " +
-    "JOIN vrain_projects p ON p.id=(SELECT id FROM vrain_projects WHERE slug=? AND status='active' LIMIT 1) " +
-    "LEFT JOIN vrain_project_books pb ON pb.project_id=p.id AND pb.book_id=b.id " +
-    "LEFT JOIN vrain_project_collections pc ON pc.project_id=p.id AND pc.collection_id=b.collection_id " +
+    "SELECT DISTINCT b.id,b.title,b.page_count FROM brvin_books b " +
+    "JOIN brvin_projects p ON p.id=(SELECT id FROM brvin_projects WHERE slug=? AND status='active' LIMIT 1) " +
+    "LEFT JOIN brvin_project_books pb ON pb.project_id=p.id AND pb.book_id=b.id " +
+    "LEFT JOIN brvin_project_collections pc ON pc.project_id=p.id AND pc.collection_id=b.collection_id " +
     "WHERE b.status='ready' AND b.indexed_pages=b.page_count AND (pb.book_id IS NOT NULL OR pc.collection_id IS NOT NULL) " +
     "ORDER BY b.title COLLATE NOCASE"
   ).bind(projectSlug).all<{id:string;title:string;page_count:number}>();

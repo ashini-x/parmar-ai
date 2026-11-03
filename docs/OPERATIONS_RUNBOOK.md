@@ -33,9 +33,9 @@ Rotate at the provider, update Cloudflare, and validate the affected integration
 ## Rollback
 Use the last verified Cloudflare version. Do not treat an ad-hoc edited working directory as a rollback artifact.
 
-## VRAIN knowledge operations
+## BRVIN knowledge operations
 
-Use the administrator-only **VRAIN** console at `/admin/vrain` (also linked from `/admin`). The former `/admin/fatman/books` address redirects to VRAIN.
+Use the administrator-only **BRVIN** console at `/admin/brvin` (also linked from `/admin`). The former `/admin/fatman/books` address redirects to BRVIN.
 
 ### Add a knowledge source
 1. Enter a source title and choose a collection. The title defaults from the PDF filename if left blank.
@@ -45,7 +45,7 @@ Use the administrator-only **VRAIN** console at `/admin/vrain` (also linked from
 5. Keep the page open until transfer completes. OCR, indexing, recovery and retrieval QA continue in Cloudflare Workflows after the transfer is complete.
 
 ### Observe live specialist work
-The right-hand VRAIN operations console refreshes every five seconds from the D1 event ledger. It shows real workflow events (not simulated agent activity): secure upload milestones, Vision OCR submission/completion, page-index progress and repairs, retrieval QA, recovery and readiness. Open **Operations** for a book to inspect its per-import event history and live Vision/Workflow status. The books list shows the registry status and indexed/expected pages.
+The right-hand BRVIN operations console refreshes every five seconds from the D1 event ledger. It shows real workflow events (not simulated agent activity): secure upload milestones, Vision OCR submission/completion, page-index progress and repairs, retrieval QA, recovery and readiness. Open **Operations** for a book to inspect its per-import event history and live Vision/Workflow status. The books list shows the registry status and indexed/expected pages.
 
 ### Manage project knowledge boundaries
 - A collection organises sources but does not make them globally searchable.
@@ -53,11 +53,11 @@ The right-hand VRAIN operations console refreshes every five seconds from the D1
 - Direct book grants can be managed independently for exceptions.
 - Access is additive: a project can see a book through a direct book grant or through a collection grant.
 - A newly created project has no book access until an administrator assigns sources.
-- Fatman is pre-registered as a VRAIN project. Its existing reviewed 538-page source and the previously managed Fatman reference books are migrated into its grants. Newly uploaded documents are not automatically added to Fatman's knowledge unless selected or added to one of Fatman's assigned collections.
+- Fatman is pre-registered as a BRVIN project. Its existing reviewed 538-page source and the previously managed Fatman reference books are migrated into its grants. Newly uploaded documents are not automatically added to Fatman's knowledge unless selected or added to one of Fatman's assigned collections.
 
 ### Recovery and failure handling
 If the browser closes during transfer, select the same PDF again so the fingerprint can resume the secure upload or start a fresh transfer if the GCS session expired. If the upload completed but indexing failed, use **Resume** from the job's operations controls when the saved Vision OCR result is available. If retrieval QA fails, the book remains unavailable to project retrieval until it passes.
 
-Do not give administrators GCP credentials or direct bucket access. Do not mark a source ready manually or bypass its retrieval verification. The VRAIN console and APIs require the existing admin session; mutating API requests enforce same-origin CSRF checks. The shared D1 registry is migrated idempotently when analytics schema initialization runs.
+Do not give administrators GCP credentials or direct bucket access. Do not mark a source ready manually or bypass its retrieval verification. The BRVIN console and APIs require the existing admin session; mutating API requests enforce same-origin CSRF checks. The shared D1 registry is migrated idempotently when analytics schema initialization runs.
 
-The legacy `/admin/fatman` importer and `/admin/fatman/monitor` remain for the original reviewed Fatman PDF. They do not become the generic VRAIN ingestion surface.
+The legacy `/admin/fatman` importer and `/admin/fatman/monitor` remain for the original reviewed Fatman PDF. They do not become the generic BRVIN ingestion surface.
