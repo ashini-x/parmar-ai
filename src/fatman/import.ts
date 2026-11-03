@@ -745,6 +745,8 @@ export interface FatmanGcsPrefixDeletionResult {
   objectVersionsDeleted: number;
   versioningEnabled: boolean;
   softDeleteRetentionSeconds: number;
+  retentionPolicySeconds: number;
+  retentionPolicyLocked: boolean;
   softDeletedObjects: number;
   latestHardDeleteTime: string | null;
 }
@@ -785,19 +787,22 @@ export async function deleteFatmanGcsObjectPrefix(
   const bucketInfo = await bucketResponse.json() as {
     versioning?: { enabled?: boolean };
     softDeletePolicy?: { retentionDurationSeconds?: string | number };
+    retentionPolicy?: { retentionPeriod?: string | number; isLocked?: boolean };
   };
   const versioningEnabled = bucketInfo.versioning?.enabled === true;
   const softDeleteRetentionSeconds = Math.max(0, Number(bucketInfo.softDeletePolicy?.retentionDurationSeconds ?? 0) || 0);
+  const retentionPolicySeconds = Math.max(0, Number(bucketInfo.retentionPolicy?.retentionPeriod ?? 0) || 0);
+  const retentionPolicyLocked = bucketInfo.retentionPolicy?.isLocked === true;
   const objectPrefix = rootPrefix + relativePrefix;
 
-  const objects: Array<{ name: string; generation: string }> = [];
+  const objects: Array<{ name: string; generation: string; noncurrent: boolean }> = [];
   let pageToken = "";
   do {
     const query = new URLSearchParams({
       prefix: objectPrefix,
       maxResults: "1000",
       versions: "true",
-      fields: "items(name,generation),nextPageToken",
+      fields: "items(name,generation,timeDeleted),nextPageToken",
     });
     if (pageToken) query.set("pageToken", pageToken);
     const response = await fetch(
@@ -806,12 +811,16 @@ export async function deleteFatmanGcsObjectPrefix(
     );
     if (!response.ok) throw await gcsError(response, "Could not inventory private BRVIN source and OCR objects.");
     const data = await response.json() as {
-      items?: Array<{ name?: string; generation?: string | number }>;
+      items?: Array<{ name?: string; generation?: string | number; timeDeleted?: string }>;
       nextPageToken?: string;
     };
     for (const item of data.items ?? []) {
       if (!item.name?.startsWith(objectPrefix) || item.generation === undefined) continue;
-      objects.push({ name: item.name, generation: String(item.generation) });
+      objects.push({
+        name: item.name,
+        generation: String(item.generation),
+        noncurrent: Boolean(item.timeDeleted),
+      });
     }
     pageToken = data.nextPageToken ?? "";
   } while (pageToken);
@@ -819,8 +828,11 @@ export async function deleteFatmanGcsObjectPrefix(
   let objectVersionsDeleted = 0;
   for (const object of objects) {
     const query = new URLSearchParams();
-    // In a versioned bucket, delete each enumerated generation, not just the live object.
-    if (versioningEnabled) query.set("generation", object.generation);
+    // With versioning enabled, delete each exact generation. If versioning is
+    // now disabled but old noncurrent generations remain, delete those by
+    // generation as well; delete the current generation by name so soft-delete
+    // policy can retain it according to the bucket's configured behavior.
+    if (versioningEnabled || object.noncurrent) query.set("generation", object.generation);
     const encodedQuery = query.toString();
     const suffix = encodedQuery ? "?" + encodedQuery : "";
     const response = await fetch(
@@ -898,6 +910,8 @@ export async function deleteFatmanGcsObjectPrefix(
     objectVersionsDeleted,
     versioningEnabled,
     softDeleteRetentionSeconds,
+    retentionPolicySeconds,
+    retentionPolicyLocked,
     softDeletedObjects,
     latestHardDeleteTime,
   };
