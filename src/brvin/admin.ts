@@ -392,7 +392,7 @@ const HTML = `<!doctype html>
 <div class="modal" id="modal"><div class="modalbox"><div class="modalhead"><h2 id="modal-title">Book operations</h2><button class="btn" id="close-modal">Close</button></div><div id="modal-body"></div></div></div>
 <script type="module">
 import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
-pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/"+pdfjsLib.version+"/pdf.worker.min.mjs";
 const $=id=>document.getElementById(id),API="/admin/api/brvin/",UPLOAD="/admin/api/brvin/upload/";
 let model=null,selectedFile=null,activeImportId=null,uploadBusy=false;
 function say(message,error=false){$("upload-status").textContent=message;$("upload-status").classList.toggle("error",error);}
@@ -408,13 +408,24 @@ function renderMetrics(s){$("metrics").innerHTML=[
 ["Indexed pages",s.indexedPages.toLocaleString()+" / "+s.totalPages.toLocaleString(),"Page-level coverage"],
 ["Active pipelines",s.activeBooks,"Running now"],["Needs attention",s.failedBooks,"Failed or blocked"]
 ].map(x=>'<div class="metric"><span>'+x[0]+'</span><strong>'+x[1]+'</strong><small>'+x[2]+'</small></div>').join("");}
-function renderCollections(list){$("collections").innerHTML=list.length?list.map(c=>'<div class="tile"><strong>'+esc(c.name)+'</strong><p>'+esc(c.description||"No description")+'</p><small>'+c.bookCount+' sources · '+c.indexedPages+'/'+c.pageCount+' pages indexed · '+c.projects.length+' project links</small></div>').join(""):'<div class="empty">No collections yet.</div>';
+function renderCollections(list){
+ const previousCollectionId=$("collection").value;
+ const selectedCollectionIds=new Set([...$("collection-checks").querySelectorAll("input:checked")].map(input=>input.value));
+ const selectedCollectionId=list.some(c=>c.id===previousCollectionId&&c.status==="active")
+  ?previousCollectionId
+  :(list.some(c=>c.id==="general"&&c.status==="active")?"general":(list.find(c=>c.status==="active")?.id||""));
+ $("collections").innerHTML=list.length?list.map(c=>'<div class="tile"><strong>'+esc(c.name)+'</strong><p>'+esc(c.description||"No description")+'</p><small>'+c.bookCount+' sources · '+c.indexedPages+'/'+c.pageCount+' pages indexed · '+c.projects.length+' project links</small></div>').join(""):'<div class="empty">No collections yet.</div>';
  $("collection").innerHTML=list.filter(c=>c.status==="active").map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join("");
- $("collection-checks").innerHTML=list.filter(c=>c.status==="active").map(c=>'<label class="check"><input type="checkbox" value="'+esc(c.id)+'"> '+esc(c.name)+'</label>').join("")||'<span class="muted">Create a collection first.</span>';
+ $("collection").value=selectedCollectionId;
+ $("collection-checks").innerHTML=list.filter(c=>c.status==="active").map(c=>'<label class="check"><input type="checkbox" value="'+esc(c.id)+'"'+(selectedCollectionIds.has(c.id)?" checked":"")+'> '+esc(c.name)+'</label>').join("")||'<span class="muted">Create a collection first.</span>';
 }
-function renderProjects(list){$("projects").innerHTML=list.length?list.map(p=>'<div class="tile"><strong>'+esc(p.name)+'</strong> '+statusPill(p.status)+'<p>'+esc(p.description||"No description")+'</p><small>Direct books: '+p.directBooks+' · via collections: '+p.collectionBooks+' · slug '+esc(p.slug)+'</small></div>').join(""):'<div class="empty">No projects have been registered.</div>';
- $("project-checks").innerHTML=list.filter(p=>p.status==="active").map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.id)+'"> '+esc(p.name)+'</label>').join("")||'<span class="muted">No active projects. Create one below.</span>';
+function renderProjects(list){
+ const previousProjectId=$("project-access").value;
+ const selectedProjectIds=new Set([...$("project-checks").querySelectorAll("input:checked")].map(input=>input.value));
+ $("projects").innerHTML=list.length?list.map(p=>'<div class="tile"><strong>'+esc(p.name)+'</strong> '+statusPill(p.status)+'<p>'+esc(p.description||"No description")+'</p><small>Direct books: '+p.directBooks+' · via collections: '+p.collectionBooks+' · slug '+esc(p.slug)+'</small></div>').join(""):'<div class="empty">No projects have been registered.</div>';
+ $("project-checks").innerHTML=list.filter(p=>p.status==="active").map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.id)+'"'+(selectedProjectIds.has(p.id)?" checked":"")+'> '+esc(p.name)+'</label>').join("")||'<span class="muted">No active projects. Create one below.</span>';
  $("project-access").innerHTML=list.filter(p=>p.status==="active").map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");
+ if(list.some(p=>p.id===previousProjectId&&p.status==="active"))$("project-access").value=previousProjectId;
  $("project-access").onchange=()=>{const p=list.find(item=>item.id===$("project-access").value);const allowed=new Set((model?.collections||[]).filter(c=>c.projects.some(link=>link.id===p?.id)).map(c=>c.id));$("collection-checks").querySelectorAll("input").forEach(input=>input.checked=allowed.has(input.value));};
 }
 function renderBooks(list,projects){$("book-count").textContent=list.length+" sources";$("books").innerHTML=list.length?list.map(b=>{
@@ -465,14 +476,77 @@ async function resumeImport(id){try{await post("upload/"+encodeURIComponent(id)+
 $("close-modal").addEventListener("click",()=>$("modal").classList.remove("open"));
 $("modal").addEventListener("click",e=>{if(e.target===$("modal"))$("modal").classList.remove("open");});
 $("pdf").addEventListener("change",()=>{selectedFile=$("pdf").files?.[0]||null;if(selectedFile&&!$("book-title").value.trim())$("book-title").value=selectedFile.name.replace(/\.pdf$/iu,"").replace(/[_-]+/gu," ").trim();$("file-info").textContent=selectedFile?selectedFile.name+" · "+fmtBytes(selectedFile.size):"No PDF selected.";$("upload").disabled=!selectedFile||uploadBusy;});
-async function inspect(file){if(file.size<8||file.size>1024*1024*1024)throw new Error("Choose a PDF between 8 bytes and 1 GB.");const buffer=await file.arrayBuffer();if(new TextDecoder().decode(buffer.slice(0,5))!=="%PDF-")throw new Error("This file is not a valid PDF.");const digest=await crypto.subtle.digest("SHA-256",buffer);const hash=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,"0")).join("").toUpperCase();const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buffer)}).promise;const pageCount=pdf.numPages;await pdf.destroy();if(!Number.isSafeInteger(pageCount)||pageCount<1||pageCount>2000)throw new Error("BRVIN currently supports 1–2,000 pages per PDF.");return{hash,pageCount};}
-async function uploadBook(){if(!selectedFile)return;if(!$("cost").checked){say("Confirm the Google Cloud OCR cost notice first.",true);return;}if(!$("book-title").value.trim()){say("Enter the name of this knowledge source.",true);return;}uploadBusy=true;$("upload").disabled=true;try{say("Inspecting PDF, counting pages and verifying its SHA-256 fingerprint…");const meta=await inspect(selectedFile);const projectIds=[...$("project-checks").querySelectorAll("input:checked")].map(i=>i.value);const started=await post("upload/start",{title:$("book-title").value.trim(),filename:selectedFile.name,sha256:meta.hash,size:selectedFile.size,pageCount:meta.pageCount,costConfirmed:true,collectionId:$("collection").value,projectIds});activeImportId=started.importId;
- if(started.canResume){await resumeImport(activeImportId);return;}
- if(started.status==="processing"||started.status==="uploaded"||started.status==="completed"){await showImport(activeImportId);await refresh();return;}
- let offset=Number(started.uploadedBytes||0),total=selectedFile.size,chunk=8*1024*1024;$("progress").max=total;$("progress").value=offset;
- while(offset<total){say("Secure transfer: "+pct(offset,total)+"% · "+fmtBytes(offset)+" of "+fmtBytes(total));const response=await fetch(UPLOAD+encodeURIComponent(activeImportId)+"/chunk",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/octet-stream","x-fatman-chunk-start":String(offset),"x-fatman-total-size":String(total)},body:selectedFile.slice(offset,Math.min(total,offset+chunk))});let data={};try{data=await response.json();}catch{}if(response.status===409&&Number.isSafeInteger(Number(data.uploadedBytes))){offset=Number(data.uploadedBytes);continue;}if(!response.ok||data.ok!==true)throw new Error(data.error||"Secure PDF transfer failed.");offset=Number(data.uploadedBytes);$("progress").value=offset;}
- say("Upload complete. BRVIN is starting Vision OCR and indexing…");await post("upload/"+encodeURIComponent(activeImportId)+"/complete",{});await showImport(activeImportId);await refresh();
- }catch(e){say("The operation paused: "+e.message+" Select the same PDF again to resume when possible.",true);}finally{uploadBusy=false;$("upload").disabled=!selectedFile;}}
+function countSimplePdfPages(buffer){
+ if(buffer.byteLength>32*1024*1024)return 0;
+ const source=new TextDecoder("latin1").decode(buffer);
+ const leafPages=source.match(/\/Type\s*\/Page\b/gu)?.length??0;
+ if(leafPages>0)return leafPages;
+ const pageTree=source.match(/\/Type\s*\/Pages\b[\s\S]{0,8192}?\/Count\s+(\d+)/u);
+ return pageTree?Number(pageTree[1]):0;
+}
+async function inspect(file){
+ if(file.size<8||file.size>1024*1024*1024)throw new Error("Choose a PDF between 8 bytes and 1 GB.");
+ const buffer=await file.arrayBuffer();
+ if(new TextDecoder().decode(buffer.slice(0,5))!=="%PDF-")throw new Error("This file is not a valid PDF.");
+ const digest=await crypto.subtle.digest("SHA-256",buffer);
+ const hash=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,"0")).join("").toUpperCase();
+ let pageCount=0;
+ try{
+  const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buffer)}).promise;
+  pageCount=pdf.numPages;
+  await pdf.destroy();
+ }catch(pdfError){
+  pageCount=countSimplePdfPages(buffer);
+  if(!pageCount){
+   const detail=pdfError instanceof Error?pdfError.message:String(pdfError);
+   throw new Error("The browser PDF reader could not inspect this file ("+detail+"), and its page tree could not be verified by the fallback counter.");
+  }
+ }
+ if(!Number.isSafeInteger(pageCount)||pageCount<1||pageCount>2000)throw new Error("BRVIN currently supports 1–2,000 pages per PDF.");
+ return{hash,pageCount};
+}
+async function uploadBook(){
+ if(!selectedFile)return;
+ if(!$("cost").checked){say("Confirm the Google Cloud OCR cost notice first.",true);return;}
+ if(!$("book-title").value.trim()){say("Enter the name of this knowledge source.",true);return;}
+ uploadBusy=true;$("upload").disabled=true;
+ let phase="PDF inspection";
+ try{
+  say("Inspecting PDF, counting pages and verifying its SHA-256 fingerprint…");
+  const meta=await inspect(selectedFile);
+  const projectIds=[...$("project-checks").querySelectorAll("input:checked")].map(i=>i.value);
+  phase="starting the secure upload";
+  const started=await post("upload/start",{title:$("book-title").value.trim(),filename:selectedFile.name,sha256:meta.hash,size:selectedFile.size,pageCount:meta.pageCount,costConfirmed:true,collectionId:$("collection").value,projectIds});
+  activeImportId=started.importId;
+  if(started.canResume){await resumeImport(activeImportId);return;}
+  if(started.status==="uploaded"){
+   phase="starting OCR and page indexing";
+   await post("upload/"+encodeURIComponent(activeImportId)+"/complete",{});
+  }
+  if(started.status==="processing"||started.status==="uploaded"||started.status==="completed"){
+   await showImport(activeImportId);await refresh();return;
+  }
+  let offset=Number(started.uploadedBytes||0),total=selectedFile.size,chunk=8*1024*1024;
+  $("progress").max=total;$("progress").value=offset;
+  phase="transferring the PDF to private storage";
+  while(offset<total){
+   say("Secure transfer: "+pct(offset,total)+"% · "+fmtBytes(offset)+" of "+fmtBytes(total));
+   const response=await fetch(UPLOAD+encodeURIComponent(activeImportId)+"/chunk",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/octet-stream","x-fatman-chunk-start":String(offset),"x-fatman-total-size":String(total)},body:selectedFile.slice(offset,Math.min(total,offset+chunk))});
+   let data={};try{data=await response.json();}catch{}
+   if(response.status===409&&Number.isSafeInteger(Number(data.uploadedBytes))){offset=Number(data.uploadedBytes);continue;}
+   if(!response.ok||data.ok!==true)throw new Error(data.error||"Secure PDF transfer failed (HTTP "+response.status+").");
+   offset=Number(data.uploadedBytes);$("progress").value=offset;
+  }
+  phase="starting OCR and page indexing";
+  say("Upload complete. BRVIN is starting Vision OCR and indexing…");
+  await post("upload/"+encodeURIComponent(activeImportId)+"/complete",{});
+  await showImport(activeImportId);await refresh();
+ }catch(e){
+  const message=e instanceof Error?e.message:String(e);
+  console.error("BRVIN upload failed during "+phase,e);
+  say("The operation paused during "+phase+": "+message+" Select the same PDF again to resume when possible.",true);
+ }finally{uploadBusy=false;$("upload").disabled=!selectedFile;}
+}
 $("upload").addEventListener("click",uploadBook);$("refresh").addEventListener("click",()=>refresh());$("logout").addEventListener("click",async()=>{await fetch("/admin/logout",{method:"POST",credentials:"same-origin"});location.assign("/admin/login");});
 $("create-project").addEventListener("click",async()=>{try{await post("projects",{name:$("project-name").value,description:$("project-desc").value});$("project-name").value="";$("project-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("create-collection").addEventListener("click",async()=>{try{await post("collections",{name:$("collection-name").value,description:$("collection-desc").value});$("collection-name").value="";$("collection-desc").value="";await refresh();}catch(e){alert(e.message);}});
