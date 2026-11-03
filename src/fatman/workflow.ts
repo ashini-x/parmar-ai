@@ -158,7 +158,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           if (!isTransientFatmanIndexError(error) || retryAttempt! >= FATMAN_PAGE_RETRY_LIMIT) throw error;
           const nextAttempt = retryAttempt! + 1;
           await step.do("schedule Fatman page retry " + nextAttempt, async () =>
-            this.startChild(importId + "-" + runId + "-retry-page-" + page + "-" + nextAttempt, {
+            this.startChild(importId + "-" + runId + "-retry-page-" + page + "-" + nextAttempt + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
               task: "retry_page",
               importId,
               page,
@@ -169,7 +169,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         }
 
         await step.do("resume Fatman supervisor after page " + page + " recovers", async () =>
-          this.startChild(importId + "-" + runId + "-resume-after-" + page + "-" + retryAttempt, {
+          this.startChild(importId + "-" + runId + "-resume-after-" + page + "-" + retryAttempt + "-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
             task: "resume_index",
             importId,
             runId,
@@ -194,7 +194,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           } catch (error) {
             if (!isTransientFatmanIndexError(error)) throw error;
             await step.do("hand Fatman page " + pageNumber + " to the recovery specialist", async () =>
-              this.startChild(importId + "-" + runId + "-retry-page-" + pageNumber + "-1", {
+              this.startChild(importId + "-" + runId + "-retry-page-" + pageNumber + "-1-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8)", {
                 task: "retry_page",
                 importId,
                 page: pageNumber,
@@ -247,7 +247,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           } catch (error) {
             if (!isTransientFatmanIndexError(error)) throw error;
             await step.do("hand failed repair page " + page + " to the recovery specialist", async () =>
-              this.startChild(importId + "-" + runId + "-retry-page-" + page + "-1", {
+              this.startChild(importId + "-" + runId + "-retry-page-" + page + "-1-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8)", {
                 task: "retry_page",
                 importId,
                 page,
@@ -319,7 +319,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         const repairPages = [...new Set([...failedPages.map((item) => item.page), ...missingPages])].slice(0, 10);
         if (repairPages.length > 0) {
           if (repairPass >= 12) {
-            throw new Error("Fatman AI Search still has missing or failed pages after three repair passes.");
+            throw new Error("Fatman AI Search still has missing or failed pages after twelve repair passes.");
           }
           const nextSequence = monitorSequence + 1;
           const nextRepairPass = repairPass + 1;
