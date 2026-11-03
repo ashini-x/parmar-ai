@@ -88,6 +88,13 @@ CREATE TABLE IF NOT EXISTS vrain_api_keys (
 CREATE INDEX IF NOT EXISTS idx_vrain_api_keys_project_status
   ON vrain_api_keys(project_id, status);
 
+CREATE TABLE IF NOT EXISTS vrain_api_usage_windows (
+  key_id TEXT PRIMARY KEY,
+  window_started_at INTEGER NOT NULL,
+  request_count INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (key_id) REFERENCES vrain_api_keys(id)
+);
+
 CREATE TABLE IF NOT EXISTS vrain_jobs (
   id TEXT PRIMARY KEY,
   document_id TEXT NOT NULL,
