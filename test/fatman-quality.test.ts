@@ -14,8 +14,7 @@ describe("Fatman retrieval readiness checks", () => {
     const text = "The Constitution of India establishes a parliamentary system of government and defines the powers and responsibilities of the President.";
     const query = buildFatmanRetrievalProbe(text);
     expect(query.split(" ")).toHaveLength(12);
-    const normalized = text.toLowerCase().replace(/[^\\p{L}\\p{N}]+/gu, " ");
-    const availableWords = new Set(normalized.split(/\\s+/u));
+    const availableWords = new Set(text.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" "));
     expect(query.split(" ").every((word) => availableWords.has(word.toLowerCase()))).toBe(true);
   });
 
