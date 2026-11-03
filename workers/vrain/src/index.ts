@@ -325,7 +325,7 @@ async function adminUploadChunk(request: Request, env: Env, documentId: string):
   if (bytes.byteLength < 1 || bytes.byteLength > MAX_CHUNK_BYTES || start + bytes.byteLength > total) {
     return json({ ok: false, error: "chunk_size_out_of_range" }, 413);
   }
-  const offset = await probeUploadSession(document.gcs_upload_uri, total, "");
+  const offset = await probeUploadSession(env, document.gcs_upload_uri, total);
   if (offset !== start) return json({ ok: false, error: "upload_offset_mismatch", uploadedBytes: offset }, 409);
   const result = await uploadChunk(env, document.gcs_upload_uri, bytes, start, total);
   await env.DB.prepare("UPDATE vrain_documents SET uploaded_bytes=?,status=?,updated_at=? WHERE id=? AND status='uploading'")
@@ -481,7 +481,7 @@ function tokens(value: string): string[] {
 
 async function consumerSources(env: Env, projectId: string): Promise<Array<{ id: string; title: string; search_prefix: string; page_count: number }>> {
   const result = await env.DB.prepare(
-    "SELECT DISTINCT d.id,d.title,d.search_prefix,d.page_count FROM vrain_documents d " +
+    "SELECT DISTINCT d.id,d.title,d.page_count FROM vrain_documents d " +
     "LEFT JOIN vrain_project_documents pd ON pd.document_id=d.id AND pd.project_id=? " +
     "LEFT JOIN vrain_project_collections pc ON pc.project_id=? AND pc.collection_id=d.collection_id " +
     "WHERE d.status='ready' AND d.indexed_pages=d.page_count AND (pd.document_id IS NOT NULL OR pc.collection_id IS NOT NULL)",
