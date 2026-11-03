@@ -119,9 +119,9 @@ async function runWithRecovery<T>(
         specialist + " is executing " + stage + ".", { attempt });
       return await step.do(
         stage + " attempt " + attempt,
-        { retries: { limit: 0 }, timeout: "30 minutes" },
+        { retries: { limit: 0, delay: "1 second" }, timeout: "30 minutes" },
         async () => action(attempt),
-      );
+      ) as T;
     } catch (error) {
       lastError = error;
       if (!isRetryable(error)) throw new NonRetryableError(safeError(error));
@@ -162,6 +162,25 @@ async function readVisionPageText(env: Env, objectName: string, page: number): P
     throw new Error("Google Vision reported a page extraction error on PDF page " + page + ": " + response.error.message);
   }
   return normalizeOcrText(response?.fullTextAnnotation?.text);
+}
+
+function buildProbe(text: string): string | undefined {
+  const words = text
+    .normalize("NFKC")
+    .replace(/\s+/gu, " ")
+    .split(" ")
+    .map((word) => word.replace(/[^\p{L}\p{N}'-]/gu, ""))
+    .filter((word) => word.length >= 3);
+  if (words.length < 6) return undefined;
+  const start = Math.max(0, Math.floor(words.length / 2) - 6);
+  return words.slice(start, start + 12).join(" ").slice(0, 240);
+}
+
+function verificationPages(pageCount: number): number[] {
+  const ratios = [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95, 1];
+  return [...new Set(ratios.map((ratio) =>
+    Math.max(1, Math.min(pageCount, Math.ceil(pageCount * ratio))),
+  ))];
 }
 
 async function markWaitingRetry(env: Env, documentId: string, stage: string, error: string): Promise<void> {
