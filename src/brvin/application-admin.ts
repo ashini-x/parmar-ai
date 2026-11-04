@@ -396,9 +396,13 @@ export async function setBrvinEnvironmentStatus(env: Env, request: Request): Pro
       ? await env.DB.prepare(
         "UPDATE brvin_application_environments SET status='revoked',revoked_at=?,revoked_by='admin-dashboard',updated_at=? WHERE id=? AND status IN ('active','disabled')"
       ).bind(now, now, environmentId).run()
-      : await env.DB.prepare(
-        "UPDATE brvin_application_environments SET status=?,updated_at=? WHERE id=? AND status='disabled'"
-      ).bind(status, now, environmentId).run();
+      : status === "disabled"
+        ? await env.DB.prepare(
+          "UPDATE brvin_application_environments SET status='disabled',updated_at=? WHERE id=? AND status='active'"
+        ).bind(now, environmentId).run()
+        : await env.DB.prepare(
+          "UPDATE brvin_application_environments SET status='active',updated_at=? WHERE id=? AND status='disabled'"
+        ).bind(now, environmentId).run();
     if (!result.success) throw new Error("D1 did not confirm the environment status change.");
 
     await record(env, status === "revoked" ? "application.environment_revoked"
