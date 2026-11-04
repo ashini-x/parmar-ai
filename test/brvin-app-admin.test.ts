@@ -26,7 +26,7 @@ class MemoryD1Statement {
   constructor(private readonly db: MemoryD1, private readonly sql: string) {}
   bind(...values: unknown[]) { this.values = values; return this; }
   async first<T>(): Promise<T | null> { return this.db.first(this.sql, this.values) as T | null; }
-  async all<T>(): Promise<{ results: T[] }> { return { results: this.db.all(this.sql, this.values) as T[] }; }
+  async all<T>(): Promise<{ results: T[] }> { return { results: await this.db.all(this.sql, this.values) as T[] }; }
   async run(): Promise<{ success: boolean }> { return this.db.run(this.sql, this.values); }
 }
 
