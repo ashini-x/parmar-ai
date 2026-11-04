@@ -805,13 +805,35 @@ export async function setBrvinApplicationStatus(env: Env, request: Request): Pro
       return json({ ok: false, error: "A revoked application is permanent. Create a new application record instead." }, 409);
     }
     const now = Date.now();
-    await env.DB.prepare(
-      "UPDATE brvin_applications SET status=?,updated_at=? WHERE id=?"
-    ).bind(status, now, applicationId).run();
+    const statements = [
+      env.DB.prepare(
+        "UPDATE brvin_applications SET status=?,updated_at=? WHERE id=?"
+      ).bind(status, now, applicationId),
+    ];
+    if (status === "revoked") {
+      // Revocation is terminal: close every environment identity and app-project
+      // grant in the same D1 transaction so the registry matches enforcement.
+      statements.push(
+        env.DB.prepare(
+          "UPDATE brvin_application_environments SET status='revoked',revoked_at=?,revoked_by='admin-dashboard',updated_at=? " +
+          "WHERE application_id=? AND status IN ('active','disabled')"
+        ).bind(now, now, applicationId),
+        env.DB.prepare(
+          "UPDATE brvin_application_project_grants SET status='revoked',revoked_at=?,revoked_by='admin-dashboard' " +
+          "WHERE application_id=? AND status='active'"
+        ).bind(now, applicationId),
+      );
+    }
+    const results = await env.DB.batch(statements);
+    if (results.some(result => !result.success)) {
+      throw new Error("D1 did not confirm the application lifecycle transaction.");
+    }
     await recordBrvinActivity(env, {
       agent: "BRVIN application registry", phase: "governance",
       eventType: "application.status_changed", status: "completed",
-      message: "Application status changed to " + String(status) + ".",
+      message: status === "revoked"
+        ? "Application revoked; its environment identities and project grants were revoked in the same transaction."
+        : "Application status changed to " + String(status) + ".",
       details: { applicationId, previousStatus: application.status, status },
     });
     return json({ ok: true, applicationId, status });
