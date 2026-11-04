@@ -197,6 +197,13 @@ The current learning system is primarily **per-student**. Accumulated quiz and l
 - [CONTRIBUTING.md](CONTRIBUTING.md): authorized contribution rules.
 - [SUPPORT.md](SUPPORT.md): support boundaries.
 
+### BRVIN knowledge platform
+
+- [docs/BRVIN_SYSTEM_REFERENCE.md](docs/BRVIN_SYSTEM_REFERENCE.md): canonical architecture, infrastructure map, D1 model, trust boundaries, ingestion and retrieval lifecycle.
+- [docs/BRVIN_INTEGRATION_GUIDE.md](docs/BRVIN_INTEGRATION_GUIDE.md): project onboarding and same-account Worker integration contract.
+- [docs/BRVIN_PRIVATE_RETRIEVAL_API.md](docs/BRVIN_PRIVATE_RETRIEVAL_API.md): internal RPC methods, input/result types, authorization and failure semantics.
+- [docs/BRVIN_OPERATIONS_RUNBOOK.md](docs/BRVIN_OPERATIONS_RUNBOOK.md): admin procedures, upload lifecycle, recovery, deletion, troubleshooting and release operations.
+
 ### Specialized directories
 
 - [data/README.md](data/README.md): repository data boundary and fixture rules.
