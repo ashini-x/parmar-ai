@@ -6,7 +6,7 @@
 **Reference test-client repository:** `ashini-x/askmoina-voice` (the BRVIN test client is a separate Worker in this repository, not the existing AskMoina Voice Worker)
 **Created:** 4 November 2026  
 **Planning baseline:** `main` at the current BRVIN 2 implementation baseline
-**Overall implementation status:** M0–M3 complete and merged. AskMoina Voice's BRVIN identity, connector and Gemini Live tool are already integrated and deployed, but the existing voice app is not a mandatory BRVIN acceptance target. M4 now targets a separate text-only BRVIN reference-test Worker in the AskMoina repository, with its own registered application/environment identity and isolated test-project grant. Do not gate M4 on camera/audio/latency tests in the production voice app.
+**Overall implementation status:** M0–M4 complete at the scaffold/reference-consumer level. M4's independent `brvin-test-client` Worker is merged in `ashini-x/askmoina-voice` PR #381 as `bf8e5a1e9fe7f451ad31430143ab52aaf801214e`; its separate Wrangler config, tester-token gate, text retrieval UI, authorization/provenance contract tests and independent Worker dry-run are included. It intentionally has no BRVIN Service Binding, registered test app/environment, test-project grant or deployment yet. M5 application/project administration is now the first incomplete milestone; M6 will connect and deploy the test client after the identity and isolated grant are provisioned. Existing AskMoina Voice remains an optional pilot, not a BRVIN acceptance gate.
 
 > **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
 
@@ -266,7 +266,7 @@ Milestones change status only after implementation and evidence. A commit alone 
 | 1 | Multi-application, multi-project identity | COMPLETE | PR #61 merged; Release Validation #586 passed; additive registry migration applied and production rows/FK check verified; v1/Fatman preserved |
 | 2 | Private retrieval API v2 | COMPLETE | PR #62 merged as `3b68aaecf3c78c712e1a1c978285ad1f166d15c4`; Release Validation #596 passed; production v2 health parity and Fatman identity/data verified |
 | 3 | Reusable BRVIN application connector | COMPLETE | PR #63 merged to main as `91b6a499bd782ae298b41e790157c23682f10881`; Release Validation #608 passed all checks and Cloudflare Preview build succeeded |
-| 4 | Independent BRVIN text reference consumer | IN PROGRESS — existing voice integration is optional | Existing AskMoina integration PR #370 and test-harness PR #380 are merged. Acceptance target is a new, separate text-only Worker in `askmoina-voice`; it will use its own registered application/environment identity, dedicated test-project grant, v2 connector and private Service Binding. Do not gate M4 on AskMoina camera/audio/latency tests |
+| 4 | Independent BRVIN text reference consumer | COMPLETE — scaffold and CI validated; binding/deployment deferred | AskMoina PR #381 merged as `bf8e5a1e9fe7f451ad31430143ab52aaf801214e`; Worker `brvin-test-client` has isolated Wrangler/TypeScript configs, token gate, text UI, v2 connector handler, authorization/provenance tests and separate dry-run. No Service Binding, registered test identity/grant or deployment yet; those are M5/M6 prerequisites for M7 live tests |
 | 5 | BRVIN application/project administration | NOT STARTED | Admin can manage apps, projects, grants and knowledge centrally |
 | 6 | Automated Connect Application wizard | NOT STARTED | Supported app can be onboarded through reviewed GitHub/Cloudflare workflow |
 | 7 | End-to-end administrator and user acceptance | NOT STARTED | Full multi-app/multi-project and negative permission tests pass |
@@ -304,30 +304,25 @@ Create the standard typed server-side adapter in a maintainable package/module d
 
 ### Milestone 4 — Independent BRVIN text reference consumer
 
-The purpose of M4 is to prove the frozen BRVIN v2 architecture with a small, deterministic consumer—not to make an existing application pass unrelated voice/video acceptance suites.
+**Status: COMPLETE — independent reference Worker scaffold merged and validated; live BRVIN connection intentionally deferred to M5/M6.**
 
-Build a **separate Worker target** inside the `ashini-x/askmoina-voice` repository (for example, `brvin-text-test`). It must have its own Wrangler configuration, Worker name, entrypoint, deployment workflow and routes. It must not share the production `askmoina-voice` entrypoint, assets, D1, Durable Objects, cron, queues, auth/session state or release path.
+The purpose of M4 is to deliver a small, deterministic text-first reference consumer for the frozen BRVIN v2 architecture—not to make the existing AskMoina Voice application pass unrelated voice/video acceptance suites.
 
-Build a minimal text interface for authorised testers:
-- show projects returned by `listAuthorizedProjectsV2()`; never show a global project list;
-- let a tester select one of those authorised projects and enter a text query (optional exact PDF page);
-- send the request to the test Worker backend, which calls the vendored typed `brvin-connector`;
-- display retrieved passage text with book title, physical PDF page, optional printed page and section;
-- distinguish empty results, denied access, inactive project, quota exhaustion and service outage without silent fallback or automatic retry;
-- keep the Service Binding and trusted environment identity server-side; browser code receives only the test UI/API response.
+Implemented in `ashini-x/askmoina-voice` PR #381, merged to `main` as `bf8e5a1e9fe7f451ad31430143ab52aaf801214e`:
+- Worker: `brvin-test-client`, separate from the production `askmoina-voice` Worker.
+- Config: `wrangler.brvin-test-client.jsonc`; entrypoint: `workers/brvin-test-client/src/index.ts`.
+- Isolated TypeScript project: `tsconfig.brvin-test-client.json`.
+- Mobile-friendly text interface: authorised project selector, question or exact PDF page, grounded passage display and physical-page citation.
+- Every API route requires `BRVIN_TEST_ACCESS_TOKEN`; it is a tester access gate, not a BRVIN application identity or retrieval credential.
+- Server-side connector uses v2 `listAuthorizedProjectsV2`, `getProjectStatusV2` and `retrieveProjectContextV2`; project IDs are selectors only and are checked against live authorised-project discovery plus service-side grants.
+- Test coverage includes the tester token, unconnected state, authorized project discovery, ungranted-project denial, exact page, readiness, retrieval citations and cross-origin rejection.
+- Release Validation type-checks the isolated Worker and performs an independent Wrangler dry-run. The merged PR also added path exclusions so text-client-only work does not deploy or run the existing AskMoina Voice production health/voice-synthetic workflows.
 
-The test Worker uses its own registered BRVIN application and environment identity supplied solely through `Service Binding props.applicationEnvironmentId`. It receives a dedicated test-project grant and test knowledge source, not Fatman's entire project by default. The project ID submitted by the browser is only a selector and must be checked by BRVIN on every call. Do not create a public route on `brvin-service`.
+**Connection boundary:** The test Worker is deliberately *not deployed or connected yet*. `wrangler.brvin-test-client.jsonc` requires a tester token and has no `BRVIN_SERVICE` Service Binding or `props.applicationEnvironmentId`. M5 must first create its distinct BRVIN application, environment, isolated test project and explicit app-project grant through the protected admin workflow. M6 then adds the trusted Service Binding and approved deployment/connection workflow. Do not borrow AskMoina Voice's production environment ID, choose Fatman as the test project's default, create ad-hoc production D1 rows, or invent an environment UUID.
 
-Provision the test application's registry rows and isolated project/grant through the protected BRVIN administration workflow as soon as M5 supports that lifecycle. Until then, build and validate the Worker locally with mocked RPC contracts; do not hard-code a fabricated environment ID or insert ad-hoc production D1 rows merely to make the demo work.
+**M4 acceptance evidence:** PR #381 is merged; its Release Validation passed `npm run check`, the isolated Worker type-check, `npm test` (including the new reference-client tests), and separate Wrangler dry-run. No Worker deployment or production D1 mutation was performed. The later live retrieval, revocation and multi-app acceptance belongs to M7 after M5/M6.
 
-Acceptance:
-1. The separate Worker config, entrypoint, UI and independent deployment workflow build without affecting production AskMoina Voice.
-2. Local/CI contract tests prove the backend lists only projects returned by the test application's mocked trusted identity and renders exact provenance.
-3. Semantic retrieval and exact-page retrieval are wired through the server-side connector; live deployment waits until M5 provisions the real test identity and isolated project.
-4. An ungranted project is denied before search/quota reservation; a revoked grant is denied on the next call in the later live acceptance.
-5. Empty/no-source, inactive project, quota, timeout and service-unavailable cases render clear status and never fall back to unrestricted search.
-6. The browser cannot access the Service Binding or choose caller identity.
-7. The existing AskMoina Voice BRVIN integration remains an optional second consumer/pilot. Do not keep changing its camera, audio, Live continuity or latency harness to close M4.
+The existing AskMoina Voice BRVIN/Gemini Live integration remains an optional pilot/second consumer. Its camera/audio/session-continuity/latency outcomes are informational only and are not a BRVIN milestone gate.
 ### Milestone 5 — Application and project administration
 
 Upgrade the protected BRVIN dashboard with application registry/connection health, environment identities, activate/revoke, authorised project list; project create/edit/activate/deactivate and app association; knowledge library; collections; direct and collection grants; readiness and retrieval-test flows. Generate IDs automatically. Keep admin mobile-friendly and understandable to a nontechnical operator. Preserve current Fatman workflow.
@@ -685,8 +680,19 @@ And when the connected end-user application can retrieve only its authorised pro
 
 **What has already shipped:** The AskMoina voice integration (PR #370) and its acceptance-harness changes exist on production. AskMoina PR #380 (merge commit `ffa145b970b929f996b12a09fd94033567806319`) changes only acceptance scripts/CI to follow Gemini Live turn boundaries. Release Validation on the merged head passed. It did not add a new consumer-facing voice feature. A production workflow triggered by that merge may finish, but its camera/audio/latency outcome is informational and does not gate BRVIN M4. Do not start more voice-specific acceptance runs or alter the production voice runtime for BRVIN.
 
-**New M4 implementation target:** A separate Worker (provisionally `brvin-text-test`) in `ashini-x/askmoina-voice`, with an isolated Wrangler config, source entrypoint, Worker name, routes and deployment workflow. Its text frontend uses the vendored v2 connector server-side, lists only projects returned for its own trusted identity, submits text queries/exact-page requests and renders passage citations. It must not share the existing voice Worker's runtime or production state.
+**M4 implementation delivered:** A separate Worker named `brvin-test-client` in `ashini-x/askmoina-voice`, with config `wrangler.brvin-test-client.jsonc`, entrypoint `workers/brvin-test-client/src/index.ts`, isolated TypeScript config `tsconfig.brvin-test-client.json`, text interface and server-side connector handler. It lists only projects returned for its future trusted identity, accepts a text query/exact page and displays source citations. It does not share the existing voice Worker's runtime or production state.
 
 **Identity/data safety:** The test Worker needs a distinct `brvin_applications` row, environment identity, app-project grant and dedicated test project/source. Never borrow AskMoina's production environment ID as a new app identity; never default the test client to Fatman or hard-code a fabricated identity. Use the M5 protected admin lifecycle to create these records and grant the test project. Before that is available, build the test Worker against mocked connector contracts and validate locally. No production D1 mutation is authorised by this plan note.
 
-**Sequence:** (1) build the isolated text-test Worker and contract tests; (2) implement M5 application/project administration so the test app/environment/project/grant can be provisioned safely from the dashboard; (3) connect the test Worker using the registered trusted environment ID and verify real retrieval, citations and negative authorization; (4) proceed to M6 Connect Application wizard for repeatable future app onboarding. The existing AskMoina voice app is not a dependency for these steps.
+**Sequence:** M4 scaffold is complete. (1) M5: implement application/project administration, including test app/environment/project/grant lifecycle; (2) M6: use Connect Application to add the generated environment ID as trusted Service Binding props and deploy/connect the test Worker with a separate test access token; (3) M7: verify real retrieval/citations, app isolation, denial/revocation and future-project automation. The existing AskMoina voice app is not a dependency for these steps.
+
+
+### Milestone log — 5 November 2026 — M4 reference Worker scaffold delivered
+
+**Implementation:** AskMoina PR #381, “M4: add isolated text-first BRVIN test client Worker”, merged to main as `bf8e5a1e9fe7f451ad31430143ab52aaf801214e`. It adds an independent `brvin-test-client` Worker with `wrangler.brvin-test-client.jsonc`, `workers/brvin-test-client/src/index.ts`, `tsconfig.brvin-test-client.json`, a text retrieval UI and its dedicated tests.
+
+**Security and isolation:** All API routes require the `BRVIN_TEST_ACCESS_TOKEN` secret. The Service Binding and `applicationEnvironmentId` remain absent by design; the browser cannot select an application identity. The Worker has no AskMoina D1, Durable Object, queue or Gemini bindings. It is not deployed. Existing voice-worker production deploy, production-health and voice-synthetic workflows ignore test-client-only changes.
+
+**Validation:** The merged PR's Release Validation includes the separate Worker type-check, full existing `npm test`, and a separate Wrangler dry-run for `wrangler.brvin-test-client.jsonc`. The PR was merged after its validation passed. The test client contract covers token authentication, only-authorized project discovery, pre-retrieval denial for other projects, readiness, exact physical page, retrieval citations, cross-origin denial and no-binding behavior.
+
+**M4 completion boundary:** This completes the independent reference-client scaffold, not live connectivity. No Service Binding, app/environment D1 row, test-project grant, secret deployment or Worker deployment was done. M5 must provide protected admin lifecycle for those records; M6 connects and deploys; M7 performs live acceptance. Do not resume AskMoina camera/audio/latency production test cycles as BRVIN blockers.
