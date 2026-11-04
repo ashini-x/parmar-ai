@@ -118,7 +118,7 @@ The connector must use its own strict input types and must not expose `unknown`-
 
 ## 3. RPC methods
 
-### 3.1 `listAuthorizedProjects()`
+### 3.1 `listAuthorizedProjectsV2()`
 
 **Purpose:** Let the trusted application discover the active projects it has been granted.
 
@@ -140,7 +140,7 @@ Rules:
 - An application with no grants receives an empty successful list, not a global list.
 - The method does not reserve retrieval quota.
 
-### 3.2 `getProjectStatus({ projectId })`
+### 3.2 `getProjectStatusV2({ projectId })`
 
 **Purpose:** Check whether one requested project is active and currently has ready authorised sources for this application.
 
@@ -169,7 +169,7 @@ Rules:
 - A valid authorised project with no ready source returns success with `ready: false` and zero count.
 - Does not reserve retrieval quota.
 
-### 3.3 `retrieveProjectContext(input)`
+### 3.3 `retrieveProjectContextV2(input)`
 
 **Purpose:** Return bounded evidence for one project, with the existing BRVIN source and page validation semantics.
 
@@ -279,15 +279,15 @@ The connector's local Cloudflare binding interface is:
 
 ```ts
 export interface BrvinServiceV2Binding {
-  listAuthorizedProjects(): Promise<BrvinV2Result<BrvinAuthorizedProject[]>>;
-  getProjectStatus(
+  listAuthorizedProjectsV2(): Promise<BrvinV2Result<BrvinAuthorizedProject[]>>;
+  getProjectStatusV2(
     input: BrvinProjectSelector,
   ): Promise<BrvinV2Result<{
     projectId: string;
     ready: boolean;
     authorizedSourceCount: number;
   }>>;
-  retrieveProjectContext(
+  retrieveProjectContextV2(
     input: BrvinV2RetrievalInput,
   ): Promise<BrvinV2Result<BrvinV2RetrievalData>>;
 }
@@ -317,7 +317,7 @@ The placeholder above is illustrative only; the admin must read the generated ID
 ## 7. Versioning and compatibility
 
 - Add v2 methods to the existing `BrvinRetrievalApi` entrypoint; do not create a public URL.
-- Preserve v1 `getProjectStatus()` and `retrieveProjectContext(input)` semantics for the legacy `clientId` identity during migration. If a method-name collision occurs in TypeScript/RPC, use explicitly versioned method names such as `getProjectStatusV2`, `listAuthorizedProjectsV2`, and `retrieveProjectContextV2`; freeze the final method names in Milestone 2 code before consumer migration.
+- Preserve v1 `getProjectStatus()` and `retrieveProjectContextV2(input)` semantics for the legacy `clientId` identity during migration. If a method-name collision occurs in TypeScript/RPC, use explicitly versioned method names such as `getProjectStatusV2`, `listAuthorizedProjectsV2`, and `retrieveProjectContextV2`; freeze the final method names in Milestone 2 code before consumer migration.
 - Do not make v1 methods accept a project selector; v1 remains bound to one project.
 - V2 methods require a project selector and perform an application-project grant check on every call.
 - Do not remove `brvin_service_clients` or v1 methods until every consumer has migrated and a separately reviewed compatibility-removal milestone is approved.
