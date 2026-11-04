@@ -16,6 +16,7 @@ describe("Parmar AI production worker", () => {
       DB: undefined,
       BRVIN_SERVICE: {
         getProjectStatus: async () => ({ ok: true, ready: true, authorizedSourceCount: 1 }),
+        getProjectStatusV2: async () => ({ ok: true, data: { projectId: "fatman", ready: true, authorizedSourceCount: 1 } }),
       },
     }) as Env;
     const response = await worker.fetch(request, healthEnv, ctx);
@@ -31,6 +32,9 @@ describe("Parmar AI production worker", () => {
       brvinRetrievalConnected: boolean;
       brvinReady: boolean;
       authorizedSources: number;
+      brvinV2Connected: boolean;
+      brvinV2Ready: boolean;
+      brvinV2AuthorizedSources: number;
       service?: string;
       checks?: unknown;
     };
@@ -41,6 +45,9 @@ describe("Parmar AI production worker", () => {
       brvinRetrievalConnected: true,
       brvinReady: true,
       authorizedSources: 1,
+      brvinV2Connected: true,
+      brvinV2Ready: true,
+      brvinV2AuthorizedSources: 1,
     });
     expect(body.service).toBeUndefined();
     expect(body.checks).toBeUndefined();
@@ -52,6 +59,7 @@ describe("Parmar AI production worker", () => {
       DB: undefined,
       BRVIN_SERVICE: {
         getProjectStatus: async () => ({ ok: true, ready: false, authorizedSourceCount: 0 }),
+        getProjectStatusV2: async () => ({ ok: true, data: { projectId: "fatman", ready: false, authorizedSourceCount: 0 } }),
       },
     }) as Env;
     const response = await worker.fetch(request, healthEnv, ctx);
@@ -63,6 +71,9 @@ describe("Parmar AI production worker", () => {
       brvinRetrievalConnected: true,
       brvinReady: false,
       authorizedSources: 0,
+      brvinV2Connected: true,
+      brvinV2Ready: false,
+      brvinV2AuthorizedSources: 0,
     });
   });
 
@@ -73,6 +84,7 @@ describe("Parmar AI production worker", () => {
       DB: undefined,
       BRVIN_SERVICE: {
         getProjectStatus: async () => ({ ok: false, code: "CLIENT_NOT_REGISTERED", message: "Not registered.", retryable: false }),
+        getProjectStatusV2: async () => ({ ok: false, code: "ENVIRONMENT_NOT_REGISTERED", message: "Not registered.", retryable: false }),
       },
     }) as Env;
     const response = await worker.fetch(request, healthEnv, ctx);
@@ -84,6 +96,9 @@ describe("Parmar AI production worker", () => {
       brvinRetrievalConnected: false,
       brvinReady: false,
       authorizedSources: 0,
+      brvinV2Connected: false,
+      brvinV2Ready: false,
+      brvinV2AuthorizedSources: 0,
     });
   });
 
