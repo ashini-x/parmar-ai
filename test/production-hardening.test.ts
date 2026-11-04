@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount, requiresFreshData, requiresMcqTopicClarification } from "../src/ai/gemini";
+import { isLikelyMcqTopicReply, isMcqRequest, normalizeAnswer, parseRequestedMcqCount, readVertexGeminiStream, requiresFreshData, requiresMcqTopicClarification, type PartialAnswerHandler } from "../src/ai/gemini";
 import { getAnalyticsConfig } from "../src/analytics/db";
 import { getConfig } from "../src/config/env";
 import { isJobLeaseOwned, isValidAnswerPacket, type JobRecord } from "../src/core/job-store";
@@ -28,6 +28,50 @@ const validPacket = {
 } as const;
 
 describe("production hardening", () => {
+  it("preserves actual Telegram paragraph breaks, including escaped JSON line feeds", () => {
+    expect(normalizeAnswer("Meaning: first line\\nsecond line\\n\\nExample: final line")).toBe(
+      "Meaning: first line\\nsecond line\\n\\nExample: final line",
+    );
+    expect(normalizeAnswer("First paragraph.\\n\\nSecond paragraph.")).toBe(
+      "First paragraph.\\n\\nSecond paragraph.",
+    );
+  });
+
+  it("does not expose unvalidated partial answer drafts from Fatman streams", async () => {
+    const events = [
+      { candidates: [{ content: { parts: [{ text: '{"responseMode":"text","answer":"First paragraph' }] } }] },
+      { candidates: [{ content: { parts: [{ text: '\\n\\nSecond paragraph"}' }] } }] },
+      { candidates: [{ finishReason: "STOP" }] },
+    ];
+    const sse = events.map((event) => "data: " + JSON.stringify(event) + "\\n\\n").join("");
+    const emitted: string[] = [];
+    const handler = ((answer: string) => { emitted.push(answer); }) as PartialAnswerHandler;
+    handler.flush = async () => undefined;
+
+    const response = await readVertexGeminiStream(new Response(sse), handler, false);
+
+    expect(emitted).toEqual([]);
+    expect(response.candidates?.[0]?.finishReason).toBe("STOP");
+    expect(response.candidates?.[0]?.content?.parts?.[0]?.text).toBe(
+      '{"responseMode":"text","answer":"First paragraph\\n\\nSecond paragraph"}',
+    );
+  });
+
+  it("keeps validated partial streaming enabled for ordinary study mode", async () => {
+    const events = [
+      { candidates: [{ content: { parts: [{ text: '{"responseMode":"text","answer":"A complete-looking' }] } }] },
+      { candidates: [{ content: { parts: [{ text: ' draft"}' }] } }] },
+    ];
+    const sse = events.map((event) => "data: " + JSON.stringify(event) + "\\n\\n").join("");
+    const emitted: string[] = [];
+    const handler = ((answer: string) => { emitted.push(answer); }) as PartialAnswerHandler;
+    handler.flush = async () => undefined;
+
+    await readVertexGeminiStream(new Response(sse), handler, true);
+
+    expect(emitted.length).toBeGreaterThan(0);
+    expect(emitted.at(-1)).toBe("A complete-looking draft");
+  });
   it("accepts a valid native quiz packet", () => {
     const quizPacket = {
       ...validPacket,
