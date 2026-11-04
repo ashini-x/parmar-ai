@@ -1,5 +1,5 @@
 import type { AiSearchChunk, ConversationTurn, Env, GeminiImageInput } from "../config/env";
-import { getFatmanBookState, reserveFatmanSearchQuery } from "../analytics/db";
+import { getFatmanBookState } from "../analytics/db";
 import { parseFatmanIndexPageKey } from "./library";
 
 const MAX_MATCHES = 12;
@@ -85,44 +85,55 @@ export async function isFatmanIndexed(env: Env): Promise<boolean> {
 }
 
 export async function isFatmanReady(env: Env): Promise<boolean> {
-  if (!hasFatmanConfiguration(env)) return false;
+  if (!env.BRVIN_SERVICE) return false;
   try {
-    const state = await getFatmanBookState(env);
-    const legacyReady = state.enabled &&
-      state.documentVersion === env.FATMAN_DOCUMENT_VERSION?.trim() &&
-      state.indexedPages === Number(env.FATMAN_EXPECTED_PAGES);
-    const authorized = await env.DB!.prepare(FATMAN_BRVIN_READY_SOURCES_SQL)
-      .all<{ id: string; title: string }>();
-    const sourceIds = new Set((authorized.results ?? []).map((book) => book.id));
-    return (legacyReady && sourceIds.has("fatman-legacy-538")) ||
-      [...sourceIds].some((id) => id !== "fatman-legacy-538");
+    const status = await env.BRVIN_SERVICE.getProjectStatus();
+    return status.ok && status.ready;
   } catch {
     return false;
   }
 }
 
+/**
+ * Live Telegram retrieval crosses the private BRVIN Service Binding. The
+ * project identity is selected by trusted Worker configuration, never by the
+ * Telegram request or the student.
+ */
 export async function retrieveFatmanContext(env: Env, query: string): Promise<FatmanBookContext> {
-  if (!(await isFatmanReady(env))) {
-    throw new FatmanRetrievalError("Fatman retrieval is not configured.", false);
+  if (!env.BRVIN_SERVICE) {
+    throw new FatmanRetrievalError(
+      "BRVIN retrieval is not configured.",
+      false,
+      "Fatman Mode is temporarily unavailable. Please try again later.",
+    );
   }
-
   const normalizedQuery = normalizeFatmanQuery(query);
   if (!normalizedQuery) throw new FatmanRetrievalError("Fatman search query is empty.", false);
 
-  const configuredLimit = Number(env.FATMAN_MONTHLY_QUERY_LIMIT);
-  const monthlyLimit = Number.isFinite(configuredLimit)
-    ? Math.max(1, Math.min(800, Math.floor(configuredLimit)))
-    : 800;
-  const usage = await reserveFatmanSearchQuery(env, monthlyLimit);
-  if (!usage.allowed) {
-    throw new FatmanRetrievalError(
-      "Fatman has reached this month's included search limit.",
-      false,
-      "Fatman search has reached this month's free usage limit. Use /help to return to usual study mode.",
-    );
+  let result;
+  try {
+    result = await env.BRVIN_SERVICE.retrieveProjectContext({
+      queries: buildFatmanSearchQueries(normalizedQuery),
+    });
+  } catch {
+    throw new FatmanRetrievalError("BRVIN retrieval is temporarily unavailable.", true);
+  }
+  if (!result.ok) {
+    throw new FatmanRetrievalError(result.message, result.retryable, result.userMessage);
   }
 
-  return searchFatmanQueries(env, buildFatmanSearchQueries(normalizedQuery), MAX_MATCHES);
+  return {
+    passages: result.passages.map((passage) => ({
+      id: passage.id,
+      bookId: passage.bookId,
+      bookTitle: passage.bookTitle,
+      pdfPage: passage.pdfPage,
+      text: passage.text,
+      score: passage.score,
+    })),
+    pageImages: [],
+    searchCount: result.searchCount,
+  };
 }
 
 /**

@@ -56,6 +56,16 @@
       "namespace": "default"
     }
   ],
+  "services": [
+    {
+      "binding": "BRVIN_SERVICE",
+      "service": "brvin-service",
+      "entrypoint": "BrvinRetrievalApi",
+      "props": {
+        "clientId": "parmar-ai"
+      }
+    }
+  ],
   "workflows": [
     {
       "name": "parmar-ai-fatman-import",
