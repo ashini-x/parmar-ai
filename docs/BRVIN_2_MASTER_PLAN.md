@@ -6,7 +6,7 @@
 **First additional consumer:** `ashini-x/askmoina-voice`  
 **Created:** 4 November 2026  
 **Planning baseline:** `main` at `939a6046f2a6fa461898f2479e6ed22923e3f3f9`  
-**Overall implementation status:** NOT STARTED — approved architecture and plan only
+**Overall implementation status:** Milestone 0 design package READY FOR REVIEW in PR #60; runtime implementation NOT STARTED
 
 > **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
 
@@ -248,6 +248,16 @@ For multi-tenant apps, mapping an authenticated app workspace/customer to a BRVI
 
 ## 5. Implementation milestones and completion gates
 
+### Milestone 0 design package
+
+The architecture freeze deliverables are maintained in two reviewable documents:
+
+- [BRVIN 2 Architecture Decision Record](BRVIN_2_ARCHITECTURE_DECISIONS.md) — exact additive D1 schema, identity trust model, migration seed, compatibility/rollback plan, AskMoina integration, admin/wizard design and acceptance checklist.
+- [BRVIN 2 Private Retrieval RPC v2 Contract](BRVIN_2_RPC_V2_CONTRACT.md) — trusted binding identity, v2 methods/types, authorisation sequence, exact-page behavior, structured failures, quotas and tests.
+
+These are the proposed Milestone 0 design. They are not implemented runtime behavior. The current v1 references remain authoritative for production until Milestones 1–2 are implemented and verified.
+
+
 All milestones initially start as **NOT STARTED**. Change a status only after implementation and evidence. A commit alone is not completion. Each completed milestone must record PR/commit, changed areas, tests, deployment status, acceptance evidence and remaining risks.
 
 | Milestone | Name | Initial status | Completion outcome |
@@ -410,7 +420,7 @@ This table is the human-readable status. The evidence fields must be filled from
 
 | Milestone | Status | PR / commit | Verification evidence | Notes |
 |---|---|---|---|---|
-| 0 — Architecture freeze | NOT STARTED | — | — | Design-only; first execution task |
+| 0 — Architecture freeze | READY FOR REVIEW | [PR #60](https://github.com/ashini-x/parmar-ai/pull/60), head `9bdb08839fb30cf393c8517ff9b64c0715172a02` | ADR and RPC v2 contract added; current D1/code/Cloudflare state reconciled; no runtime or production writes | Awaiting review/merge; design only, not implementation |
 | 1 — Identity model | NOT STARTED | — | — | Must preserve Fatman |
 | 2 — Private RPC v2 | NOT STARTED | — | — | Must remain private |
 | 3 — Reusable connector | NOT STARTED | — | — | Standard app-side adapter |
@@ -438,6 +448,31 @@ For each milestone, append a dated record with:
 - Outstanding defects, limitations and next milestone.
 
 Do not mark a milestone complete until all its required acceptance checks pass. A documentation-only milestone must not be described as implementation. A successful Worker health check alone does not prove an end-to-end model integration.
+
+### Milestone log — 4 November 2026 — Milestone 0
+
+**Status:** READY FOR REVIEW (not marked complete until the design PR is reviewed and merged).  
+**Branch:** `brvin-2/m0-architecture-freeze`  
+**Pull request:** https://github.com/ashini-x/parmar-ai/pull/60  
+**PR head:** `9bdb08839fb30cf393c8517ff9b64c0715172a02`  
+**Base audited:** `main` at `a16a9273d581d9dd5acfc3c53c3cc1f2cba819fd`
+
+**Paths changed:**
+- `docs/BRVIN_2_ARCHITECTURE_DECISIONS.md` — ADR, target D1 DDL and constraints, identity trust model, Fatman migration seed, compatibility rollout/rollback, AskMoina integration, admin/wizard design and acceptance checks.
+- `docs/BRVIN_2_RPC_V2_CONTRACT.md` — private v2 methods, types, request validation, authorisation order, quota and failure semantics, exact-page contract and test matrix.
+- `docs/BRVIN_SYSTEM_REFERENCE.md` — links to the BRVIN 2 design while preserving its as-built boundary.
+- `docs/BRVIN_INTEGRATION_GUIDE.md` — labels existing instructions as v1 and prevents premature v2 production configuration.
+- `docs/BRVIN_2_MASTER_PLAN.md` — this ledger and continuity record.
+
+**D1 migration:** none. Read-only inspection only. The live database showed the existing Fatman project/client mapping, the existing Fatman and Rain Gardens books, existing project grants, and 20 November 2026 Fatman usage queries. No tables, rows, grants, source records or usage counters were written or changed.
+
+**Cloudflare:** no configuration, binding, secret, Worker, Workflow, D1, GCS or AI Search changes. Read-only inspection confirmed the current `parmar-ai` and `brvin-service` Workers, their shared D1 binding and shared `default` AI Search instance. `brvin-service` remains configured with `workers_dev: false`; the current caller still uses `props.clientId: "fatman"`. AskMoina production has its own D1 and no BRVIN Service Binding. Observed active deployment version IDs at audit time: `parmar-ai` `56cdd777-7f48-4c63-869d-4d18a2de3e9b`; `brvin-service` `1a533c1c-a1e4-4994-9eaa-0dfb0fee0cf1`; AskMoina Voice `abee86c2-8a80-47f3-87f5-eb92a60cc2d8`. These are baseline observations, not deployments from this PR.
+
+**Verification performed:** inspected current `main`, recent commits and PR state; compared the four-commit BRVIN 2 planning delta; read the BRVIN system, private API, integration and operations references; inspected D1 table/index definitions and relevant rows; inspected both BRVIN Worker code paths and Wrangler configs; inspected AskMoina Wrangler/D1/Worker binding state; inspected live Worker settings/deployment versions and AI Search instance/statistics. The design was cross-checked against those facts. No application tests were run because this PR changes documentation only. No synthetic or production acceptance was claimed.
+
+**Deployment / rollback:** no deployment was attempted, so no rollback was required. Existing paired release workflow is unchanged.
+
+**Outstanding gate / next milestone:** review and merge PR #60. After that, begin Milestone 1 from the approved ADR with additive schema/migration tests only; keep v1 retrieval behavior and production binding unchanged.
 
 ## 8. Rules for future ChatGPT/Codex sessions
 
