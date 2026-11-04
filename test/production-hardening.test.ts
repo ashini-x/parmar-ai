@@ -32,9 +32,6 @@ describe("production hardening", () => {
     const normalized = normalizeAnswer("Meaning: first line\\nsecond line\\n\\nExample: final line");
     expect(normalized).toBe("Meaning: first line\nsecond line\n\nExample: final line");
     expect(normalizeAnswer("First paragraph.\\n\\nSecond paragraph.")).toBe("First paragraph.\n\nSecond paragraph.");
-    expect(normalizeAnswer("First paragraph.\\n\\nSecond paragraph.")).toBe(
-      "First paragraph.\\n\\nSecond paragraph.",
-    );
   });
 
   it("does not expose unvalidated partial answer drafts from Fatman streams", async () => {
