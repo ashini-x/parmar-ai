@@ -65,21 +65,22 @@ The application environment identity is not accepted by any connector method. It
 - **Provenance:** format citations from book title, physical PDF page, optional printed page and section. The raw typed passages remain available to the consumer.
 - **Model ownership:** the connector returns evidence. It never builds a Gemini prompt, generates an answer, speaks audio or manages conversation/session memory.
 
-## 5. M4 reference consumer: isolated text test Worker
+## 5. M4 reference consumer: isolated text-first BRVIN test client
 
-The first controlled M4 consumer is a separate text-only Worker housed in `ashini-x/askmoina-voice`. It uses a distinct Wrangler config, Worker name, entrypoint, deployment workflow and routes; it must not run inside or share the existing production `askmoina-voice` Worker runtime.
+The reference consumer is a separate Cloudflare Worker named `brvin-test-client` in `ashini-x/askmoina-voice`, implemented in `workers/brvin-test-client/src/index.ts` with config `wrangler.brvin-test-client.jsonc` and isolated TypeScript scope `tsconfig.brvin-test-client.json`. It is not a route or feature inside the existing production voice Worker.
 
-The text UI lets an authorised tester:
-- discover only projects returned by `listAuthorizedProjects()`;
-- select an authorised project and submit a text query or exact PDF page;
-- inspect returned passages with book title and PDF-page provenance;
-- see clear empty, denied, quota and unavailable states.
+Its mobile-friendly text UI lets an authorised tester:
+- enter a tester access token (required on every API request; stored only in page memory, never in a URL or source bundle);
+- discover only projects returned by the trusted caller's `listAuthorizedProjectsV2()`;
+- select an authorised project and submit a text query and/or exact physical PDF page;
+- inspect retrieved passages, book title, physical PDF page, optional printed page/section and citation;
+- see clear unconnected, denied, not-ready, quota and unavailable states.
 
-The test Worker calls this connector only from its server-side handler. The browser never receives the BRVIN Service Binding or the trusted `applicationEnvironmentId`. Its binding props point to a separate test application's registered environment identity. The test app receives a dedicated test-project grant; it must not inherit Fatman's corpus by default.
+The Worker uses the vendored connector only from its server-side handler. The browser does not receive the BRVIN Service Binding or trusted `applicationEnvironmentId`. It has no D1, Durable Objects, queues, Gemini or other AskMoina production bindings. A `BRVIN_TEST_ACCESS_TOKEN` tester secret is an outer access gate, not a BRVIN identity or project permission.
 
-The application/environment/project/grant records are created through the protected BRVIN admin workflow as M5 makes that lifecycle available. Until then, validate the Worker locally against mocked RPC contracts; do not fabricate or hard-code a production environment UUID and do not add ad-hoc production D1 rows.
+The merged M4 scaffold intentionally has no BRVIN Service Binding or test application identity. M5 must create the test application's registered identity, environment, isolated test project and explicit project grant through the protected admin workflow; M6 then provisions trusted Service Binding props and the reviewed independent deployment/connection path. Until then, no real-project retrieval can occur. Never reuse the AskMoina production environment ID or implicitly grant Fatman.
 
-AskMoina Voice's existing Gemini Live integration remains an optional pilot/second consumer. Its camera/audio/session-continuity tests are not a prerequisite for M4 completion. The text test Worker proves the reusable connector, trusted identity, project discovery, authorization, retrieval and citation path without changing the production voice app.
+The existing AskMoina Voice Gemini Live integration remains an optional pilot. Its camera/audio/session-continuity tests are not a BRVIN milestone gate.
 ## 6. M3 completion tests
 
 - TypeScript checks and connector unit tests pass.
