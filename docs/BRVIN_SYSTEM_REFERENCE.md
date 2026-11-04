@@ -9,7 +9,7 @@ This is the canonical technical reference for BRVIN. It records what exists in c
 
 When a future change alters code, D1 schema, bindings, access rules, ingestion, retrieval, deployment, or integrations, update this document and the relevant specialist document in the same change. Do not silently treat a planned feature as already shipped.
 
-> **BRVIN 2 implementation and chat continuity:** see [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md). The application/environment/project-grant registry (M1), private application-aware RPC v2 (M2), reusable connector (M3), and AskMoina Voice pilot integration are implemented and deployed. The AskMoina voice application is optional for BRVIN acceptance. The current M4 acceptance target is a separate, text-only reference Worker in the AskMoina repository, with its own app/environment identity and isolated project grant.
+> **BRVIN 2 implementation and chat continuity:** see [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md). The application/environment/project-grant registry (M1), private application-aware RPC v2 (M2), reusable connector (M3), and independent text-first reference Worker scaffold (M4) are implemented. The existing AskMoina Voice integration is an optional pilot, not the BRVIN acceptance path. The `brvin-test-client` Worker is in `ashini-x/askmoina-voice` under `workers/brvin-test-client/`; it has no BRVIN Service Binding or registered test identity yet. M5 admin lifecycle and M6 connection are the next steps.
 
 ## 1. Executive architecture
 
@@ -66,14 +66,15 @@ Consumer application's own Gemini/LLM prompt and answer
 
 The two planes share the existing D1 registry and AI Search namespace. They do not create a database or index per app.
 
-## 1.1 BRVIN 2 production state (4 November 2026)
+## 1.1 BRVIN 2 production state (5 November 2026)
 
 - M1 added `brvin_applications`, `brvin_application_environments` and `brvin_application_project_grants` to the existing shared D1. The Parmar AI production application/environment and explicit Fatman project grant are seeded and active.
 - M2 added `listAuthorizedProjectsV2()`, `getProjectStatusV2(input)` and `retrieveProjectContextV2(input)` to the private `BrvinRetrievalApi` entrypoint. V1 methods remain available.
 - Parmar AI production carries both `clientId: fatman` and the generated production `applicationEnvironmentId`. `/health` checks v1/v2 Fatman readiness and source-count parity.
 - Current production versions at 100%: `brvin-service` `0adea40e-2a7f-4109-b534-c90a23c3a2fe`; `parmar-ai` `ed90e0be-0606-47f6-8d05-847f2596e03f`.
-- End-user Fatman retrieval remains on v1. AskMoina Voice's v2 binding and Gemini Live connector/tool integration are already deployed as an optional pilot. Do not make its camera/audio acceptance a BRVIN milestone gate.
-- A separate text-only BRVIN reference-test Worker in the AskMoina repository is the M4 acceptance target; its distinct app/environment identity and isolated test project will be provisioned through the M5 admin workflow.
+- End-user Fatman retrieval remains on v1. AskMoina Voice's v2 binding and Gemini Live connector/tool integration are deployed as an optional pilot. Do not make its camera/audio acceptance a BRVIN milestone gate.
+- M4's independent reference-client scaffold is merged as `brvin-test-client` in the AskMoina repository (PR #381, merge `bf8e5a1e9fe7f451ad31430143ab52aaf801214e`). It has a text-only UI, tester token gate, server-side v2 connector calls, separate Wrangler/TypeScript config and mock-backed acceptance tests.
+- The reference Worker is not deployed or bound to BRVIN. Its app/environment and isolated test-project grant are to be created through the M5 admin workflow; M6 connects it with a trusted Service Binding identity; M7 verifies live retrieval and negative authorization.
 ## 2. Architecture decisions that must remain stable
 
 1. **One shared registry:** use the existing BRVIN tables in the shared D1 database. Do not create one D1 database per project or consumer app.
