@@ -347,6 +347,50 @@ describe("BRVIN 2 application identity migration", () => {
     expect(db.markerBatchCount).toBe(0);
   });
 
+  it("fails closed when the reserved production environment key belongs to another identity", async () => {
+    const db = new FakeD1Database({
+      applications: [{
+        id: BRVIN2_SEED_IDENTITIES.applicationId,
+        slug: "parmar-ai",
+        name: "Parmar AI",
+        status: "active",
+      }],
+      environments: [{
+        id: "different-environment-id",
+        application_id: BRVIN2_SEED_IDENTITIES.applicationId,
+        environment_key: "production",
+        status: "active",
+      }],
+    });
+
+    await expect(ensureBrvin2ApplicationIdentities(asD1(db)))
+      .rejects.toThrow("conflicting production environment");
+    expect(db.seedBatchCount).toBe(0);
+    expect(db.markerBatchCount).toBe(0);
+  });
+
+  it("fails closed when the active Parmar AI to Fatman grant has a different reserved ID", async () => {
+    const db = new FakeD1Database({
+      applications: [{
+        id: BRVIN2_SEED_IDENTITIES.applicationId,
+        slug: "parmar-ai",
+        name: "Parmar AI",
+        status: "active",
+      }],
+      grants: [{
+        id: "different-grant-id",
+        application_id: BRVIN2_SEED_IDENTITIES.applicationId,
+        project_id: "fatman",
+        status: "active",
+      }],
+    });
+
+    await expect(ensureBrvin2ApplicationIdentities(asD1(db)))
+      .rejects.toThrow("conflicting Parmar AI to Fatman grant");
+    expect(db.seedBatchCount).toBe(0);
+    expect(db.markerBatchCount).toBe(0);
+  });
+
   it("does not write the migration marker when D1 reports a foreign-key violation", async () => {
     const db = new FakeD1Database({
       foreignKeyIssues: [{ table: "some_table", rowid: 7 }],
