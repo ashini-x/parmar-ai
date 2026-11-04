@@ -499,7 +499,8 @@ export async function updateBrvinProject(env: Env, request: Request): Promise<Re
 
     // A v1 client ID is deployment configuration. Never silently rewrite it
     // when an administrator edits a legacy project's display name.
-    const finalSlug = Number(project.has_legacy_identity) > 0 ? project.slug : slug;
+    const hasLegacyIdentity = Number(project.has_legacy_identity) > 0;
+    const finalSlug = hasLegacyIdentity ? project.slug : slug;
     const result = await env.DB.prepare(
       "UPDATE brvin_projects SET name=?,slug=?,description=?,updated_at=? WHERE id=?"
     ).bind(name, finalSlug, description, Date.now(), projectId).run();
@@ -507,13 +508,13 @@ export async function updateBrvinProject(env: Env, request: Request): Promise<Re
 
     await record(env, "project.updated",
       "A BRVIN project name or description was updated.",
-      { projectId, previousName: project.name, name, slug: finalSlug, legacySlugPreserved: finalSlug === project.slug },
+      { projectId, previousName: project.name, name, slug: finalSlug, legacySlugPreserved: hasLegacyIdentity },
       projectId,
     );
     return json({
       ok: true,
       project: { id: projectId, name, slug: finalSlug, description, status: project.status },
-      legacySlugPreserved: finalSlug === project.slug,
+      legacySlugPreserved: hasLegacyIdentity,
     });
   } catch (error) {
     return json({ ok: false, error: message(error) }, 409);
