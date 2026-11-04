@@ -6,7 +6,7 @@
 **First additional consumer:** `ashini-x/askmoina-voice`  
 **Created:** 4 November 2026  
 **Planning baseline:** `main` at `939a6046f2a6fa461898f2479e6ed22923e3f3f9`  
-**Overall implementation status:** M0–M3 complete and merged. M4 AskMoina application identity, private connector and Gemini Live tool are merged and deployed. Production exact-page BRVIN retrieval and the broader voice, grounding, memory, recovery and history checks have passed; the latest remaining camera/latency failures were traced to synthetic completion-boundary assumptions. AskMoina PR #379 is merged and deployed; production acceptance run #648 is the current outstanding gate (not yet complete as of this ledger update).
+**Overall implementation status:** M0–M3 complete and merged. The original AskMoina Voice consumer integration is already merged and deployed, and its BRVIN exact-page retrieval has succeeded. Per the user's clarified direction on 5 November 2026, BRVIN acceptance must not be blocked on tuning AskMoina's existing camera/voice runtime. The active M4 proof is an isolated text-first BRVIN test-client Worker, implemented as a separate Worker feature in the `ashini-x/askmoina-voice` repository. M5 remains the BRVIN application/project administration dashboard; M6 remains the automated Connect Application wizard.
 
 > **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
 
@@ -22,7 +22,7 @@ The key user promise is:
 
 This is an automation and administration project, not a rebuild of the existing PDF/OCR/AI Search pipeline.
 
-The first additional real consumer is AskMoina Voice. Its existing Gemini Live model/function-call architecture should consume BRVIN evidence while retaining responsibility for answer generation, voice/video sessions and conversation state.
+AskMoina Voice is the first existing consumer integration and remains a useful optional example. It is not the platform acceptance target: BRVIN must be validated through an independent text-first test-client Worker, kept separate from the existing AskMoina Voice Worker. That test client will prove reusable application/environment identity, private Service Binding, connector, project grants and retrieval without requiring changes to the voice product.
 
 ## 2. Approved target architecture
 
@@ -266,7 +266,7 @@ Milestones change status only after implementation and evidence. A commit alone 
 | 1 | Multi-application, multi-project identity | COMPLETE | PR #61 merged; Release Validation #586 passed; additive registry migration applied and production rows/FK check verified; v1/Fatman preserved |
 | 2 | Private retrieval API v2 | COMPLETE | PR #62 merged as `3b68aaecf3c78c712e1a1c978285ad1f166d15c4`; Release Validation #596 passed; production v2 health parity and Fatman identity/data verified |
 | 3 | Reusable BRVIN application connector | COMPLETE | PR #63 merged to main as `91b6a499bd782ae298b41e790157c23682f10881`; Release Validation #608 passed all checks and Cloudflare Preview build succeeded |
-| 4 | AskMoina Voice integration | IN PROGRESS — deployed, final production acceptance pending | BRVIN PR #65 and AskMoina PR #370 merged/deployed; AskMoina acceptance-harness fixes #372, #373, #377, #378 and #379 merged; #379 deployed as Worker version `6b6b5a56-24b3-4b74-ad0c-1a47c78df784` at 100%; run #648 is the current full production acceptance gate |
+| 4 | Isolated text-first BRVIN test client | IN PROGRESS — build a separate test Worker | Existing AskMoina Voice integration (BRVIN PR #65, AskMoina PR #370) remains deployed and exact-page retrieval has passed; create a distinct Worker and text UI in the AskMoina repository without modifying the existing voice Worker |
 | 5 | BRVIN application/project administration | NOT STARTED | Admin can manage apps, projects, grants and knowledge centrally |
 | 6 | Automated Connect Application wizard | NOT STARTED | Supported app can be onboarded through reviewed GitHub/Cloudflare workflow |
 | 7 | End-to-end administrator and user acceptance | NOT STARTED | Full multi-app/multi-project and negative permission tests pass |
@@ -302,9 +302,23 @@ Implement trusted application resolution and project-level authorisation in the 
 
 Create the standard typed server-side adapter in a maintainable package/module distribution approach selected after inspecting both repos. Include connection status, accessible project discovery if approved, project readiness, semantic/exact-page retrieval, provenance formatting, optional page image handling, error/retry classification, timeout/size limits and correlation logging. Provide sample integration and tests. Never unrestricted-search fallback.
 
-### Milestone 4 — AskMoina Voice integration
+### Milestone 4 — Isolated text-first BRVIN test client
 
-Register AskMoina app + production/preview trusted identities. Add private Service Binding and reusable connector. Add a Gemini Live BRVIN search function tool and server-side handler. Select a project from trusted app/user/workspace context, call BRVIN, and return concise passages with book title/PDF page to Gemini Live. Preserve AskMoina's own D1, auth, voice/video/session continuity and final answer generation. Test audio/camera, page-specific, no-result, denied/revoked grants, quota and outage. Do not rewrite the app.
+Create a new, independently deployed Cloudflare Worker as a feature in the `ashini-x/askmoina-voice` repository. It is a BRVIN test application, not a modification or replacement of the existing AskMoina Voice Worker.
+
+Deliverables:
+- Separate Worker entrypoint, Wrangler configuration, deployment target and environment variables. Do not reuse or alter the existing AskMoina Voice production Worker configuration, routes, D1, user sessions, Gemini Live relay, secrets or deployment behavior.
+- A simple, responsive text interface for testers to enter a question and inspect the BRVIN retrieval result. Display the selected/authorised project, connection/readiness state, source title, PDF page, retrieved passage and structured failure messages. Keep the UI focused on validating BRVIN rather than creating another general-purpose chat product.
+- A server-side adapter boundary ready to use the existing typed BRVIN connector and private Service Binding. The browser must never call the private retrieval service directly or supply a trusted application/environment identity.
+- A distinct BRVIN application/environment identity and explicit project grant for this test Worker, provisioned through the approved admin/onboarding flow as those milestones become available. A project selector may show only projects authorised to that application; a requested project remains a selector, never an authorisation credential.
+- Test cases for authorised retrieval, exact-page provenance, no-result, unknown/inactive identity, ungranted project denial, revoked/deactivated access, quota exhaustion and service outage/recovery.
+- Protect the test interface with an appropriate tester access boundary. Do not make it an unauthenticated public retrieval proxy.
+
+Acceptance boundary:
+- The text test client proves the platform's consumer contract independently from AskMoina Voice's audio/video runtime.
+- Do not modify the existing AskMoina Voice Worker to make camera, microphone, audio-latency or long-session synthetics pass. Those are separate product/runtime concerns and are not BRVIN platform gates.
+- Preserve the already-deployed AskMoina Voice integration as an optional existing consumer example. Do not let its voice-specific synthetic failures block M5, M6 or BRVIN 2 completion.
+- After the test Worker exists, use M5's application/project administration and M6's Connect Application wizard to connect it through the same supported path intended for future apps; avoid hand-maintained production bindings as the final onboarding method.
 
 ### Milestone 5 — Application and project administration
 
@@ -317,19 +331,21 @@ Implement explicit GitHub and Cloudflare authorisation, repository/branch and Wo
 ### Milestone 7 — End-to-end acceptance
 
 Test at minimum:
-1. Connect AskMoina and a synthetic second app.
-2. One app with multiple projects.
-3. One project deliberately shared across multiple apps.
-4. Multiple PDFs and collections.
-5. Direct and collection grants.
-6. Readiness and page-level citations.
-7. App A denied Project B until explicitly granted.
-8. Revocation and deactivation applied to future retrieval.
-9. Unknown identities and malformed project IDs.
-10. Quotas, service outage and recovery.
-11. Fatman original flow and quota history remain intact.
-12. New projects can be created and populated without code/Wrangler changes.
-13. Full end-user question-to-answer for AskMoina.
+1. Connect the isolated text-first BRVIN test Worker in the AskMoina repository through the Connect Application wizard.
+2. Connect a second supported synthetic application through the same wizard.
+3. One app with multiple projects.
+4. One project deliberately shared across multiple apps.
+5. Multiple PDFs and collections.
+6. Direct and collection grants.
+7. Readiness and page-level citations.
+8. App A denied Project B until explicitly granted.
+9. Revocation and deactivation applied to future retrieval.
+10. Unknown identities and malformed project IDs.
+11. Quotas, service outage and recovery.
+12. Fatman original flow and quota history remain intact.
+13. New projects can be created and populated without code/Wrangler changes.
+14. Full end-user question-to-retrieval-to-cited-text-result through the independent test client.
+15. Confirm the existing AskMoina Voice integration remains unchanged and does not gate platform acceptance.
 
 Capture synthetic test evidence, production Worker versions, commit/source revision and acceptance manifest.
 
@@ -381,7 +397,7 @@ Execute BRVIN 2 Milestone 3 from docs/BRVIN_2_MASTER_PLAN.md. Build and test the
 ### Milestone 4 prompt
 
 ~~~text
-Execute BRVIN 2 Milestone 4 from docs/BRVIN_2_MASTER_PLAN.md. Integrate AskMoina Voice as the first additional BRVIN application using production/preview identities, the private Service Binding and the reusable connector. Add a Gemini Live knowledge-search function tool and route it through the existing server-side handler. Preserve Gemini answer generation, D1, user auth and voice/video continuity. Test real question-to-retrieval-to-spoken-answer, page citations, denied/revoked projects, no-result, quota and outages. Verify the deployed app, update the tracker/docs and report evidence.
+Execute BRVIN 2 Milestone 4 from docs/BRVIN_2_MASTER_PLAN.md. Build an independently deployed text-first BRVIN test-client Worker inside the askmoina-voice repository. Keep its Worker entrypoint, Wrangler config, access boundary and deployment separate from the existing AskMoina Voice Worker. Build a simple responsive question/retrieval interface showing authorised project, connection status, source title, PDF page, retrieved passages and structured errors. Prepare the server-side connector/Service Binding path, but use M5/M6's application registry and Connect Application wizard to provision and connect the test application's trusted identity and project grant. Add positive and negative tests for project authorisation, revocation, readiness, provenance, quota and outage. Do not modify or gate on AskMoina Voice camera/audio/session behavior. Update the tracker and report exact tests/deployment evidence.
 ~~~
 
 ### Milestone 5 prompt
@@ -424,7 +440,7 @@ This table is the human-readable status. The evidence fields must be filled from
 | 1 — Identity model | COMPLETE | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61), merge commit `5735314b3e692019c34ba3d2a0d851cbb6c43aa3` | Release Validation #586 passed; production migration marker and all three seed rows verified; foreign-key check empty; both Workers active on new versions | No v1 RPC or Fatman permissions/counter reset |
 | 2 — Private RPC v2 | COMPLETE | [PR #62](https://github.com/ashini-x/parmar-ai/pull/62), merge commit `3b68aaecf3c78c712e1a1c978285ad1f166d15c4` | Release Validation #596 passed; production environment-bound methods deployed; v1 Fatman path/usage unchanged | Private Service Binding only; no public retrieval route |
 | 3 — Reusable connector | COMPLETE | [PR #63](https://github.com/ashini-x/parmar-ai/pull/63), merge commit `91b6a499bd782ae298b41e790157c23682f10881` | Release Validation #608 passed; Cloudflare Preview build `a4c154e3-c056-489a-9b14-8ebac9ed9c0d` succeeded | Connector vendored by AskMoina PR #370 |
-| 4 — AskMoina integration | IN PROGRESS — deployed, final production acceptance pending | [BRVIN PR #65](https://github.com/ashini-x/parmar-ai/pull/65), merge `0b3c621b83a28de2f4ca5da95db349b364558a60`; [AskMoina PR #370](https://github.com/ashini-x/askmoina-voice/pull/370), merge `ce725d33df452de0e9df2f4613c70ec89592251e`; acceptance harness PRs #372, #373, #377, #378, [#379](https://github.com/ashini-x/askmoina-voice/pull/379), latest merge `0840af352a1e9ab03bfd36a39b691bb6068af55b` | Production Worker version `6b6b5a56-24b3-4b74-ad0c-1a47c78df784` is deployed at 100%; release validation #1787 passed; health/routes/PWA checks passed; exact-page retrieval, three grounded searches, spoken card, ranked list, spoken memory, browser recovery, >170-second continuity and history/memory APIs passed in run #647. Run #647 failed only two synthetic terminal-state checks (camera and 20-turn audio benchmark; 120,000 bytes/21 messages observed). PR #379 corrects the tests to use `generationComplete`/`turnComplete` and explicitly close finite audio input; full production run #648 is in progress and remains the gate | Fatman project allowance remains shared; AskMoina Preview intentionally has no BRVIN binding |
+| 4 — Isolated text-first BRVIN test client | IN PROGRESS — scoped per user direction on 5 Nov 2026 | Existing integration: BRVIN PR #65 and AskMoina PR #370; production exact-page BRVIN retrieval passed. New isolated test Worker not yet created | Build a separate Worker and responsive text retrieval UI inside the AskMoina repository. Existing camera/audio/Live-session synthetics are explicitly not a BRVIN platform gate; do not change the existing voice runtime or start further voice-specific production runs. | Fatman project allowance remains shared; AskMoina Preview intentionally has no BRVIN binding |
 | 5 — Admin experience | NOT STARTED | — | — | Application/project/knowledge UI |
 | 6 — Connect wizard | NOT STARTED | — | — | GitHub/Cloudflare + PR automation |
 | 7 — E2E acceptance | NOT STARTED | — | — | Full synthetic journey |
@@ -607,9 +623,21 @@ A benchmark-only fix was merged in AskMoina PR #372 as `7893ea5f79a930c2e425dc9a
 
 **Corrective implementation:** AskMoina PR #379 (merge `0840af352a1e9ab03bfd36a39b691bb6068af55b`) changes only `scripts/live-brvin-camera-smoke.py`, `scripts/live-turn-latency-benchmark.py` and `scripts/test_live_turn_latency_boundary.py`. The finite audio benchmark now emits the already-supported audio-stream-end marker and both tests recognize explicit `generationComplete` or valid `turnComplete` terminal signals while retaining the real output requirements (camera fixture label, Fatman source, physical page 14, generated audio, and all 20 latency samples). Release Validation #1787 passed. No AskMoina runtime source, prompts, D1 data, BRVIN D1 rows, grants, quota, secrets or Cloudflare bindings were changed by PR #379.
 
-**Production rollout:** Run #648 was triggered from the merged main commit. The new Worker upload was promoted to 100%; production health, protected routes, no-guest gate and PWA checks passed. The synthetic acceptance step was still running when this ledger entry was written. Do not mark M4 complete or begin M5 until the terminal result of run #648 is inspected. If it fails, record the exact failing assertion and distinguish a real application/runtime failure from another harness mismatch before changing code.
+**Historical production rollout:** The previous main-branch run #648 deployed the already-integrated AskMoina consumer and passed production health, protected routes, no-guest and PWA checks. It also passed BRVIN exact-page retrieval, three grounded searches, spoken information card, voice memory, browser recovery, >170-second Live continuity and history/memory APIs. Its camera, 20-turn latency and ranked-list voice checks failed. These are AskMoina product/runtime synthetics, not BRVIN platform authorization or retrieval failures.
 
-**Outstanding M4 acceptance:** Run #648 must complete successfully with BRVIN exact-page and camera Co-Pilot retrieval, grounded searches, spoken card and ranked-list output, 20-turn audio benchmark, voice memory, network recovery, long-session continuity, and history/memory isolation. The current run is the single active gate; do not launch another overlapping production synthetic run while it is executing.
+**Superseded M4 gate:** The former requirement to make all AskMoina camera/audio/Live synthetics pass is withdrawn by the 5 November 2026 scope correction below. The latest already-triggered workflow [#41894762074](https://github.com/ashini-x/askmoina-voice/actions/runs/41894762074) completed with failure: BRVIN exact-page retrieval, three grounded searches, spoken card, voice memory, network recovery, >170-second continuity and history/memory APIs passed; camera Co-Pilot, second-turn latency and ranked-list spoken-answer tests failed. Record this as diagnostic evidence only. It does not block M4, M5, M6 or BRVIN completion. Do not start further voice-specific production synthetics.
+
+### Milestone scope correction — 5 November 2026 — use an isolated text client as the platform test consumer
+
+**User direction:** BRVIN 2 is the reusable multi-application onboarding and administration platform. Do not spend further milestone time trying to make the existing `askmoina-voice` product's camera, microphone, audio-latency or Live-session synthetics pass. The first AskMoina integration is already deployed and has demonstrated authenticated BRVIN exact-page retrieval; that is sufficient as an existing consumer example. Voice-specific defects belong to AskMoina product work, not BRVIN platform acceptance.
+
+**New M4 proof:** Build a separate text-first test-client Worker as a feature in the `ashini-x/askmoina-voice` repository. It must be an independent Worker with its own entrypoint, Wrangler configuration, deployment and tester access boundary. It must not alter the existing AskMoina Voice Worker, D1, routes, secrets, user/session system, Gemini Live relay or production deployment behavior. Its browser UI sends questions to its own server-side handler and displays BRVIN retrieval evidence, source titles, physical PDF pages, readiness and structured failures.
+
+**Platform flow to prove:** Use the BRVIN application/environment identity and explicit app-project grant model. The test Worker is the first repeatable fixture for M5's application/project administration and M6's Connect Application wizard. Once the wizard exists, connect the test Worker through that normal reviewed GitHub/Cloudflare path; then connect a second synthetic app and prove repeated project creation does not require code, Wrangler or deployment changes.
+
+**Execution order:** M4 — isolated text test client; M5 — BRVIN application/project administration; M6 — Connect Application wizard; M7 — full multi-app/multi-project acceptance; M8 — release and handover. Do not block this sequence on further AskMoina Voice camera/audio testing.
+
+**Already-triggered workflow:** Main-branch AskMoina run [#41894762074](https://github.com/ashini-x/askmoina-voice/actions/runs/41894762074) completed with failure after this scope change. Its diagnostic result is recorded above and is not a BRVIN gate. No additional voice-specific run should be started. The connected GitHub action controls available in this session did not expose a cancel operation.
 
 ## 8. Rules for future ChatGPT/Codex sessions
 
