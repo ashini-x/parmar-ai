@@ -160,7 +160,7 @@ const MONITOR_HTML = `<!doctype html>
 <body>
 <main class="shell">
   <header class="top">
-    <div><div class="eyebrow">Parmar AI / Fatman operations</div><h1 class="title">Live indexing monitor</h1><p class="sub">538-page OCR and AI Search pipeline · autonomous supervisor, retry and verification</p></div>
+    <div><div class="eyebrow">परमार्थAI / Fatman operations</div><h1 class="title">Live indexing monitor</h1><p class="sub">538-page OCR and AI Search pipeline · autonomous supervisor, retry and verification</p></div>
     <div class="actions"><span class="live" id="live-indicator"><i class="dot"></i> Live · 10s refresh</span><button class="btn" id="refresh">Refresh now</button><button class="btn" id="auto">Pause auto-refresh</button><a class="btn primary" href="/admin/fatman">Importer</a></div>
   </header>
   <section class="hero">
