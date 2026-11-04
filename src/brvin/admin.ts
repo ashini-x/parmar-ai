@@ -87,7 +87,11 @@ export async function brvinOverview(env: Env): Promise<Response> {
       env.DB.prepare(
         "SELECT p.id,p.name,p.slug,p.description,p.status,p.created_at,p.updated_at," +
         "(SELECT COUNT(DISTINCT pb.book_id) FROM brvin_project_books pb WHERE pb.project_id=p.id) AS direct_books," +
-        "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id) AS collection_books " +
+        "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id) AS collection_books," +
+        "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_books pb JOIN brvin_books b ON b.id=pb.book_id " +
+          "WHERE pb.project_id=p.id AND b.status='ready' AND b.indexed_pages=b.page_count) AS direct_ready_books," +
+        "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id " +
+          "WHERE pc.project_id=p.id AND b.status='ready' AND b.indexed_pages=b.page_count) AS collection_ready_books " +
         "FROM brvin_projects p ORDER BY p.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
@@ -152,6 +156,9 @@ export async function brvinOverview(env: Env): Promise<Response> {
         id: String(row.id), name: String(row.name), slug: String(row.slug),
         description: String(row.description ?? ""), status: String(row.status),
         directBooks: Number(row.direct_books ?? 0), collectionBooks: Number(row.collection_books ?? 0),
+        directReadyBooks: Number(row.direct_ready_books ?? 0),
+        collectionReadyBooks: Number(row.collection_ready_books ?? 0),
+        readyBooks: Number(row.direct_ready_books ?? 0) + Number(row.collection_ready_books ?? 0),
       })),
       books: (books.results ?? []).map((row) => ({
         id: String(row.id), title: String(row.title), filename: String(row.source_filename ?? ""),
