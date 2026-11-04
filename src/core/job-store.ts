@@ -591,6 +591,8 @@ export class JobDedupe extends DurableObject {
       ? Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, requestedQuizCountRaw))
       : 1;
     const continuation = body.quizContinuation === true;
+    // One Durable Object is keyed by the student's private Telegram chat ID.
+    // Keep one daily quota across normal mode and Fatman, not one allowance per mode.
     const usageUnits = continuation ? 0 : requestedQuizCount;
     const dailyLimited = !unlimited && dayCount + usageUnits > dailyLimit;
     const burstLimited = burstCount + usageUnits > burstLimit;
