@@ -115,7 +115,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     environment:
       name: production
       url: https://parmar-ai.thenewtongs.workers.dev
@@ -126,7 +126,7 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund --legacy-peer-deps
 
-      - name: Capture active version for rollback
+      - name: Capture both active Worker versions for rollback
         id: previous
         shell: bash
         env:
@@ -138,83 +138,111 @@ jobs:
             echo "::error::Cloudflare deployment credentials are missing."
             exit 1
           fi
-          response_file="$(mktemp)"
-          trap 'rm -f "$response_file"' EXIT
-          http_code="$(curl --silent --show-error \
-            --output "$response_file" \
-            --write-out '%{http_code}' \
-            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            --header 'Content-Type: application/json' \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/parmar-ai/deployments")"
-          HTTP_CODE="$http_code" RESPONSE_FILE="$response_file" node --input-type=module <<'NODE'
+          tmp_dir="$(mktemp -d)"
+          for worker in brvin-service parmar-ai; do
+            http_code="$(curl --silent --show-error \
+              --output "$tmp_dir/$worker.json" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/$worker/deployments")"
+            if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
+              echo "::error::Cannot read $worker deployment history (HTTP $http_code); refusing to deploy without rollback coverage."
+              exit 1
+            fi
+          done
+          TMP_DIR="$tmp_dir" node --input-type=module <<'NODE'
           import { appendFileSync, readFileSync } from 'node:fs';
-          const status = Number(process.env.HTTP_CODE);
-          let body;
-          try {
-            body = JSON.parse(readFileSync(process.env.RESPONSE_FILE, 'utf8'));
-          } catch {
-            console.error(`Cannot read Cloudflare deployment history (HTTP ${status}); refusing to deploy without a rollback target.`);
-            process.exit(1);
+          for (const worker of ['brvin-service', 'parmar-ai']) {
+            const file = `${process.env.TMP_DIR}/${worker}.json`;
+            let body;
+            try {
+              body = JSON.parse(readFileSync(file, 'utf8'));
+            } catch {
+              console.error(`Cannot parse ${worker} deployment history; refusing to deploy.`);
+              process.exit(1);
+            }
+            if (body.success !== true) {
+              const errors = (body.errors ?? []).map((item) => `${item.code}: ${item.message}`).join('; ');
+              console.error(`Cannot read ${worker} deployment history. ${errors}`);
+              process.exit(1);
+            }
+            const deployments = body.result?.deployments ?? [];
+            const active = deployments.find((deployment) => {
+              const versions = deployment.versions ?? [];
+              return versions.length === 1 && versions[0]?.percentage === 100 && versions[0]?.version_id;
+            });
+            const versionId = active?.versions?.[0]?.version_id;
+            if (!versionId) {
+              console.error(`No single-version 100% deployment found for ${worker}; refusing to deploy.`);
+              process.exit(1);
+            }
+            const outputName = worker === 'brvin-service' ? 'brvin_version_id' : 'parmar_version_id';
+            appendFileSync(process.env.GITHUB_OUTPUT, `${outputName}=${versionId}\n`);
+            console.log(`Captured rollback target for ${worker}.`);
           }
-          if (status < 200 || status >= 300 || body.success !== true) {
-            const errors = (body.errors ?? []).map((item) => `${item.code}: ${item.message}`).join('; ');
-            console.error(`Cannot read Cloudflare deployment history (HTTP ${status}). ${errors}`);
-            process.exit(1);
-          }
-          const deployments = body.result?.deployments ?? [];
-          const active = deployments.find((deployment) =>
-            (deployment.versions ?? []).some((version) => version.percentage === 100 && version.version_id)
-          );
-          const version = active?.versions?.find((item) => item.percentage === 100)?.version_id;
-          if (!version) {
-            console.error('No active 100% deployment version found; refusing to deploy without a rollback target.');
-            process.exit(1);
-          }
-          appendFileSync(process.env.GITHUB_OUTPUT, `version_id=${version}\n`);
-          console.log(`Captured the active version for rollback: ${version}`);
           NODE
 
       - name: Deploy private BRVIN retrieval service
+        id: deploy_brvin
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --config wrangler.brvin.jsonc
 
       - name: Deploy Parmar AI Worker
-        id: deploy
+        id: deploy_parmar
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
         run: npm run deploy
 
-      - name: Verify production health
+      - name: Verify root, BRVIN connectivity and Fatman source readiness
         id: smoke
         env:
           SMOKE_TEST_URL: https://parmar-ai.thenewtongs.workers.dev/health
+          SMOKE_TEST_ROOT_URL: https://parmar-ai.thenewtongs.workers.dev/
           SMOKE_TEST_ATTEMPTS: "12"
           SMOKE_TEST_DELAY_MS: "5000"
         run: node scripts/production-smoke-test.mjs
 
-      - name: Roll back if production health check fails
-        id: rollback
-        if: ${{ failure() && steps.deploy.outcome == 'success' && steps.smoke.outcome == 'failure' }}
+      - name: Roll back Parmar AI Worker if the release gate fails
+        id: rollback_parmar
+        if: ${{ failure() && steps.deploy_parmar.outcome == 'success' && steps.smoke.outcome == 'failure' }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
-          PREVIOUS_VERSION_ID: ${{ steps.previous.outputs.version_id }}
+          PREVIOUS_VERSION_ID: ${{ steps.previous.outputs.parmar_version_id }}
         shell: bash
         run: |
           set -euo pipefail
           if [[ -z "${PREVIOUS_VERSION_ID:-}" ]]; then
-            echo "::error::Rollback target is unavailable."
+            echo "::error::Parmar AI rollback target is unavailable."
             exit 1
           fi
-          npx wrangler rollback "${PREVIOUS_VERSION_ID}" --name parmar-ai --message "Automatic rollback after failed production health check"
+          npx wrangler rollback "${PREVIOUS_VERSION_ID}" --name parmar-ai --message "Automatic paired rollback after failed Phase 1 production verification"
 
-      - name: Verify health after rollback
-        if: ${{ always() && steps.rollback.outcome == 'success' }}
+      - name: Roll back BRVIN service if the release gate fails
+        id: rollback_brvin
+        if: ${{ failure() && steps.deploy_brvin.outcome == 'success' && (steps.deploy_parmar.outcome != 'success' || steps.smoke.outcome == 'failure') }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+          PREVIOUS_VERSION_ID: ${{ steps.previous.outputs.brvin_version_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${PREVIOUS_VERSION_ID:-}" ]]; then
+            echo "::error::BRVIN rollback target is unavailable."
+            exit 1
+          fi
+          npx wrangler rollback "${PREVIOUS_VERSION_ID}" --name brvin-service --message "Automatic paired rollback after failed Phase 1 production verification"
+
+      - name: Verify production health after rollback
+        if: ${{ always() && (steps.rollback_parmar.outcome == 'success' || steps.rollback_brvin.outcome == 'success') }}
         env:
           SMOKE_TEST_URL: https://parmar-ai.thenewtongs.workers.dev/health
+          SMOKE_TEST_ROOT_URL: https://parmar-ai.thenewtongs.workers.dev/
           SMOKE_TEST_ATTEMPTS: "6"
           SMOKE_TEST_DELAY_MS: "5000"
         run: node scripts/production-smoke-test.mjs
