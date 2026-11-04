@@ -1,4 +1,5 @@
 import type { AiUsageRecord, AnswerPacket, Env, StudentProfile } from "../config/env";
+import { ensureBrvin2ApplicationIdentities } from "../brvin/identity-migration";
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
@@ -233,6 +234,75 @@ CREATE TABLE IF NOT EXISTS brvin_projects (
 
 CREATE INDEX IF NOT EXISTS idx_brvin_projects_status
   ON brvin_projects(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS brvin_applications (
+  id TEXT PRIMARY KEY CHECK (length(id) = 36),
+  slug TEXT NOT NULL UNIQUE CHECK (
+    length(slug) BETWEEN 1 AND 64
+    AND slug = lower(slug)
+    AND slug GLOB '[a-z0-9]*'
+    AND slug NOT GLOB '*[^a-z0-9-]*'
+    AND substr(slug, -1, 1) GLOB '[a-z0-9]'
+  ),
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'suspended', 'revoked')),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_brvin_applications_status
+  ON brvin_applications(status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS brvin_application_environments (
+  id TEXT PRIMARY KEY CHECK (length(id) = 36),
+  application_id TEXT NOT NULL
+    REFERENCES brvin_applications(id) ON DELETE RESTRICT,
+  environment_key TEXT NOT NULL CHECK (
+    length(environment_key) BETWEEN 1 AND 32
+    AND environment_key = lower(environment_key)
+    AND environment_key GLOB '[a-z0-9]*'
+    AND environment_key NOT GLOB '*[^a-z0-9-]*'
+    AND substr(environment_key, -1, 1) GLOB '[a-z0-9]'
+  ),
+  display_name TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'disabled', 'revoked')),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  revoked_at INTEGER,
+  revoked_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_brvin_app_env_application_status
+  ON brvin_application_environments(application_id, status, environment_key);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_brvin_app_env_one_active_key
+  ON brvin_application_environments(application_id, environment_key)
+  WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS brvin_application_project_grants (
+  id TEXT PRIMARY KEY CHECK (length(id) = 36),
+  application_id TEXT NOT NULL
+    REFERENCES brvin_applications(id) ON DELETE RESTRICT,
+  project_id TEXT NOT NULL
+    REFERENCES brvin_projects(id) ON DELETE RESTRICT,
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'revoked')),
+  created_at INTEGER NOT NULL,
+  created_by TEXT,
+  revoked_at INTEGER,
+  revoked_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_brvin_app_project_grants_project_status
+  ON brvin_application_project_grants(project_id, status, application_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_brvin_app_project_one_active_grant
+  ON brvin_application_project_grants(application_id, project_id)
+  WHERE status = 'active';
+
 
 CREATE TABLE IF NOT EXISTS brvin_collections (
   id TEXT PRIMARY KEY,
@@ -709,6 +779,7 @@ export async function ensureAnalyticsSchema(env: Env): Promise<void> {
       await ensureQuizSessionSchema(env);
       await ensureFatmanImportJobSchema(env);
       await ensureBrvinCompatibilitySchema(env);
+      await ensureBrvin2ApplicationIdentities(env.DB!);
     })()
       .then(() => undefined)
       .catch((error) => {

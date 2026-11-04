@@ -1,5 +1,7 @@
 # BRVIN Application Integration Guide
 
+> **Version boundary:** This guide describes the current v1 integration path. BRVIN 2's proposed app/environment/project-grant model and RPC v2 contract are documented in [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). Do not configure a production consumer with the proposed v2 contract until Milestones 1–2 are implemented, tested and deployed.
+
 This guide explains how to connect an application to the existing private BRVIN retrieval service. It is written for engineers implementing a consumer app and administrators provisioning its project.
 
 For the full architecture, data model, security boundaries and current deployment map, start with [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md). For operations, see [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md).

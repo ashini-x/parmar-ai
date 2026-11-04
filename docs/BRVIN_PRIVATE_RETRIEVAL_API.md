@@ -6,6 +6,8 @@
 
 This document describes the internal WorkerEntrypoint RPC contract. It is not a public HTTP API specification.
 
+> **Version boundary:** This page documents the currently implemented v1 contract only. BRVIN 2's proposed v2 contract is in [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). V2 is designed but not implemented or deployed; do not configure consumers against it until Milestone 2 passes review and production verification.
+
 For the complete system design, see [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md). For onboarding a consumer Worker, see [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md). For admin and production procedures, see [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md).
 
 ## 1. Service identity and deployment boundary

@@ -6,7 +6,7 @@
 **First additional consumer:** `ashini-x/askmoina-voice`  
 **Created:** 4 November 2026  
 **Planning baseline:** `main` at `939a6046f2a6fa461898f2479e6ed22923e3f3f9`  
-**Overall implementation status:** NOT STARTED — approved architecture and plan only
+**Overall implementation status:** M0 design owner-approved for progression (PR #60 remains open/unmerged); M1 identity registry implementation IN PROGRESS on `brvin-2/m1-identity-registry`
 
 > **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
 
@@ -248,12 +248,22 @@ For multi-tenant apps, mapping an authenticated app workspace/customer to a BRVI
 
 ## 5. Implementation milestones and completion gates
 
+### Milestone 0 design package
+
+The architecture freeze deliverables are maintained in two reviewable documents:
+
+- [BRVIN 2 Architecture Decision Record](BRVIN_2_ARCHITECTURE_DECISIONS.md) — exact additive D1 schema, identity trust model, migration seed, compatibility/rollback plan, AskMoina integration, admin/wizard design and acceptance checklist.
+- [BRVIN 2 Private Retrieval RPC v2 Contract](BRVIN_2_RPC_V2_CONTRACT.md) — trusted binding identity, v2 methods/types, authorisation sequence, exact-page behavior, structured failures, quotas and tests.
+
+These are the proposed Milestone 0 design. They are not implemented runtime behavior. The current v1 references remain authoritative for production until Milestones 1–2 are implemented and verified.
+
+
 All milestones initially start as **NOT STARTED**. Change a status only after implementation and evidence. A commit alone is not completion. Each completed milestone must record PR/commit, changed areas, tests, deployment status, acceptance evidence and remaining risks.
 
 | Milestone | Name | Initial status | Completion outcome |
 |---|---|---|---|
-| 0 | Architecture freeze and migration blueprint | NOT STARTED | Approved ADR, D1 design, RPC v2 contract and backwards-compatible rollout sequence |
-| 1 | Multi-application, multi-project identity | NOT STARTED | D1 application/environment/project permissions migrated; Fatman compatibility retained |
+| 0 | Architecture freeze and migration blueprint | OWNER-APPROVED; PR #60 OPEN/UNMERGED | Approved ADR, D1 design, RPC v2 contract and backwards-compatible rollout sequence |
+| 1 | Multi-application, multi-project identity | IN PROGRESS | Additive D1 registry schema, verified retry-safe Parmar AI/Fatman seed, migration and concurrency tests; no production apply yet |
 | 2 | Private retrieval API v2 | NOT STARTED | Trusted app identity and explicit per-project authorisation enforced on every retrieval |
 | 3 | Reusable BRVIN application connector | NOT STARTED | Typed reusable app-side adapter and tests |
 | 4 | AskMoina Voice integration | NOT STARTED | Real Gemini Live tool-to-BRVIN-to-answer flow verified |
@@ -410,8 +420,8 @@ This table is the human-readable status. The evidence fields must be filled from
 
 | Milestone | Status | PR / commit | Verification evidence | Notes |
 |---|---|---|---|---|
-| 0 — Architecture freeze | NOT STARTED | — | — | Design-only; first execution task |
-| 1 — Identity model | NOT STARTED | — | — | Must preserve Fatman |
+| 0 — Architecture freeze | OWNER-APPROVED; PR OPEN/UNMERGED | [PR #60](https://github.com/ashini-x/parmar-ai/pull/60) | User authorised progression on 4 Nov 2026; ADR/RPC v2 contract cross-checked; latest docs-only CI run #582 passed | Documentation remains unmerged; M1 is stacked on its branch; no production writes |
+| 1 — Identity model | IN PROGRESS | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61) — `brvin-2/m1-identity-registry` | Release Validation run #586 passed typecheck, unit tests, Node tests and both Worker dry-runs | No D1 migration applied; v1 behavior unchanged |
 | 2 — Private RPC v2 | NOT STARTED | — | — | Must remain private |
 | 3 — Reusable connector | NOT STARTED | — | — | Standard app-side adapter |
 | 4 — AskMoina integration | NOT STARTED | — | — | First additional live consumer |
@@ -438,6 +448,48 @@ For each milestone, append a dated record with:
 - Outstanding defects, limitations and next milestone.
 
 Do not mark a milestone complete until all its required acceptance checks pass. A documentation-only milestone must not be described as implementation. A successful Worker health check alone does not prove an end-to-end model integration.
+
+### Milestone log — 4 November 2026 — Milestone 0
+
+**Status:** READY FOR REVIEW (not marked complete until the design PR is reviewed and merged).  
+**Branch:** `brvin-2/m0-architecture-freeze`  
+**Pull request:** https://github.com/ashini-x/parmar-ai/pull/60  
+**Base audited:** `main` at `a16a9273d581d9dd5acfc3c53c3cc1f2cba819fd`
+
+**Paths changed:**
+- `docs/BRVIN_2_ARCHITECTURE_DECISIONS.md` — ADR, target D1 DDL and constraints, identity trust model, Fatman migration seed, compatibility rollout/rollback, AskMoina integration, admin/wizard design and acceptance checks.
+- `docs/BRVIN_2_RPC_V2_CONTRACT.md` — private v2 methods, types, request validation, authorisation order, quota and failure semantics, exact-page contract and test matrix.
+- `docs/BRVIN_SYSTEM_REFERENCE.md` — links to the BRVIN 2 design while preserving its as-built boundary.
+- `docs/BRVIN_INTEGRATION_GUIDE.md` — labels existing instructions as v1 and prevents premature v2 production configuration.
+- `docs/BRVIN_PRIVATE_RETRIEVAL_API.md` — labels the implemented RPC as v1 and links the proposed v2 contract.
+- `docs/BRVIN_2_MASTER_PLAN.md` — this ledger and continuity record.
+
+**D1 migration:** none. Read-only inspection only. The live database has only the `fatman` project and `fatman → fatman` legacy client mapping. The only direct book grant is Fatman → the built-in 538-page Fatman book; the only collection grant is Fatman → Fatman Core. The ready three-page Rain Gardens test PDF is unassigned. Fatman's `2026-11` usage counter is 20. No tables, rows, grants, source records or usage counters were written or changed.
+
+**Cloudflare:** no configuration, binding, secret, Worker, Workflow, D1, GCS or AI Search changes. Read-only inspection confirmed the current `parmar-ai` and `brvin-service` Workers, their shared D1 binding and shared `default` AI Search instance. `brvin-service` remains configured with `workers_dev: false`; the current caller still uses `props.clientId: "fatman"`. AskMoina production has its own D1 and no BRVIN Service Binding. The AI Search stats endpoint reported 541 completed items and 50 errors labelled `page_limit_reached: Free AI Search image processing is unavailable`; this is an existing index diagnostic, not caused by BRVIN 2. Observed active deployment version IDs at audit time: `parmar-ai` `56cdd777-7f48-4c63-869d-4d18a2de3e9b`; `brvin-service` `1a533c1c-a1e4-4994-9eaa-0dfb0fee0cf1`; AskMoina Voice `abee86c2-8a80-47f3-87f5-eb92a60cc2d8`. These are baseline observations, not deployments from this PR.
+
+**Verification performed:** inspected current `main`, recent commits and PR state; compared the four-commit BRVIN 2 planning delta; read the BRVIN system, private API, integration and operations references; inspected D1 table/index definitions and relevant rows; inspected both BRVIN Worker code paths and Wrangler configs; inspected AskMoina Wrangler/D1/Worker binding state; inspected live Worker settings/deployment versions and AI Search instance/statistics; checked Cloudflare's current D1 `batch()` transaction/rollback documentation. PR #29 is a separate open source-only VRAIN standalone Worker proposal with placeholder D1/GCS values and no production deployment; it is not part of BRVIN 2 or the current live BRVIN service. The design was cross-checked against those facts. GitHub Actions Release Validation run #579 completed successfully on PR head `5d35017c8351af0ac286c84943b6ed86057ba9ee`: `npm run check`, `npm test`, `npm run test:node`, and both Worker Wrangler dry-runs passed; production credential preflight, deployment and live smoke/acceptance jobs were skipped for the PR. The subsequent changes to the current API reference and this ledger are documentation-only; no runtime code changed. Run #581 was queued for the latest docs-only PR head when this entry was written. No synthetic or production acceptance was claimed.
+
+**Deployment / rollback:** no deployment was attempted, so no rollback was required. Existing paired release workflow is unchanged.
+
+**Outstanding gate / next milestone:** review and merge PR #60. After that, begin Milestone 1 from the approved ADR with additive schema/migration tests only; keep v1 retrieval behavior and production binding unchanged.
+
+### Milestone log — 4 November 2026 — Milestone 1 (implementation in progress)
+
+**Status:** IN PROGRESS. The user explicitly authorised continuing after the M0 architecture package; the architecture and migration code are kept on a stacked feature branch. M0's documentation-only PR #60 remains open and unmerged; no GitHub review submission is recorded.
+
+**Branch:** `brvin-2/m1-identity-registry` (based on M0 branch head `6766b62503542358c5c80910d63648b627774920`). **PR:** https://github.com/ashini-x/parmar-ai/pull/61. The PR targets `main` so the repository's existing validation workflow, which is restricted to PRs targeting `main`, can run; its branch ancestry still includes M0 design commits.
+
+**Paths changed so far:**
+- `src/brvin/identity-migration.ts` — idempotent identity seed migration using stable Parmar AI/application/environment/grant IDs, conflict preflight, conditional inserts, transactional D1 seed batch, read-back checks, foreign-key check, marker-after-verification, and crash/concurrent-start recovery.
+- `src/analytics/db.ts` — additive application, environment and app-project grant tables/indexes in the existing shared D1 schema; runs the BRVIN 2 seed after existing legacy compatibility initialization.
+- `test/brvin2-identity-migration.test.ts` — migration tests for first seed, idempotency/revocation, interrupted marker recovery, concurrent cold starts, slug conflict, foreign-key failure and missing Fatman project.
+
+**Safety boundary:** source branch only. No D1 migration has been applied to production. No Cloudflare resource, binding, secret, AI Search instance, Worker deployment, book/source grant, legacy service-client row or usage counter has been changed. The existing `brvin_service_clients` v1 mapping and `fatman_search_usage` remain untouched. The new v2 resolver is not implemented or enabled in M1.
+
+**Verification:** Release Validation run #586 completed successfully on the corrected M1 head `bf8567322b84dee5954443171500af44aac08f29`: `npm run check`, `npm test`, `npm run test:node`, the private BRVIN Worker Wrangler dry-run, and the Parmar AI Worker Wrangler dry-run all passed. The production credential, deployment and live-acceptance jobs were skipped for this PR. Earlier run #584 caught three strict-typing issues in the fake-D1 test double; those were corrected before run #586. Run #585 was cancelled by the PR concurrency group and is not counted as validation.
+
+**Next actions:** complete the M1 code/design review, verify the exact production D1 baseline immediately before rollout, then apply the additive migration only through the approved release path. PR #61 contains the M0 design files and M1 source slice; PR #60 remains open as the original docs-only review artifact. Do not deploy or apply the D1 migration until the M1 review and release gate are satisfied.
 
 ## 8. Rules for future ChatGPT/Codex sessions
 
