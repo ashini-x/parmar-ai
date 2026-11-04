@@ -1941,7 +1941,7 @@ function dedupe(values: string[]): string[] {
 }
 
 function creatorContactPage(): Response {
-  const creatorEmail = "idoctorprojects@gmail.com";
+  const creatorEmail = "projectbrvin@gmail.com";
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -1949,55 +1949,39 @@ function creatorContactPage(): Response {
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f5f5f2">
   <meta name="robots" content="noindex,nofollow">
-  <title>iDoctor Projects</title>
-  <script src="https://telegram.org/js/telegram-web-app.js?64"></script>
+  <title>Project BRɅIN</title>
+  <script defer src="https://telegram.org/js/telegram-web-app.js?64"></script>
   <style>
-    :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f2;color:#171717;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
+    :root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f5f7;color:#1d1d1f;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
     *{box-sizing:border-box}
-    body{margin:0;min-height:100svh;display:grid;place-items:center;padding:max(28px,env(safe-area-inset-top)) 22px max(28px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 0%,#fff 0%,#f5f5f2 62%,#eeefec 100%)}
-    main{display:flex;width:min(100%,410px);flex-direction:column;align-items:center;text-align:center}
-    .trust-badge{position:relative;isolation:isolate;overflow:hidden;display:flex;align-items:center;gap:13px;min-height:66px;max-width:100%;margin:0 0 38px;padding:9px 20px 9px 11px;border:1px solid #ffffffd9;border-radius:999px;background:#ffffffb5;box-shadow:0 10px 30px #25251f10,0 2px 5px #25251f08;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);animation:surface-breathe 5.8s ease-in-out infinite}
-    .trust-badge::before{position:absolute;z-index:2;top:-45%;bottom:-45%;left:-43%;width:44%;content:"";pointer-events:none;background:linear-gradient(105deg,transparent 0%,#ffffff26 28%,#ffffffd1 50%,#ffffff40 70%,transparent 100%);filter:blur(2px);transform:translateX(0);animation:badge-shimmer 5.6s ease-in-out infinite}
-    .avatars{position:relative;z-index:1;display:flex;flex:none;align-items:center;padding-left:2px}
-    .avatar{display:grid;width:43px;height:43px;place-items:center;overflow:hidden;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 7px #24241f20}
-    .avatar+.avatar{margin-left:-13px}
-    .avatar svg{width:26px;height:26px}
-    .avatar-one{background:linear-gradient(145deg,#d9e8ed,#b9cbd1)}
-    .avatar-two{background:linear-gradient(145deg,#ead9d3,#d7b9ad)}
-    .avatar-three{background:linear-gradient(145deg,#e2dff0,#c9c4dd)}
-    .trust-copy{position:relative;z-index:1;white-space:nowrap;background:linear-gradient(100deg,#78afcb 0%,#aaa2c0 38%,#d995a7 70%,#e99583 100%);background-clip:text;-webkit-background-clip:text;color:transparent;font-size:14px;font-weight:630;letter-spacing:-.025em}
-    h1{margin:0;font-size:36px;font-weight:620;letter-spacing:-.055em;line-height:1.08}
-    .intro{margin:10px 0 28px;color:#777772;font-size:15px;line-height:1.5;letter-spacing:-.01em}
-    .contact-button{display:flex;width:min(100%,280px);min-height:58px;align-items:center;justify-content:center;gap:12px;padding:0 22px;border:1px solid #171717;border-radius:999px;background:#171717;color:#fff;font:600 16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.015em;box-shadow:0 8px 20px #1717171a;cursor:pointer;transition:transform .15s ease,background .15s ease}
-    .contact-button:hover{background:#2b2b29}
+    body{margin:0;min-height:100svh;display:grid;place-items:center;padding:max(22px,env(safe-area-inset-top)) 20px max(22px,env(safe-area-inset-bottom));background:radial-gradient(ellipse at 50% 0%,#fff 0%,#f5f5f7 58%,#eceef2 100%)}
+    main{display:flex;width:min(100%,430px);flex-direction:column;align-items:center;text-align:center;padding:42px 28px 32px;border:1px solid #ffffffd9;border-radius:30px;background:#ffffffd9;box-shadow:0 24px 64px #1d1d1f12,0 2px 8px #1d1d1f06}
+    .brand-label{display:inline-flex;align-items:center;gap:9px;margin:0 0 22px;padding:9px 13px;border:1px solid #e8e8ed;border-radius:999px;background:#fafafd;color:#6e6e73;font-size:11px;font-weight:650;letter-spacing:.1em}
+    .brand-dot{width:7px;height:7px;border-radius:50%;background:#2f9e66;box-shadow:0 0 0 3px #2f9e6618}
+    h1{margin:0;font-size:clamp(30px,8vw,36px);font-weight:650;letter-spacing:-.06em;line-height:1.08}
+    .intro{max-width:290px;margin:12px 0 28px;color:#77777d;font-size:15px;line-height:1.55;letter-spacing:-.015em}
+    .contact-button{display:flex;width:min(100%,280px);min-height:56px;align-items:center;justify-content:center;gap:11px;padding:0 22px;border:1px solid #1d1d1f;border-radius:999px;background:#1d1d1f;color:#fff;font:600 16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.015em;box-shadow:0 5px 14px #1d1d1f18;cursor:pointer;transition:transform .14s ease,background-color .14s ease,box-shadow .14s ease}
+    .contact-button:hover{background:#343438;box-shadow:0 7px 18px #1d1d1f20}
     .contact-button:active{transform:scale(.985)}
-    .contact-button:focus-visible,.email-copy:focus-visible{outline:3px solid #6b8cff;outline-offset:4px}
-    .gmail-icon{width:25px;height:25px;flex:none}
-    .contact-details{width:min(100%,340px);margin-top:25px;padding:22px 20px 18px;border:1px solid #ffffffdc;border-radius:23px;background:#ffffffa8;box-shadow:0 16px 42px #25251f0d;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+    .contact-button:focus-visible,.email-copy:focus-visible{outline:3px solid #0a84ff;outline-offset:4px}
+    .gmail-icon{width:23px;height:23px;flex:none}
+    .contact-details{width:min(100%,340px);margin-top:22px;padding:20px 16px 15px;border:1px solid #e9e9ee;border-radius:22px;background:#fff;box-shadow:0 12px 34px #1d1d1f0a}
     .contact-details[hidden]{display:none}
-    .email-label{margin:0 0 12px;color:#777772;font-size:14px;font-weight:520}
-    .email-copy{display:flex;width:100%;min-height:52px;align-items:center;justify-content:space-between;gap:8px;padding:0 11px;border:1px solid #17171712;border-radius:15px;background:#ffffffc9;color:#171717;font:600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
-    .email-copy:active{background:#f5f5f2}
+    .email-label{margin:0 0 11px;color:#77777d;font-size:13px;font-weight:550}
+    .email-copy{display:flex;width:100%;min-height:50px;align-items:center;justify-content:space-between;gap:8px;padding:0 11px;border:1px solid #e8e8ed;border-radius:14px;background:#f7f7f9;color:#1d1d1f;font:600 13px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;transition:background-color .14s ease,border-color .14s ease}
+    .email-copy:hover{background:#f0f0f4;border-color:#dedee5}
+    .email-copy:active{background:#e9e9ef}
     .email-address{flex:none;white-space:nowrap;overflow-wrap:normal;font-size:clamp(11px,3.8vw,13px);letter-spacing:-.02em}
-    .copy-hint{display:grid;width:18px;height:18px;flex:none;place-items:center;color:#8a8a84}.copy-hint svg{display:block;width:17px;height:17px}.copy-hint svg[hidden]{display:none}
-    .copy-status{min-height:18px;margin:10px 0 0;color:#85857f;font-size:12px;line-height:1.5}
-    @keyframes badge-shimmer{0%,18%{transform:translateX(0);opacity:0}22%{opacity:.9}58%{transform:translateX(330%);opacity:.85}68%,100%{transform:translateX(330%);opacity:0}}
-    @keyframes surface-breathe{0%,100%{box-shadow:0 10px 30px #25251f10,0 2px 5px #25251f08}50%{box-shadow:0 12px 34px #25251f12,0 2px 6px #25251f09}}
-    @media(max-width:360px){.trust-badge{gap:9px;padding-right:14px}.avatar{width:39px;height:39px}.avatar+.avatar{margin-left:-12px}.trust-copy{font-size:13px}}
-    @media(prefers-reduced-motion:reduce){.trust-badge,.trust-badge::before{animation:none}.contact-button{transition:none}}
+    .copy-hint{display:grid;width:18px;height:18px;flex:none;place-items:center;color:#77777d}.copy-hint svg{display:block;width:17px;height:17px}.copy-hint svg[hidden]{display:none}
+    .copy-status{min-height:18px;margin:10px 0 0;color:#77777d;font-size:12px;line-height:1.5}
+    @media(max-width:360px){main{padding:36px 20px 28px}.email-copy{padding-inline:9px}.email-address{font-size:11px}}
+    @media(prefers-reduced-motion:reduce){.contact-button,.email-copy{transition:none}}
   </style>
 </head>
 <body>
   <main>
-    <div class="trust-badge" aria-label="Trusted by 115,000 users">
-      <div class="avatars" aria-hidden="true">
-        <span class="avatar avatar-one"><svg viewBox="0 0 32 32"><circle cx="16" cy="11" r="6" fill="#806d67"/><path d="M5 29c.8-7.2 4.7-11 11-11s10.2 3.8 11 11" fill="#a88b80"/></svg></span>
-        <span class="avatar avatar-two"><svg viewBox="0 0 32 32"><circle cx="16" cy="11" r="6" fill="#8c5f4e"/><path d="M5 29c.8-7.2 4.7-11 11-11s10.2 3.8 11 11" fill="#bd8570"/></svg></span>
-        <span class="avatar avatar-three"><svg viewBox="0 0 32 32"><circle cx="16" cy="11" r="6" fill="#625d72"/><path d="M5 29c.8-7.2 4.7-11 11-11s10.2 3.8 11 11" fill="#89849b"/></svg></span>
-      </div>
-      <span class="trust-copy">Trusted by 115k users</span>
-    </div>
-    <h1>iDoctor Projects</h1>
+    <div class="brand-label"><span class="brand-dot" aria-hidden="true"></span><span>PROJECT CONTACT</span></div>
+    <h1>Project BRɅIN</h1>
     <p class="intro">Have a question? We’re listening.</p>
     <button class="contact-button" id="contact-toggle" type="button" aria-expanded="false" aria-controls="email-contact">
       <svg class="gmail-icon" viewBox="0 0 48 48" aria-hidden="true">
@@ -2064,9 +2048,17 @@ function creatorContactPage(): Response {
       }
     });
 
-    if (window.Telegram && window.Telegram.WebApp) {
-      window.Telegram.WebApp.ready();
-      window.Telegram.WebApp.expand();
+    function prepareTelegramMiniApp() {
+      const telegramWebApp = window.Telegram && window.Telegram.WebApp;
+      if (!telegramWebApp) return;
+      telegramWebApp.ready();
+      telegramWebApp.expand();
+    }
+
+    if (document.readyState === "complete") {
+      prepareTelegramMiniApp();
+    } else {
+      window.addEventListener("load", prepareTelegramMiniApp, { once: true });
     }
   </script>
 </body>
