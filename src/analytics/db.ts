@@ -294,6 +294,24 @@ CREATE TABLE IF NOT EXISTS brvin_project_collections (
 CREATE INDEX IF NOT EXISTS idx_brvin_project_collections_collection
   ON brvin_project_collections(collection_id, project_id);
 
+CREATE TABLE IF NOT EXISTS brvin_service_clients (
+  client_id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_brvin_service_clients_project
+  ON brvin_service_clients(project_id, client_id);
+
+CREATE TABLE IF NOT EXISTS brvin_project_search_usage (
+  project_id TEXT NOT NULL,
+  billing_month TEXT NOT NULL,
+  query_count INTEGER NOT NULL DEFAULT 0,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(project_id, billing_month)
+);
+
 CREATE TABLE IF NOT EXISTS brvin_activity_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   import_id TEXT,
@@ -674,6 +692,13 @@ async function ensureBrvinCompatibilitySchema(env: Env): Promise<void> {
     ]);
   }
 }
+
+  // Each project slug is its default trusted Worker client identity. A Service
+  // Binding supplies this identity through ctx.props; request payloads cannot.
+  await db.prepare(
+    "INSERT OR IGNORE INTO brvin_service_clients (client_id,project_id,created_at,updated_at) " +
+    "SELECT slug,id,created_at,updated_at FROM brvin_projects"
+  ).run();
 
 export async function ensureAnalyticsSchema(env: Env): Promise<void> {
   if (!env.DB) return;
