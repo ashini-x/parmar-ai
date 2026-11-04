@@ -1,3 +1,10 @@
+## Unreleased: Phase 4 live production release acceptance
+- Add a read-only production acceptance gate that verifies the newest Cloudflare deployment for both Workers is a single version at 100% traffic.
+- Probe the public root and BRVIN-backed health response for connected retrieval, ready Fatman status, and at least one authorised source.
+- Write a deployment evidence manifest and GitHub Actions summary containing source revision and both Worker deployment/version IDs.
+- Add a manual acceptance-only workflow path that checks the current production deployment without redeploying or touching student data.
+- Add regression tests proving split rollouts fail closed and older active records cannot mask a newer partial deployment.
+
 ## Unreleased: Harden source-PDF lifecycle prefix guard
 - Treat unterminated ancestor prefixes such as `brvin` and `brvin/source-pdfs` as broad matches that could include source PDFs. Permit only the dedicated temporary Vision prefix and exact legacy per-book `ocr/` subtrees.
 
