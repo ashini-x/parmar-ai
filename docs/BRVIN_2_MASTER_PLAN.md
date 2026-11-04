@@ -266,7 +266,7 @@ All milestones initially start as **NOT STARTED**. Change a status only after im
 | 1 | Multi-application, multi-project identity | COMPLETE | PR #61 merged; Release Validation #586 passed; additive registry migration applied and production rows/FK check verified; v1/Fatman preserved |
 | 2 | Private retrieval API v2 | IN PROGRESS | Implement explicit v2 RPC methods with environment-bound identity and per-project authorisation; retain v1 unchanged |
 | 3 | Reusable BRVIN application connector | NOT STARTED | Typed reusable app-side adapter and tests |
-| 4 | AskMoina Voice integration | NOT STARTED | Real Gemini Live tool-to-BRVIN-to-answer flow verified |
+| 4 | AskMoina Voice integration | IN PROGRESS | BRVIN-side AskMoina production/preview identities and explicit Fatman grant prepared; AskMoina Gemini Live connector/tool integration in separate repo branch |
 | 5 | BRVIN application/project administration | NOT STARTED | Admin can manage apps, projects, grants and knowledge centrally |
 | 6 | Automated Connect Application wizard | NOT STARTED | Supported app can be onboarded through reviewed GitHub/Cloudflare workflow |
 | 7 | End-to-end administrator and user acceptance | NOT STARTED | Full multi-app/multi-project and negative permission tests pass |
@@ -535,6 +535,31 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 
 **Next actions:** rerun CI against the latest PR #62 head. If all checks pass, merge/deploy the private service RPC plus dual health probe through the established main-branch workflow and verify the live v1/v2 status checks, source parity, Fatman retrieval and unchanged usage policy. Do not switch end-user retrieval consumers to v2 until the next planned integration milestones.
 
+### Milestone log — 4 November 2026 — M4 AskMoina integration started
+
+**Status:** IN PROGRESS across the BRVIN and AskMoina repositories.
+
+**BRVIN branch:** `brvin-2/m4-askmoina-identity` (based on M2 production main). It adds the one-time migration `brvin2-askmoina-application-identities-v1` with reserved identities:
+- Application `00000000-0000-4000-8000-000000000201`, slug `askmoina-voice`.
+- Production environment `00000000-0000-4000-8000-000000000202`.
+- Preview environment `00000000-0000-4000-8000-000000000203` (registered but deliberately not bound in the public AskMoina Preview).
+- Explicit app-project grant `00000000-0000-4000-8000-000000000204` to the existing active Fatman project `fatman` only. This is the only currently provisioned/ready BRVIN project. No other project is granted.
+- The migration uses preflight conflict checks, one transactional seed batch, exact read-back checks, foreign-key validation, marker-after-verification and idempotent retry behavior. It preserves later admin revocation and does not modify the existing Parmar AI grant, legacy v1 mapping, source grants or usage counters.
+- Tests cover first seed, retry/idempotency after revocation, interrupted-marker recovery, concurrent initialization, application/environment/grant conflicts, missing Fatman and foreign-key failure.
+
+**AskMoina branch:** `brvin-2/m4-brvin-integration` based on AskMoina main. It vendors the BRVIN connector pinned to upstream BRVIN M3 branch-head commit `e092659f352442e27df53529bd4c31ba78026541`. M3 PR #63 has a successful Cloudflare preview build, but its GitHub test job remains queued; the consumer PR must record this dependency and must not merge before M3 is merged/validated.
+
+**AskMoina changes so far:**
+- Added optional `BRVIN_SERVICE` Service Binding type and trusted `BRVIN_DEFAULT_PROJECT_ID`/timeout vars. The binding is absent from the Preview configuration.
+- Added `src/brvin-knowledge.ts` for authenticated evidence lookup using only the server-configured Fatman project. It validates semantic query/page input and returns cited evidence or explicit no-result/denied/quota/outage instructions; no fallback project is selected.
+- Added `search_brvin_knowledge` to authenticated Gemini Live audio and Co-Pilot tool declarations only. Guest and preview sessions do not receive it. The function is handled inside the existing Worker socket path; raw tool calls are withheld from browser frames and returned as Gemini function responses.
+- Existing Gemini Live remains answer generator/speaker. Existing AskMoina account auth, D1 history, Key Memories, relay/session resumption, audio/video state and user continuity are unchanged.
+- Added `test/brvin-knowledge.test.ts` and pending-tool tracking coverage for BRVIN retrieval to prevent silent-turn recovery from mistaking a pending source lookup for a dead reply.
+- `wrangler.jsonc` has a top-level production BRVIN binding using the registered production environment ID; the `previews` block intentionally omits BRVIN. This file is not deployed yet.
+
+**Safety/rollout boundary:** neither branch has been merged or deployed for M4. No AskMoina production binding has been added to Cloudflare; no AskMoina or BRVIN production D1 data has yet been changed by M4. The BRVIN app/identity/grant seed only becomes live after its PR is reviewed/merged and the BRVIN release runs. AskMoina production binding/tool only becomes live after the identity is verified and its own PR/release succeeds.
+
+**Next actions:** open and validate the BRVIN identity migration PR; open and validate the AskMoina integration PR; merge/deploy the BRVIN identity first; verify both environments and exact Fatman grant in D1; then merge/deploy AskMoina and run production tool tests for semantic question, exact physical PDF page, no result, denied/revoked grant, quota exhaustion and BRVIN outage. Keep preview unbound.
 ## 8. Rules for future ChatGPT/Codex sessions
 
 At the start of every new session:
