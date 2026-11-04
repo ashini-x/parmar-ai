@@ -11,6 +11,14 @@ describe("BRVIN private application retrieval", () => {
     page_count: 538,
   }];
   const search = vi.fn();
+  let exactPageItem: { id: string; key: string; status: string; metadata?: Record<string, unknown> } | null = null;
+  const pageList = vi.fn(async (options?: { search?: string }) => ({
+    result: exactPageItem && options?.search === exactPageItem.key ? [exactPageItem] : [],
+  }));
+  const pageDownload = vi.fn(async () => {
+    const text = "Page 200 explains the separation of powers. Legislative, executive and judicial functions are distributed to prevent concentration of power.";
+    return { contentType: "text/plain", size: text.length, body: new Blob([text]).stream() };
+  });
 
   const makeEnv = (clientProject: typeof project | null = project) => {
     const prepare = vi.fn((sql: string) => ({
@@ -26,7 +34,13 @@ describe("BRVIN private application retrieval", () => {
     }));
     return {
       DB: { prepare },
-      BRVIN_SEARCH: { get: () => ({ search }) },
+      BRVIN_SEARCH: { get: () => ({
+        search,
+        items: {
+          list: pageList,
+          get: () => ({ info: vi.fn(async () => exactPageItem), download: pageDownload }),
+        },
+      }) },
       BRVIN_SEARCH_INSTANCE: "shared-index",
       BRVIN_MIN_SCORE: "0.2",
       BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT: "800",
@@ -35,6 +49,7 @@ describe("BRVIN private application retrieval", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    exactPageItem = null;
     search.mockResolvedValue({
       chunks: [{
         id: "allowed-page-14",
@@ -58,6 +73,33 @@ describe("BRVIN private application retrieval", () => {
       queries: ["Article 14 equality"],
     });
     expect(result).toMatchObject({ ok: false, code: "CLIENT_NOT_REGISTERED", retryable: false });
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("retrieves an explicitly requested PDF page by its authorised exact item key", async () => {
+    const env = makeEnv();
+    const exactKey = sources[0].search_prefix + "page-000200.txt";
+    exactPageItem = { id: "exact-page-200", key: exactKey, status: "completed", metadata: { printedPage: "184" } };
+
+    const result = await retrieveBrvinForClient(env, "fatman", {
+      queries: ["Please explain the concept in simple language on page 200"],
+      pageNumbers: [200],
+    });
+
+    expect(result).toMatchObject({ ok: true, searchCount: 0, searchedSources: 1 });
+    if (!result.ok) throw new Error("Expected exact page retrieval.");
+    expect(result.passages).toEqual([
+      expect.objectContaining({
+        id: "exact-page-200",
+        bookId,
+        bookTitle: "Constitution of India",
+        pdfPage: 200,
+        printedPage: "184",
+        text: expect.stringContaining("separation of powers"),
+      }),
+    ]);
+    expect(pageList).toHaveBeenCalledWith(expect.objectContaining({ search: exactKey }));
+    expect(pageDownload).toHaveBeenCalledTimes(1);
     expect(search).not.toHaveBeenCalled();
   });
 
