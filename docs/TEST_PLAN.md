@@ -37,6 +37,15 @@
 
 This is an integration regression test with controlled external-service responses. It does not replace a production live-service check or assert that Google, Telegram, and Cloudflare's remote services are reachable at a particular moment.
 
+## Phase 4: live production release acceptance
+
+- The release acceptance script reads Cloudflare's deployment history for both `parmar-ai` and `brvin-service`.
+- It evaluates the newest deployment record for each Worker and requires exactly one version receiving 100% traffic; an older 100% deployment must never mask a newer split or partial rollout.
+- It probes the public root route and `/health`; the health response must confirm the private BRVIN service binding, ready Fatman retrieval, and at least one authorised source.
+- It records the source revision, workflow run, deployment IDs, version IDs, rollout percentages, endpoint checks, and capture time in a JSON manifest and GitHub Actions summary.
+- The same read-only acceptance can be run with `workflow_dispatch`; this path validates the current deployment and does not redeploy either Worker.
+- The acceptance check does not send real Telegram messages, generate Gemini answers, consume student quota, or mutate production data. Continue to use the protected Telegram admin connection test and the synthetic student-journey integration test for their respective coverage.
+
 ## Limits
 - Five accepted questions in the burst window cause the sixth to receive the burst response.
 - Daily quota blocks additional AI jobs at the configured limit.
