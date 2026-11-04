@@ -67,7 +67,7 @@ class MemoryD1 {
     if (sql.includes("SELECT id,application_id,environment_key,status FROM brvin_application_environments")) {
       return this.environments.find(row => row.id === values[0]) ?? null;
     }
-    if (sql.includes("FROM brvin_application_project_grants")) {
+    if (sql.includes("brvin_application_project_grants")) {
       const hasProjectSelector = sql.includes("g.project_id=?");
       const applicationId = String(values[hasProjectSelector ? 1 : 0]);
       const projectId = hasProjectSelector ? String(values[0]) : null;
