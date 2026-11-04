@@ -88,6 +88,7 @@ STRUCTURED OUTPUT
 - Do not wrap JSON in markdown fences.
 - Keep the answer field concise and student-ready. Do not put the JSON object itself inside the answer field.
 - Keep the SSC takeaway short and use it only when it adds genuine SSC value. Never claim a frequency such as “SSC often asks” unless the prompt explicitly supplied verified exam evidence.
+- The sscTakeaway field must contain takeaway text only. Never add the heading "SSC Focus", the 📌 icon, or another label to that field. The application adds exactly one standard "📌 SSC Focus:" heading.
 - Set nextRevisionTopic ONLY when the student explicitly asks what to revise/study next, asks what to remember from the current topic, or explicitly expresses confusion/weakness. For a normal fact/concept/simple follow-up, leave it empty.
 - For a “what should I remember from this topic?” question, nextRevisionTopic should be the current topic itself, not a different related topic.
 - Do not include raw JSON, code fences, or internal metadata in the answer field.`;
@@ -101,7 +102,7 @@ FATMAN BOOK MODE
 - Preserve important definitions, cause-and-effect relationships, contrasts, dates, constitutional references and examples that the page actually supports.
 - Never invent facts, page numbers, printed page numbers, section headings or citations. The application adds verified source citations.
 - Do not say a concept is missing when the supplied text or scanned page contains the answer.
-- Always provide a useful compact SSC Focus takeaway when the retrieved material contains an exam-relevant point. Return it in the sscTakeaway field so the application can append it.
+- Always provide a useful compact exam takeaway when the retrieved material contains an exam-relevant point. Return only the takeaway content in sscTakeaway, without writing "SSC Focus", a 📌 icon, or any other heading because the application adds that label exactly once.
 - TELEGRAM LAYOUT (mandatory): Use actual paragraph breaks in the answer field. Keep each paragraph to 1–3 short sentences and separate different ideas with a blank line. Put every bullet or numbered point on its own line. Use short standalone labels such as "Meaning:", "How it works:", and "Example:" when they improve clarity. Never put the entire explanation into one dense paragraph.
 - The answer is sent as plain Telegram text, so preserve real line breaks as JSON-escaped \\n characters. Do not emit HTML tags such as <br>, markdown tables, or a single unbroken block of text.
 - Use responseMode text in Fatman Mode. If the student asks for MCQs, explain the relevant point in the answer text rather than creating a Telegram quiz.
@@ -972,14 +973,15 @@ function sanitizeAnswerPacket(
     answer = "Ye current-affairs type ka fact hai. Main is waqt live verification ko confidently confirm nahi kar pa raha hoon, isliye guess nahi karunga. Official source se latest fact verify karke bhejna safest rahega. 📚";
   }
 
-  if (packet.sscTakeaway && !isRedundantTakeaway(answer, packet.sscTakeaway)) {
-    answer = `${answer}\n\n📌 SSC Focus: ${clampText(packet.sscTakeaway, 220)}`;
+  const sscTakeaway = normalizeSscTakeaway(packet.sscTakeaway);
+  if (sscTakeaway && !isRedundantTakeaway(answer, sscTakeaway)) {
+    answer = `${answer}\n\n📌 SSC Focus: ${clampText(sscTakeaway, 220)}`;
   }
 
   return {
     ...packet,
     answer: clampAnswer(answer),
-    sscTakeaway: clampText(packet.sscTakeaway, 220),
+    sscTakeaway: clampText(sscTakeaway, 220),
   };
 }
 
@@ -1155,6 +1157,24 @@ function unwrapNestedAnswer(value: string): string {
 function looksLikeJson(value: string): boolean {
   const trimmed = value.trim();
   return /\{\s*["']answer["']\s*:/.test(trimmed) || /^\[\s*\{/.test(trimmed);
+}
+
+export function normalizeSscTakeaway(takeaway: string): string {
+  let normalized = replaceGeneratedEmDash(takeaway)
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // The UI owns the single visible heading. Strip any model-generated copy,
+  // including repeated labels, icons, and common Markdown emphasis wrappers.
+  const leadingLabel = /^(?:(?:📌|📍|🎯|✅|🔖)\uFE0F?\s*)?(?:\*{1,2}|_{1,2})?ssc[\s._-]*focus\b\s*(?::|：|-|–|—)?\s*(?:\*{1,2}|_{1,2})?\s*/iu;
+  while (leadingLabel.test(normalized)) {
+    const stripped = normalized.replace(leadingLabel, "").trim();
+    if (stripped === normalized) break;
+    normalized = stripped;
+  }
+
+  return normalized;
 }
 
 function isRedundantTakeaway(answer: string, takeaway: string): boolean {
