@@ -29,9 +29,9 @@ const validPacket = {
 
 describe("production hardening", () => {
   it("preserves actual Telegram paragraph breaks, including escaped JSON line feeds", () => {
-    expect(normalizeAnswer("Meaning: first line\\nsecond line\\n\\nExample: final line")).toBe(
-      "Meaning: first line\\nsecond line\\n\\nExample: final line",
-    );
+    const normalized = normalizeAnswer("Meaning: first line\\nsecond line\\n\\nExample: final line");
+    expect(normalized).toBe("Meaning: first line\nsecond line\n\nExample: final line");
+    expect(normalizeAnswer("First paragraph.\\n\\nSecond paragraph.")).toBe("First paragraph.\n\nSecond paragraph.");
     expect(normalizeAnswer("First paragraph.\\n\\nSecond paragraph.")).toBe(
       "First paragraph.\\n\\nSecond paragraph.",
     );
@@ -43,7 +43,7 @@ describe("production hardening", () => {
       { candidates: [{ content: { parts: [{ text: '\\n\\nSecond paragraph"}' }] } }] },
       { candidates: [{ finishReason: "STOP" }] },
     ];
-    const sse = events.map((event) => "data: " + JSON.stringify(event) + "\\n\\n").join("");
+    const sse = events.map((event) => "data: " + JSON.stringify(event) + "\n\n").join("");
     const emitted: string[] = [];
     const handler = ((answer: string) => { emitted.push(answer); }) as PartialAnswerHandler;
     handler.flush = async () => undefined;
@@ -62,7 +62,7 @@ describe("production hardening", () => {
       { candidates: [{ content: { parts: [{ text: '{"responseMode":"text","answer":"A complete-looking' }] } }] },
       { candidates: [{ content: { parts: [{ text: ' draft"}' }] } }] },
     ];
-    const sse = events.map((event) => "data: " + JSON.stringify(event) + "\\n\\n").join("");
+    const sse = events.map((event) => "data: " + JSON.stringify(event) + "\n\n").join("");
     const emitted: string[] = [];
     const handler = ((answer: string) => { emitted.push(answer); }) as PartialAnswerHandler;
     handler.flush = async () => undefined;
