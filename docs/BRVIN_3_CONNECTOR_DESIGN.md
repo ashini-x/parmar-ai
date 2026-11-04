@@ -65,16 +65,21 @@ The application environment identity is not accepted by any connector method. It
 - **Provenance:** format citations from book title, physical PDF page, optional printed page and section. The raw typed passages remain available to the consumer.
 - **Model ownership:** the connector returns evidence. It never builds a Gemini prompt, generates an answer, speaks audio or manages conversation/session memory.
 
-## 5. AskMoina integration target (M4)
+## 5. M4 reference consumer: isolated text test Worker
 
-In M4, AskMoina Voice will vendor a pinned version of this module and call it from its existing server-side Gemini Live function/tool handler. AskMoina retains its own:
-- authentication and user/workspace-to-project mapping;
-- Gemini Live model/session and audio/video state;
-- D1 conversation history, memory and continuity checkpoints;
-- user quota, rate limiting, prompts, answer generation and spoken delivery.
+The first controlled M4 consumer is a separate text-only Worker housed in `ashini-x/askmoina-voice`. It uses a distinct Wrangler config, Worker name, entrypoint, deployment workflow and routes; it must not run inside or share the existing production `askmoina-voice` Worker runtime.
 
-The browser sends a user question to AskMoina; it does not send BRVIN identity or call the private BRVIN service directly. The server derives the authorized project from trusted app context, calls the connector and passes retrieved passages/citations to Gemini Live as tool evidence.
+The text UI lets an authorised tester:
+- discover only projects returned by `listAuthorizedProjects()`;
+- select an authorised project and submit a text query or exact PDF page;
+- inspect returned passages with book title and PDF-page provenance;
+- see clear empty, denied, quota and unavailable states.
 
+The test Worker calls this connector only from its server-side handler. The browser never receives the BRVIN Service Binding or the trusted `applicationEnvironmentId`. Its binding props point to a separate test application's registered environment identity. The test app receives a dedicated test-project grant; it must not inherit Fatman's corpus by default.
+
+The application/environment/project/grant records are created through the protected BRVIN admin workflow as M5 makes that lifecycle available. Until then, validate the Worker locally against mocked RPC contracts; do not fabricate or hard-code a production environment UUID and do not add ad-hoc production D1 rows.
+
+AskMoina Voice's existing Gemini Live integration remains an optional pilot/second consumer. Its camera/audio/session-continuity tests are not a prerequisite for M4 completion. The text test Worker proves the reusable connector, trusted identity, project discovery, authorization, retrieval and citation path without changing the production voice app.
 ## 6. M3 completion tests
 
 - TypeScript checks and connector unit tests pass.
