@@ -96,7 +96,7 @@ const HTML = `<!doctype html>
 </style>
 </head>
 <body><main class="shell">
-<header class="top"><div><div class="eyebrow">Parmar AI / Fatman</div><h1 class="title">Book library</h1><p class="sub">Add a PDF. Fatman will read it, index it and make it available for answers automatically.</p></div><div class="actions"><a class="btn" href="/admin">Admin home</a><a class="btn" href="/admin/fatman/monitor">Legacy book monitor</a></div></header>
+<header class="top"><div><div class="eyebrow">परमार्थAI / Fatman</div><h1 class="title">Book library</h1><p class="sub">Add a PDF. Fatman will read it, index it and make it available for answers automatically.</p></div><div class="actions"><a class="btn" href="/admin">Admin home</a><a class="btn" href="/admin/fatman/monitor">Legacy book monitor</a></div></header>
 <section class="card">
 <h2>Add a book</h2><p class="sub">Choose a PDF and give it a name. The system checks the file, uploads it securely and runs the reading and indexing steps in the background.</p>
 <label class="field" for="book-title">Book name</label><input class="input" id="book-title" maxlength="160" placeholder="For example, Indian Polity – Reference Book">
