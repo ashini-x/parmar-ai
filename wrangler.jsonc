@@ -62,7 +62,7 @@
       "service": "brvin-service",
       "entrypoint": "BrvinRetrievalApi",
       "props": {
-        "clientId": "parmar-ai"
+        "clientId": "fatman"
       }
     }
   ],
