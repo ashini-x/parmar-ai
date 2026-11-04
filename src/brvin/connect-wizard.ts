@@ -761,6 +761,79 @@ export async function createBrvinTestClientPullRequest(env: Env, request: Reques
   }
 }
 
+export async function provisionBrvinTestClientAccessToken(env: Env, request: Request): Promise<Response> {
+  try {
+    if (!env.DB) return json({ ok: false, error: "BRVIN D1 is not configured." }, 503);
+    await ensureAnalyticsSchema(env);
+    const github = await connection(env, "github");
+    if (!github) return json({ ok: false, error: "Create and review the connection pull request first." }, 409);
+    const metadata = JSON.parse(github.metadata_json || "{}") as Record<string, unknown>;
+    const applicationId = clean(metadata.connectedApplicationId, 36);
+    const environmentId = clean(metadata.connectedEnvironmentId, 36);
+    if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !/^[a-f0-9-]{36}$/iu.test(environmentId)) {
+      return json({ ok: false, error: "The GitHub connection PR does not contain a registered application/environment identity." }, 409);
+    }
+
+    const registered = await env.DB.prepare(
+      "SELECT a.id AS application_id,e.id AS environment_id " +
+      "FROM brvin_applications a " +
+      "JOIN brvin_application_environments e ON e.application_id=a.id " +
+      "JOIN brvin_application_project_grants g ON g.application_id=a.id AND g.status='active' " +
+      "JOIN brvin_projects p ON p.id=g.project_id AND p.status='active' " +
+      "WHERE a.id=? AND e.id=? AND a.status='active' AND e.status='active' LIMIT 1"
+    ).bind(applicationId, environmentId).first<{ application_id: string; environment_id: string }>();
+    if (!registered) {
+      return json({ ok: false, error: "The connected application, environment or its active project grant is no longer active. Re-enable access before creating a tester token." }, 409);
+    }
+
+    const { accessToken, scripts } = await authorizedCloudflare(env, request);
+    if (!scripts.some(script => clean(script.id || script.script || script.name, 128) === TEST_WORKER_NAME)) {
+      return json({ ok: false, error: "The isolated test Worker has not been deployed yet. Merge the connection PR and wait for the dedicated test-worker deployment workflow." }, 409);
+    }
+    const accountId = clean(env.BRVIN_HOME_ACCOUNT_ID, 32);
+    const settings = await cloudflareApi<{ bindings?: Array<Record<string, unknown>> }>(
+      accessToken,
+      "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/settings",
+    );
+    const binding = (settings.bindings || []).find(item => item.name === "BRVIN_SERVICE" && item.type === "service");
+    const props = binding?.props && typeof binding.props === "object" ? binding.props as Record<string, unknown> : {};
+    if (clean(binding?.service, 128) !== BRVIN_SERVICE_NAME || clean(props.applicationEnvironmentId, 36) !== environmentId) {
+      return json({ ok: false, error: "The deployed test Worker is missing the exact approved BRVIN Service Binding/environment identity. No tester token was created." }, 409);
+    }
+
+    // The bearer token only opens the test interface. BRVIN project authorization
+    // is still enforced independently by the private application/environment binding.
+    const testerToken = randomToken();
+    const response = await fetch(
+      CLOUDFLARE_API + "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/secrets",
+      {
+        method: "PUT",
+        headers: { authorization: "Bearer " + accessToken, "content-type": "application/json" },
+        body: JSON.stringify({ name: "BRVIN_TEST_ACCESS_TOKEN", type: "secret_text", text: testerToken }),
+      },
+    );
+    const responseText = await response.text();
+    let payload: { success?: boolean; errors?: Array<{ message?: string }> } = {};
+    try { payload = responseText ? JSON.parse(responseText) as typeof payload : {}; } catch { payload = {}; }
+    if (!response.ok || payload.success === false) {
+      const detail = payload.errors?.map(item => clean(item.message, 160)).filter(Boolean).join("; ") || "Cloudflare did not confirm the Worker secret update.";
+      throw new Error("Cloudflare Worker secret update failed (" + response.status + "): " + detail);
+    }
+    await audit(env, "cloudflare", "test_client.access_token_provisioned", "A one-time BRVIN test-interface access token was installed as a Cloudflare Worker secret after the live service/environment binding was verified.", {
+      applicationId, environmentId, worker: TEST_WORKER_NAME, tokenFingerprint: (await stateHash(testerToken)).slice(0, 16),
+    });
+    return json({
+      ok: true,
+      testerToken,
+      oneTime: true,
+      worker: TEST_WORKER_NAME,
+      message: "Copy this token now and keep it private. BRVIN does not retain a recoverable copy; generate a new one to rotate it.",
+    }, 201);
+  } catch (error) {
+    return json({ ok: false, error: safeError(error) }, 502);
+  }
+}
+
 export async function verifyBrvinTestClientDeployment(env: Env, request: Request): Promise<Response> {
   try {
     const { accessToken } = await authorizedCloudflare(env, request);
