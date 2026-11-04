@@ -67,7 +67,7 @@ function finiteScore(value: unknown): number | undefined {
 
 function cleanMetadataText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== "string") return undefined;
-  const cleaned = value.replace(/[\\r\\n]+/gu, " ").replace(/\\s+/gu, " ").trim().slice(0, maxLength);
+  const cleaned = value.replace(/[\r\n]+/gu, " ").replace(/\s+/gu, " ").trim().slice(0, maxLength);
   return cleaned || undefined;
 }
 
