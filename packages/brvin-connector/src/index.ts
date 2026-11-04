@@ -215,7 +215,7 @@ function failure(
 }
 
 function normalizeQueries(value: unknown): string[] | null {
-  if (!Array.isArray(value)) return null;
+  if (!Array.isArray(value) || value.length > MAX_QUERIES) return null;
   const queries: string[] = [];
   for (const candidate of value) {
     if (typeof candidate !== "string" || candidate.includes("\u0000")) return null;
@@ -229,7 +229,7 @@ function normalizeQueries(value: unknown): string[] | null {
 
 function normalizePageNumbers(value: unknown): number[] | null {
   if (value === undefined) return [];
-  if (!Array.isArray(value)) return null;
+  if (!Array.isArray(value) || value.length > MAX_PAGE_NUMBERS) return null;
   const pages: number[] = [];
   for (const candidate of value) {
     if (
