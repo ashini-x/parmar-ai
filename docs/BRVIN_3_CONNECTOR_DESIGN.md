@@ -26,6 +26,15 @@ Reasons:
 
 This is an initial source-distribution choice, not a claim of an automatically synchronized multi-repository dependency. Package updates are explicit, pinned and reviewed.
 
+## 2.1 Isolated Parmar AI Worker Preview
+
+The Cloudflare preview build initially failed because the production Wrangler file had no `previews` block. The account has no existing Parmar AI preview D1 database; using `parmar-ai-admin-prod`, `sawalnewton-db`, or another application's preview database would be unsafe.
+
+A dedicated D1 database was created: `parmar-ai-admin-preview` (`4061b8b7-aeae-4f83-a650-922c68e6f42d`). The `previews` block in `wrangler.jsonc` sets `ENVIRONMENT=preview`, `FATMAN_ENABLED=false`, and binds only this preview DB plus a preview-scoped `JOB_DEDUPE` namespace.
+
+The preview deliberately omits the production BRVIN Service Binding, AI Search namespace, Fatman import Workflow, and production question Queue. Cloudflare Worker Previews would route a Service Binding call to the downstream Worker's production deployment, so omitting it prevents branch previews from reaching the live Fatman corpus/quota. The resulting non-production Preview is not intended to run the full Fatman or BRVIN workflow.
+
+Cloudflare Workers Builds preview for branch `brvin-2/m3-connector` completed successfully on commit `92e45cd54c8e5ae84dd5bb8007ae3802559a18c0`, build `ae509117-e816-4934-a3d0-7c975c5b9c21`. Cloudflare warned that the omitted production-only bindings are unavailable in Preview; this is expected and documented, not a failed build.
 ## 3. Public connector interface
 
 The package exports:
