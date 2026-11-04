@@ -1167,7 +1167,7 @@ export function normalizeSscTakeaway(takeaway: string): string {
 
   // The UI owns the single visible heading. Strip any model-generated copy,
   // including repeated labels, icons, and common Markdown emphasis wrappers.
-  const leadingLabel = /^(?:(?:📌|📍|🎯|✅|🔖)\uFE0F?\s*)?(?:\*{1,2}|_{1,2})?ssc[\s._-]*focus\b(?:\*{1,2}|_{1,2})?\s*(?::|：|-|–|—)?\s*/iu;
+  const leadingLabel = /^(?:(?:📌|📍|🎯|✅|🔖)\uFE0F?\s*)?(?:\*{1,2}|_{1,2})?ssc[\s._-]*focus\b\s*(?::|：|-|–|—)?\s*(?:\*{1,2}|_{1,2})?\s*/iu;
   while (leadingLabel.test(normalized)) {
     const stripped = normalized.replace(leadingLabel, "").trim();
     if (stripped === normalized) break;
