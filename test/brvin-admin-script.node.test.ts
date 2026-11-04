@@ -116,5 +116,13 @@ describe("BRVIN browser script contract", () => {
     expect(script).toContain('post("upload/start"');
     expect(script).toContain('post("projects"');
     expect(script).toContain('post("collections"');
+    expect(script).toContain("function renderApplications");
+    expect(script).toContain('post("applications/status"');
+    expect(script).toContain('post("applications/environments/status"');
+    expect(script).toContain('post("applications/grants/revoke"');
+    expect(script).toContain('post("projects/update"');
+    expect(adminSource).toContain('id="view-applications"');
+    expect(adminSource).toContain('id="project-application"');
+    expect(workerSource).toContain("/admin/api/brvin/applications/grants/revoke");
   });
 });
