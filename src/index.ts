@@ -1968,7 +1968,7 @@ function creatorContactPage(): Response {
     .trust-copy{position:relative;z-index:1;white-space:nowrap;background:linear-gradient(100deg,#78afcb 0%,#aaa2c0 38%,#d995a7 70%,#e99583 100%);background-clip:text;-webkit-background-clip:text;color:transparent;font-size:14px;font-weight:630;letter-spacing:-.025em}
     h1{margin:0;font-size:36px;font-weight:620;letter-spacing:-.055em;line-height:1.08}
     .intro{margin:10px 0 28px;color:#777772;font-size:15px;line-height:1.5;letter-spacing:-.01em}
-    .contact-button{display:flex;width:min(100%,280px);min-height:58px;align-items:center;justify-content:center;gap:12px;padding:0 22px;border:1px solid #171717;border-radius:999px;background:#171717;color:#fff;font:600 16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.015em;box-shadow:0 8px 20px #1717171a;cursor:pointer;transition:transform .15s ease,background .15s ease}
+    .contact-button{display:flex;width:min(100%,220px);min-height:58px;align-items:center;justify-content:center;gap:12px;padding:0 22px;border:1px solid #171717;border-radius:999px;background:#171717;color:#fff;font:600 16px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:-.015em;box-shadow:0 8px 20px #1717171a;cursor:pointer;transition:transform .15s ease,background .15s ease}
     .contact-button:hover{background:#2b2b29}
     .contact-button:active{transform:scale(.985)}
     .contact-button:focus-visible,.email-copy:focus-visible{outline:3px solid #6b8cff;outline-offset:4px}
