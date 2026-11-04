@@ -1,5 +1,5 @@
 import type { AiUsageRecord, AnswerPacket, Env, StudentProfile } from "../config/env";
-import { ensureBrvin2ApplicationIdentities } from "../brvin/identity-migration";
+import { ensureBrvin2ApplicationIdentities, ensureBrvin2AskMoinaIdentities } from "../brvin/identity-migration";
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS users (
@@ -780,6 +780,7 @@ export async function ensureAnalyticsSchema(env: Env): Promise<void> {
       await ensureFatmanImportJobSchema(env);
       await ensureBrvinCompatibilitySchema(env);
       await ensureBrvin2ApplicationIdentities(env.DB!);
+      await ensureBrvin2AskMoinaIdentities(env.DB!);
     })()
       .then(() => undefined)
       .catch((error) => {
