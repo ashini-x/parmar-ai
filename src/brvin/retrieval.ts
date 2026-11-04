@@ -298,6 +298,9 @@ export async function retrieveBrvinProjectContextForProject(
           continue;
         }
 
+        // Continue examining all query variants after reaching the passage cap,
+        // so a later variant can still improve the score/evidence for an existing id.
+        if (bestById.size >= MAX_PASSAGES) continue;
         const fingerprint = pageKey + ":" + text.toLowerCase().replace(/\s+/gu, " ").slice(0, 180);
         if (fingerprints.has(fingerprint)) continue;
         if (!allowedPages.has(pageKey) && allowedPages.size >= MAX_PAGES) continue;
@@ -315,9 +318,7 @@ export async function retrieveBrvinProjectContextForProject(
         fingerprints.add(fingerprint);
         allowedPages.add(pageKey);
         pageCounts.set(pageKey, pageCount + 1);
-        if (bestById.size >= MAX_PASSAGES) break;
       }
-      if (bestById.size >= MAX_PASSAGES) break;
     }
 
     const passages = [...bestById.values()].sort((a, b) => b.score - a.score);
