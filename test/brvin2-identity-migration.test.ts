@@ -38,7 +38,7 @@ class FakeStatement {
   }
 
   async run(): Promise<{ success: boolean }> {
-    await this.db.batch([this]);
+    await this.db.batch([this as unknown as D1PreparedStatement]);
     return { success: true };
   }
 
