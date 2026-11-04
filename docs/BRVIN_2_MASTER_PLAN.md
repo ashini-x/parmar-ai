@@ -421,7 +421,7 @@ This table is the human-readable status. The evidence fields must be filled from
 | Milestone | Status | PR / commit | Verification evidence | Notes |
 |---|---|---|---|---|
 | 0 — Architecture freeze | OWNER-APPROVED; PR OPEN/UNMERGED | [PR #60](https://github.com/ashini-x/parmar-ai/pull/60) | User authorised progression on 4 Nov 2026; ADR/RPC v2 contract cross-checked; latest docs-only CI run #582 passed | Documentation remains unmerged; M1 is stacked on its branch; no production writes |
-| 1 — Identity model | IN PROGRESS | `brvin-2/m1-identity-registry` (stacked on M0 branch) | Additive DDL + retry-safe seed helper + migration tests added; awaiting CI | No D1 migration applied; v1 behavior unchanged |
+| 1 — Identity model | IN PROGRESS | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61) — `brvin-2/m1-identity-registry` | Additive DDL + retry-safe seed helper + migration tests added; CI status not yet returned | No D1 migration applied; v1 behavior unchanged |
 | 2 — Private RPC v2 | NOT STARTED | — | — | Must remain private |
 | 3 — Reusable connector | NOT STARTED | — | — | Standard app-side adapter |
 | 4 — AskMoina integration | NOT STARTED | — | — | First additional live consumer |
@@ -478,7 +478,7 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 
 **Status:** IN PROGRESS. The user explicitly authorised continuing after the M0 architecture package; the architecture and migration code are kept on a stacked feature branch. M0's documentation-only PR #60 remains open and unmerged; no GitHub review submission is recorded.
 
-**Branch:** `brvin-2/m1-identity-registry` (based on M0 branch head `6766b62503542358c5c80910d63648b627774920`).
+**Branch:** `brvin-2/m1-identity-registry` (based on M0 branch head `6766b62503542358c5c80910d63648b627774920`). **PR:** https://github.com/ashini-x/parmar-ai/pull/61. The PR targets `main` so the repository's existing validation workflow, which is restricted to PRs targeting `main`, can run; its branch ancestry still includes M0 design commits.
 
 **Paths changed so far:**
 - `src/brvin/identity-migration.ts` — idempotent identity seed migration using stable Parmar AI/application/environment/grant IDs, conflict preflight, conditional inserts, transactional D1 seed batch, read-back checks, foreign-key check, marker-after-verification, and crash/concurrent-start recovery.
@@ -489,7 +489,7 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 
 **Verification:** no M1 test result claimed yet. The current M0 PR validation run #582 passed typecheck, unit tests, Node tests and dry-runs for both Worker bundles; its production credential, deployment and live-acceptance jobs were skipped. A fresh CI run is required for this M1 branch.
 
-**Next actions:** inspect the new migration/test code and CI results, fix any issues, update this log, then open an M1 PR stacked against `brvin-2/m0-architecture-freeze`. Do not deploy or apply the D1 migration until the M1 review and release gate are satisfied.
+**Next actions:** inspect the new migration/test code and CI results, fix any issues, and update this log. PR #61 already contains the M0 design files and M1 source slice; PR #60 remains open as the original docs-only review artifact. Do not deploy or apply the D1 migration until the M1 review and release gate are satisfied.
 
 ## 8. Rules for future ChatGPT/Codex sessions
 
