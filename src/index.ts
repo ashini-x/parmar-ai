@@ -48,7 +48,7 @@ import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getA
 
 const QUEUE_MAX_RETRIES = 10;
 const STATUS_TEXT = "Thinking…";
-const BOT_BRAND_NAME = "परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐)";
+const BOT_BRAND_NAME = "परमार्थAI";
 const RATE_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
 const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
 const FINAL_FAILURE_TEXT = "Bhai, is waqt answer complete nahi ho paaya. Tumhara sawal retry hua hai; same doubt dobara bhejna. 🙏";
@@ -589,14 +589,16 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (isDeleteMyData(text)) {
     const deletion = await deleteUserData(env, analyticsUser.telegramUserId);
-    if (deletion.chatId !== null) {
-      const id = env.JOB_DEDUPE.idFromName(String(deletion.chatId));
-      await env.JOB_DEDUPE.get(id).fetch("https://job-store/internal", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "delete_data" }),
-      });
-    }
+    // The D1 user row may already be missing (for example, after an interrupted
+    // cleanup). Always clear this private student's Durable Object using the
+    // current chat ID as a fallback, while deleteData preserves today's quota.
+    const dataChatId = deletion.chatId ?? chatId;
+    const id = env.JOB_DEDUPE.idFromName(String(dataChatId));
+    await env.JOB_DEDUPE.get(id).fetch("https://job-store/internal", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "delete_data" }),
+    });
     await bestEffortTelegram("delete_data", () => sendTelegramMessage(env, chatId, `Tumhari ${BOT_BRAND_NAME} ki stored study data aur history delete kar di gayi hai. Ab fresh start hoga. 🗑️`));
     return withRequestId(json({ ok: true, deleted: true }), requestId);
   }

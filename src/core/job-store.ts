@@ -910,7 +910,14 @@ export class JobDedupe extends DurableObject {
   }
 
   private async deleteData(): Promise<GenericResponse> {
-    await this.ctx.storage.deleteAll();
+    // Study-data deletion must not reset or revive the student's daily AI quota.
+    // Delete all Durable Object state except the independently maintained rate
+    // metadata, atomically so a concurrent intake cannot race the preservation.
+    await this.ctx.storage.transaction(async (transaction) => {
+      const storedEntries = await transaction.list();
+      const keysToDelete = [...storedEntries.keys()].filter((key) => key !== RATE_LIMIT_META_KEY);
+      if (keysToDelete.length > 0) await transaction.delete(keysToDelete);
+    });
     return { ok: true };
   }
 
