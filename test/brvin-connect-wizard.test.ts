@@ -12,10 +12,13 @@ import {
   brvinConnectStatus,
   createBrvinTestClientPullRequest,
   completeBrvinGitHubManifest,
+  completeBrvinCloudflareOAuth,
   configureBrvinCloudflareOAuth,
   registerBrvinTestConsumer,
   provisionBrvinTestClientAccessToken,
   startBrvinGitHubManifest,
+  startBrvinCloudflareOAuth,
+  verifyBrvinTestClientDeployment,
 } from "../src/brvin/connect-wizard";
 
 type Row = Record<string, unknown>;
@@ -182,6 +185,79 @@ describe("BRVIN Connect Application wizard", () => {
     expect(String(row.secret_ciphertext)).not.toContain(clientSecret);
     expect(String(row.secret_ciphertext)).not.toContain("BRVIN.Cloudflare.OAuth123");
     expect(String(row.metadata_json)).not.toContain(clientSecret);
+  });
+
+  it("requires both Cloudflare Workers Scripts scopes and a refresh token before accepting OAuth", async () => {
+    const db = new MemoryD1();
+    await configureBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/configure", {
+      clientId: "BRVIN.Cloudflare.OAuth123",
+      clientSecret: "cloudflare-client-secret-value-123456",
+    }));
+    const start = await startBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/start", {}));
+    const startBody = await start.json() as { authorizationUrl: string };
+    const authorization = new URL(startBody.authorizationUrl);
+    expect(authorization.searchParams.get("scope")).toContain("workers-scripts.read");
+    expect(authorization.searchParams.get("scope")).toContain("workers-scripts.write");
+    const state = authorization.searchParams.get("state")!;
+
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      access_token: "read-only-token",
+      scope: "workers-scripts.read",
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const callback = await completeBrvinCloudflareOAuth(env(db), request(
+      "https://parmar.example/admin/brvin/connect/cloudflare/callback?code=one-time-code&state="+encodeURIComponent(state),
+    ));
+    expect(callback.status).toBe(400);
+    expect(await callback.text()).toContain("Cloudflare permissions incomplete");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(db.connections.get("cloudflare")?.status).toBe("configured");
+  });
+
+  it("accepts Cloudflare OAuth only after both scopes, a refresh token and the private BRVIN Worker are confirmed", async () => {
+    const db = new MemoryD1();
+    await configureBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/configure", {
+      clientId: "BRVIN.Cloudflare.OAuth123",
+      clientSecret: "cloudflare-client-secret-value-123456",
+    }));
+    const start = await startBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/start", {}));
+    const startBody = await start.json() as { authorizationUrl: string };
+    const state = new URL(startBody.authorizationUrl).searchParams.get("state")!;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        access_token: "full-scope-token",
+        refresh_token: "refresh-token",
+        expires_in: 900,
+        scope: "workers-scripts.read workers-scripts.write offline_access",
+      }), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true,
+        result: [{ id: "brvin-service" }],
+        errors: [],
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const callback = await completeBrvinCloudflareOAuth(env(db), request(
+      "https://parmar.example/admin/brvin/connect/cloudflare/callback?code=one-time-code&state="+encodeURIComponent(state),
+    ));
+    expect(callback.status).toBe(200);
+    expect(await callback.text()).toContain("Cloudflare account connected");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(db.connections.get("cloudflare")?.status).toBe("connected");
+    expect(String(db.connections.get("cloudflare")?.metadata_json)).toContain("brvin-service");
+  });
+
+  it("refuses deployment verification until a dedicated connection PR has recorded its identity", async () => {
+    const db = new MemoryD1();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await verifyBrvinTestClientDeployment(env(db), request("https://parmar.example/admin/api/brvin/connect/verify"));
+    const body = await response.json() as { connected: boolean; state: string };
+    expect(response.status).toBe(409);
+    expect(body.connected).toBe(false);
+    expect(body.state).toBe("connection_pr_missing");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("creates the application, environment, project and explicit grant as one batch", async () => {
