@@ -119,19 +119,25 @@ export async function getBrvinProjectStatusForClient(
 export async function retrieveBrvinForClient(
   env: BrvinServiceEnv,
   clientId: string,
-  input: { queries?: unknown },
+  input: { queries?: unknown; pageNumbers?: unknown },
 ): Promise<BrvinServiceRetrievalResult> {
   try {
-    if (!input || !Array.isArray(input.queries)) {
+    if (!input || (input.queries !== undefined && !Array.isArray(input.queries))) {
       return failure("INVALID_REQUEST", "A list of search queries is required.", false);
     }
     const queries = [...new Set(
-      input.queries
+      (Array.isArray(input.queries) ? input.queries : [])
         .filter((value): value is string => typeof value === "string")
         .map((value) => value.replace(/\u0000/gu, "").replace(/\s+/gu, " ").trim().slice(0, 2_000))
         .filter(Boolean),
     )].slice(0, 3);
-    if (!queries.length) return failure("INVALID_REQUEST", "A non-empty search query is required.", false);
+    const pageNumbers = [...new Set(
+      (Array.isArray(input.pageNumbers) ? input.pageNumbers : [])
+        .filter((value): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= 100_000),
+    )].slice(0, 3);
+    if (!queries.length && !pageNumbers.length) {
+      return failure("INVALID_REQUEST", "A non-empty search query or a valid PDF page number is required.", false);
+    }
 
     const resolved = await resolveProjectForClient(env, clientId);
     if (!resolved) return failure("CLIENT_NOT_REGISTERED", "BRVIN application is not registered.", false);
@@ -154,10 +160,12 @@ export async function retrieveBrvinForClient(
       resolved.project,
       queries,
       sources,
+      pageNumbers,
     );
     return {
       ok: true,
       passages: context.passages,
+      ...(context.pageImages?.length ? { pageImages: context.pageImages } : {}),
       searchedSources: context.searchedSources,
       searchCount: context.searchCount,
     };
