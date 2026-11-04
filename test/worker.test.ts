@@ -28,7 +28,6 @@ describe("Parmar AI production worker", () => {
     const body = (await response.json()) as {
       ok: boolean;
       status: string;
-      service?: string;
       brvinRetrievalConnected: boolean;
       brvinReady: boolean;
       authorizedSources: number;
