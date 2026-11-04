@@ -334,18 +334,18 @@ Test at minimum:
 1. Connect the isolated text-first BRVIN test Worker in the AskMoina repository through the Connect Application wizard.
 2. Connect a second supported synthetic application through the same wizard.
 3. One app with multiple projects.
-3. One project deliberately shared across multiple apps.
-4. Multiple PDFs and collections.
-5. Direct and collection grants.
-6. Readiness and page-level citations.
-7. App A denied Project B until explicitly granted.
-8. Revocation and deactivation applied to future retrieval.
-9. Unknown identities and malformed project IDs.
-10. Quotas, service outage and recovery.
-11. Fatman original flow and quota history remain intact.
-12. New projects can be created and populated without code/Wrangler changes.
-13. Full end-user question-to-retrieval-to-cited-text-result through the independent test client.
-14. Confirm the existing AskMoina Voice integration remains unchanged and does not gate platform acceptance.
+4. One project deliberately shared across multiple apps.
+5. Multiple PDFs and collections.
+6. Direct and collection grants.
+7. Readiness and page-level citations.
+8. App A denied Project B until explicitly granted.
+9. Revocation and deactivation applied to future retrieval.
+10. Unknown identities and malformed project IDs.
+11. Quotas, service outage and recovery.
+12. Fatman original flow and quota history remain intact.
+13. New projects can be created and populated without code/Wrangler changes.
+14. Full end-user question-to-retrieval-to-cited-text-result through the independent test client.
+15. Confirm the existing AskMoina Voice integration remains unchanged and does not gate platform acceptance.
 
 Capture synthetic test evidence, production Worker versions, commit/source revision and acceptance manifest.
 
@@ -623,9 +623,9 @@ A benchmark-only fix was merged in AskMoina PR #372 as `7893ea5f79a930c2e425dc9a
 
 **Corrective implementation:** AskMoina PR #379 (merge `0840af352a1e9ab03bfd36a39b691bb6068af55b`) changes only `scripts/live-brvin-camera-smoke.py`, `scripts/live-turn-latency-benchmark.py` and `scripts/test_live_turn_latency_boundary.py`. The finite audio benchmark now emits the already-supported audio-stream-end marker and both tests recognize explicit `generationComplete` or valid `turnComplete` terminal signals while retaining the real output requirements (camera fixture label, Fatman source, physical page 14, generated audio, and all 20 latency samples). Release Validation #1787 passed. No AskMoina runtime source, prompts, D1 data, BRVIN D1 rows, grants, quota, secrets or Cloudflare bindings were changed by PR #379.
 
-**Production rollout:** Run #648 was triggered from the merged main commit. The new Worker upload was promoted to 100%; production health, protected routes, no-guest gate and PWA checks passed. The synthetic acceptance step was still running when this ledger entry was written. Do not mark M4 complete or begin M5 until the terminal result of run #648 is inspected. If it fails, record the exact failing assertion and distinguish a real application/runtime failure from another harness mismatch before changing code.
+**Historical production rollout:** The previous main-branch run #648 deployed the already-integrated AskMoina consumer and passed production health, protected routes, no-guest and PWA checks. It also passed BRVIN exact-page retrieval, three grounded searches, spoken information card, voice memory, browser recovery, >170-second Live continuity and history/memory APIs. Its camera, 20-turn latency and ranked-list voice checks failed. These are AskMoina product/runtime synthetics, not BRVIN platform authorization or retrieval failures.
 
-**Outstanding M4 acceptance:** Run #648 must complete successfully with BRVIN exact-page and camera Co-Pilot retrieval, grounded searches, spoken card and ranked-list output, 20-turn audio benchmark, voice memory, network recovery, long-session continuity, and history/memory isolation. The current run is the single active gate; do not launch another overlapping production synthetic run while it is executing.
+**Superseded M4 gate:** The former requirement to make all AskMoina camera/audio/Live synthetics pass is withdrawn by the 5 November 2026 scope correction below. The latest already-triggered workflow [#41894762074](https://github.com/ashini-x/askmoina-voice/actions/runs/41894762074) completed with failure: BRVIN exact-page retrieval, three grounded searches, spoken card, voice memory, network recovery, >170-second continuity and history/memory APIs passed; camera Co-Pilot, second-turn latency and ranked-list spoken-answer tests failed. Record this as diagnostic evidence only. It does not block M4, M5, M6 or BRVIN completion. Do not start further voice-specific production synthetics.
 
 ### Milestone scope correction — 5 November 2026 — use an isolated text client as the platform test consumer
 
@@ -637,7 +637,7 @@ A benchmark-only fix was merged in AskMoina PR #372 as `7893ea5f79a930c2e425dc9a
 
 **Execution order:** M4 — isolated text test client; M5 — BRVIN application/project administration; M6 — Connect Application wizard; M7 — full multi-app/multi-project acceptance; M8 — release and handover. Do not block this sequence on further AskMoina Voice camera/audio testing.
 
-**Already-triggered workflow:** The main-branch AskMoina workflow run [#41894762074](https://github.com/ashini-x/askmoina-voice/actions/runs/41894762074) was already running its final voice/grounding/memory synthetic stage when this direction arrived. No additional voice-specific run should be started. Its result is historical diagnostic evidence only and does not gate BRVIN M4. The connected GitHub action controls available in this session do not expose a cancel operation.
+**Already-triggered workflow:** Main-branch AskMoina run [#41894762074](https://github.com/ashini-x/askmoina-voice/actions/runs/41894762074) completed with failure after this scope change. Its diagnostic result is recorded above and is not a BRVIN gate. No additional voice-specific run should be started. The connected GitHub action controls available in this session did not expose a cancel operation.
 
 ## 8. Rules for future ChatGPT/Codex sessions
 
