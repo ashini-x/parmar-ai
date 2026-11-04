@@ -550,6 +550,14 @@ export async function completeBrvinCloudflareOAuth(env: Env, request: Request): 
     if (!statePayload || statePayload.purpose !== "authorization") return callbackHtml("Cloudflare authorization expired", "This one-time authorization state was invalid, expired or already used. Start again from BRVIN.", false);
     const { row, bundle } = await getCloudflareBundle(env);
     const token = await exchangeCloudflareToken(bundle, { grant_type: "authorization_code", code }, callbackUrl(request, "cloudflare"));
+    const grantedScopes = new Set((token.scope || "").split(/\s+/u).filter(Boolean));
+    if (!grantedScopes.has("workers-scripts.read") || !grantedScopes.has("workers-scripts.write") || !token.refresh_token) {
+      return callbackHtml(
+        "Cloudflare permissions incomplete",
+        "BRVIN requires both Workers Scripts Read and Workers Scripts Write, plus a refresh token. Update the OAuth client so these scopes are required, then authorize again.",
+        false,
+      );
+    }
     const accountId = clean(statePayload.accountId, 32);
     if (accountId !== clean(env.BRVIN_HOME_ACCOUNT_ID, 32)) return callbackHtml("Cloudflare account mismatch", "The BRVIN home account configuration changed during authorization. Start the connection again.", false);
     const scripts = await cloudflareApi<Array<Record<string, unknown>>>(token.access_token, "/accounts/" + accountId + "/workers/scripts?per_page=100");
@@ -803,7 +811,7 @@ export async function provisionBrvinTestClientAccessToken(env: Env, request: Req
     );
     const binding = (settings.bindings || []).find(item => item.name === "BRVIN_SERVICE" && item.type === "service");
     const props = binding?.props && typeof binding.props === "object" ? binding.props as Record<string, unknown> : {};
-    if (clean(binding?.service, 128) !== BRVIN_SERVICE_NAME || clean(props.applicationEnvironmentId, 36) !== environmentId) {
+    if (clean(binding?.service, 128) !== BRVIN_SERVICE_NAME || clean(binding?.entrypoint, 128) !== "BrvinRetrievalApi" || clean(props.applicationEnvironmentId, 36) !== environmentId) {
       return json({ ok: false, error: "The deployed test Worker is missing the exact approved BRVIN Service Binding/environment identity. No tester token was created." }, 409);
     }
 
@@ -842,30 +850,76 @@ export async function provisionBrvinTestClientAccessToken(env: Env, request: Req
 
 export async function verifyBrvinTestClientDeployment(env: Env, request: Request): Promise<Response> {
   try {
-    const { accessToken } = await authorizedCloudflare(env, request);
+    if (!env.DB) return json({ ok: false, connected: false, state: "identity_unavailable", error: "BRVIN D1 is not configured." }, 503);
+    await ensureAnalyticsSchema(env);
+    const connectionRow = await connection(env, "github");
+    if (!connectionRow || connectionRow.status !== "pr_created") {
+      return json({ ok: false, connected: false, state: "connection_pr_missing", error: "Create the dedicated text-test connection PR before verifying deployment." }, 409);
+    }
+    const metadata = JSON.parse(connectionRow.metadata_json || "{}") as Record<string, unknown>;
+    const expectedApplicationId = clean(metadata.connectedApplicationId, 36);
+    const expectedEnvironmentId = clean(metadata.connectedEnvironmentId, 36);
+    if (!/^[a-f0-9-]{36}$/iu.test(expectedApplicationId) || !/^[a-f0-9-]{36}$/iu.test(expectedEnvironmentId)) {
+      return json({ ok: false, connected: false, state: "identity_missing", error: "The saved connection PR does not contain a valid dedicated application/environment identity." }, 409);
+    }
+    const registered = await env.DB.prepare(
+      "SELECT a.id AS application_id,e.id AS environment_id " +
+      "FROM brvin_applications a " +
+      "JOIN brvin_application_environments e ON e.application_id=a.id " +
+      "JOIN brvin_application_project_grants g ON g.application_id=a.id AND g.status='active' " +
+      "JOIN brvin_projects p ON p.id=g.project_id AND p.status='active' " +
+      "WHERE a.id=? AND e.id=? AND a.slug='brvin-text-test-client' AND e.environment_key='production' " +
+      "AND a.status='active' AND e.status='active' LIMIT 1"
+    ).bind(expectedApplicationId, expectedEnvironmentId).first<{ application_id: string; environment_id: string }>();
+    if (!registered) {
+      return json({ ok: false, connected: false, state: "identity_inactive", error: "The dedicated text-test application, production environment or its active project grant is no longer active." }, 409);
+    }
+
+    const { accessToken, scripts } = await authorizedCloudflare(env, request);
+    if (!scripts.some(script => clean(script.id || script.script || script.name, 128) === TEST_WORKER_NAME)) {
+      return json({ ok: false, connected: false, state: "not_deployed", error: "The independent text Worker has not been deployed yet." }, 409);
+    }
     const accountId = clean(env.BRVIN_HOME_ACCOUNT_ID, 32);
-    const response = await fetch(CLOUDFLARE_API + "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/settings", {
-      headers: { authorization: "Bearer " + accessToken },
-    });
-    const text = await response.text();
-    let payload: { success?: boolean; result?: { bindings?: Array<Record<string, unknown>> } } = {};
-    try { payload = text ? JSON.parse(text) as typeof payload : {}; } catch { payload = {}; }
-    if (!response.ok || payload.success === false) return json({ ok: false, connected: false, state: "not_deployed", error: "The test Worker is not deployed yet. Merge the reviewed GitHub PR and let the normal deployment pipeline run, then retry verification." }, 409);
-    const binding = (payload.result?.bindings || []).find(item => item.name === "BRVIN_SERVICE" && item.type === "service");
+    const settings = await cloudflareApi<{ bindings?: Array<Record<string, unknown>> }>(
+      accessToken,
+      "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/settings",
+    );
+    const binding = (settings.bindings || []).find(item => item.name === "BRVIN_SERVICE" && item.type === "service");
     const service = clean(binding?.service, 128);
+    const entrypoint = clean(binding?.entrypoint, 128);
     const props = binding?.props && typeof binding.props === "object" ? binding.props as Record<string, unknown> : {};
     const configuredEnvironmentId = clean(props.applicationEnvironmentId, 36);
-    const connectionRow = await connection(env, "github");
-    const metadata = connectionRow ? JSON.parse(connectionRow.metadata_json || "{}") as Record<string, unknown> : {};
-    const expectedEnvironmentId = clean(metadata.connectedEnvironmentId, 36);
-    const connected = service === BRVIN_SERVICE_NAME && /^[a-f0-9-]{36}$/iu.test(configuredEnvironmentId) &&
-      (!expectedEnvironmentId || configuredEnvironmentId === expectedEnvironmentId);
-    return json({ ok: true, connected, state: connected ? "verified" : "binding_mismatch", worker: TEST_WORKER_NAME, service, applicationEnvironmentId: configuredEnvironmentId || null, accountId });
+    const bindingMatches = service === BRVIN_SERVICE_NAME && entrypoint === "BrvinRetrievalApi" &&
+      configuredEnvironmentId === expectedEnvironmentId;
+    if (!bindingMatches) {
+      return json({
+        ok: true, connected: false, state: "binding_mismatch", worker: TEST_WORKER_NAME,
+        service, entrypoint, applicationEnvironmentId: configuredEnvironmentId || null, accountId,
+      }, 409);
+    }
+
+    const deploymentData = await cloudflareApi<{
+      deployments?: Array<{ id?: string; versions?: Array<{ version_id?: string; percentage?: number }> }>;
+    }>(accessToken, "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/deployments");
+    const latestDeployment = deploymentData.deployments?.[0];
+    const versions = latestDeployment?.versions || [];
+    const trafficPercentage = versions.reduce((total, version) => total + Number(version.percentage || 0), 0);
+    if (!latestDeployment?.id || versions.length === 0 || Math.abs(trafficPercentage - 100) > 0.001) {
+      return json({
+        ok: false, connected: false, state: "deployment_not_active", error: "The Worker binding is configured, but no complete 100% production deployment is active yet.",
+        worker: TEST_WORKER_NAME, service, entrypoint, applicationEnvironmentId: configuredEnvironmentId, accountId,
+      }, 409);
+    }
+
+    return json({
+      ok: true, connected: true, state: "verified", worker: TEST_WORKER_NAME, service, entrypoint,
+      applicationId: expectedApplicationId, applicationEnvironmentId: configuredEnvironmentId,
+      deploymentId: latestDeployment.id, trafficPercentage, accountId,
+    });
   } catch (error) {
     return json({ ok: false, connected: false, error: safeError(error) }, 502);
   }
 }
-
 function safeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.replace(/[\r\n]+/gu, " ").slice(0, 280);
