@@ -1,5 +1,3 @@
-import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
-
 export const BRVIN2_APPLICATION_MIGRATION_KEY = "brvin2-application-identities-v1";
 
 export const BRVIN2_SEED_IDENTITIES = {
