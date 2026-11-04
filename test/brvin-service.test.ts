@@ -47,7 +47,7 @@ describe("BRVIN private application retrieval", () => {
 
   it("resolves only the service-bound client identity and reports readiness", async () => {
     const env = makeEnv();
-    const status = await getBrvinProjectStatusForClient(env, "parmar-ai");
+    const status = await getBrvinProjectStatusForClient(env, "fatman");
     expect(status).toEqual({ ok: true, ready: true, authorizedSourceCount: 1 });
     expect(env.DB.prepare).toHaveBeenCalledWith(expect.stringContaining("brvin_service_clients"));
   });
@@ -63,7 +63,7 @@ describe("BRVIN private application retrieval", () => {
 
   it("pre-filters to the mapped project's folder and returns verified page evidence", async () => {
     const env = makeEnv();
-    const result = await retrieveBrvinForClient(env, "parmar-ai", {
+    const result = await retrieveBrvinForClient(env, "fatman", {
       queries: ["Article 14 equality"],
     });
     expect(result).toMatchObject({ ok: true, searchedSources: 1, searchCount: 1 });

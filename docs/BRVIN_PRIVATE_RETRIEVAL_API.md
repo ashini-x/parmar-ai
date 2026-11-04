@@ -24,7 +24,7 @@ The named WorkerEntrypoint is BrvinRetrievalApi.
 - retrieveProjectContext({ queries }) accepts one to three bounded query variants. It resolves the project from ctx.props.clientId, enforces a per-project monthly query allowance, searches only authorised folders, and returns up to 12 validated passages with book IDs, titles, PDF page numbers and scores.
 - The caller handles its own model prompt, answer generation, conversation memory and user delivery.
 
-The parmar-ai Worker is registered with clientId "parmar-ai", which resolves to the existing fatman project. It retains the existing Fatman query expansion, queue/retry, answer generation and citation formatting. The live answer path makes one RPC retrieval request rather than a separate readiness check followed by a retrieval call.
+The parmar-ai Worker is registered with clientId "fatman", which resolves to the existing fatman project. It retains the existing Fatman query expansion, queue/retry, answer generation and citation formatting. The live answer path makes one RPC retrieval request rather than a separate readiness check followed by a retrieval call.
 
 ## Search and index
 
@@ -73,7 +73,7 @@ No project ID, API key, database binding, AI Search binding, or PDF storage cred
 ## Production acceptance criteria
 
 1. brvin-service has no public Worker URL or public route.
-2. The parmar-ai Service Binding uses clientId "parmar-ai" and resolves to active project fatman.
+2. The parmar-ai Service Binding uses clientId "fatman" and resolves to active project fatman.
 3. An unregistered client ID fails closed without searching.
 4. A project with no ready, granted sources returns no passages and performs no search.
 5. Search calls include only D1-authorised folder prefixes.
