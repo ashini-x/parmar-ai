@@ -550,100 +550,114 @@ export class JobDedupe extends DurableObject {
     const job = parseJob(body);
     const botConnectionId = job.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID;
     const key = jobKey(botConnectionId, job.updateId);
-    let existing = await this.ctx.storage.get<JobRecord>(key);
-    if (!existing && botConnectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID) {
-      const legacyKey = legacyJobKey(job.updateId);
-      existing = await this.ctx.storage.get<JobRecord>(legacyKey);
-      if (existing) {
-        existing.botConnectionId = botConnectionId;
-        await this.ctx.storage.put(key, existing);
-        await this.ctx.storage.delete(legacyKey);
-      }
-    }
-
-    if (existing) {
-      if (existing.state === "done" || existing.state === "queued" || existing.state === "processing") {
-        return { action: "duplicate", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount, fatmanModeSnapshot: existing.fatmanModeSnapshot };
-      }
-      return { action: "retry_ack", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount, fatmanModeSnapshot: existing.fatmanModeSnapshot };
-    }
-
     const now = Date.now();
     const telegramUserId = positiveNumber(body.telegramUserId);
+    // D1 access checks stay outside the storage transaction. The student's
+    // operational quota and job admission are serialized inside it below.
     const unlimited = await hasUnlimitedAiAccess(this.runtimeEnv, telegramUserId, now);
-    const rate = await this.getRateMeta(now);
     const dailyLimit = positiveEnv(this.runtimeEnv.DAILY_QUESTION_LIMIT, 20);
     const burstLimit = positiveEnv(this.runtimeEnv.BURST_QUESTION_LIMIT, 5);
     const burstWindowMs = positiveEnv(this.runtimeEnv.BURST_WINDOW_SECONDS, 10) * 1_000;
 
-    let burstWindowStart = rate.burstWindowStart;
-    let burstCount = rate.burstCount;
-    if (now - burstWindowStart >= burstWindowMs) {
-      burstWindowStart = now;
-      burstCount = 0;
-    }
+    const result = await this.ctx.storage.transaction(async (transaction): Promise<BeginResponse> => {
+      let existing = await transaction.get<JobRecord>(key);
+      if (!existing && botConnectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID) {
+        const legacyKey = legacyJobKey(job.updateId);
+        existing = await transaction.get<JobRecord>(legacyKey);
+        if (existing) {
+          existing.botConnectionId = botConnectionId;
+          await transaction.put(key, existing);
+          await transaction.delete(legacyKey);
+        }
+      }
 
-    const dayKey = indiaDayKey(now);
-    const dayCount = rate.dayKey === dayKey ? rate.dayCount : 0;
+      if (existing) {
+        if (existing.state === "done" || existing.state === "queued" || existing.state === "processing") {
+          return { action: "duplicate", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount, fatmanModeSnapshot: existing.fatmanModeSnapshot };
+        }
+        return { action: "retry_ack", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount, fatmanModeSnapshot: existing.fatmanModeSnapshot };
+      }
 
-    const requestedQuizCountRaw = Number(body.requestedQuizCount ?? 1);
-    const requestedQuizCount = Number.isSafeInteger(requestedQuizCountRaw)
-      ? Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, requestedQuizCountRaw))
-      : 1;
-    const continuation = body.quizContinuation === true;
-    // One Durable Object is keyed by the student's private Telegram chat ID.
-    // Keep one daily quota across normal mode and Fatman, not one allowance per mode.
-    const usageUnits = continuation ? 0 : requestedQuizCount;
-    const dailyLimited = !unlimited && dayCount + usageUnits > dailyLimit;
-    const burstLimited = burstCount + usageUnits > burstLimit;
+      const storedRate = await transaction.get<RateMeta>(RATE_LIMIT_META_KEY);
+      const rate: RateMeta = storedRate && typeof storedRate.dayKey === "string"
+        ? storedRate
+        : {
+            burstWindowStart: now,
+            burstCount: 0,
+            dayKey: indiaDayKey(now),
+            dayCount: 0,
+            lastRateNoticeAt: 0,
+          };
 
-    if (dailyLimited || burstLimited) {
-      const shouldNotify = now - rate.lastRateNoticeAt >= burstWindowMs;
-      await this.ctx.storage.put<RateMeta>(RATE_LIMIT_META_KEY, {
-        burstWindowStart,
-        burstCount,
-        dayKey,
-        dayCount,
-        lastRateNoticeAt: shouldNotify ? now : rate.lastRateNoticeAt,
-      });
-      return {
-        action: "rate_limited",
-        notify: shouldNotify,
-        rateLimitReason: dailyLimited ? "daily" : "burst",
-        unlimited,
+      let burstWindowStart = rate.burstWindowStart;
+      let burstCount = rate.burstCount;
+      if (now - burstWindowStart >= burstWindowMs) {
+        burstWindowStart = now;
+        burstCount = 0;
+      }
+
+      const dayKey = indiaDayKey(now);
+      const dayCount = rate.dayKey === dayKey ? rate.dayCount : 0;
+
+      const requestedQuizCountRaw = Number(body.requestedQuizCount ?? 1);
+      const requestedQuizCount = Number.isSafeInteger(requestedQuizCountRaw)
+        ? Math.max(1, Math.min(MAX_QUIZ_BATCH_SIZE, requestedQuizCountRaw))
+        : 1;
+      const continuation = body.quizContinuation === true;
+      // One Durable Object is keyed by the student's private chat ID. Fatman
+      // and normal study mode therefore consume the same daily allowance.
+      const usageUnits = continuation ? 0 : requestedQuizCount;
+      const dailyLimited = !unlimited && dayCount + usageUnits > dailyLimit;
+      const burstLimited = burstCount + usageUnits > burstLimit;
+
+      if (dailyLimited || burstLimited) {
+        const shouldNotify = now - rate.lastRateNoticeAt >= burstWindowMs;
+        await transaction.put<RateMeta>(RATE_LIMIT_META_KEY, {
+          burstWindowStart,
+          burstCount,
+          dayKey,
+          dayCount,
+          lastRateNoticeAt: shouldNotify ? now : rate.lastRateNoticeAt,
+        });
+        return {
+          action: "rate_limited",
+          notify: shouldNotify,
+          rateLimitReason: dailyLimited ? "daily" : "burst",
+          unlimited,
+          quizCount: requestedQuizCount,
+        };
+      }
+
+      const record: JobRecord = {
+        version: 2,
+        updateId: job.updateId,
+        botConnectionId,
+        chatId: job.chatId,
+        telegramUserId,
+        question: job.question,
+        messageId: job.messageId,
+        requestId: job.requestId,
+        createdAt: job.createdAt,
+        state: "pending",
+        leaseVersion: 0,
         quizCount: requestedQuizCount,
+        ...(job.photoFileIds?.length ? { photoFileIds: job.photoFileIds } : {}),
+        ...(job.fatmanModeSnapshot !== undefined ? { fatmanModeSnapshot: job.fatmanModeSnapshot } : {}),
       };
-    }
 
-    const nextBurstCount = burstCount + usageUnits;
-    await this.ctx.storage.put<RateMeta>(RATE_LIMIT_META_KEY, {
-      burstWindowStart,
-      burstCount: nextBurstCount,
-      dayKey,
-      dayCount: unlimited ? dayCount : dayCount + usageUnits,
-      lastRateNoticeAt: rate.lastRateNoticeAt,
+      await transaction.put<RateMeta>(RATE_LIMIT_META_KEY, {
+        burstWindowStart,
+        burstCount: burstCount + usageUnits,
+        dayKey,
+        dayCount: unlimited ? dayCount : dayCount + usageUnits,
+        lastRateNoticeAt: rate.lastRateNoticeAt,
+      });
+      await transaction.put(key, record);
+      return { action: "new", quizCount: requestedQuizCount };
     });
 
-    const record: JobRecord = {
-      version: 2,
-      updateId: job.updateId,
-      botConnectionId,
-      chatId: job.chatId,
-      ...(job.telegramUserId !== undefined ? { telegramUserId: job.telegramUserId } : {}),
-      question: job.question,
-      messageId: job.messageId,
-      requestId: job.requestId,
-      createdAt: job.createdAt,
-      state: "pending",
-      leaseVersion: 0,
-      quizCount: requestedQuizCount,
-      ...(job.photoFileIds?.length ? { photoFileIds: job.photoFileIds } : {}),
-      ...(job.fatmanModeSnapshot !== undefined ? { fatmanModeSnapshot: job.fatmanModeSnapshot } : {}),
-    };
-
-    await this.ctx.storage.put(key, record);
-    await this.ensureTypingAlarm(now);
-    return { action: "new", quizCount: requestedQuizCount };
+    if (result.action === "new") await this.ensureTypingAlarm(now);
+    return result;
   }
 
   private async saveAck(body: Record<string, unknown>): Promise<GenericResponse> {
@@ -809,90 +823,104 @@ export class JobDedupe extends DurableObject {
     const updateId = positiveNumber(body.updateId);
     const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID);
     const key = await this.resolveJobKey(botConnectionId, updateId);
-    const record = await this.ctx.storage.get<JobRecord>(key);
-    if (!record) return { ok: true };
-    if (!isJobLeaseOwned(record, body)) return { ok: true, stale: true };
-    const appliedKey = `profile:applied:${updateId}`;
-    if (await this.ctx.storage.get<boolean>(appliedKey)) return { ok: true };
+    const appliedKey = profileAppliedKey(botConnectionId, updateId);
+    const legacyAppliedKey = `profile:applied:${updateId}`;
+    const now = Date.now();
 
-    const profile = await this.getProfile();
-    const topic = cleanText(String(body.topic ?? ""), 100);
-    const subject = cleanText(String(body.subject ?? ""), 40);
-    const signal = normalizeProfileSignal(body.profileSignal);
-    const nextRevisionTopic = cleanText(String(body.nextRevisionTopic ?? ""), 100);
-    const question = cleanText(String(body.question ?? ""), 500);
-    const questionMode = cleanText(String(body.questionMode ?? "fact"), 20);
-    const detectedExam = cleanExam(String(body.detectedExam ?? ""));
-    const answerScope = cleanText(String(body.answerScope ?? "ssc_ga_gs"), 20);
+    // Updating the profile, recording the idempotency marker, and marking the
+    // job itself are one atomic operation. Concurrent completed answers cannot
+    // overwrite each other's questionCount or apply the same answer twice.
+    return this.ctx.storage.transaction(async (transaction): Promise<GenericResponse & { stale?: boolean }> => {
+      const record = await transaction.get<JobRecord>(key);
+      if (!record) return { ok: true };
+      if (!isJobLeaseOwned(record, body)) return { ok: true, stale: true };
 
-    // Count every successfully answered student question, including a
-    // supported-mode redirect. Out-of-scope questions do not change SSC topics
-    // or learning signals, but they still belong in the student's total history.
-    profile.questionCount += 1;
-    profile.lastUpdatedAt = Date.now();
-
-    if (answerScope === "out_of_scope") {
-      await this.ctx.storage.put(PROFILE_KEY, profile);
-      await this.ctx.storage.put(appliedKey, true);
-      return { ok: true };
-    }
-
-    if (detectedExam) profile.targetExam = detectedExam;
-
-    const validTopic = Boolean(topic && topic !== "General SSC doubt");
-    if (validTopic) {
-      profile.recentTopics = [topic, ...profile.recentTopics.filter((item) => item.toLowerCase() !== topic.toLowerCase())].slice(0, 10);
-    }
-    if (subject) {
-      profile.recentSubjects = [subject, ...profile.recentSubjects.filter((item) => item.toLowerCase() !== subject.toLowerCase())].slice(0, 6);
-    }
-
-    const confusionEvidence = signal === "confusion" && isExplicitConfusionQuestion(question);
-    const weaknessEvidence = signal === "weak" && isExplicitWeaknessQuestion(question);
-    const evidenceBackedSignal = (confusionEvidence || weaknessEvidence) ? signal : "neutral";
-
-    if (validTopic && (evidenceBackedSignal === "confusion" || evidenceBackedSignal === "weak")) {
-      const normalized = topic.toLowerCase();
-      const existingSignal = profile.learningSignals.find((item) => item.topic.toLowerCase() === normalized);
-      const nextSignal: LearningSignal = existingSignal
-        ? {
-            ...existingSignal,
-            topic,
-            confusionCount: existingSignal.confusionCount + (evidenceBackedSignal === "confusion" ? 1 : 0),
-            weakCount: existingSignal.weakCount + (evidenceBackedSignal === "weak" ? 1 : 0),
-            lastSeenAt: Date.now(),
-          }
-        : {
-            topic,
-            confusionCount: evidenceBackedSignal === "confusion" ? 1 : 0,
-            weakCount: evidenceBackedSignal === "weak" ? 1 : 0,
-            lastSeenAt: Date.now(),
-          };
-
-      profile.learningSignals = [
-        nextSignal,
-        ...profile.learningSignals.filter((item) => item.topic.toLowerCase() !== normalized),
-      ].slice(0, 12);
-
-      const totalEvidence = nextSignal.confusionCount + nextSignal.weakCount;
-      if (totalEvidence >= 2) {
-        profile.attentionTopics = [topic, ...profile.attentionTopics.filter((item) => item.toLowerCase() !== normalized)].slice(0, 6);
+      const alreadyApplied = await transaction.get<boolean>(appliedKey) === true ||
+        (botConnectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID &&
+          await transaction.get<boolean>(legacyAppliedKey) === true);
+      if (alreadyApplied) {
+        record.profileUpdated = true;
+        await transaction.put(key, record);
+        return { ok: true };
       }
-    }
 
-    const revisionTopic = validTopic && (evidenceBackedSignal === "confusion" || evidenceBackedSignal === "weak" || questionMode === "revision")
-      ? topic
-      : questionMode === "revision" && nextRevisionTopic
-        ? nextRevisionTopic
-        : "";
+      const profile = normalizeProfile(await transaction.get<unknown>(PROFILE_KEY));
+      const topic = cleanText(String(body.topic ?? ""), 100);
+      const subject = cleanText(String(body.subject ?? ""), 40);
+      const signal = normalizeProfileSignal(body.profileSignal);
+      const nextRevisionTopic = cleanText(String(body.nextRevisionTopic ?? ""), 100);
+      const question = cleanText(String(body.question ?? ""), 500);
+      const questionMode = cleanText(String(body.questionMode ?? "fact"), 20);
+      const detectedExam = cleanExam(String(body.detectedExam ?? ""));
+      const answerScope = cleanText(String(body.answerScope ?? "ssc_ga_gs"), 20);
 
-    if (revisionTopic) {
-      profile.revisionQueue = [revisionTopic, ...profile.revisionQueue.filter((item) => item.toLowerCase() !== revisionTopic.toLowerCase())].slice(0, 6);
-    }
+      // Every successfully answered request is counted, including Fatman page
+      // explanations and supported-mode redirects. Only SSC-scoped answers
+      // contribute topic and learning-signal data.
+      profile.questionCount += 1;
+      profile.lastUpdatedAt = now;
 
-    await this.ctx.storage.put(PROFILE_KEY, profile);
-    await this.ctx.storage.put(appliedKey, true);
-    return { ok: true };
+      if (answerScope !== "out_of_scope") {
+        if (detectedExam) profile.targetExam = detectedExam;
+
+        const validTopic = Boolean(topic && topic !== "General SSC doubt");
+        if (validTopic) {
+          profile.recentTopics = [topic, ...profile.recentTopics.filter((item) => item.toLowerCase() !== topic.toLowerCase())].slice(0, 10);
+        }
+        if (subject) {
+          profile.recentSubjects = [subject, ...profile.recentSubjects.filter((item) => item.toLowerCase() !== subject.toLowerCase())].slice(0, 6);
+        }
+
+        const confusionEvidence = signal === "confusion" && isExplicitConfusionQuestion(question);
+        const weaknessEvidence = signal === "weak" && isExplicitWeaknessQuestion(question);
+        const evidenceBackedSignal = (confusionEvidence || weaknessEvidence) ? signal : "neutral";
+
+        if (validTopic && (evidenceBackedSignal === "confusion" || evidenceBackedSignal === "weak")) {
+          const normalized = topic.toLowerCase();
+          const existingSignal = profile.learningSignals.find((item) => item.topic.toLowerCase() === normalized);
+          const nextSignal: LearningSignal = existingSignal
+            ? {
+                ...existingSignal,
+                topic,
+                confusionCount: existingSignal.confusionCount + (evidenceBackedSignal === "confusion" ? 1 : 0),
+                weakCount: existingSignal.weakCount + (evidenceBackedSignal === "weak" ? 1 : 0),
+                lastSeenAt: now,
+              }
+            : {
+                topic,
+                confusionCount: evidenceBackedSignal === "confusion" ? 1 : 0,
+                weakCount: evidenceBackedSignal === "weak" ? 1 : 0,
+                lastSeenAt: now,
+              };
+
+          profile.learningSignals = [
+            nextSignal,
+            ...profile.learningSignals.filter((item) => item.topic.toLowerCase() !== normalized),
+          ].slice(0, 12);
+
+          const totalEvidence = nextSignal.confusionCount + nextSignal.weakCount;
+          if (totalEvidence >= 2) {
+            profile.attentionTopics = [topic, ...profile.attentionTopics.filter((item) => item.toLowerCase() !== normalized)].slice(0, 6);
+          }
+        }
+
+        const revisionTopic = validTopic && (evidenceBackedSignal === "confusion" || evidenceBackedSignal === "weak" || questionMode === "revision")
+          ? topic
+          : questionMode === "revision" && nextRevisionTopic
+            ? nextRevisionTopic
+            : "";
+
+        if (revisionTopic) {
+          profile.revisionQueue = [revisionTopic, ...profile.revisionQueue.filter((item) => item.toLowerCase() !== revisionTopic.toLowerCase())].slice(0, 6);
+        }
+      }
+
+      record.profileUpdated = true;
+      await transaction.put(PROFILE_KEY, profile);
+      await transaction.put(appliedKey, true);
+      await transaction.put(key, record);
+      return { ok: true };
+    });
   }
 
   private ownsLease(record: JobRecord, body: Record<string, unknown>): boolean {
@@ -1279,6 +1307,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function profileAppliedKey(botConnectionId: string, updateId: number): string { return `profile:applied:${encodeURIComponent(botConnectionId)}:${updateId}`; }
 function photoAlbumKey(botConnectionId: string, mediaGroupId: string): string { return `photo-album:${encodeURIComponent(botConnectionId)}:${encodeURIComponent(mediaGroupId)}`; }
 function jobKey(botConnectionId: string, updateId: number): string { return `job:${botConnectionId}:${updateId}`; }
 function legacyJobKey(updateId: number): string { return `job:${updateId}`; }
