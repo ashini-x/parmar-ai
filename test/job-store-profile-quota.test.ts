@@ -129,6 +129,13 @@ describe("shared per-student question tracking", () => {
 
     await call(profileUpdate);
     await call(profileUpdate);
+    await call({
+      action: "complete",
+      botConnectionId,
+      updateId,
+      queueMessageId,
+      leaseVersion: claim.leaseVersion,
+    });
 
     const result = await call<{ profile: {
       questionCount: number;
