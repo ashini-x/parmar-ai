@@ -21,7 +21,7 @@ The first migration moves live project-scoped retrieval behind this service. The
 The named WorkerEntrypoint is BrvinRetrievalApi.
 
 - getProjectStatus() returns connection/availability information and the count of authorised ready sources. It does not return document text.
-- retrieveProjectContext({ queries }) accepts one to three bounded query variants. It resolves the project from ctx.props.clientId, enforces a per-project monthly query allowance, searches only authorised folders, and returns up to 12 validated passages with book IDs, titles, PDF page numbers and scores.
+- retrieveProjectContext({ queries, pageNumbers? }) accepts one to three bounded query variants and optional explicit PDF page numbers. When a page is requested, BRVIN looks up the exact page item under each D1-authorised source prefix, verifies the exact returned key and page number, and returns page text or a bounded scanned-page image. If no exact item exists, it falls back to semantic retrieval over authorised folders. The service enforces a per-project monthly query allowance and returns validated passages with book IDs, titles, PDF page numbers and scores.
 - The caller handles its own model prompt, answer generation, conversation memory and user delivery.
 
 The parmar-ai Worker is registered with clientId "fatman", which resolves to the existing fatman project. It retains the existing Fatman query expansion, queue/retry, answer generation and citation formatting. The live answer path makes one RPC retrieval request rather than a separate readiness check followed by a retrieval call.
