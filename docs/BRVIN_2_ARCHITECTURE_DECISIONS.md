@@ -269,11 +269,11 @@ The release is deliberately staged so the existing consumer keeps working throug
 
 ## 6. RPC v2 contract decision
 
-The normative TypeScript contract is in [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The public method surface is:
+The normative TypeScript contract is in [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The v2 method surface is explicitly versioned to preserve the existing v1 method names:
 
-- `listAuthorizedProjects()` — list only active projects granted to the authenticated application.
-- `getProjectStatus({ projectId })` — readiness for one project after application authorisation.
-- `retrieveProjectContext({ projectId, queries, pageNumbers? })` — bounded semantic and exact-page retrieval from that project's ready sources.
+- `listAuthorizedProjectsV2()` — list only active projects granted to the authenticated application.
+- `getProjectStatusV2({ projectId })` — readiness for one project after application authorisation.
+- `retrieveProjectContextV2({ projectId, queries, pageNumbers? })` — bounded semantic and exact-page retrieval from that project's ready sources.
 
 No method accepts an application ID, environment ID, client ID, search prefix or source grant from the caller. No unrestricted search method is provided. The project list exposes metadata and counts, not document text.
 
