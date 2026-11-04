@@ -1822,7 +1822,16 @@ async function telegramSetupMethod(env: Env, method: string, payload: Record<str
 async function buildHealth(env: Env) {
   if (!env.BRVIN_SERVICE) {
     const production = env.ENVIRONMENT === "production";
-    return { ok: !production, status: production ? "degraded" : "healthy", brvinRetrievalConnected: false };
+    return {
+      ok: !production,
+      status: production ? "degraded" : "healthy",
+      brvinRetrievalConnected: false,
+      brvinReady: false,
+      authorizedSources: 0,
+      brvinV2Connected: false,
+      brvinV2Ready: false,
+      brvinV2AuthorizedSources: 0,
+    };
   }
 
   try {
@@ -1856,7 +1865,16 @@ async function buildHealth(env: Env) {
       brvinV2AuthorizedSources: v2AuthorizedSources,
     };
   } catch {
-    return { ok: false, status: "degraded", brvinRetrievalConnected: false, brvinReady: false, authorizedSources: 0 };
+    return {
+      ok: false,
+      status: "degraded",
+      brvinRetrievalConnected: false,
+      brvinReady: false,
+      authorizedSources: 0,
+      brvinV2Connected: false,
+      brvinV2Ready: false,
+      brvinV2AuthorizedSources: 0,
+    };
   }
 }
 async function bestEffortTelegram<T>(label: string, fn: () => Promise<T>): Promise<T | undefined> {
