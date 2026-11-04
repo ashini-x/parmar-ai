@@ -1,10 +1,10 @@
 # BRVIN Private Retrieval RPC v2 — Frozen Contract
 
-**Contract status:** Designed for Milestone 2; not implemented  
+**Contract status:** Implemented and deployed in Milestone 2 (4 November 2026)  
 **ADR:** [BRVIN 2 Architecture Decision Record](BRVIN_2_ARCHITECTURE_DECISIONS.md)  
 **Existing contract:** [BRVIN Private Retrieval API v1](BRVIN_PRIVATE_RETRIEVAL_API.md)
 
-This document specifies the versioned private WorkerEntrypoint contract approved for BRVIN 2. It does not replace the current v1 contract until Milestone 2 is implemented and deployed.
+This document specifies the versioned private WorkerEntrypoint v2 contract now implemented in `src/brvin/service-worker.ts` and `src/brvin/service-core.ts`, and deployed to the private `brvin-service` Worker on 4 November 2026. V1 methods remain available and explicitly use only `ctx.props.clientId`; v2 methods use only `ctx.props.applicationEnvironmentId`. Normal Fatman/student retrieval remains on v1 until the later connector and consumer-integration milestones.
 
 ## 1. Transport and identity
 
@@ -357,6 +357,14 @@ The placeholder above is illustrative only; the admin must read the generated ID
 - Valid exact-page lookup uses quota under the existing v1 policy.
 - Legacy Fatman v1 status and retrieval remain unchanged while v2 methods are added.
 
-## 9. Implementation boundary
+## 9. Implementation and production status
 
-This is the frozen contract for Milestone 2. Milestone 0 only documents it. No D1 schema, Worker code, Service Binding, AI Search resource, secret or production deployment was changed while preparing this contract.
+Implemented and deployed on 4 November 2026 through PR #62, merge commit `3b68aaecf3c78c712e1a1c978285ad1f166d15c4`.
+
+- Release Validation run #596 passed TypeScript, unit tests, Node tests, and dry-runs for both private BRVIN and Parmar AI Worker bundles on the final implementation/test commit.
+- Active production Worker versions: `brvin-service` `0adea40e-2a7f-4109-b534-c90a23c3a2fe` and `parmar-ai` `ed90e0be-0606-47f6-8d05-847f2596e03f`, each at 100% traffic.
+- Parmar AI's production binding includes both the legacy `clientId` and the seeded `applicationEnvironmentId`. Health probes call both v1 and v2 status and require authorised source parity; production smoke acceptance uses the same check.
+- The v2 implementation performs project grants and source filtering on every request. It does not introduce a public endpoint or unrestricted fallback.
+- Consumer retrieval remains v1 until the connector and app-specific migration milestones. AskMoina has not yet been connected.
+- The post-deployment D1 audit found no foreign-key violations and confirmed Fatman's original mapping, project, ready 538-page book, direct/collection grants, and November 2026 usage counter were preserved.
+
