@@ -815,8 +815,8 @@ export async function provisionBrvinTestClientAccessToken(env: Env, request: Req
     );
     const binding = (settings.bindings || []).find(item => item.name === "BRVIN_SERVICE" && item.type === "service");
     const props = binding?.props && typeof binding.props === "object" ? binding.props as Record<string, unknown> : {};
-    if (clean(binding?.service, 128) !== BRVIN_SERVICE_NAME || clean(binding?.entrypoint, 128) !== "BrvinRetrievalApi" || clean(props.applicationEnvironmentId, 36) !== environmentId) {
-      return json({ ok: false, error: "The deployed test Worker is missing the exact approved BRVIN Service Binding/entrypoint/environment identity. No tester token was created." }, 409);
+    if (clean(binding?.service, 128) !== BRVIN_SERVICE_NAME || clean(binding?.entrypoint, 128) !== "BrvinRetrievalApi") {
+      return json({ ok: false, error: "The deployed test Worker is missing the approved private BRVIN Service Binding/entrypoint. No tester token was created." }, 409);
     }
     const deploymentData = await cloudflareApi<{
       deployments?: Array<{ id?: string; versions?: Array<{ version_id?: string; percentage?: number }> }>;
@@ -846,13 +846,39 @@ export async function provisionBrvinTestClientAccessToken(env: Env, request: Req
       const detail = payload.errors?.map(item => clean(item.message, 160)).filter(Boolean).join("; ") || "Cloudflare did not confirm the Worker secret update.";
       throw new Error("Cloudflare Worker secret update failed (" + response.status + "): " + detail);
     }
-    await audit(env, "cloudflare", "test_client.access_token_provisioned", "A one-time BRVIN test-interface access token was installed as a Cloudflare Worker secret after the live service/environment binding was verified.", {
+
+    // Cloudflare's settings API omits Service Binding props. Verify the actual
+    // runtime identity by calling the isolated Worker with its one-time token.
+    const subdomain = await cloudflareApi<{ subdomain?: string }>(
+      accessToken, "/accounts/" + accountId + "/workers/subdomain",
+    );
+    const workerSubdomain = clean(subdomain.subdomain, 100).toLowerCase();
+    if (!workerSubdomain) throw new Error("Cloudflare did not return the account workers.dev subdomain needed for the live identity check.");
+    const subdomainState = await cloudflareApi<{ enabled?: boolean }>(
+      accessToken, "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/subdomain",
+    );
+    if (subdomainState.enabled !== true) throw new Error("The isolated text Worker is not enabled on its workers.dev subdomain; live BRVIN identity verification cannot run.");
+
+    const runtimeResponse = await fetch(
+      "https://" + TEST_WORKER_NAME + "." + workerSubdomain + ".workers.dev/api/projects",
+      { headers: { authorization: "Bearer " + testerToken, "cache-control": "no-store" }, redirect: "error" },
+    );
+    let runtimePayload: { ok?: boolean; projects?: Array<{ projectId?: string }> } = {};
+    try { runtimePayload = await runtimeResponse.json() as typeof runtimePayload; } catch { runtimePayload = {}; }
+    if (!runtimeResponse.ok || runtimePayload.ok !== true || !Array.isArray(runtimePayload.projects) ||
+      !runtimePayload.projects.some(project => project.projectId === projectId)) {
+      throw new Error("The text Worker did not return its dedicated BRVIN test project through the live Service Binding. The tester token was not disclosed.");
+    }
+
+    await audit(env, "cloudflare", "test_client.access_token_provisioned", "The one-time tester token was installed and the independent text Worker completed a live BRVIN RPC identity check for its dedicated project.", {
       applicationId, environmentId, worker: TEST_WORKER_NAME, tokenFingerprint: (await stateHash(testerToken)).slice(0, 16),
     });
     return json({
       ok: true,
       testerToken,
       oneTime: true,
+      runtimeIdentityVerified: true,
+      verifiedProjectId: projectId,
       worker: TEST_WORKER_NAME,
       message: "Copy this token now and keep it private. BRVIN does not retain a recoverable copy; generate a new one to rotate it.",
     }, 201);
