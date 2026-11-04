@@ -1,8 +1,8 @@
-# Parmar AI
+# परमार्थAI
 
 **Production software: proprietary, source-available, not open source.**
 
-Parmar AI is a **Telegram-first, SSC-focused AI study companion** built for fast doubt solving, conversation continuity, adaptive study assistance, native quiz interaction, and controlled operational visibility.
+परमार्थAI is a **Telegram-first, SSC-focused AI study companion** built for fast doubt solving, conversation continuity, adaptive study assistance, native quiz interaction, and controlled operational visibility.
 
 The current production baseline is **v2.8.0**, including the multi-MCQ quiz workflow. Photo doubt support is being prepared on the `feat/photo-doubt-support` branch and is not deployed.
 
@@ -237,8 +237,8 @@ See [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md), [DEPLOY_DASHBOARD.md](DE
 
 ## License and IP
 
-**Parmar AI Proprietary Source License v1.0: All Rights Reserved.**
+**परमार्थAI Proprietary Source License v1.0: All Rights Reserved.**
 
-Copyright © 2026 Parmar AI. All rights reserved.
+Copyright © 2026 परमार्थAI. All rights reserved.
 
 The LICENSE, AI usage policy, trademarks policy, privacy notice, and NOTICE file are part of the repository's controlling legal/documentation boundary. GitHub hosting terms still apply to the GitHub platform itself; a license cannot make a public repository physically impossible to copy or fork.
