@@ -314,6 +314,50 @@ describe("BRVIN 2 AskMoina application identity registration", () => {
     expect(db.markerBatches).toBe(0);
   });
 
+  it("fails closed when a different active row owns the production environment key", async () => {
+    const db = new FakeD1({
+      applications: [{
+        id: BRVIN2_ASKMOINA_IDENTITIES.applicationId,
+        slug: "askmoina-voice",
+        name: "AskMoina Voice",
+        status: "active",
+      }],
+      environments: [{
+        id: "different-production-id",
+        application_id: BRVIN2_ASKMOINA_IDENTITIES.applicationId,
+        environment_key: "production",
+        status: "active",
+      }],
+    });
+
+    await expect(ensureBrvin2AskMoinaIdentities(asD1(db)))
+      .rejects.toThrow("conflicting AskMoina production environment");
+    expect(db.seedBatches).toBe(0);
+    expect(db.markerBatches).toBe(0);
+  });
+
+  it("fails closed when a different active grant ID already connects AskMoina to Fatman", async () => {
+    const db = new FakeD1({
+      applications: [{
+        id: BRVIN2_ASKMOINA_IDENTITIES.applicationId,
+        slug: "askmoina-voice",
+        name: "AskMoina Voice",
+        status: "active",
+      }],
+      grants: [{
+        id: "different-grant-id",
+        application_id: BRVIN2_ASKMOINA_IDENTITIES.applicationId,
+        project_id: "fatman",
+        status: "active",
+      }],
+    });
+
+    await expect(ensureBrvin2AskMoinaIdentities(asD1(db)))
+      .rejects.toThrow("conflicting AskMoina to Fatman project grant");
+    expect(db.seedBatches).toBe(0);
+    expect(db.markerBatches).toBe(0);
+  });
+
   it("does not register AskMoina when Fatman is missing or inactive", async () => {
     const missing = new FakeD1({ projects: [] });
     await expect(ensureBrvin2AskMoinaIdentities(asD1(missing)))
