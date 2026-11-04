@@ -49,7 +49,7 @@ describe("production hardening", () => {
 
     expect(emitted.length).toBeGreaterThanOrEqual(2);
     expect(emitted[0]).toBe("First paragraph");
-    expect(emitted.at(-1)).toBe("First paragraph\\n\\nSecond paragraph");
+    expect(emitted.at(-1)).toBe(["First paragraph", "", "Second paragraph"].join("\n"));
     expect(response.candidates?.[0]?.finishReason).toBe("STOP");
   });
   it("accepts a valid native quiz packet", () => {
