@@ -14,6 +14,7 @@ import {
   completeBrvinGitHubManifest,
   configureBrvinCloudflareOAuth,
   registerBrvinTestConsumer,
+  provisionBrvinTestClientAccessToken,
   startBrvinGitHubManifest,
 } from "../src/brvin/connect-wizard";
 
@@ -216,6 +217,17 @@ describe("BRVIN Connect Application wizard", () => {
     expect(response.status).toBe(400);
     expect(body.error).toContain("only the BRVIN text test Worker");
     expect(db.statements).toHaveLength(0);
+  });
+
+  it("does not provision a tester token before a connected application and deployment exist", async () => {
+    const db = new MemoryD1();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await provisionBrvinTestClientAccessToken(env(db), request("https://parmar.example/admin/api/brvin/connect/test-access-token", {}));
+    const body = await response.json() as { error: string };
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("connection pull request");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does not expose credential ciphertext or tokens in the connection status response", async () => {
