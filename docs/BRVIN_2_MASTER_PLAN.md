@@ -449,7 +449,7 @@ This table is the human-readable status. The evidence fields must be filled from
 | 3 — Reusable connector | COMPLETE | [PR #63](https://github.com/ashini-x/parmar-ai/pull/63), merge commit `91b6a499bd782ae298b41e790157c23682f10881` | Release Validation #608 passed; Cloudflare Preview build `a4c154e3-c056-489a-9b14-8ebac9ed9c0d` succeeded | Connector vendored by AskMoina PR #370 |
 | 4 — Independent BRVIN text reference Worker | COMPLETE — scaffold/contract tests delivered | [AskMoina PR #381](https://github.com/ashini-x/askmoina-voice/pull/381), merge `bf8e5a1e9fe7f451ad31430143ab52aaf801214e` | Separate `brvin-test-client` Worker, own Wrangler and TypeScript configs, tester-token gate, text UI, server-side v2 connector, authorisation/provenance tests; Release Validation and independent Wrangler dry-run passed on main | No test identity, project grant, Service Binding or deployment yet; provision in M5 and connect in M6. Voice app is optional |
 | 5 — Application/project administration | COMPLETE — merged, deployed and production release accepted | [PR #72](https://github.com/ashini-x/parmar-ai/pull/72), merge `5872c2d21cdef17feb21d661e50ddde820c51f40` | Main Release Validation and paired production release [#41900067751](https://github.com/ashini-x/parmar-ai/actions/runs/41900067751) passed typecheck, unit/Node tests, both Worker bundle checks, production deployment and root/BRVIN/Fatman smoke; acceptance artifact `13357333270` | `brvin-service` version `c6755ca2-5b5f-4968-8bbc-e957a767926d`; `parmar-ai` version `d239c941-f119-4ad1-9020-63e9a2353434`. No migration or production data mutation. Cloudflare preview PR build alone hit the account's 100 Durable Object Free-plan namespace limit; main production build/deploy passed |
-| 6 — Connect wizard | NOT STARTED | — | — | GitHub/Cloudflare + PR automation |
+| 6 — Connect wizard | IN PROGRESS | [PR #75](https://github.com/ashini-x/parmar-ai/pull/75) · `brvin/m6-connect-application-wizard` | PR Release Validation #41908858124 passed typecheck, unit/Node tests and both Worker dry-runs; live Cloudflare audit confirms `brvin-service` is present but `brvin-test-client` is not deployed | Wizard implementation exists on an open PR; provider setup, generated connection PR, isolated Worker deployment and live binding verification remain outstanding |
 | 7 — E2E acceptance | NOT STARTED | — | — | Full synthetic journey |
 | 8 — Release/handover | NOT STARTED | — | — | Final admin manual and release evidence |
 | 9 — External gateway (optional) | DEFERRED | — | — | Separate cross-account expansion |
@@ -715,6 +715,38 @@ And when the connected end-user application can retrieve only its authorised pro
 **M5 boundary:** The dashboard distinguishes a registered environment from a live-verified Worker connection. M6 owns GitHub/Cloudflare discovery, Service Binding provisioning and post-deployment connection verification. The production release acceptance verified root, private BRVIN connectivity and Fatman retrieval; the new administrative lifecycle is covered by code/route tests and is now deployed.
 
 **Next milestone:** M6 — Automated Connect Application wizard. Use the M5 protected dashboard to register the isolated text test application, its production environment, dedicated test project and explicit grant. Then use M6 to attach the trusted environment identity and deploy/connect the test Worker. Do not add ad-hoc D1 rows, reuse AskMoina Voice's production identity or default the test Worker to Fatman.
+
+### Milestone log — 5 November 2026 — M6 Connect Application wizard in progress
+
+**Status:** IN PROGRESS — the implementation is under review in an open PR. Do not mark M6 complete until an administrator completes the provider setup, creates the generated connection PR, the independent text Worker is deployed through its own workflow, and the live Service Binding/environment identity is verified.
+
+**Branch / PR:** `brvin/m6-connect-application-wizard`; [parmar-ai PR #75](https://github.com/ashini-x/parmar-ai/pull/75). The implementation baseline validated by run #41908858124 was `08da941ecab979ad57f42563b79d0411b12ec833`; this ledger update is being added to the same PR and must receive its own fresh validation.
+
+**Paths changed in PR #75:**
+- `src/analytics/db.ts` — provider-connection vault, one-time OAuth state and connection-event tables (schema-on-demand; no live D1 migration has been applied).
+- `src/brvin/admin.ts` — administrator-only Connect Application workspace, provider setup and connection controls.
+- `src/brvin/connect-wizard.ts` — GitHub App manifest/install/repository flow; Cloudflare OAuth, token refresh and pinned home-account check; isolated application/environment/project/grant registration; fixed adapter PR generation; post-deployment verification and one-time test-interface token provisioning.
+- `src/config/env.ts`, `src/index.ts`, `wrangler.jsonc` — typed config, protected admin routes and the fixed BRVIN home-account setting.
+- `test/brvin-connect-wizard.test.ts`, `test/brvin-admin-script.node.test.ts` — OAuth state/credential, registration, unsupported adapter and dashboard contracts.
+
+**Independence boundary:** The first adapter changes only `wrangler.brvin-test-client.jsonc` in `ashini-x/askmoina-voice` by adding `BRVIN_SERVICE` with the generated `applicationEnvironmentId`. It targets the separate `brvin-test-client` Worker, entrypoint and runtime. It does not change the AskMoina Voice Worker, its production Wrangler config, Gemini Live, camera/microphone sessions, voice UI, AskMoina D1 databases or production traffic. The AskMoina repository is only the source-code home for this independently deployed text Worker.
+
+**Validation evidence:**
+- parmar-ai PR Release Validation [#41908858124](https://github.com/ashini-x/parmar-ai/actions/runs/41908858124) passed `npm run check`, `npm test`, `npm run test:node`, the private BRVIN Worker dry-run and the Parmar AI Worker dry-run.
+- The independent text Worker workflow was added in AskMoina PR #383 and merged as `0910485fc75f2708f1e961ee486aa6a6cb79a58b`. Its first run [#41908940305](https://github.com/ashini-x/askmoina-voice/actions/runs/41908940305) passed the isolated Worker checks, all 597 repository tests and Wrangler dry-run, but deployment failed at the Cloudflare upload with `No access to the specified resource`. The Worker was not created.
+- AskMoina PR #384, which changes only the test-Worker deployment workflow to use a separate `BRVIN_TEST_CLOUDFLARE_API_TOKEN`, was merged as `2e3a0896599f678a6c1f395d76dd06c762934d01`; its release validation [#41909320822](https://github.com/ashini-x/askmoina-voice/actions/runs/41909320822) passed. The dedicated repository secret has not been configured or verified, so no deployment has been claimed.
+- The Cloudflare OAuth scope registry confirms the exact scope IDs `workers-scripts.read` and `workers-scripts.write`. The production account read-only audit confirms `parmar-ai` and private `brvin-service` exist, while `brvin-test-client` is absent. The production D1 audit confirms no dedicated text-test application/environment/project/grant has yet been created and no `brvin_provider_connections` table exists on production.
+- No production D1 rows, provider credentials, Worker bindings, Worker settings, secrets or deployments were changed by PR #75 or this ledger update.
+
+**Outstanding M6 gates:**
+1. Re-run PR #75 validation after this documentation commit and review the complete wizard diff.
+2. Merge/deploy the wizard through the existing parmar-ai release pipeline.
+3. Complete the one-time GitHub App registration/installation and Cloudflare OAuth-client setup from the BRVIN admin workspace; authorize only the intended repository and fixed BRVIN home account.
+4. Register the independent text-test application, production environment, isolated project and explicit application-project grant through the wizard.
+5. Add the dedicated `BRVIN_TEST_CLOUDFLARE_API_TOKEN` GitHub Actions secret in `ashini-x/askmoina-voice` with the confirmed Workers Scripts Write permission, then let the independent text-Worker workflow create/deploy only `brvin-test-client`.
+6. Generate/review/merge the adapter PR, verify the live `BRVIN_SERVICE` Service Binding and exact generated environment ID, provision the tester gate secret, and complete a real text retrieval smoke test.
+
+**Next milestone:** Continue M6 only. M7 multi-app/project, sharing, source ingestion, page citations, revocation, quotas and outage/recovery acceptance must wait for the independent reference Worker to be live and connected. Do not resume AskMoina voice-specific tests as a BRVIN blocker.
 
 ### Milestone log — 5 November 2026 — M4 reference Worker scaffold delivered
 
