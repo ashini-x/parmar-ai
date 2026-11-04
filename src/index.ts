@@ -56,6 +56,7 @@ import {
   startBrvinCloudflareOAuth,
   startBrvinGitHubManifest,
   verifyBrvinTestClientDeployment,
+  provisionBrvinTestClientAccessToken,
 } from "./brvin/connect-wizard";
 import { runBrvinRecoverySupervisor, runBrvinVisionRetentionSupervisor } from "./fatman/workflow";
 export { FatmanImportWorkflow } from "./fatman/workflow";
@@ -2250,6 +2251,7 @@ const worker = {
           if (adminApiPath === "/admin/api/brvin/connect/cloudflare/start") return startBrvinCloudflareOAuth(env, request);
           if (adminApiPath === "/admin/api/brvin/connect/consumer") return registerBrvinTestConsumer(env, request);
           if (adminApiPath === "/admin/api/brvin/connect/pull-request") return createBrvinTestClientPullRequest(env, request);
+          if (adminApiPath === "/admin/api/brvin/connect/test-access-token") return provisionBrvinTestClientAccessToken(env, request);
           if (adminApiPath === "/admin/api/brvin/upload/start") return startBrvinBookUpload(env, request);
           if (adminApiPath === "/admin/api/brvin/projects") return createBrvinProject(env, request);
           if (adminApiPath === "/admin/api/brvin/projects/update") return updateBrvinProject(env, request);
