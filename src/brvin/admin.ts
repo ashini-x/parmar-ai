@@ -69,7 +69,7 @@ export async function brvinOverview(env: Env): Promise<Response> {
   try {
     await ensureAnalyticsSchema(env);
     const now = Date.now();
-    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events] = await Promise.all([
+    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events, applications, environments, applicationGrants] = await Promise.all([
       env.DB.prepare(
         "SELECT COUNT(*) AS books, COALESCE(SUM(page_count),0) AS total_pages, " +
         "COALESCE(SUM(indexed_pages),0) AS indexed_pages, " +
@@ -87,7 +87,8 @@ export async function brvinOverview(env: Env): Promise<Response> {
       env.DB.prepare(
         "SELECT p.id,p.name,p.slug,p.description,p.status,p.created_at,p.updated_at," +
         "(SELECT COUNT(DISTINCT pb.book_id) FROM brvin_project_books pb WHERE pb.project_id=p.id) AS direct_books," +
-        "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id) AS collection_books " +
+        "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id) AS collection_books," +
+        "(SELECT COUNT(*) FROM brvin_application_project_grants ag WHERE ag.project_id=p.id AND ag.status='active') AS application_count " +
         "FROM brvin_projects p ORDER BY p.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
@@ -115,6 +116,22 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "SELECT id,import_id,book_id,project_id,agent,phase,event_type,status,message,detail_json,created_at " +
         "FROM brvin_activity_events WHERE created_at>=? ORDER BY id DESC LIMIT 100"
       ).bind(now - 7 * 86_400_000).all<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT a.id,a.slug,a.name,a.description,a.status,a.created_at,a.updated_at," +
+        "(SELECT COUNT(*) FROM brvin_application_environments e WHERE e.application_id=a.id AND e.status='active') AS active_environment_count," +
+        "(SELECT COUNT(*) FROM brvin_application_project_grants g WHERE g.application_id=a.id AND g.status='active') AS active_project_count " +
+        "FROM brvin_applications a ORDER BY a.name COLLATE NOCASE"
+      ).all<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT id,application_id,environment_key,display_name,status,created_at,updated_at,revoked_at,revoked_by " +
+        "FROM brvin_application_environments ORDER BY application_id,environment_key"
+      ).all<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT g.id,g.application_id,g.project_id,g.status,g.created_at,g.created_by,g.revoked_at,g.revoked_by," +
+        "p.name AS project_name,p.slug AS project_slug,p.status AS project_status " +
+        "FROM brvin_application_project_grants g JOIN brvin_projects p ON p.id=g.project_id " +
+        "ORDER BY g.created_at DESC"
+      ).all<Record<string, unknown>>(),
     ]);
 
     const directByBook = new Map<string, Array<{ id: string; name: string }>>();
@@ -130,6 +147,55 @@ export async function brvinOverview(env: Env): Promise<Response> {
       const list = collectionProjectMap.get(id) ?? [];
       list.push({ id: String(row.project_id), name: String(row.project_name) });
       collectionProjectMap.set(id, list);
+    }
+
+    const environmentsByApplication = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of environments.results ?? []) {
+      const applicationId = String(row.application_id);
+      const list = environmentsByApplication.get(applicationId) ?? [];
+      list.push({
+        id: String(row.id),
+        environmentKey: String(row.environment_key),
+        displayName: String(row.display_name ?? ""),
+        status: String(row.status),
+        createdAt: Number(row.created_at),
+        updatedAt: Number(row.updated_at),
+        revokedAt: row.revoked_at === null || row.revoked_at === undefined ? null : Number(row.revoked_at),
+        revokedBy: row.revoked_by ? String(row.revoked_by) : null,
+      });
+      environmentsByApplication.set(applicationId, list);
+    }
+
+    const projectsByApplication = new Map<string, Array<Record<string, unknown>>>();
+    const applicationsByProject = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of applicationGrants.results ?? []) {
+      const applicationId = String(row.application_id);
+      const projectId = String(row.project_id);
+      const grant = {
+        grantId: String(row.id),
+        applicationId,
+        projectId,
+        status: String(row.status),
+        createdAt: Number(row.created_at),
+        createdBy: row.created_by ? String(row.created_by) : null,
+        revokedAt: row.revoked_at === null || row.revoked_at === undefined ? null : Number(row.revoked_at),
+        revokedBy: row.revoked_by ? String(row.revoked_by) : null,
+        projectName: String(row.project_name),
+        projectSlug: String(row.project_slug),
+        projectStatus: String(row.project_status),
+      };
+      const appProjects = projectsByApplication.get(applicationId) ?? [];
+      appProjects.push(grant);
+      projectsByApplication.set(applicationId, appProjects);
+      const projectApplications = applicationsByProject.get(projectId) ?? [];
+      projectApplications.push({
+        applicationId,
+        name: String(row.application_name ?? ""),
+        slug: String(row.application_slug ?? ""),
+        grantId: String(row.id),
+        status: String(row.status),
+      });
+      applicationsByProject.set(projectId, projectApplications);
     }
 
     return json({
@@ -152,6 +218,17 @@ export async function brvinOverview(env: Env): Promise<Response> {
         id: String(row.id), name: String(row.name), slug: String(row.slug),
         description: String(row.description ?? ""), status: String(row.status),
         directBooks: Number(row.direct_books ?? 0), collectionBooks: Number(row.collection_books ?? 0),
+        applicationCount: Number(row.application_count ?? 0),
+        applications: applicationsByProject.get(String(row.id)) ?? [],
+      })),
+      applications: (applications.results ?? []).map((row) => ({
+        id: String(row.id), slug: String(row.slug), name: String(row.name),
+        description: String(row.description ?? ""), status: String(row.status),
+        activeEnvironmentCount: Number(row.active_environment_count ?? 0),
+        activeProjectCount: Number(row.active_project_count ?? 0),
+        environments: environmentsByApplication.get(String(row.id)) ?? [],
+        projects: projectsByApplication.get(String(row.id)) ?? [],
+        createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
       })),
       books: (books.results ?? []).map((row) => ({
         id: String(row.id), title: String(row.title), filename: String(row.source_filename ?? ""),
@@ -592,30 +669,287 @@ export async function startBrvinBookUpload(env: Env, request: Request): Promise<
 
 export async function createBrvinProject(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { name?: unknown; description?: unknown };
+  let body: { name?: unknown; description?: unknown; applicationId?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project details." }, 400); }
   const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
   const slug = slugify(name);
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
   if (!name || !slug) return json({ ok: false, error: "Enter a valid project name." }, 400);
+  if (applicationId && !/^[a-f0-9-]{36}$/iu.test(applicationId)) {
+    return json({ ok: false, error: "Select a registered application." }, 400);
+  }
   try {
     await ensureAnalyticsSchema(env);
+    if (applicationId) {
+      const application = await env.DB.prepare(
+        "SELECT id FROM brvin_applications WHERE id=? AND status='active'"
+      ).bind(applicationId).first<{ id: string }>();
+      if (!application) return json({ ok: false, error: "The selected application is not active." }, 409);
+    }
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
-    await env.DB.batch([
+    const statements = [
       env.DB.prepare(
         "INSERT INTO brvin_projects (id,name,slug,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
       ).bind(id, name, slug, description, now, now),
-      env.DB.prepare(
+    ];
+    if (applicationId) {
+      statements.push(env.DB.prepare(
+        "INSERT INTO brvin_application_project_grants (id,application_id,project_id,status,created_at,created_by) " +
+        "VALUES (?,?,?,'active',?,'admin-dashboard')"
+      ).bind(crypto.randomUUID().toLowerCase(), applicationId, id, now));
+    } else {
+      // Legacy creation remains available for existing v1 clients and Fatman-compatible integrations.
+      statements.push(env.DB.prepare(
         "INSERT INTO brvin_service_clients (client_id,project_id,created_at,updated_at) VALUES (?,?,?,?)"
-      ).bind(slug, id, now, now),
-    ]);
+      ).bind(slug, id, now, now));
+    }
+    await env.DB.batch(statements);
     await recordBrvinActivity(env, {
       projectId: id, agent: "BRVIN access control", phase: "governance",
       eventType: "project.created", status: "completed",
-      message: "A new project and its default private Worker identity were created. It has no knowledge access until sources are assigned.",
-      details: { serviceClientId: slug },
+      message: applicationId
+        ? "A new project was created and explicitly granted to its selected BRVIN application. It has no knowledge access until sources are assigned."
+        : "A legacy project and its default private Worker identity were created. It has no knowledge access until sources are assigned.",
+      details: { applicationId: applicationId || null, serviceClientId: applicationId ? null : slug },
     });
-    return json({ ok: true, project: { id, name, slug, description } }, 201);
+    return json({ ok: true, project: { id, name, slug, description, applicationId: applicationId || null } }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+function validBrvinApplicationSlug(value: string): boolean {
+  return /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u.test(value);
+}
+
+function normalizedEnvironmentKey(value: string): string {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/gu, "")
+    .replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 32).replace(/-+$/gu, "");
+}
+
+export async function createBrvinApplication(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { name?: unknown; description?: unknown; slug?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
+  const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
+  const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  const slugInput = typeof body.slug === "string" && body.slug.trim() ? body.slug : name;
+  const slug = slugify(slugInput);
+  if (!name || !slug || !validBrvinApplicationSlug(slug)) {
+    return json({ ok: false, error: "Enter an application name that produces a valid lowercase slug." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const id = crypto.randomUUID().toLowerCase(), now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO brvin_applications (id,slug,name,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
+    ).bind(id, slug, name, description, now, now).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.created", status: "completed",
+      message: "A BRVIN application record was created. No environment or project access is implied.",
+      details: { applicationId: id, slug },
+    });
+    return json({ ok: true, application: { id, slug, name, description, status: "active" } }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function createBrvinApplicationEnvironment(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { applicationId?: unknown; environmentKey?: unknown; displayName?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid environment details." }, 400); }
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const environmentKey = normalizedEnvironmentKey(typeof body.environmentKey === "string" ? body.environmentKey : "");
+  const displayName = typeof body.displayName === "string" ? body.displayName.replace(/\s+/gu, " ").trim().slice(0, 80) : "";
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !environmentKey || !validBrvinApplicationSlug(environmentKey)) {
+    return json({ ok: false, error: "Choose an active application and enter a valid environment label." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const application = await env.DB.prepare(
+      "SELECT id FROM brvin_applications WHERE id=? AND status='active'"
+    ).bind(applicationId).first<{ id: string }>();
+    if (!application) return json({ ok: false, error: "The selected application is not active." }, 409);
+    const id = crypto.randomUUID().toLowerCase(), now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO brvin_application_environments (id,application_id,environment_key,display_name,status,created_at,updated_at) " +
+      "VALUES (?,?,?,?,'active',?,?)"
+    ).bind(id, applicationId, environmentKey, displayName, now, now).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.environment_created", status: "completed",
+      message: "A new trusted environment identity was registered. Attach it through a reviewed Service Binding configuration before treating the environment as connected.",
+      details: { applicationId, environmentId: id, environmentKey },
+    });
+    return json({ ok: true, environment: { id, applicationId, environmentKey, displayName, status: "active" } }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function setBrvinApplicationStatus(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { applicationId?: unknown; status?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application status." }, 400); }
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const status = body.status;
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !["active", "suspended", "revoked"].includes(String(status))) {
+    return json({ ok: false, error: "Choose a valid application and status." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const application = await env.DB.prepare(
+      "SELECT id,status FROM brvin_applications WHERE id=?"
+    ).bind(applicationId).first<{ id: string; status: string }>();
+    if (!application) return json({ ok: false, error: "Application not found." }, 404);
+    if (application.status === "revoked" && status !== "revoked") {
+      return json({ ok: false, error: "A revoked application is permanent. Create a new application record instead." }, 409);
+    }
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_applications SET status=?,updated_at=? WHERE id=?"
+    ).bind(status, now, applicationId).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.status_changed", status: "completed",
+      message: "Application status changed to " + String(status) + ".",
+      details: { applicationId, previousStatus: application.status, status },
+    });
+    return json({ ok: true, applicationId, status });
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 502); }
+}
+
+export async function setBrvinEnvironmentStatus(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { environmentId?: unknown; status?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid environment status." }, 400); }
+  const environmentId = typeof body.environmentId === "string" ? body.environmentId.trim() : "";
+  const status = body.status;
+  if (!/^[a-f0-9-]{36}$/iu.test(environmentId) || !["active", "disabled", "revoked"].includes(String(status))) {
+    return json({ ok: false, error: "Choose a valid environment and status." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const environment = await env.DB.prepare(
+      "SELECT e.id,e.application_id,e.status,a.status AS application_status " +
+      "FROM brvin_application_environments e JOIN brvin_applications a ON a.id=e.application_id WHERE e.id=?"
+    ).bind(environmentId).first<{ id: string; application_id: string; status: string; application_status: string }>();
+    if (!environment) return json({ ok: false, error: "Environment not found." }, 404);
+    if (environment.status === "revoked" && status !== "revoked") {
+      return json({ ok: false, error: "A revoked environment identity cannot be reactivated. Create a replacement identity." }, 409);
+    }
+    if (status === "active" && environment.application_status !== "active") {
+      return json({ ok: false, error: "Activate the parent application before enabling this environment." }, 409);
+    }
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_application_environments SET status=?,updated_at=?," +
+      "revoked_at=CASE WHEN ?='revoked' THEN ? ELSE revoked_at END," +
+      "revoked_by=CASE WHEN ?='revoked' THEN 'admin-dashboard' ELSE revoked_by END WHERE id=?"
+    ).bind(status, now, status, now, status, environmentId).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.environment_status_changed", status: "completed",
+      message: "Environment " + environmentId + " status changed to " + String(status) + ".",
+      details: { applicationId: environment.application_id, environmentId, previousStatus: environment.status, status },
+    });
+    return json({ ok: true, environmentId, status });
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 502); }
+}
+
+export async function grantBrvinApplicationProject(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { applicationId?: unknown; projectId?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project grant." }, 400); }
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !projectId || projectId.length > 128 || projectId !== body.projectId) {
+    return json({ ok: false, error: "Choose a valid application and project." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const [application, project, existing] = await Promise.all([
+      env.DB.prepare("SELECT id FROM brvin_applications WHERE id=? AND status='active'").bind(applicationId).first<{ id: string }>(),
+      env.DB.prepare("SELECT id FROM brvin_projects WHERE id=? AND status='active'").bind(projectId).first<{ id: string }>(),
+      env.DB.prepare("SELECT id FROM brvin_application_project_grants WHERE application_id=? AND project_id=? AND status='active'").bind(applicationId, projectId).first<{ id: string }>(),
+    ]);
+    if (!application) return json({ ok: false, error: "The selected application is not active." }, 409);
+    if (!project) return json({ ok: false, error: "The selected project is not active." }, 409);
+    if (existing) return json({ ok: true, applicationId, projectId, grantId: existing.id, alreadyGranted: true });
+    const grantId = crypto.randomUUID().toLowerCase(), now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO brvin_application_project_grants (id,application_id,project_id,status,created_at,created_by) " +
+      "VALUES (?,?,?,'active',?,'admin-dashboard')"
+    ).bind(grantId, applicationId, projectId, now).run();
+    await recordBrvinActivity(env, {
+      projectId, agent: "BRVIN application access control", phase: "governance",
+      eventType: "application.project_granted", status: "completed",
+      message: "The application was granted access to the selected project.",
+      details: { applicationId, projectId, grantId },
+    });
+    return json({ ok: true, applicationId, projectId, grantId }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function revokeBrvinApplicationProject(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { applicationId?: unknown; projectId?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project grant." }, 400); }
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !projectId || projectId.length > 128 || projectId !== body.projectId) {
+    return json({ ok: false, error: "Choose a valid application and project." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const existing = await env.DB.prepare(
+      "SELECT id FROM brvin_application_project_grants WHERE application_id=? AND project_id=? AND status='active'"
+    ).bind(applicationId, projectId).first<{ id: string }>();
+    if (!existing) return json({ ok: false, error: "No active grant exists for this application and project." }, 404);
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_application_project_grants SET status='revoked',revoked_at=?,revoked_by='admin-dashboard' WHERE id=?"
+    ).bind(now, existing.id).run();
+    await recordBrvinActivity(env, {
+      projectId, agent: "BRVIN application access control", phase: "governance",
+      eventType: "application.project_revoked", status: "completed",
+      message: "The application-project permission was revoked. Future retrieval requests will be denied.",
+      details: { applicationId, projectId, grantId: existing.id },
+    });
+    return json({ ok: true, applicationId, projectId, grantId: existing.id });
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 502); }
+}
+
+export async function updateBrvinProject(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { projectId?: unknown; name?: unknown; description?: unknown; status?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project details." }, 400); }
+  const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
+  const status = body.status === undefined ? undefined : body.status;
+  const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
+  const description = body.description === undefined ? undefined : typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  if (!projectId || projectId.length > 128 || projectId !== body.projectId ||
+      (status !== undefined && !["active", "inactive"].includes(String(status))) ||
+      (name !== undefined && (!name || !slugify(name)))) {
+    return json({ ok: false, error: "Enter a valid project name and status." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const current = await env.DB.prepare(
+      "SELECT id,name,description,status FROM brvin_projects WHERE id=?"
+    ).bind(projectId).first<{ id: string; name: string; description: string; status: string }>();
+    if (!current) return json({ ok: false, error: "Project not found." }, 404);
+    const nextName = name ?? current.name;
+    const nextDescription = description ?? current.description;
+    const nextStatus = String(status ?? current.status);
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_projects SET name=?,description=?,status=?,updated_at=? WHERE id=?"
+    ).bind(nextName, nextDescription, nextStatus, now, projectId).run();
+    await recordBrvinActivity(env, {
+      projectId, agent: "BRVIN access control", phase: "governance",
+      eventType: "project.updated", status: "completed",
+      message: "Project details or activation status were updated.",
+      details: { previousStatus: current.status, status: nextStatus },
+    });
+    return json({ ok: true, project: { id: projectId, name: nextName, description: nextDescription, status: nextStatus } });
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
