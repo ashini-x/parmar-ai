@@ -4,7 +4,7 @@ import { getActiveTelegramBot, getTelegramBotByConnectionId, hasTelegramBotRecor
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
-const CREATOR_NAME = "iDoctor";
+const CREATOR_NAME = "BRɅIN";
 const CREATOR_CONTACT_URL = "https://parmar-ai.thenewtongs.workers.dev/contact";
 function limitTelegramMessage(text: string): { text: string } {
   return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH) };
@@ -57,7 +57,7 @@ function creatorContactMarkup(chatId: number, includeCreatorFooter = true): Crea
   if (!includeCreatorFooter || chatId <= 0) return undefined;
   return {
     inline_keyboard: [[{
-      text: "creator: " + CREATOR_NAME,
+      text: CREATOR_NAME,
       web_app: { url: CREATOR_CONTACT_URL },
     }]],
   };
