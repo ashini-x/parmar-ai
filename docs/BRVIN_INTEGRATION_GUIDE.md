@@ -1,6 +1,6 @@
 # BRVIN Application Integration Guide
 
-> **Version boundary:** This guide describes the current v1 integration path. BRVIN 2's proposed app/environment/project-grant model and RPC v2 contract are documented in [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). Do not configure a production consumer with the proposed v2 contract until Milestones 1–2 are implemented, tested and deployed.
+> **Version boundary:** This guide describes the legacy v1 connection path used by existing Fatman retrieval. The M1 application/environment/project-grant registry and M2 private RPC v2 are implemented and deployed. New integrations should use the trusted environment identity and v2 contract documented in [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md), preferably through the reusable connector being delivered in M3. Do not migrate existing consumers until their connector/tool-handler milestone is complete.
 
 This guide explains how to connect an application to the existing private BRVIN retrieval service. It is written for engineers implementing a consumer app and administrators provisioning its project.
 
