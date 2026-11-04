@@ -30,6 +30,19 @@ The current source baseline is **v2.8.0**.
 - [SOURCE_INVENTORY.md](SOURCE_INVENTORY.md): tracked source/assets and their roles.
 - [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md): documentation maintenance requirements.
 
+## BRVIN knowledge platform
+
+The BRVIN reference set is the source of truth for its shared knowledge registry, private retrieval Worker, project grants, PDF/OCR ingestion pipeline, integrations and release operations.
+
+| Document | Purpose |
+|---|---|
+| [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) | Canonical as-built architecture, infrastructure inventory, D1 model, trust boundary, source lifecycle, deployment and decisions |
+| [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md) | Same-account Service Binding setup, app-side adapter, model tool wiring, AskMoina integration plan and cross-account limitations |
+| [BRVIN_PRIVATE_RETRIEVAL_API.md](BRVIN_PRIVATE_RETRIEVAL_API.md) | Internal RPC contract, identity, request/result types, limits, failures and acceptance criteria |
+| [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md) | Dashboard use, project/collection management, uploads, status, deletion, troubleshooting and deployment/rollback |
+
+BRVIN's key architectural boundary is deliberate: the admin/ingestion plane remains in the existing `parmar-ai` Worker, while project-scoped application retrieval is served by the separate private `brvin-service` Worker. Consumer applications keep their own model generation and conversation state.
+
 ## Current feature documentation
 
 The v2.8.0 implementation includes:
