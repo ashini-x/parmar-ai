@@ -1096,6 +1096,59 @@ const HTML = `<!doctype html>
 <section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Application registry</h2><p>Environment identities, lifecycle status and project grants. Revoked records remain in the audit history.</p></div></div>
 <div id="applications-list" class="project-grid"><div class="empty">Loading application registry…</div></div>
 </section>
+
+<section class="view-panel" id="connect-wizard-panel" style="margin-top:14px">
+ <div class="panel-toolbar"><div><h2>Connect Application</h2><p>First supported adapter: the separate BRVIN text test Worker. The existing AskMoina Voice Worker is not modified.</p></div><button class="btn" id="connect-refresh" type="button">Refresh connections</button></div>
+ <div class="overview-grid">
+  <section class="tile">
+   <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>GitHub App</strong><span class="pill" id="connect-github-status">Not connected</span></div>
+   <p>Create a private BRVIN GitHub App using GitHub's manifest flow. It requests repository metadata read, contents write and pull-request write only.</p>
+   <button class="btn primary" id="github-register" type="button">Register BRVIN GitHub App</button>
+   <p id="github-app-meta" class="muted">No BRVIN GitHub App registered.</p>
+   <div class="field"><label for="github-installation">Installed account</label><select id="github-installation"><option value="">Load installations after registering the app</option></select></div>
+   <div class="job-actions"><button class="btn" id="github-load-installations" type="button">Discover installations</button><button class="btn" id="github-use-installation" type="button">Use selected installation</button></div>
+   <div class="field"><label for="github-repository">Repository</label><select id="github-repository"><option value="">Install the app and select an installation first</option></select></div>
+   <button class="btn" id="github-load-repositories" type="button">Discover repositories</button>
+   <p class="muted" id="github-repository-note">Only ashini-x/askmoina-voice is supported by this first adapter.</p>
+  </section>
+  <section class="tile">
+   <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>Cloudflare OAuth</strong><span class="pill" id="connect-cloudflare-status">Not configured</span></div>
+   <p>Create a private Cloudflare OAuth client with authorization-code and refresh-token grants. Request only Workers Scripts Read and Workers Scripts Write.</p>
+   <div class="field"><label for="cf-client-id">OAuth client ID</label><input id="cf-client-id" autocomplete="off" maxlength="160" placeholder="Cloudflare OAuth client ID"></div>
+   <div class="field"><label for="cf-client-secret">OAuth client secret</label><input id="cf-client-secret" type="password" autocomplete="new-password" maxlength="500" placeholder="Shown once by Cloudflare"></div>
+   <div class="field"><label>Exact callback URL to register</label><input id="cf-callback-url" readonly value="Shown after page load"></div>
+   <button class="btn primary" id="cf-save-client" type="button">Save OAuth client securely</button>
+   <button class="btn" id="cf-authorize" type="button">Authorize BRVIN home account</button>
+   <button class="btn" id="cf-discover-workers" type="button">Discover Workers</button>
+   <p class="muted" id="cf-worker-note">Must confirm that this same account contains the private brvin-service Worker.</p>
+  </section>
+ </div>
+ <section class="tile" style="margin-top:12px">
+  <div class="panel-toolbar"><div><h2>Register the controlled test consumer</h2><p>Generates a new app identity, environment identity, isolated project and explicit app-project grant. No source document is shared automatically.</p></div></div>
+  <div class="formgrid">
+   <div class="field"><label for="connect-app-name">Dedicated application</label><input id="connect-app-name" maxlength="100" value="BRVIN Text Test Client" readonly></div>
+   <div class="field"><label for="connect-env-key">Environment key</label><input id="connect-env-key" maxlength="32" value="production" readonly></div>
+   <div class="field"><label for="connect-project-name">Dedicated project name</label><input id="connect-project-name" maxlength="100" value="BRVIN Text Test Knowledge"></div>
+   <div class="field"><label for="connect-project-description">Project description</label><input id="connect-project-description" maxlength="500" value="Isolated knowledge project for the BRVIN text reference Worker."></div>
+  </div>
+  <button class="btn primary" id="connect-register-consumer" type="button">Create test application and project</button>
+  <p class="muted" id="connect-consumer-note">This action creates four related D1 records in one transaction.</p>
+ </section>
+ <section class="tile" style="margin-top:12px">
+  <div class="panel-toolbar"><div><h2>Prepare connection pull request</h2><p>Only the test Worker's Wrangler config is updated. The existing voice Worker and production Wrangler config are outside this adapter.</p></div></div>
+  <div class="formgrid">
+   <div class="field"><label for="connect-existing-application">Registered application</label><select id="connect-existing-application"><option value="">Register the test consumer first</option></select></div>
+   <div class="field"><label for="connect-existing-environment">Trusted environment identity</label><select id="connect-existing-environment"><option value="">Choose an application first</option></select></div>
+  </div>
+  <p class="notice">Before creating a PR, BRVIN checks the GitHub installation can write to the selected repository and Cloudflare OAuth can list the same account that hosts brvin-service. The PR will not be merged or deployed by this wizard.</p>
+  <button class="btn primary" id="connect-create-pr" type="button">Create reviewable GitHub PR</button>
+  <button class="btn" id="connect-verify-deployment" type="button">Check Worker deployment</button>
+  <div class="field"><label for="connect-test-token">One-time text test access token</label><input id="connect-test-token" type="password" readonly autocomplete="off" placeholder="Generate only after the test Worker connection is verified"></div>
+  <div class="job-actions"><button class="btn" id="connect-generate-token" type="button">Generate / rotate tester token</button><button class="btn" id="connect-copy-token" type="button">Copy token</button></div>
+  <p class="muted">This token only unlocks the test interface. It does not grant BRVIN project access. Project access remains enforced by the private Service Binding.</p>
+  <p class="muted" id="connect-result" aria-live="polite">No connection PR created yet.</p>
+ </section>
+</section>
 </div>
 </section>
 </div></div><p class="footer-note">BRVIN · Administrator-only · Operational data refreshes automatically · Knowledge is never globally exposed by default</p></main>
@@ -1207,7 +1260,51 @@ function detailText(details){if(!details||typeof details!=="object")return"";ret
 function renderEvents(list){$("events").innerHTML=list.length?list.slice(0,60).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong>'+statusPill(e.status)+'</div><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+' · '+esc(e.type)+'</small></div></div>').join(""):'<div class="empty">No operation events recorded yet.</div>';}
 function renderOverview(data){$("overview-books").textContent=String(data.stats.books);$("overview-pages").textContent=data.stats.indexedPages.toLocaleString()+" of "+data.stats.totalPages.toLocaleString()+" pages indexed";$("overview-ready").textContent=String(data.stats.readyBooks);$("overview-running").textContent=String(data.stats.activeBooks);$("overview-attention").textContent=String(data.stats.failedBooks);$("overview-status-note").textContent=data.stats.failedBooks?data.stats.failedBooks+" source(s) need attention. Open Operations to inspect the affected workflow.":data.stats.activeBooks?data.stats.activeBooks+" pipeline(s) are running. Processing continues automatically in the background.":"All tracked sources are stable. New processing events will appear here automatically.";}
 function render(){if(!model)return;renderMetrics(model.stats);renderApplications(model.applications||[]);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOverview(model);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
-async function refresh(){try{model=await api(API+"overview");render();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
+let connectState=null,connectInstallations=[],connectRepositories=[];
+async function refreshConnectState(){
+ try{connectState=await api(API+"connect/status");renderConnectState();}
+ catch(error){$("connect-result").textContent="Connection status could not load: "+error.message;}
+}
+function renderConnectState(){
+ if(!connectState)return;
+ const github=connectState.github||{},cloudflare=connectState.cloudflare||{};
+ $("connect-github-status").textContent=github.status||"not connected";
+ $("connect-cloudflare-status").textContent=cloudflare.status||"not configured";
+ $("github-app-meta").textContent=github.appName?(github.appName+" · "+(github.appUrl||github.appSlug||"")+(github.installationAccount?" · installed on "+github.installationAccount:"")):"No BRVIN GitHub App registered.";
+ $("cf-callback-url").value=window.location.origin+"/admin/brvin/connect/cloudflare/callback";
+ $("cf-worker-note").textContent=cloudflare.brvinServiceVisible
+  ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+"."
+  :"Authorize the account that hosts private brvin-service. No Worker binding will be changed until the PR is reviewed.";
+ const apps=(model?.applications||[]).filter(app=>app.status==="active"&&app.slug==="brvin-text-test-client");
+ const previousApp=$("connect-existing-application").value;
+ $("connect-existing-application").innerHTML=apps.map(app=>'<option value="'+esc(app.id)+'">'+esc(app.name)+' · '+esc(app.slug)+'</option>').join("")||'<option value="">Register the test consumer first</option>';
+ if(apps.some(app=>app.id===previousApp))$("connect-existing-application").value=previousApp;
+ renderConnectEnvironments();
+}
+function renderConnectEnvironments(){
+ const app=(model?.applications||[]).find(item=>item.id===$("connect-existing-application").value);
+ const environments=(app?.environments||[]).filter(item=>item.status==="active");
+ const previous=$("connect-existing-environment").value;
+ $("connect-existing-environment").innerHTML=environments.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.displayName||item.environmentKey)+' · '+esc(item.id)+'</option>').join("")||'<option value="">No active environment for this application</option>';
+ if(environments.some(item=>item.id===previous))$("connect-existing-environment").value=previous;
+}
+async function loadConnectRepositories(){
+ const data=await api(API+"connect/github/repositories");
+ connectRepositories=data.repositories||[];
+ $("github-repository").innerHTML=connectRepositories.map(repo=>'<option value="'+esc(repo.fullName)+'" data-branch="'+esc(repo.defaultBranch)+'">'+esc(repo.fullName)+(repo.private?" · private":"")+'</option>').join("")||'<option value="">No repositories installed</option>';
+ if(!connectRepositories.some(repo=>repo.fullName==="ashini-x/askmoina-voice")){
+  $("github-repository-note").textContent="Install the BRVIN GitHub App on ashini-x/askmoina-voice to use the first supported adapter.";
+ }else{
+  $("github-repository").value="ashini-x/askmoina-voice";
+  $("github-repository-note").textContent="Supported adapter available · default branch main · test Worker only.";
+ }
+}
+async function loadConnectInstallations(){
+ const data=await api(API+"connect/github/installations");
+ connectInstallations=data.installations||[];
+ $("github-installation").innerHTML=connectInstallations.map(item=>'<option value="'+item.id+'">'+esc(item.account)+' · '+esc(item.accountType||item.targetType)+'</option>').join("")||'<option value="">No installation yet · install the GitHub App first</option>';
+}
+async function refresh(){try{model=await api(API+"overview");render();await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
 function stage(id,state){$("step-"+id).className="step"+(state?" "+state:"");}
 function renderJob(job,pipeline){const uploaded=job.uploadedBytes>=job.expectedSize&&job.expectedSize>0;const ocr=pipeline?.vision?.status||"not_started";const status=job.status;
  stage("upload",uploaded?"done":status==="uploading"?"active":"");
@@ -1367,7 +1464,7 @@ async function clearAllBrvinBooks(){
  }catch(error){alert(error.message);}
  finally{button.disabled=false;}
 }
-function activateView(view){const allowed=["overview","books","collections","projects","operations","governance","applications"];if(!allowed.includes(view))return;document.querySelectorAll("[data-view-panel]").forEach(panel=>panel.classList.toggle("active",panel.dataset.viewPanel===view));document.querySelectorAll(".nav-item[data-view]").forEach(button=>button.classList.toggle("active",button.dataset.view===view));}
+function activateView(view){const allowed=["overview","books","collections","projects","operations","governance","applications"];if(!allowed.includes(view))return;document.querySelectorAll("[data-view-panel]").forEach(panel=>panel.classList.toggle("active",panel.dataset.viewPanel===view));document.querySelectorAll(".nav-item[data-view]").forEach(button=>button.classList.toggle("active",button.dataset.view===view));if(view==="applications")refreshConnectState();}
 document.querySelectorAll("[data-view]").forEach(button=>button.addEventListener("click",()=>activateView(button.dataset.view)));
 function openUpload(){activateView("books");$("upload-modal").classList.add("open");}
 $("open-upload").addEventListener("click",openUpload);$("open-upload-secondary").addEventListener("click",openUpload);$("open-upload-books").addEventListener("click",openUpload);
@@ -1386,6 +1483,97 @@ $("create-environment").addEventListener("click",async()=>{
 $("grant-project-button").addEventListener("click",async()=>{
  try{const applicationId=$("grant-application").value,projectId=$("grant-project").value;if(!applicationId||!projectId)throw new Error("Select an active application and project.");await post("applications/grants",{applicationId,projectId});await refresh();}
  catch(error){alert(error.message);}
+});
+$("connect-refresh").addEventListener("click",async()=>{await refresh();});
+$("github-register").addEventListener("click",async()=>{
+ try{
+  const data=await post("connect/github/manifest",{});
+  const form=document.createElement("form");form.method="POST";form.action=data.action;form.target="_blank";
+  const hidden=document.createElement("input");hidden.type="hidden";hidden.name="manifest";hidden.value=JSON.stringify(data.manifest);
+  form.appendChild(hidden);document.body.appendChild(form);form.submit();form.remove();
+ }catch(error){alert(error.message);}
+});
+$("github-load-installations").addEventListener("click",async()=>{try{await loadConnectInstallations();}catch(error){alert(error.message);}});
+$("github-use-installation").addEventListener("click",async()=>{
+ try{const installationId=Number($("github-installation").value);if(!installationId)throw new Error("Choose an installed GitHub account.");await post("connect/github/installation",{installationId});await loadConnectRepositories();await refreshConnectState();}
+ catch(error){alert(error.message);}
+});
+$("github-load-repositories").addEventListener("click",async()=>{try{await loadConnectRepositories();}catch(error){alert(error.message);}});
+$("cf-save-client").addEventListener("click",async()=>{
+ try{
+  const clientId=$("cf-client-id").value.trim(),clientSecret=$("cf-client-secret").value;
+  if(!clientId||!clientSecret)throw new Error("Enter both Cloudflare OAuth client values.");
+  const result=await post("connect/cloudflare/configure",{clientId,clientSecret});
+  $("cf-client-secret").value="";$("cf-callback-url").value=result.redirectUri;
+  $("cf-worker-note").textContent="Client credentials saved encrypted. Start OAuth authorization next.";
+  await refreshConnectState();
+ }catch(error){alert(error.message);}
+});
+$("cf-authorize").addEventListener("click",async()=>{
+ try{const result=await post("connect/cloudflare/start",{});window.location.assign(result.authorizationUrl);}
+ catch(error){alert(error.message);}
+});
+$("cf-discover-workers").addEventListener("click",async()=>{
+ try{
+  const result=await api(API+"connect/cloudflare/workers");
+  const names=(result.workers||[]).map(worker=>worker.name);
+  $("cf-worker-note").textContent="Same account verified · "+names.length+" Workers discovered · "+(names.includes("brvin-service")?"brvin-service confirmed":"brvin-service missing")+".";
+  await refreshConnectState();
+ }catch(error){$("cf-worker-note").textContent=error.message;alert(error.message);}
+});
+$("connect-register-consumer").addEventListener("click",async()=>{
+ try{
+  const result=await post("connect/consumer",{
+   applicationName:$("connect-app-name").value,
+   applicationDescription:"Isolated text-first BRVIN reference consumer; no production voice app changes.",
+   environmentKey:$("connect-env-key").value,
+   projectName:$("connect-project-name").value,
+   projectDescription:$("connect-project-description").value
+  });
+  $("connect-consumer-note").textContent="Created application "+result.application.id+", environment "+result.environment.id+", isolated project "+result.project.id+" and explicit app-project grant.";
+  await refresh();
+  $("connect-existing-application").value=result.application.id;renderConnectEnvironments();$("connect-existing-environment").value=result.environment.id;
+ }catch(error){alert(error.message);}
+});
+$("connect-existing-application").addEventListener("change",renderConnectEnvironments);
+$("connect-create-pr").addEventListener("click",async()=>{
+ try{
+  const repository=$("github-repository").value;
+  const appId=$("connect-existing-application").value;
+  const environmentId=$("connect-existing-environment").value;
+  if(repository!=="ashini-x/askmoina-voice")throw new Error("Select the supported BRVIN text test-client repository.");
+  if(!appId||!environmentId)throw new Error("Create or select an active application and environment first.");
+  $("connect-result").textContent="Verifying both provider connections and preparing a review branch…";
+  const result=await post("connect/pull-request",{repository,baseBranch:"main",applicationId:appId,environmentId});
+  $("connect-result").innerHTML='Created PR <a href="'+esc(result.pullRequest.url)+'" target="_blank" rel="noopener">#'+result.pullRequest.number+' · Review on GitHub</a>. Nothing was merged or deployed.';
+  await refreshConnectState();
+ }catch(error){$("connect-result").textContent=error.message;alert(error.message);}
+});
+$("connect-verify-deployment").addEventListener("click",async()=>{
+ try{
+  const result=await api(API+"connect/verify");
+  $("connect-result").textContent=result.state==="deployment_ready"
+   ?"Worker deployment and private BRVIN Service Binding are ready. Generate the tester token next; that action performs the live RPC identity check against the dedicated test project."
+   :"Worker deployment status: "+(result.state||"unknown")+".";
+ }catch(error){$("connect-result").textContent=error.message;}
+});
+$("connect-generate-token").addEventListener("click",async()=>{
+ try{
+  if(!confirm("Generate or rotate the private tester access token? The previous tester token will stop working."))return;
+  $("connect-generate-token").disabled=true;
+  $("connect-test-token").value="";
+  const result=await post("connect/test-access-token",{});
+  $("connect-test-token").type="text";
+  $("connect-test-token").value=result.testerToken;
+  $("connect-result").textContent="Live BRVIN RPC identity check passed for the dedicated text-test project. Copy the one-time tester token now; it will not be shown again after this page is refreshed.";
+ }catch(error){$("connect-result").textContent=error.message;alert(error.message);}
+ finally{$("connect-generate-token").disabled=false;}
+});
+$("connect-copy-token").addEventListener("click",async()=>{
+ const value=$("connect-test-token").value;
+ if(!value){alert("Generate the tester token first.");return;}
+ try{await navigator.clipboard.writeText(value);$("connect-result").textContent="Tester token copied. Keep it private and enter it in the BRVIN Test Lab.";}
+ catch{$("connect-test-token").type="text";$("connect-test-token").focus();$("connect-test-token").select();$("connect-result").textContent="Select and copy the token above. Keep it private.";}
 });
 $("create-collection").addEventListener("click",async()=>{try{await post("collections",{name:$("collection-name").value,description:$("collection-desc").value});$("collection-name").value="";$("collection-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("save-project-access").addEventListener("click",async()=>{try{const projectId=$("project-access").value;if(!projectId)throw new Error("Create or choose a project first.");const collectionIds=[...$("collection-checks").querySelectorAll("input:checked")].map(i=>i.value);await post("projects/collections",{projectId,collectionIds});await refresh();}catch(e){alert(e.message);}});

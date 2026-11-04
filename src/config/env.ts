@@ -229,6 +229,8 @@ export interface Env {
   ADMIN_DASHBOARD_USER?: string;
   ADMIN_DASHBOARD_PASSWORD?: string;
   ADMIN_SESSION_SECRET?: string;
+  /** Cloudflare account that hosts the private BRVIN retrieval Worker. */
+  BRVIN_HOME_ACCOUNT_ID?: string;
   BOT_OWNER_TELEGRAM_USER_ID?: string;
   ADMIN_TELEGRAM_USER_IDS?: string;
   UNLIMITED_AI_TELEGRAM_USER_IDS?: string;

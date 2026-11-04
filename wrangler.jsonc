@@ -48,6 +48,7 @@
     "AI_CACHED_INPUT_USD_PER_MILLION": "0.075",
     "AI_OUTPUT_USD_PER_MILLION": "3.75",
     "ADMIN_DASHBOARD_USER": "admin",
+    "BRVIN_HOME_ACCOUNT_ID": "b34a6c0b7221454c5db977fe61ddf759",
     "UNLIMITED_AI_TELEGRAM_USER_IDS": ""
   },
   "ai_search_namespaces": [
@@ -122,6 +123,7 @@
     // Never point this DB at parmar-ai-admin-prod or a different application's database.
     "vars": {
       "APP_VERSION": "2.8.0-preview",
+      "BRVIN_HOME_ACCOUNT_ID": "",
       "ENVIRONMENT": "preview",
       "FATMAN_ENABLED": "false",
       "DAILY_QUESTION_LIMIT": "20"
