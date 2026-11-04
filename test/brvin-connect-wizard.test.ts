@@ -68,13 +68,16 @@ class MemoryD1 {
       return this.environments.find(row => row.id === values[0]) ?? null;
     }
     if (sql.includes("brvin_application_project_grants")) {
-      const hasProjectSelector = sql.includes("g.project_id=?");
-      const applicationId = String(values[hasProjectSelector ? 1 : 0]);
-      const projectId = hasProjectSelector ? String(values[0]) : null;
+      const boundStrings = values.map(value => String(value));
+      const applicationId = boundStrings.find(value => this.grants.some(row => row.application_id === value));
+      const projectId = sql.includes("g.project_id=?")
+        ? boundStrings.find(value => this.grants.some(row => row.project_id === value))
+        : undefined;
+      if (!applicationId) return null;
       return this.grants.find(row =>
         row.application_id === applicationId &&
         row.status === "active" &&
-        (projectId === null || row.project_id === projectId)
+        (projectId === undefined || row.project_id === projectId)
       ) ?? null;
     }
     return null;
@@ -430,6 +433,7 @@ describe("BRVIN Connect Application wizard", () => {
 
     const response = await provisionBrvinTestClientAccessToken(env(db), request("https://parmar.example/admin/api/brvin/connect/test-access-token", {}));
     const body = await response.json() as { ok: boolean; testerToken?: string; runtimeIdentityVerified?: boolean; verifiedProjectId?: string };
+    expect(db.statements.some(sql => sql.includes("g.project_id=?") && sql.includes("brvin-text-test-client") || sql.includes("g.project_id=?"))).toBe(true);
     expect(response.status, JSON.stringify(body)).toBe(201);
     expect(body.ok).toBe(true);
     expect(body.runtimeIdentityVerified).toBe(true);
