@@ -141,5 +141,56 @@ describe("shared per-student question tracking", () => {
     expect(result.profile.targetExam).toBe("SSC CGL");
     expect(result.profile.recentTopics).toContain("Important Reports");
     expect(result.profile.recentSubjects).toContain("economy");
+
+    // A second successfully answered Fatman question is still tracked even
+    // when it is outside the SSC topic profile. It must not pollute study topics.
+    const secondUpdateId = updateId + 1;
+    const secondQueueId = `fatman-out-of-scope-${chatId}`;
+    await call({
+      action: "begin",
+      botConnectionId,
+      updateId: secondUpdateId,
+      chatId,
+      telegramUserId: chatId,
+      question: "Explain this unrelated page section.",
+      messageId: 2,
+      requestId: `fatman-profile-out-of-scope-${chatId}`,
+      createdAt: Date.now(),
+      requestedQuizCount: 1,
+      fatmanModeSnapshot: true,
+    });
+    const secondClaim = await call<{ claimed: boolean; leaseVersion?: number }>({
+      action: "claim",
+      botConnectionId,
+      updateId: secondUpdateId,
+      queueMessageId: secondQueueId,
+    });
+    expect(secondClaim.claimed).toBe(true);
+    const outOfScopeUpdate = {
+      action: "update_profile",
+      botConnectionId,
+      updateId: secondUpdateId,
+      queueMessageId: secondQueueId,
+      leaseVersion: secondClaim.leaseVersion,
+      question: "Explain this unrelated page section.",
+      topic: "Unrelated",
+      subject: "other",
+      profileSignal: "neutral",
+      nextRevisionTopic: "",
+      detectedExam: "",
+      answerScope: "out_of_scope",
+      questionMode: "concept",
+    };
+    await call(outOfScopeUpdate);
+    await call(outOfScopeUpdate);
+
+    const afterSecond = await call<{ profile: {
+      questionCount: number;
+      recentTopics: string[];
+      recentSubjects: string[];
+    } }>({ action: "get_profile" });
+    expect(afterSecond.profile.questionCount).toBe(2);
+    expect(afterSecond.profile.recentTopics).toEqual(["Important Reports"]);
+    expect(afterSecond.profile.recentSubjects).toEqual(["economy"]);
   });
 });
