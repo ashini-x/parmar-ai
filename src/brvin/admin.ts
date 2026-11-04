@@ -592,30 +592,67 @@ export async function startBrvinBookUpload(env: Env, request: Request): Promise<
 
 export async function createBrvinProject(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { name?: unknown; description?: unknown };
+  let body: { name?: unknown; description?: unknown; applicationId?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project details." }, 400); }
   const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId : "";
   const slug = slugify(name);
   if (!name || !slug) return json({ ok: false, error: "Enter a valid project name." }, 400);
+  if (applicationId && !/^[a-f0-9-]{36}$/iu.test(applicationId)) {
+    return json({ ok: false, error: "Select a valid application." }, 400);
+  }
   try {
     await ensureAnalyticsSchema(env);
+    let application: { id: string; slug: string; status: string } | null = null;
+    if (applicationId) {
+      application = await env.DB.prepare(
+        "SELECT id,slug,status FROM brvin_applications WHERE id=?"
+      ).bind(applicationId).first<{ id: string; slug: string; status: string }>();
+      if (!application) return json({ ok: false, error: "Application not found." }, 404);
+      if (application.status !== "active") return json({ ok: false, error: "Choose an active application." }, 409);
+    }
+
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
-    await env.DB.batch([
+    const statements = [
       env.DB.prepare(
         "INSERT INTO brvin_projects (id,name,slug,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
       ).bind(id, name, slug, description, now, now),
-      env.DB.prepare(
+    ];
+    if (applicationId) {
+      // New application-owned projects use the v2 grant model only. Do not
+      // create a legacy v1 client mapping for a v2 application association.
+      statements.push(env.DB.prepare(
+        "INSERT INTO brvin_application_project_grants " +
+        "(id,application_id,project_id,status,created_at,created_by) " +
+        "SELECT ?,a.id,p.id,'active',?,'admin-dashboard' " +
+        "FROM brvin_applications a JOIN brvin_projects p ON p.id=? AND p.status='active' " +
+        "WHERE a.id=? AND a.status='active'"
+      ).bind(crypto.randomUUID().toLowerCase(), now, id, applicationId));
+    } else {
+      // Preserve the original v1 service-client flow for legacy administrators.
+      statements.push(env.DB.prepare(
         "INSERT INTO brvin_service_clients (client_id,project_id,created_at,updated_at) VALUES (?,?,?,?)"
-      ).bind(slug, id, now, now),
-    ]);
+      ).bind(slug, id, now, now));
+    }
+    const results = await env.DB.batch(statements);
+    if (results.some(result => !result.success)) {
+      throw new Error("D1 did not confirm project creation and its application association.");
+    }
     await recordBrvinActivity(env, {
       projectId: id, agent: "BRVIN access control", phase: "governance",
       eventType: "project.created", status: "completed",
-      message: "A new project and its default private Worker identity were created. It has no knowledge access until sources are assigned.",
-      details: { serviceClientId: slug },
+      message: applicationId
+        ? "A new project was created and explicitly granted to its selected BRVIN application. It has no knowledge access until sources are assigned."
+        : "A legacy project and its default private Worker identity were created. It has no knowledge access until sources are assigned.",
+      details: applicationId
+        ? { applicationId, applicationSlug: application?.slug, accessModel: "application-project-grant" }
+        : { serviceClientId: slug, accessModel: "legacy-v1-client" },
     });
-    return json({ ok: true, project: { id, name, slug, description } }, 201);
+    return json({
+      ok: true,
+      project: { id, name, slug, description, ...(applicationId ? { applicationId } : {}) },
+    }, 201);
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
