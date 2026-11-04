@@ -321,10 +321,10 @@ The test Worker uses its own registered BRVIN application and environment identi
 Provision the test application's registry rows and isolated project/grant through the protected BRVIN administration workflow as soon as M5 supports that lifecycle. Until then, build and validate the Worker locally with mocked RPC contracts; do not hard-code a fabricated environment ID or insert ad-hoc production D1 rows merely to make the demo work.
 
 Acceptance:
-1. Separate Worker builds and deploys independently; production AskMoina Voice deployment and behavior remain unchanged.
-2. Its UI loads and its backend lists only the test application's authorised projects.
-3. Semantic retrieval and exact-page retrieval return grounded passages and correct physical PDF citations.
-4. An ungranted project is denied before search/quota reservation; a revoked grant is denied on the next call.
+1. The separate Worker config, entrypoint, UI and independent deployment workflow build without affecting production AskMoina Voice.
+2. Local/CI contract tests prove the backend lists only projects returned by the test application's mocked trusted identity and renders exact provenance.
+3. Semantic retrieval and exact-page retrieval are wired through the server-side connector; live deployment waits until M5 provisions the real test identity and isolated project.
+4. An ungranted project is denied before search/quota reservation; a revoked grant is denied on the next call in the later live acceptance.
 5. Empty/no-source, inactive project, quota, timeout and service-unavailable cases render clear status and never fall back to unrestricted search.
 6. The browser cannot access the Service Binding or choose caller identity.
 7. The existing AskMoina Voice BRVIN integration remains an optional second consumer/pilot. Do not keep changing its camera, audio, Live continuity or latency harness to close M4.
@@ -342,7 +342,7 @@ Test at minimum:
 1. Use the independent BRVIN text test Worker as the first controlled consumer.
 2. Connect a synthetic second application through the automated wizard; existing AskMoina Voice is an optional pilot, not a prerequisite.
 3. One app with multiple projects.
-3. One project deliberately shared across multiple apps.
+4. One project deliberately shared across multiple apps.
 4. Multiple PDFs and collections.
 5. Direct and collection grants.
 6. Readiness and page-level citations.
