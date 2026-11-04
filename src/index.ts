@@ -1960,7 +1960,7 @@ function creatorContactPage(): Response {
       font-synthesis: none;
       text-rendering: optimizeLegibility;
       -webkit-font-smoothing: antialiased;
-      /* Shared responsive rails: narrow on phones, capped on larger screens. */
+      /* Shared vertical rails: fluid on phones, capped on larger displays. */
       --content-rail-width: min(62vw, 420px);
     }
 
@@ -1996,8 +1996,8 @@ function creatorContactPage(): Response {
       min-width: 0;
       margin-inline: auto;
       flex-direction: column;
-      align-items: center;
-      text-align: center;
+      align-items: stretch;
+      text-align: left;
     }
 
     main > * {
@@ -2099,32 +2099,32 @@ function creatorContactPage(): Response {
     h1 {
       width: 100%;
       margin: 0;
-      overflow-wrap: anywhere;
-      font-size: clamp(23px, 6.8vw, 36px);
+      font-size: 40px;
       font-weight: 620;
       letter-spacing: -.055em;
       line-height: 1.08;
-      text-wrap: balance;
+      text-align: left;
+      white-space: nowrap;
     }
 
     .intro {
       width: 100%;
       margin: 10px 0 28px;
       color: #777772;
-      font-size: clamp(13px, 3.9vw, 15px);
+      font-size: 15px;
       line-height: 1.5;
       letter-spacing: -.01em;
-      text-wrap: balance;
+      text-align: left;
     }
 
     .contact-button {
       display: flex;
-      width: min(100%, 280px);
+      width: 100%;
       min-height: 58px;
       align-items: center;
       justify-content: center;
       gap: 12px;
-      padding: 0 18px;
+      padding: 0 22px;
       border: 1px solid #171717;
       border-radius: 999px;
       background: #171717;
@@ -2157,7 +2157,8 @@ function creatorContactPage(): Response {
     }
 
     .contact-details {
-      width: min(100%, 340px);
+      width: 100%;
+      min-width: 0;
       margin-top: 25px;
       padding: 22px 20px 18px;
       border: 1px solid #ffffffdc;
@@ -2203,8 +2204,7 @@ function creatorContactPage(): Response {
     .email-address {
       min-width: 0;
       overflow-wrap: anywhere;
-      text-align: left;
-      font-size: clamp(10px, 3.1vw, 13px);
+      font-size: clamp(10px, 3.4vw, 13px);
       letter-spacing: -.02em;
     }
 
@@ -2247,43 +2247,81 @@ function creatorContactPage(): Response {
       50% { box-shadow: 0 12px 34px #25251f12, 0 2px 6px #25251f09; }
     }
 
-    /* On narrow phones, stack the trust content instead of overflowing the rails. */
+    /* Keep the original avatar row; scale it rather than stacking it on phones. */
     @media (max-width: 520px) {
       .trust-badge {
-        min-height: 0;
-        flex-direction: column;
-        gap: 5px;
-        margin-bottom: 30px;
-        padding: 11px 12px 12px;
-        border-radius: 25px;
-      }
-
-      .trust-copy {
-        max-width: 100%;
-        white-space: normal;
-        font-size: 12px;
-        line-height: 1.3;
-        text-align: center;
+        gap: 9px;
+        padding: 8px 10px;
       }
 
       .avatar {
-        width: 39px;
-        height: 39px;
+        width: 34px;
+        height: 34px;
       }
 
       .avatar + .avatar {
-        margin-left: -12px;
+        margin-left: -10px;
+      }
+
+      .avatar svg {
+        width: 21px;
+        height: 21px;
+      }
+
+      .trust-copy {
+        font-size: 12px;
+        letter-spacing: -.03em;
       }
     }
 
-    /* Very narrow split-screen / compact webviews get usable side gutters. */
-    @media (max-width: 280px) {
-      main {
-        width: calc(100vw - 32px);
+    @media (max-width: 360px) {
+      :root {
+        --content-rail-width: min(68vw, 420px);
+      }
+
+      .trust-badge {
+        gap: 6px;
+        padding-inline: 8px;
+      }
+
+      .avatar {
+        width: 28px;
+        height: 28px;
+      }
+
+      .avatar + .avatar {
+        margin-left: -9px;
+      }
+
+      .avatar svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .trust-copy {
+        font-size: 10px;
+      }
+
+      h1 {
+        font-size: 34px;
       }
 
       .contact-details {
         padding-inline: 12px;
+      }
+    }
+
+    @media (max-width: 260px) {
+      :root {
+        --content-rail-width: min(78vw, 420px);
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      .trust-copy {
+        font-size: 9px;
       }
     }
 
