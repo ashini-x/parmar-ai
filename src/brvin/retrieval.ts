@@ -1,4 +1,4 @@
-import type { AiSearchChunk, Env } from "../config/env";
+import type { AiSearchChunk, BrvinRemotePageImage, Env } from "../config/env";
 import { ensureAnalyticsSchema } from "../analytics/db";
 import { parseFatmanIndexPageKey } from "../fatman/library";
 
@@ -11,6 +11,9 @@ const MAX_PASSAGE_CHARS = 4_500;
 const MAX_RAW_PASSAGE_CHARS = 60_000;
 const EXCERPT_WINDOW_CHARS = 1_100;
 const EXCERPT_WINDOW_STEP = 550;
+const MAX_EXACT_PAGE_NUMBERS = 3;
+const MAX_EXACT_PAGE_TEXT_BYTES = 60_000;
+const MAX_EXACT_PAGE_IMAGE_BYTES = 2_000_000;
 
 // Prefer BRVIN-native bindings in brvin-service. The legacy Fatman names remain
 // supported only for the existing parmar-ai admin/QA paths during this migration.
@@ -46,6 +49,7 @@ export interface BrvinProjectContext {
   passages: BrvinPassage[];
   searchedSources: number;
   searchCount: number;
+  pageImages?: BrvinRemotePageImage[];
 }
 
 export interface BrvinSource {
@@ -216,6 +220,138 @@ export async function getBrvinProjectSources(
   return result.results ?? [];
 }
 
+
+/**
+ * Resolve an explicitly requested PDF page directly from AI Search item
+ * storage. Candidate keys are created only beneath a D1-authorised source
+ * prefix, then the exact returned key and parsed page number are verified.
+ */
+async function readBoundedStream(stream: ReadableStream<Uint8Array>, maxBytes: number): Promise<Uint8Array | null> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const step = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += step) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + step)));
+  }
+  return btoa(binary);
+}
+
+function exactPageKeys(source: BrvinSource, page: number): string[] {
+  const filename = "page-" + String(page).padStart(6, "0");
+  const extensions = source.search_prefix === "fatman/pages/" ? ["jpg", "jpeg", "txt"] : ["txt"];
+  return extensions.map((extension) => source.search_prefix + filename + "." + extension);
+}
+
+async function retrieveExplicitBookPages(
+  instance: {
+    items: {
+      list(options?: { page?: number; per_page?: number; search?: string }): Promise<{
+        result: Array<{ id: string; key: string; status: string; metadata?: Record<string, unknown> }>;
+      }>;
+      get(itemId: string): {
+        download(): Promise<{ contentType: string; size: number; body: ReadableStream<Uint8Array> }>;
+      };
+    };
+  },
+  sources: BrvinSource[],
+  pageNumbers: number[],
+): Promise<{ passages: BrvinPassage[]; pageImages: BrvinRemotePageImage[] }> {
+  const passages: BrvinPassage[] = [];
+  const pageImages: BrvinRemotePageImage[] = [];
+  const seen = new Set<string>();
+
+  for (const page of pageNumbers.slice(0, MAX_EXACT_PAGE_NUMBERS)) {
+    for (const source of sources) {
+      if (!Number.isSafeInteger(page) || page < 1 || page > source.page_count) continue;
+      for (const key of exactPageKeys(source, page)) {
+        let listed: { result: Array<{ id: string; key: string; status: string; metadata?: Record<string, unknown> }> };
+        try {
+          listed = await instance.items.list({ page: 1, per_page: 10, search: key });
+        } catch {
+          continue;
+        }
+        const item = (listed.result ?? []).find((candidate) =>
+          candidate.key === key && candidate.status === "completed" && !seen.has(candidate.id),
+        );
+        if (!item) continue;
+
+        const parsed = parseFatmanIndexPageKey(item.key);
+        if (!parsed || parsed.page !== page) continue;
+        if (parsed.bookId && parsed.bookId !== source.id) continue;
+        if (!parsed.bookId && (source.id !== "fatman-legacy-538" || source.search_prefix !== "fatman/pages/")) continue;
+
+        let downloaded: { contentType: string; size: number; body: ReadableStream<Uint8Array> };
+        try {
+          downloaded = await instance.items.get(item.id).download();
+        } catch {
+          continue;
+        }
+
+        const isImage = /\.(?:jpe?g)$/iu.test(item.key);
+        const bytes = await readBoundedStream(downloaded.body, isImage ? MAX_EXACT_PAGE_IMAGE_BYTES : MAX_EXACT_PAGE_TEXT_BYTES);
+        if (!bytes?.byteLength) continue;
+
+        let text = "";
+        if (isImage) {
+          const contentType = downloaded.contentType.toLowerCase();
+          const mimeType = contentType === "image/png" ? "image/png" : contentType === "image/webp" ? "image/webp" : "image/jpeg";
+          pageImages.push({ mimeType, data: bytesToBase64(bytes), byteLength: bytes.byteLength });
+          text = "[Full scanned PDF page attached for visual reading.]";
+        } else {
+          text = cleanEvidenceText(new TextDecoder().decode(bytes)).slice(0, MAX_PASSAGE_CHARS);
+          if (!text) continue;
+        }
+
+        const printedPage = cleanMetadataText(item.metadata?.printedPage, 20);
+        const section = cleanMetadataText(item.metadata?.section, 120);
+        passages.push({
+          id: item.id,
+          bookId: source.id,
+          bookTitle: source.title,
+          pdfPage: page,
+          ...(printedPage ? { printedPage } : {}),
+          ...(section ? { section } : {}),
+          text,
+          score: 1,
+        });
+        seen.add(item.id);
+        break;
+      }
+      if (passages.length >= MAX_PAGES || pageImages.length >= MAX_EXACT_PAGE_NUMBERS) break;
+    }
+    if (passages.length >= MAX_PAGES || pageImages.length >= MAX_EXACT_PAGE_NUMBERS) break;
+  }
+
+  return { passages, pageImages };
+}
+
 /**
  * Search an already-resolved project. The authorised folders are applied by
  * AI Search before retrieval; every result is then checked again against the
@@ -226,6 +362,7 @@ export async function retrieveBrvinProjectContextForProject(
   project: BrvinProjectIdentity,
   queries: string[],
   resolvedSources?: BrvinSource[],
+  requestedPageNumbers: number[] = [],
 ): Promise<BrvinProjectContext> {
   const searchNamespace = env.BRVIN_SEARCH ?? env.FATMAN_SEARCH;
   const searchInstanceName = env.BRVIN_SEARCH_INSTANCE ?? env.FATMAN_INSTANCE_NAME;
@@ -235,14 +372,17 @@ export async function retrieveBrvinProjectContextForProject(
   }
 
   const normalizedQueries = normalizeQueries(queries);
-  if (!normalizedQueries.length) {
-    throw new BrvinRetrievalError("BRVIN search query is empty.");
+  const pageNumbers = [...new Set(requestedPageNumbers.filter((page) =>
+    Number.isSafeInteger(page) && page > 0 && page <= 100_000,
+  ))].slice(0, MAX_EXACT_PAGE_NUMBERS);
+  if (!normalizedQueries.length && !pageNumbers.length) {
+    throw new BrvinRetrievalError("BRVIN search query or an explicit page number is required.");
   }
 
   try {
     const sources = resolvedSources ?? await getBrvinProjectSources(env, project.id);
     if (!sources.length) {
-      return { project, passages: [], searchedSources: 0, searchCount: 0 };
+      return { project, passages: [], pageImages: [], searchedSources: 0, searchCount: 0 };
     }
 
     const prefixes = [...new Set(sources.map((source) => source.search_prefix))];
@@ -251,6 +391,23 @@ export async function retrieveBrvinProjectContextForProject(
     }
     const prefixSources = [...sources].sort((a, b) => b.search_prefix.length - a.search_prefix.length);
     const instance = searchNamespace.get(searchInstanceName.trim());
+
+    if (pageNumbers.length) {
+      const exact = await retrieveExplicitBookPages(instance, prefixSources, pageNumbers);
+      if (exact.passages.length) {
+        return {
+          project,
+          passages: exact.passages,
+          pageImages: exact.pageImages,
+          searchedSources: new Set(exact.passages.map((passage) => passage.bookId)).size,
+          searchCount: 0,
+        };
+      }
+      if (!normalizedQueries.length) {
+        return { project, passages: [], pageImages: [], searchedSources: sources.length, searchCount: 0 };
+      }
+    }
+
     const settled = await Promise.allSettled(normalizedQueries.map(async (query) => {
       const result = await instance.search({
         messages: [{ role: "user", content: query }],
@@ -350,6 +507,7 @@ export async function retrieveBrvinProjectContextForProject(
     return {
       project,
       passages,
+      pageImages: [],
       searchedSources: sources.length,
       searchCount: successful.length,
     };

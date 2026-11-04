@@ -21,6 +21,7 @@ export interface AiSearchItem {
   chunks_count?: number;
   error?: string;
   file_size?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface AiSearchInstance {
@@ -93,6 +94,12 @@ export interface BrvinRemotePassage {
   score: number;
 }
 
+export interface BrvinRemotePageImage {
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  data: string;
+  byteLength: number;
+}
+
 export interface BrvinServiceFailure {
   ok: false;
   code: string;
@@ -109,6 +116,7 @@ export type BrvinServiceRetrievalResult =
   | {
       ok: true;
       passages: BrvinRemotePassage[];
+      pageImages?: BrvinRemotePageImage[];
       searchedSources: number;
       searchCount: number;
     }
@@ -116,7 +124,7 @@ export type BrvinServiceRetrievalResult =
 
 export interface BrvinServiceBinding {
   getProjectStatus(): Promise<BrvinServiceStatusResult>;
-  retrieveProjectContext(input: { queries: string[] }): Promise<BrvinServiceRetrievalResult>;
+  retrieveProjectContext(input: { queries: string[]; pageNumbers?: number[] }): Promise<BrvinServiceRetrievalResult>;
 }
 
 export interface Env {

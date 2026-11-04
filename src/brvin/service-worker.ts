@@ -14,7 +14,7 @@ export class BrvinRetrievalApi extends WorkerEntrypoint<BrvinServiceEnv, BrvinSe
     return getBrvinProjectStatusForClient(this.env, this.ctx.props?.clientId ?? "");
   }
 
-  async retrieveProjectContext(input: { queries?: unknown }) {
+  async retrieveProjectContext(input: { queries?: unknown; pageNumbers?: unknown }) {
     return retrieveBrvinForClient(this.env, this.ctx.props?.clientId ?? "", input);
   }
 }
