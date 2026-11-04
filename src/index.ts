@@ -42,7 +42,7 @@ import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin
 import { completeFatmanUpload, diagnoseFatmanGcsUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 import { archiveBrvinBook, assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview } from "./brvin/admin";
-import { brvinApplications, createBrvinApplication, createBrvinEnvironment, setBrvinApplicationStatus, setBrvinEnvironmentStatus, setBrvinProjectGrant, setBrvinProjectStatus } from "./brvin/application-admin";
+import { brvinApplications, createBrvinApplication, createBrvinEnvironment, setBrvinApplicationStatus, setBrvinEnvironmentStatus, setBrvinProjectGrant, setBrvinProjectStatus, updateBrvinProject, testBrvinProjectKnowledge } from "./brvin/application-admin";
 import { runBrvinRecoverySupervisor, runBrvinVisionRetentionSupervisor } from "./fatman/workflow";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
@@ -2220,6 +2220,8 @@ const worker = {
           if (adminApiPath === "/admin/api/brvin/applications/environments/status") return setBrvinEnvironmentStatus(env, request);
           if (adminApiPath === "/admin/api/brvin/applications/project-grants") return setBrvinProjectGrant(env, request);
           if (adminApiPath === "/admin/api/brvin/projects/status") return setBrvinProjectStatus(env, request);
+          if (adminApiPath === "/admin/api/brvin/projects/update") return updateBrvinProject(env, request);
+          if (adminApiPath === "/admin/api/brvin/projects/test-knowledge") return testBrvinProjectKnowledge(env, request);
           if (adminApiPath === "/admin/api/brvin/projects") return createBrvinProject(env, request);
           if (adminApiPath === "/admin/api/brvin/collections") return createBrvinCollection(env, request);
           if (adminApiPath === "/admin/api/brvin/books/assign") return assignBrvinBookProjects(env, request);
