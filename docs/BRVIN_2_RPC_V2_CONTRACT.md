@@ -29,13 +29,12 @@ export interface BrvinServiceProps {
 
 `applicationEnvironmentId` must be looked up in `brvin_application_environments`, joined to `brvin_applications`, and both records must be active. The caller does not send this value to an RPC method.
 
-Identity selection is explicit:
+Identity selection is explicit and method-versioned:
 
-1. If `applicationEnvironmentId` is present, only v2 identity resolution is permitted. Invalid/unknown/inactive identity returns a non-retryable identity failure. Do not fall back to `clientId`.
-2. If `applicationEnvironmentId` is absent, only the explicitly legacy v1 methods may resolve `clientId` through `brvin_service_clients`.
-3. Request input never overrides `ctx.props`. A project UUID is only a selector to be checked against an active application-project grant.
-
-A consumer binding can temporarily contain both properties for controlled migration, but this does not make the two identities interchangeable.
+1. The v2 methods resolve only `ctx.props.applicationEnvironmentId` through the application/environment registry. A missing, malformed, unknown or inactive environment ID returns a non-retryable v2 identity failure. A v2 failure never falls back to `clientId`.
+2. The legacy v1 methods resolve only `ctx.props.clientId` through `brvin_service_clients`. They remain available for consumers that still call the v1 methods.
+3. The method name selects the protocol version. If both props are temporarily present during a controlled migration, a v1 method still resolves only `clientId`, while a v2 method resolves only `applicationEnvironmentId`; neither method silently switches versions.
+4. Request input never overrides `ctx.props`. A project ID is only a selector to be checked against an active application-project grant.
 
 ## 2. Shared TypeScript types
 
@@ -330,7 +329,7 @@ The placeholder above is illustrative only; the admin must read the generated ID
 - Existing project identifier `fatman` remains valid as a v2 selector and maps to the same legacy project row.
 - Unknown, malformed, disabled and revoked environment IDs fail closed.
 - Suspended/revoked application fails closed.
-- A co-present legacy `clientId` does not rescue an invalid v2 environment ID.
+- A co-present legacy `clientId` does not rescue an invalid v2 environment ID, and v2 methods never downgrade to v1.
 - A request body containing `clientId`, `applicationEnvironmentId` or another project ID cannot change caller identity.
 
 ### Project authorisation
