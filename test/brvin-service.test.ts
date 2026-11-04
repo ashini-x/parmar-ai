@@ -26,10 +26,10 @@ describe("BRVIN private application retrieval", () => {
     }));
     return {
       DB: { prepare },
-      FATMAN_SEARCH: { get: () => ({ search }) },
-      FATMAN_INSTANCE_NAME: "shared-index",
-      FATMAN_MIN_SCORE: "0.2",
-      FATMAN_MONTHLY_QUERY_LIMIT: "800",
+      BRVIN_SEARCH: { get: () => ({ search }) },
+      BRVIN_SEARCH_INSTANCE: "shared-index",
+      BRVIN_MIN_SCORE: "0.2",
+      BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT: "800",
     } as any;
   };
 

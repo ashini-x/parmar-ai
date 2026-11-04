@@ -169,8 +169,12 @@ export interface Env {
   FATMAN_GCS_BUCKET?: string;
   FATMAN_IMPORT?: FatmanImportWorkflowBinding;
   FATMAN_SEARCH?: AiSearchNamespace;
-  BRVIN_SERVICE?: BrvinServiceBinding;
+
+  BRVIN_SEARCH?: AiSearchNamespace;
+  BRVIN_SEARCH_INSTANCE?: string;
+  BRVIN_MIN_SCORE?: string;
   BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT?: string;
+  BRVIN_SERVICE?: BrvinServiceBinding;
 }
 
 export const MAX_QUIZ_BATCH_SIZE = 10;

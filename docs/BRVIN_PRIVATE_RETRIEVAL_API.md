@@ -28,12 +28,26 @@ The parmar-ai Worker is registered with clientId "fatman", which resolves to the
 
 ## Search and index
 
-- All projects use the existing AI Search instance fatman-2026-8b183803 in the existing default namespace.
+- All projects use the existing AI Search instance fatman-2026-8b183803 in the existing default namespace. The private Worker exposes it internally through the BRVIN_SEARCH binding.
 - No PDFs, OCR results, pages or search indexes are copied.
 - D1 brvin_books.search_prefix is the authoritative mapping from an allowed book to its indexed folder.
 - AI Search's built-in folder filter is applied with $in before retrieval. Every returned page key is then checked against the authorised prefix set and parsed page key.
-- The fatman_search_usage table is retained for Fatman's existing monthly allowance. Other projects use brvin_project_search_usage with a per-project/month key.
-- The service receives only D1 and AI Search bindings. It does not receive Telegram, Gemini/Vertex, Google Vision or GCS credentials.
+- The fatman_search_usage table is retained for Fatman's existing counter, but its monthly allowance uses BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT like every other project. Other projects use brvin_project_search_usage with a per-project/month key.
+- The service receives only D1 and the BRVIN_SEARCH binding. It does not receive Telegram, Gemini/Vertex, Google Vision or GCS credentials.
+
+## BRVIN Worker configuration
+
+The private brvin-service Worker now uses BRVIN-owned configuration names:
+
+- AI Search binding: BRVIN_SEARCH.
+- Shared AI Search instance variable: BRVIN_SEARCH_INSTANCE.
+- Minimum relevance threshold: BRVIN_MIN_SCORE.
+- Per-project monthly search allowance: BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT.
+- Environment label: ENVIRONMENT.
+
+The current BRVIN_SEARCH_INSTANCE value remains fatman-2026-8b183803 because that is the already-populated shared Cloudflare AI Search resource. Renaming the variable does not rename or recreate the underlying index, so existing indexed books remain available without migration.
+
+The Worker has no application secrets. It does not call Google, Vertex AI, Gemini, Telegram, Google Vision or GCS. Those credentials are not required and must not be copied into this retrieval-only Worker. The legacy FATMAN_* variables and FATMAN_SEARCH binding remain only in parmar-ai for its existing Fatman-specific ingestion and administrative workflows; they are not configured on brvin-service.
 
 ## Deployment
 

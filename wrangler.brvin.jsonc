@@ -21,14 +21,13 @@
   },
   "vars": {
     "ENVIRONMENT": "production",
-    "FATMAN_INSTANCE_NAME": "fatman-2026-8b183803",
-    "FATMAN_MIN_SCORE": "0.2",
-    "FATMAN_MONTHLY_QUERY_LIMIT": "800",
+    "BRVIN_SEARCH_INSTANCE": "fatman-2026-8b183803",
+    "BRVIN_MIN_SCORE": "0.2",
     "BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT": "800"
   },
   "ai_search_namespaces": [
     {
-      "binding": "FATMAN_SEARCH",
+      "binding": "BRVIN_SEARCH",
       "namespace": "default"
     }
   ],
