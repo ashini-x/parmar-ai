@@ -310,3 +310,245 @@ export async function ensureBrvin2ApplicationIdentities(
     throw new Error("BRVIN 2 identity migration marker could not be verified after the seed records were committed.");
   }
 }
+
+
+export const BRVIN2_ASKMOINA_MIGRATION_KEY = "brvin2-askmoina-application-identities-v1";
+
+export const BRVIN2_ASKMOINA_IDENTITIES = {
+  applicationId: "00000000-0000-4000-8000-000000000201",
+  productionEnvironmentId: "00000000-0000-4000-8000-000000000202",
+  previewEnvironmentId: "00000000-0000-4000-8000-000000000203",
+  grantId: "00000000-0000-4000-8000-000000000204",
+  applicationSlug: "askmoina-voice",
+  applicationName: "AskMoina Voice",
+  projectId: "fatman",
+  projectSlug: "fatman",
+} as const;
+
+/**
+ * Register AskMoina as the first additional BRVIN consumer.
+ *
+ * Production and preview environment identities are distinct. The initial
+ * grant is deliberately limited to the only existing ready project, Fatman.
+ * AskMoina's own preview config will not carry a BRVIN Service Binding; the
+ * preview identity is registered for controlled future testing, not to expose
+ * production retrieval to a public preview URL.
+ */
+export async function ensureBrvin2AskMoinaIdentities(
+  db: D1Database,
+  now = Date.now(),
+): Promise<void> {
+  const seed = BRVIN2_ASKMOINA_IDENTITIES;
+  const migration = await db.prepare(
+    "SELECT migration_key FROM brvin_migrations WHERE migration_key = ?",
+  ).bind(BRVIN2_ASKMOINA_MIGRATION_KEY).first<{ migration_key: string }>();
+
+  const [application, environments, grant, project] = await Promise.all([
+    db.prepare(
+      "SELECT id, slug, name, status FROM brvin_applications WHERE id = ? OR slug = ?",
+    ).bind(seed.applicationId, seed.applicationSlug).all<ApplicationRow>(),
+    db.prepare(
+      "SELECT id, application_id, environment_key, status " +
+      "FROM brvin_application_environments WHERE id IN (?, ?) " +
+      "OR (application_id = ? AND environment_key IN ('production', 'preview') AND status = 'active')",
+    ).bind(seed.productionEnvironmentId, seed.previewEnvironmentId, seed.applicationId).all<EnvironmentRow>(),
+    db.prepare(
+      "SELECT id, application_id, project_id, status " +
+      "FROM brvin_application_project_grants WHERE id = ? " +
+      "OR (application_id = ? AND project_id = ? AND status = 'active')",
+    ).bind(seed.grantId, seed.applicationId, seed.projectId).all<GrantRow>(),
+    db.prepare(
+      "SELECT id, slug, status FROM brvin_projects WHERE id = ? OR slug = ?",
+    ).bind(seed.projectId, seed.projectSlug).all<ProjectRow>(),
+  ]);
+
+  const applicationRows = application.results ?? [];
+  const environmentRows = environments.results ?? [];
+  const grantRows = grant.results ?? [];
+  const projectRows = project.results ?? [];
+
+  if (
+    applicationRows.length !== 1 ||
+    applicationRows[0].id !== seed.applicationId ||
+    applicationRows[0].slug !== seed.applicationSlug ||
+    applicationRows[0].name !== seed.applicationName
+  ) {
+    if (migration) {
+      throw new Error("BRVIN 2 AskMoina migration marker exists, but the application identity is missing or mismatched.");
+    }
+    if (applicationRows.length > 0) failConflict("AskMoina application");
+  }
+
+  const expectedEnvironments = [
+    { id: seed.productionEnvironmentId, key: "production" },
+    { id: seed.previewEnvironmentId, key: "preview" },
+  ];
+  if (migration) {
+    for (const expected of expectedEnvironments) {
+      const found = environmentRows.find((row) => row.id === expected.id);
+      if (
+        !found ||
+        found.application_id !== seed.applicationId ||
+        found.environment_key !== expected.key
+      ) {
+        throw new Error("BRVIN 2 AskMoina migration marker exists, but an environment identity is missing or mismatched.");
+      }
+    }
+    if (
+      !grantRows.some((row) =>
+        row.id === seed.grantId &&
+        row.application_id === seed.applicationId &&
+        row.project_id === seed.projectId
+      )
+    ) {
+      throw new Error("BRVIN 2 AskMoina migration marker exists, but its Fatman grant identity is missing or mismatched.");
+    }
+    return;
+  }
+
+  if (
+    projectRows.length !== 1 ||
+    projectRows[0].id !== seed.projectId ||
+    projectRows[0].slug !== seed.projectSlug ||
+    projectRows[0].status !== "active"
+  ) {
+    throw new Error("BRVIN 2 AskMoina registration requires the existing active Fatman project.");
+  }
+
+  const matchingApplication =
+    applicationRows.length === 1 &&
+    applicationRows[0].id === seed.applicationId &&
+    applicationRows[0].slug === seed.applicationSlug &&
+    applicationRows[0].name === seed.applicationName &&
+    applicationRows[0].status === "active";
+  if (applicationRows.length > 0 && !matchingApplication) {
+    failConflict("AskMoina application");
+  }
+
+  for (const expected of expectedEnvironments) {
+    const matches = environmentRows.filter((row) =>
+      row.id === expected.id ||
+      (row.application_id === seed.applicationId &&
+        row.environment_key === expected.key &&
+        row.status === "active")
+    );
+    if (
+      matches.length > 1 ||
+      (matches.length === 1 &&
+        (matches[0].id !== expected.id ||
+          matches[0].application_id !== seed.applicationId ||
+          matches[0].environment_key !== expected.key ||
+          matches[0].status !== "active"))
+    ) {
+      failConflict("AskMoina " + expected.key + " environment");
+    }
+  }
+
+  if (
+    grantRows.length > 1 ||
+    (grantRows.length === 1 &&
+      (grantRows[0].id !== seed.grantId ||
+        grantRows[0].application_id !== seed.applicationId ||
+        grantRows[0].project_id !== seed.projectId ||
+        grantRows[0].status !== "active"))
+  ) {
+    failConflict("AskMoina to Fatman project grant");
+  }
+
+  const seedResults = await db.batch([
+    db.prepare(
+      "INSERT OR IGNORE INTO brvin_applications " +
+      "(id, slug, name, description, status, created_at, updated_at) " +
+      "VALUES (?, ?, ?, ?, 'active', ?, ?)",
+    ).bind(
+      seed.applicationId,
+      seed.applicationSlug,
+      seed.applicationName,
+      "AskMoina Voice application; initial BRVIN access is limited to Fatman.",
+      now,
+      now,
+    ),
+    db.prepare(
+      "INSERT OR IGNORE INTO brvin_application_environments " +
+      "(id, application_id, environment_key, display_name, status, created_at, updated_at) " +
+      "SELECT ?, id, 'production', 'Production', 'active', ?, ? " +
+      "FROM brvin_applications WHERE id = ? AND slug = ? AND status = 'active'",
+    ).bind(seed.productionEnvironmentId, now, now, seed.applicationId, seed.applicationSlug),
+    db.prepare(
+      "INSERT OR IGNORE INTO brvin_application_environments " +
+      "(id, application_id, environment_key, display_name, status, created_at, updated_at) " +
+      "SELECT ?, id, 'preview', 'Preview (not bound to BRVIN)', 'active', ?, ? " +
+      "FROM brvin_applications WHERE id = ? AND slug = ? AND status = 'active'",
+    ).bind(seed.previewEnvironmentId, now, now, seed.applicationId, seed.applicationSlug),
+    db.prepare(
+      "INSERT OR IGNORE INTO brvin_application_project_grants " +
+      "(id, application_id, project_id, status, created_at, created_by) " +
+      "SELECT ?, a.id, p.id, 'active', ?, 'migration' " +
+      "FROM brvin_applications a JOIN brvin_projects p " +
+      "ON p.id = ? AND p.slug = ? AND p.status = 'active' " +
+      "WHERE a.id = ? AND a.slug = ? AND a.status = 'active'",
+    ).bind(seed.grantId, now, seed.projectId, seed.projectSlug, seed.applicationId, seed.applicationSlug),
+  ]);
+  assertBatchSucceeded(seedResults, "AskMoina seed");
+
+  const [seededApplication, seededEnvironments, seededGrants, fk] = await Promise.all([
+    db.prepare(
+      "SELECT id, slug, name, status FROM brvin_applications WHERE id = ? OR slug = ?",
+    ).bind(seed.applicationId, seed.applicationSlug).all<ApplicationRow>(),
+    db.prepare(
+      "SELECT id, application_id, environment_key, status " +
+      "FROM brvin_application_environments WHERE id IN (?, ?)",
+    ).bind(seed.productionEnvironmentId, seed.previewEnvironmentId).all<EnvironmentRow>(),
+    db.prepare(
+      "SELECT id, application_id, project_id, status FROM brvin_application_project_grants WHERE id = ?",
+    ).bind(seed.grantId).all<GrantRow>(),
+    db.prepare("PRAGMA foreign_key_check").all<Record<string, unknown>>(),
+  ]);
+
+  const seededApps = seededApplication.results ?? [];
+  const seededEnvs = seededEnvironments.results ?? [];
+  const seededProjectGrants = seededGrants.results ?? [];
+  if (
+    seededApps.length !== 1 ||
+    seededApps[0].id !== seed.applicationId ||
+    seededApps[0].slug !== seed.applicationSlug ||
+    seededApps[0].name !== seed.applicationName ||
+    seededApps[0].status !== "active"
+  ) failConflict("seeded AskMoina application");
+
+  for (const expected of expectedEnvironments) {
+    const found = seededEnvs.find((row) => row.id === expected.id);
+    if (
+      !found ||
+      found.application_id !== seed.applicationId ||
+      found.environment_key !== expected.key ||
+      found.status !== "active"
+    ) failConflict("seeded AskMoina " + expected.key + " environment");
+  }
+
+  if (
+    seededEnvs.length !== 2 ||
+    seededProjectGrants.length !== 1 ||
+    seededProjectGrants[0].application_id !== seed.applicationId ||
+    seededProjectGrants[0].project_id !== seed.projectId ||
+    seededProjectGrants[0].status !== "active"
+  ) failConflict("seeded AskMoina Fatman grant");
+
+  if ((fk.results ?? []).length > 0) {
+    throw new Error("BRVIN 2 AskMoina migration detected a foreign-key violation; the migration marker was not written.");
+  }
+
+  const markerResults = await db.batch([
+    db.prepare(
+      "INSERT OR IGNORE INTO brvin_migrations (migration_key, applied_at) VALUES (?, ?)",
+    ).bind(BRVIN2_ASKMOINA_MIGRATION_KEY, now),
+  ]);
+  assertBatchSucceeded(markerResults, "AskMoina marker");
+
+  const verifiedMarker = await db.prepare(
+    "SELECT migration_key FROM brvin_migrations WHERE migration_key = ?",
+  ).bind(BRVIN2_ASKMOINA_MIGRATION_KEY).first<{ migration_key: string }>();
+  if (!verifiedMarker) {
+    throw new Error("BRVIN 2 AskMoina migration marker could not be verified.");
+  }
+}
