@@ -187,15 +187,17 @@ describe("BRVIN Connect Application wizard", () => {
   it("creates the application, environment, project and explicit grant as one batch", async () => {
     const db = new MemoryD1();
     const response = await registerBrvinTestConsumer(env(db), request("https://parmar.example/admin/api/brvin/connect/consumer", {
-      applicationName: "BRVIN Text Test Client",
-      applicationDescription: "Isolated consumer",
-      environmentKey: "production",
+      applicationName: "AskMoina Voice",
+      applicationDescription: "Attempted voice identity override",
+      environmentKey: "preview",
       projectName: "BRVIN Text Test Knowledge",
       projectDescription: "No Fatman sharing by default",
     }));
     const body = await response.json() as { application: { id: string; slug: string }; environment: { id: string }; project: { id: string; slug: string } };
     expect(response.status).toBe(201);
     expect(body.application.slug).toBe("brvin-text-test-client");
+    expect(body.application.name).toBe("BRVIN Text Test Client");
+    expect(db.environments[0]).toMatchObject({ environment_key: "production" });
     expect(body.project.slug).toBe("brvin-text-test-knowledge");
     expect(db.applications).toHaveLength(1);
     expect(db.environments).toHaveLength(1);
@@ -203,6 +205,43 @@ describe("BRVIN Connect Application wizard", () => {
     expect(db.grants).toHaveLength(1);
     expect(db.grants[0]).toMatchObject({ application_id: body.application.id, project_id: body.project.id, status: "active" });
     expect(activity).toHaveBeenCalled();
+  });
+
+  it("refuses to attach the independent text Worker to an existing AskMoina Voice identity", async () => {
+    const db = new MemoryD1();
+    db.applications.push({
+      id: "11111111-2222-4333-8444-555555555555",
+      slug: "askmoina-voice",
+      name: "AskMoina Voice",
+      status: "active",
+    });
+    db.environments.push({
+      id: "22222222-3333-4444-8555-666666666666",
+      application_id: "11111111-2222-4333-8444-555555555555",
+      environment_key: "production",
+      status: "active",
+    });
+    db.grants.push({
+      id: "33333333-4444-4555-8666-777777777777",
+      application_id: "11111111-2222-4333-8444-555555555555",
+      project_id: "fatman",
+      status: "active",
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await createBrvinTestClientPullRequest(env(db), request("https://parmar.example/admin/api/brvin/connect/pull-request", {
+      applicationId: "11111111-2222-4333-8444-555555555555",
+      environmentId: "22222222-3333-4444-8555-666666666666",
+      repository: "ashini-x/askmoina-voice",
+      baseBranch: "main",
+    }));
+    const body = await response.json() as { error: string };
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("dedicated BRVIN Text Test Client");
+    expect(body.error).toContain("AskMoina Voice and Parmar AI");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("fails closed for repositories outside the reviewed first adapter", async () => {
