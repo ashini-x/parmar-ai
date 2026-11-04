@@ -1142,7 +1142,7 @@ const HTML = `<!doctype html>
   </div>
   <p class="notice">Before creating a PR, BRVIN checks the GitHub installation can write to the selected repository and Cloudflare OAuth can list the same account that hosts brvin-service. The PR will not be merged or deployed by this wizard.</p>
   <button class="btn primary" id="connect-create-pr" type="button">Create reviewable GitHub PR</button>
-  <button class="btn" id="connect-verify-deployment" type="button">Verify after PR merge and deployment</button>
+  <button class="btn" id="connect-verify-deployment" type="button">Check Worker deployment</button>
   <div class="field"><label for="connect-test-token">One-time text test access token</label><input id="connect-test-token" type="password" readonly autocomplete="off" placeholder="Generate only after the test Worker connection is verified"></div>
   <div class="job-actions"><button class="btn" id="connect-generate-token" type="button">Generate / rotate tester token</button><button class="btn" id="connect-copy-token" type="button">Copy token</button></div>
   <p class="muted">This token only unlocks the test interface. It does not grant BRVIN project access. Project access remains enforced by the private Service Binding.</p>
@@ -1552,7 +1552,9 @@ $("connect-create-pr").addEventListener("click",async()=>{
 $("connect-verify-deployment").addEventListener("click",async()=>{
  try{
   const result=await api(API+"connect/verify");
-  $("connect-result").textContent=result.connected?"Connection verified: brvin-test-client → brvin-service, environment "+result.applicationEnvironmentId+".":"Worker is deployed, but its binding did not match the registered BRVIN identity.";
+  $("connect-result").textContent=result.state==="deployment_ready"
+   ?"Worker deployment and private BRVIN Service Binding are ready. Generate the tester token next; that action performs the live RPC identity check against the dedicated test project."
+   :"Worker deployment status: "+(result.state||"unknown")+".";
  }catch(error){$("connect-result").textContent=error.message;}
 });
 $("connect-generate-token").addEventListener("click",async()=>{
@@ -1563,7 +1565,7 @@ $("connect-generate-token").addEventListener("click",async()=>{
   const result=await post("connect/test-access-token",{});
   $("connect-test-token").type="text";
   $("connect-test-token").value=result.testerToken;
-  $("connect-result").textContent="Tester token installed in Cloudflare. Copy it now; it will not be shown again after this page is refreshed.";
+  $("connect-result").textContent="Live BRVIN RPC identity check passed for the dedicated text-test project. Copy the one-time tester token now; it will not be shown again after this page is refreshed.";
  }catch(error){$("connect-result").textContent=error.message;alert(error.message);}
  finally{$("connect-generate-token").disabled=false;}
 });
