@@ -39,6 +39,10 @@ describe("Fatman page retrieval", () => {
     FATMAN_SEARCH: {
       get: () => ({ search }),
     },
+    BRVIN_SERVICE: {
+      getProjectStatus: vi.fn(),
+      retrieveProjectContext: vi.fn(),
+    },
   } as any;
 
   beforeEach(() => {
@@ -51,56 +55,59 @@ describe("Fatman page retrieval", () => {
       indexedPages: 538,
     });
     analytics.reserveFatmanSearchQuery.mockResolvedValue({ allowed: true, queryCount: 1 });
-    search.mockResolvedValue({
-      chunks: [
-        {
-          id: "page-123-a",
-          text: "Join - @freebookspdf00 The Battle of Plassey took place in 1757.",
-          score: 0.82,
-          item: { key: "fatman/pages/page-000123.jpg", metadata: { printedPage: "17" } },
-        },
-        {
-          id: "page-124-low",
-          text: "A low-scoring unrelated passage.",
-          score: 0.1,
-          item: { key: "fatman/pages/page-000124.jpg" },
-        },
-        {
-          id: "non-fatman",
-          text: "A result from another indexed item.",
-          score: 0.9,
-          item: { key: "other/pages/page-000125.jpg" },
-        },
-      ],
+    env.BRVIN_SERVICE.getProjectStatus.mockResolvedValue({
+      ok: true, ready: true, authorizedSourceCount: 1,
     });
+    env.BRVIN_SERVICE.retrieveProjectContext.mockResolvedValue({
+      ok: true,
+      searchedSources: 1,
+      searchCount: 2,
+      passages: [{
+        id: "page-123-a",
+        bookId: "fatman-legacy-538",
+        bookTitle: "Fatman 2nd Edition",
+        pdfPage: 123,
+        printedPage: "17",
+        text: "The Battle of Plassey took place in 1757.",
+        score: 0.82,
+      }],
+    });
+    search.mockResolvedValue({ chunks: [] });
   });
 
-  it("fails closed unless the configured book version and page count are indexed", async () => {
+  it("fails closed unless the private BRVIN service reports an active project with ready sources", async () => {
     expect(await isFatmanReady(env)).toBe(true);
-    expect(await isFatmanReady({ ...env, FATMAN_ENABLED: "false" })).toBe(false);
-    expect(await isFatmanReady({ ...env, FATMAN_DOCUMENT_VERSION: "another-version" })).toBe(false);
-    expect(await isFatmanReady({ ...env, DB: undefined })).toBe(false);
+    expect(await isFatmanReady({
+      ...env,
+      BRVIN_SERVICE: {
+        getProjectStatus: vi.fn().mockResolvedValue({
+          ok: true, ready: false, authorizedSourceCount: 0,
+        }),
+      },
+    })).toBe(false);
+    expect(await isFatmanReady({ ...env, BRVIN_SERVICE: undefined })).toBe(false);
+    expect(await isFatmanReady({
+      ...env,
+      BRVIN_SERVICE: {
+        getProjectStatus: vi.fn().mockRejectedValue(new Error("RPC unavailable")),
+      },
+    })).toBe(false);
   });
 
-  it("uses hybrid retrieval, filters weak/non-book hits, and preserves the exact PDF page", async () => {
+  it("uses one private RPC with bounded query variants and preserves book/page citations", async () => {
     const context = await retrieveFatmanContext(env, "  Battle   of Plassey ");
 
-    expect(search).toHaveBeenNthCalledWith(1, {
-      messages: [{ role: "user", content: "Battle of Plassey" }],
-      ai_search_options: {
-        retrieval: { max_num_results: 12, retrieval_type: "hybrid" },
-      },
+    expect(env.BRVIN_SERVICE.retrieveProjectContext).toHaveBeenCalledTimes(1);
+    expect(env.BRVIN_SERVICE.retrieveProjectContext).toHaveBeenCalledWith({
+      queries: ["Battle of Plassey", "Battle Plassey"],
     });
-    expect(search).toHaveBeenNthCalledWith(2, {
-      messages: [{ role: "user", content: "Battle Plassey" }],
-      ai_search_options: {
-        retrieval: { max_num_results: 12, retrieval_type: "hybrid" },
-      },
-    });
-    expect(analytics.reserveFatmanSearchQuery).toHaveBeenCalledWith(env, 800);
+    expect(search).not.toHaveBeenCalled();
+    expect(analytics.reserveFatmanSearchQuery).not.toHaveBeenCalled();
     expect(context.passages).toEqual([
       expect.objectContaining({
         id: "page-123-a",
+        bookId: "fatman-legacy-538",
+        bookTitle: "Fatman 2nd Edition",
         pdfPage: 123,
         printedPage: "17",
         text: "The Battle of Plassey took place in 1757.",
@@ -112,23 +119,20 @@ describe("Fatman page retrieval", () => {
     );
   });
 
-  it("retrieves only a verified additional book and cites its own title", async () => {
+  it("retrieves and cites an additional BRVIN book supplied by the authorised project", async () => {
     const bookId = "11111111-2222-4333-8444-555555555555";
-    readyBookRows.push({ id: bookId, title: "Polity Reference" });
-    analytics.getFatmanBookState.mockResolvedValue({
-      enabled: false,
-      documentVersion: "fatman-test-v1",
-      indexedPages: 0,
-    });
-    search.mockResolvedValue({
-      chunks: [{
+    env.BRVIN_SERVICE.retrieveProjectContext.mockResolvedValueOnce({
+      ok: true,
+      searchedSources: 1,
+      searchCount: 1,
+      passages: [{
         id: "polity-page-7",
+        bookId,
+        bookTitle: "Polity Reference",
+        pdfPage: 7,
+        printedPage: "4",
         text: "Fundamental rights are guaranteed by Part III of the Indian Constitution.",
         score: 0.91,
-        item: {
-          key: "vrain/books/" + bookId + "/pages/page-000007.txt",
-          metadata: { bookId, bookTitle: "Polity Reference" },
-        },
       }],
     });
 
@@ -138,15 +142,22 @@ describe("Fatman page retrieval", () => {
       expect.objectContaining({
         id: "polity-page-7",
         pdfPage: 7,
+        printedPage: "4",
         bookId,
         bookTitle: "Polity Reference",
       }),
     ]);
-    expect(formatFatmanCitations(context.passages)).toBe("Source: Polity Reference, PDF p. 7.");
+    expect(formatFatmanCitations(context.passages)).toBe("Source: Polity Reference, PDF p. 7 (book p. 4).");
   });
 
-  it("does not query AI Search after the monthly search allowance is exhausted", async () => {
-    analytics.reserveFatmanSearchQuery.mockResolvedValueOnce({ allowed: false, queryCount: 800 });
+  it("surfaces the BRVIN project's monthly search allowance without falling back to local search", async () => {
+    env.BRVIN_SERVICE.retrieveProjectContext.mockResolvedValueOnce({
+      ok: false,
+      code: "MONTHLY_LIMIT_REACHED",
+      message: "The project's monthly BRVIN search allowance has been reached.",
+      retryable: false,
+      userMessage: "Fatman search has reached this month's free usage limit. Use /help to return to usual study mode.",
+    });
 
     await expect(retrieveFatmanContext(env, "Plassey")).rejects.toMatchObject({
       name: "FatmanRetrievalError",
@@ -168,6 +179,14 @@ describe("Fatman page retrieval", () => {
   });
 
   it("runs internal QA retrieval without consuming a student's monthly search allowance", async () => {
+    search.mockResolvedValue({
+      chunks: [{
+        id: "page-123-a",
+        text: "Join - @freebookspdf00 The Battle of Plassey took place in 1757.",
+        score: 0.82,
+        item: { key: "fatman/pages/page-000123.jpg", metadata: { printedPage: "17" } },
+      }],
+    });
     const context = await retrieveFatmanQaContext(env, "Battle of Plassey 1757");
     expect(search).toHaveBeenNthCalledWith(1, {
       messages: [{ role: "user", content: "Battle of Plassey 1757" }],
@@ -249,8 +268,8 @@ describe("Fatman page retrieval", () => {
     expect(citation).toContain("PDF p. 218");
   });
 
-  it("fails closed when the D1 book state cannot be read", async () => {
-    analytics.getFatmanBookState.mockRejectedValueOnce(new Error("D1 unavailable"));
+  it("fails closed when the private BRVIN project status cannot be read", async () => {
+    env.BRVIN_SERVICE.getProjectStatus.mockRejectedValueOnce(new Error("RPC unavailable"));
     await expect(isFatmanReady(env)).resolves.toBe(false);
     expect(search).not.toHaveBeenCalled();
   });

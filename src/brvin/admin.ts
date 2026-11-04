@@ -601,13 +601,19 @@ export async function createBrvinProject(env: Env, request: Request): Promise<Re
   try {
     await ensureAnalyticsSchema(env);
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
-    await env.DB.prepare(
-      "INSERT INTO brvin_projects (id,name,slug,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
-    ).bind(id, name, slug, description, now, now).run();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO brvin_projects (id,name,slug,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
+      ).bind(id, name, slug, description, now, now),
+      env.DB.prepare(
+        "INSERT INTO brvin_service_clients (client_id,project_id,created_at,updated_at) VALUES (?,?,?,?)"
+      ).bind(slug, id, now, now),
+    ]);
     await recordBrvinActivity(env, {
       projectId: id, agent: "BRVIN access control", phase: "governance",
       eventType: "project.created", status: "completed",
-      message: "A new project identity was created. It has no knowledge access until sources are assigned.",
+      message: "A new project and its default private Worker identity were created. It has no knowledge access until sources are assigned.",
+      details: { serviceClientId: slug },
     });
     return json({ ok: true, project: { id, name, slug, description } }, 201);
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }

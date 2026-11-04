@@ -31,6 +31,9 @@ export interface AiSearchInstance {
       retrieval?: {
         max_num_results?: number;
         retrieval_type?: "vector" | "keyword" | "hybrid";
+        filters?: {
+          folder?: string | { $in?: string[]; $gte?: string; $lt?: string };
+        };
       };
     };
   }): Promise<{ chunks?: AiSearchChunk[] }>;
@@ -77,6 +80,43 @@ export interface FatmanImportWorkflowInstance {
 export interface FatmanImportWorkflowBinding {
   create(options: { id: string; params: FatmanImportWorkflowParams }): Promise<FatmanImportWorkflowInstance>;
   get(id: string): Promise<FatmanImportWorkflowInstance>;
+}
+
+export interface BrvinRemotePassage {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  pdfPage: number;
+  printedPage?: string;
+  section?: string;
+  text: string;
+  score: number;
+}
+
+export interface BrvinServiceFailure {
+  ok: false;
+  code: string;
+  message: string;
+  retryable: boolean;
+  userMessage?: string;
+}
+
+export type BrvinServiceStatusResult =
+  | { ok: true; ready: boolean; authorizedSourceCount: number }
+  | BrvinServiceFailure;
+
+export type BrvinServiceRetrievalResult =
+  | {
+      ok: true;
+      passages: BrvinRemotePassage[];
+      searchedSources: number;
+      searchCount: number;
+    }
+  | BrvinServiceFailure;
+
+export interface BrvinServiceBinding {
+  getProjectStatus(): Promise<BrvinServiceStatusResult>;
+  retrieveProjectContext(input: { queries: string[] }): Promise<BrvinServiceRetrievalResult>;
 }
 
 export interface Env {
@@ -129,6 +169,8 @@ export interface Env {
   FATMAN_GCS_BUCKET?: string;
   FATMAN_IMPORT?: FatmanImportWorkflowBinding;
   FATMAN_SEARCH?: AiSearchNamespace;
+  BRVIN_SERVICE?: BrvinServiceBinding;
+  BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT?: string;
 }
 
 export const MAX_QUIZ_BATCH_SIZE = 10;

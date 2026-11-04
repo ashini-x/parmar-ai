@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "brvin-service",
+  "main": "src/brvin/service-worker.ts",
+  "compatibility_date": "2026-10-05",
+  "workers_dev": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "vars": {
+    "ENVIRONMENT": "production",
+    "FATMAN_INSTANCE_NAME": "fatman-2026-8b183803",
+    "FATMAN_MIN_SCORE": "0.2",
+    "FATMAN_MONTHLY_QUERY_LIMIT": "800",
+    "BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT": "800"
+  },
+  "ai_search_namespaces": [
+    {
+      "binding": "FATMAN_SEARCH",
+      "namespace": "default"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "parmar-ai-admin-prod",
+      "database_id": "1c033fb8-10aa-4bee-a294-4dbc899c09f7"
+    }
+  ]
+}

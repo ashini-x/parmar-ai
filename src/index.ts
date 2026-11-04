@@ -690,12 +690,6 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   const fatmanState = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId });
   const fatmanModeSnapshot = fatmanState.active === true;
-  if (fatmanModeSnapshot && !(await isFatmanReady(env))) {
-    await jobStoreRequest(env, chatId, { action: "set_fatman_mode", botConnectionId: bot.connectionId, active: false }).catch(() => undefined);
-    await bestEffortTelegram("fatman_unavailable", () => sendTelegramMessage(env, chatId, "Fatman mode is temporarily unavailable. Use /help to return to the usual study mode.", messageId, bot.connectionId));
-    return withRequestId(json({ ok: true, fatmanUnavailable: true }), requestId);
-  }
-
   if (photoFileId && message?.media_group_id?.trim()) {
     await jobStoreRequest(env, chatId, { action: "clear_pending_quiz" }).catch(() => undefined);
     const staged = await jobStoreRequest<PhotoAlbumStageResponse>(env, chatId, {
@@ -1035,41 +1029,37 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           packet = makeFatmanNoticePacket("Photo mil gaya. Fatman mein sahi page dhoondhne ke liye photo ke saath apna sawaal ya ek keyword bhi likho.");
         } else if (fatmanMode) {
           await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingFatman);
-          if (!(await isFatmanReady(env))) {
-            packet = makeFatmanNoticePacket("Fatman mode abhi available nahi hai. /help se usual study mode mein wapas aa jao.");
-          } else {
-            await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.searchingFatman);
-            let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
-            try {
-              bookContext = await retrieveFatmanContext(env, buildFatmanRetrievalQuery(job.question, recentConversation));
-            } catch (error) {
-              if (error instanceof FatmanRetrievalError && !error.retryable) {
-                packet = makeFatmanNoticePacket(error.userMessage ?? "Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
-              } else {
-                throw error;
-              }
+          await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.searchingFatman);
+          let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
+          try {
+            bookContext = await retrieveFatmanContext(env, buildFatmanRetrievalQuery(job.question, recentConversation));
+          } catch (error) {
+            if (error instanceof FatmanRetrievalError && !error.retryable) {
+              packet = makeFatmanNoticePacket(error.userMessage ?? "Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
+            } else {
+              throw error;
             }
-            if (!packet && bookContext && !bookContext.passages.length) {
-              packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
-            }
-            if (!packet && bookContext) {
-              await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
-              generation = await generateGeminiAnswer(
-                env,
-                job.question,
-                buildProfileContext(profile, recentConversation),
-                images,
-                updatePartialAnswer,
-                bookContext,
-              );
-              packet = generation.packet;
-              const citations = formatFatmanCitations(bookContext.passages, job.question, packet.answer);
-              packet.answer = appendFatmanCitations(packet.answer, citations);
-              packet.sscTakeaway = "";
-              packet.profileSignal = "neutral";
-              packet.profileNote = "";
-              packet.nextRevisionTopic = "";
-            }
+          }
+          if (!packet && bookContext && !bookContext.passages.length) {
+            packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
+          }
+          if (!packet && bookContext) {
+            await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
+            generation = await generateGeminiAnswer(
+              env,
+              job.question,
+              buildProfileContext(profile, recentConversation),
+              images,
+              updatePartialAnswer,
+              bookContext,
+            );
+            packet = generation.packet;
+            const citations = formatFatmanCitations(bookContext.passages, job.question, packet.answer);
+            packet.answer = appendFatmanCitations(packet.answer, citations);
+            packet.sscTakeaway = "";
+            packet.profileSignal = "neutral";
+            packet.profileNote = "";
+            packet.nextRevisionTopic = "";
           }
         } else {
           await updatePartialAnswer?.setStatus?.(
@@ -1828,11 +1818,32 @@ async function telegramSetupMethod(env: Env, method: string, payload: Record<str
   return data.result;
 }
 
-async function buildHealth(_env: Env) {
-  return {
-    ok: true,
-    status: "healthy",
-  };
+async function buildHealth(env: Env) {
+  // Keep local development independent of a deployed private service.
+  if (!env.BRVIN_SERVICE) {
+    const production = env.ENVIRONMENT === "production";
+    return {
+      ok: !production,
+      status: production ? "degraded" : "healthy",
+      brvinRetrievalConnected: false,
+    };
+  }
+
+  try {
+    // Apply the idempotent D1 schema and seed the project/client mapping before
+    // the first production RPC health check after deployment.
+    await ensureAnalyticsSchema(env);
+    const status = await env.BRVIN_SERVICE.getProjectStatus();
+    const connected = status.ok === true;
+    return {
+      ok: connected,
+      status: connected ? "healthy" : "degraded",
+      brvinRetrievalConnected: connected,
+      ...(status.ok ? { brvinReady: status.ready, authorizedSources: status.authorizedSourceCount } : {}),
+    };
+  } catch {
+    return { ok: false, status: "degraded", brvinRetrievalConnected: false };
+  }
 }
 
 async function bestEffortTelegram<T>(label: string, fn: () => Promise<T>): Promise<T | undefined> {
