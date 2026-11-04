@@ -316,8 +316,8 @@ The placeholder above is illustrative only; the admin must read the generated ID
 
 ## 7. Versioning and compatibility
 
-- Add v2 methods to the existing `BrvinRetrievalApi` entrypoint; do not create a public URL.
-- Preserve v1 `getProjectStatus()` and `retrieveProjectContext(input)` semantics for the legacy `clientId` identity during migration. If a method-name collision occurs in TypeScript/RPC, use explicitly versioned method names such as `getProjectStatusV2`, `listAuthorizedProjectsV2`, and `retrieveProjectContextV2`; freeze the final method names in Milestone 2 code before consumer migration.
+- Add the exact v2 methods `listAuthorizedProjectsV2()`, `getProjectStatusV2(input)` and `retrieveProjectContextV2(input)` to the existing `BrvinRetrievalApi` entrypoint; do not create a public URL.
+- Preserve v1 `getProjectStatus()` and `retrieveProjectContext(input)` semantics for the legacy `clientId` identity during migration.
 - Do not make v1 methods accept a project selector; v1 remains bound to one project.
 - V2 methods require a project selector and perform an application-project grant check on every call.
 - Do not remove `brvin_service_clients` or v1 methods until every consumer has migrated and a separately reviewed compatibility-removal milestone is approved.
