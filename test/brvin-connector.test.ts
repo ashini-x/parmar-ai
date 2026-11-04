@@ -162,6 +162,8 @@ describe("BRVIN reusable server-side connector", () => {
       { projectId: "fatman", queries: ["one", "two", "three", "four"] },
       { projectId: "fatman", queries: ["valid"], pageNumbers: [0] },
       { projectId: "fatman", queries: ["valid"], pageNumbers: [1, 2, 3, 4] },
+      { projectId: "fatman", queries: Array(10_000).fill("same query") },
+      { projectId: "fatman", queries: ["valid"], pageNumbers: Array(10_000).fill(200) },
     ];
 
     for (const input of invalidInputs) {
