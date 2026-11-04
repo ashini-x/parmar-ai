@@ -26,6 +26,17 @@
 - Native quiz selection shows the result in Telegram without a second bot message; the outcome remains available to later follow-up questions.
 - Telegram webhook subscription includes poll_answer updates.
 
+## Synthetic end-to-end student journey
+
+- A deterministic integration test posts a signed-secret Telegram update to the real webhook handler, captures the Queue job, then invokes the real Queue consumer.
+- The test uses a temporary encrypted test-bot record and mocks Telegram API, Vertex AI streaming, and the private BRVIN RPC. It makes no live Telegram messages, Gemini calls, or book-index searches.
+- In Fatman mode, an explicit page request reaches BRVIN with its page locator; retrieved book evidence is included in the Gemini prompt.
+- The delivered Telegram answer contains the verified book/PDF citation and the normal SSC Focus takeaway.
+- The same completed journey creates one D1 question record, increments the Durable Object student profile exactly once, and consumes one unit of the shared daily quota.
+- The test fails if the Queue job retries, the answer is not delivered, the page evidence is not passed to Gemini, or any of the profile, D1, and quota assertions fail.
+
+This is an integration regression test with controlled external-service responses. It does not replace a production live-service check or assert that Google, Telegram, and Cloudflare's remote services are reachable at a particular moment.
+
 ## Limits
 - Five accepted questions in the burst window cause the sixth to receive the burst response.
 - Daily quota blocks additional AI jobs at the configured limit.
