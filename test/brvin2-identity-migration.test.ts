@@ -63,12 +63,12 @@ class FakeD1Database {
     failMarkerBatchOnce?: boolean;
   }) {
     this.state = {
-      projects: new Map((options?.projects ?? [
+      projects: new Map<string, Row>((options?.projects ?? [
         { id: "fatman", slug: "fatman", status: "active" },
-      ]).map((row) => [String(row.id), { ...row }])),
-      applications: new Map((options?.applications ?? []).map((row) => [String(row.id), { ...row }])),
-      environments: new Map((options?.environments ?? []).map((row) => [String(row.id), { ...row }])),
-      grants: new Map((options?.grants ?? []).map((row) => [String(row.id), { ...row }])),
+      ]).map((row): [string, Row] => [String(row.id), { ...row }])),
+      applications: new Map<string, Row>((options?.applications ?? []).map((row): [string, Row] => [String(row.id), { ...row }])),
+      environments: new Map<string, Row>((options?.environments ?? []).map((row): [string, Row] => [String(row.id), { ...row }])),
+      grants: new Map<string, Row>((options?.grants ?? []).map((row): [string, Row] => [String(row.id), { ...row }])),
       migrations: new Set(),
       foreignKeyIssues: options?.foreignKeyIssues ?? [],
     };
