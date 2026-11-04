@@ -179,6 +179,14 @@ describe("Fatman page retrieval", () => {
   });
 
   it("runs internal QA retrieval without consuming a student's monthly search allowance", async () => {
+    search.mockResolvedValue({
+      chunks: [{
+        id: "page-123-a",
+        text: "Join - @freebookspdf00 The Battle of Plassey took place in 1757.",
+        score: 0.82,
+        item: { key: "fatman/pages/page-000123.jpg", metadata: { printedPage: "17" } },
+      }],
+    });
     const context = await retrieveFatmanQaContext(env, "Battle of Plassey 1757");
     expect(search).toHaveBeenNthCalledWith(1, {
       messages: [{ role: "user", content: "Battle of Plassey 1757" }],
