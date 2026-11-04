@@ -1,8 +1,7 @@
-import type { AiSearchChunk, ConversationTurn, Env, GeminiImageInput } from "../config/env";
+import type { AiSearchChunk, BrvinServiceRetrievalResult, ConversationTurn, Env, GeminiImageInput } from "../config/env";
 import { getFatmanBookState } from "../analytics/db";
 import { parseFatmanIndexPageKey } from "./library";
 
-const MAX_MATCHES = 12;
 const MAX_QA_MATCHES = 50;
 const MAX_SEARCH_VARIANTS = 3;
 const MAX_CITATION_PAGES = 5;
@@ -110,7 +109,7 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
   const normalizedQuery = normalizeFatmanQuery(query);
   if (!normalizedQuery) throw new FatmanRetrievalError("Fatman search query is empty.", false);
 
-  let result;
+  let result: BrvinServiceRetrievalResult;
   try {
     result = await env.BRVIN_SERVICE.retrieveProjectContext({
       queries: buildFatmanSearchQueries(normalizedQuery),

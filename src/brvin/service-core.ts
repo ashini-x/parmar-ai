@@ -11,6 +11,16 @@ import {
   type BrvinProjectIdentity,
 } from "./retrieval";
 
+export type BrvinServiceEnv = Pick<
+  Env,
+  | "DB"
+  | "FATMAN_SEARCH"
+  | "FATMAN_INSTANCE_NAME"
+  | "FATMAN_MIN_SCORE"
+  | "FATMAN_MONTHLY_QUERY_LIMIT"
+  | "BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT"
+>;
+
 const DEFAULT_MONTHLY_QUERY_LIMIT = 800;
 const MAX_MONTHLY_QUERY_LIMIT = 800;
 
@@ -37,7 +47,7 @@ function queryLimit(value: string | undefined): number {
 }
 
 async function resolveProjectForClient(
-  env: Env,
+  env: BrvinServiceEnv,
   rawClientId: unknown,
 ): Promise<{ clientId: string; project: BrvinProjectIdentity } | null> {
   if (!env.DB) throw new Error("BRVIN database is not configured.");
@@ -52,7 +62,7 @@ async function resolveProjectForClient(
 }
 
 async function reserveProjectQuery(
-  env: Env,
+  env: BrvinServiceEnv,
   project: BrvinProjectIdentity,
 ): Promise<{ allowed: boolean; queryCount: number }> {
   if (!env.DB) return { allowed: false, queryCount: 0 };
@@ -91,7 +101,7 @@ async function reserveProjectQuery(
 }
 
 export async function getBrvinProjectStatusForClient(
-  env: Env,
+  env: BrvinServiceEnv,
   clientId: string,
 ): Promise<BrvinServiceStatusResult> {
   try {
@@ -109,7 +119,7 @@ export async function getBrvinProjectStatusForClient(
 }
 
 export async function retrieveBrvinForClient(
-  env: Env,
+  env: BrvinServiceEnv,
   clientId: string,
   input: { queries?: unknown },
 ): Promise<BrvinServiceRetrievalResult> {

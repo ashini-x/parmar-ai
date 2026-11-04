@@ -81,7 +81,13 @@ describe("BRVIN governed retrieval", () => {
     ]);
     expect(search).toHaveBeenCalledWith({
       messages: [{ role: "user", content: "Article 14 equality" }],
-      ai_search_options: { retrieval: { max_num_results: 50, retrieval_type: "hybrid" } },
+      ai_search_options: {
+        retrieval: {
+          max_num_results: 50,
+          retrieval_type: "hybrid",
+          filters: { folder: { $in: ["brvin/books/" + bookId + "/pages/"] } },
+        },
+      },
     });
   });
 

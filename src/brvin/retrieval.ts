@@ -8,6 +8,8 @@ const MAX_PASSAGES = 12;
 const MAX_PASSAGE_CHARS = 4_500;
 const MAX_RAW_PASSAGE_CHARS = 12_000;
 
+export type BrvinRetrievalEnv = Pick<Env, "DB" | "FATMAN_SEARCH" | "FATMAN_INSTANCE_NAME" | "FATMAN_MIN_SCORE">;
+
 export interface BrvinPassage {
   id: string;
   bookId: string;
@@ -80,7 +82,7 @@ function isSafeSearchPrefix(prefix: string): boolean {
  * direct project grant or a project-to-collection grant.
  */
 export async function getBrvinProjectSources(
-  env: Env,
+  env: BrvinRetrievalEnv,
   projectId: string,
 ): Promise<BrvinSource[]> {
   if (!env.DB) throw new BrvinRetrievalError("BRVIN database is not configured.");
@@ -100,7 +102,7 @@ export async function getBrvinProjectSources(
  * current D1 grant set and its registered page-key format.
  */
 export async function retrieveBrvinProjectContextForProject(
-  env: Env,
+  env: BrvinRetrievalEnv,
   project: BrvinProjectIdentity,
   queries: string[],
   resolvedSources?: BrvinSource[],

@@ -1,19 +1,9 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
-import type { Env } from "../config/env";
+import type { BrvinServiceEnv } from "./service-core";
 import {
   getBrvinProjectStatusForClient,
   retrieveBrvinForClient,
 } from "./service-core";
-
-export type BrvinServiceEnv = Pick<
-  Env,
-  | "DB"
-  | "FATMAN_SEARCH"
-  | "FATMAN_INSTANCE_NAME"
-  | "FATMAN_MIN_SCORE"
-  | "FATMAN_MONTHLY_QUERY_LIMIT"
-  | "BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT"
->;
 
 export interface BrvinServiceProps {
   clientId: string;
@@ -21,11 +11,11 @@ export interface BrvinServiceProps {
 
 export class BrvinRetrievalApi extends WorkerEntrypoint<BrvinServiceEnv, BrvinServiceProps> {
   async getProjectStatus() {
-    return getBrvinProjectStatusForClient(this.env as Env, this.ctx.props?.clientId ?? "");
+    return getBrvinProjectStatusForClient(this.env, this.ctx.props?.clientId ?? "");
   }
 
   async retrieveProjectContext(input: { queries?: unknown }) {
-    return retrieveBrvinForClient(this.env as Env, this.ctx.props?.clientId ?? "", input);
+    return retrieveBrvinForClient(this.env, this.ctx.props?.clientId ?? "", input);
   }
 }
 
