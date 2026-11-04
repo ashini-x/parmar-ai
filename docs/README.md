@@ -30,6 +30,10 @@ The current source baseline is **v2.8.0**.
 - [SOURCE_INVENTORY.md](SOURCE_INVENTORY.md): tracked source/assets and their roles.
 - [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md): documentation maintenance requirements.
 
+## BRVIN 2 project continuity and execution
+
+**Start every new BRVIN 2 session here:** [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md). It contains the approved future architecture, baseline audit, milestone prompts, acceptance criteria and progress ledger. Update its ledger after every milestone.
+
 ## BRVIN knowledge platform
 
 The BRVIN reference set is the source of truth for its shared knowledge registry, private retrieval Worker, project grants, PDF/OCR ingestion pipeline, integrations and release operations.
