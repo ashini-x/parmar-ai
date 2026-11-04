@@ -252,7 +252,7 @@ describe("BRVIN Connect Application wizard", () => {
     expect(await callback.text()).toContain("Cloudflare account connected");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(db.connections.get("cloudflare")?.status).toBe("connected");
-    expect(String(db.connections.get("cloudflare")?.metadata_json)).toContain("brvin-service");
+    expect(String(db.connections.get("cloudflare")?.metadata_json)).toContain("b34a6c0b7221454c5db977fe61ddf759");
   });
 
   it("refuses deployment verification until a dedicated connection PR has recorded its identity", async () => {
@@ -430,7 +430,7 @@ describe("BRVIN Connect Application wizard", () => {
 
     const response = await provisionBrvinTestClientAccessToken(env(db), request("https://parmar.example/admin/api/brvin/connect/test-access-token", {}));
     const body = await response.json() as { ok: boolean; testerToken?: string; runtimeIdentityVerified?: boolean; verifiedProjectId?: string };
-    expect(response.status).toBe(201);
+    expect(response.status, JSON.stringify(body)).toBe(201);
     expect(body.ok).toBe(true);
     expect(body.runtimeIdentityVerified).toBe(true);
     expect(body.verifiedProjectId).toBe(projectId);
