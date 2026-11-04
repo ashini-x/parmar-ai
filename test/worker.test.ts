@@ -12,7 +12,13 @@ describe("Parmar AI production worker", () => {
     const request = new IncomingRequest("http://example.com/health");
     const ctx = createExecutionContext();
 
-    const response = await worker.fetch(request, testEnv, ctx);
+    const healthEnv = Object.assign(Object.create(testEnv), {
+      DB: undefined,
+      BRVIN_SERVICE: {
+        getProjectStatus: async () => ({ ok: true, ready: true, authorizedSourceCount: 1 }),
+      },
+    }) as Env;
+    const response = await worker.fetch(request, healthEnv, ctx);
     await waitOnExecutionContext(ctx);
 
     expect(response.status).toBe(200);
@@ -23,10 +29,20 @@ describe("Parmar AI production worker", () => {
       ok: boolean;
       status: string;
       service?: string;
+      brvinRetrievalConnected: boolean;
+      brvinReady: boolean;
+      authorizedSources: number;
+      service?: string;
       checks?: unknown;
     };
 
-    expect(body).toEqual({ ok: true, status: "healthy" });
+    expect(body).toEqual({
+      ok: true,
+      status: "healthy",
+      brvinRetrievalConnected: true,
+      brvinReady: true,
+      authorizedSources: 1,
+    });
     expect(body.service).toBeUndefined();
     expect(body.checks).toBeUndefined();
   });
