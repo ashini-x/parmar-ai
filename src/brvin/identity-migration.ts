@@ -383,6 +383,9 @@ export async function ensureBrvin2AskMoinaIdentities(
     { id: seed.productionEnvironmentId, key: "production" },
     { id: seed.previewEnvironmentId, key: "preview" },
   ];
+  if (!migration && applicationRows.length === 0 && (environmentRows.length > 0 || grantRows.length > 0)) {
+    failConflict("orphaned AskMoina environment or project grant");
+  }
   if (migration) {
     for (const expected of expectedEnvironments) {
       const found = environmentRows.find((row) => row.id === expected.id);
