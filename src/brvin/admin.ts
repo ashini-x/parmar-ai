@@ -1126,8 +1126,8 @@ const HTML = `<!doctype html>
  <section class="tile" style="margin-top:12px">
   <div class="panel-toolbar"><div><h2>Register the controlled test consumer</h2><p>Generates a new app identity, environment identity, isolated project and explicit app-project grant. No source document is shared automatically.</p></div></div>
   <div class="formgrid">
-   <div class="field"><label for="connect-app-name">Application name</label><input id="connect-app-name" maxlength="100" value="BRVIN Text Test Client"></div>
-   <div class="field"><label for="connect-env-key">Environment key</label><input id="connect-env-key" maxlength="32" value="production"></div>
+   <div class="field"><label for="connect-app-name">Dedicated application</label><input id="connect-app-name" maxlength="100" value="BRVIN Text Test Client" readonly></div>
+   <div class="field"><label for="connect-env-key">Environment key</label><input id="connect-env-key" maxlength="32" value="production" readonly></div>
    <div class="field"><label for="connect-project-name">Dedicated project name</label><input id="connect-project-name" maxlength="100" value="BRVIN Text Test Knowledge"></div>
    <div class="field"><label for="connect-project-description">Project description</label><input id="connect-project-description" maxlength="500" value="Isolated knowledge project for the BRVIN text reference Worker."></div>
   </div>
@@ -1275,7 +1275,7 @@ function renderConnectState(){
  $("cf-worker-note").textContent=cloudflare.brvinServiceVisible
   ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+"."
   :"Authorize the account that hosts private brvin-service. No Worker binding will be changed until the PR is reviewed.";
- const apps=(model?.applications||[]).filter(app=>app.status==="active");
+ const apps=(model?.applications||[]).filter(app=>app.status==="active"&&app.slug==="brvin-text-test-client");
  const previousApp=$("connect-existing-application").value;
  $("connect-existing-application").innerHTML=apps.map(app=>'<option value="'+esc(app.id)+'">'+esc(app.name)+' · '+esc(app.slug)+'</option>').join("")||'<option value="">Register the test consumer first</option>';
  if(apps.some(app=>app.id===previousApp))$("connect-existing-application").value=previousApp;
