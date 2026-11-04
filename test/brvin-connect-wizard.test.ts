@@ -269,7 +269,7 @@ describe("BRVIN Connect Application wizard", () => {
       projectName: "BRVIN Text Test Knowledge",
       projectDescription: "No Fatman sharing by default",
     }));
-    const body = await response.json() as { application: { id: string; slug: string }; environment: { id: string }; project: { id: string; slug: string } };
+    const body = await response.json() as { application: { id: string; slug: string; name: string }; environment: { id: string; key: string }; project: { id: string; slug: string } };
     expect(response.status).toBe(201);
     expect(body.application.slug).toBe("brvin-text-test-client");
     expect(body.application.name).toBe("BRVIN Text Test Client");
