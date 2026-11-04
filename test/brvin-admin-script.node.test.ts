@@ -122,6 +122,15 @@ describe("BRVIN browser script contract", () => {
     expect(script).toContain('post("applications/grants/revoke"');
     expect(script).toContain('post("projects/update"');
     expect(adminSource).toContain('id="view-applications"');
+    expect(adminSource).toContain('id="connect-wizard-panel"');
+    expect(adminSource).toContain('id="github-register"');
+    expect(adminSource).toContain('id="cf-authorize"');
+    expect(adminSource).toContain('id="connect-create-pr"');
+    expect(adminSource).toContain('post("connect/pull-request"');
+    expect(workerSource).toContain("/admin/brvin/connect/github/callback");
+    expect(workerSource).toContain("/admin/brvin/connect/cloudflare/callback");
+    expect(workerSource).toContain("/admin/api/brvin/connect/pull-request");
+    expect(workerSource).toContain("/admin/api/brvin/connect/verify");
     expect(adminSource).toContain('id="project-application"');
     expect(workerSource).toContain("/admin/api/brvin/applications/grants/revoke");
   });
