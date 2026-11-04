@@ -69,7 +69,7 @@ export async function brvinOverview(env: Env): Promise<Response> {
   try {
     await ensureAnalyticsSchema(env);
     const now = Date.now();
-    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events] = await Promise.all([
+    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events, applications, environments, applicationGrants] = await Promise.all([
       env.DB.prepare(
         "SELECT COUNT(*) AS books, COALESCE(SUM(page_count),0) AS total_pages, " +
         "COALESCE(SUM(indexed_pages),0) AS indexed_pages, " +
@@ -87,7 +87,8 @@ export async function brvinOverview(env: Env): Promise<Response> {
       env.DB.prepare(
         "SELECT p.id,p.name,p.slug,p.description,p.status,p.created_at,p.updated_at," +
         "(SELECT COUNT(DISTINCT pb.book_id) FROM brvin_project_books pb WHERE pb.project_id=p.id) AS direct_books," +
-        "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id) AS collection_books " +
+        "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id) AS collection_books," +
+        "(SELECT COUNT(*) FROM brvin_application_project_grants ag WHERE ag.project_id=p.id AND ag.status='active') AS application_count " +
         "FROM brvin_projects p ORDER BY p.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
@@ -115,6 +116,24 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "SELECT id,import_id,book_id,project_id,agent,phase,event_type,status,message,detail_json,created_at " +
         "FROM brvin_activity_events WHERE created_at>=? ORDER BY id DESC LIMIT 100"
       ).bind(now - 7 * 86_400_000).all<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT a.id,a.slug,a.name,a.description,a.status,a.created_at,a.updated_at," +
+        "(SELECT COUNT(*) FROM brvin_application_environments e WHERE e.application_id=a.id AND e.status='active') AS active_environment_count," +
+        "(SELECT COUNT(*) FROM brvin_application_project_grants g WHERE g.application_id=a.id AND g.status='active') AS active_project_count " +
+        "FROM brvin_applications a ORDER BY a.name COLLATE NOCASE"
+      ).all<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT id,application_id,environment_key,display_name,status,created_at,updated_at,revoked_at,revoked_by " +
+        "FROM brvin_application_environments ORDER BY application_id,environment_key"
+      ).all<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT g.id,g.application_id,g.project_id,g.status,g.created_at,g.created_by,g.revoked_at,g.revoked_by," +
+        "p.name AS project_name,p.slug AS project_slug,p.status AS project_status," +
+        "a.name AS application_name,a.slug AS application_slug " +
+        "FROM brvin_application_project_grants g JOIN brvin_projects p ON p.id=g.project_id " +
+        "JOIN brvin_applications a ON a.id=g.application_id " +
+        "ORDER BY g.created_at DESC"
+      ).all<Record<string, unknown>>(),
     ]);
 
     const directByBook = new Map<string, Array<{ id: string; name: string }>>();
@@ -130,6 +149,55 @@ export async function brvinOverview(env: Env): Promise<Response> {
       const list = collectionProjectMap.get(id) ?? [];
       list.push({ id: String(row.project_id), name: String(row.project_name) });
       collectionProjectMap.set(id, list);
+    }
+
+    const environmentsByApplication = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of environments.results ?? []) {
+      const applicationId = String(row.application_id);
+      const list = environmentsByApplication.get(applicationId) ?? [];
+      list.push({
+        id: String(row.id),
+        environmentKey: String(row.environment_key),
+        displayName: String(row.display_name ?? ""),
+        status: String(row.status),
+        createdAt: Number(row.created_at),
+        updatedAt: Number(row.updated_at),
+        revokedAt: row.revoked_at === null || row.revoked_at === undefined ? null : Number(row.revoked_at),
+        revokedBy: row.revoked_by ? String(row.revoked_by) : null,
+      });
+      environmentsByApplication.set(applicationId, list);
+    }
+
+    const projectsByApplication = new Map<string, Array<Record<string, unknown>>>();
+    const applicationsByProject = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of applicationGrants.results ?? []) {
+      const applicationId = String(row.application_id);
+      const projectId = String(row.project_id);
+      const grant = {
+        grantId: String(row.id),
+        applicationId,
+        projectId,
+        status: String(row.status),
+        createdAt: Number(row.created_at),
+        createdBy: row.created_by ? String(row.created_by) : null,
+        revokedAt: row.revoked_at === null || row.revoked_at === undefined ? null : Number(row.revoked_at),
+        revokedBy: row.revoked_by ? String(row.revoked_by) : null,
+        projectName: String(row.project_name),
+        projectSlug: String(row.project_slug),
+        projectStatus: String(row.project_status),
+      };
+      const appProjects = projectsByApplication.get(applicationId) ?? [];
+      appProjects.push(grant);
+      projectsByApplication.set(applicationId, appProjects);
+      const projectApplications = applicationsByProject.get(projectId) ?? [];
+      projectApplications.push({
+        applicationId,
+        name: String(row.application_name ?? ""),
+        slug: String(row.application_slug ?? ""),
+        grantId: String(row.id),
+        status: String(row.status),
+      });
+      applicationsByProject.set(projectId, projectApplications);
     }
 
     return json({
@@ -152,6 +220,17 @@ export async function brvinOverview(env: Env): Promise<Response> {
         id: String(row.id), name: String(row.name), slug: String(row.slug),
         description: String(row.description ?? ""), status: String(row.status),
         directBooks: Number(row.direct_books ?? 0), collectionBooks: Number(row.collection_books ?? 0),
+        applicationCount: Number(row.application_count ?? 0),
+        applications: applicationsByProject.get(String(row.id)) ?? [],
+      })),
+      applications: (applications.results ?? []).map((row) => ({
+        id: String(row.id), slug: String(row.slug), name: String(row.name),
+        description: String(row.description ?? ""), status: String(row.status),
+        activeEnvironmentCount: Number(row.active_environment_count ?? 0),
+        activeProjectCount: Number(row.active_project_count ?? 0),
+        environments: environmentsByApplication.get(String(row.id)) ?? [],
+        projects: projectsByApplication.get(String(row.id)) ?? [],
+        createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
       })),
       books: (books.results ?? []).map((row) => ({
         id: String(row.id), title: String(row.title), filename: String(row.source_filename ?? ""),
@@ -592,30 +671,287 @@ export async function startBrvinBookUpload(env: Env, request: Request): Promise<
 
 export async function createBrvinProject(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { name?: unknown; description?: unknown };
+  let body: { name?: unknown; description?: unknown; applicationId?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project details." }, 400); }
   const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
   const slug = slugify(name);
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
   if (!name || !slug) return json({ ok: false, error: "Enter a valid project name." }, 400);
+  if (applicationId && !/^[a-f0-9-]{36}$/iu.test(applicationId)) {
+    return json({ ok: false, error: "Select a registered application." }, 400);
+  }
   try {
     await ensureAnalyticsSchema(env);
+    if (applicationId) {
+      const application = await env.DB.prepare(
+        "SELECT id FROM brvin_applications WHERE id=? AND status='active'"
+      ).bind(applicationId).first<{ id: string }>();
+      if (!application) return json({ ok: false, error: "The selected application is not active." }, 409);
+    }
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
-    await env.DB.batch([
+    const statements = [
       env.DB.prepare(
         "INSERT INTO brvin_projects (id,name,slug,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
       ).bind(id, name, slug, description, now, now),
-      env.DB.prepare(
+    ];
+    if (applicationId) {
+      statements.push(env.DB.prepare(
+        "INSERT INTO brvin_application_project_grants (id,application_id,project_id,status,created_at,created_by) " +
+        "VALUES (?,?,?,'active',?,'admin-dashboard')"
+      ).bind(crypto.randomUUID().toLowerCase(), applicationId, id, now));
+    } else {
+      // Legacy creation remains available for existing v1 clients and Fatman-compatible integrations.
+      statements.push(env.DB.prepare(
         "INSERT INTO brvin_service_clients (client_id,project_id,created_at,updated_at) VALUES (?,?,?,?)"
-      ).bind(slug, id, now, now),
-    ]);
+      ).bind(slug, id, now, now));
+    }
+    await env.DB.batch(statements);
     await recordBrvinActivity(env, {
       projectId: id, agent: "BRVIN access control", phase: "governance",
       eventType: "project.created", status: "completed",
-      message: "A new project and its default private Worker identity were created. It has no knowledge access until sources are assigned.",
-      details: { serviceClientId: slug },
+      message: applicationId
+        ? "A new project was created and explicitly granted to its selected BRVIN application. It has no knowledge access until sources are assigned."
+        : "A legacy project and its default private Worker identity were created. It has no knowledge access until sources are assigned.",
+      details: { applicationId: applicationId || null, serviceClientId: applicationId ? null : slug },
     });
-    return json({ ok: true, project: { id, name, slug, description } }, 201);
+    return json({ ok: true, project: { id, name, slug, description, applicationId: applicationId || null } }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+function validBrvinApplicationSlug(value: string): boolean {
+  return /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u.test(value);
+}
+
+function normalizedEnvironmentKey(value: string): string {
+  return value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/gu, "")
+    .replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 32).replace(/-+$/gu, "");
+}
+
+export async function createBrvinApplication(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { name?: unknown; description?: unknown; slug?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
+  const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
+  const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  const slugInput = typeof body.slug === "string" && body.slug.trim() ? body.slug : name;
+  const slug = slugify(slugInput);
+  if (!name || !slug || !validBrvinApplicationSlug(slug)) {
+    return json({ ok: false, error: "Enter an application name that produces a valid lowercase slug." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const id = crypto.randomUUID().toLowerCase(), now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO brvin_applications (id,slug,name,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
+    ).bind(id, slug, name, description, now, now).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.created", status: "completed",
+      message: "A BRVIN application record was created. No environment or project access is implied.",
+      details: { applicationId: id, slug },
+    });
+    return json({ ok: true, application: { id, slug, name, description, status: "active" } }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function createBrvinApplicationEnvironment(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { applicationId?: unknown; environmentKey?: unknown; displayName?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid environment details." }, 400); }
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const environmentKey = normalizedEnvironmentKey(typeof body.environmentKey === "string" ? body.environmentKey : "");
+  const displayName = typeof body.displayName === "string" ? body.displayName.replace(/\s+/gu, " ").trim().slice(0, 80) : "";
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !environmentKey || !validBrvinApplicationSlug(environmentKey)) {
+    return json({ ok: false, error: "Choose an active application and enter a valid environment label." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const application = await env.DB.prepare(
+      "SELECT id FROM brvin_applications WHERE id=? AND status='active'"
+    ).bind(applicationId).first<{ id: string }>();
+    if (!application) return json({ ok: false, error: "The selected application is not active." }, 409);
+    const id = crypto.randomUUID().toLowerCase(), now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO brvin_application_environments (id,application_id,environment_key,display_name,status,created_at,updated_at) " +
+      "VALUES (?,?,?,?,'active',?,?)"
+    ).bind(id, applicationId, environmentKey, displayName, now, now).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.environment_created", status: "completed",
+      message: "A new trusted environment identity was registered. Attach it through a reviewed Service Binding configuration before treating the environment as connected.",
+      details: { applicationId, environmentId: id, environmentKey },
+    });
+    return json({ ok: true, environment: { id, applicationId, environmentKey, displayName, status: "active" } }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function setBrvinApplicationStatus(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { applicationId?: unknown; status?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application status." }, 400); }
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const status = body.status;
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !["active", "suspended", "revoked"].includes(String(status))) {
+    return json({ ok: false, error: "Choose a valid application and status." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const application = await env.DB.prepare(
+      "SELECT id,status FROM brvin_applications WHERE id=?"
+    ).bind(applicationId).first<{ id: string; status: string }>();
+    if (!application) return json({ ok: false, error: "Application not found." }, 404);
+    if (application.status === "revoked" && status !== "revoked") {
+      return json({ ok: false, error: "A revoked application is permanent. Create a new application record instead." }, 409);
+    }
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_applications SET status=?,updated_at=? WHERE id=?"
+    ).bind(status, now, applicationId).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.status_changed", status: "completed",
+      message: "Application status changed to " + String(status) + ".",
+      details: { applicationId, previousStatus: application.status, status },
+    });
+    return json({ ok: true, applicationId, status });
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 502); }
+}
+
+export async function setBrvinEnvironmentStatus(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { environmentId?: unknown; status?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid environment status." }, 400); }
+  const environmentId = typeof body.environmentId === "string" ? body.environmentId.trim() : "";
+  const status = body.status;
+  if (!/^[a-f0-9-]{36}$/iu.test(environmentId) || !["active", "disabled", "revoked"].includes(String(status))) {
+    return json({ ok: false, error: "Choose a valid environment and status." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const environment = await env.DB.prepare(
+      "SELECT e.id,e.application_id,e.status,a.status AS application_status " +
+      "FROM brvin_application_environments e JOIN brvin_applications a ON a.id=e.application_id WHERE e.id=?"
+    ).bind(environmentId).first<{ id: string; application_id: string; status: string; application_status: string }>();
+    if (!environment) return json({ ok: false, error: "Environment not found." }, 404);
+    if (environment.status === "revoked" && status !== "revoked") {
+      return json({ ok: false, error: "A revoked environment identity cannot be reactivated. Create a replacement identity." }, 409);
+    }
+    if (status === "active" && environment.application_status !== "active") {
+      return json({ ok: false, error: "Activate the parent application before enabling this environment." }, 409);
+    }
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_application_environments SET status=?,updated_at=?," +
+      "revoked_at=CASE WHEN ?='revoked' THEN ? ELSE revoked_at END," +
+      "revoked_by=CASE WHEN ?='revoked' THEN 'admin-dashboard' ELSE revoked_by END WHERE id=?"
+    ).bind(status, now, status, now, status, environmentId).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.environment_status_changed", status: "completed",
+      message: "Environment " + environmentId + " status changed to " + String(status) + ".",
+      details: { applicationId: environment.application_id, environmentId, previousStatus: environment.status, status },
+    });
+    return json({ ok: true, environmentId, status });
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 502); }
+}
+
+export async function grantBrvinApplicationProject(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { applicationId?: unknown; projectId?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project grant." }, 400); }
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !projectId || projectId.length > 128 || projectId !== body.projectId) {
+    return json({ ok: false, error: "Choose a valid application and project." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const [application, project, existing] = await Promise.all([
+      env.DB.prepare("SELECT id FROM brvin_applications WHERE id=? AND status='active'").bind(applicationId).first<{ id: string }>(),
+      env.DB.prepare("SELECT id FROM brvin_projects WHERE id=? AND status='active'").bind(projectId).first<{ id: string }>(),
+      env.DB.prepare("SELECT id FROM brvin_application_project_grants WHERE application_id=? AND project_id=? AND status='active'").bind(applicationId, projectId).first<{ id: string }>(),
+    ]);
+    if (!application) return json({ ok: false, error: "The selected application is not active." }, 409);
+    if (!project) return json({ ok: false, error: "The selected project is not active." }, 409);
+    if (existing) return json({ ok: true, applicationId, projectId, grantId: existing.id, alreadyGranted: true });
+    const grantId = crypto.randomUUID().toLowerCase(), now = Date.now();
+    await env.DB.prepare(
+      "INSERT INTO brvin_application_project_grants (id,application_id,project_id,status,created_at,created_by) " +
+      "VALUES (?,?,?,'active',?,'admin-dashboard')"
+    ).bind(grantId, applicationId, projectId, now).run();
+    await recordBrvinActivity(env, {
+      projectId, agent: "BRVIN application access control", phase: "governance",
+      eventType: "application.project_granted", status: "completed",
+      message: "The application was granted access to the selected project.",
+      details: { applicationId, projectId, grantId },
+    });
+    return json({ ok: true, applicationId, projectId, grantId }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function revokeBrvinApplicationProject(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { applicationId?: unknown; projectId?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project grant." }, 400); }
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !projectId || projectId.length > 128 || projectId !== body.projectId) {
+    return json({ ok: false, error: "Choose a valid application and project." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const existing = await env.DB.prepare(
+      "SELECT id FROM brvin_application_project_grants WHERE application_id=? AND project_id=? AND status='active'"
+    ).bind(applicationId, projectId).first<{ id: string }>();
+    if (!existing) return json({ ok: false, error: "No active grant exists for this application and project." }, 404);
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_application_project_grants SET status='revoked',revoked_at=?,revoked_by='admin-dashboard' WHERE id=?"
+    ).bind(now, existing.id).run();
+    await recordBrvinActivity(env, {
+      projectId, agent: "BRVIN application access control", phase: "governance",
+      eventType: "application.project_revoked", status: "completed",
+      message: "The application-project permission was revoked. Future retrieval requests will be denied.",
+      details: { applicationId, projectId, grantId: existing.id },
+    });
+    return json({ ok: true, applicationId, projectId, grantId: existing.id });
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 502); }
+}
+
+export async function updateBrvinProject(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { projectId?: unknown; name?: unknown; description?: unknown; status?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project details." }, 400); }
+  const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
+  const status = body.status === undefined ? undefined : body.status;
+  const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
+  const description = body.description === undefined ? undefined : typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  if (!projectId || projectId.length > 128 || projectId !== body.projectId ||
+      (status !== undefined && !["active", "inactive"].includes(String(status))) ||
+      (name !== undefined && (!name || !slugify(name)))) {
+    return json({ ok: false, error: "Enter a valid project name and status." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const current = await env.DB.prepare(
+      "SELECT id,name,description,status FROM brvin_projects WHERE id=?"
+    ).bind(projectId).first<{ id: string; name: string; description: string; status: string }>();
+    if (!current) return json({ ok: false, error: "Project not found." }, 404);
+    const nextName = name ?? current.name;
+    const nextDescription = description ?? current.description;
+    const nextStatus = String(status ?? current.status);
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_projects SET name=?,description=?,status=?,updated_at=? WHERE id=?"
+    ).bind(nextName, nextDescription, nextStatus, now, projectId).run();
+    await recordBrvinActivity(env, {
+      projectId, agent: "BRVIN access control", phase: "governance",
+      eventType: "project.updated", status: "completed",
+      message: "Project details or activation status were updated.",
+      details: { previousStatus: current.status, status: nextStatus },
+    });
+    return json({ ok: true, project: { id: projectId, name: nextName, description: nextDescription, status: nextStatus } });
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
@@ -728,7 +1064,7 @@ const HTML = `<!doctype html>
 .modal{display:none;position:fixed;inset:0;background:#11182766;z-index:30;padding:18px;align-items:center;justify-content:center;backdrop-filter:blur(5px)}.modal.open{display:flex}.modalbox{width:min(720px,100%);max-height:90vh;overflow:auto;background:#fff;border:1px solid #ffffff90;border-radius:19px;padding:22px;box-shadow:0 24px 80px #11182730}.modalbox.wide{width:min(820px,100%)}.modalhead{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}.modalhead h2{font-size:18px;letter-spacing:-.035em;margin:0;font-weight:710}.modal-subtitle{font-size:11px;color:var(--muted);margin:-10px 0 16px}.modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}.management-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.management-actions .btn{justify-content:flex-start;padding:12px}.management-actions .btn.danger{grid-column:1/-1}.footer-note{font-size:10px;color:#989eaa;text-align:center;margin:26px 0 0}
 @media(max-width:1050px){.shell{padding:18px}.app-layout{grid-template-columns:1fr;gap:20px}.sidebar{position:static;display:block;border-bottom:1px solid var(--line);padding-bottom:13px}.nav-group{display:inline-block;vertical-align:top;margin-right:18px}.nav-label{padding:0 8px 6px}.nav-list{flex-direction:row;gap:4px}.nav-item{width:auto;white-space:nowrap;padding:9px 11px}.workspace{max-width:none}.overview-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:680px){.shell{padding:13px 12px 30px}.top{align-items:flex-start;padding-bottom:14px}.brand-mark{width:34px;height:34px}.brand{font-size:18px}.brand-caption{font-size:10px}.actions{gap:6px}.actions .btn{padding:8px 9px;font-size:10px}.live{width:100%;justify-content:flex-end;font-size:10px}.app-layout{padding-top:13px;gap:16px}.sidebar{overflow-x:auto;white-space:nowrap;margin:0 -12px;padding:0 12px 10px}.nav-group{margin-right:12px}.nav-label{display:none}.nav-item{font-size:11px;padding:8px 10px;gap:6px}.nav-icon{width:auto}.page-heading{align-items:flex-start;flex-direction:column;margin:4px 0 16px}.page-heading h1{font-size:25px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{padding:13px}.metric strong{font-size:22px}.overview-grid,.quick-grid,.collection-grid,.project-grid,.job-grid{grid-template-columns:1fr}.panel,.view-panel{padding:15px}.feature-panel{padding:18px}.feature-number{font-size:36px}.formgrid{grid-template-columns:1fr;gap:0}.steps{grid-template-columns:repeat(2,1fr)}.modal{padding:10px;align-items:flex-end}.modalbox{padding:18px;border-radius:18px 18px 12px 12px;max-height:92vh;width:100%}.management-actions{grid-template-columns:1fr}.management-actions .btn.danger{grid-column:auto}.table{min-width:680px}}</style></head><body><body><main class="shell"><header class="top"><div class="brand-wrap"><div class="brand-mark" aria-hidden="true">B</div><div><div class="brand">BRVIN</div><div class="brand-caption">Knowledge intelligence · परमार्थAI</div></div></div><div class="actions"><span class="live"><i></i><span id="live-label">LIVE · connecting</span></span><button class="btn" id="refresh" type="button">↻ Refresh</button><a class="btn" href="/admin">Admin home</a><button class="btn" id="logout" type="button">Sign out</button></div></header>
-<div class="app-layout"><aside class="sidebar" aria-label="BRVIN navigation"><div class="nav-group"><div class="nav-label">Workspace</div><nav class="nav-list" aria-label="Workspace"><button class="nav-item active" type="button" data-view="overview"><span class="nav-icon">⌂</span>Overview</button><button class="nav-item" type="button" data-view="books"><span class="nav-icon">▤</span>Knowledge sources</button><button class="nav-item" type="button" data-view="collections"><span class="nav-icon">▧</span>Knowledge collections</button><button class="nav-item" type="button" data-view="projects"><span class="nav-icon">◫</span>Projects</button><button class="nav-item" type="button" data-view="operations"><span class="nav-icon">◷</span>Live operations</button></nav></div><div class="nav-group"><div class="nav-label">Administration</div><nav class="nav-list" aria-label="Administration"><button class="nav-item" type="button" data-view="governance"><span class="nav-icon">⚙</span>Governance</button></nav></div></aside>
+<div class="app-layout"><aside class="sidebar" aria-label="BRVIN navigation"><div class="nav-group"><div class="nav-label">Workspace</div><nav class="nav-list" aria-label="Workspace"><button class="nav-item active" type="button" data-view="overview"><span class="nav-icon">⌂</span>Overview</button><button class="nav-item" type="button" data-view="books"><span class="nav-icon">▤</span>Knowledge sources</button><button class="nav-item" type="button" data-view="collections"><span class="nav-icon">▧</span>Knowledge collections</button><button class="nav-item" type="button" data-view="projects"><span class="nav-icon">◫</span>Projects</button><button class="nav-item" type="button" data-view="operations"><span class="nav-icon">◷</span>Live operations</button></nav></div><div class="nav-group"><div class="nav-label">Administration</div><nav class="nav-list" aria-label="Administration"><button class="nav-item" type="button" data-view="governance"><span class="nav-icon">⚙</span>Governance</button><button class="nav-item" type="button" data-view="applications"><span class="nav-icon">◇</span>Applications & access</button></nav></div></aside>
 <div class="workspace">
 <section class="view active" id="view-overview" data-view-panel="overview"><div class="page-heading"><div><div class="eyebrow">BRVIN workspace</div><h1>Knowledge, organised.</h1><p class="subtitle">A single governed library, connected to projects with intention.</p></div><div class="heading-actions"><button class="btn primary" id="open-upload" type="button">＋ Add knowledge source</button></div></div>
 <div class="metrics" id="metrics"><div class="metric"><span>Knowledge sources</span><strong>—</strong><small>Across all collections</small></div><div class="metric"><span>Collections</span><strong>—</strong><small>Governed groups</small></div><div class="metric"><span>Projects</span><strong>—</strong><small>Independent consumers</small></div><div class="metric"><span>Indexed pages</span><strong>—</strong><small>Verified / total</small></div><div class="metric"><span>Active pipelines</span><strong>—</strong><small>Running now</small></div><div class="metric"><span>Needs attention</span><strong>—</strong><small>Failed or blocked</small></div></div>
@@ -737,7 +1073,31 @@ const HTML = `<!doctype html>
 <section class="view" id="view-collections" data-view-panel="collections"><div class="page-heading"><div><div class="eyebrow">Organisation</div><h1>Collections</h1><p class="subtitle">Arrange sources into logical groups. A collection is not shared until assigned to a project.</p></div><div class="heading-actions"><button class="btn" type="button" data-view="governance">＋ Create collection</button></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Your collections</h2><p>Each collection can be connected to one or more projects.</p></div></div><div id="collections" class="collection-grid"><div class="empty">Loading collections…</div></div></section></section>
 <section class="view" id="view-projects" data-view-panel="projects"><div class="page-heading"><div><div class="eyebrow">Knowledge consumers</div><h1>Projects</h1><p class="subtitle">Manage the project spaces that can retrieve BRVIN knowledge.</p></div><div class="heading-actions"><button class="btn" type="button" data-view="governance">＋ Create project</button></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Connected projects</h2><p>Direct book access and collection access are additive.</p></div></div><div id="projects" class="project-grid"><div class="empty">Loading projects…</div></div></section></section>
 <section class="view" id="view-operations" data-view-panel="operations"><div class="page-heading"><div><div class="eyebrow">System activity</div><h1>Operations</h1><p class="subtitle">Follow ingestion, indexing, retrieval checks and cleanup workflows.</p></div><div class="heading-actions"><span class="live"><i></i>5-second refresh · automatic</span></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Live pipelines</h2><p>Active jobs and recoverable failures.</p></div></div><div id="jobs" class="job-grid"><div class="empty">No active processing jobs.</div></div></section><section class="view-panel"><div class="panel-toolbar"><div><h2>Specialist activity</h2><p>Actual workflow events · <span id="event-stamp">Waiting for events</span></p></div></div><div class="timeline" id="events"><div class="empty">Waiting for BRVIN events…</div></div></section></section>
-<section class="view" id="view-governance" data-view-panel="governance"><div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Governance</h1><p class="subtitle">Create projects and collections, then explicitly grant collection access.</p></div></div><div class="overview-grid"><section class="view-panel"><div class="panel-toolbar"><div><h2>Create a project</h2><p>A project is an isolated knowledge consumer.</p></div></div><div class="field"><label for="project-name">Project name</label><input id="project-name" maxlength="100" placeholder="Project name"></div><div class="field"><label for="project-desc">Description</label><input id="project-desc" maxlength="500" placeholder="What will this platform use BRVIN for?"></div><button class="btn primary" id="create-project" type="button">Create project</button></section><section class="view-panel"><div class="panel-toolbar"><div><h2>Create a collection</h2><p>Group sources by subject or purpose.</p></div></div><div class="field"><label for="collection-name">Collection name</label><input id="collection-name" maxlength="100" placeholder="Collection name"></div><div class="field"><label for="collection-desc">Description</label><input id="collection-desc" maxlength="500" placeholder="What belongs in this collection?"></div><button class="btn primary" id="create-collection" type="button">Create collection</button></section><section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Collection access</h2><p>Choose which collections a project can retrieve. This does not replace direct book assignments.</p></div></div><div class="formgrid"><div class="field"><label for="project-access">Project</label><select id="project-access"></select></div><div class="field"><label>Available collections</label><div class="checks" id="collection-checks"></div></div></div><button class="btn primary" id="save-project-access" type="button">Save collection access</button><div class="notice">Access is additive: projects receive content through direct book assignments and/or collection assignments. Empty projects have no BRVIN knowledge access.</div></section></div></section>
+<section class="view" id="view-governance" data-view-panel="governance"><div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Governance</h1><p class="subtitle">Create projects and collections, then explicitly grant collection access.</p></div></div><div class="overview-grid"><section class="view-panel"><div class="panel-toolbar"><div><h2>Create a project</h2><p>A project is an isolated knowledge consumer.</p></div></div><div class="field"><label for="project-application">Connected application</label><select id="project-application"><option value="">Loading applications…</option></select></div><div class="field"><label for="project-name">Project name</label><input id="project-name" maxlength="100" placeholder="Project name"></div><div class="field"><label for="project-desc">Description</label><input id="project-desc" maxlength="500" placeholder="What will this platform use BRVIN for?"></div><button class="btn primary" id="create-project" type="button">Create project</button></section><section class="view-panel"><div class="panel-toolbar"><div><h2>Create a collection</h2><p>Group sources by subject or purpose.</p></div></div><div class="field"><label for="collection-name">Collection name</label><input id="collection-name" maxlength="100" placeholder="Collection name"></div><div class="field"><label for="collection-desc">Description</label><input id="collection-desc" maxlength="500" placeholder="What belongs in this collection?"></div><button class="btn primary" id="create-collection" type="button">Create collection</button></section><section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Collection access</h2><p>Choose which collections a project can retrieve. This does not replace direct book assignments.</p></div></div><div class="formgrid"><div class="field"><label for="project-access">Project</label><select id="project-access"></select></div><div class="field"><label>Available collections</label><div class="checks" id="collection-checks"></div></div></div><button class="btn primary" id="save-project-access" type="button">Save collection access</button><div class="notice">Access is additive: projects receive content through direct book assignments and/or collection assignments. Empty projects have no BRVIN knowledge access.</div></section></div></section>
+<section class="view" id="view-applications" data-view-panel="applications">
+<div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Applications & access</h1><p class="subtitle">Register consumer apps, deployment identities and explicit project permissions.</p></div></div>
+<div class="overview-grid">
+<section class="view-panel"><div class="panel-toolbar"><div><h2>Register application</h2><p>Create the application record once. It does not grant project access by itself.</p></div></div>
+<div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. BRVIN Text Test Client"></div>
+<div class="field"><label for="application-desc">Description</label><input id="application-desc" maxlength="500" placeholder="What will this application use BRVIN for?"></div>
+<button class="btn primary" id="create-application" type="button">Register application</button>
+</section>
+<section class="view-panel"><div class="panel-toolbar"><div><h2>Add deployment environment</h2><p>Environment IDs are generated by BRVIN and are not API keys.</p></div></div>
+<div class="field"><label for="environment-application">Application</label><select id="environment-application"></select></div>
+<div class="field"><label for="environment-key">Environment key</label><input id="environment-key" maxlength="32" placeholder="production, preview, staging"></div>
+<div class="field"><label for="environment-name">Display name</label><input id="environment-name" maxlength="80" placeholder="Production"></div>
+<button class="btn primary" id="create-environment" type="button">Add environment</button>
+</section>
+<section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Grant project access</h2><p>Application grants and source-level book/collection grants are separate permissions.</p></div></div>
+<div class="formgrid"><div class="field"><label for="grant-application">Application</label><select id="grant-application"></select></div><div class="field"><label for="grant-project">Project</label><select id="grant-project"></select></div></div>
+<button class="btn primary" id="grant-project-button" type="button">Grant application access</button>
+<div class="notice">Only active applications, active environments and active grants can retrieve. A project selector never proves entitlement. Registered environments are not marked live-connected until the M6 wizard verifies the Service Binding.</div>
+</section>
+<section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Application registry</h2><p>Environment identities, lifecycle status and project grants. Revoked records remain in the audit history.</p></div></div>
+<div id="applications-list" class="project-grid"><div class="empty">Loading application registry…</div></div>
+</section>
+</div>
+</section>
 </div></div><p class="footer-note">BRVIN · Administrator-only · Operational data refreshes automatically · Knowledge is never globally exposed by default</p></main>
 <div class="modal" id="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title"><div class="modalbox wide"><div class="modalhead"><div><div class="eyebrow">Secure ingestion</div><h2 id="upload-modal-title">Add knowledge source</h2></div><button class="btn" id="close-upload" type="button">Close</button></div><p class="modal-subtitle">Upload a private PDF. BRVIN handles OCR, indexing and retrieval verification in the background.</p><div class="formgrid"><div class="field"><label for="book-title">Book / document name</label><input id="book-title" maxlength="160" placeholder="e.g. Indian Polity Reference"></div><div class="field"><label for="collection">Knowledge collection</label><select id="collection"></select></div></div><div class="field"><label>PDF document</label><label class="drop" for="pdf"><span><strong>Choose PDF from this device</strong><small>Private resumable upload · up to 1 GB · 2,000 pages · OCR costs may apply</small><input id="pdf" type="file" accept="application/pdf"></span></label><div class="file" id="file-info">No PDF selected.</div></div><div class="field"><label>Grant project access (optional)</label><div class="checks" id="project-checks"><span class="muted">Loading projects…</span></div></div><label class="check"><input type="checkbox" id="cost"> I understand Google Cloud Vision OCR may incur usage charges.</label><div class="modal-actions"><button class="btn primary" id="upload" disabled type="button">Add to BRVIN</button></div><progress class="progress" id="progress" value="0" max="100"></progress><p class="statusline" id="upload-status" aria-live="polite">Choose a PDF to start. Processing continues on the server after upload completes.</p><div class="steps"><div class="step" id="step-upload"><b>01 · Secure upload</b><small>Private object storage</small></div><div class="step" id="step-ocr"><b>02 · Vision OCR</b><small>Document text detection</small></div><div class="step" id="step-index"><b>03 · Indexing</b><small>Page-level search</small></div><div class="step" id="step-qa"><b>04 · Retrieval QA</b><small>Source-page verification</small></div><div class="step" id="step-ready"><b>05 · Ready</b><small>Project access enabled</small></div></div><div class="notice">BRVIN does not automatically share every book with every project. A book is searchable only after indexing and retrieval QA pass, and only for projects explicitly assigned the book or its collection.</div></div></div>
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modalbox"><div class="modalhead"><h2 id="modal-title">Book operations</h2><button class="btn" id="close-modal" type="button">Close</button></div><div id="modal-body"></div></div></div><script type="module">
@@ -770,18 +1130,83 @@ function renderCollections(list){
 function renderProjects(list){
  const previousProjectId=$("project-access").value;
  const selectedProjectIds=new Set([...$("project-checks").querySelectorAll("input:checked")].map(input=>input.value));
- $("projects").innerHTML=list.length?list.map(p=>'<div class="tile"><strong>'+esc(p.name)+'</strong> '+statusPill(p.status)+'<p>'+esc(p.description||"No description")+'</p><small>Direct books: '+p.directBooks+' · via collections: '+p.collectionBooks+' · slug '+esc(p.slug)+'</small></div>').join(""):'<div class="empty">No projects have been registered.</div>';
+ $("projects").innerHTML=list.length?list.map(p=>{
+  const apps=(p.applications||[]).filter(a=>a.status==="active").map(a=>a.name||a.slug).join(", ");
+  const nextStatus=p.status==="active"?"inactive":"active";
+  const action=p.status==="active"?"Deactivate":"Activate";
+  return '<div class="tile"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><strong>'+esc(p.name)+'</strong>'+statusPill(p.status)+'</div><p>'+esc(p.description||"No description")+'</p><small>Direct books: '+p.directBooks+' · via collections: '+p.collectionBooks+' · slug '+esc(p.slug)+'</small><p><small>Application access: '+esc(apps||"No application grants")+'</small></p><div class="job-actions"><button class="btn" data-project-edit="'+esc(p.id)+'" type="button">Edit details</button><button class="btn" data-project-status="'+esc(p.id)+'" data-status="'+nextStatus+'" type="button">'+action+'</button></div></div>';
+ }).join(""):'<div class="empty">No projects have been registered.</div>';
  $("project-checks").innerHTML=list.filter(p=>p.status==="active").map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.id)+'"'+(selectedProjectIds.has(p.id)?" checked":"")+'> '+esc(p.name)+'</label>').join("")||'<span class="muted">No active projects. Create one below.</span>';
  $("project-access").innerHTML=list.filter(p=>p.status==="active").map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");
  if(list.some(p=>p.id===previousProjectId&&p.status==="active"))$("project-access").value=previousProjectId;
  $("project-access").onchange=()=>{const p=list.find(item=>item.id===$("project-access").value);const allowed=new Set((model?.collections||[]).filter(c=>c.projects.some(link=>link.id===p?.id)).map(c=>c.id));$("collection-checks").querySelectorAll("input").forEach(input=>input.checked=allowed.has(input.value));};
+ $("projects").querySelectorAll("[data-project-edit]").forEach(button=>button.addEventListener("click",async()=>{
+  const project=list.find(item=>item.id===button.dataset.projectEdit);if(!project)return;
+  const name=prompt("Project name",project.name);if(name===null)return;
+  const description=prompt("Project description",project.description||"");if(description===null)return;
+  try{await post("projects/update",{projectId:project.id,name,description});await refresh();}catch(error){alert(error.message);}
+ }));
+ $("projects").querySelectorAll("[data-project-status]").forEach(button=>button.addEventListener("click",async()=>{
+  const project=list.find(item=>item.id===button.dataset.projectStatus);if(!project)return;
+  const status=button.dataset.status;
+  const message=status==="inactive"?"Deactivate "+project.name+"? Future retrieval requests will be denied. Existing source grants will be retained.":"Reactivate "+project.name+"?";
+  if(!confirm(message))return;
+  try{await post("projects/update",{projectId:project.id,status});await refresh();}catch(error){alert(error.message);}
+ }));
 }
+function renderApplications(list){
+ const active=list.filter(app=>app.status==="active");
+ const previous={
+  project:$("project-application").value,
+  env:$("environment-application").value,
+  grantApp:$("grant-application").value,
+  grantProject:$("grant-project").value,
+ };
+ const fill=(id,items,previousValue,emptyLabel)=>{
+  const select=$(id);select.innerHTML=items.length?items.map(item=>'<option value="'+esc(item.value)+'">'+esc(item.label)+'</option>').join(""):'<option value="">'+emptyLabel+'</option>';
+  if(items.some(item=>item.value===previousValue))select.value=previousValue;
+ };
+ const options=active.map(app=>({value:app.id,label:app.name+" · "+app.slug}));
+ fill("project-application",options,previous.project,"Register an application first");
+ fill("environment-application",options,previous.env,"Register an active application first");
+ fill("grant-application",options,previous.grantApp,"No active applications");
+ fill("grant-project",(model?.projects||[]).filter(project=>project.status==="active").map(project=>({value:project.id,label:project.name+" · "+project.slug})),previous.grantProject,"No active projects");
+ const html=list.length?list.map(app=>{
+  const appAction=app.status==="active"?"suspended":app.status==="suspended"?"active":null;
+  const appActionLabel=app.status==="active"?"Suspend application":app.status==="suspended"?"Reactivate application":"Permanently revoked";
+  const envHtml=app.environments.length?app.environments.map(environment=>{
+   const next=environment.status==="active"?"disabled":environment.status==="disabled"?"active":null;
+   const action=next?'<button class="btn" data-environment-status="'+esc(environment.id)+'" data-status="'+next+'">'+(next==="disabled"?"Disable":"Activate")+'</button>':"";
+   const revoke=environment.status!=="revoked"?'<button class="btn danger" data-environment-status="'+esc(environment.id)+'" data-status="revoked">Revoke identity</button>':"";
+   return '<div class="pulse-row"><span><strong>'+esc(environment.displayName||environment.environmentKey)+'</strong><br><small>'+esc(environment.environmentKey)+' · '+esc(environment.id)+'</small></span><span>'+statusPill(environment.status)+' '+action+' '+revoke+'</span></div>';
+  }).join(""):'<div class="empty">No deployment environments registered.</div>';
+  const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No project grants. Application cannot retrieve knowledge.</div>';
+  return '<article class="tile"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>'+esc(app.name)+'</strong><p><small>'+esc(app.slug)+' · '+esc(app.id)+'</small></p></div>'+statusPill(app.status)+'</div><p>'+esc(app.description||"No description")+'</p><div class="pulse-row"><span>Active environments</span><strong>'+app.activeEnvironmentCount+'</strong></div><div class="pulse-row"><span>Active project grants</span><strong>'+app.activeProjectCount+'</strong></div><div class="notice">Registry status only. A registered environment is not a live connection check; M6 verifies its Service Binding.</div>'+(appAction?'<button class="btn '+(appAction==="suspended"?"danger":"")+'" data-application-status="'+esc(app.id)+'" data-status="'+appAction+'">'+appActionLabel+'</button>':"")+'<div style="margin-top:14px"><strong>Environments</strong>'+envHtml+'</div><div style="margin-top:14px"><strong>Project access</strong>'+grantHtml+'</div></article>';
+ }).join(""):'<div class="empty">No applications registered. Create the first application to start onboarding.</div>';
+ $("applications-list").innerHTML=html;
+ $("applications-list").querySelectorAll("[data-application-status]").forEach(button=>button.addEventListener("click",async()=>{
+  const app=list.find(item=>item.id===button.dataset.applicationStatus);if(!app)return;
+  const status=button.dataset.status;
+  if(!confirm((status==="revoked"?"Permanently revoke ":"Suspend ")+app.name+"? Existing environments and grants are retained for audit; retrieval will fail while the application is not active."))return;
+  try{await post("applications/status",{applicationId:app.id,status});await refresh();}catch(error){alert(error.message);}
+ }));
+ $("applications-list").querySelectorAll("[data-environment-status]").forEach(button=>button.addEventListener("click",async()=>{
+  const status=button.dataset.status;
+  if(status==="revoked"&&!confirm("Permanently revoke this environment identity? It cannot be reused or reactivated."))return;
+  try{await post("applications/environments/status",{environmentId:button.dataset.environmentStatus,status});await refresh();}catch(error){alert(error.message);}
+ }));
+ $("applications-list").querySelectorAll("[data-grant-revoke]").forEach(button=>button.addEventListener("click",async()=>{
+  if(!confirm("Revoke this application’s access to the selected project? Future retrieval requests will be denied."))return;
+  try{await post("applications/grants/revoke",{applicationId:button.dataset.applicationId,projectId:button.dataset.projectId});await refresh();}catch(error){alert(error.message);}
+ }));
+}
+
 function renderBooks(list,projects){$("book-count").textContent=list.length+" sources";$("books").innerHTML=list.length?list.map(b=>{const access=b.projects.map(p=>p.name).join(", ")||"No project access",progress=pct(b.indexedPages,b.pageCount),archived=b.status==="archived",manageLabel=archived?"Manage · archived":"Manage";const inspect=["uploading","uploaded","processing","failed","delete_failed"].includes(b.status)?'<button class="btn" data-inspect="'+esc(b.id)+'" type="button">Inspect</button> ':"";return '<tr><td class="source-name"><strong>'+esc(b.title)+'</strong><div class="muted">'+esc(b.filename)+'</div><div class="bar"><i style="width:'+progress+'%"></i></div></td><td>'+esc(b.collectionName)+'</td><td>'+b.indexedPages+'/'+b.pageCount+'</td><td>'+statusPill(b.status)+(b.error?'<div class="error" style="font-size:10px;margin-top:5px">'+esc(b.error)+'</div>':"")+'</td><td>'+esc(access)+'</td><td class="source-actions">'+inspect+'<button class="btn" data-manage="'+esc(b.id)+'" data-archived="'+archived+'" type="button">'+manageLabel+'</button></td></tr>';}).join(""):'<tr><td class="empty" colspan="6">No knowledge sources yet. Add the first PDF to start your library.</td></tr>';$("books").querySelectorAll("[data-inspect]").forEach(button=>button.addEventListener("click",()=>showImport(button.dataset.inspect)));$("books").querySelectorAll("[data-manage]").forEach(button=>button.addEventListener("click",()=>manageBook(button.dataset.manage)));}
 function renderJobs(list){$("jobs").innerHTML=list.length?list.map(j=>{const deleting=j.status==="deleting"||j.status==="delete_failed",percent=j.status==="uploading"?pct(j.uploadedBytes,j.expectedBytes):pct(j.indexedPages,j.pageCount),label=deleting?"Removing AI Search pages and private PDF/OCR storage":j.status==="uploading"?fmtBytes(j.uploadedBytes)+" / "+fmtBytes(j.expectedBytes):j.indexedPages+" / "+j.pageCount+" pages";return '<div class="job-card"><div class="job-card-head"><strong>'+esc(j.title)+'</strong>'+statusPill(j.status)+'</div><p>'+esc(label)+(deleting?"":" · "+percent+"% · updated "+esc(time(j.updatedAt)))+'</p>'+(deleting?"":'<div class="bar" style="max-width:none"><i style="width:'+percent+'%"></i></div>')+(j.error?'<p class="error">'+esc(j.error)+'</p>':"")+'<div class="job-actions"><button class="btn" data-inspect="'+esc(j.id)+'" type="button">Inspect pipeline</button>'+(j.status==="failed"&&j.hasOcrOperation?'<button class="btn" data-resume="'+esc(j.id)+'" type="button">Resume</button>':"")+'</div></div>';}).join(""):'<div class="empty" style="grid-column:1/-1">No active processing or deletion jobs. New BRVIN operations will appear here.</div>';$("jobs").querySelectorAll("[data-inspect]").forEach(b=>b.addEventListener("click",()=>showImport(b.dataset.inspect)));$("jobs").querySelectorAll("[data-resume]").forEach(b=>b.addEventListener("click",()=>resumeImport(b.dataset.resume)));}
 function detailText(details){if(!details||typeof details!=="object")return"";return Object.entries(details).map(([key,value])=>key+": "+(typeof value==="object"?JSON.stringify(value):String(value))).join(" · ").slice(0,700);}
 function renderEvents(list){$("events").innerHTML=list.length?list.slice(0,60).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong>'+statusPill(e.status)+'</div><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+' · '+esc(e.type)+'</small></div></div>').join(""):'<div class="empty">No operation events recorded yet.</div>';}
 function renderOverview(data){$("overview-books").textContent=String(data.stats.books);$("overview-pages").textContent=data.stats.indexedPages.toLocaleString()+" of "+data.stats.totalPages.toLocaleString()+" pages indexed";$("overview-ready").textContent=String(data.stats.readyBooks);$("overview-running").textContent=String(data.stats.activeBooks);$("overview-attention").textContent=String(data.stats.failedBooks);$("overview-status-note").textContent=data.stats.failedBooks?data.stats.failedBooks+" source(s) need attention. Open Operations to inspect the affected workflow.":data.stats.activeBooks?data.stats.activeBooks+" pipeline(s) are running. Processing continues automatically in the background.":"All tracked sources are stable. New processing events will appear here automatically.";}
-function render(){if(!model)return;renderMetrics(model.stats);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOverview(model);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
+function render(){if(!model)return;renderMetrics(model.stats);renderApplications(model.applications||[]);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOverview(model);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
 async function refresh(){try{model=await api(API+"overview");render();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
 function stage(id,state){$("step-"+id).className="step"+(state?" "+state:"");}
 function renderJob(job,pipeline){const uploaded=job.uploadedBytes>=job.expectedSize&&job.expectedSize>0;const ocr=pipeline?.vision?.status||"not_started";const status=job.status;
@@ -942,14 +1367,26 @@ async function clearAllBrvinBooks(){
  }catch(error){alert(error.message);}
  finally{button.disabled=false;}
 }
-function activateView(view){const allowed=["overview","books","collections","projects","operations","governance"];if(!allowed.includes(view))return;document.querySelectorAll("[data-view-panel]").forEach(panel=>panel.classList.toggle("active",panel.dataset.viewPanel===view));document.querySelectorAll(".nav-item[data-view]").forEach(button=>button.classList.toggle("active",button.dataset.view===view));}
+function activateView(view){const allowed=["overview","books","collections","projects","operations","governance","applications"];if(!allowed.includes(view))return;document.querySelectorAll("[data-view-panel]").forEach(panel=>panel.classList.toggle("active",panel.dataset.viewPanel===view));document.querySelectorAll(".nav-item[data-view]").forEach(button=>button.classList.toggle("active",button.dataset.view===view));}
 document.querySelectorAll("[data-view]").forEach(button=>button.addEventListener("click",()=>activateView(button.dataset.view)));
 function openUpload(){activateView("books");$("upload-modal").classList.add("open");}
 $("open-upload").addEventListener("click",openUpload);$("open-upload-secondary").addEventListener("click",openUpload);$("open-upload-books").addEventListener("click",openUpload);
 $("close-upload").addEventListener("click",()=>$("upload-modal").classList.remove("open"));$("upload-modal").addEventListener("click",event=>{if(event.target===$("upload-modal"))$("upload-modal").classList.remove("open");});
 $("close-upload").addEventListener("click",()=>$("upload-modal").classList.remove("open"));$("upload-modal").addEventListener("click",event=>{if(event.target===$("upload-modal"))$("upload-modal").classList.remove("open");});
 $("clear-brvin").addEventListener("click",clearAllBrvinBooks);$("upload").addEventListener("click",uploadBook);$("refresh").addEventListener("click",()=>refresh());$("logout").addEventListener("click",async()=>{await fetch("/admin/logout",{method:"POST",credentials:"same-origin"});location.assign("/admin/login");});
-$("create-project").addEventListener("click",async()=>{try{await post("projects",{name:$("project-name").value,description:$("project-desc").value});$("project-name").value="";$("project-desc").value="";await refresh();}catch(e){alert(e.message);}});
+$("create-project").addEventListener("click",async()=>{try{const applicationId=$("project-application").value;if(!applicationId)throw new Error("Select an active application for this project.");await post("projects",{name:$("project-name").value,description:$("project-desc").value,applicationId});$("project-name").value="";$("project-desc").value="";await refresh();}catch(e){alert(e.message);}});
+$("create-application").addEventListener("click",async()=>{
+ try{const name=$("application-name").value.trim();if(!name)throw new Error("Enter an application name.");await post("applications",{name,description:$("application-desc").value});$("application-name").value="";$("application-desc").value="";await refresh();}
+ catch(error){alert(error.message);}
+});
+$("create-environment").addEventListener("click",async()=>{
+ try{const applicationId=$("environment-application").value;if(!applicationId)throw new Error("Select an active application.");const environmentKey=$("environment-key").value.trim();if(!environmentKey)throw new Error("Enter an environment key.");await post("applications/environments",{applicationId,environmentKey,displayName:$("environment-name").value});$("environment-key").value="";$("environment-name").value="";await refresh();}
+ catch(error){alert(error.message);}
+});
+$("grant-project-button").addEventListener("click",async()=>{
+ try{const applicationId=$("grant-application").value,projectId=$("grant-project").value;if(!applicationId||!projectId)throw new Error("Select an active application and project.");await post("applications/grants",{applicationId,projectId});await refresh();}
+ catch(error){alert(error.message);}
+});
 $("create-collection").addEventListener("click",async()=>{try{await post("collections",{name:$("collection-name").value,description:$("collection-desc").value});$("collection-name").value="";$("collection-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("save-project-access").addEventListener("click",async()=>{try{const projectId=$("project-access").value;if(!projectId)throw new Error("Create or choose a project first.");const collectionIds=[...$("collection-checks").querySelectorAll("input:checked")].map(i=>i.value);await post("projects/collections",{projectId,collectionIds});await refresh();}catch(e){alert(e.message);}});
 await refresh();setInterval(async()=>{await refresh();if(activeImportId&&$("modal").classList.contains("open"))await showImport(activeImportId).catch(()=>{});},5000);
