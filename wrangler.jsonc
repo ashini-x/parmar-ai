@@ -118,6 +118,8 @@
     ]
   },
   "previews": {
+    // Isolated preview only: no production BRVIN, AI Search, Workflow or Queue bindings.
+    // Never point this DB at parmar-ai-admin-prod or a different application's database.
     "vars": {
       "APP_VERSION": "2.8.0-preview",
       "ENVIRONMENT": "preview",
