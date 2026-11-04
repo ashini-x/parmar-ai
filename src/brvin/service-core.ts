@@ -7,7 +7,7 @@ import type {
   BrvinV2Failure,
   BrvinV2FailureCode,
   BrvinV2Result,
-  BrvinV2RetrievalInput,
+  BrvinV2RetrievalData,
 } from "../config/env";
 import { logger } from "../core/logger";
 import {
@@ -530,7 +530,7 @@ export async function retrieveBrvinForApplicationV2(
   env: BrvinServiceEnv,
   applicationEnvironmentId: string,
   input: unknown,
-): Promise<BrvinV2Result<import("../config/env").BrvinV2RetrievalData>> {
+): Promise<BrvinV2Result<BrvinV2RetrievalData>> {
   const startedAt = Date.now();
   const parsed = parseBrvinV2RetrievalInput(input);
   if (!parsed) {
