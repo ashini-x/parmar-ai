@@ -1820,33 +1820,30 @@ async function telegramSetupMethod(env: Env, method: string, payload: Record<str
 }
 
 async function buildHealth(env: Env) {
-  // Keep local development independent of a deployed private service.
   if (!env.BRVIN_SERVICE) {
     const production = env.ENVIRONMENT === "production";
-    return {
-      ok: !production,
-      status: production ? "degraded" : "healthy",
-      brvinRetrievalConnected: false,
-    };
+    return { ok: !production, status: production ? "degraded" : "healthy", brvinRetrievalConnected: false };
   }
 
   try {
-    // Apply the idempotent D1 schema and seed the project/client mapping before
-    // the first production RPC health check after deployment.
     await ensureAnalyticsSchema(env);
     const status = await env.BRVIN_SERVICE.getProjectStatus();
     const connected = status.ok === true;
+    const authorizedSources = connected && Number.isSafeInteger(status.authorizedSourceCount)
+      ? Math.max(0, status.authorizedSourceCount)
+      : 0;
+    const ready = connected && status.ready === true && authorizedSources > 0;
     return {
-      ok: connected,
-      status: connected ? "healthy" : "degraded",
+      ok: ready,
+      status: ready ? "healthy" : "degraded",
       brvinRetrievalConnected: connected,
-      ...(status.ok ? { brvinReady: status.ready, authorizedSources: status.authorizedSourceCount } : {}),
+      brvinReady: ready,
+      authorizedSources,
     };
   } catch {
-    return { ok: false, status: "degraded", brvinRetrievalConnected: false };
+    return { ok: false, status: "degraded", brvinRetrievalConnected: false, brvinReady: false, authorizedSources: 0 };
   }
 }
-
 async function bestEffortTelegram<T>(label: string, fn: () => Promise<T>): Promise<T | undefined> {
   try { return await fn(); }
   catch (error) {

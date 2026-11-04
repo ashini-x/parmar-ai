@@ -45,6 +45,48 @@ describe("Parmar AI production worker", () => {
     expect(body.service).toBeUndefined();
     expect(body.checks).toBeUndefined();
   });
+  it("fails health when BRVIN is reachable but Fatman has no authorized sources", async () => {
+    const request = new IncomingRequest("http://example.com/health");
+    const ctx = createExecutionContext();
+    const healthEnv = Object.assign(Object.create(testEnv), {
+      DB: undefined,
+      BRVIN_SERVICE: {
+        getProjectStatus: async () => ({ ok: true, ready: false, authorizedSourceCount: 0 }),
+      },
+    }) as Env;
+    const response = await worker.fetch(request, healthEnv, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      status: "degraded",
+      brvinRetrievalConnected: true,
+      brvinReady: false,
+      authorizedSources: 0,
+    });
+  });
+
+  it("fails health when BRVIN client registration is unavailable", async () => {
+    const request = new IncomingRequest("http://example.com/health");
+    const ctx = createExecutionContext();
+    const healthEnv = Object.assign(Object.create(testEnv), {
+      DB: undefined,
+      BRVIN_SERVICE: {
+        getProjectStatus: async () => ({ ok: false, code: "CLIENT_NOT_REGISTERED", message: "Not registered.", retryable: false }),
+      },
+    }) as Env;
+    const response = await worker.fetch(request, healthEnv, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      status: "degraded",
+      brvinRetrievalConnected: false,
+      brvinReady: false,
+      authorizedSources: 0,
+    });
+  });
+
 
   it("returns 404 for unknown routes", async () => {
     const request = new IncomingRequest("http://example.com/not-a-route");
