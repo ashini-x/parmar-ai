@@ -10,6 +10,7 @@ vi.mock("../src/analytics/db", () => analytics);
 import {
   buildFatmanRetrievalQuery,
   buildFatmanSearchQueries,
+  extractFatmanPageNumbers,
   extractFatmanEvidenceExcerpt,
   FatmanRetrievalError,
   formatFatmanCitations,
@@ -223,6 +224,13 @@ describe("Fatman page retrieval", () => {
     expect(excerpt).toContain("Buxar");
     expect(excerpt).toContain("Allahabad");
     expect(excerpt).toContain("Diwani");
+  });
+
+  it("extracts explicit PDF page references and removes the locator from semantic search variants", () => {
+    expect(extractFatmanPageNumbers("Please explain the concept in simple language which is in page 200")).toEqual([200]);
+    expect(extractFatmanPageNumbers("Explain PDF page no. 17 and pg. 18")).toEqual([17, 18]);
+    expect(buildFatmanSearchQueries("Please explain the concept in simple language which is in page 200"))
+      .not.toContain("page 200");
   });
 
   it("expands short Article lookups and common FR/DPSP shorthand", () => {
