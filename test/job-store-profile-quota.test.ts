@@ -25,6 +25,82 @@ function createStudentStore() {
 }
 
 describe("shared per-student question tracking", () => {
+  it("preserves the daily question limit after /delete_data clears all study state", async () => {
+    const { chatId, botConnectionId, call } = createStudentStore();
+
+    for (let index = 1; index <= 20; index += 1) {
+      const result = await call<{ action: string }>({
+        action: "begin",
+        botConnectionId,
+        updateId: index,
+        chatId,
+        telegramUserId: chatId,
+        question: `Question before data deletion ${index}`,
+        messageId: index,
+        requestId: `delete-data-quota-${chatId}-${index}`,
+        createdAt: Date.now(),
+        requestedQuizCount: 1,
+        fatmanModeSnapshot: index % 2 === 0,
+      });
+      expect(result.action).toBe("new");
+    }
+
+    await call({ action: "set_exam", exam: "SSC CGL" });
+    await call({ action: "set_fatman_mode", botConnectionId, active: true });
+
+    const beforeDeletion = await call<{
+      usage: { dayCount: number; dailyLimit: number; unlimited: boolean };
+    }>({ action: "get_usage", telegramUserId: chatId });
+    expect(beforeDeletion.usage.dayCount).toBe(20);
+
+    await call({ action: "delete_data" });
+
+    const clearedProfile = await call<{ profile: {
+      questionCount: number;
+      targetExam: string;
+      recentTopics: string[];
+    } }>({ action: "get_profile" });
+    expect(clearedProfile.profile.questionCount).toBe(0);
+    expect(clearedProfile.profile.targetExam).toBe("SSC (not specified)");
+    expect(clearedProfile.profile.recentTopics).toEqual([]);
+
+    const clearedMode = await call<{ active: boolean }>({
+      action: "get_fatman_mode",
+      botConnectionId,
+    });
+    expect(clearedMode.active).toBe(false);
+
+    const afterDeletion = await call<{
+      usage: { dayCount: number; dailyLimit: number; unlimited: boolean };
+    }>({ action: "get_usage", telegramUserId: chatId });
+    expect(afterDeletion.usage).toEqual({
+      dayCount: 20,
+      dailyLimit: 20,
+      unlimited: false,
+    });
+
+    const twentyFirst = await call<{
+      action: string;
+      rateLimitReason?: string;
+    }>({
+      action: "begin",
+      botConnectionId,
+      updateId: 21,
+      chatId,
+      telegramUserId: chatId,
+      question: "Question after deleting stored data",
+      messageId: 21,
+      requestId: `delete-data-quota-${chatId}-21`,
+      createdAt: Date.now(),
+      requestedQuizCount: 1,
+      fatmanModeSnapshot: false,
+    });
+    expect(twentyFirst).toMatchObject({
+      action: "rate_limited",
+      rateLimitReason: "daily",
+    });
+  });
+
   it("uses one 20-question daily allowance across Fatman and normal mode", async () => {
     const { chatId, botConnectionId, call } = createStudentStore();
 
