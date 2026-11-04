@@ -691,7 +691,7 @@ async function ensureBrvinCompatibilitySchema(env: Env): Promise<void> {
       ).bind("2026-11-03-fatman-books-to-brvin-v1", now),
     ]);
   }
-}
+  }
 
   // Each project slug is its default trusted Worker client identity. A Service
   // Binding supplies this identity through ctx.props; request payloads cannot.
@@ -699,6 +699,7 @@ async function ensureBrvinCompatibilitySchema(env: Env): Promise<void> {
     "INSERT OR IGNORE INTO brvin_service_clients (client_id,project_id,created_at,updated_at) " +
     "SELECT slug,id,created_at,updated_at FROM brvin_projects"
   ).run();
+}
 
 export async function ensureAnalyticsSchema(env: Env): Promise<void> {
   if (!env.DB) return;
