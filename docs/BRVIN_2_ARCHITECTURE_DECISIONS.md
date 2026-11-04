@@ -19,7 +19,7 @@ BRVIN 2 will introduce three additive D1 entities:
 
 The private retrieval Worker will resolve its caller from the Service Binding's deployment-controlled `ctx.props.applicationEnvironmentId`. A request's `projectId` selects a requested project; it never authenticates or authorises that project. Every v2 request must resolve the environment, verify the application and environment are active, verify the exact application-project grant, verify the project is active, then resolve only that project's ready and fully indexed direct/collection-granted sources.
 
-The existing `brvin_service_clients` mapping and v1 methods remain supported during migration. They are not reinterpreted as application records and are not deleted in Milestone 1. The Fatman `fatman_search_usage` counter, source rows, project grants, collections, page keys and shared AI Search resource remain intact.
+The existing `brvin_service_clients` mapping and v1 methods remain supported during migration. They are not reinterpreted as application records and are not deleted in Milestone 1. Existing project IDs remain unchanged: production Fatman currently uses the literal text ID `fatman`, while new projects are provisioned with UUIDs. V2 treats project IDs as opaque selectors and supports both. The Fatman `fatman_search_usage` counter, source rows, project grants, collections, page keys and shared AI Search resource remain intact.
 
 ## 2. Decisions
 
