@@ -1,6 +1,6 @@
 # Release Process
 
-**Production line: 2.6.x**
+**Production line: 2.8.0**
 
 Parmar AI releases are controlled changes, not ad-hoc source uploads.
 
@@ -42,7 +42,19 @@ Update the affected:
 
 Deploy the exact verified artifact and record the provider-side deployment/version identifier.
 
-## 6. Smoke test
+## 6. Live release acceptance
+
+Run `node scripts/production-release-acceptance.mjs` after deployment and before declaring the release accepted. The script is read-only and requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+
+It must confirm:
+- the newest `parmar-ai` deployment has exactly one version at 100% traffic;
+- the newest `brvin-service` deployment has exactly one version at 100% traffic;
+- the public root endpoint identifies the परमार्थAI Worker;
+- `/health` is healthy, its BRVIN binding is connected, Fatman retrieval is ready, and at least one authorised source exists.
+
+The script writes `dist/production-release-manifest.json` and appends a GitHub Actions summary. The manifest contains deployment/version IDs, source revision, workflow run, endpoint checks, and timestamp; it must not contain secrets or student data. A manual `workflow_dispatch` run performs the same read-only check without deploying.
+
+## 7. Smoke test
 
 At minimum, validate:
 
@@ -54,13 +66,13 @@ At minimum, validate:
 - affected administrative action
 - relevant state/analytics changes
 
-## 7. Rollback
+## 8. Rollback
 
-Rollback to a previously verified production version.
+Rollback to a previously verified Cloudflare version.
 
 Do not reconstruct a rollback manually from memory or from an edited working directory.
 
-## 8. Post-release review
+## 9. Post-release review
 
 Confirm:
 
@@ -70,6 +82,6 @@ Confirm:
 - no secret material entered the repository;
 - documentation describes the released state.
 
-## 9. Emergency changes
+## 10. Emergency changes
 
 Security and outage fixes may prioritize stabilization first, but they still require a formal change record and documentation review before the next normal release.
