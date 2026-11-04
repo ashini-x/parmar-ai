@@ -42,10 +42,19 @@ function assertHealth(body) {
     throw new Error("Private BRVIN service binding is not connected.");
   }
   if (body?.brvinReady !== true) {
-    throw new Error("Fatman book retrieval is not ready.");
+    throw new Error("Fatman v1 book retrieval is not ready.");
   }
   if (!Number.isSafeInteger(body?.authorizedSources) || body.authorizedSources < 1) {
-    throw new Error("Fatman has no authorized book sources.");
+    throw new Error("Fatman has no authorized v1 book sources.");
+  }
+  if (body?.brvinV2Connected !== true || body?.brvinV2Ready !== true) {
+    throw new Error("BRVIN v2 application identity or Fatman project authorisation is not ready.");
+  }
+  if (
+    !Number.isSafeInteger(body?.brvinV2AuthorizedSources) ||
+    body.brvinV2AuthorizedSources !== body.authorizedSources
+  ) {
+    throw new Error("BRVIN v1 and v2 Fatman source readiness checks do not match.");
   }
 }
 

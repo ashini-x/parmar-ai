@@ -6,7 +6,7 @@
 **First additional consumer:** `ashini-x/askmoina-voice`  
 **Created:** 4 November 2026  
 **Planning baseline:** `main` at `939a6046f2a6fa461898f2479e6ed22923e3f3f9`  
-**Overall implementation status:** M0 design owner-approved for progression (PR #60 remains open/unmerged); M1 identity registry implementation IN PROGRESS on `brvin-2/m1-identity-registry`
+**Overall implementation status:** M0 architecture freeze and M1 identity registry merged to `main`; production schema/seed verified. M2 private retrieval RPC v2 is IN PROGRESS on `brvin-2/m2-private-rpc-v2`.
 
 > **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
 
@@ -262,9 +262,9 @@ All milestones initially start as **NOT STARTED**. Change a status only after im
 
 | Milestone | Name | Initial status | Completion outcome |
 |---|---|---|---|
-| 0 | Architecture freeze and migration blueprint | OWNER-APPROVED; PR #60 OPEN/UNMERGED | Approved ADR, D1 design, RPC v2 contract and backwards-compatible rollout sequence |
-| 1 | Multi-application, multi-project identity | IN PROGRESS | Additive D1 registry schema, verified retry-safe Parmar AI/Fatman seed, migration and concurrency tests; no production apply yet |
-| 2 | Private retrieval API v2 | NOT STARTED | Trusted app identity and explicit per-project authorisation enforced on every retrieval |
+| 0 | Architecture freeze and migration blueprint | COMPLETE | M0 design package merged to `main` in PR #61; original docs-only PR #60 closed as superseded |
+| 1 | Multi-application, multi-project identity | COMPLETE | PR #61 merged; Release Validation #586 passed; additive registry migration applied and production rows/FK check verified; v1/Fatman preserved |
+| 2 | Private retrieval API v2 | IN PROGRESS | Implement explicit v2 RPC methods with environment-bound identity and per-project authorisation; retain v1 unchanged |
 | 3 | Reusable BRVIN application connector | NOT STARTED | Typed reusable app-side adapter and tests |
 | 4 | AskMoina Voice integration | NOT STARTED | Real Gemini Live tool-to-BRVIN-to-answer flow verified |
 | 5 | BRVIN application/project administration | NOT STARTED | Admin can manage apps, projects, grants and knowledge centrally |
@@ -420,8 +420,8 @@ This table is the human-readable status. The evidence fields must be filled from
 
 | Milestone | Status | PR / commit | Verification evidence | Notes |
 |---|---|---|---|---|
-| 0 — Architecture freeze | OWNER-APPROVED; PR OPEN/UNMERGED | [PR #60](https://github.com/ashini-x/parmar-ai/pull/60) | User authorised progression on 4 Nov 2026; ADR/RPC v2 contract cross-checked; latest docs-only CI run #582 passed | Documentation remains unmerged; M1 is stacked on its branch; no production writes |
-| 1 — Identity model | IN PROGRESS | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61) — `brvin-2/m1-identity-registry` | Release Validation run #586 passed typecheck, unit tests, Node tests and both Worker dry-runs | No D1 migration applied; v1 behavior unchanged |
+| 0 — Architecture freeze | COMPLETE | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61) merged as `5735314b3e692019c34ba3d2a0d851cbb6c43aa3` | ADR and RPC v2 contract merged to main; Release Validation #586 passed for the combined code/docs PR | Original docs-only PR #60 closed as superseded |
+| 1 — Identity model | COMPLETE | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61), merge commit `5735314b3e692019c34ba3d2a0d851cbb6c43aa3` | Release Validation #586 passed; production migration marker and all three seed rows verified; foreign-key check empty; both Workers active on new versions | No v1 RPC or Fatman permissions/counter reset |
 | 2 — Private RPC v2 | NOT STARTED | — | — | Must remain private |
 | 3 — Reusable connector | NOT STARTED | — | — | Standard app-side adapter |
 | 4 — AskMoina integration | NOT STARTED | — | — | First additional live consumer |
@@ -451,9 +451,9 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 
 ### Milestone log — 4 November 2026 — Milestone 0
 
-**Status:** READY FOR REVIEW (not marked complete until the design PR is reviewed and merged).  
+**Status:** COMPLETE. The ADR and RPC contract were merged to `main` in PR #61 on 4 November 2026.  
 **Branch:** `brvin-2/m0-architecture-freeze`  
-**Pull request:** https://github.com/ashini-x/parmar-ai/pull/60  
+**Original review artifact:** https://github.com/ashini-x/parmar-ai/pull/60 (closed as superseded after PR #61 merged).  
 **Base audited:** `main` at `a16a9273d581d9dd5acfc3c53c3cc1f2cba819fd`
 
 **Paths changed:**
@@ -472,7 +472,7 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 
 **Deployment / rollback:** no deployment was attempted, so no rollback was required. Existing paired release workflow is unchanged.
 
-**Outstanding gate / next milestone:** review and merge PR #60. After that, begin Milestone 1 from the approved ADR with additive schema/migration tests only; keep v1 retrieval behavior and production binding unchanged.
+**Completion evidence:** PR #61 merged to `main` as `5735314b3e692019c34ba3d2a0d851cbb6c43aa3`. Production D1 contains `brvin_applications`, `brvin_application_environments`, and `brvin_application_project_grants`; migration marker `brvin2-application-identities-v1` is present; Parmar AI application, production environment and Fatman grant match the reserved IDs; `PRAGMA foreign_key_check` returned no rows. The live Worker deployment history shows active versions `brvin-service` `0612b809-84fa-4aab-8a55-3b37262d2409` and `parmar-ai` `ac6a70a2-c4ba-484c-809f-e0ec52fdda1d`. Legacy v1 client `fatman -> fatman`, active Fatman project, ready 538/538-page book, direct book grant, Fatman Core collection grant and `2026-11` usage count 20 remain unchanged. The M2 RPC implementation is now underway.
 
 ### Milestone log — 4 November 2026 — Milestone 1 (implementation in progress)
 
@@ -490,6 +490,50 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 **Verification:** Release Validation run #586 completed successfully on the corrected M1 head `bf8567322b84dee5954443171500af44aac08f29`: `npm run check`, `npm test`, `npm run test:node`, the private BRVIN Worker Wrangler dry-run, and the Parmar AI Worker Wrangler dry-run all passed. The production credential, deployment and live-acceptance jobs were skipped for this PR. Earlier run #584 caught three strict-typing issues in the fake-D1 test double; those were corrected before run #586. Run #585 was cancelled by the PR concurrency group and is not counted as validation.
 
 **Next actions:** complete the M1 code/design review, verify the exact production D1 baseline immediately before rollout, then apply the additive migration only through the approved release path. PR #61 contains the M0 design files and M1 source slice; PR #60 remains open as the original docs-only review artifact. Do not deploy or apply the D1 migration until the M1 review and release gate are satisfied.
+
+### Milestone log — 4 November 2026 — M1 production migration completed
+
+**Status:** COMPLETE — merged and live identity registry verified.
+**Pull request:** https://github.com/ashini-x/parmar-ai/pull/61
+**Merge commit:** `5735314b3e692019c34ba3d2a0d851cbb6c43aa3`.
+**Implementation validation:** Release Validation run #586 passed `npm run check`, `npm test`, `npm run test:node`, private BRVIN Worker Wrangler dry-run and Parmar AI Worker Wrangler dry-run. The check ran against implementation commit `bf8567322b84dee5954443171500af44aac08f29`; the final merge added documentation-only ledger changes after that validated code commit.
+
+**Production deployment:** Both Workers received active 100% deployments after merge. `brvin-service`: `0612b809-84fa-4aab-8a55-3b37262d2409`; `parmar-ai`: `ac6a70a2-c4ba-484c-809f-e0ec52fdda1d`. The existing production release workflow includes the paired deployment, `/health`/root smoke test and release manifest acceptance.
+
+**Production D1 evidence (read-only verification after migration):**
+- New tables exist: `brvin_applications`, `brvin_application_environments`, `brvin_application_project_grants`.
+- Migration marker `brvin2-application-identities-v1` exists.
+- Application `00000000-0000-4000-8000-000000000101` = active `parmar-ai` / Parmar AI.
+- Production environment `00000000-0000-4000-8000-000000000102` = active and correctly parented to the Parmar AI application.
+- Grant `00000000-0000-4000-8000-000000000103` = active Parmar AI → existing Fatman project `fatman`.
+- `PRAGMA foreign_key_check` returned no rows.
+- Legacy client remains `fatman -> fatman`; the sole registered project remains active Fatman; its 538-page built-in book remains ready at 538/538; its direct book grant and Fatman Core collection grant remain unchanged.
+- `fatman_search_usage` for `2026-11` remains at 20. All inspected queries were read-only (`rows_written=0`).
+
+**Compatibility boundary:** The new registry is present, but M2 v2 resolver/RPC methods are not yet implemented. The current live Parmar AI binding continues to use v1 `props.clientId='fatman'`; no v2 caller cutover has happened.
+
+**Outstanding:** No source, permission, quota or end-to-end retrieval behavior was changed by the migration. M2 must now implement the private v2 RPC and comprehensive negative/authorization tests without removing or changing v1.
+
+### Milestone log — 4 November 2026 — Milestone 2 implementation in progress
+
+**Status:** IN PROGRESS — RPC v2 implementation and tests are in PR #62; the latest health-probe changes require a fresh validation run before review/merge.
+**Branch:** `brvin-2/m2-private-rpc-v2`.
+**Pull request:** https://github.com/ashini-x/parmar-ai/pull/62.
+
+**Paths currently changed for M2:**
+- `src/config/env.ts` — typed v2 project selector, authorized-project metadata, success/failure envelope, error codes and service binding methods.
+- `src/brvin/service-core.ts` — strict trusted environment resolution, active application check, per-project grant verification, app-scoped project discovery, project status, bounded retrieval, existing project-level quota reuse and structured content-free logs.
+- `src/brvin/service-worker.ts` — additive v2 WorkerEntrypoint methods; v1 methods remain explicitly tied to `clientId`.
+- `test/brvin-v2-service.test.ts` — environment/project failures, no identity fallback, opaque Fatman ID, denied grants, inactive app/environment/project, no-source behavior, bounded inputs, folder filtering and Fatman quota tests.
+- `wrangler.jsonc` — adds the seeded Parmar AI production `applicationEnvironmentId` alongside the existing `clientId` in trusted Service Binding props; no preview or AskMoina binding is changed.
+- `src/index.ts` — `/health` probes both v1 and v2 Fatman project status and requires their authorised-source counts to match. The v2 status probe does not consume retrieval quota.
+- `scripts/production-smoke-test.mjs` — requires the production smoke check to verify both v1 and v2 readiness.
+
+**Verification so far:** core v2 code passed Release Validation run #590 (TypeScript, unit tests, Node tests, private BRVIN Worker dry-run and Parmar AI Worker dry-run). That run preceded the later dual-health-probe, production binding-props and smoke-script edits; those edits are not yet claimed validated. Run #589 was cancelled by GitHub PR concurrency and is not counted.
+
+**Production boundary:** none of the M2 branch changes are deployed or applied. Current production remains on M1 deployment versions until M2 is reviewed/merged. No D1 schema or source grant change is part of M2.
+
+**Next actions:** rerun CI against the latest PR #62 head. If all checks pass, merge/deploy the private service RPC plus dual health probe through the established main-branch workflow and verify the live v1/v2 status checks, source parity, Fatman retrieval and unchanged usage policy. Do not switch end-user retrieval consumers to v2 until the next planned integration milestones.
 
 ## 8. Rules for future ChatGPT/Codex sessions
 

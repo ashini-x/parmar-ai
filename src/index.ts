@@ -1822,26 +1822,59 @@ async function telegramSetupMethod(env: Env, method: string, payload: Record<str
 async function buildHealth(env: Env) {
   if (!env.BRVIN_SERVICE) {
     const production = env.ENVIRONMENT === "production";
-    return { ok: !production, status: production ? "degraded" : "healthy", brvinRetrievalConnected: false };
+    return {
+      ok: !production,
+      status: production ? "degraded" : "healthy",
+      brvinRetrievalConnected: false,
+      brvinReady: false,
+      authorizedSources: 0,
+      brvinV2Connected: false,
+      brvinV2Ready: false,
+      brvinV2AuthorizedSources: 0,
+    };
   }
 
   try {
     await ensureAnalyticsSchema(env);
-    const status = await env.BRVIN_SERVICE.getProjectStatus();
+    // Keep the v1 check in place for current retrieval traffic while also
+    // exercising the new environment-bound v2 identity and project grant.
+    // Status probes do not reserve the project's monthly retrieval quota.
+    const [status, v2Status] = await Promise.all([
+      env.BRVIN_SERVICE.getProjectStatus(),
+      env.BRVIN_SERVICE.getProjectStatusV2({ projectId: "fatman" }),
+    ]);
     const connected = status.ok === true;
     const authorizedSources = connected && Number.isSafeInteger(status.authorizedSourceCount)
       ? Math.max(0, status.authorizedSourceCount)
       : 0;
-    const ready = connected && status.ready === true && authorizedSources > 0;
+    const legacyReady = connected && status.ready === true && authorizedSources > 0;
+    const v2Connected = v2Status.ok === true;
+    const v2AuthorizedSources = v2Connected && Number.isSafeInteger(v2Status.data.authorizedSourceCount)
+      ? Math.max(0, v2Status.data.authorizedSourceCount)
+      : 0;
+    const v2Ready = v2Connected && v2Status.data.ready === true && v2AuthorizedSources > 0;
+    const ready = legacyReady && v2Ready && v2AuthorizedSources === authorizedSources;
     return {
       ok: ready,
       status: ready ? "healthy" : "degraded",
       brvinRetrievalConnected: connected,
-      brvinReady: ready,
+      brvinReady: legacyReady,
       authorizedSources,
+      brvinV2Connected: v2Connected,
+      brvinV2Ready: v2Ready,
+      brvinV2AuthorizedSources: v2AuthorizedSources,
     };
   } catch {
-    return { ok: false, status: "degraded", brvinRetrievalConnected: false, brvinReady: false, authorizedSources: 0 };
+    return {
+      ok: false,
+      status: "degraded",
+      brvinRetrievalConnected: false,
+      brvinReady: false,
+      authorizedSources: 0,
+      brvinV2Connected: false,
+      brvinV2Ready: false,
+      brvinV2AuthorizedSources: 0,
+    };
   }
 }
 async function bestEffortTelegram<T>(label: string, fn: () => Promise<T>): Promise<T | undefined> {

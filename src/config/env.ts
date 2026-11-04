@@ -122,7 +122,75 @@ export type BrvinServiceRetrievalResult =
     }
   | BrvinServiceFailure;
 
-export interface BrvinServiceBinding {
+export interface BrvinProjectSelector {
+  /** Opaque BRVIN project identifier; never an authorisation credential. */
+  projectId: string;
+}
+
+export interface BrvinAuthorizedProject {
+  projectId: string;
+  slug: string;
+  name: string;
+  description: string;
+  ready: boolean;
+  authorizedSourceCount: number;
+}
+
+export type BrvinV2Passage = BrvinRemotePassage;
+export type BrvinV2PageImage = BrvinRemotePageImage;
+
+export interface BrvinV2RetrievalInput extends BrvinProjectSelector {
+  queries: string[];
+  pageNumbers?: number[];
+  requestId?: string;
+}
+
+export interface BrvinV2RetrievalData {
+  passages: BrvinV2Passage[];
+  pageImages?: BrvinV2PageImage[];
+  searchedSources: number;
+  searchCount: number;
+}
+
+export type BrvinV2FailureCode =
+  | "INVALID_REQUEST"
+  | "APPLICATION_NOT_REGISTERED"
+  | "APPLICATION_INACTIVE"
+  | "ENVIRONMENT_NOT_REGISTERED"
+  | "ENVIRONMENT_INACTIVE"
+  | "PROJECT_NOT_AUTHORIZED"
+  | "PROJECT_INACTIVE"
+  | "MONTHLY_LIMIT_REACHED"
+  | "RETRIEVAL_FAILED"
+  | "BRVIN_UNAVAILABLE";
+
+export interface BrvinV2Success<T> {
+  ok: true;
+  data: T;
+}
+
+export interface BrvinV2Failure {
+  ok: false;
+  code: BrvinV2FailureCode;
+  message: string;
+  retryable: boolean;
+  userMessage?: string;
+  requestId?: string;
+}
+
+export type BrvinV2Result<T> = BrvinV2Success<T> | BrvinV2Failure;
+
+export interface BrvinServiceV2Binding {
+  listAuthorizedProjectsV2(): Promise<BrvinV2Result<BrvinAuthorizedProject[]>>;
+  getProjectStatusV2(input: BrvinProjectSelector): Promise<BrvinV2Result<{
+    projectId: string;
+    ready: boolean;
+    authorizedSourceCount: number;
+  }>>;
+  retrieveProjectContextV2(input: BrvinV2RetrievalInput): Promise<BrvinV2Result<BrvinV2RetrievalData>>;
+}
+
+export interface BrvinServiceBinding extends BrvinServiceV2Binding {
   getProjectStatus(): Promise<BrvinServiceStatusResult>;
   retrieveProjectContext(input: { queries: string[]; pageNumbers?: number[] }): Promise<BrvinServiceRetrievalResult>;
 }
