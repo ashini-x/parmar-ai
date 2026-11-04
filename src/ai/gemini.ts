@@ -270,7 +270,10 @@ export async function generateGeminiAnswer(
   const location = env.GEMINI_LOCATION?.trim() || DEFAULT_LOCATION;
   const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
-  const thinkingLevel = selectThinkingLevel(normalizedQuestion, getConfig(env).maxThinkingLevel);
+  const requestedThinkingLevel = selectThinkingLevel(normalizedQuestion, getConfig(env).maxThinkingLevel);
+  // Retrieved book material already constrains the evidence. Medium thinking
+  // leaves more of the bounded output budget for the actual explanation.
+  const thinkingLevel = bookContext ? minThinking(requestedThinkingLevel, "MEDIUM") : requestedThinkingLevel;
   const identityQuestion = isBotIdentityQuestion(normalizedQuestion);
   const requiresGrounding = !bookContext && !identityQuestion && requiresFreshData(normalizedQuestion) && isGroundingEnabled(env);
   const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, profile);
@@ -289,12 +292,15 @@ export async function generateGeminiAnswer(
 
   for (let attempt = 1; attempt <= MAX_INTERNAL_ATTEMPTS; attempt += 1) {
     try {
-      if (attempt > 1) {
-        await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.retrying);
-      } else if (bookContext) {
+      // A retry is announced during the backoff after a failed request, not
+      // while the next generation is running. Every new attempt returns to a
+      // truthful working state before it starts streaming.
+      if (bookContext) {
         await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.writingAnswer);
       } else if (requiresGrounding) {
         await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingSources);
+      } else if (attempt > 1) {
+        await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.preparingAnswer);
       }
 
       const result = await requestVertexGemini(
@@ -319,6 +325,7 @@ export async function generateGeminiAnswer(
 
       if (!geminiError.retryable || attempt >= MAX_INTERNAL_ATTEMPTS) throw geminiError;
 
+      await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.retrying);
       await sleep(800 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
     }
   }
@@ -351,7 +358,12 @@ async function requestVertexGemini(
   }
 
   const controller = new AbortController();
-  const timeoutMs = positiveInt(env.VERTEX_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
+  const configuredTimeoutMs = positiveInt(env.VERTEX_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
+  // Page-grounded answers may include scanned-page vision input and need a
+  // little more wall time than the text-only path, without changing normal mode.
+  const timeoutMs = bookContext
+    ? Math.max(configuredTimeoutMs, 45_000)
+    : configuredTimeoutMs;
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
@@ -384,10 +396,10 @@ async function requestVertexGemini(
       generationConfig: {
         thinkingConfig: { thinkingLevel },
         maxOutputTokens: Math.min(
-          6_000,
+          bookContext ? 8_192 : 6_000,
           Math.max(
             positiveInt(env.MAX_OUTPUT_TOKENS, 1_200),
-            bookContext ? 2_048 + (attempt > 1 ? 512 : 0) : 700 + requestedQuizCount * 450 + (attempt > 1 ? 400 : 0),
+            bookContext ? 4_096 + (attempt > 1 ? 1_024 : 0) : 700 + requestedQuizCount * 450 + (attempt > 1 ? 400 : 0),
           ),
         ),
         responseMimeType: "application/json",
@@ -415,10 +427,10 @@ async function requestVertexGemini(
     let data: GeminiApiResponse;
     if (response.ok && onPartialAnswer) {
       try {
-        // Fatman must show only validated, complete answers. A partial JSON answer
-        // from an attempt that later fails validation or hits MAX_TOKENS must never
-        // be presented as a finished explanation before the internal retry begins.
-        data = await readVertexGeminiStream(response, onPartialAnswer, !bookContext);
+        // Stream the decoded answer field into the same Telegram message in
+        // every mode. If an attempt fails validation or hits MAX_TOKENS, the
+        // retry state replaces its draft and the next attempt streams afresh.
+        data = await readVertexGeminiStream(response, onPartialAnswer);
       } finally {
         await onPartialAnswer.flush();
       }
@@ -1230,7 +1242,6 @@ function isRetryableStatus(status: number): boolean {
 export async function readVertexGeminiStream(
   response: Response,
   onPartialAnswer: PartialAnswerHandler,
-  emitPartialAnswer = true,
 ): Promise<GeminiApiResponse> {
   const reader = response.body?.getReader();
   if (!reader) throw new GeminiError("Vertex AI streaming response had no body.", undefined, true);
@@ -1284,7 +1295,7 @@ export async function readVertexGeminiStream(
     if (responseMode !== "text") return;
 
     const partialAnswer = extractPartialJsonString(responseText, "answer");
-    if (partialAnswer && emitPartialAnswer) {
+    if (partialAnswer) {
       // A Telegram update failure must not interrupt generation or final validation.
       onPartialAnswer(replaceGeneratedEmDash(partialAnswer));
     }
