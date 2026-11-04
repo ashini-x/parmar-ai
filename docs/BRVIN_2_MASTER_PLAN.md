@@ -420,7 +420,7 @@ This table is the human-readable status. The evidence fields must be filled from
 
 | Milestone | Status | PR / commit | Verification evidence | Notes |
 |---|---|---|---|---|
-| 0 — Architecture freeze | READY FOR REVIEW | [PR #60](https://github.com/ashini-x/parmar-ai/pull/60), head `571857252c84f132fecb6bb98b81828a58c9a1df` | ADR and RPC v2 contract added; current D1/code/Cloudflare state reconciled; no runtime or production writes | Awaiting review/merge; design only, not implementation |
+| 0 — Architecture freeze | READY FOR REVIEW | [PR #60](https://github.com/ashini-x/parmar-ai/pull/60) | ADR and RPC v2 contract added; current D1/code/Cloudflare state reconciled; no runtime or production writes | Awaiting review/merge; design only, not implementation |
 | 1 — Identity model | NOT STARTED | — | — | Must preserve Fatman |
 | 2 — Private RPC v2 | NOT STARTED | — | — | Must remain private |
 | 3 — Reusable connector | NOT STARTED | — | — | Standard app-side adapter |
@@ -454,7 +454,6 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 **Status:** READY FOR REVIEW (not marked complete until the design PR is reviewed and merged).  
 **Branch:** `brvin-2/m0-architecture-freeze`  
 **Pull request:** https://github.com/ashini-x/parmar-ai/pull/60  
-**PR head:** `571857252c84f132fecb6bb98b81828a58c9a1df`  
 **Base audited:** `main` at `a16a9273d581d9dd5acfc3c53c3cc1f2cba819fd`
 
 **Paths changed:**
