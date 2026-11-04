@@ -284,6 +284,36 @@ describe("BRVIN 2 AskMoina application identity registration", () => {
     expect(db.markerBatches).toBe(0);
   });
 
+  it("serializes simultaneous initialization without duplicating AskMoina identities", async () => {
+    const db = new FakeD1();
+
+    await Promise.all([
+      ensureBrvin2AskMoinaIdentities(asD1(db), 1_800_000_000_000),
+      ensureBrvin2AskMoinaIdentities(asD1(db), 1_800_000_000_001),
+    ]);
+
+    expect(db.getApplication()).toBeDefined();
+    expect(db.getEnvironment(BRVIN2_ASKMOINA_IDENTITIES.productionEnvironmentId)).toBeDefined();
+    expect(db.getEnvironment(BRVIN2_ASKMOINA_IDENTITIES.previewEnvironmentId)).toBeDefined();
+    expect(db.getGrant()?.project_id).toBe("fatman");
+  });
+
+  it("fails closed when orphaned AskMoina environment rows exist without the application", async () => {
+    const db = new FakeD1({
+      environments: [{
+        id: BRVIN2_ASKMOINA_IDENTITIES.productionEnvironmentId,
+        application_id: "different-application",
+        environment_key: "production",
+        status: "active",
+      }],
+    });
+
+    await expect(ensureBrvin2AskMoinaIdentities(asD1(db)))
+      .rejects.toThrow("orphaned AskMoina environment");
+    expect(db.seedBatches).toBe(0);
+    expect(db.markerBatches).toBe(0);
+  });
+
   it("does not register AskMoina when Fatman is missing or inactive", async () => {
     const missing = new FakeD1({ projects: [] });
     await expect(ensureBrvin2AskMoinaIdentities(asD1(missing)))
