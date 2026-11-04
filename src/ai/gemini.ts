@@ -102,6 +102,8 @@ FATMAN BOOK MODE
 - Never invent facts, page numbers, printed page numbers, section headings or citations. The application adds verified source citations.
 - Do not say a concept is missing when the supplied text or scanned page contains the answer.
 - Always provide a useful compact SSC Focus takeaway when the retrieved material contains an exam-relevant point. Return it in the sscTakeaway field so the application can append it.
+- TELEGRAM LAYOUT (mandatory): Use actual paragraph breaks in the answer field. Keep each paragraph to 1–3 short sentences and separate different ideas with a blank line. Put every bullet or numbered point on its own line. Use short standalone labels such as "Meaning:", "How it works:", and "Example:" when they improve clarity. Never put the entire explanation into one dense paragraph.
+- The answer is sent as plain Telegram text, so preserve real line breaks as JSON-escaped \\n characters. Do not emit HTML tags such as <br>, markdown tables, or a single unbroken block of text.
 - Use responseMode text in Fatman Mode. If the student asks for MCQs, explain the relevant point in the answer text rather than creating a Telegram quiz.
 `;
 
@@ -413,7 +415,10 @@ async function requestVertexGemini(
     let data: GeminiApiResponse;
     if (response.ok && onPartialAnswer) {
       try {
-        data = await readVertexGeminiStream(response, onPartialAnswer);
+        // Fatman must show only validated, complete answers. A partial JSON answer
+        // from an attempt that later fails validation or hits MAX_TOKENS must never
+        // be presented as a finished explanation before the internal retry begins.
+        data = await readVertexGeminiStream(response, onPartialAnswer, !bookContext);
       } finally {
         await onPartialAnswer.flush();
       }
@@ -618,6 +623,7 @@ function buildFatmanUserPrompt(
     "Do not use outside facts or model memory. If these pages do not answer the question, say so clearly.",
     "Answer the student's actual request. Explain the concept in your own simple words instead of copying or lightly rephrasing whole sentences from the page.",
     "Keep the reply concise and proportional to the question. Preserve the important logic, distinctions and examples needed to understand it.",
+    "Format the answer for Telegram readability: use short paragraphs separated by blank lines, and put each step or bullet on its own line. Do not return one dense paragraph or HTML <br> tags.",
     "Use an analogy or a small example when it makes a difficult concept easier, but do not add unsupported book facts.",
     "For comparisons, include each concept's constitutional Part or Article when shown in the excerpts, even when the student uses shorthand.",
     "Return one compact exam-relevant point in sscTakeaway when the material has a clear SSC connection.",
@@ -1159,7 +1165,7 @@ function replaceGeneratedEmDash(text: string): string {
     .replace(/\s*\u2014\s*/gu, ", ");
 }
 
-function normalizeAnswer(answer: string): string {
+export function normalizeAnswer(answer: string): string {
   return replaceGeneratedEmDash(answer)
     .replace(/\r\n/g, "\n")
     .replace(/\\n/g, "\n")
@@ -1221,9 +1227,10 @@ function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 409 || status === 429 || status >= 500;
 }
 
-async function readVertexGeminiStream(
+export async function readVertexGeminiStream(
   response: Response,
   onPartialAnswer: PartialAnswerHandler,
+  emitPartialAnswer = true,
 ): Promise<GeminiApiResponse> {
   const reader = response.body?.getReader();
   if (!reader) throw new GeminiError("Vertex AI streaming response had no body.", undefined, true);
@@ -1277,7 +1284,7 @@ async function readVertexGeminiStream(
     if (responseMode !== "text") return;
 
     const partialAnswer = extractPartialJsonString(responseText, "answer");
-    if (partialAnswer) {
+    if (partialAnswer && emitPartialAnswer) {
       // A Telegram update failure must not interrupt generation or final validation.
       onPartialAnswer(replaceGeneratedEmDash(partialAnswer));
     }
