@@ -9,7 +9,7 @@ This is the canonical technical reference for BRVIN. It records what exists in c
 
 When a future change alters code, D1 schema, bindings, access rules, ingestion, retrieval, deployment, or integrations, update this document and the relevant specialist document in the same change. Do not silently treat a planned feature as already shipped.
 
-> **BRVIN 2 implementation and chat continuity:** see [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md). The application/environment/project-grant registry (M1) and private application-aware RPC v2 (M2) are implemented and deployed. The exact decisions and methods are documented in [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The current Fatman consumer continues to use v1 retrieval, while the production health check validates v1 and v2 status parity. The reusable connector and AskMoina integration are still future milestones.
+> **BRVIN 2 implementation and chat continuity:** see [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md). The application/environment/project-grant registry (M1), private application-aware RPC v2 (M2), reusable connector (M3), and AskMoina Voice pilot integration are implemented and deployed. The AskMoina voice application is optional for BRVIN acceptance. The current M4 acceptance target is a separate, text-only reference Worker in the AskMoina repository, with its own app/environment identity and isolated project grant.
 
 ## 1. Executive architecture
 
@@ -20,6 +20,7 @@ The current architecture deliberately separates **knowledge administration and i
 - The existing `parmar-ai` Worker owns the protected BRVIN admin workspace, upload gateway, Google Cloud upload/OCR orchestration, Cloudflare Workflow, D1 registration, access grants, and release verification.
 - A second Worker, `brvin-service`, is the private retrieval boundary. Consumer Workers call it with Cloudflare Service Binding RPC. Legacy v1 methods resolve `ctx.props.clientId` to a single project; v2 methods resolve `ctx.props.applicationEnvironmentId` to an application, then verify its active grant for the requested project. Both paths check D1 source grants, search only authorised folders, and validate returned page keys again.
 - The application that called BRVIN remains responsible for its own model, prompt, conversation state, tool/function-call handling, response formatting, and user delivery. BRVIN returns evidence; it does not generate the final answer.
+- The first controlled reference consumer is planned as a separate text-only Worker in `ashini-x/askmoina-voice`. It will not share the existing AskMoina Voice Worker runtime or production state; its own registered application/environment and test-project grant will be used.
 
 ### High-level flow
 
@@ -71,7 +72,8 @@ The two planes share the existing D1 registry and AI Search namespace. They do n
 - M2 added `listAuthorizedProjectsV2()`, `getProjectStatusV2(input)` and `retrieveProjectContextV2(input)` to the private `BrvinRetrievalApi` entrypoint. V1 methods remain available.
 - Parmar AI production carries both `clientId: fatman` and the generated production `applicationEnvironmentId`. `/health` checks v1/v2 Fatman readiness and source-count parity.
 - Current production versions at 100%: `brvin-service` `0adea40e-2a7f-4109-b534-c90a23c3a2fe`; `parmar-ai` `ed90e0be-0606-47f6-8d05-847f2596e03f`.
-- End-user Fatman retrieval remains on v1. No AskMoina binding or app integration is live yet; that is Milestone 4.
+- End-user Fatman retrieval remains on v1. AskMoina Voice's v2 binding and Gemini Live connector/tool integration are already deployed as an optional pilot. Do not make its camera/audio acceptance a BRVIN milestone gate.
+- A separate text-only BRVIN reference-test Worker in the AskMoina repository is the M4 acceptance target; its distinct app/environment identity and isolated test project will be provisioned through the M5 admin workflow.
 ## 2. Architecture decisions that must remain stable
 
 1. **One shared registry:** use the existing BRVIN tables in the shared D1 database. Do not create one D1 database per project or consumer app.
