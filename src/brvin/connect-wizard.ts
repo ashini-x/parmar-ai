@@ -621,15 +621,15 @@ export async function discoverBrvinCloudflareWorkers(env: Env, request: Request)
 export async function registerBrvinTestConsumer(env: Env, request: Request): Promise<Response> {
   let body: { applicationName?: unknown; applicationDescription?: unknown; environmentKey?: unknown; projectName?: unknown; projectDescription?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid test application details." }, 400); }
-  const applicationName = clean(body.applicationName, 100).replace(/\s+/gu, " ");
-  const description = clean(body.applicationDescription, 500);
-  const environmentKey = clean(body.environmentKey, 32).toLowerCase().replace(/[^a-z0-9-]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 32).replace(/-+$/gu, "");
+  const applicationName = "BRVIN Text Test Client";
+  const applicationSlug = "brvin-text-test-client";
+  const description = "Independent text-only BRVIN reference client; no voice runtime dependency.";
+  const environmentKey = "production";
   const projectName = clean(body.projectName, 100).replace(/\s+/gu, " ");
   const projectDescription = clean(body.projectDescription, 500);
   const slugify = (value: string) => value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 64);
-  const applicationSlug = slugify(applicationName);
   const projectSlug = slugify(projectName);
-  if (!applicationName || !applicationSlug || !projectName || !projectSlug || !environmentKey) return json({ ok: false, error: "Enter a valid application, environment and project name." }, 400);
+  if (!projectName || !projectSlug) return json({ ok: false, error: "Enter a valid dedicated test-project name." }, 400);
   try {
     if (!env.DB) return json({ ok: false, error: "BRVIN D1 is not configured." }, 503);
     await ensureAnalyticsSchema(env);
@@ -695,6 +695,12 @@ export async function createBrvinTestClientPullRequest(env: Env, request: Reques
     ]);
     if (!application || application.status !== "active" || !environment || environment.status !== "active" || environment.application_id !== applicationId) {
       return json({ ok: false, error: "Choose an active application and one of its active environment identities." }, 409);
+    }
+    if (application.slug !== "brvin-text-test-client" || environment.environment_key !== "production") {
+      return json({
+        ok: false,
+        error: "This adapter is restricted to the dedicated BRVIN Text Test Client production identity. Existing AskMoina Voice and Parmar AI identities cannot be attached.",
+      }, 409);
     }
     const grant = await env.DB.prepare("SELECT id FROM brvin_application_project_grants WHERE application_id=? AND status='active' LIMIT 1")
       .bind(applicationId).first<{ id: string }>();
