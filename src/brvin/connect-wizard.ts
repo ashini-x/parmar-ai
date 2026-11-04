@@ -710,9 +710,11 @@ export async function createBrvinTestClientPullRequest(env: Env, request: Reques
         error: "This adapter is restricted to the dedicated BRVIN Text Test Client production identity. Existing AskMoina Voice and Parmar AI identities cannot be attached.",
       }, 409);
     }
-    const grant = await env.DB.prepare("SELECT id FROM brvin_application_project_grants WHERE application_id=? AND status='active' LIMIT 1")
-      .bind(applicationId).first<{ id: string }>();
-    if (!grant) return json({ ok: false, error: "Grant this application at least one isolated BRVIN project before connecting its Worker." }, 409);
+    const grant = await env.DB.prepare(
+      "SELECT id,project_id FROM brvin_application_project_grants " +
+      "WHERE application_id=? AND status='active' AND project_id<>'fatman' LIMIT 1"
+    ).bind(applicationId).first<{ id: string; project_id: string }>();
+    if (!grant) return json({ ok: false, error: "Grant this dedicated text-test application an isolated non-Fatman BRVIN project before connecting its Worker." }, 409);
     const cf = await authorizedCloudflare(env, request);
     const { row: ghRow, bundle } = await getGitHubBundle(env);
     const token = await githubInstallationToken(env, bundle, repository);
@@ -764,6 +766,7 @@ export async function createBrvinTestClientPullRequest(env: Env, request: Reques
       selectedRepository: repository, pullRequestUrl: pr.html_url, pullRequestNumber: pr.number,
       pullRequestHeadSha: pr.head?.sha || newCommit.sha, pullRequestCreatedAt: Date.now(),
       connectedApplicationId: applicationId, connectedEnvironmentId: environmentId,
+      connectedProjectId: grant.project_id,
     }, { ...bundle, lastRepository: repository, lastPullRequestUrl: pr.html_url });
     await audit(env, "github", "github.connection_pr_created", "A reviewable GitHub pull request was created for the isolated BRVIN text test Worker.", {
       repository, pullRequestNumber: pr.number, pullRequestUrl: pr.html_url, applicationId, environmentId,
