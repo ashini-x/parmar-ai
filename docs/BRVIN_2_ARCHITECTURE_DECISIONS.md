@@ -219,6 +219,21 @@ The first query resolves the caller. The second verifies a grant for the request
 
 After that, use the existing source resolver semantics: ready books, `indexed_pages = page_count`, and either a direct `brvin_project_books` grant or a `brvin_project_collections` grant. Keep safe-prefix validation, AI Search pre-filter and returned-key validation.
 
+### 3.3 D1 migration mechanics
+
+Milestone 1 must use the existing shared D1 binding and `brvin_migrations` marker mechanism; it must not create a second database or use a separate project-scoped registry. Apply the DDL with the existing `ensureAnalyticsSchema` initialization path after inspecting its current statement splitting and startup behavior.
+
+- Create the three additive tables and their indexes using `CREATE TABLE/INDEX IF NOT EXISTS`.
+- Use the stable migration key `brvin2-application-identities-v1`.
+- Seed the Parmar AI application, production environment, Fatman app-project grant and migration marker in one D1 `batch()` transaction after the schema exists. Use the three reserved IDs in §4.1 and `INSERT OR IGNORE` to make retries idempotent.
+- Cloudflare documents that statements in a D1 `batch()` execute sequentially in one SQL transaction and that a failing statement aborts/rolls back the batch. Keep the seed rows and marker in the same batch; do not split them into unrelated writes. See [D1 Database API — batch()](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch).
+- After the batch, read back each seeded row and verify the expected ID, slug, parent app, project, environment label and active status. Also run `PRAGMA foreign_key_check`. A collision where a reserved ID or unique slug belongs to a different record is a hard migration error, not a successful no-op.
+- If verification detects a pre-existing conflict after an idempotent insert was skipped, do not mark the migration complete or delete data automatically. Stop and require explicit reconciliation.
+- The migration must not update or delete `brvin_service_clients`, projects, books, collections, book grants, collection grants, search usage or activity history.
+
+The current `ensureAnalyticsSchema` promise is isolate-local. The M1 migration therefore needs idempotent DDL, stable seed identifiers, unique constraints and a transactional D1 batch so simultaneous Worker cold starts cannot create duplicate app/environment/grant records. Add explicit repeated-start and concurrent-start tests before deployment.
+
+
 ## 4. Legacy-to-target mapping
 
 | Current production state | Target state | Migration behavior |
@@ -385,7 +400,8 @@ Read-only evidence inspected on 4 November 2026:
 - `main` was at `a16a9273d581d9dd5acfc3c53c3cc1f2cba819fd`, four commits ahead of planning baseline `939a6046f2a6fa461898f2479e6ed22923e3f3f9`. Those commits add the plan and navigation links; they do not implement the new registry.
 - Current D1 schema contains `brvin_projects`, `brvin_service_clients`, book/collection grant tables and usage tables; it does not yet contain application/environment/app-project tables.
 - Current production projects and service-client mapping contain the Fatman project and `fatman → fatman` client only.
-- Current source inventory contains the ready 538-page Fatman book and a ready three-page Rain Gardens test PDF. Existing grant counts and source resolver behavior preserve project-level separation; the Rain Gardens book is not granted to Fatman.
+- Current source inventory contains the ready 538-page Fatman book and a ready three-page Rain Gardens test PDF. The only direct book grant is Fatman → the built-in 538-page Fatman source; the only collection grant is Fatman → Fatman Core. Rain Gardens is ready but unassigned, so Fatman cannot retrieve it.
+- The shared AI Search stats endpoint reported 541 completed items and 50 errors whose provider message was `page_limit_reached: Free AI Search image processing is unavailable`. This is a pre-existing index diagnostic, not a BRVIN 2 change. Later end-to-end acceptance must reconcile the errors against expected text/page keys; do not infer that a source is complete solely from the instance-wide statistics.
 - November 2026 Fatman usage contains 20 queries in `fatman_search_usage`; the new design does not migrate or reset it.
 - Live `parmar-ai` has a `BRVIN_SERVICE` Service Binding to `brvin-service`; its config uses `props.clientId='fatman'`.
 - Live `brvin-service` has the same D1 binding and the shared `default` AI Search namespace/instance `fatman-2026-8b183803`. The instance has existing indexed content; do not re-create or reconfigure it for BRVIN 2.
