@@ -1,6 +1,7 @@
 import type { Env } from "../config/env";
 import { ensureAnalyticsSchema, recordBrvinActivity } from "../analytics/db";
 import { json } from "../http/response";
+import { BrvinRetrievalError, retrieveBrvinProjectContext } from "./retrieval";
 
 type AdminRow = Record<string, unknown>;
 
@@ -471,6 +472,93 @@ export async function setBrvinProjectGrant(env: Env, request: Request): Promise<
     return json({ ok: true, applicationId, projectId, grantId: activeGrant.id, status: "revoked" });
   } catch (error) {
     return json({ ok: false, error: message(error) }, 409);
+  }
+}
+
+export async function updateBrvinProject(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return fail("The BRVIN database is not configured.", 503);
+  const body = await readObject(request);
+  if (!body) return fail("Enter valid project details.", 400);
+  const projectId = typeof body.projectId === "string" ? body.projectId : "";
+  const name = cleanText(body.name, 100);
+  const description = cleanText(body.description, 500);
+  const slug = makeSlug(name, 64);
+  if (!projectId || projectId.length > 128) return fail("Select a valid project.", 400);
+  if (!name || !slug) return fail("Enter a valid project name.", 400);
+
+  try {
+    await ensureAnalyticsSchema(env);
+    const project = await env.DB.prepare(
+      "SELECT p.id,p.name,p.slug,p.status," +
+      "EXISTS(SELECT 1 FROM brvin_service_clients c WHERE c.project_id=p.id) AS has_legacy_identity " +
+      "FROM brvin_projects p WHERE p.id=?"
+    ).bind(projectId).first<{
+      id: string; name: string; slug: string; status: string; has_legacy_identity: number;
+    }>();
+    if (!project) return fail("Project not found.", 404);
+
+    // A v1 client ID is deployment configuration. Never silently rewrite it
+    // when an administrator edits a legacy project's display name.
+    const finalSlug = Number(project.has_legacy_identity) > 0 ? project.slug : slug;
+    const result = await env.DB.prepare(
+      "UPDATE brvin_projects SET name=?,slug=?,description=?,updated_at=? WHERE id=?"
+    ).bind(name, finalSlug, description, Date.now(), projectId).run();
+    if (!result.success) throw new Error("D1 did not confirm the project update.");
+
+    await record(env, "project.updated",
+      "A BRVIN project name or description was updated.",
+      { projectId, previousName: project.name, name, slug: finalSlug, legacySlugPreserved: finalSlug === project.slug },
+      projectId,
+    );
+    return json({
+      ok: true,
+      project: { id: projectId, name, slug: finalSlug, description, status: project.status },
+      legacySlugPreserved: finalSlug === project.slug,
+    });
+  } catch (error) {
+    return json({ ok: false, error: message(error) }, 409);
+  }
+}
+
+export async function testBrvinProjectKnowledge(env: Env, request: Request): Promise<Response> {
+  const body = await readObject(request);
+  if (!body) return fail("Enter a text query for this project.", 400);
+  const projectId = typeof body.projectId === "string" ? body.projectId : "";
+  const query = cleanText(body.query, 2_000);
+  if (!projectId || projectId.length > 128) return fail("Select a valid project.", 400);
+  if (!query) return fail("Enter a query to test the project's knowledge.", 400);
+  try {
+    await ensureAnalyticsSchema(env);
+    const project = await env.DB!.prepare(
+      "SELECT id,name,slug,status FROM brvin_projects WHERE id=?"
+    ).bind(projectId).first<{ id: string; name: string; slug: string; status: string }>();
+    if (!project) return fail("Project not found.", 404);
+    if (project.status !== "active") return fail("Activate this project before testing its knowledge.", 409);
+
+    const context = await retrieveBrvinProjectContext(env, project.slug, query);
+    return json({
+      ok: true,
+      project: { id: project.id, name: project.name, slug: project.slug },
+      query,
+      searchedSources: context.searchedSources,
+      searchCount: context.searchCount,
+      passages: context.passages.map((passage) => ({
+        id: passage.id,
+        bookTitle: passage.bookTitle,
+        pdfPage: passage.pdfPage,
+        printedPage: passage.printedPage,
+        section: passage.section,
+        score: passage.score,
+        citation: passage.bookTitle + " — PDF page " + passage.pdfPage +
+          (passage.printedPage ? " · printed page " + passage.printedPage : ""),
+        text: passage.text,
+      })),
+    });
+  } catch (error) {
+    if (error instanceof BrvinRetrievalError) {
+      return fail(error.message, error.retryable ? 502 : 409);
+    }
+    return fail(message(error), 502);
   }
 }
 
