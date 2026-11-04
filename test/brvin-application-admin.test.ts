@@ -13,6 +13,7 @@ import {
   setBrvinEnvironmentStatus,
   setBrvinProjectGrant,
   setBrvinProjectStatus,
+  updateBrvinProject,
   brvinApplications,
 } from "../src/brvin/application-admin";
 
@@ -22,6 +23,7 @@ type State = {
   environments: Row[];
   projects: Row[];
   grants: Row[];
+  legacyClientProjectIds: string[];
 };
 
 function createDb(state: State): any {
@@ -43,6 +45,13 @@ function createDb(state: State): any {
       if (!row) return null;
       const app = state.applications.find(item => item.id === row.application_id);
       return app ? { ...row, application_status: app.status } : null;
+    }
+    if (query.includes("from brvin_projects p where p.id")) {
+      const row = state.projects.find(item => item.id === args[0]);
+      return row ? {
+        ...row,
+        has_legacy_identity: state.legacyClientProjectIds.includes(String(row.id)) ? 1 : 0,
+      } : null;
     }
     if (query.includes("from brvin_projects where id")) {
       return state.projects.find(row => row.id === args[0]) ?? null;
@@ -158,6 +167,13 @@ function createDb(state: State): any {
       if (row) { row.status = "revoked"; row.revoked_at = args[0]; row.revoked_by = "admin-dashboard"; }
       return { success: Boolean(row) };
     }
+    if (query.includes("update brvin_projects set name")) {
+      const row = state.projects.find(item => item.id === args[4]);
+      if (row) {
+        row.name = args[0]; row.slug = args[1]; row.description = args[2]; row.updated_at = args[3];
+      }
+      return { success: Boolean(row) };
+    }
     if (query.includes("update brvin_projects set status")) {
       const row = state.projects.find(item => item.id === args[2]);
       if (row) { row.status = args[0]; row.updated_at = args[1]; }
@@ -220,6 +236,7 @@ describe("BRVIN application and project administration", () => {
         description: "", status: "active", created_at: 1, updated_at: 1,
       }],
       grants: [],
+      legacyClientProjectIds: [],
     };
     env = { DB: createDb(state) };
   });
@@ -338,6 +355,36 @@ describe("BRVIN application and project administration", () => {
     expect(revokeData.status).toBe("revoked");
     expect(state.grants[0].status).toBe("revoked");
     expect(state.grants[0].revoked_at).toBeTypeOf("number");
+  });
+
+  it("edits an application-owned project's name, slug and description without changing its ID", async () => {
+    const response = await updateBrvinProject(env, request({
+      projectId: TEST_PROJECT_ID,
+      name: "New Test Project",
+      description: "Updated reference project",
+    }));
+    const data = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(data.project.id).toBe(TEST_PROJECT_ID);
+    expect(data.project.slug).toBe("new-test-project");
+    expect(data.project.description).toBe("Updated reference project");
+    expect(data.legacySlugPreserved).toBe(false);
+  });
+
+  it("preserves a legacy v1 client slug when editing its project display name", async () => {
+    state.legacyClientProjectIds.push(TEST_PROJECT_ID);
+    const response = await updateBrvinProject(env, request({
+      projectId: TEST_PROJECT_ID,
+      name: "Legacy Project Renamed",
+      description: "Display name only",
+    }));
+    const data = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(data.project.name).toBe("Legacy Project Renamed");
+    expect(data.project.slug).toBe("test-project");
+    expect(data.legacySlugPreserved).toBe(true);
   });
 
   it("activates and deactivates a project without deleting its grants", async () => {
