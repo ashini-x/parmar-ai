@@ -91,8 +91,14 @@ The following DDL is the Milestone 1 target. It is intentionally additive and us
 
 ```sql
 CREATE TABLE IF NOT EXISTS brvin_applications (
-  id TEXT PRIMARY KEY,
-  slug TEXT NOT NULL UNIQUE,
+  id TEXT PRIMARY KEY CHECK (length(id) = 36),
+  slug TEXT NOT NULL UNIQUE CHECK (
+    length(slug) BETWEEN 1 AND 64
+    AND slug = lower(slug)
+    AND slug GLOB '[a-z0-9]*'
+    AND slug NOT GLOB '*[^a-z0-9-]*'
+    AND substr(slug, -1, 1) GLOB '[a-z0-9]'
+  ),
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'active'
@@ -105,10 +111,16 @@ CREATE INDEX IF NOT EXISTS idx_brvin_applications_status
   ON brvin_applications(status, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS brvin_application_environments (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY CHECK (length(id) = 36),
   application_id TEXT NOT NULL
     REFERENCES brvin_applications(id) ON DELETE RESTRICT,
-  environment_key TEXT NOT NULL,
+  environment_key TEXT NOT NULL CHECK (
+    length(environment_key) BETWEEN 1 AND 32
+    AND environment_key = lower(environment_key)
+    AND environment_key GLOB '[a-z0-9]*'
+    AND environment_key NOT GLOB '*[^a-z0-9-]*'
+    AND substr(environment_key, -1, 1) GLOB '[a-z0-9]'
+  ),
   display_name TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'disabled', 'revoked')),
@@ -126,7 +138,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_brvin_app_env_one_active_key
   WHERE status = 'active';
 
 CREATE TABLE IF NOT EXISTS brvin_application_project_grants (
-  id TEXT PRIMARY KEY,
+  id TEXT PRIMARY KEY CHECK (length(id) = 36),
   application_id TEXT NOT NULL
     REFERENCES brvin_applications(id) ON DELETE RESTRICT,
   project_id TEXT NOT NULL
