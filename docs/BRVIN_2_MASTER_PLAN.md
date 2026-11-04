@@ -6,7 +6,7 @@
 **Reference test-client repository:** `ashini-x/askmoina-voice` (the BRVIN test client is a separate Worker in this repository, not the existing AskMoina Voice Worker)
 **Created:** 4 November 2026  
 **Planning baseline:** `main` at the current BRVIN 2 implementation baseline
-**Overall implementation status:** M0–M4 complete at the scaffold/reference-consumer level. M4's independent `brvin-test-client` Worker is merged in `ashini-x/askmoina-voice` PR #381 as `bf8e5a1e9fe7f451ad31430143ab52aaf801214e`; its separate Wrangler config, tester-token gate, text retrieval UI, authorization/provenance contract tests and independent Worker dry-run are included. It intentionally has no BRVIN Service Binding, registered test app/environment, test-project grant or deployment yet. M5 application/project administration is now the first incomplete milestone; M6 will connect and deploy the test client after the identity and isolated grant are provisioned. Existing AskMoina Voice remains an optional pilot, not a BRVIN acceptance gate.
+**Overall implementation status:** M0–M5 are complete and merged. M4 delivered the isolated `brvin-test-client` reference Worker scaffold; its real application/environment identity and Service Binding are intentionally provisioned through the M5/M6 lifecycle, not hard-coded. M5 delivered the protected application/environment/project administration experience and passed main-branch production release acceptance in run #41900067751. The first incomplete milestone is M6 — the automated Connect Application wizard. Existing AskMoina Voice remains an optional pilot, not a BRVIN acceptance gate.
 
 > **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
 
@@ -267,8 +267,8 @@ Milestones change status only after implementation and evidence. A commit alone 
 | 2 | Private retrieval API v2 | COMPLETE | PR #62 merged as `3b68aaecf3c78c712e1a1c978285ad1f166d15c4`; Release Validation #596 passed; production v2 health parity and Fatman identity/data verified |
 | 3 | Reusable BRVIN application connector | COMPLETE | PR #63 merged to main as `91b6a499bd782ae298b41e790157c23682f10881`; Release Validation #608 passed all checks and Cloudflare Preview build succeeded |
 | 4 | Independent BRVIN text reference consumer | COMPLETE — scaffold and CI validated; binding/deployment deferred | AskMoina PR #381 merged as `bf8e5a1e9fe7f451ad31430143ab52aaf801214e`; Worker `brvin-test-client` has isolated Wrangler/TypeScript configs, token gate, text UI, v2 connector handler, authorization/provenance tests and separate dry-run. No Service Binding, registered test identity/grant or deployment yet; those are M5/M6 prerequisites for M7 live tests |
-| 5 | BRVIN application/project administration | NOT STARTED | Admin can manage apps, projects, grants and knowledge centrally |
-| 6 | Automated Connect Application wizard | NOT STARTED | Supported app can be onboarded through reviewed GitHub/Cloudflare workflow |
+| 5 | BRVIN application/project administration | COMPLETE — implemented, deployed and production release accepted | [PR #72](https://github.com/ashini-x/parmar-ai/pull/72) merged as `5872c2d21cdef17feb21d661e50ddde820c51f40`; typecheck/unit/Node/service/Worker bundle validation and paired production deployment/acceptance #41900067751 passed. Existing Fatman path preserved; no schema migration or production data mutation | Dashboard exposes app/environment lifecycle, app-project grant/revocation history, app-bound project creation, project edit/activation and existing knowledge/source grants. Live binding verification belongs to M6 |
+| 6 | Automated Connect Application wizard | NOT STARTED — first incomplete milestone | Supported app can be onboarded through reviewed GitHub/Cloudflare workflow |
 | 7 | End-to-end administrator and user acceptance | NOT STARTED | Full multi-app/multi-project and negative permission tests pass |
 | 8 | Release completion and administrator handover | NOT STARTED | Production evidence, final docs and non-technical admin manual; declare completion |
 
@@ -325,7 +325,11 @@ Implemented in `ashini-x/askmoina-voice` PR #381, merged to `main` as `bf8e5a1e9
 The existing AskMoina Voice BRVIN/Gemini Live integration remains an optional pilot/second consumer. Its camera/audio/session-continuity/latency outcomes are informational only and are not a BRVIN milestone gate.
 ### Milestone 5 — Application and project administration
 
-Upgrade the protected BRVIN dashboard with application registry/connection health, environment identities, activate/revoke, authorised project list; project create/edit/activate/deactivate and app association; knowledge library; collections; direct and collection grants; readiness and retrieval-test flows. Generate IDs automatically. Keep admin mobile-friendly and understandable to a nontechnical operator. Preserve current Fatman workflow.
+**Status: COMPLETE — deployed and production release accepted.**
+
+The protected BRVIN dashboard now exposes the application registry, environment identity lifecycle, app-to-project grant/revocation history, authorised project associations, app-bound project creation, project edit/activation/deactivation and the existing knowledge library, collections and source-level grants. IDs and slugs are generated automatically. New projects created for an application get an explicit app-project grant; the legacy no-application path remains available for existing v1/Fatman consumers.
+
+The dashboard explicitly distinguishes a registered environment from a live-verified Worker connection. M6 owns GitHub/Cloudflare connection discovery, Service Binding provisioning and post-deployment connection verification. Preserve the existing Fatman ingestion, source permissions and usage history.
 
 ### Milestone 6 — Automated Connect Application wizard
 
@@ -338,7 +342,7 @@ Test at minimum:
 2. Connect a synthetic second application through the automated wizard; existing AskMoina Voice is an optional pilot, not a prerequisite.
 3. One app with multiple projects.
 4. One project deliberately shared across multiple apps.
-4. Multiple PDFs and collections.
+5. Multiple PDFs and collections.
 5. Direct and collection grants.
 6. Readiness and page-level citations.
 7. App A denied Project B until explicitly granted.
@@ -400,13 +404,13 @@ Execute BRVIN 2 Milestone 3 from docs/BRVIN_2_MASTER_PLAN.md. Build and test the
 ### Milestone 4 prompt
 
 ~~~text
-Execute BRVIN 2 Milestone 4 from docs/BRVIN_2_MASTER_PLAN.md. Integrate AskMoina Voice as the first additional BRVIN application using production/preview identities, the private Service Binding and the reusable connector. Add a Gemini Live knowledge-search function tool and route it through the existing server-side handler. Preserve Gemini answer generation, D1, user auth and voice/video continuity. Test real question-to-retrieval-to-spoken-answer, page citations, denied/revoked projects, no-result, quota and outages. Verify the deployed app, update the tracker/docs and report evidence.
+Execute BRVIN 2 Milestone 4 from docs/BRVIN_2_MASTER_PLAN.md. Build the isolated text-first BRVIN reference Worker inside the askmoina-voice repository with a separate Wrangler config, entrypoint, tester-token boundary, text retrieval interface and server-side v2 connector. Do not modify or deploy the existing AskMoina Voice Worker. Validate mocked authorised-project discovery, query retrieval, exact PDF page citations, ungranted-project denial and not-ready handling. Keep the test Worker unconnected until M5 provisions its app/environment/project/grant records and M6 attaches the trusted binding through the wizard.
 ~~~
 
 ### Milestone 5 prompt
 
 ~~~text
-Execute BRVIN 2 Milestone 5 from docs/BRVIN_2_MASTER_PLAN.md. Implement the application-aware BRVIN administration experience for applications, environments, connection health, projects, project permissions, collections, books, indexing readiness, test-knowledge and activation/revocation. Project IDs/slugs must remain automatic. Use the existing ingestion pipeline. Make it clear and usable for a nontechnical administrator. Preserve Fatman. Add tests, update docs/tracker and report evidence.
+M5 is implemented and deployed in main. Verify the protected BRVIN administration experience for applications, environments, application-project grants, project association/edit/activation and the existing knowledge/collection/source-grant workflows. Keep registered environment state distinct from a verified live Service Binding. Preserve Fatman and its legacy v1 mapping.
 ~~~
 
 ### Milestone 6 prompt
@@ -443,8 +447,8 @@ This table is the human-readable status. The evidence fields must be filled from
 | 1 — Identity model | COMPLETE | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61), merge commit `5735314b3e692019c34ba3d2a0d851cbb6c43aa3` | Release Validation #586 passed; production migration marker and all three seed rows verified; foreign-key check empty; both Workers active on new versions | No v1 RPC or Fatman permissions/counter reset |
 | 2 — Private RPC v2 | COMPLETE | [PR #62](https://github.com/ashini-x/parmar-ai/pull/62), merge commit `3b68aaecf3c78c712e1a1c978285ad1f166d15c4` | Release Validation #596 passed; production environment-bound methods deployed; v1 Fatman path/usage unchanged | Private Service Binding only; no public retrieval route |
 | 3 — Reusable connector | COMPLETE | [PR #63](https://github.com/ashini-x/parmar-ai/pull/63), merge commit `91b6a499bd782ae298b41e790157c23682f10881` | Release Validation #608 passed; Cloudflare Preview build `a4c154e3-c056-489a-9b14-8ebac9ed9c0d` succeeded | Connector vendored by AskMoina PR #370 |
-| 4 — AskMoina integration | IN PROGRESS — deployed, final production acceptance pending | [BRVIN PR #65](https://github.com/ashini-x/parmar-ai/pull/65), merge `0b3c621b83a28de2f4ca5da95db349b364558a60`; [AskMoina PR #370](https://github.com/ashini-x/askmoina-voice/pull/370), merge `ce725d33df452de0e9df2f4613c70ec89592251e`; acceptance harness PRs #372, #373, #377, #378, [#379](https://github.com/ashini-x/askmoina-voice/pull/379), latest merge `0840af352a1e9ab03bfd36a39b691bb6068af55b` | Production Worker version `6b6b5a56-24b3-4b74-ad0c-1a47c78df784` is deployed at 100%; release validation #1787 passed; health/routes/PWA checks passed; exact-page retrieval, three grounded searches, spoken card, ranked list, spoken memory, browser recovery, >170-second continuity and history/memory APIs passed in run #647. Run #647 failed only two synthetic terminal-state checks (camera and 20-turn audio benchmark; 120,000 bytes/21 messages observed). PR #379 corrects the tests to use `generationComplete`/`turnComplete` and explicitly close finite audio input; full production run #648 is in progress and remains the gate | Fatman project allowance remains shared; AskMoina Preview intentionally has no BRVIN binding |
-| 5 — Admin experience | NOT STARTED | — | — | Application/project/knowledge UI |
+| 4 — Independent BRVIN text reference Worker | COMPLETE — scaffold/contract tests delivered | [AskMoina PR #381](https://github.com/ashini-x/askmoina-voice/pull/381), merge `bf8e5a1e9fe7f451ad31430143ab52aaf801214e` | Separate `brvin-test-client` Worker, own Wrangler and TypeScript configs, tester-token gate, text UI, server-side v2 connector, authorisation/provenance tests; Release Validation and independent Wrangler dry-run passed on main | No test identity, project grant, Service Binding or deployment yet; provision in M5 and connect in M6. Voice app is optional |
+| 5 — Application/project administration | COMPLETE — merged, deployed and production release accepted | [PR #72](https://github.com/ashini-x/parmar-ai/pull/72), merge `5872c2d21cdef17feb21d661e50ddde820c51f40` | Main Release Validation and paired production release [#41900067751](https://github.com/ashini-x/parmar-ai/actions/runs/41900067751) passed typecheck, unit/Node tests, both Worker bundle checks, production deployment and root/BRVIN/Fatman smoke; acceptance artifact `13357333270` | `brvin-service` version `c6755ca2-5b5f-4968-8bbc-e957a767926d`; `parmar-ai` version `d239c941-f119-4ad1-9020-63e9a2353434`. No migration or production data mutation. Cloudflare preview PR build alone hit the account's 100 Durable Object Free-plan namespace limit; main production build/deploy passed |
 | 6 — Connect wizard | NOT STARTED | — | — | GitHub/Cloudflare + PR automation |
 | 7 — E2E acceptance | NOT STARTED | — | — | Full synthetic journey |
 | 8 — Release/handover | NOT STARTED | — | — | Final admin manual and release evidence |
@@ -686,6 +690,31 @@ And when the connected end-user application can retrieve only its authorised pro
 
 **Sequence:** M4 scaffold is complete. (1) M5: implement application/project administration, including test app/environment/project/grant lifecycle; (2) M6: use Connect Application to add the generated environment ID as trusted Service Binding props and deploy/connect the test Worker with a separate test access token; (3) M7: verify real retrieval/citations, app isolation, denial/revocation and future-project automation. The existing AskMoina voice app is not a dependency for these steps.
 
+
+### Milestone log — 5 November 2026 — M5 application/project administration complete
+
+**Status:** COMPLETE — implementation merged, paired production deployment succeeded, and the live release acceptance gate passed.
+
+**Branch / PR:** `brvin/m5-application-project-admin`; [PR #72](https://github.com/ashini-x/parmar-ai/pull/72), squash merge `5872c2d21cdef17feb21d661e50ddde820c51f40`.
+
+**Paths/components changed:**
+- `src/brvin/admin.ts` — application registry/environment/grant overview; create application; create environment identity; suspend/reactivate/revoke application; disable/reactivate/revoke environment; grant/revoke app-project permissions with retained revocation history; app-associated project creation; project edit/activate/deactivate; mobile-friendly Applications & Access dashboard.
+- `src/index.ts` — new POST routes behind existing admin authentication and same-origin/CSRF protection.
+- `test/brvin-app-admin.test.ts` — application/environment lifecycle, active-state constraints, grant/revoke, revocation permanence, app-bound project creation and legacy service-client compatibility tests.
+- `test/brvin-admin-script.node.test.ts` — dashboard UI and route contract assertions.
+
+**Compatibility and data safety:** No D1 schema migration was added or applied. No production D1 rows, grants, counters or source permissions were mutated by this change. A new project created with an application ID receives an explicit `brvin_application_project_grants` row and no legacy `brvin_service_clients` row. The legacy/no-application path remains available for existing v1/Fatman consumers. Knowledge-source book/collection grants remain independent of app-project grants.
+
+**Verification:**
+- PR Release Validation #41899630676 passed `npm run check`, `npm test`, `npm run test:node`, private BRVIN service dry-run and Parmar Worker dry-run.
+- Main Release Validation and paired production release [#41900067751](https://github.com/ashini-x/parmar-ai/actions/runs/41900067751) completed success.
+- Cloudflare Workers Build [3ae32566-9d8e-4a2d-bd8b-e1267167cb1c](https://dash.cloudflare.com/b34a6c0b7221454c5db977fe61ddf759/workers/services/view/parmar-ai/production/builds/3ae32566-9d8e-4a2d-bd8b-e1267167cb1c) completed success. Production versions: `brvin-service` `c6755ca2-5b5f-4968-8bbc-e957a767926d`; `parmar-ai` `d239c941-f119-4ad1-9020-63e9a2353434`.
+- Production root and BRVIN-backed health/Fatman readiness smoke passed. The acceptance manifest reports `workerHealth=passed`, `brvinServiceBinding=passed`, `fatmanRetrieval=passed`; artifact `13357333270` was uploaded. Automatic rollback steps were skipped because acceptance passed.
+- The branch-preview Cloudflare build failed only because the account had reached the Free-plan limit of 100 Durable Object namespaces. This was a preview quota issue, not a source/test failure; the main production build/deployment passed. No plan upgrade or quota workaround was attempted.
+
+**M5 boundary:** The dashboard distinguishes a registered environment from a live-verified Worker connection. M6 owns GitHub/Cloudflare discovery, Service Binding provisioning and post-deployment connection verification. The production release acceptance verified root, private BRVIN connectivity and Fatman retrieval; the new administrative lifecycle is covered by code/route tests and is now deployed.
+
+**Next milestone:** M6 — Automated Connect Application wizard. Use the M5 protected dashboard to register the isolated text test application, its production environment, dedicated test project and explicit grant. Then use M6 to attach the trusted environment identity and deploy/connect the test Worker. Do not add ad-hoc D1 rows, reuse AskMoina Voice's production identity or default the test Worker to Fatman.
 
 ### Milestone log — 5 November 2026 — M4 reference Worker scaffold delivered
 
