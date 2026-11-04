@@ -8,7 +8,12 @@ vi.mock("../src/analytics/db", () => ({
   setFatmanBookState: vi.fn(),
 }));
 
-import { retrieveBrvinProjectContext, BrvinRetrievalError } from "../src/brvin/retrieval";
+import {
+  retrieveBrvinProjectContext,
+  BrvinRetrievalError,
+  extractBrvinEvidenceExcerpt,
+  isBrvinPassageRelevant,
+} from "../src/brvin/retrieval";
 import { brvinAdminPage, brvinAdminScript } from "../src/brvin/admin";
 
 describe("BRVIN governed retrieval", () => {
@@ -89,6 +94,18 @@ describe("BRVIN governed retrieval", () => {
         },
       },
     });
+  });
+
+  it("uses meaningful-term relevance and evidence windows from long OCR pages", () => {
+    const query = "drainage overflow drawdown";
+    const longPage = ("Background description without relevant terms. ").repeat(180) +
+      "Drainage overflow inspection confirms the drawdown period and the required outlet checks.";
+    expect(isBrvinPassageRelevant(query, longPage)).toBe(true);
+    const excerpt = extractBrvinEvidenceExcerpt(query, longPage);
+    expect(excerpt).toContain("Drainage");
+    expect(excerpt).toContain("drawdown");
+    expect(excerpt.length).toBeLessThanOrEqual(4_500);
+    expect(isBrvinPassageRelevant(query, "Unrelated historical introduction without those details.")).toBe(false);
   });
 
   it("does not expose content for an inactive or unknown project", async () => {

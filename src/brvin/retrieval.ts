@@ -4,9 +4,13 @@ import { parseFatmanIndexPageKey } from "../fatman/library";
 
 const MAX_QUERIES = 3;
 const MAX_RESULTS_PER_QUERY = 50;
-const MAX_PASSAGES = 12;
+const MAX_PASSAGES = 8;
+const MAX_PAGES = 6;
+const MAX_PASSAGES_PER_PAGE = 2;
 const MAX_PASSAGE_CHARS = 4_500;
-const MAX_RAW_PASSAGE_CHARS = 12_000;
+const MAX_RAW_PASSAGE_CHARS = 60_000;
+const EXCERPT_WINDOW_CHARS = 1_100;
+const EXCERPT_WINDOW_STEP = 550;
 
 export type BrvinRetrievalEnv = Pick<Env, "DB" | "FATMAN_SEARCH" | "FATMAN_INSTANCE_NAME" | "FATMAN_MIN_SCORE">;
 
@@ -59,8 +63,106 @@ function finiteScore(value: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function terms(value: string): string[] {
-  return value.toLowerCase().normalize("NFKC").match(/[\p{L}\p{N}]{3,}/gu) ?? [];
+const QUERY_STOP_WORDS = new Set([
+  "a", "about", "after", "all", "also", "an", "and", "are", "as", "at", "be", "because",
+  "been", "being", "between", "both", "but", "by", "can", "could", "did", "do", "does",
+  "for", "from", "had", "has", "have", "how", "in", "into", "is", "it", "its", "of",
+  "on", "or", "our", "please", "should", "that", "the", "their", "them", "there", "these",
+  "this", "those", "to", "was", "were", "what", "when", "where", "which", "who", "why",
+  "will", "with", "would", "you", "your", "pdf", "page", "fatman", "edition", "second",
+  "2nd", "2026", "book", "chapter", "explain", "describe", "tell", "me", "about",
+]);
+
+function meaningfulBrvinTerms(value: string): Set<string> {
+  return new Set(
+    value.toLowerCase().normalize("NFKC")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim()
+      .split(/\s+/u)
+      .filter((term) => term.length >= 2 && !QUERY_STOP_WORDS.has(term)),
+  );
+}
+
+export function isBrvinPassageRelevant(query: string, passage: string): boolean {
+  const queryTerms = meaningfulBrvinTerms(query);
+  if (queryTerms.size === 0) return false;
+  const passageTerms = meaningfulBrvinTerms(passage);
+  let overlap = 0;
+  for (const term of queryTerms) if (passageTerms.has(term)) overlap += 1;
+  return overlap >= (queryTerms.size <= 2 ? 1 : 2);
+}
+
+function cleanEvidenceText(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/\bjoin\s*[-:]*\s*@?freebookspdf\d*\b/giu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, MAX_RAW_PASSAGE_CHARS);
+}
+
+/** Select evidence-bearing windows across the full OCR page, not only its opening. */
+export function extractBrvinEvidenceExcerpt(
+  query: string,
+  value: string,
+  maxChars = MAX_PASSAGE_CHARS,
+): string {
+  const text = cleanEvidenceText(value);
+  if (text.length <= maxChars) return text;
+
+  const queryTerms = meaningfulBrvinTerms(query);
+  if (!queryTerms.size) return text.slice(0, maxChars);
+
+  const windows: Array<{ start: number; end: number; terms: Set<string> }> = [];
+  for (let start = 0; start < text.length; start += EXCERPT_WINDOW_STEP) {
+    const end = Math.min(text.length, start + EXCERPT_WINDOW_CHARS);
+    const windowTerms = meaningfulBrvinTerms(text.slice(start, end));
+    const matchedTerms = new Set([...queryTerms].filter((term) => windowTerms.has(term)));
+    if (matchedTerms.size) windows.push({ start, end, terms: matchedTerms });
+    if (end === text.length) break;
+  }
+  if (!windows.length) return text.slice(0, maxChars);
+
+  const selected: Array<{ start: number; end: number; terms: Set<string> }> = [];
+  const covered = new Set<string>();
+  let usedChars = 0;
+  const maxWindows = Math.max(1, Math.ceil(maxChars / EXCERPT_WINDOW_CHARS));
+  while (selected.length < maxWindows && usedChars < maxChars) {
+    let best: typeof windows[number] | undefined;
+    let bestScore = 0;
+    for (const candidate of windows) {
+      if (selected.includes(candidate)) continue;
+      const overlap = selected.reduce((total, item) =>
+        total + Math.max(0, Math.min(item.end, candidate.end) - Math.max(item.start, candidate.start)), 0);
+      if (overlap > EXCERPT_WINDOW_CHARS * 0.45) continue;
+      const newTerms = [...candidate.terms].filter((term) => !covered.has(term));
+      const score = newTerms.length + candidate.terms.size * 0.08 - overlap / EXCERPT_WINDOW_CHARS;
+      if (score > bestScore) {
+        best = candidate;
+        bestScore = score;
+      }
+    }
+    if (!best || bestScore <= 0) break;
+    selected.push(best);
+    best.terms.forEach((term) => covered.add(term));
+    usedChars += best.end - best.start;
+  }
+  if (!selected.length) return text.slice(0, maxChars);
+
+  const pieces: string[] = [];
+  let previousEnd = -1;
+  let remaining = maxChars;
+  for (const window of selected.sort((a, b) => a.start - b.start)) {
+    const start = Math.max(window.start, previousEnd);
+    if (start >= window.end || remaining <= 0) continue;
+    const piece = text.slice(start, Math.min(window.end, start + remaining));
+    if (piece) {
+      pieces.push(piece);
+      remaining -= piece.length;
+      previousEnd = start + piece.length;
+    }
+  }
+  return pieces.join(" … ");
 }
 
 function normalizeQueries(values: string[]): string[] {
@@ -127,7 +229,6 @@ export async function retrieveBrvinProjectContextForProject(
       throw new BrvinRetrievalError("A registered BRVIN search prefix is invalid.");
     }
     const prefixSources = [...sources].sort((a, b) => b.search_prefix.length - a.search_prefix.length);
-
     const instance = env.FATMAN_SEARCH.get(env.FATMAN_INSTANCE_NAME.trim());
     const settled = await Promise.allSettled(normalizedQueries.map(async (query) => {
       const result = await instance.search({
@@ -160,9 +261,11 @@ export async function retrieveBrvinProjectContextForProject(
       ? Math.min(1, Math.max(0, minScoreValue))
       : 0.2;
     const bestById = new Map<string, BrvinPassage>();
+    const fingerprints = new Set<string>();
+    const pageCounts = new Map<string, number>();
+    const allowedPages = new Set<string>();
 
     for (const searchResult of successful) {
-      const queryTerms = new Set(terms(searchResult.value.query));
       for (const chunk of searchResult.value.chunks) {
         const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
         const source = prefixSources.find((item) => key.startsWith(item.search_prefix));
@@ -171,8 +274,6 @@ export async function retrieveBrvinProjectContextForProject(
         const parsed = parseFatmanIndexPageKey(key);
         if (!parsed || parsed.page < 1) continue;
         if (parsed.bookId && parsed.bookId !== source.id) continue;
-        // The only valid page key without an embedded book UUID is the
-        // immutable, built-in Fatman legacy reference.
         if (!parsed.bookId && (source.id !== "fatman-legacy-538" || source.search_prefix !== "fatman/pages/")) {
           continue;
         }
@@ -182,31 +283,44 @@ export async function retrieveBrvinProjectContextForProject(
           finiteScore(chunk.scoring_details?.vector_score);
         if (score === undefined || score < minScore) continue;
 
-        const rawText = cleanText(chunk.text, MAX_RAW_PASSAGE_CHARS);
-        if (!rawText || !terms(rawText).some((term) => queryTerms.has(term))) continue;
+        const rawText = cleanEvidenceText(chunk.text);
+        if (!rawText || !isBrvinPassageRelevant(searchResult.value.query, rawText)) continue;
+        const text = extractBrvinEvidenceExcerpt(searchResult.value.query, rawText, MAX_PASSAGE_CHARS);
+        if (!text) continue;
 
-        const text = cleanText(rawText, MAX_PASSAGE_CHARS);
+        const pageKey = source.id + ":" + parsed.page;
         const id = typeof chunk.id === "string" && chunk.id
           ? chunk.id
           : key + ":" + text.slice(0, 80);
         const previous = bestById.get(id);
-        if (!previous || score > previous.score) {
-          bestById.set(id, {
-            id,
-            bookId: source.id,
-            bookTitle: source.title,
-            pdfPage: parsed.page,
-            text,
-            score,
-          });
+        if (previous) {
+          if (score > previous.score) bestById.set(id, { ...previous, score, text });
+          continue;
         }
+
+        const fingerprint = pageKey + ":" + text.toLowerCase().replace(/\s+/gu, " ").slice(0, 180);
+        if (fingerprints.has(fingerprint)) continue;
+        if (!allowedPages.has(pageKey) && allowedPages.size >= MAX_PAGES) continue;
+        const pageCount = pageCounts.get(pageKey) ?? 0;
+        if (pageCount >= MAX_PASSAGES_PER_PAGE) continue;
+
+        bestById.set(id, {
+          id,
+          bookId: source.id,
+          bookTitle: source.title,
+          pdfPage: parsed.page,
+          text,
+          score,
+        });
+        fingerprints.add(fingerprint);
+        allowedPages.add(pageKey);
+        pageCounts.set(pageKey, pageCount + 1);
+        if (bestById.size >= MAX_PASSAGES) break;
       }
+      if (bestById.size >= MAX_PASSAGES) break;
     }
 
-    const passages = [...bestById.values()]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, MAX_PASSAGES);
-
+    const passages = [...bestById.values()].sort((a, b) => b.score - a.score);
     return {
       project,
       passages,
