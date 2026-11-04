@@ -208,7 +208,7 @@ class FakeD1Database {
           row.environment_key === environmentKey &&
           row.status === "active"),
       );
-      if (app?.slug === applicationSlug && app.status === "active" && !duplicate) {
+      if (app && app.slug === applicationSlug && app.status === "active" && !duplicate) {
         state.environments.set(String(id), {
           id: String(id),
           application_id: String(applicationId),
@@ -232,9 +232,11 @@ class FakeD1Database {
           row.status === "active"),
       );
       if (
-        app?.slug === applicationSlug &&
+        app &&
+        project &&
+        app.slug === applicationSlug &&
         app.status === "active" &&
-        project?.slug === projectSlug &&
+        project.slug === projectSlug &&
         project.status === "active" &&
         !duplicate
       ) {
