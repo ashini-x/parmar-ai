@@ -10,6 +10,7 @@ vi.mock("../src/analytics/db", () => ({
 
 import {
   brvinConnectStatus,
+  createBrvinTestClientPullRequest,
   completeBrvinGitHubManifest,
   configureBrvinCloudflareOAuth,
   registerBrvinTestConsumer,
