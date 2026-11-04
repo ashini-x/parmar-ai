@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
 const contactStart = workerSource.indexOf("function creatorContactPage()");
-const contactEnd = workerSource.indexOf("\\nconst worker =", contactStart);
+const contactEnd = workerSource.indexOf("\nconst worker =", contactStart);
 const contactSource = workerSource.slice(contactStart, contactEnd);
 
 describe("Project BRɅIN contact page responsive rails", () => {
