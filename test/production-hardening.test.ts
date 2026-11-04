@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLikelyMcqTopicReply, isMcqRequest, normalizeAnswer, parseRequestedMcqCount, readVertexGeminiStream, requiresFreshData, requiresMcqTopicClarification, type PartialAnswerHandler } from "../src/ai/gemini";
+import { isLikelyMcqTopicReply, isMcqRequest, normalizeAnswer, normalizeSscTakeaway, parseRequestedMcqCount, readVertexGeminiStream, requiresFreshData, requiresMcqTopicClarification, type PartialAnswerHandler } from "../src/ai/gemini";
 import { getAnalyticsConfig } from "../src/analytics/db";
 import { getConfig } from "../src/config/env";
 import { isJobLeaseOwned, isValidAnswerPacket, type JobRecord } from "../src/core/job-store";
@@ -28,6 +28,18 @@ const validPacket = {
 } as const;
 
 describe("production hardening", () => {
+  it("strips all model-generated SSC Focus labels so the app adds only one", () => {
+    const content = "Tincture of iodine contains iodine as the solute and alcohol as the solvent.";
+    expect([
+      normalizeSscTakeaway("SSC focus: " + content),
+      normalizeSscTakeaway("📌 SSC Focus: SSC focus: " + content),
+      normalizeSscTakeaway("**SSC Focus:** " + content),
+      normalizeSscTakeaway("SSC_Focus - " + content),
+      normalizeSscTakeaway(content),
+    ]).toEqual([content, content, content, content, content]);
+    expect(normalizeSscTakeaway("")).toBe("");
+  });
+
   it("preserves actual Telegram paragraph breaks, including escaped JSON line feeds", () => {
     const normalized = normalizeAnswer("Meaning: first line\\nsecond line\\n\\nExample: final line");
     expect(normalized).toBe("Meaning: first line\nsecond line\n\nExample: final line");
