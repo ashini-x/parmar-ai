@@ -1057,9 +1057,8 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
               packet.answer = packet.answer.trim() +
                 "\n\n📚 Fatman source note: I couldn't retrieve a matching book passage for this question, so this is a general SSC explanation, not a verified summary of a Fatman page.";
             }
-            packet.profileSignal = "neutral";
-            packet.profileNote = "";
-            packet.nextRevisionTopic = "";
+            // Fatman questions feed the same student learning profile as normal mode.
+            // Preserve the model's explicit confusion/weakness signal for profile QA.
           }
         } else {
           await updatePartialAnswer?.setStatus?.(
@@ -1118,7 +1117,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       }
 
       let latestProfile = profile;
-      if (!fatmanMode && !claim.record.profileUpdated) {
+      if (!claim.record.profileUpdated) {
         try {
           const profileWrite = await jobStoreRequest<{ ok: true; stale?: boolean }>(env, job.chatId, {
             action: "update_profile",
@@ -1283,7 +1282,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           env,
           job,
           claim.record.statusMessageId,
-          buildAnswerForStudent(packet, latestProfile, !fatmanMode),
+          buildAnswerForStudent(packet, latestProfile),
         );
         statusMessageHandled = true;
       }

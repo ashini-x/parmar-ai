@@ -23,7 +23,7 @@
   },
   "vars": {
     "APP_VERSION": "2.8.0",
-    "BURST_QUESTION_LIMIT": "5",
+    "BURST_QUESTION_LIMIT": "25",
     "BURST_WINDOW_SECONDS": "10",
     "DAILY_QUESTION_LIMIT": "20",
     "ENVIRONMENT": "production",
