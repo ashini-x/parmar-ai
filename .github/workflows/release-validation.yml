@@ -102,11 +102,14 @@ jobs:
             console.error(`Cloudflare credential preflight failed (HTTP ${status}). ${errors}`);
             process.exit(1);
           }
-          if (!Array.isArray(body.result) || !body.result.some((script) => script.id === 'parmar-ai')) {
-            console.error('Cloudflare API authentication succeeded, but the parmar-ai Worker was not present in the accessible script list.');
+          const requiredWorkers = ['parmar-ai', 'brvin-service'];
+          const availableWorkers = new Set((body.result ?? []).map((script) => script.id));
+          const missingWorkers = requiredWorkers.filter((worker) => !availableWorkers.has(worker));
+          if (missingWorkers.length > 0) {
+            console.error('Cloudflare API authentication succeeded, but required Workers are unavailable: ' + missingWorkers.join(', '));
             process.exit(1);
           }
-          console.log('Cloudflare token authenticated and can list the existing parmar-ai Worker.');
+          console.log('Cloudflare token authenticated and can list both production Workers.');
           console.log('No production deployment was attempted.');
           NODE
 
