@@ -1040,9 +1040,6 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
               throw error;
             }
           }
-          if (!packet && bookContext && !bookContext.passages.length) {
-            packet = makeFatmanNoticePacket("Fatman ki scanned pages mein is sawaal ka relevant hissa nahi mila. Ek keyword, chapter ka naam, ya photo ke saath caption bhejo.");
-          }
           if (!packet && bookContext) {
             await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
             generation = await generateGeminiAnswer(
@@ -1056,7 +1053,10 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             packet = generation.packet;
             const citations = formatFatmanCitations(bookContext.passages, job.question, packet.answer);
             packet.answer = appendFatmanCitations(packet.answer, citations);
-            packet.sscTakeaway = "";
+            if (!bookContext.passages.length && !bookContext.pageImages.length) {
+              packet.answer = packet.answer.trim() +
+                "\n\n📚 Fatman source note: I couldn't retrieve a matching book passage for this question, so this is a general SSC explanation, not a verified summary of a Fatman page.";
+            }
             packet.profileSignal = "neutral";
             packet.profileNote = "";
             packet.nextRevisionTopic = "";
