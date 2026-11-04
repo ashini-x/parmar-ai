@@ -825,10 +825,17 @@ export class JobDedupe extends DurableObject {
     const detectedExam = cleanExam(String(body.detectedExam ?? ""));
     const answerScope = cleanText(String(body.answerScope ?? "ssc_ga_gs"), 20);
 
-    if (answerScope === "out_of_scope") return { ok: true };
-
+    // Count every successfully answered student question, including a
+    // supported-mode redirect. Out-of-scope questions do not change SSC topics
+    // or learning signals, but they still belong in the student's total history.
     profile.questionCount += 1;
     profile.lastUpdatedAt = Date.now();
+
+    if (answerScope === "out_of_scope") {
+      await this.ctx.storage.put(PROFILE_KEY, profile);
+      await this.ctx.storage.put(appliedKey, true);
+      return { ok: true };
+    }
 
     if (detectedExam) profile.targetExam = detectedExam;
 
