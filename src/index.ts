@@ -42,6 +42,21 @@ import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin
 import { completeFatmanUpload, diagnoseFatmanGcsUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 import { archiveBrvinBook, assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinApplication, createBrvinApplicationEnvironment, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, grantBrvinApplicationProject, revokeBrvinApplicationProject, setBrvinApplicationStatus, setBrvinEnvironmentStatus, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview, updateBrvinProject } from "./brvin/admin";
+import {
+  brvinConnectStatus,
+  completeBrvinCloudflareOAuth,
+  completeBrvinGitHubManifest,
+  configureBrvinCloudflareOAuth,
+  createBrvinTestClientPullRequest,
+  discoverBrvinCloudflareWorkers,
+  listBrvinGitHubInstallations,
+  listBrvinGitHubRepositories,
+  registerBrvinTestConsumer,
+  selectBrvinGitHubInstallation,
+  startBrvinCloudflareOAuth,
+  startBrvinGitHubManifest,
+  verifyBrvinTestClientDeployment,
+} from "./brvin/connect-wizard";
 import { runBrvinRecoverySupervisor, runBrvinVisionRetentionSupervisor } from "./fatman/workflow";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
@@ -2167,6 +2182,19 @@ const worker = {
         return new Response(null, { status: 308, headers: { location: "/admin/brvin", "cache-control": "no-store" } });
       }
 
+      // Provider callbacks are intentionally outside the admin-session cookie path:
+      // SameSite=Strict cookies are not sent on a cross-site OAuth redirect. Each
+      // callback instead consumes a 10-minute, single-use, cryptographically random state.
+      if (url.pathname === "/admin/brvin/connect/github/callback") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        return withRequestId(await completeBrvinGitHubManifest(env, request), requestId);
+      }
+
+      if (url.pathname === "/admin/brvin/connect/cloudflare/callback") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        return withRequestId(await completeBrvinCloudflareOAuth(env, request), requestId);
+      }
+
       if (url.pathname === "/admin/brvin/app.js") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         if (!(await requireAdmin(request, env))) return withRequestId(new Response("unauthorized", { status: 401, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } }), requestId);
@@ -2201,6 +2229,11 @@ const worker = {
       if (adminApiPath.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
         if (adminApiPath === "/admin/api/brvin/overview" && request.method === "GET") return brvinOverview(env);
+        if (adminApiPath === "/admin/api/brvin/connect/status" && request.method === "GET") return brvinConnectStatus(env);
+        if (adminApiPath === "/admin/api/brvin/connect/github/installations" && request.method === "GET") return listBrvinGitHubInstallations(env);
+        if (adminApiPath === "/admin/api/brvin/connect/github/repositories" && request.method === "GET") return listBrvinGitHubRepositories(env);
+        if (adminApiPath === "/admin/api/brvin/connect/cloudflare/workers" && request.method === "GET") return discoverBrvinCloudflareWorkers(env, request);
+        if (adminApiPath === "/admin/api/brvin/connect/verify" && request.method === "GET") return verifyBrvinTestClientDeployment(env, request);
         if (adminApiPath === "/admin/api/brvin/diagnostics/storage" && request.method === "GET") return diagnoseFatmanGcsUpload(env);
         if (adminApiPath === "/admin/api/brvin/status" && request.method === "GET") return brvinImportStatus(env, url.searchParams.get("id"));
         if (adminApiPath === "/admin/api/fatman/monitor" && request.method === "GET") return fatmanMonitorStatus(env);
@@ -2211,6 +2244,12 @@ const worker = {
         if (adminApiPath === "/admin/api/fatman/upload/status" && request.method === "GET") return fatmanUploadStatus(env, url.searchParams.get("id"));
         if (request.method === "POST" && adminApiPath.startsWith("/admin/api/brvin/")) {
           if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          if (adminApiPath === "/admin/api/brvin/connect/github/manifest") return startBrvinGitHubManifest(env, request);
+          if (adminApiPath === "/admin/api/brvin/connect/github/installation") return selectBrvinGitHubInstallation(env, request);
+          if (adminApiPath === "/admin/api/brvin/connect/cloudflare/configure") return configureBrvinCloudflareOAuth(env, request);
+          if (adminApiPath === "/admin/api/brvin/connect/cloudflare/start") return startBrvinCloudflareOAuth(env, request);
+          if (adminApiPath === "/admin/api/brvin/connect/consumer") return registerBrvinTestConsumer(env, request);
+          if (adminApiPath === "/admin/api/brvin/connect/pull-request") return createBrvinTestClientPullRequest(env, request);
           if (adminApiPath === "/admin/api/brvin/upload/start") return startBrvinBookUpload(env, request);
           if (adminApiPath === "/admin/api/brvin/projects") return createBrvinProject(env, request);
           if (adminApiPath === "/admin/api/brvin/projects/update") return updateBrvinProject(env, request);
