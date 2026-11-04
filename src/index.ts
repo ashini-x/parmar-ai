@@ -42,6 +42,7 @@ import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin
 import { completeFatmanUpload, diagnoseFatmanGcsUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 import { archiveBrvinBook, assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview } from "./brvin/admin";
+import { brvinApplications, createBrvinApplication, createBrvinEnvironment, setBrvinApplicationStatus, setBrvinEnvironmentStatus, setBrvinProjectGrant, setBrvinProjectStatus } from "./brvin/application-admin";
 import { runBrvinRecoverySupervisor, runBrvinVisionRetentionSupervisor } from "./fatman/workflow";
 export { FatmanImportWorkflow } from "./fatman/workflow";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
@@ -2201,6 +2202,7 @@ const worker = {
       if (adminApiPath.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
         if (adminApiPath === "/admin/api/brvin/overview" && request.method === "GET") return brvinOverview(env);
+        if (adminApiPath === "/admin/api/brvin/applications" && request.method === "GET") return brvinApplications(env);
         if (adminApiPath === "/admin/api/brvin/diagnostics/storage" && request.method === "GET") return diagnoseFatmanGcsUpload(env);
         if (adminApiPath === "/admin/api/brvin/status" && request.method === "GET") return brvinImportStatus(env, url.searchParams.get("id"));
         if (adminApiPath === "/admin/api/fatman/monitor" && request.method === "GET") return fatmanMonitorStatus(env);
@@ -2212,6 +2214,12 @@ const worker = {
         if (request.method === "POST" && adminApiPath.startsWith("/admin/api/brvin/")) {
           if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
           if (adminApiPath === "/admin/api/brvin/upload/start") return startBrvinBookUpload(env, request);
+          if (adminApiPath === "/admin/api/brvin/applications") return createBrvinApplication(env, request);
+          if (adminApiPath === "/admin/api/brvin/applications/environments") return createBrvinEnvironment(env, request);
+          if (adminApiPath === "/admin/api/brvin/applications/status") return setBrvinApplicationStatus(env, request);
+          if (adminApiPath === "/admin/api/brvin/applications/environments/status") return setBrvinEnvironmentStatus(env, request);
+          if (adminApiPath === "/admin/api/brvin/applications/project-grants") return setBrvinProjectGrant(env, request);
+          if (adminApiPath === "/admin/api/brvin/projects/status") return setBrvinProjectStatus(env, request);
           if (adminApiPath === "/admin/api/brvin/projects") return createBrvinProject(env, request);
           if (adminApiPath === "/admin/api/brvin/collections") return createBrvinCollection(env, request);
           if (adminApiPath === "/admin/api/brvin/books/assign") return assignBrvinBookProjects(env, request);
