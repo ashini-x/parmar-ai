@@ -6,7 +6,7 @@
 **First additional consumer:** `ashini-x/askmoina-voice`  
 **Created:** 4 November 2026  
 **Planning baseline:** `main` at `939a6046f2a6fa461898f2479e6ed22923e3f3f9`  
-**Overall implementation status:** M0–M3 are complete and merged to `main`; M1 registry and M2 RPC v2 are deployed and verified. M4 AskMoina application identity registration and consumer integration are IN PROGRESS in PR #65 and AskMoina PR #370.
+**Overall implementation status:** M0–M3 complete and merged. M4 AskMoina application identity, private connector and Gemini Live tool are merged and deployed; production exact-page BRVIN retrieval has passed on the deployed Worker. The broad production voice synthetic suite is re-running after a benchmark-only fix; final M4 acceptance remains provisional until that run completes.
 
 > **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
 
@@ -264,9 +264,9 @@ Milestones change status only after implementation and evidence. A commit alone 
 |---|---|---|---|
 | 0 | Architecture freeze and migration blueprint | COMPLETE | M0 design package merged to `main` in PR #61; original docs-only PR #60 closed as superseded |
 | 1 | Multi-application, multi-project identity | COMPLETE | PR #61 merged; Release Validation #586 passed; additive registry migration applied and production rows/FK check verified; v1/Fatman preserved |
-| 2 | Private retrieval API v2 | COMPLETE | PR #62 merged and deployed; environment-bound v2 methods and per-project authorization verified in production; v1 remains intact |
+| 2 | Private retrieval API v2 | COMPLETE | PR #62 merged as `3b68aaecf3c78c712e1a1c978285ad1f166d15c4`; Release Validation #596 passed; production v2 health parity and Fatman identity/data verified |
 | 3 | Reusable BRVIN application connector | COMPLETE | PR #63 merged to main as `91b6a499bd782ae298b41e790157c23682f10881`; Release Validation #608 passed all checks and Cloudflare Preview build succeeded |
-| 4 | AskMoina Voice integration | IN PROGRESS | BRVIN identity migration in PR #65; AskMoina Gemini Live connector/tool integration in PR #370; identity must deploy before consumer binding |
+| 4 | AskMoina Voice integration | IN PROGRESS — deployed, acceptance pending | BRVIN PR #65 merged `0b3c621b83a28de2f4ca5da95db349b364558a60`; AskMoina PR #370 merged `ce725d33df452de0e9df2f4613c70ec89592251e`; benchmark fix PR #372 merged `7893ea5f79a930c2e425dc9a87997b2412435d25` |
 | 5 | BRVIN application/project administration | NOT STARTED | Admin can manage apps, projects, grants and knowledge centrally |
 | 6 | Automated Connect Application wizard | NOT STARTED | Supported app can be onboarded through reviewed GitHub/Cloudflare workflow |
 | 7 | End-to-end administrator and user acceptance | NOT STARTED | Full multi-app/multi-project and negative permission tests pass |
@@ -422,9 +422,9 @@ This table is the human-readable status. The evidence fields must be filled from
 |---|---|---|---|---|
 | 0 — Architecture freeze | COMPLETE | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61) merged as `5735314b3e692019c34ba3d2a0d851cbb6c43aa3` | ADR and RPC v2 contract merged to main; Release Validation #586 passed for the combined code/docs PR | Original docs-only PR #60 closed as superseded |
 | 1 — Identity model | COMPLETE | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61), merge commit `5735314b3e692019c34ba3d2a0d851cbb6c43aa3` | Release Validation #586 passed; production migration marker and all three seed rows verified; foreign-key check empty; both Workers active on new versions | No v1 RPC or Fatman permissions/counter reset |
-| 2 — Private RPC v2 | NOT STARTED | — | — | Must remain private |
+| 2 — Private RPC v2 | COMPLETE | [PR #62](https://github.com/ashini-x/parmar-ai/pull/62), merge commit `3b68aaecf3c78c712e1a1c978285ad1f166d15c4` | Release Validation #596 passed; production environment-bound methods deployed; v1 Fatman path/usage unchanged | Private Service Binding only; no public retrieval route |
 | 3 — Reusable connector | COMPLETE | [PR #63](https://github.com/ashini-x/parmar-ai/pull/63), merge commit `91b6a499bd782ae298b41e790157c23682f10881` | Release Validation #608 passed; Cloudflare Preview build `a4c154e3-c056-489a-9b14-8ebac9ed9c0d` succeeded | Connector vendored by AskMoina PR #370 |
-| 4 — AskMoina integration | IN PROGRESS | [BRVIN PR #65](https://github.com/ashini-x/parmar-ai/pull/65); [AskMoina PR #370](https://github.com/ashini-x/askmoina-voice/pull/370) | Identity migration tests/Worker builds passed run #609; AskMoina consumer CI pending; production D1 and tool smoke pending | Merge/deploy BRVIN identity before merging/deploying AskMoina binding |
+| 4 — AskMoina integration | IN PROGRESS — live, synthetic acceptance finishing | [BRVIN PR #65](https://github.com/ashini-x/parmar-ai/pull/65), merge `0b3c621b83a28de2f4ca5da95db349b364558a60`; [AskMoina PR #370](https://github.com/ashini-x/askmoina-voice/pull/370), merge `ce725d33df452de0e9df2f4613c70ec89592251e`; benchmark PR #372 merge `7893ea5f79a930c2e425dc9a87997b2412435d25` | Deployed AskMoina Worker version `57355cd5-b41b-4978-a00e-390acafadf7a` is at 100%; health/routes/PWA checks passed; exact PDF page 14 synthetic passed and BRVIN telemetry shows authorised production app/env→Fatman, one source, success. Re-run full suite after speech-boundary benchmark correction | Fatman project allowance remains shared; preview Worker is intentionally unbound |
 | 5 — Admin experience | NOT STARTED | — | — | Application/project/knowledge UI |
 | 6 — Connect wizard | NOT STARTED | — | — | GitHub/Cloudflare + PR automation |
 | 7 — E2E acceptance | NOT STARTED | — | — | Full synthetic journey |
@@ -571,6 +571,32 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 **AskMoina consumer:** PR #370 is open in `ashini-x/askmoina-voice`. Its branch vendors the M3 connector, adds the authenticated `search_brvin_knowledge` Gemini Live function, calls the server-side connector using only configured project `fatman`, and deliberately leaves preview unbound. It has not been merged or deployed. Its upstream connector pin will be advanced to the M3 merge commit in a follow-up commit.
 
 **Production boundary:** M4 identity migration has not been applied to production D1. The AskMoina Worker production binding has not been deployed. The Fatman grant is shared with other authorised consumers and therefore shares Fatman's current monthly quota; no limit increase or alternate project grant is included.
+
+### Milestone log — 4 November 2026 — M4 deployed and exact-page acceptance verified
+
+**BRVIN M3 — COMPLETE.** PR #63 merged as `91b6a499bd782ae298b41e790157c23682f10881`; Release Validation #608 passed TypeScript, unit, Node and both Worker dry-runs. Cloudflare Preview build `a4c154e3-c056-489a-9b14-8ebac9ed9c0d` succeeded.
+
+**BRVIN M4 identity — MERGED AND DEPLOYED.** PR #65 merged as `0b3c621b83a28de2f4ca5da95db349b364558a60`; fresh rebased Release Validation #611 passed all typecheck/test/Worker dry-run gates. The normal main release run #612 completed success and applied the idempotent D1 registration migration.
+
+Production D1 `parmar-ai-admin-prod` read-back:
+- AskMoina application `00000000-0000-4000-8000-000000000201`, slug `askmoina-voice`, active.
+- Production environment `00000000-0000-4000-8000-000000000202`, active.
+- Preview environment `00000000-0000-4000-8000-000000000203`, active, display name explicitly says not bound to BRVIN.
+- AskMoina→Fatman grant `00000000-0000-4000-8000-000000000204`, active.
+- Migration marker `brvin2-askmoina-application-identities-v1` present; `PRAGMA foreign_key_check` returned no rows.
+- Fatman remains active. Its November 2026 query counter was 20 before live synthetic calls and 22 after two exact-page smoke requests; no grant/quota increase was made. All D1 audit queries were read-only.
+
+**AskMoina consumer — MERGED AND DEPLOYED.** PR #370 merged as `ce725d33df452de0e9df2f4613c70ec89592251e`. Release Validation #1761 and Workers Build passed. The production Worker config binds `BRVIN_SERVICE` to `brvin-service` / `BrvinRetrievalApi`, trusted environment ID `00000000-0000-4000-8000-000000000202`, and fixed `BRVIN_DEFAULT_PROJECT_ID=fatman`. Preview Wrangler config has no Service Binding and no default project ID. The app's own D1/auth/history/memory/Gemini/audio/video/session relay/resumption remain consumer-owned.
+
+Production exact-page synthetic on the deployed AskMoina Worker:
+- Script `scripts/live-brvin-knowledge-smoke.py` requested physical PDF page 14 through the authenticated Gemini Live WebSocket.
+- Synthetic output: `brvin_exact_page`, `passed=true`, `bookCitation=true`, `physicalPdfPage14Citation=true`.
+- Cloudflare telemetry for BRVIN RPC shows caller application ID `00000000-0000-4000-8000-000000000201`, environment ID `00000000-0000-4000-8000-000000000202`, environment key `production`, project `fatman`, outcome `success`, sourceCount 1; AskMoina connector outcome `success` and bounded response bytes. Second run after benchmark patch also succeeded in 3691 ms.
+- AskMoina production Worker deployment after the benchmark-only fix: version `57355cd5-b41b-4978-a00e-390acafadf7a`, 100% traffic, release `0.4.170`.
+
+**Production synthetic qualification:** Initial deployment run #643 failed on the existing turn-latency benchmark, even though the provider turn was complete and had produced 101,760 audio bytes. The benchmark's timestamp was set after a retained 120 ms quiet PCM tail, so valid audio generated during the tail was misclassified. All other tests passed, including BRVIN exact page, 3 sequential web lookups, spoken answer/card, ranked list, voice memory, browser network recovery, >170-second Live continuity and conversation-history/memory APIs.
+
+A benchmark-only fix was merged in AskMoina PR #372 as `7893ea5f79a930c2e425dc9a87997b2412435d25`: measure speech end at the last meaningful PCM frame, return that offset with the trimmed fixture, and add four deterministic regression tests. No production Worker runtime, model prompt, DB schema, binding or quota behavior changed in this fix. Release Validation and Cloudflare Preview checks passed before merge. Main release #644 has deployed the benchmark fix and is re-running the full synthetic acceptance. The exact-page BRVIN synthetic has passed again and production health/routes/PWA are green; keep M4 status provisional until run #644 completes, especially the 20-turn latency benchmark and remaining continuity/history checks.
 
 ## 8. Rules for future ChatGPT/Codex sessions
 
