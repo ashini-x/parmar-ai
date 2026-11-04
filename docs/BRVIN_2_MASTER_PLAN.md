@@ -420,7 +420,7 @@ This table is the human-readable status. The evidence fields must be filled from
 
 | Milestone | Status | PR / commit | Verification evidence | Notes |
 |---|---|---|---|---|
-| 0 — Architecture freeze | READY FOR REVIEW | [PR #60](https://github.com/ashini-x/parmar-ai/pull/60), head `9bdb08839fb30cf393c8517ff9b64c0715172a02` | ADR and RPC v2 contract added; current D1/code/Cloudflare state reconciled; no runtime or production writes | Awaiting review/merge; design only, not implementation |
+| 0 — Architecture freeze | READY FOR REVIEW | [PR #60](https://github.com/ashini-x/parmar-ai/pull/60), head `571857252c84f132fecb6bb98b81828a58c9a1df` | ADR and RPC v2 contract added; current D1/code/Cloudflare state reconciled; no runtime or production writes | Awaiting review/merge; design only, not implementation |
 | 1 — Identity model | NOT STARTED | — | — | Must preserve Fatman |
 | 2 — Private RPC v2 | NOT STARTED | — | — | Must remain private |
 | 3 — Reusable connector | NOT STARTED | — | — | Standard app-side adapter |
@@ -454,7 +454,7 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 **Status:** READY FOR REVIEW (not marked complete until the design PR is reviewed and merged).  
 **Branch:** `brvin-2/m0-architecture-freeze`  
 **Pull request:** https://github.com/ashini-x/parmar-ai/pull/60  
-**PR head:** `9bdb08839fb30cf393c8517ff9b64c0715172a02`  
+**PR head:** `571857252c84f132fecb6bb98b81828a58c9a1df`  
 **Base audited:** `main` at `a16a9273d581d9dd5acfc3c53c3cc1f2cba819fd`
 
 **Paths changed:**
@@ -464,7 +464,7 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 - `docs/BRVIN_INTEGRATION_GUIDE.md` — labels existing instructions as v1 and prevents premature v2 production configuration.
 - `docs/BRVIN_2_MASTER_PLAN.md` — this ledger and continuity record.
 
-**D1 migration:** none. Read-only inspection only. The live database showed the existing Fatman project/client mapping, the existing Fatman and Rain Gardens books, existing project grants, and 20 November 2026 Fatman usage queries. No tables, rows, grants, source records or usage counters were written or changed.
+**D1 migration:** none. Read-only inspection only. The live database showed the existing Fatman project/client mapping, the existing Fatman and Rain Gardens books, existing project grants, and 20 queries recorded for the 2026-11 billing month in Fatman usage. No tables, rows, grants, source records or usage counters were written or changed.
 
 **Cloudflare:** no configuration, binding, secret, Worker, Workflow, D1, GCS or AI Search changes. Read-only inspection confirmed the current `parmar-ai` and `brvin-service` Workers, their shared D1 binding and shared `default` AI Search instance. `brvin-service` remains configured with `workers_dev: false`; the current caller still uses `props.clientId: "fatman"`. AskMoina production has its own D1 and no BRVIN Service Binding. Observed active deployment version IDs at audit time: `parmar-ai` `56cdd777-7f48-4c63-869d-4d18a2de3e9b`; `brvin-service` `1a533c1c-a1e4-4994-9eaa-0dfb0fee0cf1`; AskMoina Voice `abee86c2-8a80-47f3-87f5-eb92a60cc2d8`. These are baseline observations, not deployments from this PR.
 
