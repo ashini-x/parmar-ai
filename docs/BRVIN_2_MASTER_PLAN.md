@@ -544,8 +544,15 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 
 **Status:** IN PROGRESS. Work is on `brvin-2/m3-connector`, based on M2 merge commit `3b68aaecf3c78c712e1a1c978285ad1f166d15c4`.
 **Purpose:** provide one typed server-side connector API for BRVIN v2 project discovery, readiness, semantic/exact-page retrieval, provenance formatting, timeout and error handling. Consumers must not make raw BRVIN RPC calls from browser/mobile clients.
-**Initial investigation:** inspect `ashini-x/parmar-ai` and `ashini-x/askmoina-voice` TypeScript/package/WorkerEntrypoint structure before freezing module distribution. Preserve the v1 Fatman call path; no AskMoina cutover is part of M3.
-**Next actions:** select and document a maintainable shared package/module delivery method; implement the connector with strict types and bounded request handling; add tests for discovery, status, page/semantic retrieval, provenance, failures, timeout/size limits and absence of unrestricted fallback. Open a dedicated PR and update this ledger after validation.
+**Distribution decision:** a dependency-free source package is maintained in `packages/brvin-connector`; consumers vendor a pinned copy through a reviewed PR and record the upstream BRVIN commit. No public npm package or registry credential is introduced. The future Connect Application wizard can update the pinned copy through its reviewed PR flow. The rationale and contract are documented in `docs/BRVIN_3_CONNECTOR_DESIGN.md`.
+
+**Initial implementation:** `packages/brvin-connector/package.json`, `packages/brvin-connector/src/index.ts`, and `packages/brvin-connector/README.md` have been added. The module exposes project discovery, readiness, semantic/exact-page retrieval, bounded inputs, deadline/response-size limits, typed failure classification, content-free diagnostic callbacks and citation/evidence formatting. It deliberately has no permission cache and performs no automatic retries.
+
+**Tests:** `test/brvin-connector.test.ts` has been added for discovery, opaque Fatman ID, query/page normalization, exact-page-only retrieval, invalid selectors/input, authorization/quotas classification, thrown errors, timeout ambiguity/no retry, size caps, content-free diagnostics and citation formatting. Validation is pending; no M3 behavior is marked complete.
+
+**AskMoina boundary:** M3 provides the shared connector only. M4 will vendor a pinned copy into `ashini-x/askmoina-voice` and call it from the existing server-side Gemini Live function/tool handler. AskMoina's auth, workspace mapping, own D1, history, memory, live sessions and generation remain app-owned. No AskMoina code or production binding has been changed in M3.
+
+**Next actions:** run CI, fix failures, then open a dedicated M3 PR. Keep existing Fatman retrieval on v1 and do not connect AskMoina until M4.
 
 ## 8. Rules for future ChatGPT/Codex sessions
 
