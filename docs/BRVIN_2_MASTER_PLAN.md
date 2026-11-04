@@ -6,7 +6,7 @@
 **First additional consumer:** `ashini-x/askmoina-voice`  
 **Created:** 4 November 2026  
 **Planning baseline:** `main` at `939a6046f2a6fa461898f2479e6ed22923e3f3f9`  
-**Overall implementation status:** M0 architecture freeze and M1 identity registry merged to `main`; production schema/seed verified. M2 private retrieval RPC v2 is IN PROGRESS on `brvin-2/m2-private-rpc-v2`.
+**Overall implementation status:** M0–M3 are complete and merged to `main`; M1 registry and M2 RPC v2 are deployed and verified. M4 AskMoina application identity registration and consumer integration are IN PROGRESS in PR #65 and AskMoina PR #370.
 
 > **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
 
@@ -255,18 +255,18 @@ The architecture freeze deliverables are maintained in two reviewable documents:
 - [BRVIN 2 Architecture Decision Record](BRVIN_2_ARCHITECTURE_DECISIONS.md) — exact additive D1 schema, identity trust model, migration seed, compatibility/rollback plan, AskMoina integration, admin/wizard design and acceptance checklist.
 - [BRVIN 2 Private Retrieval RPC v2 Contract](BRVIN_2_RPC_V2_CONTRACT.md) — trusted binding identity, v2 methods/types, authorisation sequence, exact-page behavior, structured failures, quotas and tests.
 
-These are the proposed Milestone 0 design. They are not implemented runtime behavior. The current v1 references remain authoritative for production until Milestones 1–2 are implemented and verified.
+These design documents have been implemented in M1–M3. The v1 references remain authoritative for existing Fatman retrieval, while v2 is deployed and used by the M4 AskMoina integration.
 
 
-All milestones initially start as **NOT STARTED**. Change a status only after implementation and evidence. A commit alone is not completion. Each completed milestone must record PR/commit, changed areas, tests, deployment status, acceptance evidence and remaining risks.
+Milestones change status only after implementation and evidence. A commit alone is not completion. Each completed milestone records PR/commit, changed areas, tests, deployment status, acceptance evidence and remaining risks.
 
 | Milestone | Name | Initial status | Completion outcome |
 |---|---|---|---|
 | 0 | Architecture freeze and migration blueprint | COMPLETE | M0 design package merged to `main` in PR #61; original docs-only PR #60 closed as superseded |
 | 1 | Multi-application, multi-project identity | COMPLETE | PR #61 merged; Release Validation #586 passed; additive registry migration applied and production rows/FK check verified; v1/Fatman preserved |
-| 2 | Private retrieval API v2 | IN PROGRESS | Implement explicit v2 RPC methods with environment-bound identity and per-project authorisation; retain v1 unchanged |
-| 3 | Reusable BRVIN application connector | NOT STARTED | Typed reusable app-side adapter and tests |
-| 4 | AskMoina Voice integration | IN PROGRESS | BRVIN-side AskMoina production/preview identities and explicit Fatman grant prepared; AskMoina Gemini Live connector/tool integration in separate repo branch |
+| 2 | Private retrieval API v2 | COMPLETE | PR #62 merged and deployed; environment-bound v2 methods and per-project authorization verified in production; v1 remains intact |
+| 3 | Reusable BRVIN application connector | COMPLETE | PR #63 merged to main as `91b6a499bd782ae298b41e790157c23682f10881`; Release Validation #608 passed all checks and Cloudflare Preview build succeeded |
+| 4 | AskMoina Voice integration | IN PROGRESS | BRVIN identity migration in PR #65; AskMoina Gemini Live connector/tool integration in PR #370; identity must deploy before consumer binding |
 | 5 | BRVIN application/project administration | NOT STARTED | Admin can manage apps, projects, grants and knowledge centrally |
 | 6 | Automated Connect Application wizard | NOT STARTED | Supported app can be onboarded through reviewed GitHub/Cloudflare workflow |
 | 7 | End-to-end administrator and user acceptance | NOT STARTED | Full multi-app/multi-project and negative permission tests pass |
@@ -423,8 +423,8 @@ This table is the human-readable status. The evidence fields must be filled from
 | 0 — Architecture freeze | COMPLETE | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61) merged as `5735314b3e692019c34ba3d2a0d851cbb6c43aa3` | ADR and RPC v2 contract merged to main; Release Validation #586 passed for the combined code/docs PR | Original docs-only PR #60 closed as superseded |
 | 1 — Identity model | COMPLETE | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61), merge commit `5735314b3e692019c34ba3d2a0d851cbb6c43aa3` | Release Validation #586 passed; production migration marker and all three seed rows verified; foreign-key check empty; both Workers active on new versions | No v1 RPC or Fatman permissions/counter reset |
 | 2 — Private RPC v2 | NOT STARTED | — | — | Must remain private |
-| 3 — Reusable connector | NOT STARTED | — | — | Standard app-side adapter |
-| 4 — AskMoina integration | IN PROGRESS | BRVIN identity PR #64 re-based in follow-up; AskMoina consumer PR #370 | Identities, project grant, server-side Gemini Live tool and pinned connector are staged; CI/release/production smoke pending | Must deploy identity before consumer binding |
+| 3 — Reusable connector | COMPLETE | [PR #63](https://github.com/ashini-x/parmar-ai/pull/63), merge commit `91b6a499bd782ae298b41e790157c23682f10881` | Release Validation #608 passed; Cloudflare Preview build `a4c154e3-c056-489a-9b14-8ebac9ed9c0d` succeeded | Connector vendored by AskMoina PR #370 |
+| 4 — AskMoina integration | IN PROGRESS | [BRVIN PR #65](https://github.com/ashini-x/parmar-ai/pull/65); [AskMoina PR #370](https://github.com/ashini-x/askmoina-voice/pull/370) | Identity migration tests/Worker builds passed run #609; AskMoina consumer CI pending; production D1 and tool smoke pending | Merge/deploy BRVIN identity before merging/deploying AskMoina binding |
 | 5 — Admin experience | NOT STARTED | — | — | Application/project/knowledge UI |
 | 6 — Connect wizard | NOT STARTED | — | — | GitHub/Cloudflare + PR automation |
 | 7 — E2E acceptance | NOT STARTED | — | — | Full synthetic journey |
@@ -560,6 +560,18 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 **Safety/rollout boundary:** neither branch has been merged or deployed for M4. No AskMoina production binding has been added to Cloudflare; no AskMoina or BRVIN production D1 data has yet been changed by M4. The BRVIN app/identity/grant seed only becomes live after its PR is reviewed/merged and the BRVIN release runs. AskMoina production binding/tool only becomes live after the identity is verified and its own PR/release succeeds.
 
 **Next actions:** open and validate the BRVIN identity migration PR; open and validate the AskMoina integration PR; merge/deploy the BRVIN identity first; verify both environments and exact Fatman grant in D1; then merge/deploy AskMoina and run production tool tests for semantic question, exact physical PDF page, no result, denied/revoked grant, quota exhaustion and BRVIN outage. Keep preview unbound.
+### Milestone log — 4 November 2026 — M3 completed and M4 rebased onto main
+
+**M3 completion:** PR #63 merged as `91b6a499bd782ae298b41e790157c23682f10881`. Release Validation #608 passed `npm run check`, `npm test`, `npm run test:node`, and both Worker Wrangler dry-runs. Cloudflare preview build `a4c154e3-c056-489a-9b14-8ebac9ed9c0d` also passed. The reusable connector is now available on main at `packages/brvin-connector`.
+
+**M4 BRVIN identity:** work has been moved from stale branch `brvin-2/m4-askmoina-identity` onto `brvin-2/m4-askmoina-identity-main`, based on main after M3 merge `91b6a499bd782ae298b41e790157c23682f10881`. The identity migration, `src/analytics/db.ts` initializer call, migration tests and updated ledger are all present on that branch. Release Validation #609 passed TypeScript, unit tests, Node tests and both Worker dry-runs on equivalent M4 implementation before rebasing; a fresh run is required for PR #65.
+
+**PR transition:** previous PR #64 is based on pre-M3 main and will be closed as superseded. The rebased branch is submitted as PR #65 so its base is current main and the M3 connector exists before M4 migration review.
+
+**AskMoina consumer:** PR #370 is open in `ashini-x/askmoina-voice`. Its branch vendors the M3 connector, adds the authenticated `search_brvin_knowledge` Gemini Live function, calls the server-side connector using only configured project `fatman`, and deliberately leaves preview unbound. It has not been merged or deployed. Its upstream connector pin will be advanced to the M3 merge commit in a follow-up commit.
+
+**Production boundary:** M4 identity migration has not been applied to production D1. The AskMoina Worker production binding has not been deployed. The Fatman grant is shared with other authorised consumers and therefore shares Fatman's current monthly quota; no limit increase or alternate project grant is included.
+
 ## 8. Rules for future ChatGPT/Codex sessions
 
 At the start of every new session:
