@@ -39,11 +39,11 @@ A consumer binding can temporarily contain both properties for controlled migrat
 
 ## 2. Shared TypeScript types
 
-The exact names can be adjusted to match repository conventions during implementation, but the semantics and trust boundary must not change.
+The names and semantics below are the frozen target contract for Milestone 2.
 
 ```ts
 export interface BrvinProjectSelector {
-  /** Existing BRVIN project UUID; selector, not proof of permission. */
+  /** Existing BRVIN project identifier; opaque selector, not proof of permission. */
   projectId: string;
 }
 
@@ -162,7 +162,7 @@ Success data:
 
 Rules:
 
-- Validate the project UUID format and length.
+- Validate that `projectId` is a non-empty string of at most 128 characters, has no NUL byte and is not padded with leading/trailing whitespace. Do not require UUID syntax; preserve legacy IDs such as `fatman`.
 - Resolve the environment/application.
 - Verify the active application-project grant and active project.
 - Return `PROJECT_NOT_AUTHORIZED` for an unknown project or missing/revoked grant; do not allow this method to enumerate other applications' project IDs.
@@ -197,7 +197,7 @@ Success data:
 
 Validation and bounds:
 
-- `projectId` must be a valid UUID-shaped BRVIN project identifier.
+- `projectId` must be a non-empty BRVIN project identifier of at most 128 characters. Treat it as opaque: the existing Fatman project ID is the literal string `fatman`, while newly provisioned project IDs are UUIDs. Do not coerce, regenerate or validate it as UUID-only.
 - At least one usable query or valid page number is required.
 - Accept at most 3 unique query variants, each normalized and bounded to 2,000 characters.
 - Accept at most 3 unique positive integer page numbers.
@@ -327,6 +327,7 @@ The placeholder above is illustrative only; the admin must read the generated ID
 
 ### Identity resolution
 - Active environment + active app resolves the correct app.
+- Existing project identifier `fatman` remains valid as a v2 selector and maps to the same legacy project row.
 - Unknown, malformed, disabled and revoked environment IDs fail closed.
 - Suspended/revoked application fails closed.
 - A co-present legacy `clientId` does not rescue an invalid v2 environment ID.
@@ -337,6 +338,7 @@ The placeholder above is illustrative only; the admin must read the generated ID
 - Same app with a second granted project succeeds.
 - Project shared to a second app succeeds only for that second app after a separate grant.
 - Unshared project, revoked grant, unknown project and inactive project fail before quota reservation and before AI Search.
+- Opaque non-UUID project identifiers remain supported for existing legacy project rows; malformed/oversized values fail validation.
 - Revoking or deactivating a grant affects the next request; no permission cache may outlive the request.
 - App with no grants lists an empty project collection.
 
