@@ -116,5 +116,28 @@
         "max_concurrency": 50
       }
     ]
+  },
+  "previews": {
+    "vars": {
+      "APP_VERSION": "2.8.0-preview",
+      "ENVIRONMENT": "preview",
+      "FATMAN_ENABLED": "false",
+      "DAILY_QUESTION_LIMIT": "20"
+    },
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "parmar-ai-admin-preview",
+        "database_id": "4061b8b7-aeae-4f83-a650-922c68e6f42d"
+      }
+    ],
+    "durable_objects": {
+      "bindings": [
+        {
+          "name": "JOB_DEDUPE",
+          "class_name": "JobDedupe"
+        }
+      ]
+    }
   }
 }
