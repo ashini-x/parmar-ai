@@ -14,10 +14,9 @@ import {
 export type BrvinServiceEnv = Pick<
   Env,
   | "DB"
-  | "FATMAN_SEARCH"
-  | "FATMAN_INSTANCE_NAME"
-  | "FATMAN_MIN_SCORE"
-  | "FATMAN_MONTHLY_QUERY_LIMIT"
+  | "BRVIN_SEARCH"
+  | "BRVIN_SEARCH_INSTANCE"
+  | "BRVIN_MIN_SCORE"
   | "BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT"
 >;
 
@@ -69,18 +68,19 @@ async function reserveProjectQuery(
   const now = Date.now();
   const month = new Date(now).toISOString().slice(0, 7);
   const fatman = project.slug === "fatman";
+  const monthlyLimit = queryLimit(env.BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT);
 
   const reserved = fatman
     ? await env.DB.prepare(
         "INSERT INTO fatman_search_usage (billing_month,query_count,updated_at) VALUES (?,1,?) " +
         "ON CONFLICT(billing_month) DO UPDATE SET query_count=query_count+1,updated_at=excluded.updated_at " +
         "WHERE query_count < ? RETURNING query_count",
-      ).bind(month, now, queryLimit(env.FATMAN_MONTHLY_QUERY_LIMIT)).first<{ query_count: number }>()
+      ).bind(month, now, monthlyLimit).first<{ query_count: number }>()
     : await env.DB.prepare(
         "INSERT INTO brvin_project_search_usage (project_id,billing_month,query_count,updated_at) VALUES (?,?,1,?) " +
         "ON CONFLICT(project_id,billing_month) DO UPDATE SET query_count=query_count+1,updated_at=excluded.updated_at " +
         "WHERE query_count < ? RETURNING query_count",
-      ).bind(project.id, month, now, queryLimit(env.BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT)).first<{ query_count: number }>();
+      ).bind(project.id, month, now, monthlyLimit).first<{ query_count: number }>();
 
   if (reserved) return { allowed: true, queryCount: Number(reserved.query_count) };
 
@@ -94,9 +94,7 @@ async function reserveProjectQuery(
 
   return {
     allowed: false,
-    queryCount: Number(existing?.query_count ?? queryLimit(
-      fatman ? env.FATMAN_MONTHLY_QUERY_LIMIT : env.BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT,
-    )),
+    queryCount: Number(existing?.query_count ?? monthlyLimit),
   };
 }
 

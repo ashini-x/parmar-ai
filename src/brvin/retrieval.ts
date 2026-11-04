@@ -12,7 +12,17 @@ const MAX_RAW_PASSAGE_CHARS = 60_000;
 const EXCERPT_WINDOW_CHARS = 1_100;
 const EXCERPT_WINDOW_STEP = 550;
 
-export type BrvinRetrievalEnv = Pick<Env, "DB" | "FATMAN_SEARCH" | "FATMAN_INSTANCE_NAME" | "FATMAN_MIN_SCORE">;
+// Prefer BRVIN-native bindings in brvin-service. The legacy Fatman names remain
+// supported only for the existing parmar-ai admin/QA paths during this migration.
+export type BrvinRetrievalEnv = Pick<Env, "DB"> &
+  Partial<Pick<Env,
+    | "BRVIN_SEARCH"
+    | "BRVIN_SEARCH_INSTANCE"
+    | "BRVIN_MIN_SCORE"
+    | "FATMAN_SEARCH"
+    | "FATMAN_INSTANCE_NAME"
+    | "FATMAN_MIN_SCORE"
+  >>;
 
 export interface BrvinPassage {
   id: string;
@@ -217,7 +227,10 @@ export async function retrieveBrvinProjectContextForProject(
   queries: string[],
   resolvedSources?: BrvinSource[],
 ): Promise<BrvinProjectContext> {
-  if (!env.DB || !env.FATMAN_SEARCH || !env.FATMAN_INSTANCE_NAME?.trim()) {
+  const searchNamespace = env.BRVIN_SEARCH ?? env.FATMAN_SEARCH;
+  const searchInstanceName = env.BRVIN_SEARCH_INSTANCE ?? env.FATMAN_INSTANCE_NAME;
+  const minScoreSetting = env.BRVIN_MIN_SCORE ?? env.FATMAN_MIN_SCORE;
+  if (!env.DB || !searchNamespace || !searchInstanceName?.trim()) {
     throw new BrvinRetrievalError("BRVIN retrieval is not configured.");
   }
 
@@ -237,7 +250,7 @@ export async function retrieveBrvinProjectContextForProject(
       throw new BrvinRetrievalError("A registered BRVIN search prefix is invalid.");
     }
     const prefixSources = [...sources].sort((a, b) => b.search_prefix.length - a.search_prefix.length);
-    const instance = env.FATMAN_SEARCH.get(env.FATMAN_INSTANCE_NAME.trim());
+    const instance = searchNamespace.get(searchInstanceName.trim());
     const settled = await Promise.allSettled(normalizedQueries.map(async (query) => {
       const result = await instance.search({
         messages: [{ role: "user", content: query }],
@@ -264,7 +277,7 @@ export async function retrieveBrvinProjectContextForProject(
       );
     }
 
-    const minScoreValue = Number(env.FATMAN_MIN_SCORE ?? "0.2");
+    const minScoreValue = Number(minScoreSetting ?? "0.2");
     const minScore = Number.isFinite(minScoreValue)
       ? Math.min(1, Math.max(0, minScoreValue))
       : 0.2;
