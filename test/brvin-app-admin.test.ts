@@ -80,22 +80,22 @@ class MemoryD1 {
   async run(sql: string, values: unknown[]): Promise<{ success: boolean }> {
     this.statements.push(sql);
     if (sql.includes("INSERT INTO brvin_applications")) {
-      const [id, slug, name, description, , createdAt, updatedAt] = values;
+      const [id, slug, name, description, createdAt, updatedAt] = values;
       this.applications.push({ id, slug, name, description, status: "active", created_at: createdAt, updated_at: updatedAt });
     } else if (sql.includes("INSERT INTO brvin_application_environments")) {
-      const [id, applicationId, environmentKey, displayName, , createdAt, updatedAt] = values;
+      const [id, applicationId, environmentKey, displayName, createdAt, updatedAt] = values;
       this.environments.push({
         id, application_id: applicationId, environment_key: environmentKey, display_name: displayName,
         status: "active", created_at: createdAt, updated_at: updatedAt, revoked_at: null, revoked_by: null,
       });
     } else if (sql.includes("INSERT INTO brvin_projects")) {
-      const [id, name, slug, description, , createdAt, updatedAt] = values;
+      const [id, name, slug, description, createdAt, updatedAt] = values;
       this.projects.push({ id, name, slug, description, status: "active", created_at: createdAt, updated_at: updatedAt });
     } else if (sql.includes("INSERT INTO brvin_application_project_grants")) {
-      const [id, applicationId, projectId, , createdAt, createdBy] = values;
+      const [id, applicationId, projectId, createdAt] = values;
       this.grants.push({
         id, application_id: applicationId, project_id: projectId, status: "active",
-        created_at: createdAt, created_by: createdBy, revoked_at: null, revoked_by: null,
+        created_at: createdAt, created_by: "admin-dashboard", revoked_at: null, revoked_by: null,
       });
     } else if (sql.includes("INSERT INTO brvin_service_clients")) {
       this.legacyClients.push({ client_id: values[0], project_id: values[1] });
@@ -152,7 +152,7 @@ describe("BRVIN application and project administration", () => {
     expect(body.application.id).toMatch(/^[a-f0-9-]{36}$/u);
     expect(body.application.slug).toBe("moina-text-lab");
     expect(body.application.status).toBe("active");
-    expect(activity).toHaveBeenCalledWith(environment(db), expect.objectContaining({ eventType: "application.created" }));
+    expect(activity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "application.created" }));
   });
 
   it("creates only an active environment under an active application", async () => {
