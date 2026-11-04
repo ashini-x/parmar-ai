@@ -197,6 +197,10 @@ The current learning system is primarily **per-student**. Accumulated quiz and l
 - [CONTRIBUTING.md](CONTRIBUTING.md): authorized contribution rules.
 - [SUPPORT.md](SUPPORT.md): support boundaries.
 
+### BRVIN 2 — application connectivity roadmap
+
+**Continuing BRVIN 2 in a new chat? Start with [docs/BRVIN_2_MASTER_PLAN.md](docs/BRVIN_2_MASTER_PLAN.md).** It is the canonical handover file: approved architecture, current baseline, milestone-by-milestone instructions, acceptance criteria and progress ledger.
+
 ### BRVIN knowledge platform
 
 - [docs/BRVIN_SYSTEM_REFERENCE.md](docs/BRVIN_SYSTEM_REFERENCE.md): canonical architecture, infrastructure map, D1 model, trust boundaries, ingestion and retrieval lifecycle.
