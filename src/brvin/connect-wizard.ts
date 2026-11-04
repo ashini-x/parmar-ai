@@ -46,6 +46,12 @@ function decodeText(value: string): string {
   return new TextDecoder().decode(fromBase64(value));
 }
 
+function ownedBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 function randomToken(): string {
   return base64Url(crypto.getRandomValues(new Uint8Array(32)));
 }
@@ -66,15 +72,15 @@ function encryptionSecret(env: Env): string {
 
 async function encryptionKey(env: Env): Promise<CryptoKey> {
   const material = await sha256("BRVIN provider connection vault v1\0" + encryptionSecret(env));
-  return crypto.subtle.importKey("raw", material, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  return crypto.subtle.importKey("raw", ownedBuffer(material), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
 async function encryptSecret(env: Env, value: unknown): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cipher = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv, additionalData: new TextEncoder().encode("brvin-provider-connection:v1") },
+    { name: "AES-GCM", iv: ownedBuffer(iv), additionalData: ownedBuffer(new TextEncoder().encode("brvin-provider-connection:v1")) },
     await encryptionKey(env),
-    new TextEncoder().encode(JSON.stringify(value)),
+    ownedBuffer(new TextEncoder().encode(JSON.stringify(value))),
   );
   return base64Url(iv) + "." + base64Url(new Uint8Array(cipher));
 }
@@ -84,9 +90,9 @@ async function decryptSecret<T>(env: Env, value: string): Promise<T> {
   if (!ivText || !cipherText) throw new Error("Stored provider credentials are not readable. Reconnect the provider.");
   try {
     const clear = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: fromBase64(ivText), additionalData: new TextEncoder().encode("brvin-provider-connection:v1") },
+      { name: "AES-GCM", iv: ownedBuffer(fromBase64(ivText)), additionalData: ownedBuffer(new TextEncoder().encode("brvin-provider-connection:v1")) },
       await encryptionKey(env),
-      fromBase64(cipherText),
+      ownedBuffer(fromBase64(cipherText)),
     );
     return JSON.parse(new TextDecoder().decode(clear)) as T;
   } catch {
@@ -238,7 +244,7 @@ function githubPrivateKeyPkcs8(pem: string): Uint8Array {
 async function githubAppJwt(bundle: GitHubBundle): Promise<string> {
   const privateKey = await crypto.subtle.importKey(
     "pkcs8",
-    githubPrivateKeyPkcs8(bundle.privateKey),
+    ownedBuffer(githubPrivateKeyPkcs8(bundle.privateKey)),
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
     false,
     ["sign"],
@@ -247,7 +253,7 @@ async function githubAppJwt(bundle: GitHubBundle): Promise<string> {
   const header = base64Url(new TextEncoder().encode(JSON.stringify({ alg: "RS256", typ: "JWT" })));
   const payload = base64Url(new TextEncoder().encode(JSON.stringify({ iat: now - 30, exp: now + 8 * 60, iss: bundle.appId })));
   const unsigned = header + "." + payload;
-  const signature = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, new TextEncoder().encode(unsigned)));
+  const signature = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, ownedBuffer(new TextEncoder().encode(unsigned))));
   return unsigned + "." + base64Url(signature);
 }
 
@@ -300,75 +306,6 @@ async function getCloudflareBundle(env: Env): Promise<{ row: ConnectionRow; bund
   const bundle = await decryptSecret<CloudflareBundle>(env, row.secret_ciphertext);
   if (!bundle.clientId || !bundle.clientSecret) throw new Error("Cloudflare OAuth client credentials are incomplete.");
   return { row, bundle };
-}
-
-async function exchangeCloudflareToken(
-  bundle: CloudflareBundle,
-  form: Record<string, string>,
-  redirectUri: string,
-): Promise<{ access_token: string; refresh_token?: string; expires_in?: number; scope?: string }> {
-  const formBody = new URLSearchParams({ ...form, redirect_uri: redirectUri });
-  const basic = btoa(bundle.clientId + ":" + bundle.clientSecret);
-  const response = await fetch(CLOUDFLARE_TOKEN, {
-    method: "POST",
-    headers: { authorization: "Basic " + basic, "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
-    body: formBody.toString(),
-  });
-  const text = await response.text();
-  let payload: unknown = {};
-  try { payload = text ? JSON.parse(text) : {}; } catch { payload = {}; }
-  const data = payload as { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; error_description?: string; error?: string };
-  if (!response.ok || !data.access_token) {
-    throw new Error("Cloudflare OAuth token exchange failed: " + clean(data.error_description || data.error || "authorization was not accepted", 240));
-  }
-  return data as { access_token: string; refresh_token?: string; expires_in?: number; scope?: string };
-}
-
-async function refreshCloudflareAccessToken(
-  env: Env,
-  row: ConnectionRow,
-  bundle: CloudflareBundle,
-  redirectUri: string,
-): Promise<{ accessToken: string; bundle: CloudflareBundle }> {
-  if (bundle.accessToken && (bundle.accessTokenExpiresAt || 0) > Date.now() + 60_000) {
-    return { accessToken: bundle.accessToken, bundle };
-  }
-  if (!bundle.refreshToken) throw new Error("The Cloudflare OAuth session has expired. Re-authorize Cloudflare from the Connect Application panel.");
-  const result = await exchangeCloudflareToken(
-    bundle,
-    { grant_type: "refresh_token", refresh_token: bundle.refreshToken },
-    redirectUri,
-  );
-  const next: CloudflareBundle = {
-    ...bundle,
-    accessToken: result.access_token,
-    refreshToken: result.refresh_token || bundle.refreshToken,
-    accessTokenExpiresAt: Date.now() + Math.max(60, Number(result.expires_in || 900)) * 1000,
-  };
-  const metadata = JSON.parse(row.metadata_json || "{}") as Record<string, unknown>;
-  await saveConnection(env, "cloudflare", "connected", metadata, next);
-  return { accessToken: next.accessToken!, bundle: next };
-}
-
-async function authorizedCloudflare(
-  env: Env,
-  request: Request,
-): Promise<{ accessToken: string; bundle: CloudflareBundle; scripts: Array<Record<string, unknown>> }> {
-  const accountId = clean(env.BRVIN_HOME_ACCOUNT_ID, 32);
-  if (!/^[a-f0-9]{32}$/iu.test(accountId)) throw new Error("BRVIN_HOME_ACCOUNT_ID is not configured. Set it to the Cloudflare account that hosts the private brvin-service Worker.");
-  const { row, bundle } = await getCloudflareBundle(env);
-  const refreshed = await refreshCloudflareAccessToken(env, row, bundle, callbackUrl(request, "cloudflare"));
-  const scripts = await cloudflareApi<Array<Record<string, unknown>>>(
-    refreshed.accessToken,
-    "/accounts/" + accountId + "/workers/scripts?per_page=100",
-  );
-  const brvin = scripts.some(script => clean(script.id || script.script || script.name, 128) === BRVIN_SERVICE_NAME);
-  if (!brvin) throw new Error("The authorized Cloudflare account does not expose the private brvin-service Worker. Select the account that hosts BRVIN and authorize the requested Workers scripts scope.");
-  if (refreshed.bundle.accountId !== accountId) {
-    const metadata = JSON.parse(row.metadata_json || "{}") as Record<string, unknown>;
-    await saveConnection(env, "cloudflare", "connected", { ...metadata, accountId, brvinServiceVisible: true }, { ...refreshed.bundle, accountId });
-  }
-  return { accessToken: refreshed.accessToken, bundle: refreshed.bundle, scripts };
 }
 
 function accountScripts(scripts: Array<Record<string, unknown>>): Array<{ name: string; modifiedOn: string | null }> {
