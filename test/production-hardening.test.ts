@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount, requiresFreshData, requiresMcqTopicClarification } from "../src/ai/gemini";
+import { isLikelyMcqTopicReply, isMcqRequest, normalizeAnswer, parseRequestedMcqCount, readVertexGeminiStream, requiresFreshData, requiresMcqTopicClarification, type PartialAnswerHandler } from "../src/ai/gemini";
 import { getAnalyticsConfig } from "../src/analytics/db";
 import { getConfig } from "../src/config/env";
 import { isJobLeaseOwned, isValidAnswerPacket, type JobRecord } from "../src/core/job-store";
@@ -28,6 +28,30 @@ const validPacket = {
 } as const;
 
 describe("production hardening", () => {
+  it("preserves actual Telegram paragraph breaks, including escaped JSON line feeds", () => {
+    const normalized = normalizeAnswer("Meaning: first line\\nsecond line\\n\\nExample: final line");
+    expect(normalized).toBe("Meaning: first line\nsecond line\n\nExample: final line");
+    expect(normalizeAnswer("First paragraph.\\n\\nSecond paragraph.")).toBe("First paragraph.\n\nSecond paragraph.");
+  });
+
+  it("streams Fatman answer chunks and preserves paragraph breaks during Telegram edits", async () => {
+    const events = [
+      { candidates: [{ content: { parts: [{ text: '{"responseMode":"text","answer":"First paragraph' }] } }] },
+      { candidates: [{ content: { parts: [{ text: '\\n\\nSecond paragraph"}' }] } }] },
+      { candidates: [{ finishReason: "STOP" }] },
+    ];
+    const sse = events.map((event) => "data: " + JSON.stringify(event) + "\n\n").join("");
+    const emitted: string[] = [];
+    const handler = ((answer: string) => { emitted.push(answer); }) as PartialAnswerHandler;
+    handler.flush = async () => undefined;
+
+    const response = await readVertexGeminiStream(new Response(sse), handler);
+
+    expect(emitted.length).toBeGreaterThanOrEqual(2);
+    expect(emitted[0]).toBe("First paragraph");
+    expect(emitted.at(-1)).toBe(["First paragraph", "", "Second paragraph"].join("\n"));
+    expect(response.candidates?.[0]?.finishReason).toBe("STOP");
+  });
   it("accepts a valid native quiz packet", () => {
     const quizPacket = {
       ...validPacket,
