@@ -9,6 +9,8 @@ This is the canonical technical reference for BRVIN. It records what exists in c
 
 When a future change alters code, D1 schema, bindings, access rules, ingestion, retrieval, deployment, or integrations, update this document and the relevant specialist document in the same change. Do not silently treat a planned feature as already shipped.
 
+> **BRVIN 2 future implementation and chat continuity:** see [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md). That file tracks the approved target architecture and milestone progress. This document remains the audited as-built baseline until each milestone is implemented and verified.
+
 ## 1. Executive architecture
 
 BRVIN is a shared, project-scoped knowledge and retrieval layer. Multiple applications can use the same indexed knowledge corpus while receiving only the documents explicitly granted to their project.
