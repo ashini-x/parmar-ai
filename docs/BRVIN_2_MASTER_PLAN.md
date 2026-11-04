@@ -421,7 +421,7 @@ This table is the human-readable status. The evidence fields must be filled from
 | Milestone | Status | PR / commit | Verification evidence | Notes |
 |---|---|---|---|---|
 | 0 — Architecture freeze | OWNER-APPROVED; PR OPEN/UNMERGED | [PR #60](https://github.com/ashini-x/parmar-ai/pull/60) | User authorised progression on 4 Nov 2026; ADR/RPC v2 contract cross-checked; latest docs-only CI run #582 passed | Documentation remains unmerged; M1 is stacked on its branch; no production writes |
-| 1 — Identity model | IN PROGRESS | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61) — `brvin-2/m1-identity-registry` | Additive DDL + retry-safe seed helper + migration tests added; CI status not yet returned | No D1 migration applied; v1 behavior unchanged |
+| 1 — Identity model | IN PROGRESS | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61) — `brvin-2/m1-identity-registry` | Release Validation run #586 passed typecheck, unit tests, Node tests and both Worker dry-runs | No D1 migration applied; v1 behavior unchanged |
 | 2 — Private RPC v2 | NOT STARTED | — | — | Must remain private |
 | 3 — Reusable connector | NOT STARTED | — | — | Standard app-side adapter |
 | 4 — AskMoina integration | NOT STARTED | — | — | First additional live consumer |
@@ -487,9 +487,9 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 
 **Safety boundary:** source branch only. No D1 migration has been applied to production. No Cloudflare resource, binding, secret, AI Search instance, Worker deployment, book/source grant, legacy service-client row or usage counter has been changed. The existing `brvin_service_clients` v1 mapping and `fatman_search_usage` remain untouched. The new v2 resolver is not implemented or enabled in M1.
 
-**Verification:** no M1 test result claimed yet. The current M0 PR validation run #582 passed typecheck, unit tests, Node tests and dry-runs for both Worker bundles; its production credential, deployment and live-acceptance jobs were skipped. A fresh CI run is required for this M1 branch.
+**Verification:** Release Validation run #586 completed successfully on the corrected M1 head `bf8567322b84dee5954443171500af44aac08f29`: `npm run check`, `npm test`, `npm run test:node`, the private BRVIN Worker Wrangler dry-run, and the Parmar AI Worker Wrangler dry-run all passed. The production credential, deployment and live-acceptance jobs were skipped for this PR. Earlier run #584 caught three strict-typing issues in the fake-D1 test double; those were corrected before run #586. Run #585 was cancelled by the PR concurrency group and is not counted as validation.
 
-**Next actions:** inspect the new migration/test code and CI results, fix any issues, and update this log. PR #61 already contains the M0 design files and M1 source slice; PR #60 remains open as the original docs-only review artifact. Do not deploy or apply the D1 migration until the M1 review and release gate are satisfied.
+**Next actions:** complete the M1 code/design review, verify the exact production D1 baseline immediately before rollout, then apply the additive migration only through the approved release path. PR #61 contains the M0 design files and M1 source slice; PR #60 remains open as the original docs-only review artifact. Do not deploy or apply the D1 migration until the M1 review and release gate are satisfied.
 
 ## 8. Rules for future ChatGPT/Codex sessions
 
