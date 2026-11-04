@@ -1,98 +1,338 @@
-# BRVIN Private Retrieval Service
+# BRVIN Private Retrieval API
 
-## Decision
+**Contract status:** implemented  
+**Last verified:** 4 November 2026  
+**Implementation:** `src/brvin/service-worker.ts`, `src/brvin/service-core.ts`, `src/brvin/retrieval.ts`
 
-BRVIN remains in the ashini-x/parmar-ai monorepo but is deployed as a separate Cloudflare Worker named brvin-service. Applications call it through private Cloudflare Service Binding RPC. The retrieval Worker has no public route and has workers_dev disabled.
+This document describes the internal WorkerEntrypoint RPC contract. It is not a public HTTP API specification.
 
-The first migration moves live project-scoped retrieval behind this service. The existing /admin/brvin workspace, PDF ingestion gateway, Google Vision/GCS orchestration, and release-QA tooling remain in the existing parmar-ai Worker for this stage. They continue to use the same D1 database, AI Search namespace, and background Workflow. This avoids a risky ingestion/admin rewrite while making the application retrieval boundary central and reusable.
+For the complete system design, see [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md). For onboarding a consumer Worker, see [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md). For admin and production procedures, see [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md).
 
-## Trust and project resolution
+## 1. Service identity and deployment boundary
 
-- The caller's identity is delivered as ctx.props.clientId by the Service Binding configuration.
-- ctx.props is platform-controlled deployment configuration, not request data. The RPC methods do not accept a project slug or project ID from the caller.
-- D1 table brvin_service_clients maps the trusted client ID to one project.
-- Existing projects receive a default client ID matching their slug. Creating a project also creates this mapping atomically.
-- A project must be active. Books must be ready and fully indexed, and must be reachable through a direct book grant or a collection grant.
-- The service filters AI Search by the authorised folders before retrieval, then validates each returned key against the D1-authorised source list again.
-- Unknown callers, inactive projects, invalid prefixes, and retrieval failures never fall back to an unfiltered search.
+The private Worker is named `brvin-service`. It is deployed with `wrangler.brvin.jsonc`, `workers_dev: false`, and no public route. Its default `fetch()` handler returns HTTP 404.
 
-## RPC contract
+Consumers in the same Cloudflare account call the named RPC entrypoint through a Service Binding:
 
-The named WorkerEntrypoint is BrvinRetrievalApi.
+- Service name: `brvin-service`
+- Entrypoint: `BrvinRetrievalApi`
+- Binding name in the consumer: `BRVIN_SERVICE`
+- Trusted property: `props.clientId`
 
-- getProjectStatus() returns connection/availability information and the count of authorised ready sources. It does not return document text.
-- retrieveProjectContext({ queries, pageNumbers? }) accepts one to three bounded query variants and optional explicit PDF page numbers. When a page is requested, BRVIN looks up the exact page item under each D1-authorised source prefix, verifies the exact returned key and page number, and returns page text or a bounded scanned-page image. If no exact item exists, it falls back to semantic retrieval over authorised folders. The service enforces a per-project monthly query allowance and returns validated passages with book IDs, titles, PDF page numbers and scores.
-- The caller handles its own model prompt, answer generation, conversation memory and user delivery.
-
-The parmar-ai Worker is registered with clientId "fatman", which resolves to the existing fatman project. It retains the existing Fatman query expansion, queue/retry, answer generation and citation formatting. The live answer path makes one RPC retrieval request rather than a separate readiness check followed by a retrieval call.
-
-## Search and index
-
-- All projects use the existing AI Search instance fatman-2026-8b183803 in the existing default namespace. The private Worker exposes it internally through the BRVIN_SEARCH binding.
-- No PDFs, OCR results, pages or search indexes are copied.
-- D1 brvin_books.search_prefix is the authoritative mapping from an allowed book to its indexed folder.
-- AI Search's built-in folder filter is applied with $in before retrieval. Every returned page key is then checked against the authorised prefix set and parsed page key.
-- The fatman_search_usage table is retained for Fatman's existing counter, but its monthly allowance uses BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT like every other project. Other projects use brvin_project_search_usage with a per-project/month key.
-- The service receives only D1 and the BRVIN_SEARCH binding. It does not receive Telegram, Gemini/Vertex, Google Vision or GCS credentials.
-
-## BRVIN Worker configuration
-
-The private brvin-service Worker now uses BRVIN-owned configuration names:
-
-- AI Search binding: BRVIN_SEARCH.
-- Shared AI Search instance variable: BRVIN_SEARCH_INSTANCE.
-- Minimum relevance threshold: BRVIN_MIN_SCORE.
-- Per-project monthly search allowance: BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT.
-- Environment label: ENVIRONMENT.
-
-The current BRVIN_SEARCH_INSTANCE value remains fatman-2026-8b183803 because that is the already-populated shared Cloudflare AI Search resource. Renaming the variable does not rename or recreate the underlying index, so existing indexed books remain available without migration.
-
-The Worker has no application secrets. It does not call Google, Vertex AI, Gemini, Telegram, Google Vision or GCS. Those credentials are not required and must not be copied into this retrieval-only Worker. The legacy FATMAN_* variables and FATMAN_SEARCH binding remain only in parmar-ai for its existing Fatman-specific ingestion and administrative workflows; they are not configured on brvin-service.
-
-## Deployment
-
-The two Worker configs are:
-
-- wrangler.jsonc — parmar-ai.
-- wrangler.brvin.jsonc — brvin-service.
-
-The GitHub Actions workflow dry-runs both configurations. Production deploys brvin-service first, then parmar-ai, then runs the existing production health check. The health check now verifies that the trusted parmar-ai client can reach BRVIN. If that fails, the existing parmar-ai deployment rolls back. The private BRVIN Worker is additive and the previous parmar-ai version does not depend on it.
-
-No new Cloudflare variables or application secrets are required when the existing GitHub Actions deployment credentials can deploy a Worker with D1, AI Search and Service Bindings. Existing repository settings remain:
-
-- GitHub Actions secret CLOUDFLARE_API_TOKEN.
-- GitHub Actions variable or secret CLOUDFLARE_ACCOUNT_ID.
-
-The deployment token must have Workers Scripts edit permission and access to the existing account resources. No Telegram, GCP, Gemini or GCS secret is copied into brvin-service.
-
-## Connecting another application
-
-After creating an application project in BRVIN, the default client ID is the project's slug. For a project named AskMoina this is normally askmoina. Grant books directly or grant their collection in the admin console.
-
-In the AskMoina Worker's Wrangler configuration, add:
+Example consumer binding:
 
 ~~~jsonc
-"services": [
-  {
-    "binding": "BRVIN_SERVICE",
-    "service": "brvin-service",
-    "entrypoint": "BrvinRetrievalApi",
-    "props": { "clientId": "askmoina" }
-  }
-]
+{
+  "services": [
+    {
+      "binding": "BRVIN_SERVICE",
+      "service": "brvin-service",
+      "entrypoint": "BrvinRetrievalApi",
+      "props": {
+        "clientId": "fatman"
+      }
+    }
+  ]
+}
 ~~~
 
-No project ID, API key, database binding, AI Search binding, or PDF storage credential is needed in AskMoina. The app calls env.BRVIN_SERVICE.retrieveProjectContext({ queries: [question] }). The project mapping and current grants remain authoritative in BRVIN's D1 registry.
+The example uses Fatman's current identity. Replace it with the slug generated for the consumer project.
 
-## Production acceptance criteria
+Cloudflare Service Binding RPC is an internal same-account Worker-to-Worker mechanism. See the official [Service Binding](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/) and [RPC](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/rpc/) documentation.
 
-1. brvin-service has no public Worker URL or public route.
-2. The parmar-ai Service Binding uses clientId "fatman" and resolves to active project fatman.
-3. An unregistered client ID fails closed without searching.
-4. A project with no ready, granted sources returns no passages and performs no search.
-5. Search calls include only D1-authorised folder prefixes.
-6. Returned chunk keys are verified against D1 grants after search.
-7. Collection and direct grants both work, and revoked grants stop appearing in retrieval.
-8. Fatman citations preserve the existing book title and PDF page fields.
-9. The existing Telegram queue, retries, Durable Object continuity and Gemini answer flow remain unchanged.
-10. Both Worker bundles type-check and dry-run; production health confirms the private RPC is connected.
+## 2. Trust model
+
+The entrypoint extends `WorkerEntrypoint` and reads the caller identity from `this.ctx.props.clientId`.
+
+The caller cannot choose a project by including a client ID or project ID in the method input. The identity is supplied by the consumer Worker's deployed Service Binding configuration and is mapped through D1 table `brvin_service_clients`.
+
+This value is a trusted configuration identity, not an API key or bearer secret. Its trust comes from who can modify/deploy the Worker configuration. Do not expose a consumer-controlled public proxy that allows arbitrary clients to choose this property.
+
+Resolution requires:
+1. syntactically valid client ID;
+2. registered client mapping;
+3. active mapped project.
+
+Failure to resolve returns `CLIENT_NOT_REGISTERED`. It does not perform a search.
+
+## 3. Method: `getProjectStatus()`
+
+### Purpose
+
+Check the caller's registered project identity and calculate the number of currently authorised ready sources.
+
+### Input
+
+No parameters.
+
+### Success response
+
+~~~ts
+{
+  ok: true;
+  ready: boolean;
+  authorizedSourceCount: number;
+}
+~~~
+
+Example:
+
+~~~json
+{
+  "ok": true,
+  "ready": true,
+  "authorizedSourceCount": 1
+}
+~~~
+
+### Failure response
+
+~~~ts
+{
+  ok: false;
+  code: string;
+  message: string;
+  retryable: boolean;
+  userMessage?: string;
+}
+~~~
+
+Expected failure codes include:
+- `CLIENT_NOT_REGISTERED`: identity is unknown, invalid or belongs to an inactive project.
+- `BRVIN_UNAVAILABLE`: the service could not safely complete the status lookup.
+
+### Semantics
+
+- Status is project-level connection/readiness information.
+- It does not return document text.
+- `ready: false` with `authorizedSourceCount: 0` means the caller may be registered but currently has no eligible source.
+- A positive source count does not guarantee a particular query will produce passages.
+- It does not consume a retrieval query allowance.
+
+Use it for health checks and connection onboarding. A consumer does not need to call it before every retrieval request.
+
+## 4. Method: `retrieveProjectContext(input)`
+
+### Purpose
+
+Retrieve relevant passages and optional exact-page images from the set of books currently authorised for the caller's project.
+
+### Input
+
+~~~ts
+{
+  queries?: unknown;
+  pageNumbers?: unknown;
+}
+~~~
+
+The TypeScript consumer binding should use the stricter shape:
+
+~~~ts
+{
+  queries: string[];
+  pageNumbers?: number[];
+}
+~~~
+
+Validation and normalization:
+- at least one non-empty query or valid page number is required;
+- up to 3 unique queries are accepted;
+- each query is normalized and bounded to 2,000 characters;
+- up to 3 unique positive integer page numbers are accepted;
+- page numbers must be no greater than 100,000;
+- invalid/empty content is rejected rather than sent as an unrestricted search.
+
+### Success response
+
+~~~ts
+{
+  ok: true;
+  passages: BrvinRemotePassage[];
+  pageImages?: BrvinRemotePageImage[];
+  searchedSources: number;
+  searchCount: number;
+}
+~~~
+
+Passage shape:
+
+~~~ts
+interface BrvinRemotePassage {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  pdfPage: number;
+  printedPage?: string;
+  section?: string;
+  text: string;
+  score: number;
+}
+~~~
+
+Optional image shape:
+
+~~~ts
+interface BrvinRemotePageImage {
+  mimeType: "image/jpeg" | "image/png" | "image/webp";
+  data: string;       // base64
+  byteLength: number;
+}
+~~~
+
+Example:
+
+~~~json
+{
+  "ok": true,
+  "passages": [
+    {
+      "id": "item-17",
+      "bookId": "book-uuid",
+      "bookTitle": "Example reference",
+      "pdfPage": 17,
+      "printedPage": "12",
+      "section": "Site selection",
+      "text": "Retrieved and bounded passage...",
+      "score": 0.74
+    }
+  ],
+  "searchedSources": 1,
+  "searchCount": 1
+}
+~~~
+
+The printed page and section fields are optional. The PDF page is the stable page index in the original PDF and should be retained for citations. Do not silently replace it with a printed page number.
+
+### Exact-page behavior
+
+When page numbers are supplied, the service first attempts direct item lookup under the D1-authorised source prefixes. The candidate key, returned key, source prefix and parsed page number are validated.
+
+If exact-page retrieval succeeds, it returns the page result without running semantic search. Therefore `searchCount` may be zero. If the exact-page path cannot find an item and a textual query is also supplied, the service may fall back to semantic retrieval within the same authorised source set. A page-only request without an exact result returns no passage.
+
+Where a supported page image is present and within the byte limit, `pageImages` may be returned. Consumers should not assume that every exact page has an image.
+
+## 5. Retrieval authorization and filtering
+
+The service computes the effective source list from D1. A source must:
+
+- belong to an active project;
+- have `status = 'ready'`;
+- have `indexed_pages = page_count`;
+- have either a direct row in `brvin_project_books` or a collection grant in `brvin_project_collections`.
+
+For each request the service then:
+
+1. validates each D1-derived `search_prefix`;
+2. applies an AI Search folder filter with only the authorised prefixes;
+3. validates each returned key against the authorised prefix set;
+4. parses the page key and checks the book identity/page fields;
+5. applies the relevance threshold and bounded evidence selection.
+
+No request parameter can supply an arbitrary folder prefix. No unknown or unauthorised source can be searched as a fallback.
+
+## 6. Result limits and cost controls
+
+Current implementation limits include:
+
+| Control | Current behavior |
+|---|---|
+| Unique query variants | Maximum 3 |
+| Explicit PDF page numbers | Maximum 3 |
+| Query length | Maximum 2,000 characters after normalization |
+| Candidate chunks | Up to 50 per query |
+| Returned passages | Bounded to 8 |
+| Passage text | Bounded excerpt size |
+| Default minimum score | 0.2 |
+| Monthly project query allowance | Configured at 800; code caps maximum at 800 |
+
+A valid retrieval request reserves monthly usage in D1 before the retrieval operation. Fatman retains the legacy `fatman_search_usage` counter; other projects use `brvin_project_search_usage`.
+
+The 800 allowance is not a per-user quota. Each consumer must enforce its own application/user quota and abuse controls.
+
+## 7. Failure contract
+
+All failures use the discriminated object:
+
+~~~ts
+interface BrvinServiceFailure {
+  ok: false;
+  code: string;
+  message: string;
+  retryable: boolean;
+  userMessage?: string;
+}
+~~~
+
+Known codes include:
+
+| Code | Meaning | Consumer behavior |
+|---|---|---|
+| `INVALID_REQUEST` | No usable query/page or invalid input shape | Fix the request; do not retry unchanged |
+| `CLIENT_NOT_REGISTERED` | Trusted binding identity does not resolve to an active project | Fix BRVIN project/client mapping or props |
+| `MONTHLY_LIMIT_REACHED` | Project monthly retrieval allowance is exhausted | Stop retrieval and show a quota-aware message |
+| `RETRIEVAL_FAILED` | Retrieval failed; retryability indicates whether retry may help | Use bounded retry only when retryable |
+| `BRVIN_UNAVAILABLE` | Service/D1/retrieval dependency could not be used | Degrade gracefully; no global search fallback |
+
+Never interpret a failure as an empty successful search. Preserve the distinction between:
+- successful retrieval with zero passages;
+- access/registration denial;
+- monthly quota exhaustion;
+- transient service failure.
+
+## 8. Type contract in the current consumer
+
+The canonical TypeScript result and binding interfaces currently live in `src/config/env.ts`:
+
+- `BrvinRemotePassage`
+- `BrvinRemotePageImage`
+- `BrvinServiceFailure`
+- `BrvinServiceStatusResult`
+- `BrvinServiceRetrievalResult`
+- `BrvinServiceBinding`
+
+A separate repository should reproduce the narrow public interface rather than depend on importing the full Parmar application environment.
+
+## 9. Consumer responsibilities
+
+BRVIN does not:
+- decide when an application should retrieve;
+- create the app's model tool declaration;
+- call Gemini or another LLM;
+- append passages to the app's conversation context;
+- generate the final response;
+- manage end-user application authentication, quotas or billing;
+- render UI, audio or citations on the consumer's behalf.
+
+The app must call the binding from server-side code, pass the returned evidence to its own model, preserve the book/page provenance, and handle service failures safely. Retrieved source text is evidence, not trusted executable instructions.
+
+## 10. Current deployment and test references
+
+- Private service config: `wrangler.brvin.jsonc`.
+- Consumer config: `wrangler.jsonc`.
+- Entry point: `src/brvin/service-worker.ts`.
+- Core authorization/quota: `src/brvin/service-core.ts`.
+- Source filtering and retrieval: `src/brvin/retrieval.ts`.
+- Service tests: `test/brvin-service.test.ts`.
+- Retrieval tests: `test/brvin.test.ts`.
+- Release validation and deployment: `.github/workflows/release-validation.yml`.
+
+The private service is deployed before `parmar-ai`; the existing release workflow captures both prior deployment versions, runs a BRVIN-backed production health check and maintains rollback paths.
+
+## 11. Production acceptance criteria
+
+1. `brvin-service` has no public route and `workers_dev` remains disabled.
+2. The Fatman Service Binding uses the `fatman` client identity and resolves to active project Fatman.
+3. An unknown caller fails closed without searching.
+4. An inactive project fails closed.
+5. A project with no ready/granted sources returns no passages and performs no search.
+6. Search filters contain only D1-authorised folder prefixes.
+7. Returned item keys are checked again against the D1-authorised set.
+8. Direct book grants work.
+9. Collection grants work.
+10. Revoked grants stop appearing in later retrievals.
+11. Exact-page retrieval preserves correct book and PDF page provenance.
+12. Monthly quota exhaustion returns `MONTHLY_LIMIT_REACHED`.
+13. Consumer service failures never fall back to unrestricted search.
+14. Fatman's existing answer generation, Telegram queue/retry, Durable Object continuity and citation behavior remain unchanged.
+15. Both Worker configs type-check/dry-run and production release manifests record both deployed versions.
