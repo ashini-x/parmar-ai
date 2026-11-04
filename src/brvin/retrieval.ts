@@ -19,6 +19,8 @@ export interface BrvinPassage {
   bookId: string;
   bookTitle: string;
   pdfPage: number;
+  printedPage?: string;
+  section?: string;
   text: string;
   score: number;
 }
@@ -61,6 +63,12 @@ function cleanText(value: unknown, max = MAX_PASSAGE_CHARS): string {
 function finiteScore(value: unknown): number | undefined {
   const n = Number(value);
   return Number.isFinite(n) ? n : undefined;
+}
+
+function cleanMetadataText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const cleaned = value.replace(/[\\r\\n]+/gu, " ").replace(/\\s+/gu, " ").trim().slice(0, maxLength);
+  return cleaned || undefined;
 }
 
 const QUERY_STOP_WORDS = new Set([
@@ -307,11 +315,15 @@ export async function retrieveBrvinProjectContextForProject(
         const pageCount = pageCounts.get(pageKey) ?? 0;
         if (pageCount >= MAX_PASSAGES_PER_PAGE) continue;
 
+        const printedPage = cleanMetadataText(chunk.item?.metadata?.printedPage, 20);
+        const section = cleanMetadataText(chunk.item?.metadata?.section, 120);
         bestById.set(id, {
           id,
           bookId: source.id,
           bookTitle: source.title,
           pdfPage: parsed.page,
+          ...(printedPage ? { printedPage } : {}),
+          ...(section ? { section } : {}),
           text,
           score,
         });

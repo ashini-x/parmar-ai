@@ -87,6 +87,8 @@ export interface BrvinRemotePassage {
   bookId: string;
   bookTitle: string;
   pdfPage: number;
+  printedPage?: string;
+  section?: string;
   text: string;
   score: number;
 }

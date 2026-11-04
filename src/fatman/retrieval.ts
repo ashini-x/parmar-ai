@@ -127,6 +127,8 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
       bookId: passage.bookId,
       bookTitle: passage.bookTitle,
       pdfPage: passage.pdfPage,
+      ...(passage.printedPage ? { printedPage: passage.printedPage } : {}),
+      ...(passage.section ? { section: passage.section } : {}),
       text: passage.text,
       score: passage.score,
     })),
