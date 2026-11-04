@@ -115,7 +115,7 @@ class FakeD1 {
         .map((row) => ({ ...row }));
     }
     if (sql.includes("FROM brvin_application_environments")) {
-      const ids = [seed.productionEnvironmentId, seed.previewEnvironmentId];
+      const ids: string[] = [seed.productionEnvironmentId, seed.previewEnvironmentId];
       return [...this.state.environments.values()]
         .filter((row) => {
           if (sql.includes("environment_key IN ('production', 'preview')")) {
@@ -177,7 +177,7 @@ class FakeD1 {
       const duplicate = [...this.state.environments.values()].some((row) =>
         row.id === id || (row.application_id === applicationId && row.environment_key === environmentKey && row.status === "active")
       );
-      if (app?.slug === applicationSlug && app.status === "active" && !duplicate) {
+      if (app && app.slug === applicationSlug && app.status === "active" && !duplicate) {
         this.state.environments.set(String(id), {
           id: String(id), application_id: String(applicationId), environment_key: environmentKey,
           display_name: displayName, status: "active", created_at: Number(createdAt), updated_at: Number(updatedAt),
@@ -192,8 +192,9 @@ class FakeD1 {
       const duplicate = [...this.state.grants.values()].some((row) =>
         row.id === id || (row.application_id === applicationId && row.project_id === projectId && row.status === "active")
       );
-      if (app?.slug === applicationSlug && app.status === "active" &&
-          project?.slug === projectSlug && project.status === "active" && !duplicate) {
+      if (app && project &&
+          app.slug === applicationSlug && app.status === "active" &&
+          project.slug === projectSlug && project.status === "active" && !duplicate) {
         this.state.grants.set(String(id), {
           id: String(id), application_id: String(applicationId), project_id: String(projectId),
           status: "active", created_at: Number(createdAt), created_by: "migration",
