@@ -6,7 +6,7 @@
 **First additional consumer:** `ashini-x/askmoina-voice`  
 **Created:** 4 November 2026  
 **Planning baseline:** `main` at `939a6046f2a6fa461898f2479e6ed22923e3f3f9`  
-**Overall implementation status:** M0 architecture freeze and M1 identity registry merged to `main`; production schema/seed verified. M2 private retrieval RPC v2 is IN PROGRESS on `brvin-2/m2-private-rpc-v2`.
+**Overall implementation status:** M0 architecture freeze, M1 identity registry, and M2 private retrieval RPC v2 are merged and deployed. M3 reusable connector is IN PROGRESS on `brvin-2/m3-connector`.
 
 > **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
 
@@ -265,7 +265,7 @@ All milestones initially start as **NOT STARTED**. Change a status only after im
 | 0 | Architecture freeze and migration blueprint | COMPLETE | M0 design package merged to `main` in PR #61; original docs-only PR #60 closed as superseded |
 | 1 | Multi-application, multi-project identity | COMPLETE | PR #61 merged; Release Validation #586 passed; additive registry migration applied and production rows/FK check verified; v1/Fatman preserved |
 | 2 | Private retrieval API v2 | IN PROGRESS | Implement explicit v2 RPC methods with environment-bound identity and per-project authorisation; retain v1 unchanged |
-| 3 | Reusable BRVIN application connector | NOT STARTED | Typed reusable app-side adapter and tests |
+| 3 | Reusable BRVIN application connector | IN PROGRESS | Build a shared typed, server-side adapter for discovery, readiness, semantic/exact-page retrieval, citations, timeout/error handling and consumer-facing tests |
 | 4 | AskMoina Voice integration | NOT STARTED | Real Gemini Live tool-to-BRVIN-to-answer flow verified |
 | 5 | BRVIN application/project administration | NOT STARTED | Admin can manage apps, projects, grants and knowledge centrally |
 | 6 | Automated Connect Application wizard | NOT STARTED | Supported app can be onboarded through reviewed GitHub/Cloudflare workflow |
@@ -423,7 +423,7 @@ This table is the human-readable status. The evidence fields must be filled from
 | 0 — Architecture freeze | COMPLETE | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61) merged as `5735314b3e692019c34ba3d2a0d851cbb6c43aa3` | ADR and RPC v2 contract merged to main; Release Validation #586 passed for the combined code/docs PR | Original docs-only PR #60 closed as superseded |
 | 1 — Identity model | COMPLETE | [PR #61](https://github.com/ashini-x/parmar-ai/pull/61), merge commit `5735314b3e692019c34ba3d2a0d851cbb6c43aa3` | Release Validation #586 passed; production migration marker and all three seed rows verified; foreign-key check empty; both Workers active on new versions | No v1 RPC or Fatman permissions/counter reset |
 | 2 — Private RPC v2 | NOT STARTED | — | — | Must remain private |
-| 3 — Reusable connector | NOT STARTED | — | — | Standard app-side adapter |
+| 3 — Reusable connector | IN PROGRESS | `brvin-2/m3-connector` | Package/distribution approach being selected after inspecting Parmar AI and AskMoina; implementation/tests next | Standard app-side adapter; no consumer cutover yet |
 | 4 — AskMoina integration | NOT STARTED | — | — | First additional live consumer |
 | 5 — Admin experience | NOT STARTED | — | — | Application/project/knowledge UI |
 | 6 — Connect wizard | NOT STARTED | — | — | GitHub/Cloudflare + PR automation |
@@ -514,26 +514,47 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 
 **Outstanding:** No source, permission, quota or end-to-end retrieval behavior was changed by the migration. M2 must now implement the private v2 RPC and comprehensive negative/authorization tests without removing or changing v1.
 
-### Milestone log — 4 November 2026 — Milestone 2 implementation in progress
+### Milestone log — 4 November 2026 — M2 private RPC v2 completed and deployed
 
-**Status:** IN PROGRESS — RPC v2 implementation and tests are in PR #62; the latest health-probe changes require a fresh validation run before review/merge.
-**Branch:** `brvin-2/m2-private-rpc-v2`.
+**Status:** COMPLETE — PR #62 merged and both Workers updated in production.
 **Pull request:** https://github.com/ashini-x/parmar-ai/pull/62.
+**Merge commit:** `3b68aaecf3c78c712e1a1c978285ad1f166d15c4`.
+**Implementation validation:** Release Validation run #596 completed the validation job successfully on the final M2 code/test commit `3a730244a32c7d27516255179e94e240eccfef24`: `npm run check`, `npm test`, `npm run test:node`, private BRVIN Worker Wrangler dry-run, and Parmar AI Worker Wrangler dry-run all passed. The earlier run #594 caught three legacy `test/worker.test.ts` fixtures that lacked the new v2 health mock; these were updated and the full suite passed in #596. Run #590 had validated the core RPC before the health changes.
 
-**Paths currently changed for M2:**
-- `src/config/env.ts` — typed v2 project selector, authorized-project metadata, success/failure envelope, error codes and service binding methods.
-- `src/brvin/service-core.ts` — strict trusted environment resolution, active application check, per-project grant verification, app-scoped project discovery, project status, bounded retrieval, existing project-level quota reuse and structured content-free logs.
-- `src/brvin/service-worker.ts` — additive v2 WorkerEntrypoint methods; v1 methods remain explicitly tied to `clientId`.
-- `test/brvin-v2-service.test.ts` — environment/project failures, no identity fallback, opaque Fatman ID, denied grants, inactive app/environment/project, no-source behavior, bounded inputs, folder filtering and Fatman quota tests.
-- `wrangler.jsonc` — adds the seeded Parmar AI production `applicationEnvironmentId` alongside the existing `clientId` in trusted Service Binding props; no preview or AskMoina binding is changed.
-- `src/index.ts` — `/health` probes both v1 and v2 Fatman project status and requires their authorised-source counts to match. The v2 status probe does not consume retrieval quota.
-- `scripts/production-smoke-test.mjs` — requires the production smoke check to verify both v1 and v2 readiness.
+**Production versions:**
+- `brvin-service`: `0adea40e-2a7f-4109-b534-c90a23c3a2fe`, Worker version 29, created 4 November 2026 15:52:48 UTC, 100% traffic.
+- `parmar-ai`: `ed90e0be-0606-47f6-8d05-847f2596e03f`, Worker version 489, created 4 November 2026 15:52:52 UTC, 100% traffic.
+- The repository's main-branch release workflow deploys `brvin-service` then `parmar-ai`, runs `scripts/production-smoke-test.mjs` against `/health` and `/`, runs `scripts/production-release-acceptance.mjs`, and rolls back both Workers if the health or acceptance gates fail. The paired new versions remain the active 100% deployment; no rollback deployment is present.
 
-**Verification so far:** core v2 code passed Release Validation run #590 (TypeScript, unit tests, Node tests, private BRVIN Worker dry-run and Parmar AI Worker dry-run). That run preceded the later dual-health-probe, production binding-props and smoke-script edits; those edits are not yet claimed validated. Run #589 was cancelled by GitHub PR concurrency and is not counted.
+**M2 behavior:**
+- Added `listAuthorizedProjectsV2()`, `getProjectStatusV2({ projectId })`, and `retrieveProjectContextV2(input)` on the private `BrvinRetrievalApi` entrypoint.
+- V2 trusts only `ctx.props.applicationEnvironmentId`; v1 trusts only `ctx.props.clientId`; no cross-version fallback.
+- V2 resolves active app/environment, active app-project grant, active project, then currently ready/fully indexed direct/collection sources. Unknown projects and missing/revoked grants return the same `PROJECT_NOT_AUTHORIZED` failure.
+- Reuses existing bounded retrieval, exact PDF-page evidence, prefix filters, returned-key validation, and project-level usage counters. Fatman remains on its original `fatman_search_usage` quota.
+- Parmar AI production binding now carries both `clientId: fatman` and the seeded production environment ID `00000000-0000-4000-8000-000000000102`. `/health` invokes both v1 and v2 status and requires source-count parity; this is status-only and does not consume retrieval quota. Normal Fatman/student retrieval remains v1.
+- Added `test/brvin-v2-service.test.ts` for identity, authorization, no fallback, project status, no-source behavior, bounded inputs, prefix filtering and quota outcomes; updated `test/worker.test.ts` to assert dual-version health behavior.
 
-**Production boundary:** none of the M2 branch changes are deployed or applied. Current production remains on M1 deployment versions until M2 is reviewed/merged. No D1 schema or source grant change is part of M2.
+**Post-deployment data audit:** production D1 read-only queries show `PRAGMA foreign_key_check` is empty; Parmar AI app, production environment and Fatman grant are active; migration marker exists; v1 service client remains `fatman -> fatman`; Fatman is active, its built-in book remains ready at 538/538, direct and Fatman Core grants remain intact, and November 2026 usage remains 20. Audit statements reported `rows_written=0` and `changed_db=false`.
 
-**Next actions:** rerun CI against the latest PR #62 head. If all checks pass, merge/deploy the private service RPC plus dual health probe through the established main-branch workflow and verify the live v1/v2 status checks, source parity, Fatman retrieval and unchanged usage policy. Do not switch end-user retrieval consumers to v2 until the next planned integration milestones.
+**Limitations:** no user-facing consumer has switched to v2 retrieval yet. AskMoina remains unconnected. No public route, new D1 database, search namespace, book grant or source re-indexing was introduced.
+
+**Next milestone:** M3 reusable connector, then M4 AskMoina integration.
+
+### Milestone log — 4 November 2026 — M3 reusable connector started
+
+**Status:** IN PROGRESS. Work is on `brvin-2/m3-connector`, based on M2 merge commit `3b68aaecf3c78c712e1a1c978285ad1f166d15c4`.
+**Purpose:** provide one typed server-side connector API for BRVIN v2 project discovery, readiness, semantic/exact-page retrieval, provenance formatting, timeout and error handling. Consumers must not make raw BRVIN RPC calls from browser/mobile clients.
+**Distribution decision:** a dependency-free source package is maintained in `packages/brvin-connector`; consumers vendor a pinned copy through a reviewed PR and record the upstream BRVIN commit. No public npm package or registry credential is introduced. The future Connect Application wizard can update the pinned copy through its reviewed PR flow. The rationale and contract are documented in `docs/BRVIN_3_CONNECTOR_DESIGN.md`.
+
+**Preview isolation:** Cloudflare's first Workers Build preview failed because the repository had no `previews` configuration. A dedicated D1 database `parmar-ai-admin-preview` (`4061b8b7-aeae-4f83-a650-922c68e6f42d`) was created. `wrangler.jsonc` now defines a preview-only DB and preview `JOB_DEDUPE` namespace with `FATMAN_ENABLED=false`; it deliberately omits BRVIN Service Binding, AI Search, production Queue and Workflow so a public branch Preview cannot call production retrieval or consume Fatman quota. Cloudflare Preview build `ae509117-e816-4934-a3d0-7c975c5b9c21` completed successfully on `92e45cd54c8e5ae84dd5bb8007ae3802559a18c0`.
+
+**Initial implementation:** `packages/brvin-connector/package.json`, `packages/brvin-connector/src/index.ts`, and `packages/brvin-connector/README.md` have been added. The module exposes project discovery, readiness, semantic/exact-page retrieval, bounded inputs, deadline/response-size limits, typed failure classification, content-free diagnostic callbacks and citation/evidence formatting. It deliberately has no permission cache and performs no automatic retries.
+
+**Tests:** `test/brvin-connector.test.ts` has been added for discovery, opaque Fatman ID, query/page normalization, exact-page-only retrieval, invalid selectors/input, authorization/quotas classification, thrown errors, timeout ambiguity/no retry, size caps, content-free diagnostics and citation formatting. Validation is pending; no M3 behavior is marked complete. The adapter now bounds both raw input array lengths as well as their unique normalized values, preventing oversized duplicate arrays from consuming unnecessary CPU.
+
+**AskMoina boundary:** M3 provides the shared connector only. M4 will vendor a pinned copy into `ashini-x/askmoina-voice` and call it from the existing server-side Gemini Live function/tool handler. AskMoina's auth, workspace mapping, own D1, history, memory, live sessions and generation remain app-owned. No AskMoina code or production binding has been changed in M3.
+
+**Next actions:** run CI, fix failures, then open a dedicated M3 PR. Keep existing Fatman retrieval on v1 and do not connect AskMoina until M4.
 
 ## 8. Rules for future ChatGPT/Codex sessions
 

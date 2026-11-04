@@ -6,7 +6,7 @@
 
 This document describes the internal WorkerEntrypoint RPC contract. It is not a public HTTP API specification.
 
-> **Version boundary:** This page documents the currently implemented v1 contract only. BRVIN 2's proposed v2 contract is in [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). V2 is designed but not implemented or deployed; do not configure consumers against it until Milestone 2 passes review and production verification.
+> **Version boundary:** This page documents the implemented v1 methods for existing consumers. The additional v2 methods are now also implemented and deployed; see [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md) for their trusted application/environment identity and project-grant contract. Parmar AI's live health check exercises both versions, but Fatman end-user retrieval remains on v1 until connector/consumer migration.
 
 For the complete system design, see [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md). For onboarding a consumer Worker, see [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md). For admin and production procedures, see [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md).
 
@@ -44,9 +44,9 @@ Cloudflare Service Binding RPC is an internal same-account Worker-to-Worker mech
 
 ## 2. Trust model
 
-The entrypoint extends `WorkerEntrypoint` and reads the caller identity from `this.ctx.props.clientId`.
+The entrypoint extends `WorkerEntrypoint`. The v1 methods documented on this page read the caller identity from `this.ctx.props.clientId`; the separately versioned v2 methods read only `this.ctx.props.applicationEnvironmentId`. Neither path accepts caller identity from request data.
 
-The caller cannot choose a project by including a client ID or project ID in the method input. The identity is supplied by the consumer Worker's deployed Service Binding configuration and is mapped through D1 table `brvin_service_clients`.
+The caller cannot choose a v1 project by including a client ID or project ID in the method input. The v1 identity is supplied by the consumer Worker's deployed Service Binding configuration and mapped through D1 table `brvin_service_clients`. V2's application identity and multi-project authorization are specified separately in the v2 contract.
 
 This value is a trusted configuration identity, not an API key or bearer secret. Its trust comes from who can modify/deploy the Worker configuration. Do not expose a consumer-controlled public proxy that allows arbitrary clients to choose this property.
 
