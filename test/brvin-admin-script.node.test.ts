@@ -126,6 +126,10 @@ describe("BRVIN browser script contract", () => {
     expect(adminSource).toContain('id="github-register"');
     expect(adminSource).toContain('id="cf-authorize"');
     expect(adminSource).toContain('id="connect-create-pr"');
+    expect(adminSource).toContain('id="connect-generate-token"');
+    expect(adminSource).toContain('id="connect-test-token"');
+    expect(adminSource).toContain('post("connect/test-access-token"');
+    expect(workerSource).toContain("/admin/api/brvin/connect/test-access-token");
     expect(adminSource).toContain('post("connect/pull-request"');
     expect(workerSource).toContain("/admin/brvin/connect/github/callback");
     expect(workerSource).toContain("/admin/brvin/connect/cloudflare/callback");
