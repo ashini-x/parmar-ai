@@ -461,6 +461,7 @@ Do not mark a milestone complete until all its required acceptance checks pass. 
 - `docs/BRVIN_2_RPC_V2_CONTRACT.md` — private v2 methods, types, request validation, authorisation order, quota and failure semantics, exact-page contract and test matrix.
 - `docs/BRVIN_SYSTEM_REFERENCE.md` — links to the BRVIN 2 design while preserving its as-built boundary.
 - `docs/BRVIN_INTEGRATION_GUIDE.md` — labels existing instructions as v1 and prevents premature v2 production configuration.
+- `docs/BRVIN_PRIVATE_RETRIEVAL_API.md` — labels the implemented RPC as v1 and links the proposed v2 contract.
 - `docs/BRVIN_2_MASTER_PLAN.md` — this ledger and continuity record.
 
 **D1 migration:** none. Read-only inspection only. The live database has only the `fatman` project and `fatman → fatman` legacy client mapping. The only direct book grant is Fatman → the built-in 538-page Fatman book; the only collection grant is Fatman → Fatman Core. The ready three-page Rain Gardens test PDF is unassigned. Fatman's `2026-11` usage counter is 20. No tables, rows, grants, source records or usage counters were written or changed.
