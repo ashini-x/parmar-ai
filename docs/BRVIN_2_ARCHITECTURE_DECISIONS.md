@@ -79,7 +79,7 @@ BRVIN's project-level quota is distinct from every consumer app's own user/works
 
 The v1 path resolves only `ctx.props.clientId` through `brvin_service_clients`. The v2 path resolves only `ctx.props.applicationEnvironmentId` through the application/environment registry.
 
-If an environment ID is present but malformed, revoked, unknown or inactive, the request fails closed. It must not fall back to a simultaneously present legacy `clientId`. The legacy path is used only when the environment ID is absent and the caller invokes the explicitly legacy v1 method. There is no request-body override for either identity.
+Protocol version is selected by the explicit RPC method name, not by request data or automatic identity fallback: v1 methods resolve only `ctx.props.clientId`; v2 methods resolve only `ctx.props.applicationEnvironmentId`. A v2 method with a missing, malformed, revoked, unknown or inactive environment ID fails closed and never falls back to a co-present `clientId`. A v1 method remains an explicit legacy call and resolves only its configured `clientId`. There is no request-body override for either identity.
 
 ### ADR-010 — Do not silently alter a consumer's production deployment
 
