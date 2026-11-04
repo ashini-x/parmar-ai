@@ -893,25 +893,26 @@ export async function verifyBrvinTestClientDeployment(env: Env, request: Request
     await ensureAnalyticsSchema(env);
     const connectionRow = await connection(env, "github");
     if (!connectionRow || connectionRow.status !== "pr_created") {
-      return json({ ok: false, connected: false, state: "connection_pr_missing", error: "Create the dedicated text-test connection PR before verifying deployment." }, 409);
+      return json({ ok: false, connected: false, state: "connection_pr_missing", error: "Create the dedicated text-test connection PR before checking deployment." }, 409);
     }
     const metadata = JSON.parse(connectionRow.metadata_json || "{}") as Record<string, unknown>;
-    const expectedApplicationId = clean(metadata.connectedApplicationId, 36);
-    const expectedEnvironmentId = clean(metadata.connectedEnvironmentId, 36);
-    if (!/^[a-f0-9-]{36}$/iu.test(expectedApplicationId) || !/^[a-f0-9-]{36}$/iu.test(expectedEnvironmentId)) {
-      return json({ ok: false, connected: false, state: "identity_missing", error: "The saved connection PR does not contain a valid dedicated application/environment identity." }, 409);
+    const applicationId = clean(metadata.connectedApplicationId, 36);
+    const environmentId = clean(metadata.connectedEnvironmentId, 36);
+    const projectId = clean(metadata.connectedProjectId, 128);
+    if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !/^[a-f0-9-]{36}$/iu.test(environmentId) || !/^[a-f0-9-]{36}$/iu.test(projectId)) {
+      return json({ ok: false, connected: false, state: "identity_missing", error: "The saved connection PR does not contain the dedicated application, environment and project identities." }, 409);
     }
     const registered = await env.DB.prepare(
-      "SELECT a.id AS application_id,e.id AS environment_id " +
+      "SELECT a.id AS application_id,e.id AS environment_id,g.project_id " +
       "FROM brvin_applications a " +
       "JOIN brvin_application_environments e ON e.application_id=a.id " +
-      "JOIN brvin_application_project_grants g ON g.application_id=a.id AND g.status='active' " +
+      "JOIN brvin_application_project_grants g ON g.application_id=a.id AND g.project_id=? AND g.status='active' " +
       "JOIN brvin_projects p ON p.id=g.project_id AND p.status='active' " +
       "WHERE a.id=? AND e.id=? AND a.slug='brvin-text-test-client' AND e.environment_key='production' " +
       "AND a.status='active' AND e.status='active' LIMIT 1"
-    ).bind(expectedApplicationId, expectedEnvironmentId).first<{ application_id: string; environment_id: string }>();
+    ).bind(projectId, applicationId, environmentId).first<{ application_id: string; environment_id: string; project_id: string }>();
     if (!registered) {
-      return json({ ok: false, connected: false, state: "identity_inactive", error: "The dedicated text-test application, production environment or its active project grant is no longer active." }, 409);
+      return json({ ok: false, connected: false, state: "identity_inactive", error: "The dedicated text-test application, production environment or its project grant is no longer active." }, 409);
     }
 
     const { accessToken, scripts } = await authorizedCloudflare(env, request);
@@ -926,17 +927,13 @@ export async function verifyBrvinTestClientDeployment(env: Env, request: Request
     const binding = (settings.bindings || []).find(item => item.name === "BRVIN_SERVICE" && item.type === "service");
     const service = clean(binding?.service, 128);
     const entrypoint = clean(binding?.entrypoint, 128);
-    const props = binding?.props && typeof binding.props === "object" ? binding.props as Record<string, unknown> : {};
-    const configuredEnvironmentId = clean(props.applicationEnvironmentId, 36);
-    const bindingMatches = service === BRVIN_SERVICE_NAME && entrypoint === "BrvinRetrievalApi" &&
-      configuredEnvironmentId === expectedEnvironmentId;
-    if (!bindingMatches) {
-      return json({
-        ok: true, connected: false, state: "binding_mismatch", worker: TEST_WORKER_NAME,
-        service, entrypoint, applicationEnvironmentId: configuredEnvironmentId || null, accountId,
-      }, 409);
+    if (service !== BRVIN_SERVICE_NAME || entrypoint !== "BrvinRetrievalApi") {
+      return json({ ok: false, connected: false, state: "binding_mismatch", error: "The deployed text Worker does not have the approved private BRVIN Service Binding and entrypoint." }, 409);
     }
 
+    // Cloudflare's Worker settings API does not return Service Binding props.
+    // The actual application/environment/project identity is proven by the live
+    // RPC probe performed when the one-time tester token is provisioned.
     const deploymentData = await cloudflareApi<{
       deployments?: Array<{ id?: string; versions?: Array<{ version_id?: string; percentage?: number }> }>;
     }>(accessToken, "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/deployments");
@@ -944,16 +941,14 @@ export async function verifyBrvinTestClientDeployment(env: Env, request: Request
     const versions = latestDeployment?.versions || [];
     const trafficPercentage = versions.reduce((total, version) => total + Number(version.percentage || 0), 0);
     if (!latestDeployment?.id || versions.length === 0 || Math.abs(trafficPercentage - 100) > 0.001) {
-      return json({
-        ok: false, connected: false, state: "deployment_not_active", error: "The Worker binding is configured, but no complete 100% production deployment is active yet.",
-        worker: TEST_WORKER_NAME, service, entrypoint, applicationEnvironmentId: configuredEnvironmentId, accountId,
-      }, 409);
+      return json({ ok: false, connected: false, state: "deployment_not_active", error: "The text Worker has a binding, but no complete 100% deployment is active yet." }, 409);
     }
 
     return json({
-      ok: true, connected: true, state: "verified", worker: TEST_WORKER_NAME, service, entrypoint,
-      applicationId: expectedApplicationId, applicationEnvironmentId: configuredEnvironmentId,
-      deploymentId: latestDeployment.id, trafficPercentage, accountId,
+      ok: true, connected: false, state: "deployment_ready", runtimeIdentityVerified: false,
+      worker: TEST_WORKER_NAME, service, entrypoint, deploymentId: latestDeployment.id,
+      trafficPercentage, applicationId, applicationEnvironmentId: environmentId, projectId, accountId,
+      message: "Worker deployment is ready. Generate the tester token to run the live BRVIN identity check.",
     });
   } catch (error) {
     return json({ ok: false, connected: false, error: safeError(error) }, 502);
