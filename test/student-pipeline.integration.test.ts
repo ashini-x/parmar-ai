@@ -12,7 +12,7 @@ function toPem(bytes: Uint8Array): string {
   for (const byte of bytes) binary += String.fromCharCode(byte);
   const base64 = btoa(binary);
   const lines = base64.match(/.{1,64}/gu) ?? [];
-  return `-----BEGIN PRIVATE KEY-----\\n${lines.join("\\n")}\\n-----END PRIVATE KEY-----`;
+  return `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----`;
 }
 
 async function createTestPrivateKey(): Promise<string> {
@@ -115,7 +115,7 @@ describe("Phase 3 synthetic student journey", () => {
             totalTokenCount: 755,
           },
         };
-        return new Response(`data: ${JSON.stringify(event)}\\n\\n`, {
+        return new Response(`data: ${JSON.stringify(event)}\n\n`, {
           status: 200,
           headers: { "content-type": "text/event-stream" },
         });
@@ -236,7 +236,7 @@ describe("Phase 3 synthetic student journey", () => {
         retry: vi.fn(),
       };
       const queueContext = createExecutionContext();
-      await worker.queue({ messages: [queueMessage] } as unknown as MessageBatch<QuestionJob>, testEnvWithServices, queueContext);
+      await worker.queue({ messages: [queueMessage] } as unknown as Parameters<typeof worker.queue>[0], testEnvWithServices, queueContext);
       await waitOnExecutionContext(queueContext);
 
       expect(queueMessage.ack).toHaveBeenCalledTimes(1);
