@@ -1143,6 +1143,9 @@ const HTML = `<!doctype html>
   <p class="notice">Before creating a PR, BRVIN checks the GitHub installation can write to the selected repository and Cloudflare OAuth can list the same account that hosts brvin-service. The PR will not be merged or deployed by this wizard.</p>
   <button class="btn primary" id="connect-create-pr" type="button">Create reviewable GitHub PR</button>
   <button class="btn" id="connect-verify-deployment" type="button">Verify after PR merge and deployment</button>
+  <div class="field"><label for="connect-test-token">One-time text test access token</label><input id="connect-test-token" type="password" readonly autocomplete="off" placeholder="Generate only after the test Worker connection is verified"></div>
+  <div class="job-actions"><button class="btn" id="connect-generate-token" type="button">Generate / rotate tester token</button><button class="btn" id="connect-copy-token" type="button">Copy token</button></div>
+  <p class="muted">This token only unlocks the test interface. It does not grant BRVIN project access. Project access remains enforced by the private Service Binding.</p>
   <p class="muted" id="connect-result" aria-live="polite">No connection PR created yet.</p>
  </section>
 </section>
@@ -1551,6 +1554,24 @@ $("connect-verify-deployment").addEventListener("click",async()=>{
   const result=await api(API+"connect/verify");
   $("connect-result").textContent=result.connected?"Connection verified: brvin-test-client → brvin-service, environment "+result.applicationEnvironmentId+".":"Worker is deployed, but its binding did not match the registered BRVIN identity.";
  }catch(error){$("connect-result").textContent=error.message;}
+});
+$("connect-generate-token").addEventListener("click",async()=>{
+ try{
+  if(!confirm("Generate or rotate the private tester access token? The previous tester token will stop working."))return;
+  $("connect-generate-token").disabled=true;
+  $("connect-test-token").value="";
+  const result=await post("connect/test-access-token",{});
+  $("connect-test-token").type="text";
+  $("connect-test-token").value=result.testerToken;
+  $("connect-result").textContent="Tester token installed in Cloudflare. Copy it now; it will not be shown again after this page is refreshed.";
+ }catch(error){$("connect-result").textContent=error.message;alert(error.message);}
+ finally{$("connect-generate-token").disabled=false;}
+});
+$("connect-copy-token").addEventListener("click",async()=>{
+ const value=$("connect-test-token").value;
+ if(!value){alert("Generate the tester token first.");return;}
+ try{await navigator.clipboard.writeText(value);$("connect-result").textContent="Tester token copied. Keep it private and enter it in the BRVIN Test Lab.";}
+ catch{$("connect-test-token").type="text";$("connect-test-token").focus();$("connect-test-token").select();$("connect-result").textContent="Select and copy the token above. Keep it private.";}
 });
 $("create-collection").addEventListener("click",async()=>{try{await post("collections",{name:$("collection-name").value,description:$("collection-desc").value});$("collection-name").value="";$("collection-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("save-project-access").addEventListener("click",async()=>{try{const projectId=$("project-access").value;if(!projectId)throw new Error("Create or choose a project first.");const collectionIds=[...$("collection-checks").querySelectorAll("input:checked")].map(i=>i.value);await post("projects/collections",{projectId,collectionIds});await refresh();}catch(e){alert(e.message);}});
