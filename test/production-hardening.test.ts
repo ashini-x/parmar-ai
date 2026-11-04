@@ -34,7 +34,7 @@ describe("production hardening", () => {
     expect(normalizeAnswer("First paragraph.\\n\\nSecond paragraph.")).toBe("First paragraph.\n\nSecond paragraph.");
   });
 
-  it("does not expose unvalidated partial answer drafts from Fatman streams", async () => {
+  it("streams Fatman answer chunks and preserves paragraph breaks during Telegram edits", async () => {
     const events = [
       { candidates: [{ content: { parts: [{ text: '{"responseMode":"text","answer":"First paragraph' }] } }] },
       { candidates: [{ content: { parts: [{ text: '\\n\\nSecond paragraph"}' }] } }] },
@@ -45,29 +45,12 @@ describe("production hardening", () => {
     const handler = ((answer: string) => { emitted.push(answer); }) as PartialAnswerHandler;
     handler.flush = async () => undefined;
 
-    const response = await readVertexGeminiStream(new Response(sse), handler, false);
+    const response = await readVertexGeminiStream(new Response(sse), handler);
 
-    expect(emitted).toEqual([]);
+    expect(emitted.length).toBeGreaterThanOrEqual(2);
+    expect(emitted[0]).toBe("First paragraph");
+    expect(emitted.at(-1)).toBe("First paragraph\\n\\nSecond paragraph");
     expect(response.candidates?.[0]?.finishReason).toBe("STOP");
-    expect(response.candidates?.[0]?.content?.parts?.[0]?.text).toBe(
-      '{"responseMode":"text","answer":"First paragraph\\n\\nSecond paragraph"}',
-    );
-  });
-
-  it("keeps validated partial streaming enabled for ordinary study mode", async () => {
-    const events = [
-      { candidates: [{ content: { parts: [{ text: '{"responseMode":"text","answer":"A complete-looking' }] } }] },
-      { candidates: [{ content: { parts: [{ text: ' draft"}' }] } }] },
-    ];
-    const sse = events.map((event) => "data: " + JSON.stringify(event) + "\n\n").join("");
-    const emitted: string[] = [];
-    const handler = ((answer: string) => { emitted.push(answer); }) as PartialAnswerHandler;
-    handler.flush = async () => undefined;
-
-    await readVertexGeminiStream(new Response(sse), handler, true);
-
-    expect(emitted.length).toBeGreaterThan(0);
-    expect(emitted.at(-1)).toBe("A complete-looking draft");
   });
   it("accepts a valid native quiz packet", () => {
     const quizPacket = {
