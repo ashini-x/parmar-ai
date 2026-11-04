@@ -49,15 +49,15 @@ const retrievalData: BrvinRetrievalData = {
 function makeBinding(overrides: Partial<BrvinV2RpcBinding> = {}): BrvinV2RpcBinding {
   return {
     listAuthorizedProjectsV2: vi.fn(async () => ({
-      ok: true,
+      ok: true as const,
       data: [project],
     })),
     getProjectStatusV2: vi.fn(async () => ({
-      ok: true,
+      ok: true as const,
       data: status,
     })),
     retrieveProjectContextV2: vi.fn(async () => ({
-      ok: true,
+      ok: true as const,
       data: retrievalData,
     })),
     ...overrides,
