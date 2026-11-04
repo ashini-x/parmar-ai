@@ -794,7 +794,8 @@ export async function provisionBrvinTestClientAccessToken(env: Env, request: Req
       "JOIN brvin_application_environments e ON e.application_id=a.id " +
       "JOIN brvin_application_project_grants g ON g.application_id=a.id AND g.status='active' " +
       "JOIN brvin_projects p ON p.id=g.project_id AND p.status='active' " +
-      "WHERE a.id=? AND e.id=? AND a.status='active' AND e.status='active' LIMIT 1"
+      "WHERE a.id=? AND e.id=? AND a.slug='brvin-text-test-client' AND e.environment_key='production' " +
+      "AND a.status='active' AND e.status='active' LIMIT 1"
     ).bind(applicationId, environmentId).first<{ application_id: string; environment_id: string }>();
     if (!registered) {
       return json({ ok: false, error: "The connected application, environment or its active project grant is no longer active. Re-enable access before creating a tester token." }, 409);
@@ -812,7 +813,16 @@ export async function provisionBrvinTestClientAccessToken(env: Env, request: Req
     const binding = (settings.bindings || []).find(item => item.name === "BRVIN_SERVICE" && item.type === "service");
     const props = binding?.props && typeof binding.props === "object" ? binding.props as Record<string, unknown> : {};
     if (clean(binding?.service, 128) !== BRVIN_SERVICE_NAME || clean(binding?.entrypoint, 128) !== "BrvinRetrievalApi" || clean(props.applicationEnvironmentId, 36) !== environmentId) {
-      return json({ ok: false, error: "The deployed test Worker is missing the exact approved BRVIN Service Binding/environment identity. No tester token was created." }, 409);
+      return json({ ok: false, error: "The deployed test Worker is missing the exact approved BRVIN Service Binding/entrypoint/environment identity. No tester token was created." }, 409);
+    }
+    const deploymentData = await cloudflareApi<{
+      deployments?: Array<{ id?: string; versions?: Array<{ version_id?: string; percentage?: number }> }>;
+    }>(accessToken, "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/deployments");
+    const latestDeployment = deploymentData.deployments?.[0];
+    const versions = latestDeployment?.versions || [];
+    const trafficPercentage = versions.reduce((total, version) => total + Number(version.percentage || 0), 0);
+    if (!latestDeployment?.id || versions.length === 0 || Math.abs(trafficPercentage - 100) > 0.001) {
+      return json({ ok: false, error: "The text Worker does not yet have a fully active production deployment. No tester token was created." }, 409);
     }
 
     // The bearer token only opens the test interface. BRVIN project authorization
