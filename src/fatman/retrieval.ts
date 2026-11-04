@@ -111,8 +111,10 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
 
   let result: BrvinServiceRetrievalResult;
   try {
+    const pageNumbers = extractFatmanPageNumbers(normalizedQuery);
     result = await env.BRVIN_SERVICE.retrieveProjectContext({
       queries: buildFatmanSearchQueries(normalizedQuery),
+      ...(pageNumbers.length ? { pageNumbers } : {}),
     });
   } catch {
     throw new FatmanRetrievalError("BRVIN retrieval is temporarily unavailable.", true);
@@ -132,7 +134,11 @@ export async function retrieveFatmanContext(env: Env, query: string): Promise<Fa
       text: passage.text,
       score: passage.score,
     })),
-    pageImages: [],
+    pageImages: (result.pageImages ?? []).map((image) => ({
+      mimeType: image.mimeType,
+      data: image.data,
+      byteLength: image.byteLength,
+    })),
     searchCount: result.searchCount,
   };
 }
@@ -156,10 +162,23 @@ export async function retrieveFatmanQaContext(env: Env, query: string): Promise<
  * into a small bounded set of search phrases. The phrases are search hints only:
  * they never become answer facts and every result still passes lexical relevance.
  */
+export function extractFatmanPageNumbers(value: string): number[] {
+  const pages = new Set<number>();
+  const pattern = /\b(?:pdf\s*)?(?:page|pg\.?|p\.?)\s*(?:no\.?\s*)?(\d{1,5})\b/giu;
+  for (const match of value.matchAll(pattern)) {
+    const page = Number(match[1]);
+    if (Number.isSafeInteger(page) && page > 0 && page <= 100_000) pages.add(page);
+  }
+  return [...pages].slice(0, 3);
+}
+
 export function buildFatmanSearchQueries(value: string): string[] {
   const query = normalizeFatmanQuery(value);
   if (!query) return [];
 
+  const queryWithoutPageLocator = normalizeFatmanQuery(
+    query.replace(/\b(?:pdf\s*)?(?:page|pg\.?|p\.?)\s*(?:no\.?\s*)?\d{1,5}\b/giu, " "),
+  ) || query;
   const variants: string[] = [];
   const add = (candidate: string) => {
     const normalized = normalizeFatmanQuery(candidate);
@@ -167,9 +186,9 @@ export function buildFatmanSearchQueries(value: string): string[] {
       variants.push(normalized);
     }
   };
-  add(query);
+  add(queryWithoutPageLocator);
 
-  const expandedQuery = expandFatmanAliases(query);
+  const expandedQuery = expandFatmanAliases(queryWithoutPageLocator);
   const article = /\barticle\s+(\d{1,3}[a-z]?)\b/iu.exec(expandedQuery);
   if (article) add("Article " + article[1] + " Indian Constitution");
 
