@@ -33,10 +33,10 @@ export const BRVIN_CLOUDFLARE_REQUIRED_SCOPES = [
   "account-api-tokens.write",
   "agw.read", "agw.run", "agw.write",
   "ai-model.read", "ai-model.write",
-  "ai-search.index", "ai-search.metadata_read", "ai-search.read", "ai-search.run", "ai-search.write",
+  "ai-search.index", "ai-search.read", "ai-search.run", "ai-search.write",
   "ai.read", "ai.write",
   "aiaudit.read", "aiaudit.write",
-  "aig.metadata_read", "aig.read", "aig.run", "aig.write",
+  "aig.read", "aig.run", "aig.write",
   "agent-memory.write",
   "browser-rendering.read", "browser-rendering.write",
   "cf-agents.read", "cf-agents.write",
@@ -45,35 +45,39 @@ export const BRVIN_CLOUDFLARE_REQUIRED_SCOPES = [
   "cloudchamber.read", "cloudchamber.write",
   "constellation.read", "constellation.write",
   "containers.read", "containers.write",
-  "d1.metadata_read", "d1.read", "d1.write",
+  "d1.read", "d1.write",
   "firewall-for-ai.read", "firewall-for-ai.write",
   "flagship.evaluate", "flagship.read", "flagship.write",
   "hyperdrive-planetscale.setup",
   "k2.consume", "k2.produce", "k2.read", "k2.write",
   "mcp-portals.read", "mcp-portals.write",
-  "messaging.edit", "messaging.metadata_read", "messaging.read",
+  "messaging.edit", "messaging.read",
   "offline_access",
-  "page.read", "page.shield", "page.write", "pages.metadata_read",
+  "page.read", "page.shield", "page.write",
   "pipelines.read", "pipelines.send", "pipelines.write",
   "pubsub.read", "pubsub.write",
   "query-cache.read", "query-cache.write",
-  "queues.metadata_read", "queues.read", "queues.write",
+  "queues.read", "queues.write",
   "r2-catalog-sql.read", "r2-catalog.read", "r2-catalog.write",
   "rag.read", "rag.run", "rag.write",
   "realtime.admin", "realtime.read", "realtime.write",
   "secrets-store.read", "secrets-store.write",
   "vectorize.read", "vectorize.write",
-  "websearch.metadata_read", "websearch.read", "websearch.run", "websearch.write",
+  "websearch.read", "websearch.run", "websearch.write",
   "workers-ci.read", "workers-ci.write",
-  "workers-kv-storage.metadata_read", "workers-kv-storage.read", "workers-kv-storage.write",
+  "workers-kv-storage.read", "workers-kv-storage.write",
   "workers-observability-telemetry.write", "workers-observability.read", "workers-observability.write",
   "workers-r2-bucket-item.read", "workers-r2-bucket-item.write",
-  "workers-r2.metadata_read", "workers-r2.read", "workers-r2.write",
+  "workers-r2.read", "workers-r2.write",
   "workers-routes.read", "workers-routes.write",
-  "workers-scripts.admin", "workers-scripts.content_read", "workers-scripts.edit",
-  "workers-scripts.metadata_read", "workers-scripts.read", "workers-scripts.write",
-  "workers-tail.read", "workers_ai.metadata_read",
+  "workers-scripts.content_read", "workers-scripts.edit",
+  "workers-scripts.metadata_read",
+  "workers-tail.read",
 ] as const;
+
+// Checked separately: the configured OAuth scope set supplied by the administrator
+// includes Workers Editor but does not include the product-level Admin role.
+export const BRVIN_CLOUDFLARE_WORKER_ADMIN_SCOPE = "workers-scripts.admin" as const;
 
 function grantedPermission(current: Record<string, unknown>, name: string, required: "read" | "write"): boolean {
   const value = clean(current[name], 20);
@@ -371,6 +375,7 @@ export async function brvinConnectStatus(env: Env): Promise<Response> {
     const cfMeta = cloudflare ? JSON.parse(cloudflare.metadata_json || "{}") as Record<string, unknown> : {};
     const grantedScopes = clean(cfMeta.scope, 5000).split(/\s+/u).filter(Boolean);
     const missingCloudflareScopes = BRVIN_CLOUDFLARE_REQUIRED_SCOPES.filter(scope => !grantedScopes.includes(scope));
+    const workerAdminScopeGranted = grantedScopes.includes(BRVIN_CLOUDFLARE_WORKER_ADMIN_SCOPE);
     const slug = clean(githubMeta.slug, 100);
     const installationId = Number(githubMeta.installationId || 0) || null;
     return json({
@@ -398,6 +403,10 @@ export async function brvinConnectStatus(env: Env): Promise<Response> {
         grantedScopes,
         requiredScopes: BRVIN_CLOUDFLARE_REQUIRED_SCOPES,
         missingScopes: missingCloudflareScopes,
+        workerAdminScopeId: BRVIN_CLOUDFLARE_WORKER_ADMIN_SCOPE,
+        workerAdminScopeGranted,
+        workerEditorScopeGranted: grantedScopes.includes("workers-scripts.edit"),
+        accountTokenWriteScopeGranted: grantedScopes.includes("account-api-tokens.write"),
       },
     });
   } catch (error) {
@@ -456,14 +465,33 @@ export async function inspectBrvinProviderCapabilities(env: Env): Promise<Respon
     const metadata = cloudflare ? JSON.parse(cloudflare.metadata_json || "{}") as Record<string, unknown> : {};
     const granted = new Set(clean(metadata.scope, 5000).split(/\s+/u).filter(Boolean));
     const missingScopes = BRVIN_CLOUDFLARE_REQUIRED_SCOPES.filter(scope => !granted.has(scope));
+    const workerAdminScopeGranted = granted.has(BRVIN_CLOUDFLARE_WORKER_ADMIN_SCOPE);
+    const workerEditorScopeGranted = granted.has("workers-scripts.edit");
+    const accountTokenWriteScopeGranted = granted.has("account-api-tokens.write");
+    const connectionReady = cloudflare?.status === "connected" && missingScopes.length === 0 && metadata.brvinServiceVisible === true;
+    const readinessBlockers = [] as string[];
+    if (!connectionReady) readinessBlockers.push("Complete Cloudflare OAuth consent and confirm private brvin-service visibility.");
+    if (!workerAdminScopeGranted) readinessBlockers.push("Workers Admin (workers-scripts.admin) is not granted. Workers Editor can update existing Workers but cannot create or delete Workers.");
+    if (!accountTokenWriteScopeGranted) readinessBlockers.push("Account API Tokens Write (account-api-tokens.write) is not granted.");
+    readinessBlockers.push("Real account-token creation, project-scoped token verification, and direct secret delivery have not yet passed live acceptance.");
     result.cloudflare = {
       connected: cloudflare?.status === "connected",
       accountId: clean(metadata.accountId, 32) || clean(env.BRVIN_HOME_ACCOUNT_ID, 32) || null,
       brvinServiceVisible: metadata.brvinServiceVisible === true,
       grantedScopes: [...granted],
       missingScopes,
-      ready: cloudflare?.status === "connected" && missingScopes.length === 0 && metadata.brvinServiceVisible === true,
-      oauthClientScopesHelp: "Edit the BRVIN Connect OAuth client at Cloudflare Dashboard → Manage Account → OAuth clients, add every required scope shown by connect/status, save, then run Authorize again. The OAuth client secret already stored by BRVIN is retained encrypted.",
+      workerAdminScopeId: BRVIN_CLOUDFLARE_WORKER_ADMIN_SCOPE,
+      workerAdminScopeGranted,
+      workerEditorScopeGranted,
+      canCreateOrDeleteWorkers: workerAdminScopeGranted,
+      canDeployExistingWorkers: workerAdminScopeGranted || workerEditorScopeGranted,
+      accountTokenWriteScopeGranted,
+      accountTokenCreationVerified: false,
+      connectionReady,
+      projectFactoryReady: false,
+      readinessBlockers,
+      ready: false,
+      oauthClientScopesHelp: "The configured scope set includes Workers Editor but not Workers Admin. If Cloudflare offers workers-scripts.admin for this self-managed OAuth client, add it to the existing client and re-authorize. Without Workers Admin, BRVIN cannot create or delete new Workers. Never add account_api_tokens:create; that scope is reserved for Cloudflare CLI OAuth.",
     };
   } catch (error) {
     result.cloudflare = { connected: false, missingScopes: BRVIN_CLOUDFLARE_REQUIRED_SCOPES, error: safeError(error) };
@@ -773,7 +801,7 @@ export async function completeBrvinCloudflareOAuth(env: Env, request: Request): 
       workerCount: names.length, scope: clean(token.scope, 6000), authorizedAt: Date.now(),
     }, next);
     await audit(env, "cloudflare", "cloudflare.account_authorized", "Cloudflare OAuth access was verified against the account hosting the private brvin-service Worker.", { accountId, workerCount: names.length });
-    return callbackHtml("Cloudflare account connected", "BRVIN confirmed the authorised account, full requested Developer Platform scopes, Account API Tokens Write and private brvin-service presence. Return to BRVIN to run the provider capability check.", true);
+    return callbackHtml("Cloudflare account connected", "BRVIN confirmed the authorised account, the requested configured OAuth scopes and private brvin-service presence. Return to BRVIN to run the capability check. Workers Admin and live account-token creation remain separate Project Factory acceptance gates.", true);
   } catch (error) {
     return callbackHtml("Cloudflare connection failed", safeError(error), false);
   }
