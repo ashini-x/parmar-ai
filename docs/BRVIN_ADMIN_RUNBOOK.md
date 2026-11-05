@@ -135,13 +135,13 @@ The Rain Gardens test source was then manually retried using **Vision OCR cleanu
 
 Permission availability and an installed lifecycle rule are separate facts. The read-only diagnostic must report the actual bucket rule, not infer installation from IAM permissions alone.
 
-After the M11 lifecycle-verification release is deployed:
+The M11 lifecycle-verification release is now deployed (PR #101 / Main Release Validation #778). After a scheduled supervisor cycle (five-minute cadence), run the read-only check:
 
 1. Open **Live operations** and select **Run read-only storage check**.
 2. Confirm **Core object access: READY**.
 3. Confirm **Lifecycle configuration permissions: READY**.
 4. Confirm **30-day OCR lifecycle rule: INSTALLED (age 30 days)**. The rule must be a GCS Delete rule scoped to exactly `brvin/temporary-vision-ocr/`, with age no greater than 30 days.
-5. If the rule says **NOT INSTALLED**, the scheduled retention supervisor will attempt to install it safely on its next five-minute run. It now checks even when there are no cleanup candidates.
+5. If the rule says **NOT INSTALLED**, wait for the next five-minute retention-supervisor cycle, then run the read-only check again. The supervisor now verifies/installs the rule even when there are no cleanup candidates.
 6. Run the read-only check again. Do not report the safety net as ready until the rule itself says **INSTALLED**.
 7. If the result says **BLOCKED — unsafe existing Delete rule**, stop and ask a Google Cloud administrator to review the existing lifecycle policy. BRVIN intentionally refuses to replace or widen existing Delete rules that could affect original PDFs.
 
