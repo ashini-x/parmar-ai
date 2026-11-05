@@ -6,6 +6,7 @@ import {
   getFatmanImportJob,
   startFatmanLibraryUpload,
 } from "../fatman/import";
+import { brvinMonthlyQueryLimit } from "./service-core";
 
 function friendlyError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -70,13 +71,14 @@ export async function brvinOverview(env: Env): Promise<Response> {
     await ensureAnalyticsSchema(env);
     const now = Date.now();
     const billingMonth = new Date(now).toISOString().slice(0, 7);
-    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events, applications, environments, applicationGrants, projectUsage, fatmanUsage] = await Promise.all([
+    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events, applications, environments, applicationGrants, projectUsage, fatmanUsage, retentionSummaryResult, eventSummaryResult] = await Promise.all([
       env.DB.prepare(
         "SELECT COUNT(*) AS books, COALESCE(SUM(page_count),0) AS total_pages, " +
         "COALESCE(SUM(indexed_pages),0) AS indexed_pages, " +
         "SUM(CASE WHEN status='ready' AND indexed_pages=page_count THEN 1 ELSE 0 END) AS ready_books, " +
         "SUM(CASE WHEN status IN ('uploading','uploaded','processing') THEN 1 ELSE 0 END) AS active_books, " +
-        "SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed_books " +
+        "SUM(CASE WHEN status IN ('failed','delete_failed') THEN 1 ELSE 0 END) AS failed_books, " +
+        "SUM(CASE WHEN status IN ('deleting','delete_failed') THEN 1 ELSE 0 END) AS deleting_books " +
         "FROM brvin_books"
       ).first<Record<string, number>>(),
       env.DB.prepare(
@@ -102,7 +104,9 @@ export async function brvinOverview(env: Env): Promise<Response> {
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
         "SELECT b.id,b.title,b.source_filename,b.page_count,b.indexed_pages,b.status,b.error_message,b.collection_id," +
-        "b.search_prefix,b.source_type,b.vision_output_deleted_at,b.vision_output_deletion_started_at,b.created_at,b.updated_at,c.name AS collection_name " +
+        "b.search_prefix,b.source_type,b.vision_output_deleted_at,b.vision_output_deletion_started_at,b.created_at,b.updated_at,c.name AS collection_name," +
+        "(SELECT e.message FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type='source.vision_ocr_delete_failed' ORDER BY e.created_at DESC LIMIT 1) AS vision_cleanup_error," +
+        "(SELECT e.created_at FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type='source.vision_ocr_delete_failed' ORDER BY e.created_at DESC LIMIT 1) AS vision_cleanup_failed_at " +
         "FROM brvin_books b LEFT JOIN brvin_collections c ON c.id=b.collection_id " +
         "ORDER BY b.updated_at DESC LIMIT 200"
       ).all<Record<string, unknown>>(),
@@ -155,7 +159,24 @@ export async function brvinOverview(env: Env): Promise<Response> {
       env.DB.prepare(
         "SELECT query_count FROM fatman_search_usage WHERE billing_month=?"
       ).bind(billingMonth).first<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT " +
+        "SUM(CASE WHEN source_type='pdf' AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL THEN 1 ELSE 0 END) AS total_due," +
+        "SUM(CASE WHEN source_type='pdf' AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NOT NULL THEN 1 ELSE 0 END) AS running," +
+        "SUM(CASE WHEN source_type='pdf' AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NULL AND EXISTS (" +
+          "SELECT 1 FROM brvin_activity_events e WHERE e.book_id=brvin_books.id AND e.event_type='source.vision_ocr_delete_failed') THEN 1 ELSE 0 END) AS failed " +
+        "FROM brvin_books"
+      ).first<Record<string, number>>(),
+      env.DB.prepare(
+        "SELECT SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed," +
+        "SUM(CASE WHEN status='warning' THEN 1 ELSE 0 END) AS warnings," +
+        "SUM(CASE WHEN event_type='source.vision_ocr_delete_failed' THEN 1 ELSE 0 END) AS ocr_cleanup_failures," +
+        "MAX(created_at) AS latest_at FROM brvin_activity_events WHERE created_at>=?"
+      ).bind(now - 7 * 86_400_000).first<Record<string, number>>(),
     ]);
+
+    const retentionSummaryRow = retentionSummaryResult.results?.[0] ?? null;
+    const eventSummaryRow = eventSummaryResult.results?.[0] ?? null;
 
     const directByBook = new Map<string, Array<{ id: string; name: string }>>();
     for (const row of bookAssignments.results ?? []) {
@@ -248,6 +269,27 @@ export async function brvinOverview(env: Env): Promise<Response> {
     }
     // Fatman's existing v1 requests have their own counter; preserve that separate accounting.
     if (fatmanUsage) monthlyQueriesByProject.set("fatman", Number(fatmanUsage.query_count ?? 0));
+    const monthlyLimit = brvinMonthlyQueryLimit(env.BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT);
+    const allEnvironments = [...environmentsByApplication.values()].flat();
+    const connectionCounts = {
+      connected: allEnvironments.filter(item => item.connectionStatus === "connected").length,
+      connectedNoReady: allEnvironments.filter(item => item.connectionStatus === "connected_no_ready").length,
+      failed: allEnvironments.filter(item => item.connectionStatus === "failed").length,
+      pending: allEnvironments.filter(item => item.connectionStatus === "pending").length,
+      disabled: allEnvironments.filter(item => item.connectionStatus === "disabled").length,
+      revoked: allEnvironments.filter(item => item.connectionStatus === "revoked").length,
+    };
+    const retentionSummary = {
+      totalDue: Number(retentionSummaryRow?.total_due ?? 0),
+      running: Number(retentionSummaryRow?.running ?? 0),
+      failed: Number(retentionSummaryRow?.failed ?? 0),
+    };
+    const eventSummary = {
+      failed: Number(eventSummaryRow?.failed ?? 0),
+      warnings: Number(eventSummaryRow?.warnings ?? 0),
+      ocrCleanupFailures: Number(eventSummaryRow?.ocr_cleanup_failures ?? 0),
+      latestAt: eventSummaryRow?.latest_at == null ? null : Number(eventSummaryRow.latest_at),
+    };
 
     return json({
       ok: true,
@@ -258,6 +300,14 @@ export async function brvinOverview(env: Env): Promise<Response> {
         totalPages: Number(stats?.total_pages ?? 0),
         indexedPages: Number(stats?.indexed_pages ?? 0), readyBooks: Number(stats?.ready_books ?? 0),
         activeBooks: Number(stats?.active_books ?? 0), failedBooks: Number(stats?.failed_books ?? 0),
+        deletingBooks: Number(stats?.deleting_books ?? 0),
+      },
+      operations: {
+        billingMonth,
+        monthlyQueryLimit: monthlyLimit,
+        connections: connectionCounts,
+        retention: retentionSummary,
+        events: eventSummary,
       },
       collections: (collections.results ?? []).map((row) => ({
         id: String(row.id), name: String(row.name), description: String(row.description ?? ""),
@@ -274,6 +324,8 @@ export async function brvinOverview(env: Env): Promise<Response> {
         sourceCount: Number(row.source_count ?? 0), readySourceCount: Number(row.ready_source_count ?? 0),
         applicationCount: Number(row.application_count ?? 0),
         monthlyQueries: monthlyQueriesByProject.get(String(row.id)) ?? 0,
+        monthlyLimit,
+        monthlyRemaining: Math.max(0, monthlyLimit - (monthlyQueriesByProject.get(String(row.id)) ?? 0)),
         applications: applicationsByProject.get(String(row.id)) ?? [],
       })),
       applications: (applications.results ?? []).map((row) => ({
@@ -286,7 +338,13 @@ export async function brvinOverview(env: Env): Promise<Response> {
         activeEnvironmentCount: Number(row.active_environment_count ?? 0),
         activeProjectCount: Number(row.active_project_count ?? 0),
         environments: environmentsByApplication.get(String(row.id)) ?? [],
-        projects: projectsByApplication.get(String(row.id)) ?? [],
+        projects: (projectsByApplication.get(String(row.id)) ?? []).map(grant => ({
+          ...grant,
+          monthlyQueries: monthlyQueriesByProject.get(String(grant.projectId)) ?? 0,
+          monthlyLimit,
+          monthlyRemaining: Math.max(0, monthlyLimit - (monthlyQueriesByProject.get(String(grant.projectId)) ?? 0)),
+          usageScope: "shared_project",
+        })),
         createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
       })),
       books: (books.results ?? []).map((row) => ({
@@ -297,6 +355,8 @@ export async function brvinOverview(env: Env): Promise<Response> {
         searchPrefix: String(row.search_prefix), sourceType: String(row.source_type),
         visionOcrDeleted: row.vision_output_deleted_at !== null && row.vision_output_deleted_at !== undefined,
         visionOcrDeleting: row.vision_output_deletion_started_at !== null && row.vision_output_deletion_started_at !== undefined,
+        visionOcrCleanupError: row.vision_cleanup_error ? String(row.vision_cleanup_error) : undefined,
+        visionOcrCleanupFailedAt: row.vision_cleanup_failed_at == null ? null : Number(row.vision_cleanup_failed_at),
         directProjects: directByBook.get(String(row.id)) ?? [],
         collectionProjects: collectionProjectMap.get(String(row.collection_id)) ?? [],
         projects: [...(directByBook.get(String(row.id)) ?? []), ...(collectionProjectMap.get(String(row.collection_id)) ?? []).filter(project =>
