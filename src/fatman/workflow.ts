@@ -2,7 +2,7 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloud
 import type { Env } from "../config/env";
 import { runFatmanReleaseQaForEnv } from "./release-qa-runner";
 import { ensureAnalyticsSchema, recordBrvinActivity, setFatmanBookState } from "../analytics/db";
-import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError } from "./recovery-policy";
+import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError, shouldPauseAutomaticVisionCleanupRetry } from "./recovery-policy";
 import { buildFatmanBookVerificationPages, buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
 import { retrieveFatmanContext } from "./retrieval";
 import { getGoogleAccessToken } from "../auth/google";
@@ -316,9 +316,12 @@ export async function runBrvinVisionRetentionSupervisor(env: Env): Promise<{ sca
   let paused = 0;
   for (const candidate of rows) {
     const failures = await env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM brvin_activity_events WHERE book_id=? AND event_type='source.vision_ocr_delete_failed' AND created_at>=?"
-    ).bind(candidate.id, Date.now() - 60 * 60 * 1000).first<{ count: number }>();
-    if (Number(failures?.count ?? 0) >= 5) { paused += 1; continue; }
+      "SELECT COUNT(*) AS count FROM brvin_activity_events WHERE book_id=? AND event_type='source.vision_ocr_delete_failed'"
+    ).bind(candidate.id).first<{ count: number }>();
+    // A failed GCS deletion is usually an IAM/retention-policy issue, not a
+    // transient index issue. Stop unattended retries after the first failure;
+    // the administrator can diagnose storage permissions and explicitly retry.
+    if (shouldPauseAutomaticVisionCleanupRetry(Number(failures?.count ?? 0))) { paused += 1; continue; }
     const result = await startBrvinVisionOutputCleanup(env, candidate.id, "scheduled_retention_supervisor");
     if (result.started) started += 1;
     else if (result.reason === "workflow_create_failed") deferred += 1;
@@ -1112,8 +1115,8 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         await recordBrvinActivity(this.env, {
           importId, bookId: importedBook?.book_id ?? importId, agent: "Storage retention supervisor",
           phase: "retention", eventType: "source.vision_ocr_delete_failed", status: "failed",
-          message: "Vision OCR output could not be fully deleted; the original PDF and indexed book remain unchanged.",
-          details: { error: message.slice(0, 400), retryable: true },
+          message: "Vision OCR output could not be fully deleted; the original PDF and indexed book remain unchanged. Automatic retries are paused until storage permissions are corrected and an administrator retries cleanup.",
+          details: { error: message.slice(0, 400), retryable: true, automaticRetryPaused: true, manualRetryAvailable: true },
         }).catch(() => undefined);
       } else if (params.task !== "cleanup_chunk" && params.task !== "parmarbot_test") {
         await markFatmanImportFailed(this.env, importId, error).catch(() => undefined);

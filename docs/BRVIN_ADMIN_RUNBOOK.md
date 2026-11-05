@@ -1,0 +1,185 @@
+# BRVIN Administrator Runbook
+
+**Audience:** an administrator who manages teachers' knowledge projects and connects independent applications.  
+**Last reviewed:** 6 November 2026.  
+**Workspace:** [BRVIN Admin](https://parmar-ai.thenewtongs.workers.dev/admin/brvin)
+
+This is the day-to-day operating guide. The administrator does not need to create a database, Cloudflare Worker, search index or OCR pipeline for each teacher. BRVIN reuses the shared knowledge registry and retrieval service.
+
+## 1. Open the workspace
+
+1. Open the BRVIN Admin link above in a browser.
+2. Sign in with your existing administrator account.
+3. The left navigation is organised around **Knowledge sources**, **Collections**, **Knowledge projects**, **Live operations**, **Governance** and **Applications**. On a narrow phone screen, the navigation can scroll horizontally.
+4. Use **Live operations** to check ingestion/retention jobs, application connections and recent activity.
+
+Never send another person your admin password, browser session, cookies, private key, Cloudflare token, Google service-account key or a connection nonce/proof.
+
+## 2. Create a teacher knowledge project
+
+A knowledge project is the teacher's permission boundary—the teacher's digital brain.
+
+1. Open **Governance**.
+2. Under **Create a teacher knowledge project**, enter the Teacher / owner label (for example, `Teacher A · Mathematics`), a clear project name and a short description.
+3. Create the project.
+4. Open **Knowledge projects** and select **View details** to check the source count, assigned applications, monthly project searches and activity.
+
+Creating a project does not create a separate application, GitHub repository, Worker, D1 database or search index.
+
+## 3. Organise and upload knowledge sources
+
+### Collections
+
+A collection is a reusable group of books. It is not shared with a project until the administrator assigns it.
+
+1. In **Governance**, create a collection with a meaningful name and description.
+2. Add a PDF using **Add knowledge source**.
+3. Choose a source title and collection; review the PDF's SHA-256 and page count.
+4. Confirm the upload. The background pipeline stores the original PDF privately, submits Google Vision document OCR, indexes pages and runs retrieval-readiness checks.
+5. Use **Live operations → Live pipelines** or the source's **Manage → Inspect processing pipeline** to follow the job. A source is retrieval-ready only after its full page count is indexed and QA has passed.
+
+Do not close the browser during the initial upload transfer. After the upload has completed and the background job is running, processing continues in the Worker/Workflow infrastructure.
+
+### Assign direct book access
+
+1. Open **Knowledge sources** and find the PDF.
+2. Select **Manage** → **Manage direct project access**.
+3. Tick only the projects that should be allowed to retrieve this book.
+4. Save the assignments.
+
+### Assign collection access
+
+1. Open **Knowledge projects** → **View details** for the teacher.
+2. Select **Manage collection grants**, or use **Governance → Collection access**.
+3. Choose the project and tick its allowed collections.
+4. Save collection access.
+
+Direct-book grants and collection grants are independent and additive. A book can be available through either path. Only ready, fully indexed books are returned by retrieval. New ready books added to a granted collection become eligible automatically.
+
+## 4. Register and connect an application
+
+An application is an independent bot, website or assistant that calls BRVIN.
+
+1. Open **Applications**.
+2. Under **Connect an existing application**, enter its name, owner label, purpose, repository URL/default branch (metadata only), runtime provider and environment details.
+3. Register the application. Use a separate environment record for production, staging and preview.
+4. Open the application's card and check the registered environment and Worker URL.
+5. Use **Generate ChatGPT handoff** to create the non-secret integration prompt and manifest. Paste it into the engineering conversation that has access to the application's repository and deployment account.
+6. Once the app's Worker has the private `BRVIN_SERVICE` Service Binding and the trusted environment ID configured, select **Verify connection** for that exact environment.
+7. The environment should show **Connected** or **Connected · no ready knowledge**. The latter means the private connection works but no ready source is currently authorised.
+
+Repository metadata does not grant ChatGPT GitHub access. Make sure the engineering chat has separately been authorised for the repository. The handoff never contains a Cloudflare master token, Google private key or BRVIN secret.
+
+## 5. Grant or revoke application access
+
+Application-to-project grants control which knowledge projects an application can retrieve.
+
+- From an application's card, use **Grant selected project** to add another project.
+- From a knowledge project's details, use **Grant application access** to add an application.
+- Revoke access from either view. Future retrieval requests are denied after the grant becomes revoked.
+- Grant history is retained for audit.
+
+**Important:** an application-project grant is application-wide, not a per-teacher login policy. If one bot or website serves several teachers, that application must authenticate each end user and map that user to an allowed project on its own server before calling BRVIN. Do not expose multiple teacher projects to a shared end-user session without that application-side check.
+
+## 6. Understand usage and quotas
+
+The current v2 service enforces a maximum of **800 retrieval queries per knowledge project per UTC calendar month**. The administrator dashboard uses the same bounded limit as the retrieval service.
+
+- Knowledge-project views show searches used, monthly limit and remaining allowance.
+- Application cards show the project counters associated with their grants.
+- If two applications share a project, they consume the same project allowance. The dashboard does not claim that these shared project queries are attributable to one application.
+- Fatman's legacy v1 usage counter is retained and shown under the Fatman project; it is not silently combined with another project's usage.
+
+When the project allowance is exhausted, BRVIN returns `MONTHLY_LIMIT_REACHED` before searching. It does not broaden access or fall back to unfiltered search.
+
+## 7. Operate the Live operations view
+
+The Operations page refreshes automatically and displays:
+
+- Project search usage for the current month.
+- Active environment connection failures.
+- Failed and warning activity from the last seven days.
+- Outstanding/running/failed OCR-only cleanup.
+- Current pipeline jobs and the activity timeline.
+
+Use the activity filter to narrow the event list to failures/warnings, storage retention, application connections, ingestion/indexing or governance.
+
+For a failed or stuck source, open the source's **Manage** panel and select **Inspect processing pipeline**. Read the latest workflow, Vision and activity status before choosing any action. Use **Resume** only when the system reports that the failed import is resumable. Do not use full book deletion as a troubleshooting shortcut.
+
+## 8. Google Cloud Storage and OCR retention
+
+BRVIN retains three different things separately:
+
+1. **Original source PDF** — the private uploaded document.
+2. **Persistent indexed pages** — the searchable page text used by retrieval.
+3. **Temporary Google Vision JSON** — intermediate OCR output used during indexing.
+
+The OCR-only cleanup action removes only temporary Vision JSON. It must retain the original PDF, indexed page text, project grants and READY/archived state. Full book deletion is a different, destructive operation.
+
+### Current storage permission issue found in production
+
+The M11 read-only production audit found that the ingestion service account cannot inspect the bucket policy:
+
+- **Bucket:** `parmar-fatman-ocr-90db7be4`
+- **Ingestion service account:** `telegram-bot@project-90db7be4-619f-4ed7-89b.iam.gserviceaccount.com`
+- **Observed missing permission:** `storage.buckets.get`
+- **Lifecycle safety-net permissions needed:** `storage.buckets.get` and `storage.buckets.update`
+
+The production book observed during the audit remained **READY, 3/3 pages indexed**. OCR-only cleanup had failed. The original PDF and indexed pages were not changed. The 30-day lifecycle safety-net rule could not be verified or installed.
+
+### Required administrator action
+
+A Google Cloud administrator with permission to change the bucket IAM policy must grant the ingestion service account the narrowly scoped permissions it needs on this bucket:
+
+**Core object operations** (for PDF/OCR object work):
+- `storage.objects.create`
+- `storage.objects.get`
+- `storage.objects.list`
+- `storage.objects.delete`
+
+**Bucket-level lifecycle inspection/configuration**:
+- `storage.buckets.get`
+- `storage.buckets.update`
+
+Prefer a bucket-scoped custom role containing only the required permissions, rather than granting broad Storage Admin or Project Owner. Review the organisation's IAM process before applying it. ChatGPT has not changed this GCP IAM policy.
+
+### Verify and retry safely
+
+1. Open **Live operations** and select **Run read-only storage check**. This checks OAuth, bucket metadata and permission availability; it does not create, update or delete GCS objects or lifecycle rules.
+2. Confirm core object access is **READY** and that the lifecycle permissions are present. If the lifecycle safety net still reports missing permissions, have the GCP administrator finish the bucket IAM change.
+3. Open the affected source's **Manage** panel. A failed OCR-only cleanup is shown with the last failure reason and the original PDF/index preservation note.
+4. After correcting IAM, select **Retry Vision OCR cleanup**. Confirm the document title when prompted.
+5. Check the Operations timeline for `source.vision_ocr_deleted`, then check the source record for the OCR-cleanup-complete state. Do not treat “cleanup started” as proof of deletion.
+6. If GCS soft delete or a retention policy is enabled, deletion may remain recoverable until the provider's hard-delete time. Do not promise immediate physical erasure based only on the successful delete request.
+
+After one cleanup failure, BRVIN pauses unattended cleanup retries for that source to avoid repeatedly hitting the same IAM failure. The administrator can retry manually after permissions are corrected.
+
+## 9. Connection failures
+
+Open **Applications** and find the exact environment that failed. Review its last-check timestamp and safe failure code.
+
+- `PROBE_UNREACHABLE`: the browser could not reach the configured consumer probe endpoint.
+- `PROBE_REJECTED`: the deployed consumer did not return a valid private-service proof.
+- `CHALLENGE_EXPIRED`: the short-lived challenge expired; run verification again.
+- `ENVIRONMENT_CHANGED`: the target environment identity/configuration changed during verification.
+
+Check the Worker URL, the consumer's private Service Binding target/entrypoint and the trusted environment ID in deployment configuration. Do not copy a proof or nonce into a support ticket. Do not mark an environment Connected manually; rerun the live check.
+
+## 10. Safe operating rules
+
+- Never share admin passwords, session cookies, private keys, OAuth client secrets, Cloudflare tokens, Google keys, raw challenge nonces or proofs.
+- Do not create one database, search namespace, Worker or OCR pipeline per teacher.
+- Do not assign every project to every application by default.
+- Do not treat an app-wide grant as end-user teacher authorisation.
+- Do not delete the PDF or search index when the intent is only to clean temporary Vision JSON.
+- Do not manually edit production D1 rows to make a status look successful.
+- Do not call the system commercially ready until a real independent consumer app has completed its user authentication, retrieval and operational acceptance.
+
+## 11. Quick daily checklist
+
+1. Open **Live operations**; check failed sources, connection failures and warnings.
+2. Check quota remaining for projects that are in active use.
+3. Resolve any source indexing or retention issue before uploading more material.
+4. Check new application environments are correctly connected.
+5. Review project/application grants and revoke access that is no longer required.
+6. Preserve the existing Fatman and AskMoina production state.

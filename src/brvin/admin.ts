@@ -6,6 +6,7 @@ import {
   getFatmanImportJob,
   startFatmanLibraryUpload,
 } from "../fatman/import";
+import { brvinMonthlyQueryLimit } from "./service-core";
 
 function friendlyError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -70,13 +71,14 @@ export async function brvinOverview(env: Env): Promise<Response> {
     await ensureAnalyticsSchema(env);
     const now = Date.now();
     const billingMonth = new Date(now).toISOString().slice(0, 7);
-    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events, applications, environments, applicationGrants, projectUsage, fatmanUsage] = await Promise.all([
+    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events, applications, environments, applicationGrants, projectUsage, fatmanUsage, retentionSummaryResult, eventSummaryResult] = await Promise.all([
       env.DB.prepare(
         "SELECT COUNT(*) AS books, COALESCE(SUM(page_count),0) AS total_pages, " +
         "COALESCE(SUM(indexed_pages),0) AS indexed_pages, " +
         "SUM(CASE WHEN status='ready' AND indexed_pages=page_count THEN 1 ELSE 0 END) AS ready_books, " +
         "SUM(CASE WHEN status IN ('uploading','uploaded','processing') THEN 1 ELSE 0 END) AS active_books, " +
-        "SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed_books " +
+        "SUM(CASE WHEN status IN ('failed','delete_failed') THEN 1 ELSE 0 END) AS failed_books, " +
+        "SUM(CASE WHEN status IN ('deleting','delete_failed') THEN 1 ELSE 0 END) AS deleting_books " +
         "FROM brvin_books"
       ).first<Record<string, number>>(),
       env.DB.prepare(
@@ -102,7 +104,10 @@ export async function brvinOverview(env: Env): Promise<Response> {
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
         "SELECT b.id,b.title,b.source_filename,b.page_count,b.indexed_pages,b.status,b.error_message,b.collection_id," +
-        "b.search_prefix,b.source_type,b.vision_output_deleted_at,b.vision_output_deletion_started_at,b.created_at,b.updated_at,c.name AS collection_name " +
+        "b.search_prefix,b.source_type,b.vision_output_deleted_at,b.vision_output_deletion_started_at,b.created_at,b.updated_at,c.name AS collection_name," +
+        "(SELECT e.event_type FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS vision_cleanup_last_event_type," +
+        "(SELECT e.message FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS vision_cleanup_last_message," +
+        "(SELECT e.created_at FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS vision_cleanup_last_at " +
         "FROM brvin_books b LEFT JOIN brvin_collections c ON c.id=b.collection_id " +
         "ORDER BY b.updated_at DESC LIMIT 200"
       ).all<Record<string, unknown>>(),
@@ -155,7 +160,25 @@ export async function brvinOverview(env: Env): Promise<Response> {
       env.DB.prepare(
         "SELECT query_count FROM fatman_search_usage WHERE billing_month=?"
       ).bind(billingMonth).first<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT " +
+        "SUM(CASE WHEN source_type='pdf' AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL THEN 1 ELSE 0 END) AS total_due," +
+        "SUM(CASE WHEN source_type='pdf' AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NOT NULL THEN 1 ELSE 0 END) AS running," +
+        "SUM(CASE WHEN source_type='pdf' AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NULL AND (" +
+          "SELECT e.event_type FROM brvin_activity_events e WHERE e.book_id=brvin_books.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1" +
+        ")='source.vision_ocr_delete_failed' THEN 1 ELSE 0 END) AS failed " +
+        "FROM brvin_books"
+      ).first<Record<string, number>>(),
+      env.DB.prepare(
+        "SELECT SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed," +
+        "SUM(CASE WHEN status='warning' THEN 1 ELSE 0 END) AS warnings," +
+        "SUM(CASE WHEN event_type='source.vision_ocr_delete_failed' THEN 1 ELSE 0 END) AS ocr_cleanup_failures," +
+        "MAX(created_at) AS latest_at FROM brvin_activity_events WHERE created_at>=?"
+      ).bind(now - 7 * 86_400_000).first<Record<string, number>>(),
     ]);
+
+    const retentionSummaryRow = retentionSummaryResult ?? null;
+    const eventSummaryRow = eventSummaryResult ?? null;
 
     const directByBook = new Map<string, Array<{ id: string; name: string }>>();
     for (const row of bookAssignments.results ?? []) {
@@ -248,6 +271,27 @@ export async function brvinOverview(env: Env): Promise<Response> {
     }
     // Fatman's existing v1 requests have their own counter; preserve that separate accounting.
     if (fatmanUsage) monthlyQueriesByProject.set("fatman", Number(fatmanUsage.query_count ?? 0));
+    const monthlyLimit = brvinMonthlyQueryLimit(env.BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT);
+    const allEnvironments = [...environmentsByApplication.values()].flat();
+    const connectionCounts = {
+      connected: allEnvironments.filter(item => item.connectionStatus === "connected").length,
+      connectedNoReady: allEnvironments.filter(item => item.connectionStatus === "connected_no_ready").length,
+      failed: allEnvironments.filter(item => item.connectionStatus === "failed").length,
+      pending: allEnvironments.filter(item => item.connectionStatus === "pending").length,
+      disabled: allEnvironments.filter(item => item.connectionStatus === "disabled").length,
+      revoked: allEnvironments.filter(item => item.connectionStatus === "revoked").length,
+    };
+    const retentionSummary = {
+      totalDue: Number(retentionSummaryRow?.total_due ?? 0),
+      running: Number(retentionSummaryRow?.running ?? 0),
+      failed: Number(retentionSummaryRow?.failed ?? 0),
+    };
+    const eventSummary = {
+      failed: Number(eventSummaryRow?.failed ?? 0),
+      warnings: Number(eventSummaryRow?.warnings ?? 0),
+      ocrCleanupFailures: Number(eventSummaryRow?.ocr_cleanup_failures ?? 0),
+      latestAt: eventSummaryRow?.latest_at == null ? null : Number(eventSummaryRow.latest_at),
+    };
 
     return json({
       ok: true,
@@ -258,6 +302,14 @@ export async function brvinOverview(env: Env): Promise<Response> {
         totalPages: Number(stats?.total_pages ?? 0),
         indexedPages: Number(stats?.indexed_pages ?? 0), readyBooks: Number(stats?.ready_books ?? 0),
         activeBooks: Number(stats?.active_books ?? 0), failedBooks: Number(stats?.failed_books ?? 0),
+        deletingBooks: Number(stats?.deleting_books ?? 0),
+      },
+      operations: {
+        billingMonth,
+        monthlyQueryLimit: monthlyLimit,
+        connections: connectionCounts,
+        retention: retentionSummary,
+        events: eventSummary,
       },
       collections: (collections.results ?? []).map((row) => ({
         id: String(row.id), name: String(row.name), description: String(row.description ?? ""),
@@ -274,6 +326,8 @@ export async function brvinOverview(env: Env): Promise<Response> {
         sourceCount: Number(row.source_count ?? 0), readySourceCount: Number(row.ready_source_count ?? 0),
         applicationCount: Number(row.application_count ?? 0),
         monthlyQueries: monthlyQueriesByProject.get(String(row.id)) ?? 0,
+        monthlyLimit,
+        monthlyRemaining: Math.max(0, monthlyLimit - (monthlyQueriesByProject.get(String(row.id)) ?? 0)),
         applications: applicationsByProject.get(String(row.id)) ?? [],
       })),
       applications: (applications.results ?? []).map((row) => ({
@@ -286,7 +340,13 @@ export async function brvinOverview(env: Env): Promise<Response> {
         activeEnvironmentCount: Number(row.active_environment_count ?? 0),
         activeProjectCount: Number(row.active_project_count ?? 0),
         environments: environmentsByApplication.get(String(row.id)) ?? [],
-        projects: projectsByApplication.get(String(row.id)) ?? [],
+        projects: (projectsByApplication.get(String(row.id)) ?? []).map(grant => ({
+          ...grant,
+          monthlyQueries: monthlyQueriesByProject.get(String(grant.projectId)) ?? 0,
+          monthlyLimit,
+          monthlyRemaining: Math.max(0, monthlyLimit - (monthlyQueriesByProject.get(String(grant.projectId)) ?? 0)),
+          usageScope: "shared_project",
+        })),
         createdAt: Number(row.created_at), updatedAt: Number(row.updated_at),
       })),
       books: (books.results ?? []).map((row) => ({
@@ -297,6 +357,9 @@ export async function brvinOverview(env: Env): Promise<Response> {
         searchPrefix: String(row.search_prefix), sourceType: String(row.source_type),
         visionOcrDeleted: row.vision_output_deleted_at !== null && row.vision_output_deleted_at !== undefined,
         visionOcrDeleting: row.vision_output_deletion_started_at !== null && row.vision_output_deletion_started_at !== undefined,
+        visionOcrCleanupError: row.vision_cleanup_last_event_type === "source.vision_ocr_delete_failed" && row.vision_cleanup_last_message ? String(row.vision_cleanup_last_message) : undefined,
+        visionOcrCleanupLastEvent: row.vision_cleanup_last_event_type ? String(row.vision_cleanup_last_event_type) : undefined,
+        visionOcrCleanupLastAt: row.vision_cleanup_last_at == null ? null : Number(row.vision_cleanup_last_at),
         directProjects: directByBook.get(String(row.id)) ?? [],
         collectionProjects: collectionProjectMap.get(String(row.collection_id)) ?? [],
         projects: [...(directByBook.get(String(row.id)) ?? []), ...(collectionProjectMap.get(String(row.collection_id)) ?? []).filter(project =>
@@ -384,15 +447,15 @@ async function startBrvinDeletionWorkflow(
     crypto.randomUUID().replaceAll("-", "").slice(0, 12);
 
   if (mode === "vision_output") {
-    if (candidate.status !== "ready" || candidate.import_status !== "completed" ||
+    if ((candidate.status !== "ready" && candidate.status !== "archived") || candidate.import_status !== "completed" ||
         Number(candidate.indexed_pages) !== Number(candidate.page_count)) {
-      throw new Error("OCR-only cleanup is available only after the book is ready and all pages passed retrieval QA.");
+      throw new Error("OCR-only cleanup is available only after the book is ready or archived and all pages passed retrieval QA.");
     }
     if (candidate.vision_output_deleted_at) throw new Error("Vision OCR output has already been removed for this book.");
     if (candidate.vision_output_deletion_started_at) throw new Error("Vision OCR cleanup is already running for this book.");
     const reserved = await env.DB.prepare(
       "UPDATE brvin_books SET vision_output_deletion_started_at=?,updated_at=? " +
-      "WHERE id=? AND status='ready' AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NULL"
+      "WHERE id=? AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NULL"
     ).bind(Date.now(), Date.now(), candidate.id).run();
     if ((reserved.meta?.changes ?? 0) !== 1) throw new Error("The book changed state. Refresh the dashboard and retry.");
     try {
@@ -1340,7 +1403,7 @@ const HTML = `<!doctype html>
 <section class="view" id="view-books" data-view-panel="books"><div class="page-heading"><div><div class="eyebrow">Library</div><h1>Knowledge sources</h1><p class="subtitle">Books and documents indexed for your projects.</p></div><div class="heading-actions"><button class="btn danger" id="clear-brvin" type="button">Clear all imported books</button><button class="btn primary" type="button" id="open-upload-books">＋ Add source</button></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>All sources</h2><p id="book-count">Loading knowledge registry…</p></div><span class="muted" style="font-size:11px">Select Manage for source actions</span></div><div class="tablewrap"><table class="table"><thead><tr><th>Source</th><th>Collection</th><th>Indexed</th><th>Status</th><th>Project access</th><th>Actions</th></tr></thead><tbody id="books"><tr><td class="empty" colspan="6">Loading knowledge registry…</td></tr></tbody></table></div><div class="notice">The original PDF and searchable page index are retained independently. Google Vision OCR JSON is temporary processing output, but it may remain in private cloud storage when the required Google Cloud permissions do not allow cleanup; this does not affect retrieval from indexed pages. “Delete OCR files” keeps the PDF and searchable pages. “Delete book” removes the PDF, OCR output, indexed pages, project grants and registry records. Bulk clear preserves the protected built-in Fatman reference, project and collection definitions, and the audit trail.</div></section></section>
 <section class="view" id="view-collections" data-view-panel="collections"><div class="page-heading"><div><div class="eyebrow">Organisation</div><h1>Collections</h1><p class="subtitle">Arrange sources into logical groups. A collection is not shared until assigned to a project.</p></div><div class="heading-actions"><button class="btn" type="button" data-view="governance">＋ Create collection</button></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Your collections</h2><p>Each collection can be connected to one or more projects.</p></div></div><div id="collections" class="collection-grid"><div class="empty">Loading collections…</div></div></section></section>
 <section class="view" id="view-projects" data-view-panel="projects"><div class="page-heading"><div><div class="eyebrow">Teacher workspaces</div><h1>Knowledge projects</h1><p class="subtitle">One digital brain per teacher or learning use case. Applications receive access only through explicit grants.</p></div><div class="heading-actions"><button class="btn" type="button" data-view="governance">＋ Create project</button></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Teacher knowledge workspaces</h2><p>Review source readiness, assigned applications and monthly retrieval usage.</p></div></div><div id="projects" class="project-grid"><div class="empty">Loading projects…</div></div></section></section>
-<section class="view" id="view-operations" data-view-panel="operations"><div class="page-heading"><div><div class="eyebrow">System activity</div><h1>Operations</h1><p class="subtitle">Follow ingestion, indexing, retrieval checks and cleanup workflows.</p></div><div class="heading-actions"><span class="live"><i></i>5-second refresh · automatic</span></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Live pipelines</h2><p>Active jobs and recoverable failures.</p></div></div><div id="jobs" class="job-grid"><div class="empty">No active processing jobs.</div></div></section><section class="view-panel"><div class="panel-toolbar"><div><h2>Specialist activity</h2><p>Actual workflow events · <span id="event-stamp">Waiting for events</span></p></div></div><div class="timeline" id="events"><div class="empty">Waiting for BRVIN events…</div></div></section></section>
+<section class="view" id="view-operations" data-view-panel="operations"><div class="page-heading"><div><div class="eyebrow">System activity</div><h1>Operations</h1><p class="subtitle">Monitor retrieval quota, application connections, ingestion failures and source retention.</p></div><div class="heading-actions"><span class="live"><i></i>5-second refresh · automatic</span><a class="btn" href="https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_ADMIN_RUNBOOK.md" target="_blank" rel="noopener noreferrer">Administrator runbook</a></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Operational summary</h2><p>Live counts from the BRVIN registry and last seven days of activity.</p></div><button class="btn primary" id="storage-diagnostics" type="button">Run read-only storage check</button></div><div class="metrics" id="operations-metrics"><div class="metric"><span>Project searches</span><strong>—</strong><small>This month</small></div><div class="metric"><span>Connection failures</span><strong>—</strong><small>Active environments</small></div><div class="metric"><span>Failed events</span><strong>—</strong><small>Last seven days</small></div><div class="metric"><span>OCR cleanup failures</span><strong>—</strong><small>Manual retry may be needed</small></div></div><div class="notice" id="retention-note">Loading storage retention status…</div><div id="storage-diagnostic-result" class="notice" hidden aria-live="polite"></div><div class="muted" style="font-size:11px;margin-top:8px">Query allowances are enforced per knowledge project, not per application. When apps share a project, their requests consume that shared project allowance.</div></section><section class="view-panel"><div class="panel-toolbar"><div><h2>Live pipelines</h2><p>Active jobs and recoverable failures.</p></div></div><div id="jobs" class="job-grid"><div class="empty">No active processing jobs.</div></div></section><section class="view-panel"><div class="panel-toolbar"><div><h2>Specialist activity</h2><p>Actual workflow events · <span id="event-stamp">Waiting for events</span></p></div><div class="field" style="min-width:180px"><label for="event-filter">Filter activity</label><select id="event-filter"><option value="all">All recent events</option><option value="attention">Failures and warnings</option><option value="retention">Storage and OCR retention</option><option value="connections">Application connections</option><option value="ingestion">Upload and indexing</option><option value="governance">Grants and governance</option></select></div></div><div class="timeline" id="events"><div class="empty">Waiting for BRVIN events…</div></div></section></section>
 <section class="view" id="view-governance" data-view-panel="governance"><div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Knowledge setup</h1><p class="subtitle">Create teacher workspaces, organise source collections and control exactly which material each project can retrieve.</p></div></div><div class="overview-grid"><section class="view-panel"><div class="panel-toolbar"><div><h2>Create a teacher knowledge project</h2><p>Start with the teacher or customer label. You can connect applications and grant access separately.</p></div></div><div class="field"><label for="project-owner">Teacher / owner label</label><input id="project-owner" maxlength="120" placeholder="e.g. Teacher A · Mathematics"></div><div class="field"><label for="project-name">Knowledge project name</label><input id="project-name" maxlength="100" placeholder="e.g. Teacher A Mathematics"></div><div class="field"><label for="project-desc">Description</label><input id="project-desc" maxlength="500" placeholder="Subjects, methods or intended learning use"></div><div class="notice">Creating a knowledge project does not create an application, repository, Worker or legacy service credential. Connect an application separately and grant access when ready.</div><button class="btn primary" id="create-project" type="button">Create knowledge project</button></section><section class="view-panel"><div class="panel-toolbar"><div><h2>Create a collection</h2><p>Group sources by subject or purpose.</p></div></div><div class="field"><label for="collection-name">Collection name</label><input id="collection-name" maxlength="100" placeholder="Collection name"></div><div class="field"><label for="collection-desc">Description</label><input id="collection-desc" maxlength="500" placeholder="What belongs in this collection?"></div><button class="btn primary" id="create-collection" type="button">Create collection</button></section><section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Collection access</h2><p>Choose which collections a project can retrieve. This does not replace direct book assignments.</p></div></div><div class="formgrid"><div class="field"><label for="project-access">Project</label><select id="project-access"></select></div><div class="field"><label>Available collections</label><div class="checks" id="collection-checks"></div></div></div><button class="btn primary" id="save-project-access" type="button">Save collection access</button><div class="notice">Access is additive: projects receive content through direct book assignments and/or collection assignments. Empty projects have no BRVIN knowledge access.</div></section></div></section>
 <section class="view" id="view-applications" data-view-panel="applications">
 <div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Applications</h1><p class="subtitle">Register independent bots and apps, track their deployment environments, and manage the teacher knowledge projects they are allowed to retrieve.</p></div></div>
@@ -1483,7 +1546,7 @@ function openProjectDetails(projectId){
   '<div class="metrics" style="grid-template-columns:repeat(3,minmax(0,1fr))">'+
    '<div class="metric"><span>Ready sources</span><strong>'+Number(project.readySourceCount||0)+' / '+Number(project.sourceCount||0)+'</strong></div>'+
    '<div class="metric"><span>Applications</span><strong>'+Number(project.applicationCount||0)+'</strong></div>'+
-   '<div class="metric"><span>Queries this month</span><strong>'+Number(project.monthlyQueries||0).toLocaleString()+'</strong></div>'+
+   '<div class="metric"><span>Project searches this month</span><strong>'+Number(project.monthlyQueries||0).toLocaleString()+' / '+Number(project.monthlyLimit||800).toLocaleString()+'</strong><small>'+Number(project.monthlyRemaining??Math.max(0,Number(project.monthlyLimit||800)-Number(project.monthlyQueries||0))).toLocaleString()+' remaining · shared by all granted apps</small></div>'+
   '</div>'+
   '<p class="modal-subtitle">'+esc(project.ownerLabel||"Owner not assigned")+' · '+statusPill(project.status)+'</p>'+
   '<p class="muted">'+esc(project.description||"No description")+'</p>'+
@@ -1648,7 +1711,9 @@ function renderProjects(list){
    '<div class="pulse-row"><span>Knowledge sources ready</span><strong>'+ready+' / '+total+'</strong></div>'+
    '<div class="pulse-row"><span>Books via collections</span><strong>'+Number(p.collectionBooks||0)+'</strong></div>'+
    '<div class="pulse-row"><span>Connected applications</span><strong>'+Number(p.applicationCount||0)+'</strong></div>'+
-   '<div class="pulse-row"><span>Retrieval queries this month</span><strong>'+Number(p.monthlyQueries||0).toLocaleString()+'</strong></div>'+
+   '<div class="pulse-row"><span>Project searches this month</span><strong>'+Number(p.monthlyQueries||0).toLocaleString()+' / '+Number(p.monthlyLimit||800).toLocaleString()+'</strong></div>'+
+    '<div class="bar" style="max-width:none"><i style="width:'+pct(Number(p.monthlyQueries||0),Number(p.monthlyLimit||800))+'%"></i></div>'+
+    '<p><small>'+Number(p.monthlyRemaining??Math.max(0,Number(p.monthlyLimit||800)-Number(p.monthlyQueries||0))).toLocaleString()+' remaining · counts are shared across all apps granted to this project.</small></p>'+
    '<div style="margin-top:9px"><small>Apps with active permission: '+esc(apps||"None assigned")+'</small></div>'+
    '<div class="job-actions"><button class="btn primary" data-project-details="'+esc(p.id)+'" type="button">View details</button><button class="btn" data-project-edit="'+esc(p.id)+'" type="button">Edit details</button><button class="btn" data-project-access="'+esc(p.id)+'" type="button">Manage collections</button><button class="btn" data-project-status="'+esc(p.id)+'" data-status="'+nextStatus+'" type="button">'+action+'</button></div>'+
   '</article>';
@@ -1746,7 +1811,7 @@ function renderApplications(list){
     '<div class="job-actions">'+edit+(app.status==="active"&&environment.status==="active"&&app.repositoryUrl?'<button class="btn primary" data-handoff="true" data-application-id="'+esc(app.id)+'" data-environment-id="'+esc(environment.id)+'" type="button">Generate ChatGPT handoff</button>':"")+(app.status==="active"&&environment.status==="active"&&environment.workerUrl?'<button class="btn" data-environment-verify="'+esc(environment.id)+'" type="button">Verify connection</button>':"")+action+revoke+'</div>'+
    '</div>';
   }).join(""):'<div class="empty">No deployment environments registered.</div>';
-  const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
+  const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small><br><small>'+Number(grant.monthlyQueries||0).toLocaleString()+' / '+Number(grant.monthlyLimit||800).toLocaleString()+' project searches this month · shared project counter</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
   const activeGrantProjectIds=new Set(app.projects.filter(grant=>grant.status==="active").map(grant=>grant.projectId));
   const grantableProjects=app.status==="active"?(model?.projects||[]).filter(project=>project.status==="active"&&!activeGrantProjectIds.has(project.id)):[];
   const inlineGrantHtml=app.status!=="active"
@@ -1799,9 +1864,43 @@ function renderApplications(list){
 function renderBooks(list,projects){$("book-count").textContent=list.length+" sources";$("books").innerHTML=list.length?list.map(b=>{const access=b.projects.map(p=>p.name).join(", ")||"No project access",progress=pct(b.indexedPages,b.pageCount),archived=b.status==="archived",manageLabel=archived?"Manage · archived":"Manage";const inspect=["uploading","uploaded","processing","failed","delete_failed"].includes(b.status)?'<button class="btn" data-inspect="'+esc(b.id)+'" type="button">Inspect</button> ':"";return '<tr><td class="source-name"><strong>'+esc(b.title)+'</strong><div class="muted">'+esc(b.filename)+'</div><div class="bar"><i style="width:'+progress+'%"></i></div></td><td>'+esc(b.collectionName)+'</td><td>'+b.indexedPages+'/'+b.pageCount+'</td><td>'+statusPill(b.status)+(b.error?'<div class="error" style="font-size:10px;margin-top:5px">'+esc(b.error)+'</div>':"")+'</td><td>'+esc(access)+'</td><td class="source-actions">'+inspect+'<button class="btn" data-manage="'+esc(b.id)+'" data-archived="'+archived+'" type="button">'+manageLabel+'</button></td></tr>';}).join(""):'<tr><td class="empty" colspan="6">No knowledge sources yet. Add the first PDF to start your library.</td></tr>';$("books").querySelectorAll("[data-inspect]").forEach(button=>button.addEventListener("click",()=>showImport(button.dataset.inspect)));$("books").querySelectorAll("[data-manage]").forEach(button=>button.addEventListener("click",()=>manageBook(button.dataset.manage)));}
 function renderJobs(list){$("jobs").innerHTML=list.length?list.map(j=>{const deleting=j.status==="deleting"||j.status==="delete_failed",percent=j.status==="uploading"?pct(j.uploadedBytes,j.expectedBytes):pct(j.indexedPages,j.pageCount),label=deleting?"Removing AI Search pages and private PDF/OCR storage":j.status==="uploading"?fmtBytes(j.uploadedBytes)+" / "+fmtBytes(j.expectedBytes):j.indexedPages+" / "+j.pageCount+" pages";return '<div class="job-card"><div class="job-card-head"><strong>'+esc(j.title)+'</strong>'+statusPill(j.status)+'</div><p>'+esc(label)+(deleting?"":" · "+percent+"% · updated "+esc(time(j.updatedAt)))+'</p>'+(deleting?"":'<div class="bar" style="max-width:none"><i style="width:'+percent+'%"></i></div>')+(j.error?'<p class="error">'+esc(j.error)+'</p>':"")+'<div class="job-actions"><button class="btn" data-inspect="'+esc(j.id)+'" type="button">Inspect pipeline</button>'+(j.status==="failed"&&j.hasOcrOperation?'<button class="btn" data-resume="'+esc(j.id)+'" type="button">Resume</button>':"")+'</div></div>';}).join(""):'<div class="empty" style="grid-column:1/-1">No active processing or deletion jobs. New BRVIN operations will appear here.</div>';$("jobs").querySelectorAll("[data-inspect]").forEach(b=>b.addEventListener("click",()=>showImport(b.dataset.inspect)));$("jobs").querySelectorAll("[data-resume]").forEach(b=>b.addEventListener("click",()=>resumeImport(b.dataset.resume)));}
 function detailText(details){if(!details||typeof details!=="object")return"";return Object.entries(details).map(([key,value])=>key+": "+(typeof value==="object"?JSON.stringify(value):String(value))).join(" · ").slice(0,700);}
-function renderEvents(list){$("events").innerHTML=list.length?list.slice(0,60).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong>'+statusPill(e.status)+'</div><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+' · '+esc(e.type)+'</small></div></div>').join(""):'<div class="empty">No operation events recorded yet.</div>';}
+function renderEvents(list){
+ const filter=$("event-filter")?.value||"all";
+ const filtered=(list||[]).filter(event=>{
+  const phase=String(event.phase||"").toLowerCase(),type=String(event.type||"").toLowerCase(),status=String(event.status||"").toLowerCase();
+  if(filter==="attention")return status==="failed"||status==="warning";
+  if(filter==="retention")return phase==="retention"||type.includes("storage")||type.includes("vision_ocr");
+  if(filter==="connections")return type.includes("connection")||type.includes("environment");
+  if(filter==="ingestion")return ["upload","ocr","indexing","verification","processing","recovery"].includes(phase)||type.startsWith("book.")||type.startsWith("index.")||type.startsWith("ocr.");
+  if(filter==="governance")return phase==="governance"||type.includes("grant")||type.includes("revok")||type.includes("application.");
+  return true;
+ });
+ $("events").innerHTML=filtered.length?filtered.slice(0,60).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong>'+statusPill(e.status)+'</div><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+' · '+esc(e.type)+'</small></div></div>').join(""):'<div class="empty">No events match this filter.</div>';
+}
+function renderOperations(data){
+ const ops=data.operations||{},connections=ops.connections||{},retention=ops.retention||{},events=ops.events||{};
+ const projectSearches=(data.projects||[]).reduce((total,project)=>total+Number(project.monthlyQueries||0),0);
+ const cards=[
+  ["Project searches",projectSearches.toLocaleString(),"This month · project counters"],
+  ["Connection failures",Number(connections.failed||0),"Active environment checks"],
+  ["Failed events",Number(events.failed||0),"Last seven days"],
+  ["OCR cleanup failures",Number(retention.failed||0),"Paused for manual recovery"],
+ ];
+ $("operations-metrics").innerHTML=cards.map(([label,value,note])=>'<div class="metric"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong><small>'+esc(note)+'</small></div>').join("");
+ let note;
+ if(Number(retention.failed||0)>0){
+  note=Number(retention.failed)+" source(s) have failed OCR-only cleanup. Their original PDFs, indexed pages and READY/archived status are retained. Automatic retries are paused; run the read-only storage check, correct GCS permissions, then use Manage → Retry Vision OCR cleanup.";
+ }else if(Number(retention.running||0)>0){
+  note=Number(retention.running)+" OCR cleanup job(s) are currently running. The source PDFs and indexed pages remain retained.";
+ }else if(Number(retention.totalDue||0)>0){
+  note=Number(retention.totalDue)+" ready/archived source(s) still have temporary Vision OCR output pending cleanup.";
+ }else{
+  note="No eligible temporary Vision OCR cleanup remains outstanding.";
+ }
+ $("retention-note").textContent=note;
+}
 function renderOverview(data){$("overview-books").textContent=String(data.stats.books);$("overview-pages").textContent=data.stats.indexedPages.toLocaleString()+" of "+data.stats.totalPages.toLocaleString()+" pages indexed";$("overview-ready").textContent=String(data.stats.readyBooks);$("overview-running").textContent=String(data.stats.activeBooks);$("overview-attention").textContent=String(data.stats.failedBooks);$("overview-status-note").textContent=data.stats.failedBooks?data.stats.failedBooks+" source(s) need attention. Open Operations to inspect the affected workflow.":data.stats.activeBooks?data.stats.activeBooks+" pipeline(s) are running. Processing continues automatically in the background.":"All tracked sources are stable. New processing events will appear here automatically.";}
-function render(){if(!model)return;renderMetrics(model.stats);renderApplications(model.applications||[]);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOverview(model);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
+function render(){if(!model)return;renderMetrics(model.stats);renderApplications(model.applications||[]);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOperations(model);renderOverview(model);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
 let connectState=null;
 async function refreshConnectState(){
  try{connectState=await api(API+"connect/status");renderConnectState();}
@@ -1833,6 +1932,32 @@ function renderConnectState(){
   :"Authorize the Cloudflare account that hosts private brvin-service. The capability check itself does not create or change Workers.";
 }
 async function refresh(){try{model=await api(API+"overview");render();if($("connect-wizard-panel")?.open)await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
+async function runStorageDiagnostics(){
+ const button=$("storage-diagnostics"),result=$("storage-diagnostic-result");
+ button.disabled=true;result.hidden=false;result.textContent="Checking service-account permissions and bucket metadata without changing storage…";
+ try{
+  const response=await fetch(API+"diagnostics/storage",{method:"GET",credentials:"same-origin"});
+  let data={};try{data=await response.json();}catch{}
+  if(!response.ok)throw new Error(data.error||"Storage diagnostic failed (HTTP "+response.status+").");
+  const perms=data.checks?.permissions||{},bucket=data.checks?.bucket||{};
+  const objectMissing=perms.missingObjectPermissions||[];
+  const lifecycleMissing=data.retentionLifecycleMissingPermissions||perms.lifecycleMissingPermissions||[];
+  result.textContent=[
+   "Service account: "+(data.serviceAccountEmail||"not configured"),
+   "Bucket: "+(data.bucketName||"not configured"),
+   "Core object access: "+(data.uploadStartReady?"READY":"BLOCKED"),
+   "Missing object permissions: "+(objectMissing.length?objectMissing.join(", "):"none reported"),
+   "Bucket metadata inspection: "+(bucket.ok?"available":"not available"),
+   "30-day OCR lifecycle safety net: "+(data.retentionLifecycleReady?"READY":"NOT CONFIGURED"),
+   "Lifecycle permissions still needed: "+(lifecycleMissing.length?lifecycleMissing.join(", "):"none reported"),
+   data.note||""
+  ].filter(Boolean).join("\\n");
+  result.style.whiteSpace="pre-wrap";
+ }catch(error){result.textContent="Diagnostic could not complete: "+(error instanceof Error?error.message:String(error));}
+ finally{button.disabled=false;}
+}
+$("storage-diagnostics").addEventListener("click",runStorageDiagnostics);
+$("event-filter").addEventListener("change",()=>renderEvents(model?.events||[]));
 function stage(id,state){$("step-"+id).className="step"+(state?" "+state:"");}
 function renderJob(job,pipeline){const uploaded=job.uploadedBytes>=job.expectedSize&&job.expectedSize>0;const ocr=pipeline?.vision?.status||"not_started";const status=job.status;
  stage("upload",uploaded?"done":status==="uploading"?"active":"");
@@ -1848,7 +1973,33 @@ async function showImport(id){activeImportId=id;try{const d=await api(API+"statu
  $("modal-body").innerHTML='<div class="metrics" style="grid-template-columns:repeat(3,1fr)"><div class="metric"><span>State</span><strong style="font-size:17px">'+esc(job.status)+'</strong></div><div class="metric"><span>Indexed</span><strong style="font-size:17px">'+job.indexedPages+'/'+job.expectedPages+'</strong></div><div class="metric"><span>Upload</span><strong style="font-size:17px">'+pct(job.uploadedBytes,job.expectedSize)+'%</strong></div></div><p class="muted">Vision OCR: '+esc(d.pipeline?.vision?.status||"not started")+' · Workflow: '+esc(d.pipeline?.workflow?.status||"not started")+'</p><div class="timeline">'+(d.events||[]).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+'</small></div></div>').join("")+'</div>';
  $("modal").classList.add("open");
  }catch(e){say(e.message,true);}}
-function manageBook(id){const book=model?.books?.find(item=>item.id===id);if(!book)return;const canDelete=book.sourceType==="pdf"&&!book.visionOcrDeleting&&["ready","failed","delete_failed","completed","archived"].includes(book.status),canArchive=book.sourceType==="pdf"&&book.status==="ready",canRestore=book.sourceType==="pdf"&&book.status==="archived",canDeleteOcr=book.sourceType==="pdf"&&book.status==="ready"&&!book.visionOcrDeleted&&!book.visionOcrDeleting,busyOcr=book.visionOcrDeleting,needsInspect=["uploading","uploaded","processing","failed","delete_failed"].includes(book.status);$("modal-title").textContent=book.title;$("modal-body").innerHTML='<p class="modal-subtitle" style="margin:0 0 16px">'+esc(book.collectionName)+' · '+book.indexedPages+'/'+book.pageCount+' pages indexed · '+esc(book.status.replaceAll("_"," "))+'</p><div class="management-actions">'+(needsInspect?'<button class="btn" id="manage-inspect" type="button">Inspect processing pipeline</button>':'')+(book.status==="deleting"?"":'<button class="btn" id="manage-access" type="button">Manage direct project access</button>')+(canArchive?'<button class="btn" id="manage-archive" data-book-archive type="button">Archive source</button>':'')+(canRestore?'<button class="btn" id="manage-restore" data-book-restore type="button">Restore source</button>':'')+(canDeleteOcr?'<button class="btn" id="manage-ocr" type="button">Delete Vision OCR files only</button>':busyOcr?'<span class="muted">Vision OCR cleanup is running…</span>':book.visionOcrDeleted?'<span class="muted">Vision OCR files marked as removed.</span>':'')+(canDelete?'<button class="btn danger" id="manage-delete" type="button">Delete this book permanently</button>':book.sourceType!=="pdf"?'<span class="muted">This built-in source is protected.</span>':'')+'</div><div class="notice">'+(book.status==="deleting"?"Full book deletion is already in progress. The source will disappear from this library when its background workflow completes.":"Direct project access is managed separately from collection access. Archiving pauses retrieval but retains stored data. Deleting the book is permanent and removes its searchable pages and imported storage.")+'</div>';$("modal").classList.add("open");if(needsInspect)$("manage-inspect").addEventListener("click",()=>showImport(id));if(book.status!=="deleting")$("manage-access").addEventListener("click",()=>editBookAccess(id));if(canArchive)$("manage-archive").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await archiveBook(id,"archive",button);});if(canRestore)$("manage-restore").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await archiveBook(id,"restore",button);});if(canDeleteOcr)$("manage-ocr").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await deleteVisionOutput(id,button);});if(canDelete)$("manage-delete").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await deleteBook(id,button);});}
+function manageBook(id){
+ const book=model?.books?.find(item=>item.id===id);if(!book)return;
+ const canDelete=book.sourceType==="pdf"&&!book.visionOcrDeleting&&["ready","failed","delete_failed","completed","archived"].includes(book.status);
+ const canArchive=book.sourceType==="pdf"&&book.status==="ready",canRestore=book.sourceType==="pdf"&&book.status==="archived";
+ const canDeleteOcr=book.sourceType==="pdf"&&(book.status==="ready"||book.status==="archived")&&!book.visionOcrDeleted&&!book.visionOcrDeleting;
+ const busyOcr=book.visionOcrDeleting,needsInspect=["uploading","uploaded","processing","failed","delete_failed"].includes(book.status);
+ const failedOcr=Boolean(book.visionOcrCleanupError),ocrAction=failedOcr?"Retry Vision OCR cleanup":"Delete Vision OCR files only";
+ $("modal-title").textContent=book.title;
+ $("modal-body").innerHTML=
+  '<p class="modal-subtitle" style="margin:0 0 16px">'+esc(book.collectionName)+' · '+book.indexedPages+'/'+book.pageCount+' pages indexed · '+esc(book.status.replaceAll("_"," "))+'</p>'+
+  '<div class="management-actions">'+(needsInspect?'<button class="btn" id="manage-inspect" type="button">Inspect processing pipeline</button>':"")+
+   (book.status==="deleting"?"":'<button class="btn" id="manage-access" type="button">Manage direct project access</button>')+
+   (canArchive?'<button class="btn" id="manage-archive" data-book-archive type="button">Archive source</button>':"")+
+   (canRestore?'<button class="btn" id="manage-restore" data-book-restore type="button">Restore source</button>':"")+
+   (canDeleteOcr?'<button class="btn" id="manage-ocr" type="button">'+ocrAction+'</button>':busyOcr?'<span class="muted">Vision OCR cleanup is running…</span>':book.visionOcrDeleted?'<span class="muted">Vision OCR files marked as removed.</span>':"")+
+   (canDelete?'<button class="btn danger" id="manage-delete" type="button">Delete this book permanently</button>':book.sourceType!=="pdf"?'<span class="muted">This built-in source is protected.</span>':"")+
+  '</div>'+
+  (failedOcr?'<div class="notice error" style="margin-top:12px">Last OCR cleanup failed: '+esc(book.visionOcrCleanupError)+'<br>Automatic retries are paused. Run the read-only storage check in Operations, correct the bucket permissions, then retry here. The original PDF, indexed pages and retrieval-ready status have been retained.</div>':"")+
+  '<div class="notice">'+(book.status==="deleting"?"Full book deletion is already in progress. The source will disappear from this library when its background workflow completes.":"Direct project access is managed separately from collection access. Archiving pauses retrieval but retains stored data. Deleting the book is permanent and removes its searchable pages and imported storage.")+'</div>';
+ $("modal").classList.add("open");
+ if(needsInspect)$("manage-inspect").addEventListener("click",()=>showImport(id));
+ if(book.status!=="deleting")$("manage-access").addEventListener("click",()=>editBookAccess(id));
+ if(canArchive)$("manage-archive").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await archiveBook(id,"archive",button);});
+ if(canRestore)$("manage-restore").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await archiveBook(id,"restore",button);});
+ if(canDeleteOcr)$("manage-ocr").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await deleteVisionOutput(id,button);});
+ if(canDelete)$("manage-delete").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await deleteBook(id,button);});
+}
 async function editBookAccess(id){const book=model.books.find(b=>b.id===id);if(!book)return;const selected=new Set((book.directProjects||[]).map(p=>p.id));
  $("modal-title").textContent="Project access · "+book.title;
  $("modal-body").innerHTML='<p class="muted">Choose exactly which projects can retrieve this source. Saving replaces its direct project assignments.</p><div class="checks" id="access-choices">'+model.projects.filter(p=>p.status==="active").map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.id)+'" '+(selected.has(p.id)?"checked":"")+'> '+esc(p.name)+'</label>').join("")+'</div><button class="btn primary" id="save-book-access" style="margin-top:12px">Save access</button>';

@@ -26,8 +26,15 @@ export type BrvinServiceEnv = Pick<
   | "BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT"
 >;
 
-const DEFAULT_MONTHLY_QUERY_LIMIT = 800;
-const MAX_MONTHLY_QUERY_LIMIT = 800;
+export const BRVIN_MAX_MONTHLY_QUERY_LIMIT = 800;
+export const BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT = 800;
+
+export function brvinMonthlyQueryLimit(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isSafeInteger(parsed) && parsed > 0
+    ? Math.min(BRVIN_MAX_MONTHLY_QUERY_LIMIT, parsed)
+    : BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT;
+}
 
 function failure(
   code: string,
@@ -44,12 +51,6 @@ function normalizedClientId(value: unknown): string {
   return /^[a-z0-9][a-z0-9-]{0,63}$/u.test(clientId) ? clientId : "";
 }
 
-function queryLimit(value: string | undefined): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  return Number.isSafeInteger(parsed) && parsed > 0
-    ? Math.min(MAX_MONTHLY_QUERY_LIMIT, parsed)
-    : DEFAULT_MONTHLY_QUERY_LIMIT;
-}
 
 async function resolveProjectForClient(
   env: BrvinServiceEnv,
@@ -74,7 +75,7 @@ async function reserveProjectQuery(
   const now = Date.now();
   const month = new Date(now).toISOString().slice(0, 7);
   const fatman = project.slug === "fatman";
-  const monthlyLimit = queryLimit(env.BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT);
+  const monthlyLimit = brvinMonthlyQueryLimit(env.BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT);
 
   const reserved = fatman
     ? await env.DB.prepare(

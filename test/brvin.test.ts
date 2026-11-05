@@ -135,6 +135,16 @@ describe("BRVIN governed retrieval", () => {
     expect(html).toContain("Live operations");
     expect(html).toContain("Specialist activity");
     expect(html).toContain("5-second refresh");
+    expect(html).toContain("Run read-only storage check");
+    expect(html).toContain('id="storage-diagnostics"');
+    expect(html).toContain("Operational summary");
+    expect(html).toContain("Administrator runbook");
+    expect(script).toContain("runStorageDiagnostics");
+    expect(script).toContain("retentionLifecycleMissingPermissions");
+    expect(script).toContain("Retry Vision OCR cleanup");
+    expect(script).toContain("shared by all granted apps");
+    expect(html).toContain('id="event-filter"');
+    expect(script).toContain('$("event-filter").addEventListener("change"');
     expect(html).toContain("project access");
     expect(script).toContain('const previousCollectionId=$("collection").value;');
     expect(script).toContain("data-project-grant-revoke");
