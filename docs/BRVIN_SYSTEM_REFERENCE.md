@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 5 November 2026 (M8 handoff implementation deployed; production release acceptance passed)  
+**Last verified against source and production infrastructure:** 6 November 2026 (M9 live production connection verification accepted)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/askmoina-voice`
 
@@ -9,7 +9,7 @@ This is the canonical technical reference for BRVIN. It records what exists in c
 
 When a future change alters code, D1 schema, bindings, access rules, ingestion, retrieval, deployment, or integrations, update this document and the relevant specialist document in the same change. Do not silently treat a planned feature as already shipped.
 
-> **BRVIN 2 implementation and chat continuity:** read [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md), then [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md), this as-built reference, [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The active product is a teacher-specific digital-brain knowledge platform and application connection manager. ChatGPT remains the user's software engineer using separate GitHub/Cloudflare authorizations. The autonomous Project Factory proposal is superseded historical documentation; do not follow its milestones. M0–M8 are complete; M4's fixed reference scaffold is retired and not a product requirement. M8 handoff generation is merged, deployed and production-accepted. M9 — live connection verification and activation is IN PROGRESS on `brvin/m9-live-connection-verification`; release and live proof acceptance remain pending. M10–M11 remain outstanding. The retired `brvin-test-client` scaffold must not be recreated.
+> **BRVIN 2 implementation and chat continuity:** read [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md), then [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md), this as-built reference, [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The active product is a teacher-specific digital-brain knowledge platform and application connection manager. ChatGPT remains the user's software engineer using separate GitHub/Cloudflare authorizations. The autonomous Project Factory proposal is superseded historical documentation; do not follow its milestones. M0–M8 are complete; M4's fixed reference scaffold is retired and not a product requirement. M8 handoff generation is merged, deployed and production-accepted. M9 — live connection verification and activation is COMPLETE; the authenticated Parmar AI Production browser check and read-only D1 proof record both show Connected with one ready authorised source. M10 — teacher knowledge assignment/isolation — and M11 — operations and administrator handover — remain outstanding. The retired `brvin-test-client` scaffold must not be recreated.
 
 ## Product-scope correction — 5 November 2026
 
