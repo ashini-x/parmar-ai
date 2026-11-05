@@ -198,13 +198,13 @@ At the start of every new chat/Codex session, read these GitHub files in order:
 
 Then inspect latest branches, commits, PRs, checks and relevant Cloudflare state. Resume at the first incomplete milestone. The user should not need to repeat this specification in a new chat.
 
-Current first task: M6 — inspect existing PR #75 wizard, current GitHub App permissions and installation, Cloudflare OAuth scopes/roles, encrypted provider vault and provider API capability matrix. Implement administrator/credential lifecycle before the general Project Factory.
+Current first task: M6 remains incomplete. PRs #82/#83 deployed the provider-administrator permission preflight and admin-panel instructions. The remaining one-time approvals are: (1) approve the expanded existing BRVIN GitHub App permissions and set its installation to All repositories; (2) add the Cloudflare OAuth scopes displayed in the BRVIN dashboard to the existing BRVIN Connect client, including `account_api_tokens:create`, preserve its callback URL and authorization-code/refresh-token grants, then authorize once. The Cloudflare account member is already Super Administrator. After consent, implement account API-token creation, project-scoped token permission/resource-scope verification, direct GitHub Actions/Worker secret delivery, credential-vault lifecycle, rotation and revocation before M7.
 
 ## 10. Implementation boundaries
 
 - Do not force generated apps into askmoina-voice or another unrelated existing repository. Each independent software project gets a purpose-built repository.
 - Do not use existing AskMoina Voice production runtime, Gemini Live, camera/microphone or voice acceptance suite as a BRVIN dependency.
-- Do not merge/deploy historical PR #385 from askmoina-voice; it is superseded.
+PR #385 in askmoina-voice is closed without merging; PR #386 removed the old undeployed text-test-client scaffold. Do not reopen PR #385 or recreate that fixed adapter.
 - Do not create per-knowledge-project repositories or duplicate OCR/search infrastructure.
 - Do not expose brvin-service publicly to make generated apps connect.
 - Do not trust browser-supplied app/environment or project IDs as authorization.
