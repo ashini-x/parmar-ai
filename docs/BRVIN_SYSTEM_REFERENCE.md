@@ -453,6 +453,7 @@ The existing v2 private service enforces an active application-project grant bef
 The active M10 change is in [PR #99](https://github.com/ashini-x/parmar-ai/pull/99), branch `brvin/m10-teacher-isolation-acceptance`; CI is in progress. It adds:
 - App-card controls to grant an additional active knowledge project and retain the existing revoke action.
 - Project-detail controls to grant an active application, revoke existing app grants and view grant history.
+- Project-detail shortcuts to the existing direct-book grant editor and collection-grant selector, so source-access changes are reachable from the teacher project context.
 - Explicit admin copy that app-project grants are application-wide, not teacher-user-specific.
 - Automated two-application fixtures with independent Teacher A and Teacher B projects plus one deliberately shared project.
 - Tests for only-granted-project discovery, cross-project denial before quota/search, immediate revocation denial, multi-project app access, intentional sharing, direct-book and collection scope, future collection additions, unready sources and inactive identities/projects.
