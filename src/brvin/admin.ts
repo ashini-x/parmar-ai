@@ -1951,7 +1951,7 @@ async function runStorageDiagnostics(){
    "30-day OCR lifecycle safety net: "+(data.retentionLifecycleReady?"READY":"NOT CONFIGURED"),
    "Lifecycle permissions still needed: "+(lifecycleMissing.length?lifecycleMissing.join(", "):"none reported"),
    data.note||""
-  ].filter(Boolean).join("\n");
+  ].filter(Boolean).join("\\n");
   result.style.whiteSpace="pre-wrap";
  }catch(error){result.textContent="Diagnostic could not complete: "+(error instanceof Error?error.message:String(error));}
  finally{button.disabled=false;}
