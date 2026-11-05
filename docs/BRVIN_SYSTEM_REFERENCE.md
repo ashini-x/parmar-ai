@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 6 November 2026 (M9 live production connection verification accepted)  
+**Last verified against source and production infrastructure:** 6 November 2026 (M10 teacher-isolation administration and acceptance deployed)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/askmoina-voice`
 
@@ -9,7 +9,7 @@ This is the canonical technical reference for BRVIN. It records what exists in c
 
 When a future change alters code, D1 schema, bindings, access rules, ingestion, retrieval, deployment, or integrations, update this document and the relevant specialist document in the same change. Do not silently treat a planned feature as already shipped.
 
-> **BRVIN 2 implementation and chat continuity:** read [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md), then [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md), this as-built reference, [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The active product is a teacher-specific digital-brain knowledge platform and application connection manager. ChatGPT remains the user's software engineer using separate GitHub/Cloudflare authorizations. The autonomous Project Factory proposal is superseded historical documentation; do not follow its milestones. M0–M8 are complete; M4's fixed reference scaffold is retired and not a product requirement. M8 handoff generation is merged, deployed and production-accepted. M9 — live connection verification and activation is COMPLETE; the authenticated Parmar AI Production browser check and read-only D1 proof record both show Connected with one ready authorised source. M10 — teacher knowledge assignment/isolation — is IN PROGRESS on `brvin/m10-teacher-isolation-acceptance`; M11 — operations and administrator handover — remains outstanding. The retired `brvin-test-client` scaffold must not be recreated.
+> **BRVIN 2 implementation and chat continuity:** read [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md), then [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md), this as-built reference, [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The active product is a teacher-specific digital-brain knowledge platform and application connection manager. ChatGPT remains the user's software engineer using separate GitHub/Cloudflare authorizations. The autonomous Project Factory proposal is superseded historical documentation; do not follow its milestones. M0–M10 are complete; M4's fixed reference scaffold is retired and not a product requirement. M8 handoff generation is merged, deployed and production-accepted. M9 — live connection verification and activation is COMPLETE; the authenticated Parmar AI Production browser check and read-only D1 proof record both show Connected with one ready authorised source. M10 — teacher knowledge assignment/isolation — is COMPLETE and deployed. M11 — operations and administrator handover — is the next active milestone. The retired `brvin-test-client` scaffold must not be recreated.
 
 ## Product-scope correction — 5 November 2026
 
@@ -70,18 +70,18 @@ Consumer application's own Gemini/LLM prompt and answer
 
 The two planes share the existing D1 registry and AI Search namespace. They do not create a database or index per app.
 
-## 1.1 BRVIN 2 production state (6 November 2026 — after M9 live connection acceptance)
+## 1.1 BRVIN 2 production state (6 November 2026 — after M10 production release)
 
 - M1 added `brvin_applications`, `brvin_application_environments` and `brvin_application_project_grants` to the existing shared D1. The Parmar AI production application/environment and explicit Fatman project grant are seeded and active.
 - M2 added `listAuthorizedProjectsV2()`, `getProjectStatusV2(input)` and `retrieveProjectContextV2(input)` to the private `BrvinRetrievalApi` entrypoint. V1 methods remain available.
 - Parmar AI production carries both `clientId: fatman` and the generated production `applicationEnvironmentId`. `/health` checks v1/v2 Fatman readiness and source-count parity.
-- Latest paired production release after M9: `brvin-service` deployment `0d9029cd-410a-4169-98da-1a21d3a434d0`, version `af406a76-ec5c-4e0b-b401-80dfb1ff2a38`; `parmar-ai` deployment `0a39a60f-01f7-4225-93ac-209a9aca38ab`, version `6e27a398-0bf4-4dba-8cc4-a0e17977bb4e`. Main Release Validation #729 (run `42079795434`) passed paired deployment, root/health/private BRVIN/Fatman acceptance; artifact `13440845149`. The authenticated Parmar AI Production Verify Connection check subsequently passed on 6 November 2026; D1 records `connected`, one ready authorised source and proof consumption.
+- Latest paired production release after M10: `brvin-service` deployment `2b3d2330-0c2f-4fa2-9909-48dfe7997070`, version `97c8b017-0994-4be3-9045-110d8a892b99`; `parmar-ai` deployment `70d635d1-b384-41c8-a8a9-6e3d51066198`, version `91222548-5ecc-49e0-8fa8-45daac2e19a6`. Main Release Validation #756 (run `42098761142`) passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance; artifact `13448441278`.
 - End-user Fatman retrieval remains on v1. AskMoina Voice's v2 binding and Gemini Live connector/tool integration are deployed as an optional pilot. Do not make its camera/audio acceptance a BRVIN milestone gate.
 - The former M4 independent reference-client scaffold was originally merged as `brvin-test-client` in AskMoina PR #381, then retired by PR #386. Its Worker source, Wrangler/TypeScript config, tests and dedicated deploy workflow are no longer in the AskMoina repository. It was never deployed. The shared BRVIN connector remains.
 - The historical Project Factory provider-administrator preflight and configured-scope correction were deployed through PRs #82, #83 and #88. They are part of the as-built code but are no longer an active product milestone. Do not ask the user to complete broad GitHub/Cloudflare administrator re-consent for the narrowed knowledge-platform goal. Audit any runtime dependencies before simplifying or removing this legacy UI; no credential should be revoked or deleted as a side effect.
 - The existing BRVIN GitHub App is installed on the `ashini-x` account. Its broader Project Factory permission upgrade and All-repository scope were never accepted as requirements for the clarified product. The saved Cloudflare OAuth grant remains `workers-scripts.edit offline_access`; this historical connection is not required to deliver the knowledge-platform workflow through ChatGPT's own integrations. Do not request additional consent or delete/revoke the existing provider configuration until its code/runtime dependencies have been audited.
 - The old fixed text-test application/environment are revoked, its project is inactive, its only application-project grant is revoked, and stale PR #385 metadata has been cleared from the GitHub provider connection. PR #385 was closed without merging; PR #386 removed the undeployed scaffold. The sample Rain Gardens PDF remains ready but unassigned.
-- The old provider-admin/test-client sequence above is superseded. Do not create the retired `brvin-test-client`, provision its token/secret, or reauthorize provider scopes for that purpose. M6 teacher-focused admin workspace, M7 application/repository/runtime registration, M8 ChatGPT integration handoff and M9 live v2 connection verification are complete. M10 knowledge assignment/isolation is underway on `brvin/m10-teacher-isolation-acceptance`; M11 operations/handover remains outstanding.
+- The old provider-admin/test-client sequence above is superseded. Do not create the retired `brvin-test-client`, provision its token/secret, or reauthorize provider scopes for that purpose. M6 teacher-focused admin workspace, M7 application/repository/runtime registration, M8 ChatGPT integration handoff, M9 live v2 connection verification and M10 teacher knowledge assignment/isolation are complete. M11 operations/handover is the next active milestone.
 ## 2. Architecture decisions that must remain stable
 
 1. **One shared registry:** use the existing BRVIN tables in the shared D1 database. Do not create one D1 database per project or consumer app.
@@ -444,25 +444,37 @@ This closes M9's valid production connection-verification path. Automated M9 tes
 
 **What it does not prove:** consumer end-user login, Gemini/model/tool wiring, per-teacher user-to-project mapping or cross-teacher isolation. These remain M10/M11 responsibilities. The app-wide application-project grant is not per-user authorisation.
 
-**Next active milestone:** M10 — implementation is underway in `brvin/m10-teacher-isolation-acceptance`; validate teacher A/B separation, explicit project/source/collection grants, deliberate sharing and revocation. Consumer-side user-to-project mapping remains a distinct consumer responsibility where an app serves multiple teachers.
+**Next active milestone:** M10 is now complete; its implementation and production acceptance are recorded below. M11 — operations, usage visibility, recovery and administrator handover — is next.
 
-### 9.6 M10 teacher knowledge assignment and isolation — implementation in progress
+### 9.6 M10 teacher knowledge assignment and isolation — complete
 
-The existing v2 private service enforces an active application-project grant before quota reservation or search. Its source resolver then includes only ready, fully indexed books assigned directly or through an active project-collection grant. The source grant lookup is repeated for each request, so a newly ready book added to an already granted collection becomes available without an app deployment, while a revoked app-project grant blocks the next request.
+M10 shipped through [PR #99](https://github.com/ashini-x/parmar-ai/pull/99), squash-merged to `main` as `0068d74d8b164cfc64fbc43c23d9449ae8745db5`.
 
-The active M10 change is in [PR #99](https://github.com/ashini-x/parmar-ai/pull/99), branch `brvin/m10-teacher-isolation-acceptance`; CI is in progress. It adds:
-- App-card controls to grant an additional active knowledge project and retain the existing revoke action.
-- Project-detail controls to grant an active application, revoke existing app grants and view grant history.
-- Project-detail shortcuts to the existing direct-book grant editor and collection-grant selector, so source-access changes are reachable from the teacher project context.
-- Explicit admin copy that app-project grants are application-wide, not teacher-user-specific.
-- Automated two-application fixtures with independent Teacher A and Teacher B projects plus one deliberately shared project.
-- Tests for only-granted-project discovery, cross-project denial before quota/search, immediate revocation denial, multi-project app access, intentional sharing, direct-book and collection scope, future collection additions, unready sources and inactive identities/projects.
-- Admin API tests for one project shared across apps, multiple projects per app and idempotent grant behavior, plus browser-script checks for both grant-control locations.
-- The Node browser-script regression check now expects the connection-state wording introduced after M9 was accepted.
+**Admin workflow delivered:**
+- Application cards can grant an additional active knowledge project or revoke an existing project grant.
+- Knowledge-project details can grant an active application and revoke existing app grants; grant history remains visible.
+- Project details provide shortcuts to each listed source's direct-book grant editor and to the collection-grant selector for that project.
+- The UI explains that app-project grants are application-wide. A consumer that serves multiple teachers must authenticate the user and map that user to a permitted project on its own server.
 
-**Implementation status:** in progress. Branch CI and production release validation are pending. No production D1 rows, test teachers, applications, projects, grants, bindings or secrets were changed; this increment adds no schema migration. Automated two-tenant fixtures are used instead of test data in the live Fatman production registry.
+**Authorization acceptance delivered:**
+- Two distinct trusted application/environment identities represent Teacher A and Teacher B.
+- Each app lists only the projects explicitly granted to it; both can access a deliberately shared project.
+- Cross-project requests are rejected before quota reservation and AI Search.
+- The next retrieval after app-project grant revocation is rejected.
+- Direct book grants and collection grants remain independent source-scope controls; only ready, fully indexed books are searched.
+- Future ready books added to an already-granted collection are included automatically.
+- Inactive projects and environments fail closed.
+- Admin API tests cover multiple projects per app, one project shared across apps and idempotent grant behavior. Browser-script tests cover both grant-control views and direct/collection access shortcuts.
 
-**Critical limitation:** BRVIN cannot determine which of a consumer application's signed-in end users should access which app-wide granted project. Any application that serves multiple teachers must map its authenticated user to an allowed project server-side before calling BRVIN. The current M10 fixture validates separate consumer application identities and grants; it does not claim to test a shared consumer's login/session policy. M10 must not be marked complete until the required PR CI and acceptance review pass.
+**Validation and production evidence:**
+- PR Release Validation [#755](https://github.com/ashini-x/parmar-ai/actions/runs/42098579862) passed TypeScript, unit, Node/browser-script tests and both Worker bundle dry-runs.
+- Main Release Validation [#756](https://github.com/ashini-x/parmar-ai/actions/runs/42098761142) deployed the paired Workers; root, health, private BRVIN Service Binding, Fatman retrieval and production release acceptance passed.
+- `brvin-service` version `97c8b017-0994-4be3-9045-110d8a892b99`; `parmar-ai` version `91222548-5ecc-49e0-8fa8-45daac2e19a6`; artifact `13448441278`.
+- Read-only D1 verification (`rows_written=0`) confirmed existing Fatman app-project grants and Parmar AI Production's M9 `connected` proof record remain unchanged. No migration or production test teacher/project/grant was added.
+
+**Scope boundary:** M10's automated fixtures test separate consumer applications, not a shared consumer application's end-user login/session. BRVIN's app-project grants are app-wide. Any future consumer that serves multiple teachers must implement and test its own authenticated user-to-project policy before using multiple teacher projects. The admin UI controls were checked by browser-script contract tests; a separate authenticated visual click-through was not performed in this session.
+
+**Next milestone:** M11 — operations, usage and quota visibility, connection/ingestion recovery, audit and administrator handover.
 
 ## 10. Consumer application integration
 
