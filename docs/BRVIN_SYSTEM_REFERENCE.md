@@ -402,7 +402,15 @@ M6 shipped in [PR #91](https://github.com/ashini-x/parmar-ai/pull/91), merge com
 
 **Manual verification limitation:** the admin route requires the administrator's authenticated browser session. This session did not have that login session available for a visual click-through. The dashboard client contract is covered by passing Node/browser-script tests, and the deployed backend/schema/query behavior was verified against production. The administrator can visually confirm the signed-in workspace at `/admin/brvin`; do not claim that this session performed the click-through.
 
-### 9.3 Remaining admin-experience gap
+### 9.3 M7 application connection registry — implementation pending release
+
+M7 is being implemented on branch `brvin/m7-application-connection-wizard`; it is not yet merged or deployed.
+
+The pending change adds non-secret metadata for an existing GitHub repository URL/default branch and per-environment Cloudflare Worker name/HTTPS URL. The application wizard registers one or more production/staging/preview environment identities using the existing backend-generated UUID model. It does not create repositories, Workers, secrets, bindings or deployments, and it does not call GitHub/Cloudflare to prove provider authorization. ChatGPT's GitHub connection remains a separate authorization boundary. All environment cards remain Pending until M9 live Service Binding verification.
+
+The additive D1 migration marker is `2026-11-05-brvin-connection-metadata-v1`. Existing application/environment IDs and grants are preserved. Production status must not be claimed until PR checks, merge, release and live D1 read-back have passed.
+
+### 9.4 Remaining admin-experience gap
 
 The deployed UI has separate application, environment and grant forms. It does not yet provide the final project-centric teacher workspace or a complete Connect Application journey.
 
