@@ -286,7 +286,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 | M7 | Application connection registry and wizard | COMPLETE | PR #93 merged and deployed; production release #705 and smoke accepted; repository/default-branch/runtime metadata, generated env identities, Worker metadata, Pending status and D1 migration verified. No provider resource provisioning. |
 | M8 | ChatGPT integration handoff | COMPLETE — merged, deployed and production release accepted | PR #95 merged; PR Release Validation #711 and Main Release Validation #713 passed. The admin generates a versioned, dated, copyable non-secret prompt and structured manifest per active application/environment. |
 | M9 | Live connection verification and activation | COMPLETE — production browser proof accepted | PR #98 merged and deployed; Release Validation #728 and Main Release Validation #729 passed; the authenticated Parmar AI Production check showed Connected and D1 confirmed one-time proof consumption with one ready authorised source. |
-| M10 | Teacher knowledge assignment and isolation acceptance | NOT STARTED | Multiple teacher projects and independent apps; grant, revoke, multi-project, sharing and cross-project denial tests pass. |
+| M10 | Teacher knowledge assignment and isolation acceptance | IN PROGRESS — implementation branch | Dual-sided application/project grant controls and two-application teacher-isolation acceptance tests are being added; PR CI and production review pending. |
 | M11 | Operations, usage and administrator handover | NOT STARTED | Live project/app usage, pipeline/connection failures, audit/revocation, recovery guidance and nontechnical admin manual. |
 
 ### M6 — Admin workspace aligned to teacher knowledge operations
@@ -359,6 +359,15 @@ The live production environment displayed **Connected** after one authenticated 
 - A collection grant includes eligible future ready sources in that collection according to the existing contract.
 - Empty, unready, inactive and revoked scopes return no passages or fail closed.
 - If one application serves several teachers, its own authenticated user-to-project policy is tested; BRVIN app-wide grants are not misrepresented as per-user grants.
+
+**Implementation update — 6 November 2026 (in progress):** Working on branch `brvin/m10-teacher-isolation-acceptance`. The existing v2 authorization algorithm already checks an active app-project grant before quota reservation/search and resolves only ready direct-book/collection sources. This increment adds:
+- Project detail controls to grant an active application and revoke each active application grant, with grant history retained in the view.
+- Application-card controls to grant another active knowledge project and retain the existing revoke path.
+- Clear disclosure that app-project grants are application-wide. Any app serving several teachers must perform authenticated user-to-project authorization on its own server; this BRVIN admin control does not provide per-user permissions.
+- A dedicated two-application/three-project isolation suite covering only-granted project discovery, cross-project denial, intentional shared access, revoke denial on the next retrieval, direct/collection source boundaries, future ready collection additions, unready source exclusion and inactive project/environment denial.
+- Administration tests for multiple projects per app, one project shared across apps and idempotent grants, plus browser-script assertions for both sides of the controls.
+
+Files changed in this increment: `src/brvin/admin.ts`, `test/brvin-m10-isolation.test.ts`, `test/brvin-app-admin.test.ts` and `test/brvin.test.ts`. No production D1 rows, projects, apps, grants, bindings or secrets have been changed; no migration is introduced. The automated suite uses isolated in-memory fixtures rather than synthetic production teacher records. CI and full acceptance are pending; this is not an M10 completion claim.
 
 ### M11 — Operations, usage and administrator handover
 
