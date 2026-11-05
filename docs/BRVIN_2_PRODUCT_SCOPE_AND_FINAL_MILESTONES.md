@@ -274,7 +274,7 @@ The user's existing ChatGPT integrations remain the engineering mechanism. A fut
 
 Milestone completion is based on shipped code and evidence, not documentation alone. The status below separates the already completed core from the final product work.
 
-| ID | Milestone | Status at scope freeze | Completion outcome |
+| ID | Milestone | Current status at 6 November 2026 | Completion outcome |
 |---|---|---|---|
 | M0 | Architecture freeze and migration blueprint | COMPLETE | Data model, trust model and migration design accepted. |
 | M1 | Multi-application, multi-project identity | COMPLETE | Application, environment and app-project grant registry deployed; Fatman identity preserved. |
@@ -285,7 +285,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 | M6 | Admin workspace aligned to teacher knowledge operations | COMPLETE | Merged/deployed via PR #91; additive owner-label migration, app-neutral teacher knowledge project creation, project readiness/usage/detail UI, application metadata editing, and legacy provider controls collapsed. Main release #701 and production smoke passed. |
 | M7 | Application connection registry and wizard | COMPLETE | PR #93 merged and deployed; production release #705 and smoke accepted; repository/default-branch/runtime metadata, generated env identities, Worker metadata, Pending status and D1 migration verified. No provider resource provisioning. |
 | M8 | ChatGPT integration handoff | COMPLETE — merged, deployed and production release accepted | PR #95 merged; PR Release Validation #711 and Main Release Validation #713 passed. The admin generates a versioned, dated, copyable non-secret prompt and structured manifest per active application/environment. |
-| M9 | Live connection verification and activation | IN PROGRESS — implementation branch | One-time environment-bound challenge/proof protocol, private proof RPC, consumer probe endpoint and admin finalization/status UI are implemented on a feature branch; CI, merge, deployment and live acceptance remain pending. |
+| M9 | Live connection verification and activation | COMPLETE — production browser proof accepted | PR #98 merged and deployed; Release Validation #728 and Main Release Validation #729 passed; the authenticated Parmar AI Production check showed Connected and D1 confirmed one-time proof consumption with one ready authorised source. |
 | M10 | Teacher knowledge assignment and isolation acceptance | NOT STARTED | Multiple teacher projects and independent apps; grant, revoke, multi-project, sharing and cross-project denial tests pass. |
 | M11 | Operations, usage and administrator handover | NOT STARTED | Live project/app usage, pipeline/connection failures, audit/revocation, recovery guidance and nontechnical admin manual. |
 
@@ -340,7 +340,11 @@ Milestone completion is based on shipped code and evidence, not documentation al
 - The result distinguishes Connected from Connected — no ready knowledge.
 - The service remains private and no unfiltered retrieval path is introduced.
 
-**Implementation and validation state (5 November 2026):** PR #98 is merged to `main` as `1a57f53965f30c3de89eb51570548f99eb893e4f`. GitHub Release Validation #728 and paired main Release Validation #729 passed; release #729 deployed both Workers and passed root, health, private BRVIN binding and Fatman retrieval acceptance. The M9 challenge schema is deployed and the registered production Worker URL is saved. The final browser-driven challenge/proof exchange has not yet been completed, so production must remain Pending. The prior branch-preview capacity issue was resolved by preview cleanup; 80 unused namespace slots were freed without touching production namespaces.
+**Production acceptance (6 November 2026):** PR #98 is merged to `main` as `1a57f53965f30c3de89eb51570548f99eb893e4f`. Release Validation #728 and Main Release Validation #729 passed; release #729 deployed both Workers and passed root, health, private BRVIN binding and Fatman retrieval acceptance. The administrator completed the authenticated Verify Connection flow for Parmar AI Production and reported **Connected**. Read-only D1 verification for environment `00000000-0000-4000-8000-000000000102` confirmed `status=connected`, a persisted proof hash, populated completion timestamp, `ready=1` and `authorized_source_count=1`; no failure code was recorded. The proof completed at 6 November 2026, 00:12:12.665 IST. Raw nonce/proof values are not stored in this log. The live success path is accepted; wrong-environment, expired, inactive, forged and replay rejection remain covered by automated tests. M9 is COMPLETE and M10 is next.
+
+### M9 production acceptance record — 6 November 2026
+
+The live production environment displayed **Connected** after one authenticated browser verification. D1 independently recorded the environment-bound check as `connected`, with a consumed proof, completion time and a service-generated snapshot of one ready authorised source. This closes the M9 live acceptance gate. The manual check did not attempt a negative identity attack; the rejection cases are verified by the M9 automated test suite. M10 remains responsible for multi-teacher isolation and consumer-side user-to-project authorization.
 
 ### M10 — Teacher knowledge assignment and isolation acceptance
 
