@@ -80,7 +80,9 @@ function makeHarness() {
     { id: "cccccccc-cccc-4ccc-8ccc-ccccccccccc1", title: "Shared exam reference", search_prefix: "brvin/books/cccccccc-cccc-4ccc-8ccc-ccccccccccc1/pages/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "none" },
     { id: "dddddddd-dddd-4ddd-8ddd-ddddddddddd1", title: "Unassigned source", search_prefix: "brvin/books/dddddddd-dddd-4ddd-8ddd-ddddddddddd1/pages/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "none" },
   ];
-  const search = vi.fn(async () => ({
+  const search = vi.fn(async (_input: {
+    ai_search_options: { retrieval: { filters: { folder: { $in: string[] } } } };
+  }) => ({
     chunks: books
       .filter(book => book.status === "ready" && book.indexed_pages === book.page_count)
       .map(book => ({
