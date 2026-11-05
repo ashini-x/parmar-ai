@@ -394,6 +394,8 @@ No D1 migration or production teacher data was created or modified. Read-only D1
 - Failure-aware OCR-only cleanup status, paused unattended retries after a GCS failure, and manual retry after permissions are repaired. The original PDF, indexed pages and READY/archived state remain independent.
 - A detailed administrator runbook at [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md).
 
+[PR #100](https://github.com/ashini-x/parmar-ai/pull/100) is open. PR Release Validation [#764](https://github.com/ashini-x/parmar-ai/actions/runs/42104068272) passed TypeScript, all unit tests, Node/browser-script tests and both Worker bundle dry-runs. Merge and production release acceptance remain pending.
+
 The production audit identified missing `storage.buckets.get` on bucket `parmar-fatman-ocr-90db7be4` for service account `telegram-bot@project-90db7be4-619f-4ed7-89b.iam.gserviceaccount.com`; the lifecycle safety-net additionally needs `storage.buckets.update`. This is an external Google Cloud IAM action. No permissions have been changed by the M11 branch. No production D1 rows, grants, app/project records, secrets or bindings have been changed. PR validation and release evidence are pending.
 
 ### Deferred M12 — Cross-account / non-Cloudflare consumer gateway
