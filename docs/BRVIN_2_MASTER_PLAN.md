@@ -1,7 +1,7 @@
-# BRVIN 2 — Master Architecture, Implementation Plan and Continuity Tracker
+# BRVIN — Master Architecture, Implementation Plan and Continuity Tracker
 
 **Document type:** Canonical project handover and implementation tracker  
-**Project:** BRVIN 2 — Application Connectivity and Automated Provisioning  
+**Project:** BRVIN — Autonomous Software Project Factory and Application-aware Knowledge Platform  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Historical reference-test-client repository:** `ashini-x/askmoina-voice` (the scaffold is not the Project Factory target; do not deploy it for the new PDF-chat proof app)
 **Created:** 4 November 2026  
@@ -763,20 +763,22 @@ At the start of every new session:
 
 ## 9. Completion definition
 
-BRVIN 2 is complete only when a nontechnical administrator can:
+BRVIN is complete only when a nontechnical user can:
 
-1. connect a supported app once through the wizard;
-2. create a new project under that connected application;
-3. upload and organise knowledge;
-4. assign direct/collection permissions;
-5. wait for processing and readiness;
-6. test relevant questions and see source/page evidence;
-7. activate or revoke access;
-8. repeat this for additional projects without recurring code, Wrangler, GitHub PR or application deployment changes.
+1. Authorise the GitHub and Cloudflare provider connections once at the required administrator level.
+2. Describe a software idea in the BRVIN dashboard and approve its project plan.
+3. Have BRVIN create a new GitHub repository, codebase, tests, CI/CD, required Cloudflare resources, application/environment identities and project credentials without manual token/secret copy-paste.
+4. Have BRVIN build, test, repair, merge/deploy under the stored approval policy, verify live behavior and maintain an auditable resource/deployment history.
+5. Create an independent Chat with Your PDFs application through the factory, upload PDF documents, ask questions and receive grounded answers with correct physical PDF-page citations.
+6. Create a second, materially different software application through the same factory without a bespoke manual infrastructure process.
+7. Create additional BRVIN knowledge projects, collections and source grants for connected apps without creating new software repositories, Service Bindings or application deployments.
+8. Share projects only through explicit application-project grants; prove denial, revocation, deactivation, quota and recovery behavior.
+9. Preserve Fatman's data, ingestion, retrieval, permissions and usage history, keep brvin-service private, and leave AskMoina Voice runtime independent.
+10. Inspect the audit trail, credentials, deployments, errors and rollback/recovery instructions from the BRVIN dashboard.
 
-And when the connected end-user application can retrieve only its authorised project's content and generate a correct answer using its own model.
+The connected application must retrieve only its authorised project's content and generate an answer using its own model/provider. BRVIN must not expose its master administrator credentials to generated applications.
 
-**The finish line is a working administrator-operated product, not a collection of merged code changes.**
+**The finish line is a working autonomous engineering and knowledge platform—not a collection of merged code changes or a wizard that still depends on manual provider setup.**
 
 
 
