@@ -903,7 +903,7 @@ The D1 query was read-only (`rows_written = 0`). The raw nonce and proof are not
 **Scope of this increment:** close the admin workflow gap and expand automated acceptance around the existing application/environment/project and project/source authorization contracts. No change to the v2 authorization algorithm is intended: the service already checks the active application-project grant before quota reservation or search, then resolves only ready sources granted directly or through an assigned collection.
 
 **Changed paths:**
-- `src/brvin/admin.ts` — add application grant controls in each application card; add grant and revoke controls plus grant history in each project detail view; clarify app-wide grant semantics and refresh grant state after changes.
+- `src/brvin/admin.ts` — add application grant controls in each application card; add grant/revoke controls plus grant history in each project detail view; add direct-book and collection-grant shortcuts from project details; clarify app-wide grant semantics and refresh grant state after changes.
 - `test/brvin-m10-isolation.test.ts` — add two trusted application/environment fixtures, two private teacher projects and a deliberately shared project; test only-granted-project discovery, cross-project denial before quota/search, direct and collection source scoping, shared access, immediate denial after revocation, future ready collection additions and inactive project/environment rejection.
 - `test/brvin-app-admin.test.ts` — add administrative acceptance for one project shared across applications, multiple projects per application and idempotent repeat grant.
 - `test/brvin.test.ts` — assert the project-side and app-side grant controls and the user-to-project warning are present in the admin script.
