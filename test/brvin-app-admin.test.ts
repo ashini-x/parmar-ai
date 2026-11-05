@@ -12,6 +12,7 @@ import {
   createBrvinApplication,
   createBrvinApplicationEnvironment,
   createBrvinProject,
+  updateBrvinApplication,
   grantBrvinApplicationProject,
   revokeBrvinApplicationProject,
   setBrvinApplicationStatus,
@@ -80,8 +81,8 @@ class MemoryD1 {
   async run(sql: string, values: unknown[]): Promise<{ success: boolean }> {
     this.statements.push(sql);
     if (sql.includes("INSERT INTO brvin_applications")) {
-      const [id, slug, name, description, createdAt, updatedAt] = values;
-      this.applications.push({ id, slug, name, description, status: "active", created_at: createdAt, updated_at: updatedAt });
+      const [id, slug, name, description, ownerLabel, createdAt, updatedAt] = values;
+      this.applications.push({ id, slug, name, description, owner_label: ownerLabel, status: "active", created_at: createdAt, updated_at: updatedAt });
     } else if (sql.includes("INSERT INTO brvin_application_environments")) {
       const [id, applicationId, environmentKey, displayName, createdAt, updatedAt] = values;
       this.environments.push({
@@ -89,8 +90,8 @@ class MemoryD1 {
         status: "active", created_at: createdAt, updated_at: updatedAt, revoked_at: null, revoked_by: null,
       });
     } else if (sql.includes("INSERT INTO brvin_projects")) {
-      const [id, name, slug, description, createdAt, updatedAt] = values;
-      this.projects.push({ id, name, slug, description, status: "active", created_at: createdAt, updated_at: updatedAt });
+      const [id, name, slug, description, ownerLabel, createdAt, updatedAt] = values;
+      this.projects.push({ id, name, slug, description, owner_label: ownerLabel, status: "active", created_at: createdAt, updated_at: updatedAt });
     } else if (sql.includes("INSERT INTO brvin_application_project_grants")) {
       const [id, applicationId, projectId, createdAt] = values;
       this.grants.push({
@@ -115,9 +116,13 @@ class MemoryD1 {
       const row = this.grants.find(item => item.id === id);
       if (row) Object.assign(row, { status: "revoked", revoked_at: revokedAt, revoked_by: "admin-dashboard" });
     } else if (sql.includes("UPDATE brvin_projects SET name")) {
-      const [name, description, status, updatedAt, id] = values;
+      const [name, description, ownerLabel, status, updatedAt, id] = values;
       const row = this.projects.find(item => item.id === id);
-      if (row) Object.assign(row, { name, description, status, updated_at: updatedAt });
+      if (row) Object.assign(row, { name, description, owner_label: ownerLabel, status, updated_at: updatedAt });
+    } else if (sql.includes("UPDATE brvin_applications SET name")) {
+      const [name, description, ownerLabel, updatedAt, id] = values;
+      const row = this.applications.find(item => item.id === id);
+      if (row) Object.assign(row, { name, description, owner_label: ownerLabel, updated_at: updatedAt });
     }
     return { success: true };
   }
@@ -146,12 +151,15 @@ describe("BRVIN application and project administration", () => {
     const response = await createBrvinApplication(environment(db), request({
       name: "Moina Text Lab",
       description: "Independent BRVIN test consumer",
+      ownerLabel: "Teacher A",
     }));
-    const body = await response.json() as { ok: boolean; application: { id: string; slug: string; status: string } };
+    const body = await response.json() as { ok: boolean; application: { id: string; slug: string; status: string; ownerLabel: string } };
     expect(response.status).toBe(201);
     expect(body.application.id).toMatch(/^[a-f0-9-]{36}$/u);
     expect(body.application.slug).toBe("moina-text-lab");
     expect(body.application.status).toBe("active");
+    expect(body.application.ownerLabel).toBe("Teacher A");
+    expect(db.applications[0].owner_label).toBe("Teacher A");
     expect(activity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "application.created" }));
   });
 
@@ -179,15 +187,35 @@ describe("BRVIN application and project administration", () => {
       applicationId: appId,
       name: "BRVIN Text Test",
       description: "Test project",
+      ownerLabel: "Teacher B · Mathematics",
     }));
-    const body = await response.json() as { project: { id: string; slug: string; applicationId: string } };
+    const body = await response.json() as { project: { id: string; slug: string; applicationId: string; ownerLabel: string } };
     expect(response.status).toBe(201);
     expect(body.project.slug).toBe("brvin-text-test");
     expect(body.project.applicationId).toBe(appId);
+    expect(body.project.ownerLabel).toBe("Teacher B · Mathematics");
+    expect(db.projects[0].owner_label).toBe("Teacher B · Mathematics");
     expect(db.projects).toHaveLength(1);
     expect(db.grants).toHaveLength(1);
     expect(db.grants[0]).toMatchObject({ application_id: appId, project_id: body.project.id, status: "active" });
     expect(db.legacyClients).toHaveLength(0);
+  });
+
+  it("creates an app-neutral teacher knowledge project without a legacy service-client identity", async () => {
+    const db = new MemoryD1();
+    const response = await createBrvinProject(environment(db), request({
+      name: "Teacher C Mathematics",
+      description: "Shortcuts and methods",
+      ownerLabel: "Teacher C",
+      legacyClient: false,
+    }));
+    const body = await response.json() as { project: { ownerLabel: string; slug: string } };
+    expect(response.status).toBe(201);
+    expect(body.project.ownerLabel).toBe("Teacher C");
+    expect(body.project.slug).toBe("teacher-c-mathematics");
+    expect(db.projects[0].owner_label).toBe("Teacher C");
+    expect(db.legacyClients).toHaveLength(0);
+    expect(db.grants).toHaveLength(0);
   });
 
   it("preserves legacy service-client creation when no application is supplied", async () => {
@@ -243,11 +271,36 @@ describe("BRVIN application and project administration", () => {
       projectId: "fatman",
       name: "Fatman Knowledge",
       description: "Preserved legacy knowledge project",
+      ownerLabel: "Legacy owner",
       status: "inactive",
     }));
     expect(response.status).toBe(200);
-    expect(db.projects[0]).toMatchObject({ name: "Fatman Knowledge", status: "inactive" });
+    expect(db.projects[0]).toMatchObject({ name: "Fatman Knowledge", owner_label: "Legacy owner", status: "inactive" });
     expect(db.grants[0].status).toBe("active");
+  });
+
+  it("updates application owner metadata without changing its identity or status", async () => {
+    const db = new MemoryD1();
+    const appId = "11111111-2222-4333-8444-555555555555";
+    db.applications.push({
+      id: appId, slug: "math-bot", name: "Math Bot", description: "Before",
+      owner_label: "Teacher A", status: "active",
+    });
+    const response = await updateBrvinApplication(environment(db), request({
+      applicationId: appId,
+      name: "SSC Mathematics Bot",
+      description: "Teacher-specific mathematics assistant",
+      ownerLabel: "Teacher A · Mathematics",
+    }));
+    const body = await response.json() as { application: { name: string; ownerLabel: string; status: string } };
+    expect(response.status).toBe(200);
+    expect(body.application).toMatchObject({
+      name: "SSC Mathematics Bot", ownerLabel: "Teacher A · Mathematics", status: "active",
+    });
+    expect(db.applications[0]).toMatchObject({
+      slug: "math-bot", owner_label: "Teacher A · Mathematics", status: "active",
+    });
+    expect(activity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "application.updated" }));
   });
 
   it("does not reactivate a permanently revoked application", async () => {
