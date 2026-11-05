@@ -50,6 +50,12 @@ The active architecture is the shared `parmar-ai` admin/ingestion plane plus pri
 
 **Superseded plans:** the autonomous Project Factory proposal and the old M3 connector/reference-client design were removed from the active documentation tree. Do not recreate their milestones or the retired `brvin-test-client`. Past text remains recoverable from Git history, not as active requirements.
 
+## Downstream teacher application platform — planned
+
+The proposed multi-channel, multi-tenant teacher application platform is a **separate downstream consumer workstream**, not a BRVIN subsystem and not a currently deployed capability. Its architecture and phased build direction are recorded in [TEACHER_PLATFORM_ARCHITECTURE.md](TEACHER_PLATFORM_ARCHITECTURE.md).
+
+The implementation repository is proposed as `ashini-x/teacher-platform` (working name; not yet created). Keep the existing `parmar-ai` application, BRVIN admin/ingestion plane and private `brvin-service` stable. This planning document does not change BRVIN scope or close the remaining M11 real-consumer acceptance gate.
+
 ## Current feature documentation
 
 The v2.8.0 implementation includes:
