@@ -15,6 +15,77 @@ const TEST_CONFIG_PATH = "wrangler.brvin-test-client.jsonc";
 const TEST_WORKER_NAME = "brvin-test-client";
 const BRVIN_SERVICE_NAME = "brvin-service";
 
+export const BRVIN_GITHUB_REQUIRED_PERMISSIONS = {
+  metadata: "read",
+  administration: "write",
+  actions: "write",
+  checks: "write",
+  contents: "write",
+  deployments: "write",
+  environments: "write",
+  issues: "write",
+  pull_requests: "write",
+  repository_creation: "write",
+  secrets: "write",
+  variables: "write",
+  workflows: "write",
+} as const;
+
+export const BRVIN_CLOUDFLARE_REQUIRED_SCOPES = [
+  "account-api-tokens.write",
+  "agw.read", "agw.run", "agw.write",
+  "ai-model.read", "ai-model.write",
+  "ai-search.index", "ai-search.metadata_read", "ai-search.read", "ai-search.run", "ai-search.write",
+  "ai.read", "ai.write",
+  "aiaudit.read", "aiaudit.write",
+  "aig.metadata_read", "aig.read", "aig.run", "aig.write",
+  "agent-memory.write",
+  "browser-rendering.read", "browser-rendering.write",
+  "cf-agents.read", "cf-agents.write",
+  "cfspeed.read", "cfspeed.write",
+  "cloud-connector.read", "cloud-connector.write",
+  "cloudchamber.read", "cloudchamber.write",
+  "constellation.read", "constellation.write",
+  "containers.read", "containers.write",
+  "d1.metadata_read", "d1.read", "d1.write",
+  "firewall-for-ai.read", "firewall-for-ai.write",
+  "flagship.evaluate", "flagship.read", "flagship.write",
+  "hyperdrive-planetscale.setup",
+  "k2.consume", "k2.produce", "k2.read", "k2.write",
+  "mcp-portals.read", "mcp-portals.write",
+  "messaging.edit", "messaging.metadata_read", "messaging.read",
+  "offline_access",
+  "page.read", "page.write", "pages.metadata_read",
+  "pipelines.read", "pipelines.send", "pipelines.write",
+  "pubsub.read", "pubsub.write",
+  "query-cache.read", "query-cache.write",
+  "queues.metadata_read", "queues.read", "queues.write",
+  "r2-catalog-sql.read", "r2-catalog.read", "r2-catalog.write",
+  "rag.read", "rag.run", "rag.write",
+  "realtime.admin", "realtime.read", "realtime.write",
+  "secrets-store.read", "secrets-store.write",
+  "vectorize.read", "vectorize.write",
+  "websearch.metadata_read", "websearch.read", "websearch.run", "websearch.write",
+  "workers-ci.read", "workers-ci.write",
+  "workers-kv-storage.metadata_read", "workers-kv-storage.read", "workers-kv-storage.write",
+  "workers-observability-telemetry.write", "workers-observability.read", "workers-observability.write",
+  "workers-r2-bucket-item.read", "workers-r2-bucket-item.write",
+  "workers-r2.metadata_read", "workers-r2.read", "workers-r2.write",
+  "workers-routes.read", "workers-routes.write",
+  "workers-scripts.admin", "workers-scripts.content_read", "workers-scripts.edit",
+  "workers-scripts.metadata_read", "workers-scripts.read", "workers-scripts.write",
+  "workers-tail.read", "workers_ai.metadata_read",
+] as const;
+
+function grantedPermission(current: Record<string, unknown>, name: string, required: "read" | "write"): boolean {
+  const value = clean(current[name], 20);
+  return value === "write" || (required === "read" && value === "read");
+}
+
+function missingPermissions(current: Record<string, unknown>, required: Record<string, "read" | "write">): string[] {
+  return Object.entries(required).filter(([name, level]) => !grantedPermission(current, name, level)).map(([name]) => name);
+}
+
 function clean(value: unknown, max = 200): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
@@ -321,35 +392,122 @@ export async function brvinConnectStatus(env: Env): Promise<Response> {
     const [github, cloudflare] = await Promise.all([connection(env, "github"), connection(env, "cloudflare")]);
     const githubMeta = github ? JSON.parse(github.metadata_json || "{}") as Record<string, unknown> : {};
     const cfMeta = cloudflare ? JSON.parse(cloudflare.metadata_json || "{}") as Record<string, unknown> : {};
+    const grantedScopes = clean(cfMeta.scope, 5000).split(/\s+/u).filter(Boolean);
+    const missingCloudflareScopes = BRVIN_CLOUDFLARE_REQUIRED_SCOPES.filter(scope => !grantedScopes.includes(scope));
+    const slug = clean(githubMeta.slug, 100);
+    const installationId = Number(githubMeta.installationId || 0) || null;
     return json({
       ok: true,
       github: {
         status: github?.status || "not_connected",
         appName: clean(githubMeta.appName, 100),
-        appSlug: clean(githubMeta.slug, 100),
+        appSlug: slug,
         appUrl: clean(githubMeta.htmlUrl, 240),
-        installationId: Number(githubMeta.installationId || 0) || null,
+        appSettingsUrl: slug ? "https://github.com/settings/apps/" + encodeURIComponent(slug) + "/permissions" : null,
+        installationId,
+        installationUrl: installationId ? "https://github.com/settings/installations/" + installationId : null,
         installationAccount: clean(githubMeta.installationAccount, 100) || null,
+        repositorySelection: clean(githubMeta.repositorySelection, 20) || null,
         selectedRepository: clean(githubMeta.selectedRepository, 200) || null,
         pullRequestUrl: clean(githubMeta.pullRequestUrl, 500) || null,
+        requiredPermissions: BRVIN_GITHUB_REQUIRED_PERMISSIONS,
       },
       cloudflare: {
         status: cloudflare?.status || "not_configured",
         accountId: clean(cfMeta.accountId, 32) || clean(env.BRVIN_HOME_ACCOUNT_ID, 32) || null,
         brvinServiceVisible: cfMeta.brvinServiceVisible === true,
         lastWorkerDiscoveryAt: Number(cfMeta.lastWorkerDiscoveryAt || 0) || null,
+        grantedScopes,
+        requiredScopes: BRVIN_CLOUDFLARE_REQUIRED_SCOPES,
+        missingScopes: missingCloudflareScopes,
       },
-      supportedAdapter: { repository: TEST_REPOSITORY, configPath: TEST_CONFIG_PATH, worker: TEST_WORKER_NAME },
+      supportedAdapter: { repository: TEST_REPOSITORY, configPath: TEST_CONFIG_PATH, worker: TEST_WORKER_NAME, status: "superseded_by_project_factory" },
     });
   } catch (error) {
     return json({ ok: false, error: safeError(error) }, 500);
   }
 }
 
+export async function inspectBrvinProviderCapabilities(env: Env): Promise<Response> {
+  const result: Record<string, unknown> = {
+    ok: true,
+    github: { connected: false, appPermissions: {}, missingAppPermissions: Object.keys(BRVIN_GITHUB_REQUIRED_PERMISSIONS), installation: null, error: null },
+    cloudflare: { connected: false, missingScopes: BRVIN_CLOUDFLARE_REQUIRED_SCOPES, error: null },
+  };
+  try {
+    const connectionRow = await connection(env, "github");
+    if (connectionRow && connectionRow.status !== "revoked") {
+      const { bundle } = await getGitHubBundle(env);
+      const [app, installations] = await Promise.all([
+        githubAppRequest<{ slug?: string; permissions?: Record<string, string> }>(env, bundle, "/app"),
+        githubAppRequest<Array<{ id?: number; account?: { login?: string }; permissions?: Record<string, string>; repository_selection?: string; html_url?: string }>>(env, bundle, "/app/installations?per_page=100"),
+      ]);
+      const metadata = JSON.parse(connectionRow.metadata_json || "{}") as Record<string, unknown>;
+      const installationId = Number(metadata.installationId || 0);
+      const selected = installations.find(item => Number(item.id) === installationId) || null;
+      const appPermissions = app.permissions || {};
+      const installationPermissions = selected?.permissions || {};
+      const required = BRVIN_GITHUB_REQUIRED_PERMISSIONS as unknown as Record<string, "read" | "write">;
+      const missingAppPermissions = missingPermissions(appPermissions, required);
+      const missingInstallationPermissions = missingPermissions(installationPermissions, required);
+      result.github = {
+        connected: true,
+        appSlug: clean(app.slug || metadata.slug, 100),
+        appPermissions,
+        missingAppPermissions,
+        installation: selected ? {
+          id: selected.id,
+          account: clean(selected.account?.login, 100),
+          repositorySelection: clean(selected.repository_selection, 20),
+          url: clean(selected.html_url, 500),
+          permissions: installationPermissions,
+          missingPermissions: missingInstallationPermissions,
+          allRepositories: selected.repository_selection === "all",
+        } : null,
+        missingInstallationPermissions: selected ? missingInstallationPermissions : Object.keys(required),
+        needsOwnerApproval: missingAppPermissions.length > 0 || !selected || missingInstallationPermissions.length > 0 || selected.repository_selection !== "all",
+        settingsUrl: app.slug ? "https://github.com/settings/apps/" + encodeURIComponent(app.slug) + "/permissions" : null,
+      };
+    } else {
+      result.github = { connected: false, missingAppPermissions: Object.keys(BRVIN_GITHUB_REQUIRED_PERMISSIONS), error: "The BRVIN GitHub App is not connected." };
+    }
+  } catch (error) {
+    result.github = { connected: false, error: safeError(error) };
+  }
+  try {
+    const cloudflare = await connection(env, "cloudflare");
+    const metadata = cloudflare ? JSON.parse(cloudflare.metadata_json || "{}") as Record<string, unknown> : {};
+    const granted = new Set(clean(metadata.scope, 5000).split(/\s+/u).filter(Boolean));
+    const missingScopes = BRVIN_CLOUDFLARE_REQUIRED_SCOPES.filter(scope => !granted.has(scope));
+    result.cloudflare = {
+      connected: cloudflare?.status === "connected",
+      accountId: clean(metadata.accountId, 32) || clean(env.BRVIN_HOME_ACCOUNT_ID, 32) || null,
+      brvinServiceVisible: metadata.brvinServiceVisible === true,
+      grantedScopes: [...granted],
+      missingScopes,
+      ready: cloudflare?.status === "connected" && missingScopes.length === 0 && metadata.brvinServiceVisible === true,
+      oauthClientScopesHelp: "Edit the BRVIN Connect OAuth client at Cloudflare Dashboard → Manage Account → OAuth clients, add every required scope shown by connect/status, save, then run Authorize again. The OAuth client secret already stored by BRVIN is retained encrypted.",
+    };
+  } catch (error) {
+    result.cloudflare = { connected: false, missingScopes: BRVIN_CLOUDFLARE_REQUIRED_SCOPES, error: safeError(error) };
+  }
+  return json(result);
+}
+
 export async function startBrvinGitHubManifest(env: Env, request: Request): Promise<Response> {
   try {
     if (!env.DB) return json({ ok: false, error: "BRVIN D1 is not configured." }, 503);
     encryptionSecret(env);
+    const existing = await connection(env, "github");
+    if (existing && existing.status !== "revoked") {
+      const metadata = JSON.parse(existing.metadata_json || "{}") as Record<string, unknown>;
+      const slug = clean(metadata.slug, 100);
+      return json({
+        ok: false,
+        error: "A BRVIN GitHub App is already registered. Update its permissions in GitHub and approve the installation instead of creating a duplicate app.",
+        settingsUrl: slug ? "https://github.com/settings/apps/" + encodeURIComponent(slug) + "/permissions" : null,
+      }, 409);
+    }
     const state = await createState(env, "github", { purpose: "manifest" });
     const origin = new URL(request.url).origin;
     const redirect = origin + "/admin/brvin/connect/github/callback";
@@ -359,7 +517,7 @@ export async function startBrvinGitHubManifest(env: Env, request: Request): Prom
       description: "Private repository-scoped connector for onboarding Cloudflare Workers to BRVIN.",
       redirect_url: redirect,
       public: false,
-      default_permissions: { metadata: "read", contents: "write", pull_requests: "write" },
+      default_permissions: BRVIN_GITHUB_REQUIRED_PERMISSIONS,
       default_events: [],
     };
     return json({ ok: true, action: "https://github.com/settings/apps/new?state=" + encodeURIComponent(state), manifest });
@@ -443,8 +601,9 @@ export async function completeBrvinGitHubManifest(env: Env, request: Request): P
       return callbackHtml("GitHub returned an incomplete App response", diagnostic, false);
     }
     const permissions = app.permissions || {};
-    if (permissions.metadata !== "read" || permissions.contents !== "write" || permissions.pull_requests !== "write") {
-      return callbackHtml("GitHub permissions did not match", "The created app does not have the expected least-privilege repository permissions. Delete it in GitHub and restart the setup.", false);
+    const missing = missingPermissions(permissions, BRVIN_GITHUB_REQUIRED_PERMISSIONS as unknown as Record<string, "read" | "write">);
+    if (missing.length > 0) {
+      return callbackHtml("GitHub administrator permissions did not match", "The created app is missing required BRVIN Project Factory permissions: " + missing.join(", ") + ". Update the app permissions and approve the installation before continuing.", false);
     }
     const metadata = { appName: clean(app.name, 100), slug: app.slug, htmlUrl: clean(app.html_url, 240), createdAt: Date.now(), installationId: null };
     await saveConnection(env, "github", "app_created", metadata, {
@@ -454,7 +613,7 @@ export async function completeBrvinGitHubManifest(env: Env, request: Request): P
       privateKey: app.pem,
     } satisfies GitHubBundle);
     await audit(env, "github", "github.app_created", "A private least-privilege GitHub App was created through the manifest flow.", { appId: app.id, slug: app.slug });
-    return callbackHtml("GitHub App created", "BRVIN's private GitHub App was created and its private key is encrypted in BRVIN D1. Return to BRVIN, then install the app on the one repository you want to connect.", true);
+    return callbackHtml("GitHub App created", "BRVIN's private GitHub App was created and its private key is encrypted in BRVIN D1. Install it on your personal account with access to all repositories, then approve the full requested permissions.", true);
   } catch (error) {
     return callbackHtml("GitHub app registration failed", safeError(error), false);
   }
@@ -569,7 +728,7 @@ export async function startBrvinCloudflareOAuth(env: Env, request: Request): Pro
     url.searchParams.set("client_id", bundle.clientId);
     url.searchParams.set("redirect_uri", callbackUrl(request, "cloudflare"));
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", "workers-scripts.edit offline_access");
+    url.searchParams.set("scope", BRVIN_CLOUDFLARE_REQUIRED_SCOPES.join(" "));
     url.searchParams.set("state", state);
     return json({ ok: true, authorizationUrl: url.toString() });
   } catch (error) {
@@ -605,10 +764,11 @@ export async function completeBrvinCloudflareOAuth(env: Env, request: Request): 
     const { row, bundle } = await getCloudflareBundle(env);
     const token = await exchangeCloudflareToken(bundle, { grant_type: "authorization_code", code }, callbackUrl(request, "cloudflare"));
     const grantedScopes = new Set((token.scope || "").split(/\s+/u).filter(Boolean));
-    if (!grantedScopes.has("workers-scripts.edit") || !token.refresh_token) {
+    const missingScopes = BRVIN_CLOUDFLARE_REQUIRED_SCOPES.filter(scope => !grantedScopes.has(scope));
+    if (missingScopes.length > 0 || !token.refresh_token) {
       return callbackHtml(
-        "Cloudflare permissions incomplete",
-        "BRVIN requires Workers Editor at the Workers product scope, plus a refresh token. Update the OAuth client so the Workers Editor permission is required, then authorize again.",
+        "Cloudflare administrator permissions incomplete",
+        "BRVIN requires the approved Developer Platform and AI resource scopes plus Account API Tokens Write. Update the private BRVIN Connect OAuth client to include all Project Factory scopes, then authorize again. Missing scope IDs: " + missingScopes.slice(0, 30).join(", ") + (missingScopes.length > 30 ? " … and " + (missingScopes.length - 30) + " more." : "") + ".",
         false,
       );
     }
@@ -627,10 +787,10 @@ export async function completeBrvinCloudflareOAuth(env: Env, request: Request): 
     const metadata = JSON.parse(row.metadata_json || "{}") as Record<string, unknown>;
     await saveConnection(env, "cloudflare", "connected", {
       ...metadata, accountId, brvinServiceVisible: true, lastWorkerDiscoveryAt: Date.now(),
-      workerCount: names.length, scope: clean(token.scope, 500), authorizedAt: Date.now(),
+      workerCount: names.length, scope: clean(token.scope, 6000), authorizedAt: Date.now(),
     }, next);
     await audit(env, "cloudflare", "cloudflare.account_authorized", "Cloudflare OAuth access was verified against the account hosting the private brvin-service Worker.", { accountId, workerCount: names.length });
-    return callbackHtml("Cloudflare account connected", "BRVIN confirmed that this OAuth authorization can read the Cloudflare account containing the private brvin-service Worker. Return to BRVIN to discover Workers and prepare the isolated test-client pull request.", true);
+    return callbackHtml("Cloudflare account connected", "BRVIN confirmed the authorised account, full requested Developer Platform scopes, Account API Tokens Write and private brvin-service presence. Return to BRVIN to run the provider capability check.", true);
   } catch (error) {
     return callbackHtml("Cloudflare connection failed", safeError(error), false);
   }

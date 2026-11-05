@@ -10,6 +10,8 @@ vi.mock("../src/analytics/db", () => ({
 
 import {
   brvinConnectStatus,
+  BRVIN_CLOUDFLARE_REQUIRED_SCOPES,
+  BRVIN_GITHUB_REQUIRED_PERMISSIONS,
   createBrvinTestClientPullRequest,
   completeBrvinGitHubManifest,
   completeBrvinCloudflareOAuth,
@@ -136,7 +138,12 @@ describe("BRVIN Connect Application wizard", () => {
     expect(body.ok).toBe(true);
     expect(body.action).toContain("https://github.com/settings/apps/new?state=");
     expect(body.manifest.public).toBe(false);
-    expect(body.manifest.default_permissions).toEqual({ metadata: "read", contents: "write", pull_requests: "write" });
+    expect(body.manifest.default_permissions).toEqual(BRVIN_GITHUB_REQUIRED_PERMISSIONS);
+    expect(body.manifest.default_permissions.administration).toBe("write");
+    expect(body.manifest.default_permissions.repository_creation).toBe("write");
+    expect(body.manifest.default_permissions.actions).toBe("write");
+    expect(body.manifest.default_permissions.secrets).toBe("write");
+    expect(body.manifest.default_permissions.workflows).toBe("write");
     expect(db.states.size).toBe(1);
     const state = new URL(body.action).searchParams.get("state")!;
     expect([...db.states.keys()][0]).not.toBe(state);
@@ -157,7 +164,7 @@ describe("BRVIN Connect Application wizard", () => {
         name: "BRVIN Connect",
         html_url: "https://github.com/apps/brvin-connect",
         pem: privateKey,
-        permissions: { metadata: "read", contents: "write", pull_requests: "write" },
+        permissions: { ...BRVIN_GITHUB_REQUIRED_PERMISSIONS },
       }), { status: 201, headers: { "content-type": "application/json" } });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -233,10 +240,11 @@ describe("BRVIN Connect Application wizard", () => {
     const start = await startBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/start", {}));
     const startBody = await start.json() as { authorizationUrl: string };
     const authorization = new URL(startBody.authorizationUrl);
-    expect(authorization.searchParams.get("scope")).toContain("workers-scripts.edit");
-    expect(authorization.searchParams.get("scope")).toContain("offline_access");
-    expect(authorization.searchParams.get("scope")).not.toContain("workers-scripts.read");
-    expect(authorization.searchParams.get("scope")).not.toContain("workers-scripts.write");
+    const requestedScopes = authorization.searchParams.get("scope")!.split(/\s+/u);
+    for (const requiredScope of BRVIN_CLOUDFLARE_REQUIRED_SCOPES) expect(requestedScopes).toContain(requiredScope);
+    expect(requestedScopes).toContain("workers-scripts.admin");
+    expect(requestedScopes).toContain("account-api-tokens.write");
+    expect(requestedScopes).toContain("offline_access");
     const state = authorization.searchParams.get("state")!;
 
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
@@ -249,7 +257,7 @@ describe("BRVIN Connect Application wizard", () => {
       "https://parmar.example/admin/brvin/connect/cloudflare/callback?code=one-time-code&state="+encodeURIComponent(state),
     ));
     expect(callback.status).toBe(400);
-    expect(await callback.text()).toContain("Cloudflare permissions incomplete");
+    expect(await callback.text()).toContain("Cloudflare administrator permissions incomplete");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(db.connections.get("cloudflare")?.status).toBe("configured");
   });
@@ -268,7 +276,7 @@ describe("BRVIN Connect Application wizard", () => {
         access_token: "full-scope-token",
         refresh_token: "refresh-token",
         expires_in: 900,
-        scope: "workers-scripts.edit offline_access",
+        scope: BRVIN_CLOUDFLARE_REQUIRED_SCOPES.join(" "),
       }), { status: 200, headers: { "content-type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         success: true,
@@ -285,6 +293,26 @@ describe("BRVIN Connect Application wizard", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(db.connections.get("cloudflare")?.status).toBe("connected");
     expect(String(db.connections.get("cloudflare")?.metadata_json)).toContain("b34a6c0b7221454c5db977fe61ddf759");
+  });
+
+  it("reports missing administrator scopes without revealing provider credentials", async () => {
+    const db = new MemoryD1();
+    await configureBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/configure", {
+      clientId: "BRVIN.Cloudflare.OAuth123",
+      clientSecret: "cloudflare-client-secret-value-123456",
+    }));
+    const response = await brvinConnectStatus(env(db));
+    const body = await response.json() as {
+      github: { requiredPermissions: Record<string, string> };
+      cloudflare: { requiredScopes: string[]; missingScopes: string[] };
+    };
+    expect(response.status).toBe(200);
+    expect(body.github.requiredPermissions.administration).toBe("write");
+    expect(body.github.requiredPermissions.repository_creation).toBe("write");
+    expect(body.cloudflare.requiredScopes).toContain("workers-scripts.admin");
+    expect(body.cloudflare.requiredScopes).toContain("account-api-tokens.write");
+    expect(body.cloudflare.missingScopes).toContain("workers-scripts.admin");
+    expect(JSON.stringify(body)).not.toContain("cloudflare-client-secret-value-123456");
   });
 
   it("refuses deployment verification until a dedicated connection PR has recorded its identity", async () => {
@@ -415,7 +443,7 @@ describe("BRVIN Connect Application wizard", () => {
           access_token: "full-scope-token",
           refresh_token: "refresh-token",
           expires_in: 3600,
-          scope: "workers-scripts.edit offline_access",
+          scope: BRVIN_CLOUDFLARE_REQUIRED_SCOPES.join(" "),
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
       if (url.includes("/workers/scripts?per_page=100")) {
