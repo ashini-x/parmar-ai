@@ -1384,7 +1384,7 @@ const HTML = `<!doctype html>
 <section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Grant project access</h2><p>Application grants and source-level book/collection grants are separate permissions.</p></div></div>
 <div class="formgrid"><div class="field"><label for="grant-application">Application</label><select id="grant-application"></select></div><div class="field"><label for="grant-project">Project</label><select id="grant-project"></select></div></div>
 <button class="btn primary" id="grant-project-button" type="button">Grant application access</button>
-<div class="notice">Application grants are independent of source grants. A registered environment is not yet a verified connection: live private Service Binding verification is a later milestone. ChatGPT's GitHub repository access is authorized separately; BRVIN cannot grant that access from this panel.</div>
+<div class="notice">Application grants are app-wide, not teacher-user-specific. A multi-teacher application must authenticate each user and enforce its user-to-project mapping server-side. Source-level direct-book and collection grants are a second, independent permission layer. Consumer GitHub access is separate from BRVIN.</div>
 </section>
 <section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Application registry</h2><p>Environment identities, lifecycle status and project grants. Revoked records remain in the audit history.</p></div></div>
 <div id="applications-list" class="project-grid"><div class="empty">Loading application registry…</div></div>
@@ -1462,8 +1462,20 @@ function openProjectDetails(projectId){
  const project=(model?.projects||[]).find(item=>item.id===projectId);if(!project)return;
  const sources=(model?.books||[]).filter(book=>(book.projects||[]).some(link=>link.id===projectId));
  const collections=(model?.collections||[]).filter(collection=>(collection.projects||[]).some(link=>link.id===projectId));
- const applications=(project.applications||[]).filter(app=>app.status==="active");
+ const grants=project.applications||[];
+ const appById=new Map((model?.applications||[]).map(app=>[app.id,app]));
+ const activeGrantIds=new Set(grants.filter(grant=>grant.status==="active").map(grant=>grant.applicationId));
+ const grantableApps=(model?.applications||[]).filter(app=>app.status==="active"&&!activeGrantIds.has(app.id));
  const events=(model?.events||[]).filter(event=>event.projectId===projectId).slice(0,8);
+ const grantRows=grants.length?grants.map(grant=>{
+  const app=appById.get(grant.applicationId);
+  const label=app?.name||grant.name||grant.slug||grant.applicationId;
+  const revoked=grant.status!=="active";
+  return '<div class="pulse-row"><span><strong>'+esc(label)+'</strong><br><small>'+esc(grant.slug||app?.slug||"")+' · '+(revoked?"grant revoked":"grant active")+(grant.createdAt?' · granted '+esc(time(grant.createdAt)):"")+(grant.revokedAt?' · revoked '+esc(time(grant.revokedAt)):"")+'</small></span><span>'+statusPill(grant.status)+(revoked?'':' <button class="btn danger" data-project-grant-revoke="true" data-application-id="'+esc(grant.applicationId)+'" data-project-id="'+esc(projectId)+'">Revoke access</button>')+'</span></div>';
+ }).join(""):'<div class="empty">No application has been granted this knowledge project.</div>';
+ const grantControls=grantableApps.length
+  ?'<div class="formgrid"><div class="field"><label for="project-grant-application">Grant to application</label><select id="project-grant-application">'+grantableApps.map(app=>'<option value="'+esc(app.id)+'">'+esc(app.name)+' · '+esc(app.slug)+'</option>').join("")+'</select></div><div class="field" style="justify-content:flex-end"><button class="btn primary" id="project-grant-button" type="button">Grant application access</button></div></div>'
+  :'<div class="empty">Every active application already has a grant, or no active application is registered.</div>';
  $("modal-title").textContent=project.name;
  $("modal-body").innerHTML=
   '<div class="metrics" style="grid-template-columns:repeat(3,minmax(0,1fr))">'+
@@ -1473,19 +1485,33 @@ function openProjectDetails(projectId){
   '</div>'+
   '<p class="modal-subtitle">'+esc(project.ownerLabel||"Owner not assigned")+' · '+statusPill(project.status)+'</p>'+
   '<p class="muted">'+esc(project.description||"No description")+'</p>'+
-  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Knowledge sources</h2><p>Latest source records currently returned by the BRVIN admin registry.</p></div></div>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Application access</h2><p>These grants are application-wide. A multi-teacher app must map each signed-in user to an allowed project on its own server.</p></div></div>'+
+   grantControls+grantRows+
+  '</section>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Knowledge sources</h2><p>Sources are included only through direct book grants or assigned collections, and only after indexing is ready.</p></div></div>'+
    (sources.length?sources.map(book=>'<div class="pulse-row"><span><strong>'+esc(book.title)+'</strong><br><small>'+esc(book.collectionName)+' · '+book.indexedPages+'/'+book.pageCount+' pages</small></span>'+statusPill(book.status)+'</div>').join(""):'<div class="empty">No assigned sources are visible for this project.</div>')+
   '</section>'+
-  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Collections</h2><p>Collection grants add the ready sources in each collection.</p></div></div>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Collections</h2><p>Collection grants include eligible ready sources added later.</p></div></div>'+
    (collections.length?collections.map(collection=>'<div class="pulse-row"><span>'+esc(collection.name)+'</span><strong>'+Number(collection.bookCount||0)+' sources</strong></div>').join(""):'<div class="empty">No collections assigned.</div>')+
-  '</section>'+
-  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Applications with access</h2><p>Only active application-project grants are listed.</p></div></div>'+
-   (applications.length?applications.map(app=>'<div class="pulse-row"><span>'+esc(app.name||app.slug)+'</span>'+statusPill(app.status)+'</div>').join(""):'<div class="empty">No applications have been granted access.</div>')+
   '</section>'+
   '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Recent activity</h2><p>Project-scoped governance and ingestion events.</p></div></div>'+
    (events.length?events.map(event=>'<div class="pulse-row"><span>'+esc(event.message)+'</span><small>'+esc(time(event.createdAt))+'</small></div>').join(""):'<div class="empty">No project-scoped events in the current activity window.</div>')+
   '</section>';
  $("modal").classList.add("open");
+ const grantButton=$("project-grant-button");
+ if(grantButton)grantButton.addEventListener("click",async()=>{
+  const applicationId=$("project-grant-application").value;
+  if(!applicationId)return;
+  grantButton.disabled=true;
+  try{await post("applications/grants",{applicationId,projectId});await refresh();openProjectDetails(projectId);}
+  catch(error){alert(error.message);grantButton.disabled=false;}
+ });
+ $("modal-body").querySelectorAll("[data-project-grant-revoke]").forEach(button=>button.addEventListener("click",async()=>{
+  if(!confirm("Revoke this application's access to "+project.name+"? Future retrieval requests will be denied."))return;
+  button.disabled=true;
+  try{await post("applications/grants/revoke",{applicationId:button.dataset.applicationId,projectId});await refresh();openProjectDetails(projectId);}
+  catch(error){alert(error.message);button.disabled=false;}
+ }));
 }
 function openProjectEditor(projectId){
  const project=(model?.projects||[]).find(item=>item.id===projectId);if(!project)return;
@@ -1709,6 +1735,11 @@ function renderApplications(list){
    '</div>';
   }).join(""):'<div class="empty">No deployment environments registered.</div>';
   const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
+  const activeGrantProjectIds=new Set(app.projects.filter(grant=>grant.status==="active").map(grant=>grant.projectId));
+  const grantableProjects=(model?.projects||[]).filter(project=>project.status==="active"&&!activeGrantProjectIds.has(project.id));
+  const inlineGrantHtml=grantableProjects.length
+   ?'<div data-app-grant-controls="'+esc(app.id)+'" class="formgrid"><div class="field"><label>Grant another knowledge project</label><select data-app-grant-select>'+grantableProjects.map(project=>'<option value="'+esc(project.id)+'">'+esc(project.name)+' · '+esc(project.ownerLabel||"No owner")+'</option>').join("")+'</select></div><div class="field" style="justify-content:flex-end"><button class="btn" data-app-grant="'+esc(app.id)+'" type="button">Grant selected project</button></div></div>'
+   :'<div class="notice">No additional active knowledge projects are available to grant.</div>';
   return '<article class="tile">'+
    '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>'+esc(app.name)+'</strong><p><small>'+esc(app.ownerLabel||"Owner not assigned")+' · '+esc(app.slug)+'</small></p></div>'+statusPill(app.status)+'</div>'+
    '<p>'+esc(app.description||"No description")+'</p>'+
@@ -1716,9 +1747,9 @@ function renderApplications(list){
    '<div class="pulse-row"><span>Runtime provider</span><strong>'+esc(app.runtimeProvider==="other"?"Other / external":"Cloudflare Workers")+'</strong></div>'+
    '<div class="pulse-row"><span>Deployment environments</span><strong>'+app.environments.length+'</strong></div>'+
    '<div class="pulse-row"><span>Active knowledge grants</span><strong>'+app.activeProjectCount+'</strong></div>'+
-   '<div class="notice">Repository and Worker references are metadata only. GitHub authorization is separate; no repository access is inferred. Every environment is Pending until a live private Service Binding verification succeeds in M9.</div>'+
+   '<div class="notice">Repository and Worker references are metadata only. GitHub authorization is separate. Connection status reflects the last environment check; project access is governed by active application grants and source-level assignments.</div>'+
    '<div class="job-actions"><button class="btn" data-application-edit="'+esc(app.id)+'" type="button">Edit application</button>'+(appAction?'<button class="btn '+(appAction==="suspended"?"danger":"")+'" data-application-status="'+esc(app.id)+'" data-status="'+appAction+'">'+appActionLabel+'</button>':"")+'</div>'+
-   '<div style="margin-top:14px"><strong>Environments</strong>'+envHtml+'</div><div style="margin-top:14px"><strong>Knowledge access</strong>'+grantHtml+'</div></article>';
+   '<div style="margin-top:14px"><strong>Environments</strong>'+envHtml+'</div><div style="margin-top:14px"><strong>Knowledge access</strong><p class="muted">Application-wide grants. Multi-teacher apps must enforce authenticated user-to-project access in their own server-side logic.</p>'+grantHtml+inlineGrantHtml+'</div></article>';
  }).join(""):'<div class="empty" style="grid-column:1/-1">No applications registered. Create the repository with ChatGPT or manually first, then register its existing URL here.</div>';
  $("applications-list").innerHTML=html;
  $("applications-list").querySelectorAll("[data-handoff]").forEach(button=>button.addEventListener("click",()=>openApplicationHandoff(button.dataset.applicationId,button.dataset.environmentId)));
@@ -1738,7 +1769,16 @@ function renderApplications(list){
  }));
  $("applications-list").querySelectorAll("[data-grant-revoke]").forEach(button=>button.addEventListener("click",async()=>{
   if(!confirm("Revoke this application’s access to the selected project? Future retrieval requests will be denied."))return;
-  try{await post("applications/grants/revoke",{applicationId:button.dataset.applicationId,projectId:button.dataset.projectId});await refresh();}catch(error){alert(error.message);}
+  button.disabled=true;
+  try{await post("applications/grants/revoke",{applicationId:button.dataset.applicationId,projectId:button.dataset.projectId});await refresh();}catch(error){alert(error.message);button.disabled=false;}
+ }));
+ $("applications-list").querySelectorAll("[data-app-grant]").forEach(button=>button.addEventListener("click",async()=>{
+  const controls=button.closest("[data-app-grant-controls]");
+  const projectId=controls?.querySelector("[data-app-grant-select]")?.value;
+  const applicationId=button.dataset.appGrant;
+  if(!applicationId||!projectId)return;
+  button.disabled=true;
+  try{await post("applications/grants",{applicationId,projectId});await refresh();}catch(error){alert(error.message);button.disabled=false;}
  }));
 }
 
