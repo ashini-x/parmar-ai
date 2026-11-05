@@ -163,5 +163,12 @@ describe("BRVIN browser script contract", () => {
     expect(script).toContain('post("applications/environments/update"');
     expect(script).toContain('repositoryDefaultBranch:$("application-branch").value');
     expect(script).toContain("function openEnvironmentEditor");
+    expect(script).toContain("function openApplicationHandoff");
+    expect(script).toContain('data-handoff="true"');
+    expect(script).toContain("applications/handoff?");
+    expect(script).toContain("handoff-manifest");
+    expect(script).toContain("Generate again after editing metadata");
+    expect(workerSource).toContain("/admin/api/brvin/applications/handoff");
+    expect(workerSource).toContain("getBrvinApplicationHandoff");
   });
 });

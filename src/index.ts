@@ -42,6 +42,7 @@ import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin
 import { completeFatmanUpload, diagnoseFatmanGcsUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 import { archiveBrvinBook, assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinApplication, createBrvinApplicationEnvironment, updateBrvinApplicationEnvironment, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, grantBrvinApplicationProject, revokeBrvinApplicationProject, setBrvinApplicationStatus, setBrvinEnvironmentStatus, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview, updateBrvinApplication, updateBrvinProject } from "./brvin/admin";
+import { getBrvinApplicationHandoff } from "./brvin/handoff";
 import {
   brvinConnectStatus,
   inspectBrvinProviderCapabilities,
@@ -2226,6 +2227,13 @@ const worker = {
       const adminApiPath = url.pathname.replace(/^\/admin\/api\/vrain(?=\/|$)/u, "/admin/api/brvin");
       if (adminApiPath.startsWith("/admin/api/")) {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
+        if (adminApiPath === "/admin/api/brvin/applications/handoff" && request.method === "GET") {
+          return getBrvinApplicationHandoff(
+            env,
+            url.searchParams.get("applicationId"),
+            url.searchParams.get("environmentId"),
+          );
+        }
         if (adminApiPath === "/admin/api/brvin/overview" && request.method === "GET") return brvinOverview(env);
         if (adminApiPath === "/admin/api/brvin/connect/status" && request.method === "GET") return brvinConnectStatus(env);
         if (adminApiPath === "/admin/api/brvin/connect/capabilities" && request.method === "GET") return inspectBrvinProviderCapabilities(env);

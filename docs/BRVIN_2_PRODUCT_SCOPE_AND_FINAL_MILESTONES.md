@@ -284,7 +284,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 | M5 | Core application/project administration | COMPLETE — UX expansion remains | Existing app/environment/grant lifecycle and protected admin are deployed. |
 | M6 | Admin workspace aligned to teacher knowledge operations | COMPLETE | Merged/deployed via PR #91; additive owner-label migration, app-neutral teacher knowledge project creation, project readiness/usage/detail UI, application metadata editing, and legacy provider controls collapsed. Main release #701 and production smoke passed. |
 | M7 | Application connection registry and wizard | COMPLETE | PR #93 merged and deployed; production release #705 and smoke accepted; repository/default-branch/runtime metadata, generated env identities, Worker metadata, Pending status and D1 migration verified. No provider resource provisioning. |
-| M8 | ChatGPT integration handoff | NOT STARTED | BRVIN generates a complete repository-specific integration prompt/manifest; ChatGPT implements code and deployment using its own provider connections. |
+| M8 | ChatGPT integration handoff | IN PROGRESS — implementation branch active | A per-application/environment non-secret prompt and structured manifest are being added to the admin workspace; PR validation and production acceptance remain pending. |
 | M9 | Live connection verification and activation | NOT STARTED | A deployed consumer environment proves its trusted v2 identity and private Service Binding path; UI distinguishes connection health from source readiness. |
 | M10 | Teacher knowledge assignment and isolation acceptance | NOT STARTED | Multiple teacher projects and independent apps; grant, revoke, multi-project, sharing and cross-project denial tests pass. |
 | M11 | Operations, usage and administrator handover | NOT STARTED | Live project/app usage, pipeline/connection failures, audit/revocation, recovery guidance and nontechnical admin manual. |
@@ -498,3 +498,12 @@ For a new ChatGPT chat or branch:
 - **Connection state:** every environment remains Pending until M9 live private Service Binding verification. This is intentional, not an unverified success.
 - **Production acceptance artifact:** `13430623895`.
 - **Next active milestone:** M8 — ChatGPT integration handoff. It has not been started by this work.
+
+
+### 5 November 2026 — M8 ChatGPT integration handoff (implementation in progress)
+
+- **Status:** IN PROGRESS on branch brvin/m8-chatgpt-integration-handoff. No merge or deployment is claimed yet.
+- **Scope being implemented:** Admin can generate a versioned, dated, copyable prompt and structured JSON manifest for an active application/environment from current registry metadata.
+- **Trust boundary:** The generated handoff uses the exact v2 applicationEnvironmentId, private brvin-service / BrvinRetrievalApi / BRVIN_SERVICE binding, and v2 RPC method names. It instructs ChatGPT to integrate server-side into the existing consumer model/tool path, preserve source/page citations, and complete the security/test checklist. It does not expose provider or deployment secrets, grant GitHub access, provision Cloudflare resources or mark an environment Connected.
+- **Account constraint:** BRVIN's configured account ID may be included as a non-secret comparison reference, but M7 does not prove the target consumer Worker is in that account. The handoff therefore requires explicit account verification before deployment. Non-Cloudflare runtime entries are blocked for this same-account Service Binding flow.
+- **Next:** Complete PR validation and production release acceptance, then stop. M9 live connection verification remains a separate milestone.

@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 5 November 2026  
+**Last verified against source and production infrastructure:** 5 November 2026 (M7 production release; M8 implementation branch in progress)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/askmoina-voice`
 
@@ -9,7 +9,7 @@ This is the canonical technical reference for BRVIN. It records what exists in c
 
 When a future change alters code, D1 schema, bindings, access rules, ingestion, retrieval, deployment, or integrations, update this document and the relevant specialist document in the same change. Do not silently treat a planned feature as already shipped.
 
-> **BRVIN 2 implementation and chat continuity:** read [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md), then [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md), this as-built reference, [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The active product is a teacher-specific digital-brain knowledge platform and application connection manager. ChatGPT remains the user's software engineer using separate GitHub/Cloudflare authorizations. The autonomous Project Factory proposal is superseded historical documentation; do not follow its milestones. M0–M5 foundation status and all as-built behavior below remain subject to the evidence recorded here. The active remaining milestones are M6–M11 in the final product-scope document. The retired `brvin-test-client` scaffold must not be recreated.
+> **BRVIN 2 implementation and chat continuity:** read [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md), then [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md), this as-built reference, [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The active product is a teacher-specific digital-brain knowledge platform and application connection manager. ChatGPT remains the user's software engineer using separate GitHub/Cloudflare authorizations. The autonomous Project Factory proposal is superseded historical documentation; do not follow its milestones. M0–M7 are complete; M4's fixed reference scaffold is retired and not a product requirement. M8 handoff generation is in implementation; M9–M11 remain outstanding in the final product-scope document. The retired `brvin-test-client` scaffold must not be recreated.
 
 ## Product-scope correction — 5 November 2026
 
@@ -70,18 +70,18 @@ Consumer application's own Gemini/LLM prompt and answer
 
 The two planes share the existing D1 registry and AI Search namespace. They do not create a database or index per app.
 
-## 1.1 BRVIN 2 production state (5 November 2026 — after M6 wizard release)
+## 1.1 BRVIN 2 production state (5 November 2026 — after M7 registry release)
 
 - M1 added `brvin_applications`, `brvin_application_environments` and `brvin_application_project_grants` to the existing shared D1. The Parmar AI production application/environment and explicit Fatman project grant are seeded and active.
 - M2 added `listAuthorizedProjectsV2()`, `getProjectStatusV2(input)` and `retrieveProjectContextV2(input)` to the private `BrvinRetrievalApi` entrypoint. V1 methods remain available.
 - Parmar AI production carries both `clientId: fatman` and the generated production `applicationEnvironmentId`. `/health` checks v1/v2 Fatman readiness and source-count parity.
-- Latest paired production release: `brvin-service` deployment `d2a63c37-3274-467a-8697-3a1ffa6f0c7d`, version `c22150a0-6aef-4a84-bcd7-ffa4d3d274bb`, and `parmar-ai` deployment `0fa6e194-c1f6-4398-8dc6-1d037c9a1ec2`, version `83fe277d-c667-4e45-89a5-2364197fbf3d`, each at 100% traffic. Release Validation #683 (run `42038383649`) passed; production acceptance artifact `13420620125` records root, health, BRVIN Service Binding and Fatman retrieval checks.
+- Latest paired production release at the end of M7: `brvin-service` deployment `8a98e1b0-650e-4421-b79f-0bcd443c6d9c`, version `146cb9f6-84c2-4321-87f6-c82045643fef`; `parmar-ai` deployment `15e68daf-1a53-47df-8a00-26b3223c8ffa`, version `4c4cfe12-ea03-417d-bf1e-8ee8e26c9d81`. Main Release Validation #705 (run `42062174803`) passed paired deployment and root/health/private BRVIN/Fatman production acceptance; artifact `13430623895`.
 - End-user Fatman retrieval remains on v1. AskMoina Voice's v2 binding and Gemini Live connector/tool integration are deployed as an optional pilot. Do not make its camera/audio acceptance a BRVIN milestone gate.
 - The former M4 independent reference-client scaffold was originally merged as `brvin-test-client` in AskMoina PR #381, then retired by PR #386. Its Worker source, Wrangler/TypeScript config, tests and dedicated deploy workflow are no longer in the AskMoina repository. It was never deployed. The shared BRVIN connector remains.
 - The historical Project Factory provider-administrator preflight and configured-scope correction were deployed through PRs #82, #83 and #88. They are part of the as-built code but are no longer an active product milestone. Do not ask the user to complete broad GitHub/Cloudflare administrator re-consent for the narrowed knowledge-platform goal. Audit any runtime dependencies before simplifying or removing this legacy UI; no credential should be revoked or deleted as a side effect.
 - The existing BRVIN GitHub App is installed on the `ashini-x` account. Its broader Project Factory permission upgrade and All-repository scope were never accepted as requirements for the clarified product. The saved Cloudflare OAuth grant remains `workers-scripts.edit offline_access`; this historical connection is not required to deliver the knowledge-platform workflow through ChatGPT's own integrations. Do not request additional consent or delete/revoke the existing provider configuration until its code/runtime dependencies have been audited.
 - The old fixed text-test application/environment are revoked, its project is inactive, its only application-project grant is revoked, and stale PR #385 metadata has been cleared from the GitHub provider connection. PR #385 was closed without merging; PR #386 removed the undeployed scaffold. The sample Rain Gardens PDF remains ready but unassigned.
-- The old provider-admin/test-client sequence above is superseded. Do not create the retired `brvin-test-client`, provision its token/secret, or reauthorize provider scopes for that purpose. The active next product work is M6 — teacher-focused admin workspace, followed by M7 application/repository/runtime registration, M8 ChatGPT integration handoff, M9 live v2 connection verification, M10 knowledge assignment/isolation, and M11 operations/handover as defined in `BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md`.
+- The old provider-admin/test-client sequence above is superseded. Do not create the retired `brvin-test-client`, provision its token/secret, or reauthorize provider scopes for that purpose. M6 teacher-focused admin workspace and M7 application/repository/runtime registration are complete. M8 ChatGPT integration handoff is in implementation on branch `brvin/m8-chatgpt-integration-handoff`. M9 live v2 connection verification, M10 knowledge assignment/isolation and M11 operations/handover remain not started.
 ## 2. Architecture decisions that must remain stable
 
 1. **One shared registry:** use the existing BRVIN tables in the shared D1 database. Do not create one D1 database per project or consumer app.
@@ -414,22 +414,28 @@ M7 shipped in [PR #93](https://github.com/ashini-x/parmar-ai/pull/93), merge com
 - The wizard stores an existing GitHub repository URL/default branch and optional Worker name/HTTPS URL references. It does not provision repositories, Workers, secrets, bindings or deployments. It does not prove ChatGPT can access a GitHub repo.
 - Environments are intentionally still Pending. M9 owns live private Service Binding verification before they may be shown as Connected.
 
-### 9.4 Remaining application integration gap
+### 9.4 M8 ChatGPT integration handoff — implementation in progress
 
-M7 is being implemented on branch `brvin/m7-application-connection-wizard`; it is not yet merged or deployed.
+M8 is being implemented on branch brvin/m8-chatgpt-integration-handoff. The generator is a deterministic function of the selected application/environment registry values and a generation timestamp. It returns a versioned structured manifest and a complete copyable ChatGPT prompt.
 
-The pending change adds non-secret metadata for an existing GitHub repository URL/default branch and per-environment Cloudflare Worker name/HTTPS URL. The application wizard registers one or more production/staging/preview environment identities using the existing backend-generated UUID model. It does not create repositories, Workers, secrets, bindings or deployments, and it does not call GitHub/Cloudflare to prove provider authorization. ChatGPT's GitHub connection remains a separate authorization boundary. All environment cards remain Pending until M9 live Service Binding verification.
+The implementation adds:
+- src/brvin/handoff.ts — allowlisted manifest/prompt builder and D1-backed read endpoint;
+- GET /admin/api/brvin/applications/handoff?applicationId=...&environmentId=... — validates IDs, requires an active application and environment, verifies the environment belongs to that application, and reads the latest saved metadata;
+- src/brvin/admin.ts — Generate ChatGPT handoff action on eligible active environment cards; modal shows revision/date, prompt, JSON manifest and copy controls. Regeneration makes a fresh request instead of relying on a saved snapshot;
+- regression tests for generated contract fields, v2 identity, secret exclusion, runtime support, app/environment scoping and browser UI wiring.
 
-The additive D1 migration marker is `2026-11-05-brvin-connection-metadata-v1`. Existing application/environment IDs and grants are preserved. Production status must not be claimed until PR checks, merge, release and live D1 read-back have passed.
+The handoff names service brvin-service, entrypoint BrvinRetrievalApi, binding BRVIN_SERVICE and v2 methods listAuthorizedProjectsV2(), getProjectStatusV2({ projectId }) and retrieveProjectContextV2(input). The identity is applicationEnvironmentId, never the legacy v1 clientId. It directs ChatGPT to vendor a pinned copy of packages/brvin-connector, integrate on the server side into the existing model/tool path, preserve citations, test authorization/failure cases, and deploy only through the consumer repository's reviewed release path.
 
-### 9.4 Remaining admin-experience gap
+The generator reads only allowlisted application, repository, environment and runtime metadata, plus the configured non-secret BRVIN account ID reference. It does not inspect the legacy provider credential vault. M7 does not record the consumer's actual Cloudflare account ID; the manifest marks it unverified and the prompt requires the engineer to confirm same-account deployment before release. A non-Cloudflare runtime is explicitly blocked. The generator does not create or modify a consumer repository, Worker, binding, secret, project grant or deployment. It does not mark the environment Connected.
 
-The deployed UI has separate application, environment and grant forms. It does not yet provide the final project-centric teacher workspace or a complete Connect Application journey.
+**Status:** branch implementation only. PR validation, merge and production release remain pending. M9 is not started.
+ 
+### 9.5 Remaining admin and connection work
 
-The final target is specified in [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md): Knowledge Projects and Applications are the primary admin concepts; application registration captures repository/runtime references; a generated ChatGPT handoff performs the one-time code integration; and the deployed app must pass a live v2 connection check before it is labelled Connected.
+M6 and M7 have delivered the teacher-focused Knowledge Projects/Application workspace, editable repository/runtime metadata, generated environment identity registration, explicit project grants, and Pending connection state. M8 adds the one-time ChatGPT handoff generator (implementation and production release pending in PR #95).
 
-A registered application or environment row is not proof of a live Service Binding. Do not show Connected until the verification contract is implemented and a real runtime check passes.
-
+The live consumer-side identity probe, authenticated success/failure reporting, and Connected state are not yet implemented. Those belong to M9 and require an ADR for probe authentication and replay protection first. M10 still owns the broader teacher assignment/isolation acceptance workflow. Until M9 passes for an actual deployed consumer, every registered environment must remain Pending.
+ 
 ## 10. Consumer application integration
 
 ### 10.1 Supported same-account v2 connection
@@ -463,7 +469,7 @@ The existing BRVIN application-project grant is application-wide, not user-speci
 
 ### 10.3 ChatGPT's role in the one-time integration
 
-ChatGPT remains the user's application engineer. BRVIN's intended wizard registers application metadata and environment identity, then generates a non-secret, repository-specific integration handoff. The user ensures that the repository is available in ChatGPT's own GitHub connection. ChatGPT uses its separately authorized GitHub/Cloudflare tools to modify the consumer repo, test and deploy it.
+ChatGPT remains the user's application engineer. The M8 admin handoff generator creates a non-secret, repository- and environment-specific prompt plus structured manifest from current BRVIN registry values. It supplies the exact private v2 binding identity, connector source location, security rules and test checklist. The user ensures that the repository is available in ChatGPT's own GitHub connection. ChatGPT uses its separately authorized GitHub/Cloudflare tools to modify the consumer repo, test and deploy it. The handoff does not authorize those connections or itself create infrastructure.
 
 BRVIN cannot authorize OpenAI's GitHub connector or guarantee that a newly created private repository is automatically visible to ChatGPT. A repository URL recorded in BRVIN is metadata, not proof of ChatGPT or BRVIN source-control access.
 
@@ -613,3 +619,16 @@ Also update:
 - [Operations Runbook](BRVIN_OPERATIONS_RUNBOOK.md) for admin or operational changes.
 
 The canonical principle: **code and deployed configuration define the implementation; this document explains the current design and where to verify it.** Never use this guide as a reason to skip tests, release manifests, or a targeted check after a material code/infrastructure change.
+
+
+## M8 handoff generator — implementation in progress (5 November 2026)
+
+The implementation branch brvin/m8-chatgpt-integration-handoff adds:
+- src/brvin/handoff.ts: pure manifest/prompt builder plus the read-only D1-backed handoff endpoint;
+- GET /admin/api/brvin/applications/handoff?applicationId=...&environmentId=...: validates UUIDs, requires an active app and environment, verifies the environment belongs to that app, and regenerates from current saved metadata;
+- src/brvin/admin.ts: per-environment Generate ChatGPT handoff control, revision/date display, copyable prompt and JSON manifest;
+- tests for manifest fields, exact v2 binding identity, environment/app scoping, secret exclusion, unsupported runtime and browser-script/route integration.
+
+The generator includes only explicitly allowlisted application, repository, environment, runtime and non-secret BRVIN account metadata. It does not read legacy GitHub App or Cloudflare OAuth vault entries. The target Cloudflare account is not stored in M7, so the handoff records it as unverified and instructs ChatGPT to compare the actual target deployment with the BRVIN account before deploying. Non-Cloudflare runtime providers are blocked for this private same-account binding design.
+
+**Current status:** implementation and unit/UI tests are on the branch; PR validation and production deployment are pending. This does not mark an environment Connected and does not implement M9.

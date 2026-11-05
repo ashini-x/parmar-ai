@@ -1484,6 +1484,46 @@ function openProjectEditor(projectId){
   }catch(error){alert(error.message);button.disabled=false;}
  });
 }
+async function openApplicationHandoff(applicationId,environmentId){
+  const app=(model?.applications||[]).find(item=>item.id===applicationId);
+  const environment=(app?.environments||[]).find(item=>item.id===environmentId);
+  if(!app||!environment)return;
+  $("modal-title").textContent="ChatGPT integration handoff · "+(environment.displayName||environment.environmentKey);
+  $("modal-body").innerHTML='<p class="muted">Generating a repository-specific, non-secret handoff from the latest saved application and environment metadata…</p>';
+  $("modal").classList.add("open");
+  try{
+   const query="applications/handoff?"+new URLSearchParams({applicationId,environmentId}).toString();
+   const handoff=await api(API+query);
+   $("modal-body").innerHTML=
+    '<div class="metrics" style="grid-template-columns:repeat(2,minmax(0,1fr))">'+
+     '<div class="metric"><span>Handoff revision</span><strong style="font-size:16px">'+esc(handoff.revision)+'</strong></div>'+
+     '<div class="metric"><span>Generated</span><strong style="font-size:13px">'+esc(time(Date.parse(handoff.generatedAt)))+'</strong></div>'+
+    '</div>'+
+    '<p class="modal-subtitle" style="margin:0 0 14px">Generated from the current repository, application and environment records. Generate again after editing metadata to refresh this handoff.</p>'+
+    '<div class="notice">This is a copyable engineering handoff only. ChatGPT must separately have access to the repository and the target Worker account must be confirmed. BRVIN does not create repositories, bindings, secrets or deployments. Connection remains Pending until M9 live verification.</div>'+
+    '<div class="panel-toolbar" style="margin-top:16px"><div><h2>ChatGPT integration prompt</h2><p>Copy and paste this complete prompt into the engineering conversation that has access to the target repository.</p></div><button class="btn primary" id="copy-handoff-prompt" type="button">Copy prompt</button></div>'+
+    '<textarea id="handoff-prompt" rows="16" readonly spellcheck="false" style="width:100%;font:11px/1.5 ui-monospace,monospace;white-space:pre;overflow:auto"></textarea>'+
+    '<div class="panel-toolbar" style="margin-top:16px"><div><h2>Structured manifest</h2><p>Machine-readable manifest for review and record keeping.</p></div><button class="btn" id="copy-handoff-manifest" type="button">Copy manifest</button></div>'+
+    '<textarea id="handoff-manifest" rows="14" readonly spellcheck="false" style="width:100%;font:11px/1.5 ui-monospace,monospace;white-space:pre;overflow:auto"></textarea>'+
+    '<p id="handoff-copy-status" class="statusline" aria-live="polite"></p>';
+   $("handoff-prompt").value=handoff.prompt;
+   $("handoff-manifest").value=JSON.stringify(handoff.manifest,null,2);
+   const copy=async(id,label)=>{
+    const field=$(id);
+    try{
+     await navigator.clipboard.writeText(field.value);
+     $("handoff-copy-status").textContent=label+" copied.";
+    }catch{
+     field.focus();field.select();
+     $("handoff-copy-status").textContent="Clipboard access is unavailable. The "+label.toLowerCase()+" is selected; use Copy from your device.";
+    }
+   };
+   $("copy-handoff-prompt").addEventListener("click",()=>copy("handoff-prompt","Prompt"));
+   $("copy-handoff-manifest").addEventListener("click",()=>copy("handoff-manifest","Manifest"));
+  }catch(error){
+   $("modal-body").innerHTML='<p class="error">'+esc(error.message)+'</p><p class="muted">Check the saved GitHub repository URL and environment status, then regenerate.</p>';
+  }
+}
 function openApplicationEditor(applicationId){
  const app=(model?.applications||[]).find(item=>item.id===applicationId);if(!app)return;
  $("modal-title").textContent="Application · "+app.name;
@@ -1602,7 +1642,7 @@ function renderApplications(list){
     '<p><small>'+esc(environment.environmentKey)+' · '+esc(environment.id)+'</small></p>'+
     '<div class="pulse-row"><span>Worker / runtime</span><strong>'+worker+'</strong></div>'+
     '<div class="pulse-row"><span>Runtime URL</span><span>'+workerUrl+'</span></div>'+
-    '<div class="job-actions">'+edit+action+revoke+'</div>'+
+    '<div class="job-actions">'+edit+(app.status==="active"&&environment.status==="active"&&app.repositoryUrl?'<button class="btn primary" data-handoff="true" data-application-id="'+esc(app.id)+'" data-environment-id="'+esc(environment.id)+'" type="button">Generate ChatGPT handoff</button>':"")+action+revoke+'</div>'+
    '</div>';
   }).join(""):'<div class="empty">No deployment environments registered.</div>';
   const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
@@ -1618,6 +1658,7 @@ function renderApplications(list){
    '<div style="margin-top:14px"><strong>Environments</strong>'+envHtml+'</div><div style="margin-top:14px"><strong>Knowledge access</strong>'+grantHtml+'</div></article>';
  }).join(""):'<div class="empty" style="grid-column:1/-1">No applications registered. Create the repository with ChatGPT or manually first, then register its existing URL here.</div>';
  $("applications-list").innerHTML=html;
+ $("applications-list").querySelectorAll("[data-handoff]").forEach(button=>button.addEventListener("click",()=>openApplicationHandoff(button.dataset.applicationId,button.dataset.environmentId)));
  $("applications-list").querySelectorAll("[data-application-edit]").forEach(button=>button.addEventListener("click",()=>openApplicationEditor(button.dataset.applicationEdit)));
  $("applications-list").querySelectorAll("[data-environment-edit]").forEach(button=>button.addEventListener("click",()=>openEnvironmentEditor(button.dataset.applicationId,button.dataset.environmentEdit)));
  $("applications-list").querySelectorAll("[data-application-status]").forEach(button=>button.addEventListener("click",async()=>{
