@@ -1488,17 +1488,48 @@ function openApplicationEditor(applicationId){
  const app=(model?.applications||[]).find(item=>item.id===applicationId);if(!app)return;
  $("modal-title").textContent="Application · "+app.name;
  $("modal-body").innerHTML=
-  '<div class="field"><label for="edit-app-owner">Teacher / owner</label><input id="edit-app-owner" maxlength="120" value="'+esc(app.ownerLabel||"")+'" placeholder="Teacher or customer label"></div>'+
+  '<div class="field"><label for="edit-app-owner">Teacher / owner</label><input id="edit-app-owner" maxlength="120" value="'+esc(app.ownerLabel||"")+'"></div>'+
   '<div class="field"><label for="edit-app-name">Application name</label><input id="edit-app-name" maxlength="100" value="'+esc(app.name)+'"></div>'+
   '<div class="field"><label for="edit-app-description">Purpose</label><textarea id="edit-app-description" maxlength="500" rows="3">'+esc(app.description||"")+'</textarea></div>'+
-  '<div class="modal-actions"><button class="btn primary" id="save-app-details" type="button">Save details</button></div>';
+  '<div class="field"><label for="edit-app-repository">GitHub repository URL</label><input id="edit-app-repository" maxlength="300" value="'+esc(app.repositoryUrl||"")+'" placeholder="https://github.com/owner/repository"></div>'+
+  '<div class="field"><label for="edit-app-branch">Default branch</label><input id="edit-app-branch" maxlength="100" value="'+esc(app.repositoryDefaultBranch||"main")+'"></div>'+
+  '<div class="field"><label for="edit-app-runtime">Runtime provider</label><select id="edit-app-runtime"><option value="cloudflare-workers"'+(app.runtimeProvider!=="other"?" selected":"")+'>Cloudflare Workers</option><option value="other"'+(app.runtimeProvider==="other"?" selected":"")+'>Other / not yet deployed on Workers</option></select></div>'+
+  '<div class="notice">Repository and runtime references are metadata only. Saving them does not grant ChatGPT repository access or verify a Worker connection.</div>'+
+  '<div class="modal-actions"><button class="btn primary" id="save-app-details" type="button">Save application details</button></div>';
  $("modal").classList.add("open");
  $("save-app-details").addEventListener("click",async()=>{
   const button=$("save-app-details");button.disabled=true;
   try{
    const name=$("edit-app-name").value.trim();
    if(!name)throw new Error("Enter an application name.");
-   await post("applications/update",{applicationId:app.id,name,description:$("edit-app-description").value,ownerLabel:$("edit-app-owner").value});
+   await post("applications/update",{
+    applicationId:app.id,name,description:$("edit-app-description").value,ownerLabel:$("edit-app-owner").value,
+    repositoryUrl:$("edit-app-repository").value,repositoryDefaultBranch:$("edit-app-branch").value,
+    runtimeProvider:$("edit-app-runtime").value
+   });
+   $("modal").classList.remove("open");await refresh();
+  }catch(error){alert(error.message);button.disabled=false;}
+ });
+}
+function openEnvironmentEditor(applicationId,environmentId){
+ const app=(model?.applications||[]).find(item=>item.id===applicationId);
+ const environment=(app?.environments||[]).find(item=>item.id===environmentId);if(!app||!environment)return;
+ $("modal-title").textContent="Environment · "+(environment.displayName||environment.environmentKey);
+ $("modal-body").innerHTML=
+  '<div class="field"><label>Environment key</label><input value="'+esc(environment.environmentKey)+'" disabled></div>'+
+  '<div class="field"><label for="edit-env-display">Display name</label><input id="edit-env-display" maxlength="80" value="'+esc(environment.displayName||"")+'"></div>'+
+  '<div class="field"><label for="edit-env-worker">Worker name</label><input id="edit-env-worker" maxlength="63" value="'+esc(environment.workerName||"")+'" placeholder="my-application-production"></div>'+
+  '<div class="field"><label for="edit-env-url">Worker URL (HTTPS)</label><input id="edit-env-url" maxlength="300" value="'+esc(environment.workerUrl||"")+'" placeholder="https://my-application.example.workers.dev"></div>'+
+  '<div class="notice">The environment identity is immutable. These values describe the runtime only; live connection remains Pending until M9 verification.</div>'+
+  '<div class="modal-actions"><button class="btn primary" id="save-env-details" type="button">Save environment details</button></div>';
+ $("modal").classList.add("open");
+ $("save-env-details").addEventListener("click",async()=>{
+  const button=$("save-env-details");button.disabled=true;
+  try{
+   await post("applications/environments/update",{
+    environmentId:environment.id,displayName:$("edit-env-display").value,
+    workerName:$("edit-env-worker").value,workerUrl:$("edit-env-url").value
+   });
    $("modal").classList.remove("open");await refresh();
   }catch(error){alert(error.message);button.disabled=false;}
  });
@@ -1555,25 +1586,40 @@ function renderApplications(list){
  const html=list.length?list.map(app=>{
   const appAction=app.status==="active"?"suspended":app.status==="suspended"?"active":null;
   const appActionLabel=app.status==="active"?"Suspend application":app.status==="suspended"?"Reactivate application":"Permanently revoked";
+  const repositoryHtml=app.repositoryUrl
+   ?'<a href="'+esc(app.repositoryUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(app.repositoryUrl)+'</a> · branch <strong>'+esc(app.repositoryDefaultBranch||"main")+'</strong>'
+   :'No repository reference saved';
   const envHtml=app.environments.length?app.environments.map(environment=>{
    const next=environment.status==="active"?"disabled":environment.status==="disabled"?"active":null;
    const action=next?'<button class="btn" data-environment-status="'+esc(environment.id)+'" data-status="'+next+'">'+(next==="disabled"?"Disable":"Activate")+'</button>':"";
    const revoke=environment.status!=="revoked"?'<button class="btn danger" data-environment-status="'+esc(environment.id)+'" data-status="revoked">Revoke identity</button>':"";
-   const verification=environment.status==="active"?"Registered · live verification not yet implemented":"Not available";
-   return '<div class="pulse-row"><span><strong>'+esc(environment.displayName||environment.environmentKey)+'</strong><br><small>'+esc(environment.environmentKey)+' · '+esc(verification)+' · '+esc(environment.id)+'</small></span><span>'+statusPill(environment.status)+' '+action+' '+revoke+'</span></div>';
+   const connection=environment.status==="revoked"?"Revoked":environment.status==="disabled"?"Disabled":"Pending connection";
+   const worker=environment.workerName?esc(environment.workerName):"Worker not specified";
+   const workerUrl=environment.workerUrl?'<a href="'+esc(environment.workerUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(environment.workerUrl)+'</a>':"URL not specified";
+   const edit=environment.status!=="revoked"?'<button class="btn" data-environment-edit="'+esc(environment.id)+'" data-application-id="'+esc(app.id)+'">Edit runtime details</button>':"";
+   return '<div class="tile" style="margin-top:8px">'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>'+esc(environment.displayName||environment.environmentKey)+'</strong><span class="pill">'+connection+'</span></div>'+
+    '<p><small>'+esc(environment.environmentKey)+' · '+esc(environment.id)+'</small></p>'+
+    '<div class="pulse-row"><span>Worker / runtime</span><strong>'+worker+'</strong></div>'+
+    '<div class="pulse-row"><span>Runtime URL</span><span>'+workerUrl+'</span></div>'+
+    '<div class="job-actions">'+edit+action+revoke+'</div>'+
+   '</div>';
   }).join(""):'<div class="empty">No deployment environments registered.</div>';
   const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
   return '<article class="tile">'+
    '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>'+esc(app.name)+'</strong><p><small>'+esc(app.ownerLabel||"Owner not assigned")+' · '+esc(app.slug)+'</small></p></div>'+statusPill(app.status)+'</div>'+
    '<p>'+esc(app.description||"No description")+'</p>'+
+   '<div class="pulse-row"><span>GitHub repository</span><span>'+repositoryHtml+'</span></div>'+
+   '<div class="pulse-row"><span>Runtime provider</span><strong>'+esc(app.runtimeProvider==="other"?"Other / external":"Cloudflare Workers")+'</strong></div>'+
    '<div class="pulse-row"><span>Deployment environments</span><strong>'+app.environments.length+'</strong></div>'+
    '<div class="pulse-row"><span>Active knowledge grants</span><strong>'+app.activeProjectCount+'</strong></div>'+
-   '<div class="notice">Registry only — not live-connected. A registered environment is not proof of a deployed private Service Binding. M9 owns live connection verification.</div>'+
-   '<div class="job-actions"><button class="btn" data-application-edit="'+esc(app.id)+'" type="button">Edit details</button>'+(appAction?'<button class="btn '+(appAction==="suspended"?"danger":"")+'" data-application-status="'+esc(app.id)+'" data-status="'+appAction+'">'+appActionLabel+'</button>':"")+'</div>'+
+   '<div class="notice">Repository and Worker references are metadata only. GitHub authorization is separate; no repository access is inferred. Every environment is Pending until a live private Service Binding verification succeeds in M9.</div>'+
+   '<div class="job-actions"><button class="btn" data-application-edit="'+esc(app.id)+'" type="button">Edit application</button>'+(appAction?'<button class="btn '+(appAction==="suspended"?"danger":"")+'" data-application-status="'+esc(app.id)+'" data-status="'+appAction+'">'+appActionLabel+'</button>':"")+'</div>'+
    '<div style="margin-top:14px"><strong>Environments</strong>'+envHtml+'</div><div style="margin-top:14px"><strong>Knowledge access</strong>'+grantHtml+'</div></article>';
- }).join(""):'<div class="empty" style="grid-column:1/-1">No applications registered. Register an independently built app after its repository has been created with ChatGPT.</div>';
+ }).join(""):'<div class="empty" style="grid-column:1/-1">No applications registered. Create the repository with ChatGPT or manually first, then register its existing URL here.</div>';
  $("applications-list").innerHTML=html;
  $("applications-list").querySelectorAll("[data-application-edit]").forEach(button=>button.addEventListener("click",()=>openApplicationEditor(button.dataset.applicationEdit)));
+ $("applications-list").querySelectorAll("[data-environment-edit]").forEach(button=>button.addEventListener("click",()=>openEnvironmentEditor(button.dataset.applicationId,button.dataset.environmentEdit)));
  $("applications-list").querySelectorAll("[data-application-status]").forEach(button=>button.addEventListener("click",async()=>{
   const app=list.find(item=>item.id===button.dataset.applicationStatus);if(!app)return;
   const status=button.dataset.status;
