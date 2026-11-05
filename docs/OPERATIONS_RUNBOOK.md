@@ -35,6 +35,8 @@ Use the last verified Cloudflare version. Do not treat an ad-hoc edited working 
 
 ## BRVIN knowledge operations
 
+For the complete current administrator workflow, see [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md). For detailed engineering/operator troubleshooting, see [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md).
+
 Use the administrator-only **BRVIN** console at `/admin/brvin` (also linked from `/admin`). The former `/admin/fatman/books` address redirects to BRVIN.
 
 ### Add a knowledge source
