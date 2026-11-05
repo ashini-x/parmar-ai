@@ -421,15 +421,15 @@ The bullets below are architecture/security acceptance criteria, not a live task
 Read-only evidence inspected on 4 November 2026:
 
 - `main` was at `a16a9273d581d9dd5acfc3c53c3cc1f2cba819fd`, four commits ahead of planning baseline `939a6046f2a6fa461898f2479e6ed22923e3f3f9`. Those commits add the plan and navigation links; they do not implement the new registry.
-- Current D1 schema contains `brvin_projects`, `brvin_service_clients`, book/collection grant tables and usage tables; it does not yet contain application/environment/app-project tables.
-- Current production projects and service-client mapping contain the Fatman project and `fatman → fatman` client only.
-- Current source inventory contains the ready 538-page Fatman book and a ready three-page Rain Gardens test PDF. The only direct book grant is Fatman → the built-in 538-page Fatman source; the only collection grant is Fatman → Fatman Core. Rain Gardens is ready but unassigned, so Fatman cannot retrieve it.
+- At the 4 November baseline, D1 contained `brvin_projects`, `brvin_service_clients`, book/collection grant tables and usage tables; the application/environment/app-project tables had not yet been introduced.
+- At that 4 November snapshot, production projects and service-client mapping contained the Fatman project and `fatman → fatman` client only.
+- The source inventory at that time contained the ready 538-page Fatman book and a ready three-page Rain Gardens test PDF. The only direct book grant is Fatman → the built-in 538-page Fatman source; the only collection grant is Fatman → Fatman Core. Rain Gardens is ready but unassigned, so Fatman cannot retrieve it.
 - The shared AI Search stats endpoint reported 541 completed items and 50 errors whose provider message was `page_limit_reached: Free AI Search image processing is unavailable`. This is a pre-existing index diagnostic, not a BRVIN 2 change. Later end-to-end acceptance must reconcile the errors against expected text/page keys; do not infer that a source is complete solely from the instance-wide statistics.
 - November 2026 Fatman usage contains 20 queries in `fatman_search_usage`; the new design does not migrate or reset it.
 - Live `parmar-ai` has a `BRVIN_SERVICE` Service Binding to `brvin-service`; its config uses `props.clientId='fatman'`.
 - Live `brvin-service` has the same D1 binding and the shared `default` AI Search namespace/instance `fatman-2026-8b183803`. The instance has existing indexed content; do not re-create or reconfigure it for BRVIN 2.
-- The current private service code resolves a project from `brvin_service_clients` and does not yet resolve application/environment/project grants.
-- AskMoina's Wrangler config uses its own `askmoina-prod` and `askmoina-preview` D1 databases and does not yet contain `BRVIN_SERVICE`. Its production Worker is separate and must be integrated through the private binding only.
+- At that time, the private service resolved a project from `brvin_service_clients`; application/environment/project-grant resolution was the design target, not yet implemented.
+- At that time, AskMoina's Wrangler config used its own `askmoina-prod` and `askmoina-preview` D1 databases and did not yet contain `BRVIN_SERVICE`. A later optional v2 pilot has since been added; see the current integration status in `BRVIN_SYSTEM_REFERENCE.md`.
 
 The observations in this section are a frozen historical baseline from 4 November 2026 and must not be used as current production facts. Application/environment/project-grant v2 implementation and production acceptance are now complete; consult [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) for the current deployed state.
 
