@@ -389,7 +389,6 @@ export async function brvinConnectStatus(env: Env): Promise<Response> {
         installationUrl: installationId ? "https://github.com/settings/installations/" + installationId : null,
         installationAccount: clean(githubMeta.installationAccount, 100) || null,
         repositorySelection: clean(githubMeta.repositorySelection, 20) || null,
-        repositorySelection: clean(githubMeta.repositorySelection, 20) || null,
         requiredPermissions: BRVIN_GITHUB_REQUIRED_PERMISSIONS,
       },
       cloudflare: {
