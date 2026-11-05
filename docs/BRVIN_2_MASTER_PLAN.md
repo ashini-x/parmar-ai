@@ -6,7 +6,7 @@
 **Product scope:** [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md)  
 **As-built reference:** [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md)  
 **Planning baseline:** `main`  
-**Status at 5 November 2026:** M0–M7 are complete; M4's reference scaffold was retired and is not a product requirement. M6's teacher-focused admin workspace and M7's application/environment registry are deployed and production-accepted. M8 — ChatGPT integration handoff is the first incomplete milestone and is in implementation on branch brvin/m8-chatgpt-integration-handoff. M9–M11 remain not started.
+**Status at 5 November 2026:** M0–M8 are complete; M4's fixed reference scaffold was retired and is not a product requirement. M6's teacher-focused admin workspace, M7's application/environment registry and M8's ChatGPT integration handoff are merged, deployed and production-accepted. M9 — live connection verification and activation is the first incomplete milestone; M10–M11 remain not started.
 
 > **Scope correction:** The user's confirmed goal is a multi-application, teacher-specific knowledge platform. ChatGPT remains the user's software engineer through its separately authorized GitHub and Cloudflare connections. The previously proposed autonomous BRVIN coding brain, repository factory, broad provider-admin credential vault and BRVIN-owned CI/CD are superseded and are not active BRVIN 2 requirements. See [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md).
 
@@ -244,7 +244,7 @@ The active final milestone sequence is **M6–M11**. The authoritative detailed 
 | 5 | Core application/project administration | COMPLETE — UX expansion remains | Protected application/environment/grant lifecycle and knowledge admin deployed. |
 | 6 | Admin workspace aligned to teacher knowledge operations | COMPLETE — merged, deployed and production smoke accepted | Teacher/owner metadata, app-neutral knowledge project creation, source readiness/usage, project detail view, application metadata and legacy provider settings de-emphasized. |
 | 7 | Application connection registry and wizard | COMPLETE — merged, deployed and production acceptance passed | Existing app repository/default-branch/runtime metadata, generated production/staging/preview environment identities, editable Worker references and explicit Pending connection status. |
-| 8 | ChatGPT integration handoff | IN PROGRESS — implementation branch active; PR validation pending | Generate a non-secret prompt and structured manifest for each active application/environment, with one-click admin regeneration. |
+| 8 | ChatGPT integration handoff | COMPLETE — merged, deployed and production release accepted | Admin generates a versioned, dated, copyable non-secret prompt and structured manifest for each active application/environment. |
 | 9 | Live connection verification and activation | NOT STARTED | Deployed consumer proves trusted v2 identity and private Service Binding; readiness is shown separately. |
 | 10 | Teacher knowledge assignment and isolation acceptance | NOT STARTED | Multi-teacher/multi-app grant, revoke, isolation and sharing tests. |
 | 11 | Operations, usage and administrator handover | NOT STARTED | Usage, failures, audit, operating guide and a real teacher-focused app acceptance run. |
@@ -337,7 +337,7 @@ This table is the human-readable status. The evidence fields must be filled from
 | 5 — Application/project administration | COMPLETE — merged, deployed and production release accepted | [PR #72](https://github.com/ashini-x/parmar-ai/pull/72), merge `5872c2d21cdef17feb21d661e50ddde820c51f40` | Main Release Validation and paired production release [#41900067751](https://github.com/ashini-x/parmar-ai/actions/runs/41900067751) passed typecheck, unit/Node tests, both Worker bundle checks, production deployment and root/BRVIN/Fatman smoke; acceptance artifact `13357333270` | `brvin-service` version `c6755ca2-5b5f-4968-8bbc-e957a767926d`; `parmar-ai` version `d239c941-f119-4ad1-9020-63e9a2353434`. No migration or production data mutation. Cloudflare preview PR build alone hit the account's 100 Durable Object Free-plan namespace limit; main production build/deploy passed |
 | 6 — Admin workspace aligned to teacher knowledge operations | COMPLETE — merged and deployed | [PR #91](https://github.com/ashini-x/parmar-ai/pull/91), merge `4ab6c555af64f5972607a9b9f409c181d0883c7f` | Release Validation #700 passed typecheck, unit tests, Node/browser-script tests and both Worker bundle validations. Main release #701 passed paired deployment, root/health/private BRVIN/Fatman smoke and release acceptance. D1 owner-label migration marker/columns and dashboard summary SQL were verified read-only. | Authenticated visual click-through was not performed in this session; browser login remains a manual confirmation. No M7 work started. |
 | 7 — Application connection registry and wizard | COMPLETE — merged and deployed | [PR #93](https://github.com/ashini-x/parmar-ai/pull/93), merge `3f7803fe5e3cc0f9894292a8ce7ad6c79a6d11d6` | Release Validation #704 passed type-check, unit tests, Node/browser-script tests and both Worker bundle validations. Main release #705 passed paired deployment, root/health/private BRVIN/Fatman smoke and release acceptance. Production D1 migration marker/columns and existing app/environment records were verified read-only. | Wizard is metadata-only; no GitHub repository, Worker, secret, binding or deployment is provisioned. All environments remain Pending until M9. |
-| 8 — ChatGPT integration handoff | IN PROGRESS — branch active | `brvin/m8-chatgpt-integration-handoff` | Generator, admin endpoint/UI and isolation tests are implemented on the branch; full PR validation and production deployment are pending. |
+| 8 — ChatGPT integration handoff | COMPLETE — merged and deployed | [PR #95](https://github.com/ashini-x/parmar-ai/pull/95), merge `81bc036ca1ffd2ae7d3ce6ed0170ee2e1e69d9fd` | PR Release Validation #711 passed typecheck, all unit/integration tests, Node/browser-script tests and both Worker bundle checks. Main Release Validation #713 passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance; artifact `13434543663`. | `brvin-service` deployment `b778ed64-c168-4e17-9473-eec04ed67e00`, version `3737180d-9317-464f-8e12-816b266f1fc2`; `parmar-ai` deployment `fab3a262-b1c9-415d-9431-738c953d6451`, version `96a626c5-c11c-4e7b-9202-a040cd434da7`. No M8 D1 migration or provider-secret mutation. Environment remains Pending until M9 live verification. |
 | 9 — Live connection verification and activation | NOT STARTED | — | — | Deployed consumer proves trusted v2 identity and private Service Binding; readiness is shown separately. |
 | 10 — Teacher knowledge assignment and isolation acceptance | NOT STARTED | — | — | Multi-teacher/multi-app grants, revocation, sharing and cross-project denial tests. |
 | 11 — Operations, usage and administrator handover | NOT STARTED | — | — | Usage, pipeline/connection failures, audit/revocation, recovery guidance and nontechnical admin manual. |
@@ -805,30 +805,35 @@ The active final milestones are M6–M11 as defined in [BRVIN_2_PRODUCT_SCOPE_AN
 **Next active milestone:** M8 — ChatGPT integration handoff. Implementation is underway on branch brvin/m8-chatgpt-integration-handoff; acceptance, merge and production release remain pending.
 
 
-### Milestone log — 5 November 2026 — M8 ChatGPT integration handoff (implementation in progress)
+### Milestone log — 5 November 2026 — M8 ChatGPT integration handoff (complete)
 
-**Status:** IN PROGRESS — feature branch changes committed; pull request validation, merge and production release are not yet complete.
+**Status:** COMPLETE — merged to main, deployed to production, and PR/main release acceptance passed.
 
-**Scope:** Generate a repository-specific, non-secret integration prompt and structured manifest for each active application/environment. ChatGPT continues to implement the consumer code and deployment using its own separately authorized GitHub and Cloudflare connections.
+**Scope:** Generate a deterministic, copyable, repository-specific integration prompt and structured manifest for each active application/environment. ChatGPT remains responsible for consumer code changes, CI and deployment using its separately authorized GitHub and Cloudflare connections.
 
-**Implementation on branch brvin/m8-chatgpt-integration-handoff:**
-- src/brvin/handoff.ts — deterministic manifest/prompt builder and administrator-only read endpoint. The endpoint selects the application and environment from D1, verifies that the environment belongs to the selected app, and requires both records to be active.
-- src/brvin/admin.ts — an environment-level Generate ChatGPT handoff action and a modal that displays the generated prompt, structured manifest, revision and generation time, with copy controls. Each generation rereads current metadata; no handoff is cached as authoritative.
-- src/index.ts — protected GET endpoint at /admin/api/brvin/applications/handoff.
-- test/brvin-handoff.test.ts — prompt/manifest contract, binding identity, supported runtime, repository validation and secret-exclusion tests.
-- test/brvin-app-admin.test.ts — D1 application/environment scoping and endpoint behavior.
-- test/brvin-admin-script.node.test.ts — admin UI/route contract assertions.
+**Implementation:**
+- \`src/brvin/handoff.ts\` — deterministic manifest/prompt builder and protected read-only endpoint. It loads only allowlisted registry fields, verifies that the selected active environment belongs to the selected active application, and regenerates from current D1 metadata on each request.
+- \`src/index.ts\` — administrator-session-protected GET endpoint \`/admin/api/brvin/applications/handoff\`.
+- \`src/brvin/admin.ts\` — per-environment Generate ChatGPT handoff action and modal with visible revision/date, copyable prompt and structured JSON manifest.
+- \`test/brvin-handoff.test.ts\` — manifest/prompt contract, exact v2 identity, runtime gate, repository validation and secret-exclusion tests.
+- \`test/brvin-app-admin.test.ts\` — successful handoff generation and application/environment scoping tests.
+- \`test/brvin-admin-script.node.test.ts\` — browser script parsing and handoff route/UI contract checks.
 
-**Trust and safety boundary:** The handoff names BRVIN's private brvin-service Worker, BrvinRetrievalApi entrypoint, BRVIN_SERVICE binding and v2 RPC methods. It supplies the registered environment UUID only as applicationEnvironmentId. It explicitly requires the same Cloudflare account and instructs ChatGPT to confirm the target account; the target account cannot be proven from M7 metadata. The handoff contains no provider tokens, secrets, D1/search credentials or legacy v1 client ID. A non-Cloudflare runtime is marked unsupported and must stop rather than introduce a public gateway. No repository, Worker, secret, binding or deployment is provisioned by the generator.
+**Trust and safety boundary:** The generated handoff names private service \`brvin-service\`, entrypoint \`BrvinRetrievalApi\`, binding \`BRVIN_SERVICE\`, and v2 methods \`listAuthorizedProjectsV2()\`, \`getProjectStatusV2({ projectId })\`, and \`retrieveProjectContextV2(input)\`. It uses \`applicationEnvironmentId\`, never legacy v1 \`clientId\`. It directs ChatGPT to vendor a reviewed, pinned copy of \`packages/brvin-connector\`, integrate server-side into the consumer's existing model/tool path, preserve source/page citations, and apply the security and test checklist. It contains no provider/master/deployment secrets, D1/Search credentials or legacy provider-vault material.
 
-**Tests:** PR checks pending. Unit tests, browser-script parsing, full typecheck and both Worker bundle checks must pass before merge.
+The BRVIN Cloudflare account ID is only a non-secret comparison reference. M7 does not prove the target consumer is in the same Cloudflare account, so the handoff explicitly requires ChatGPT to verify the actual target account before deployment. A non-Cloudflare runtime is blocked rather than routed through an invented public gateway. The generator does not create repositories, Workers, secrets, bindings, grants or deployments, and does not claim a live connection.
 
-**PR:** Not opened yet at this log update.
+**PR:** [PR #95](https://github.com/ashini-x/parmar-ai/pull/95), merged to \`main\` as \`81bc036ca1ffd2ae7d3ce6ed0170ee2e1e69d9fd\`.
 
-**Deployment:** Not deployed. No production D1 writes or Cloudflare infrastructure changes are part of M8.
+**Validation:** PR Release Validation [#711](https://github.com/ashini-x/parmar-ai/actions/runs/42067500863) passed \`npm run check\`, \`npm test\`, \`npm run test:node\`, private BRVIN Worker bundle validation and Parmar AI Worker bundle validation. The initial repository-URL regression test identified that query strings could be accepted; the URL parser was tightened and the final PR validation passed.
 
-**Live verification:** Not performed. Environments remain Pending until M9.
+**Production deployment:** Main Release Validation [#713](https://github.com/ashini-x/parmar-ai/actions/runs/42067800093) passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance. Acceptance artifact ID \`13434543663\` records root, worker health, BRVIN Service Binding and Fatman retrieval as passed. Rollback steps were skipped because acceptance passed.
 
-**Limitations:** The target repository's access in ChatGPT and the target Worker account's equality with BRVIN's account must be confirmed through the separate engineering connections. M8 cannot authorize those connections.
+- \`brvin-service\`: deployment \`b778ed64-c168-4e17-9473-eec04ed67e00\`, version \`3737180d-9317-464f-8e12-816b266f1fc2\`.
+- \`parmar-ai\`: deployment \`fab3a262-b1c9-415d-9431-738c953d6451\`, version \`96a626c5-c11c-4e7b-9202-a040cd434da7\`.
 
-**Next action:** Open the implementation PR, run the complete validation workflow, merge only on green checks, and verify the paired production release. Stop before M9.
+**Data and preservation:** M8 adds no D1 schema migration and no application/project/grant test records. It does not alter Fatman ingestion, retrieval, usage accounting, existing app/environment identities, source grants or provider credentials. The existing application/environment state remains Pending until M9.
+
+**Verification limitation:** CI parsed and checked the generated admin script and route contracts, but this session did not have an authenticated administrator browser session for a manual visual click-through or an actual per-app handoff-copy test. The deployed code and paired release were accepted; do not describe a specific consumer as connected or claim the admin modal was manually exercised.
+
+**Next milestone:** M9 — Live connection verification and activation. Stop here; do not begin M9 without the user's instruction.
