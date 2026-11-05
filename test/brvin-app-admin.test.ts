@@ -347,6 +347,53 @@ describe("BRVIN application and project administration", () => {
     expect(db.grants).toHaveLength(0);
   });
 
+  it("supports multiple projects per application and intentional sharing across applications", async () => {
+    const db = new MemoryD1();
+    const appA = "11111111-2222-4333-8444-555555555551";
+    const appB = "11111111-2222-4333-8444-555555555552";
+    const projectA = "22222222-3333-4444-8555-666666666661";
+    const projectB = "22222222-3333-4444-8555-666666666662";
+    db.applications.push({ id: appA, status: "active" }, { id: appB, status: "active" });
+    db.projects.push(
+      { id: projectA, name: "Teacher A", status: "active" },
+      { id: projectB, name: "Shared Reference", status: "active" },
+    );
+    db.grants.push({
+      id: "33333333-4444-4555-8666-777777777771",
+      application_id: appA, project_id: projectA, status: "active",
+    });
+
+    const shared = await grantBrvinApplicationProject(environment(db), request({
+      applicationId: appB, projectId: projectA,
+    }));
+    const secondProject = await grantBrvinApplicationProject(environment(db), request({
+      applicationId: appA, projectId: projectB,
+    }));
+
+    expect(shared.status).toBe(201);
+    expect(secondProject.status).toBe(201);
+    expect(db.grants).toHaveLength(3);
+    expect(db.grants.filter(grant => grant.project_id === projectA && grant.status === "active")).toHaveLength(2);
+    expect(db.grants.filter(grant => grant.application_id === appA && grant.status === "active")).toHaveLength(2);
+  });
+
+  it("treats an already-active app-project grant as idempotent", async () => {
+    const db = new MemoryD1();
+    const appId = "11111111-2222-4333-8444-555555555555";
+    const projectId = "22222222-3333-4444-8555-666666666666";
+    const grantId = "33333333-4444-4555-8666-777777777777";
+    db.applications.push({ id: appId, status: "active" });
+    db.projects.push({ id: projectId, status: "active" });
+    db.grants.push({ id: grantId, application_id: appId, project_id: projectId, status: "active" });
+
+    const response = await grantBrvinApplicationProject(environment(db), request({ applicationId: appId, projectId }));
+    const body = await response.json() as { alreadyGranted?: boolean; grantId?: string };
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ alreadyGranted: true, grantId });
+    expect(db.grants).toHaveLength(1);
+  });
+
   it("does not grant a project to an inactive application", async () => {
     const db = new MemoryD1();
     const appId = "11111111-2222-4333-8444-555555555555";
