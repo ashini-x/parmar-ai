@@ -86,5 +86,75 @@ describe("BRVIN GCS read-only permission diagnostic", () => {
     expect(result.uploadStartReady).toBe(false);
     expect(result.checks.permissions.missingObjectPermissions).toEqual(["storage.objects.list"]);
     expect(result.retentionLifecycleMissingPermissions).toEqual([]);
+    expect(result.retentionLifecycleRule.status).toBe("missing");
+    expect(result.retentionLifecycleReady).toBe(false);
+  });
+
+  it("reports the exact 30-day OCR-prefix rule as installed only when the bucket rule exists", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        name: "brvin-test-bucket",
+        lifecycle: { rule: [{ action: { type: "Delete" }, condition: { age: 30, matchesPrefix: ["brvin/temporary-vision-ocr/"] } }] },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        permissions: [
+          "storage.objects.create",
+          "storage.objects.get",
+          "storage.objects.list",
+          "storage.objects.delete",
+          "storage.buckets.get",
+          "storage.buckets.update",
+        ],
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await diagnoseFatmanGcsUpload(env);
+    const result = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(result).toMatchObject({
+      ok: true,
+      uploadStartReady: true,
+      retentionLifecycleReady: true,
+      retentionLifecyclePermissionsReady: true,
+      retentionLifecycleRule: {
+        status: "installed",
+        prefix: "brvin/temporary-vision-ocr/",
+        requiredMaxAgeDays: 30,
+        configuredAgeDays: 30,
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.every(call => (call[1] as RequestInit | undefined)?.method !== "PATCH")).toBe(true);
+  });
+
+  it("blocks lifecycle readiness when an existing Delete rule can overlap source PDFs", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        name: "brvin-test-bucket",
+        lifecycle: { rule: [{ action: { type: "Delete" }, condition: { age: 30 } }] },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        permissions: [
+          "storage.objects.create",
+          "storage.objects.get",
+          "storage.objects.list",
+          "storage.objects.delete",
+          "storage.buckets.get",
+          "storage.buckets.update",
+        ],
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await diagnoseFatmanGcsUpload(env);
+    const result = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(result.uploadStartReady).toBe(true);
+    expect(result.retentionLifecyclePermissionsReady).toBe(true);
+    expect(result.retentionLifecycleReady).toBe(false);
+    expect(result.retentionLifecycleRule.status).toBe("blocked_unsafe_delete_rule");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.every(call => (call[1] as RequestInit | undefined)?.method !== "PATCH")).toBe(true);
   });
 });
