@@ -892,3 +892,8 @@ The connected application must retrieve only its authorised project's content an
 **Implementation starting point:** M6 is the first incomplete milestone. Inspect current GitHub App manifest permissions, installation state, Cloudflare OAuth client scopes, encrypted provider-connection vault, existing provider APIs and relevant GitHub/Cloudflare API operations. Design the permission/capability matrix from real API contracts, implement upgrades and consent safely, build project credential provisioning and secret delivery, then validate with isolated test resources before starting M7. Do not mutate live account permissions or secrets in this documentation-only change.
 
 **Files changed by this documentation proposal:** docs/BRVIN_AUTONOMOUS_PROJECT_FACTORY.md (new), docs/BRVIN_2_MASTER_PLAN.md (revised goal, administrator experience, milestones, prompts and ledger), docs/BRVIN_SYSTEM_REFERENCE.md (as-built boundary and continuity pointer). The source commit/PR and checks are recorded when this documentation branch is reviewed and merged.
+
+
+### Documentation release record — 5 November 2026
+
+The autonomous Project Factory specification was merged through [PR #80](https://github.com/ashini-x/parmar-ai/pull/80) as commit `8fb34381aef72f510f512fa2b31e24376403171d`. Release Validation [#664](https://github.com/ashini-x/parmar-ai/actions/runs/42012212458) passed type-checking, unit tests, Node tests, and both Worker bundle validations. Production deployment and live-production verification were skipped because this was a documentation-only change. Exactly three documentation files changed; no production infrastructure was modified.
