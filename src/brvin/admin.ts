@@ -1235,6 +1235,44 @@ function renderCollections(list){
  $("collection").value=selectedCollectionId;
  $("collection-checks").innerHTML=list.filter(c=>c.status==="active").map(c=>'<label class="check"><input type="checkbox" value="'+esc(c.id)+'"'+(selectedCollectionIds.has(c.id)?" checked":"")+'> '+esc(c.name)+'</label>').join("")||'<span class="muted">Create a collection first.</span>';
 }
+function openProjectEditor(projectId){
+ const project=(model?.projects||[]).find(item=>item.id===projectId);if(!project)return;
+ $("modal-title").textContent="Knowledge project · "+project.name;
+ $("modal-body").innerHTML=
+  '<div class="field"><label for="edit-project-owner">Teacher / owner</label><input id="edit-project-owner" maxlength="120" value="'+esc(project.ownerLabel||"")+'" placeholder="Teacher or customer label"></div>'+
+  '<div class="field"><label for="edit-project-name">Knowledge project name</label><input id="edit-project-name" maxlength="100" value="'+esc(project.name)+'"></div>'+
+  '<div class="field"><label for="edit-project-description">Description</label><textarea id="edit-project-description" maxlength="500" rows="3">'+esc(project.description||"")+'</textarea></div>'+
+  '<div class="modal-actions"><button class="btn primary" id="save-project-details" type="button">Save details</button></div>';
+ $("modal").classList.add("open");
+ $("save-project-details").addEventListener("click",async()=>{
+  const button=$("save-project-details");button.disabled=true;
+  try{
+   const name=$("edit-project-name").value.trim();
+   if(!name)throw new Error("Enter a knowledge project name.");
+   await post("projects/update",{projectId:project.id,name,description:$("edit-project-description").value,ownerLabel:$("edit-project-owner").value});
+   $("modal").classList.remove("open");await refresh();
+  }catch(error){alert(error.message);button.disabled=false;}
+ });
+}
+function openApplicationEditor(applicationId){
+ const app=(model?.applications||[]).find(item=>item.id===applicationId);if(!app)return;
+ $("modal-title").textContent="Application · "+app.name;
+ $("modal-body").innerHTML=
+  '<div class="field"><label for="edit-app-owner">Teacher / owner</label><input id="edit-app-owner" maxlength="120" value="'+esc(app.ownerLabel||"")+'" placeholder="Teacher or customer label"></div>'+
+  '<div class="field"><label for="edit-app-name">Application name</label><input id="edit-app-name" maxlength="100" value="'+esc(app.name)+'"></div>'+
+  '<div class="field"><label for="edit-app-description">Purpose</label><textarea id="edit-app-description" maxlength="500" rows="3">'+esc(app.description||"")+'</textarea></div>'+
+  '<div class="modal-actions"><button class="btn primary" id="save-app-details" type="button">Save details</button></div>';
+ $("modal").classList.add("open");
+ $("save-app-details").addEventListener("click",async()=>{
+  const button=$("save-app-details");button.disabled=true;
+  try{
+   const name=$("edit-app-name").value.trim();
+   if(!name)throw new Error("Enter an application name.");
+   await post("applications/update",{applicationId:app.id,name,description:$("edit-app-description").value,ownerLabel:$("edit-app-owner").value});
+   $("modal").classList.remove("open");await refresh();
+  }catch(error){alert(error.message);button.disabled=false;}
+ });
+}
 function renderProjects(list){
  const previousProjectId=$("project-access").value;
  const selectedProjectIds=new Set([...$("project-checks").querySelectorAll("input:checked")].map(input=>input.value));
@@ -1242,17 +1280,27 @@ function renderProjects(list){
   const apps=(p.applications||[]).filter(a=>a.status==="active").map(a=>a.name||a.slug).join(", ");
   const nextStatus=p.status==="active"?"inactive":"active";
   const action=p.status==="active"?"Deactivate":"Activate";
-  return '<div class="tile"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><strong>'+esc(p.name)+'</strong>'+statusPill(p.status)+'</div><p>'+esc(p.description||"No description")+'</p><small>Direct books: '+p.directBooks+' · via collections: '+p.collectionBooks+' · slug '+esc(p.slug)+'</small><p><small>Application access: '+esc(apps||"No application grants")+'</small></p><div class="job-actions"><button class="btn" data-project-edit="'+esc(p.id)+'" type="button">Edit details</button><button class="btn" data-project-status="'+esc(p.id)+'" data-status="'+nextStatus+'" type="button">'+action+'</button></div></div>';
- }).join(""):'<div class="empty">No projects have been registered.</div>';
+  const ready=Number(p.readySourceCount||0),total=Number(p.sourceCount||0);
+  return '<article class="tile">'+
+   '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><strong>'+esc(p.name)+'</strong><div class="muted" style="font-size:10px;margin-top:4px">'+esc(p.ownerLabel||"Owner not assigned")+'</div></div>'+statusPill(p.status)+'</div>'+
+   '<p>'+esc(p.description||"No description")+'</p>'+
+   '<div class="pulse-row"><span>Knowledge sources ready</span><strong>'+ready+' / '+total+'</strong></div>'+
+   '<div class="pulse-row"><span>Collections</span><strong>'+Number(p.collectionBooks||0)+'</strong></div>'+
+   '<div class="pulse-row"><span>Connected applications</span><strong>'+Number(p.applicationCount||0)+'</strong></div>'+
+   '<div class="pulse-row"><span>Retrieval queries this month</span><strong>'+Number(p.monthlyQueries||0).toLocaleString()+'</strong></div>'+
+   '<div style="margin-top:9px"><small>Apps with active permission: '+esc(apps||"None assigned")+'</small></div>'+
+   '<div class="job-actions"><button class="btn" data-project-edit="'+esc(p.id)+'" type="button">Edit details</button><button class="btn" data-project-access="'+esc(p.id)+'" type="button">Manage sources</button><button class="btn" data-project-status="'+esc(p.id)+'" data-status="'+nextStatus+'" type="button">'+action+'</button></div>'+
+  '</article>';
+ }).join(""):'<div class="empty" style="grid-column:1/-1">No knowledge projects yet. Create a teacher workspace to start organizing source material.</div>';
  $("project-checks").innerHTML=list.filter(p=>p.status==="active").map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.id)+'"'+(selectedProjectIds.has(p.id)?" checked":"")+'> '+esc(p.name)+'</label>').join("")||'<span class="muted">No active projects. Create one below.</span>';
- $("project-access").innerHTML=list.filter(p=>p.status==="active").map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");
+ $("project-access").innerHTML=list.filter(p=>p.status==="active").map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+esc(p.ownerLabel||"No owner")+'</option>').join("");
  if(list.some(p=>p.id===previousProjectId&&p.status==="active"))$("project-access").value=previousProjectId;
- $("project-access").onchange=()=>{const p=list.find(item=>item.id===$("project-access").value);const allowed=new Set((model?.collections||[]).filter(c=>c.projects.some(link=>link.id===p?.id)).map(c=>c.id));$("collection-checks").querySelectorAll("input").forEach(input=>input.checked=allowed.has(input.value));};
- $("projects").querySelectorAll("[data-project-edit]").forEach(button=>button.addEventListener("click",async()=>{
-  const project=list.find(item=>item.id===button.dataset.projectEdit);if(!project)return;
-  const name=prompt("Project name",project.name);if(name===null)return;
-  const description=prompt("Project description",project.description||"");if(description===null)return;
-  try{await post("projects/update",{projectId:project.id,name,description});await refresh();}catch(error){alert(error.message);}
+ $("project-access").onchange=()=>{const p=list.find(item=>item.id===$("project-access").value);const allowed=new Set((model?.collections||[]).filter(col=>col.projects.some(link=>link.id===p?.id)).map(col=>col.id));$("collection-checks").querySelectorAll("input").forEach(input=>input.checked=allowed.has(input.value));};
+ $("projects").querySelectorAll("[data-project-edit]").forEach(button=>button.addEventListener("click",()=>openProjectEditor(button.dataset.projectEdit)));
+ $("projects").querySelectorAll("[data-project-access]").forEach(button=>button.addEventListener("click",()=>{
+  $("project-access").value=button.dataset.projectAccess;
+  $("project-access").dispatchEvent(new Event("change"));
+  activateView("governance");
  }));
  $("projects").querySelectorAll("[data-project-status]").forEach(button=>button.addEventListener("click",async()=>{
   const project=list.find(item=>item.id===button.dataset.projectStatus);if(!project)return;
@@ -1264,21 +1312,15 @@ function renderProjects(list){
 }
 function renderApplications(list){
  const active=list.filter(app=>app.status==="active");
- const previous={
-  project:$("project-application").value,
-  env:$("environment-application").value,
-  grantApp:$("grant-application").value,
-  grantProject:$("grant-project").value,
- };
+ const previous={env:$("environment-application").value,grantApp:$("grant-application").value,grantProject:$("grant-project").value};
  const fill=(id,items,previousValue,emptyLabel)=>{
   const select=$(id);select.innerHTML=items.length?items.map(item=>'<option value="'+esc(item.value)+'">'+esc(item.label)+'</option>').join(""):'<option value="">'+emptyLabel+'</option>';
   if(items.some(item=>item.value===previousValue))select.value=previousValue;
  };
  const options=active.map(app=>({value:app.id,label:app.name+" · "+app.slug}));
- fill("project-application",options,previous.project,"Register an application first");
  fill("environment-application",options,previous.env,"Register an active application first");
  fill("grant-application",options,previous.grantApp,"No active applications");
- fill("grant-project",(model?.projects||[]).filter(project=>project.status==="active").map(project=>({value:project.id,label:project.name+" · "+project.slug})),previous.grantProject,"No active projects");
+ fill("grant-project",(model?.projects||[]).filter(project=>project.status==="active").map(project=>({value:project.id,label:project.name+" · "+(project.ownerLabel||"No owner")})),previous.grantProject,"No active knowledge projects");
  const html=list.length?list.map(app=>{
   const appAction=app.status==="active"?"suspended":app.status==="suspended"?"active":null;
   const appActionLabel=app.status==="active"?"Suspend application":app.status==="suspended"?"Reactivate application":"Permanently revoked";
@@ -1286,12 +1328,21 @@ function renderApplications(list){
    const next=environment.status==="active"?"disabled":environment.status==="disabled"?"active":null;
    const action=next?'<button class="btn" data-environment-status="'+esc(environment.id)+'" data-status="'+next+'">'+(next==="disabled"?"Disable":"Activate")+'</button>':"";
    const revoke=environment.status!=="revoked"?'<button class="btn danger" data-environment-status="'+esc(environment.id)+'" data-status="revoked">Revoke identity</button>':"";
-   return '<div class="pulse-row"><span><strong>'+esc(environment.displayName||environment.environmentKey)+'</strong><br><small>'+esc(environment.environmentKey)+' · '+esc(environment.id)+'</small></span><span>'+statusPill(environment.status)+' '+action+' '+revoke+'</span></div>';
+   const verification=environment.status==="active"?"Registered · live verification not yet implemented":"Not available";
+   return '<div class="pulse-row"><span><strong>'+esc(environment.displayName||environment.environmentKey)+'</strong><br><small>'+esc(environment.environmentKey)+' · '+esc(verification)+' · '+esc(environment.id)+'</small></span><span>'+statusPill(environment.status)+' '+action+' '+revoke+'</span></div>';
   }).join(""):'<div class="empty">No deployment environments registered.</div>';
-  const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No project grants. Application cannot retrieve knowledge.</div>';
-  return '<article class="tile"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>'+esc(app.name)+'</strong><p><small>'+esc(app.slug)+' · '+esc(app.id)+'</small></p></div>'+statusPill(app.status)+'</div><p>'+esc(app.description||"No description")+'</p><div class="pulse-row"><span>Active environments</span><strong>'+app.activeEnvironmentCount+'</strong></div><div class="pulse-row"><span>Active project grants</span><strong>'+app.activeProjectCount+'</strong></div><div class="notice">Registry status only. A registered environment is not a live connection check; M6 verifies its Service Binding.</div>'+(appAction?'<button class="btn '+(appAction==="suspended"?"danger":"")+'" data-application-status="'+esc(app.id)+'" data-status="'+appAction+'">'+appActionLabel+'</button>':"")+'<div style="margin-top:14px"><strong>Environments</strong>'+envHtml+'</div><div style="margin-top:14px"><strong>Project access</strong>'+grantHtml+'</div></article>';
- }).join(""):'<div class="empty">No applications registered. Create the first application to start onboarding.</div>';
+  const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
+  return '<article class="tile">'+
+   '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>'+esc(app.name)+'</strong><p><small>'+esc(app.ownerLabel||"Owner not assigned")+' · '+esc(app.slug)+'</small></p></div>'+statusPill(app.status)+'</div>'+
+   '<p>'+esc(app.description||"No description")+'</p>'+
+   '<div class="pulse-row"><span>Deployment environments</span><strong>'+app.environments.length+'</strong></div>'+
+   '<div class="pulse-row"><span>Active knowledge grants</span><strong>'+app.activeProjectCount+'</strong></div>'+
+   '<div class="notice">Registry only — not live-connected. A registered environment is not proof of a deployed private Service Binding. M9 owns live connection verification.</div>'+
+   '<div class="job-actions"><button class="btn" data-application-edit="'+esc(app.id)+'" type="button">Edit details</button>'+(appAction?'<button class="btn '+(appAction==="suspended"?"danger":"")+'" data-application-status="'+esc(app.id)+'" data-status="'+appAction+'">'+appActionLabel+'</button>':"")+'</div>'+
+   '<div style="margin-top:14px"><strong>Environments</strong>'+envHtml+'</div><div style="margin-top:14px"><strong>Knowledge access</strong>'+grantHtml+'</div></article>';
+ }).join(""):'<div class="empty" style="grid-column:1/-1">No applications registered. Register an independently built app after its repository has been created with ChatGPT.</div>';
  $("applications-list").innerHTML=html;
+ $("applications-list").querySelectorAll("[data-application-edit]").forEach(button=>button.addEventListener("click",()=>openApplicationEditor(button.dataset.applicationEdit)));
  $("applications-list").querySelectorAll("[data-application-status]").forEach(button=>button.addEventListener("click",async()=>{
   const app=list.find(item=>item.id===button.dataset.applicationStatus);if(!app)return;
   const status=button.dataset.status;
