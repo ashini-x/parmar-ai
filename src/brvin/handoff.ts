@@ -34,7 +34,7 @@ function clean(value: unknown, max = 300): string {
 
 function repositoryParts(value: string): { owner: string; name: string } {
   const url = clean(value, 300);
-  const match = /^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/iu.exec(url);
+  const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/iu.exec(url);
   if (!match) throw new Error("Add a valid HTTPS GitHub repository URL before generating the handoff.");
   return { owner: match[1], name: match[2] };
 }
