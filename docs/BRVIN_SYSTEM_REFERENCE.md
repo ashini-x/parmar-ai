@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 6 November 2026 (M11 Operations implementation in progress; production GCS retention IAM issue documented)  
+**Last verified against source and production infrastructure:** 6 November 2026 (M11 initial Operations release deployed; GCS retention and real-consumer acceptance remain open)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/askmoina-voice`
 
@@ -9,7 +9,7 @@ This is the canonical technical reference for BRVIN. It records what exists in c
 
 When a future change alters code, D1 schema, bindings, access rules, ingestion, retrieval, deployment, or integrations, update this document and the relevant specialist document in the same change. Do not silently treat a planned feature as already shipped.
 
-> **BRVIN 2 implementation and chat continuity:** read [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md), then [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md), this as-built reference, [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The active product is a teacher-specific digital-brain knowledge platform and application connection manager. ChatGPT remains the user's software engineer using separate GitHub/Cloudflare authorizations. The autonomous Project Factory proposal is superseded historical documentation; do not follow its milestones. M0–M10 are complete; M4's fixed reference scaffold is retired and not a product requirement. M8 handoff generation is merged, deployed and production-accepted. M9 — live connection verification and activation is COMPLETE; the authenticated Parmar AI Production browser check and read-only D1 proof record both show Connected with one ready authorised source. M10 — teacher knowledge assignment/isolation — is COMPLETE and deployed. M11 — operations and administrator handover — is IN PROGRESS on `brvin/m11-operations-and-admin-handover`; runbook and operations visibility are being completed. A production GCS lifecycle permission repair remains a Google Cloud administrator action. The retired `brvin-test-client` scaffold must not be recreated.
+> **BRVIN 2 implementation and chat continuity:** read [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md), then [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md), this as-built reference, [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The active product is a teacher-specific digital-brain knowledge platform and application connection manager. ChatGPT remains the user's software engineer using separate GitHub/Cloudflare authorizations. The autonomous Project Factory proposal is superseded historical documentation; do not follow its milestones. M0–M10 are complete; M4's fixed reference scaffold is retired and not a product requirement. M8 handoff generation is merged, deployed and production-accepted. M9 — live connection verification and activation is COMPLETE; the authenticated Parmar AI Production browser check and read-only D1 proof record both show Connected with one ready authorised source. M10 — teacher knowledge assignment/isolation — is COMPLETE and deployed. M11 — the initial Operations increment — is deployed by PR #100/Main Release #768; GCS lifecycle IAM repair, live admin walkthrough and real teacher-app acceptance remain open. The retired `brvin-test-client` scaffold must not be recreated.
 
 ## Product-scope correction — 5 November 2026
 
@@ -70,18 +70,18 @@ Consumer application's own Gemini/LLM prompt and answer
 
 The two planes share the existing D1 registry and AI Search namespace. They do not create a database or index per app.
 
-## 1.1 BRVIN 2 production state (6 November 2026 — after M10 production release)
+## 1.1 BRVIN 2 production state (6 November 2026 — after M11 initial Operations release)
 
 - M1 added `brvin_applications`, `brvin_application_environments` and `brvin_application_project_grants` to the existing shared D1. The Parmar AI production application/environment and explicit Fatman project grant are seeded and active.
 - M2 added `listAuthorizedProjectsV2()`, `getProjectStatusV2(input)` and `retrieveProjectContextV2(input)` to the private `BrvinRetrievalApi` entrypoint. V1 methods remain available.
 - Parmar AI production carries both `clientId: fatman` and the generated production `applicationEnvironmentId`. `/health` checks v1/v2 Fatman readiness and source-count parity.
-- Latest paired production release after M10: `brvin-service` deployment `2b3d2330-0c2f-4fa2-9909-48dfe7997070`, version `97c8b017-0994-4be3-9045-110d8a892b99`; `parmar-ai` deployment `70d635d1-b384-41c8-a8a9-6e3d51066198`, version `91222548-5ecc-49e0-8fa8-45daac2e19a6`. Main Release Validation #756 (run `42098761142`) passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance; artifact `13448441278`.
+- Latest paired production release after M11 initial increment: `brvin-service` deployment `10fdd281-5f71-4261-b2da-adf568391458`, version `86114707-0bc3-4ee6-a227-bdb9bd9bcc5b`; `parmar-ai` deployment `224c1165-d65b-4693-9f42-1425ffa70521`, version `17386b5c-affb-4064-a261-3eb89c98179d`. Main Release Validation #768 (run `42104739449`) passed validation, paired deployment, root/health/private BRVIN/Fatman acceptance; artifact `13450708616`.
 - End-user Fatman retrieval remains on v1. AskMoina Voice's v2 binding and Gemini Live connector/tool integration are deployed as an optional pilot. Do not make its camera/audio acceptance a BRVIN milestone gate.
 - The former M4 independent reference-client scaffold was originally merged as `brvin-test-client` in AskMoina PR #381, then retired by PR #386. Its Worker source, Wrangler/TypeScript config, tests and dedicated deploy workflow are no longer in the AskMoina repository. It was never deployed. The shared BRVIN connector remains.
 - The historical Project Factory provider-administrator preflight and configured-scope correction were deployed through PRs #82, #83 and #88. They are part of the as-built code but are no longer an active product milestone. Do not ask the user to complete broad GitHub/Cloudflare administrator re-consent for the narrowed knowledge-platform goal. Audit any runtime dependencies before simplifying or removing this legacy UI; no credential should be revoked or deleted as a side effect.
 - The existing BRVIN GitHub App is installed on the `ashini-x` account. Its broader Project Factory permission upgrade and All-repository scope were never accepted as requirements for the clarified product. The saved Cloudflare OAuth grant remains `workers-scripts.edit offline_access`; this historical connection is not required to deliver the knowledge-platform workflow through ChatGPT's own integrations. Do not request additional consent or delete/revoke the existing provider configuration until its code/runtime dependencies have been audited.
 - The old fixed text-test application/environment are revoked, its project is inactive, its only application-project grant is revoked, and stale PR #385 metadata has been cleared from the GitHub provider connection. PR #385 was closed without merging; PR #386 removed the undeployed scaffold. The sample Rain Gardens PDF remains ready but unassigned.
-- The old provider-admin/test-client sequence above is superseded. Do not create the retired `brvin-test-client`, provision its token/secret, or reauthorize provider scopes for that purpose. M6 teacher-focused admin workspace, M7 application/repository/runtime registration, M8 ChatGPT integration handoff, M9 live v2 connection verification and M10 teacher knowledge assignment/isolation are complete. M11 operations/handover is the next active milestone.
+- The old provider-admin/test-client sequence above is superseded. Do not create the retired `brvin-test-client`, provision its token/secret, or reauthorize provider scopes for that purpose. M6 teacher-focused admin workspace, M7 application/repository/runtime registration, M8 ChatGPT integration handoff, M9 live v2 connection verification and M10 teacher knowledge assignment/isolation are complete. M11's initial Operations increment is deployed; GCS lifecycle IAM remediation, authenticated admin walkthrough and real teacher-app acceptance remain open.
 ## 2. Architecture decisions that must remain stable
 
 1. **One shared registry:** use the existing BRVIN tables in the shared D1 database. Do not create one D1 database per project or consumer app.
@@ -476,22 +476,32 @@ M10 shipped through [PR #99](https://github.com/ashini-x/parmar-ai/pull/99), squ
 
 **Next milestone:** M11 — operations, usage and quota visibility, connection/ingestion recovery, audit and administrator handover.
 
-### 9.7 M11 operations, usage and administrator handover — in progress
+### 9.7 M11 operations, usage and administrator handover — initial increment deployed; acceptance open
 
-M11 is being implemented in [PR #100](https://github.com/ashini-x/parmar-ai/pull/100), branch `brvin/m11-operations-and-admin-handover`. PR Release Validation [#764](https://github.com/ashini-x/parmar-ai/actions/runs/42104068272) passed TypeScript, unit tests, Node/browser-script tests and both Worker bundle dry-runs; merge and production deployment are pending.
+M11's initial implementation shipped in [PR #100](https://github.com/ashini-x/parmar-ai/pull/100), squash-merged as `f7801a558d2a0dae82a449a2ebf0196e24da3fee`. PR Release Validation [#764](https://github.com/ashini-x/parmar-ai/actions/runs/42104068272) passed TypeScript, unit tests, Node/browser-script tests and both Worker bundle dry-runs. Main Release Validation [#768](https://github.com/ashini-x/parmar-ai/actions/runs/42104739449) deployed both Workers; root/health/private BRVIN/Fatman smoke and release acceptance passed; artifact `13450708616`.
 
-The BRVIN Operations view now has a design/implementation path for:
-- Per-project monthly query use and remaining allowance, driven by the same 800/month bounded helper as retrieval enforcement. App grant views show the associated project counter as shared, not as application-attributed usage.
-- Current environment connection status counts; failed/warning event summaries; retention state; event filtering.
-- A protected read-only GCS diagnostic that separates core object operations from optional bucket lifecycle configuration.
-- Manual retry affordance for OCR-only cleanup after GCS permissions have been repaired.
+The deployed Operations view includes:
+- Per-project monthly query use and remaining allowance, driven by the same 800/month bounded helper as retrieval enforcement. App grant views show the associated project counter as shared, not application-attributed usage.
+- Current environment connection counts, failed/warning event summaries and OCR retention state.
+- Event filters for attention, retention, connections, ingestion and governance.
+- A protected read-only GCS diagnostic that separates core object permissions from optional bucket lifecycle permissions.
+- Failure-aware OCR-only cleanup state, paused unattended retries after a failure, and a manual retry path after GCS permissions are repaired.
+- A nontechnical administrator runbook at [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md).
 
-**Production retention finding:** a read-only production audit found Vision OCR cleanup failing because the ingestion service account cannot inspect bucket policy with `storage.buckets.get` on `parmar-fatman-ocr-90db7be4`. The 30-day lifecycle safety net also requires `storage.buckets.get` and `storage.buckets.update`. The observed source was still READY with all 3/3 pages indexed; the original PDF and searchable pages were retained. No GCP IAM permission was changed by M11 implementation. The administrator instructions and exact identity/bucket are in [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md).
+Production versions: `brvin-service` deployment `10fdd281-5f71-4261-b2da-adf568391458`, version `86114707-0bc3-4ee6-a227-bdb9bd9bcc5b`; `parmar-ai` deployment `224c1165-d65b-4693-9f42-1425ffa70521`, version `17386b5c-affb-4064-a261-3eb89c98179d`.
 
-After a failed OCR-only cleanup, unattended retries are paused to avoid looping on an unresolved IAM/policy error. The admin can manually retry after the storage diagnostic confirms permissions. The cleanup path remains separate from full PDF/index deletion. GCS soft-delete/retention may delay physical erasure after a successful delete request.
+**Production retention finding:** a read-only production audit found Vision OCR cleanup failing because the ingestion service account cannot inspect bucket policy with `storage.buckets.get` on `parmar-fatman-ocr-90db7be4`. The 30-day lifecycle safety net also requires `storage.buckets.get` and `storage.buckets.update`. The observed source was READY with 3/3 pages indexed; its original PDF and searchable pages were retained. No GCP IAM permission was changed by M11 implementation or deployment.
 
-**No production migration/data writes:** M11 has not added a D1 migration, changed production grants, created teacher test records or changed Worker secrets/bindings. PR validation and production release are pending. M11 is not complete until those checks and the nontechnical admin handover are accepted.
+**Read-only D1 verification:** (`rows_written=0`) confirmed existing AskMoina Voice → Fatman and Parmar AI → Fatman grants unchanged, the historical test grant still revoked, and Parmar AI Production's M9 connection record still `connected`, `ready=1`, one authorised source and proof hash present. Production counts remain 3 applications, 2 projects, 3 grant records and 1 connection check. No D1 migration, test tenant, app/project/grant, secret or binding was added or changed.
 
+**Remaining M11 acceptance gates:**
+1. A Google Cloud administrator must apply the bucket-scoped object/lifecycle permissions in the runbook.
+2. An authenticated administrator must run the read-only diagnostic and verify the lifecycle safety net; after IAM repair, retry OCR-only cleanup and confirm `source.vision_ocr_deleted` while the PDF, indexed pages and READY/archived state remain available.
+3. Perform an authenticated visual walkthrough of the Operations view and administrator runbook.
+4. Complete a real teacher-focused consumer application acceptance: register a distinct app, connect it through the ChatGPT handoff, grant a real teacher project/source, verify retrieval, then revoke and verify denial. No synthetic production teacher or grant has been created.
+
+M11 remains IN PROGRESS until these items have verifiable outcomes. No commercial or end-to-end readiness claim is made.
+ 
 ## 10. Consumer application integration
 
 ### 10.1 Supported same-account v2 connection
