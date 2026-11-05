@@ -1125,7 +1125,7 @@ const HTML = `<!doctype html>
    <p id="cf-client-state" class="muted">Checking the encrypted OAuth client configuration…</p>
    <div class="field"><label for="cf-required-scopes">Required one-time Cloudflare OAuth scopes</label><textarea id="cf-required-scopes" rows="5" readonly spellcheck="false"></textarea></div>
    <button class="btn" id="cf-copy-required-scopes" type="button">Copy required scopes</button>
-   <p class="notice">One-time Cloudflare approval: open Manage Account → OAuth clients, edit the existing BRVIN Connect client, add the scopes shown below, and ensure <code>account-api-tokens.write</code> (Account API Tokens Write) is selected. Do not add <code>account_api_tokens:create</code>: Cloudflare does not allow this self-managed OAuth client to request that Cloudflare CLI scope. Preserve authorization-code and refresh-token grants and the callback URL, then save and authorize BRVIN once. Its existing client secret is already encrypted in BRVIN; you do not need to create another client or re-enter the secret.</p>
+   <p class="notice">One-time Cloudflare approval: edit the existing BRVIN Connect client and allow the requested scopes shown below, including <code>account-api-tokens.write</code> (Account API Tokens Write). Do not add <code>account_api_tokens:create</code>; it is reserved for Cloudflare CLI OAuth. Your supplied scope list includes <code>workers-scripts.edit</code> (Workers Editor), but not <code>workers-scripts.admin</code> (Workers Admin). Editor can deploy/update existing Workers but cannot create/delete Workers. If Cloudflare offers <code>workers-scripts.admin</code> for this OAuth client, add it and re-authorize; otherwise full autonomous Worker creation is not available through this client and BRVIN will show that blocker rather than claim the Project Factory is ready. Preserve the callback URL and authorization-code/refresh-token grants. The client secret remains encrypted; do not create another client or re-enter it.</p>
    <button class="btn primary" id="cf-save-client" type="button">Save OAuth client securely</button>
    <button class="btn" id="cf-authorize" type="button">Authorize / refresh BRVIN access</button>
    <button class="btn" id="cf-discover-workers" type="button">Discover Workers</button>
@@ -1272,7 +1272,7 @@ function renderConnectState(){
   ?"Existing OAuth client "+(cloudflare.clientIdHint||"") +" is stored encrypted. Its secret does not need to be entered again."
   :"No OAuth client has been saved yet. Configure the existing BRVIN Connect client only if the encrypted client record is missing.";
  $("cf-worker-note").textContent=cloudflare.brvinServiceVisible
-  ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+". OAuth currently grants "+(cloudflare.grantedScopes||[]).length+" scopes; verify the expanded Admin and token-creation scopes below."
+  ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+". OAuth currently grants "+(cloudflare.grantedScopes||[]).length+" scopes. "+(cloudflare.workerAdminScopeGranted?"Workers Admin is granted.":"BLOCKER: Workers Editor is not Workers Admin; BRVIN cannot create/delete new Workers until workers-scripts.admin is granted.")
   :"Authorize the Cloudflare account that hosts private brvin-service. The capability check itself does not create or change Workers.";
 }
 async function refresh(){try{model=await api(API+"overview");render();await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
@@ -1480,7 +1480,10 @@ $("provider-capability-check").addEventListener("click",async()=>{
    const missing=cloudflare.missingScopes||[];
    parts.push("Cloudflare OAuth: "+(missing.length?"missing "+missing.length+" required scopes":"required scopes passed")+".");
    if(missing.length)parts.push("Missing scope IDs: "+missing.slice(0,14).join(", ")+(missing.length>14?" …":"")+".");
-   if(!missing.includes("account-api-tokens.write"))parts.push("Account API Tokens Write OAuth permission is present; token creation itself has not yet been verified.");
+   if(!missing.includes("account-api-tokens.write"))parts.push("Account API Tokens Write OAuth permission is present; actual token creation still needs a live provider test.");
+    if(!cloudflare.workerAdminScopeGranted)parts.push("BLOCKER: Workers Admin (workers-scripts.admin) is missing. Workers Editor only updates existing Workers and cannot create/delete the new Workers required by the Project Factory.");
+    else parts.push("Workers Admin is granted for create/delete operations.");
+    if(cloudflare.projectFactoryReady!==true)parts.push("Project Factory credential lifecycle is not accepted yet: real account-token creation, project-scoped permission verification and direct secret delivery still need live validation.");
   }else parts.push("Cloudflare: "+(cloudflare.error||"not authorized")+".");
   $("provider-capability-result").textContent=parts.join(" ");
  }catch(error){$("provider-capability-result").textContent="Provider check failed: "+error.message;}
