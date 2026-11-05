@@ -1,10 +1,10 @@
 # BRVIN Private Retrieval RPC v2 — Frozen Contract
 
-**Contract status:** Implemented and deployed in Milestone 2 (4 November 2026)  
+**Contract status:** Implemented and deployed; current contract for new consumers  
 **ADR:** [BRVIN 2 Architecture Decision Record](BRVIN_2_ARCHITECTURE_DECISIONS.md)  
 **Existing contract:** [BRVIN Private Retrieval API v1](BRVIN_PRIVATE_RETRIEVAL_API.md)
 
-This document specifies the versioned private WorkerEntrypoint v2 contract implemented in `src/brvin/service-worker.ts` and `src/brvin/service-core.ts`. Retrieval methods preserve v1 compatibility and use only `ctx.props.applicationEnvironmentId` for v2. M9 adds the probe-only `proveConnectionV2` method; it is not a retrieval method and is not part of the consumer retrieval connector.
+This document specifies the versioned private WorkerEntrypoint v2 contract implemented in `src/brvin/service-worker.ts` and `src/brvin/service-core.ts`. Retrieval methods preserve v1 compatibility and use only `ctx.props.applicationEnvironmentId` for v2. The live connection-verification extension adds the probe-only `proveConnectionV2` method; it is not a retrieval method and is not part of the consumer retrieval connector.
 
 ## 1. Transport and identity
 

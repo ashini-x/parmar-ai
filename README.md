@@ -197,16 +197,18 @@ The current learning system is primarily **per-student**. Accumulated quiz and l
 - [CONTRIBUTING.md](CONTRIBUTING.md): authorized contribution rules.
 - [SUPPORT.md](SUPPORT.md): support boundaries.
 
-### BRVIN 2 — application connectivity roadmap
+### BRVIN — current source of truth
 
-**Continuing BRVIN 2 in a new chat? Start with [docs/BRVIN_2_MASTER_PLAN.md](docs/BRVIN_2_MASTER_PLAN.md).** It is the canonical handover file: approved architecture, current baseline, milestone-by-milestone instructions, acceptance criteria and progress ledger.
+**Continuing BRVIN in a new chat? Start with [docs/BRVIN_2_MASTER_PLAN.md](docs/BRVIN_2_MASTER_PLAN.md).** It is the current handover and identifies the only active roadmap and technical references. M6–M10 are complete; M11 has one remaining real teacher-focused consumer retrieval/revocation acceptance test.
 
-### BRVIN knowledge platform
-
-- [docs/BRVIN_SYSTEM_REFERENCE.md](docs/BRVIN_SYSTEM_REFERENCE.md): canonical architecture, infrastructure map, D1 model, trust boundaries, ingestion and retrieval lifecycle.
-- [docs/BRVIN_INTEGRATION_GUIDE.md](docs/BRVIN_INTEGRATION_GUIDE.md): project onboarding and same-account Worker integration contract.
-- [docs/BRVIN_PRIVATE_RETRIEVAL_API.md](docs/BRVIN_PRIVATE_RETRIEVAL_API.md): internal RPC methods, input/result types, authorization and failure semantics.
-- [docs/BRVIN_OPERATIONS_RUNBOOK.md](docs/BRVIN_OPERATIONS_RUNBOOK.md): admin procedures, upload lifecycle, recovery, deletion, troubleshooting and release operations.
+- [docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md): approved scope and active milestone acceptance.
+- [docs/BRVIN_SYSTEM_REFERENCE.md](docs/BRVIN_SYSTEM_REFERENCE.md): as-built architecture and production state.
+- [docs/BRVIN_2_ARCHITECTURE_DECISIONS.md](docs/BRVIN_2_ARCHITECTURE_DECISIONS.md): accepted architecture decisions.
+- [docs/BRVIN_2_RPC_V2_CONTRACT.md](docs/BRVIN_2_RPC_V2_CONTRACT.md): current private v2 contract.
+- [docs/BRVIN_INTEGRATION_GUIDE.md](docs/BRVIN_INTEGRATION_GUIDE.md): consumer Worker integration.
+- [docs/BRVIN_ADMIN_RUNBOOK.md](docs/BRVIN_ADMIN_RUNBOOK.md): administrator instructions.
+- [docs/BRVIN_OPERATIONS_RUNBOOK.md](docs/BRVIN_OPERATIONS_RUNBOOK.md): engineering/operator troubleshooting.
+- [docs/BRVIN_PRIVATE_RETRIEVAL_API.md](docs/BRVIN_PRIVATE_RETRIEVAL_API.md): legacy v1 compatibility only.
 
 ### Specialized directories
 

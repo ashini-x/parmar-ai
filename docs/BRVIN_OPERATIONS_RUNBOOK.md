@@ -1,6 +1,6 @@
 # BRVIN Operations Runbook
 
-This document is for administrators and engineers operating the current BRVIN production system in `ashini-x/parmar-ai`.
+This is the detailed engineering/operator runbook for the current BRVIN production system in `ashini-x/parmar-ai`. It covers system-level procedures, admin API routes, troubleshooting and deployment. For day-to-day, beginner-friendly administrator tasks, use [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md).
 
 For architecture and design decisions, see [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md). For connecting an application, see [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md).
 
