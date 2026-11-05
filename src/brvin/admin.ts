@@ -1220,8 +1220,8 @@ function time(value){return value?new Date(Number(value)).toLocaleString():"—"
 function pct(a,b){return b?Math.max(0,Math.min(100,Math.floor(a/b*100))):0;}
 function statusPill(s){return '<span class="pill '+esc(s)+'">'+esc(String(s||"unknown").replaceAll("_"," "))+"</span>";}
 function renderMetrics(s){$("metrics").innerHTML=[
-["Knowledge sources",s.books,"Across all collections"],["Collections",s.collections,"Governed groups"],["Projects",s.projects,"Independent consumers"],
-["Indexed pages",s.indexedPages.toLocaleString()+" / "+s.totalPages.toLocaleString(),"Page-level coverage"],
+["Knowledge sources",s.books,"Across all teacher projects"],["Knowledge projects",s.projects,"Teacher digital brains"],["Applications",s.applications||0,"Independent consumer apps"],
+["Collections",s.collections,"Governed groups"],["Indexed pages",s.indexedPages.toLocaleString()+" / "+s.totalPages.toLocaleString(),"Page-level coverage"],
 ["Active pipelines",s.activeBooks,"Running now"],["Needs attention",s.failedBooks,"Failed or blocked"]
 ].map(x=>'<div class="metric"><span>'+x[0]+'</span><strong>'+x[1]+'</strong><small>'+x[2]+'</small></div>').join("");}
 function renderCollections(list){
@@ -1563,9 +1563,9 @@ $("open-upload").addEventListener("click",openUpload);$("open-upload-secondary")
 $("close-upload").addEventListener("click",()=>$("upload-modal").classList.remove("open"));$("upload-modal").addEventListener("click",event=>{if(event.target===$("upload-modal"))$("upload-modal").classList.remove("open");});
 $("close-upload").addEventListener("click",()=>$("upload-modal").classList.remove("open"));$("upload-modal").addEventListener("click",event=>{if(event.target===$("upload-modal"))$("upload-modal").classList.remove("open");});
 $("clear-brvin").addEventListener("click",clearAllBrvinBooks);$("upload").addEventListener("click",uploadBook);$("refresh").addEventListener("click",()=>refresh());$("logout").addEventListener("click",async()=>{await fetch("/admin/logout",{method:"POST",credentials:"same-origin"});location.assign("/admin/login");});
-$("create-project").addEventListener("click",async()=>{try{const applicationId=$("project-application").value;if(!applicationId)throw new Error("Select an active application for this project.");await post("projects",{name:$("project-name").value,description:$("project-desc").value,applicationId});$("project-name").value="";$("project-desc").value="";await refresh();}catch(e){alert(e.message);}});
+$("create-project").addEventListener("click",async()=>{try{const name=$("project-name").value.trim();if(!name)throw new Error("Enter a knowledge project name.");await post("projects",{name,description:$("project-desc").value,ownerLabel:$("project-owner").value,legacyClient:false});$("project-name").value="";$("project-desc").value="";$("project-owner").value="";await refresh();}catch(e){alert(e.message);}});
 $("create-application").addEventListener("click",async()=>{
- try{const name=$("application-name").value.trim();if(!name)throw new Error("Enter an application name.");await post("applications",{name,description:$("application-desc").value});$("application-name").value="";$("application-desc").value="";await refresh();}
+ try{const name=$("application-name").value.trim();if(!name)throw new Error("Enter an application name.");await post("applications",{name,description:$("application-desc").value,ownerLabel:$("application-owner").value});$("application-name").value="";$("application-desc").value="";$("application-owner").value="";await refresh();}
  catch(error){alert(error.message);}
 });
 $("create-environment").addEventListener("click",async()=>{
