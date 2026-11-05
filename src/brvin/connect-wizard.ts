@@ -179,6 +179,7 @@ async function githubRequest<T>(path: string, token: string, method = "GET", bod
     method,
     headers: {
       accept: "application/vnd.github+json",
+      "user-agent": "BRVIN-Connect",
       authorization: "Bearer " + token,
       "x-github-api-version": "2022-11-28",
       ...(body === undefined ? {} : { "content-type": "application/json" }),
@@ -378,7 +379,11 @@ export async function completeBrvinGitHubManifest(env: Env, request: Request): P
     if (!statePayload || statePayload.purpose !== "manifest") return callbackHtml("GitHub setup expired", "This one-time registration state was invalid, expired or already used. Start again from BRVIN.", false);
     const response = await fetch(GITHUB_API + "/app-manifests/" + encodeURIComponent(code) + "/conversions", {
       method: "POST",
-      headers: { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28" },
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "BRVIN-Connect",
+        "x-github-api-version": "2022-11-28",
+      },
     });
     const responseText = await response.text();
     let payload: unknown = {};

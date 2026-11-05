@@ -149,14 +149,17 @@ describe("BRVIN Connect Application wizard", () => {
     const startBody = await start.json() as { action: string };
     const state = new URL(startBody.action).searchParams.get("state")!;
     const privateKey = "-----BEGIN RSA PRIVATE KEY-----\nprivate-test-key\n-----END RSA PRIVATE KEY-----";
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      id: 123,
-      slug: "brvin-connect",
-      name: "BRVIN Connect",
-      html_url: "https://github.com/apps/brvin-connect",
-      pem: privateKey,
-      permissions: { metadata: "read", contents: "write", pull_requests: "write" },
-    }), { status: 201, headers: { "content-type": "application/json" } }));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(new Headers(init?.headers).get("user-agent")).toBe("BRVIN-Connect");
+      return new Response(JSON.stringify({
+        id: 123,
+        slug: "brvin-connect",
+        name: "BRVIN Connect",
+        html_url: "https://github.com/apps/brvin-connect",
+        pem: privateKey,
+        permissions: { metadata: "read", contents: "write", pull_requests: "write" },
+      }), { status: 201, headers: { "content-type": "application/json" } });
+    });
     vi.stubGlobal("fetch", fetchMock);
     const callback = await completeBrvinGitHubManifest(env(db), request("https://parmar.example/admin/brvin/connect/github/callback?code=one-time-code&state="+encodeURIComponent(state)));
     expect(callback.status).toBe(200);
