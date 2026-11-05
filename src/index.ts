@@ -48,16 +48,12 @@ import {
   completeBrvinCloudflareOAuth,
   completeBrvinGitHubManifest,
   configureBrvinCloudflareOAuth,
-  createBrvinTestClientPullRequest,
   discoverBrvinCloudflareWorkers,
   listBrvinGitHubInstallations,
   listBrvinGitHubRepositories,
-  registerBrvinTestConsumer,
   selectBrvinGitHubInstallation,
   startBrvinCloudflareOAuth,
   startBrvinGitHubManifest,
-  verifyBrvinTestClientDeployment,
-  provisionBrvinTestClientAccessToken,
 } from "./brvin/connect-wizard";
 import { runBrvinRecoverySupervisor, runBrvinVisionRetentionSupervisor } from "./fatman/workflow";
 export { FatmanImportWorkflow } from "./fatman/workflow";
@@ -2236,7 +2232,6 @@ const worker = {
         if (adminApiPath === "/admin/api/brvin/connect/github/installations" && request.method === "GET") return listBrvinGitHubInstallations(env);
         if (adminApiPath === "/admin/api/brvin/connect/github/repositories" && request.method === "GET") return listBrvinGitHubRepositories(env);
         if (adminApiPath === "/admin/api/brvin/connect/cloudflare/workers" && request.method === "GET") return discoverBrvinCloudflareWorkers(env, request);
-        if (adminApiPath === "/admin/api/brvin/connect/verify" && request.method === "GET") return verifyBrvinTestClientDeployment(env, request);
         if (adminApiPath === "/admin/api/brvin/diagnostics/storage" && request.method === "GET") return diagnoseFatmanGcsUpload(env);
         if (adminApiPath === "/admin/api/brvin/status" && request.method === "GET") return brvinImportStatus(env, url.searchParams.get("id"));
         if (adminApiPath === "/admin/api/fatman/monitor" && request.method === "GET") return fatmanMonitorStatus(env);
@@ -2251,9 +2246,6 @@ const worker = {
           if (adminApiPath === "/admin/api/brvin/connect/github/installation") return selectBrvinGitHubInstallation(env, request);
           if (adminApiPath === "/admin/api/brvin/connect/cloudflare/configure") return configureBrvinCloudflareOAuth(env, request);
           if (adminApiPath === "/admin/api/brvin/connect/cloudflare/start") return startBrvinCloudflareOAuth(env, request);
-          if (adminApiPath === "/admin/api/brvin/connect/consumer") return registerBrvinTestConsumer(env, request);
-          if (adminApiPath === "/admin/api/brvin/connect/pull-request") return createBrvinTestClientPullRequest(env, request);
-          if (adminApiPath === "/admin/api/brvin/connect/test-access-token") return provisionBrvinTestClientAccessToken(env, request);
           if (adminApiPath === "/admin/api/brvin/upload/start") return startBrvinBookUpload(env, request);
           if (adminApiPath === "/admin/api/brvin/projects") return createBrvinProject(env, request);
           if (adminApiPath === "/admin/api/brvin/projects/update") return updateBrvinProject(env, request);

@@ -1,5 +1,5 @@
 import type { Env } from "../config/env";
-import { ensureAnalyticsSchema, recordBrvinActivity } from "../analytics/db";
+import { ensureAnalyticsSchema } from "../analytics/db";
 import { json } from "../http/response";
 
 type Provider = "github" | "cloudflare";
@@ -10,9 +10,6 @@ const GITHUB_API = "https://api.github.com";
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const CLOUDFLARE_AUTH = "https://dash.cloudflare.com/oauth2/auth";
 const CLOUDFLARE_TOKEN = "https://dash.cloudflare.com/oauth2/token";
-const TEST_REPOSITORY = "ashini-x/askmoina-voice";
-const TEST_CONFIG_PATH = "wrangler.brvin-test-client.jsonc";
-const TEST_WORKER_NAME = "brvin-test-client";
 const BRVIN_SERVICE_NAME = "brvin-service";
 
 export const BRVIN_GITHUB_REQUIRED_PERMISSIONS = {
@@ -32,6 +29,11 @@ export const BRVIN_GITHUB_REQUIRED_PERMISSIONS = {
 } as const;
 
 export const BRVIN_CLOUDFLARE_REQUIRED_SCOPES = [
+  // Cloudflare's Oct 1, 2026 OAuth token-provisioning scope is a special OAuth
+  // capability and is not returned by GET /oauth/scopes. Keep the API-token
+  // permission group as well: generated account tokens are limited by both
+  // the creator's Cloudflare roles and the scopes granted to this OAuth client.
+  "account_api_tokens:create",
   "account-api-tokens.write",
   "agw.read", "agw.run", "agw.write",
   "ai-model.read", "ai-model.write",
@@ -55,7 +57,7 @@ export const BRVIN_CLOUDFLARE_REQUIRED_SCOPES = [
   "mcp-portals.read", "mcp-portals.write",
   "messaging.edit", "messaging.metadata_read", "messaging.read",
   "offline_access",
-  "page.read", "page.write", "pages.metadata_read",
+  "page.read", "page.shield", "page.write", "pages.metadata_read",
   "pipelines.read", "pipelines.send", "pipelines.write",
   "pubsub.read", "pubsub.write",
   "query-cache.read", "query-cache.write",
@@ -101,20 +103,6 @@ function fromBase64(value: string): Uint8Array {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
   return bytes;
-}
-
-function base64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const value of bytes) binary += String.fromCharCode(value);
-  return btoa(binary);
-}
-
-function encodeText(value: string): string {
-  return base64(new TextEncoder().encode(value));
-}
-
-function decodeText(value: string): string {
-  return new TextDecoder().decode(fromBase64(value));
 }
 
 function ownedBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -380,13 +368,6 @@ async function getCloudflareBundle(env: Env): Promise<{ row: ConnectionRow; bund
   return { row, bundle };
 }
 
-function accountScripts(scripts: Array<Record<string, unknown>>): Array<{ name: string; modifiedOn: string | null }> {
-  return scripts.map(script => ({
-    name: clean(script.id || script.script || script.name, 128),
-    modifiedOn: typeof script.modified_on === "string" ? script.modified_on : null,
-  })).filter(script => script.name).sort((a, b) => a.name.localeCompare(b.name));
-}
-
 export async function brvinConnectStatus(env: Env): Promise<Response> {
   try {
     const [github, cloudflare] = await Promise.all([connection(env, "github"), connection(env, "cloudflare")]);
@@ -408,12 +389,13 @@ export async function brvinConnectStatus(env: Env): Promise<Response> {
         installationUrl: installationId ? "https://github.com/settings/installations/" + installationId : null,
         installationAccount: clean(githubMeta.installationAccount, 100) || null,
         repositorySelection: clean(githubMeta.repositorySelection, 20) || null,
-        selectedRepository: clean(githubMeta.selectedRepository, 200) || null,
-        pullRequestUrl: clean(githubMeta.pullRequestUrl, 500) || null,
         requiredPermissions: BRVIN_GITHUB_REQUIRED_PERMISSIONS,
       },
       cloudflare: {
         status: cloudflare?.status || "not_configured",
+        oauthClientConfigured: Boolean(clean(cfMeta.clientIdHint, 40)),
+        clientIdHint: clean(cfMeta.clientIdHint, 40) || null,
+        callbackUrl: clean(cfMeta.redirectUri, 500) || null,
         accountId: clean(cfMeta.accountId, 32) || clean(env.BRVIN_HOME_ACCOUNT_ID, 32) || null,
         brvinServiceVisible: cfMeta.brvinServiceVisible === true,
         lastWorkerDiscoveryAt: Number(cfMeta.lastWorkerDiscoveryAt || 0) || null,
@@ -421,7 +403,6 @@ export async function brvinConnectStatus(env: Env): Promise<Response> {
         requiredScopes: BRVIN_CLOUDFLARE_REQUIRED_SCOPES,
         missingScopes: missingCloudflareScopes,
       },
-      supportedAdapter: { repository: TEST_REPOSITORY, configPath: TEST_CONFIG_PATH, worker: TEST_WORKER_NAME, status: "superseded_by_project_factory" },
     });
   } catch (error) {
     return json({ ok: false, error: safeError(error) }, 500);
@@ -840,334 +821,6 @@ export async function discoverBrvinCloudflareWorkers(env: Env, request: Request)
   }
 }
 
-export async function registerBrvinTestConsumer(env: Env, request: Request): Promise<Response> {
-  let body: { applicationName?: unknown; applicationDescription?: unknown; environmentKey?: unknown; projectName?: unknown; projectDescription?: unknown };
-  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid test application details." }, 400); }
-  const applicationName = "BRVIN Text Test Client";
-  const applicationSlug = "brvin-text-test-client";
-  const description = "Independent text-only BRVIN reference client; no voice runtime dependency.";
-  const environmentKey = "production";
-  const projectName = clean(body.projectName, 100).replace(/\s+/gu, " ");
-  const projectDescription = clean(body.projectDescription, 500);
-  const slugify = (value: string) => value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/gu, "").replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 64);
-  const projectSlug = slugify(projectName);
-  if (!projectName || !projectSlug) return json({ ok: false, error: "Enter a valid dedicated test-project name." }, 400);
-  try {
-    if (!env.DB) return json({ ok: false, error: "BRVIN D1 is not configured." }, 503);
-    await ensureAnalyticsSchema(env);
-    const applicationId = crypto.randomUUID().toLowerCase();
-    const environmentId = crypto.randomUUID().toLowerCase();
-    const projectId = crypto.randomUUID().toLowerCase();
-    const grantId = crypto.randomUUID().toLowerCase();
-    const now = Date.now();
-    await env.DB.batch([
-      env.DB.prepare("INSERT INTO brvin_applications (id,slug,name,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)")
-        .bind(applicationId, applicationSlug, applicationName, description, now, now),
-      env.DB.prepare("INSERT INTO brvin_application_environments (id,application_id,environment_key,display_name,status,created_at,updated_at) VALUES (?,?,?,?, 'active',?,?)")
-        .bind(environmentId, applicationId, environmentKey, environmentKey, now, now),
-      env.DB.prepare("INSERT INTO brvin_projects (id,name,slug,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)")
-        .bind(projectId, projectName, projectSlug, projectDescription, now, now),
-      env.DB.prepare("INSERT INTO brvin_application_project_grants (id,application_id,project_id,status,created_at,created_by) VALUES (?,?,?,'active',?,'connect-wizard')")
-        .bind(grantId, applicationId, projectId, now),
-    ]);
-    await recordBrvinActivity(env, {
-      projectId, agent: "BRVIN Connect Application wizard", phase: "governance",
-      eventType: "application.test_consumer_registered", status: "completed",
-      message: "The first controlled text test consumer, environment identity, isolated project and explicit application grant were registered.",
-      details: { applicationId, environmentId, projectId, grantId },
-    });
-    await audit(env, "github", "consumer.registered", "The isolated BRVIN text test consumer was registered with a dedicated project grant.", { applicationId, environmentId, projectId });
-    return json({
-      ok: true,
-      application: { id: applicationId, slug: applicationSlug, name: applicationName },
-      environment: { id: environmentId, key: environmentKey },
-      project: { id: projectId, slug: projectSlug, name: projectName },
-      grantId,
-    }, 201);
-  } catch (error) {
-    return json({ ok: false, error: safeError(error) }, 409);
-  }
-}
-
-async function readGitHubFile(token: string, repository: string, path: string, ref: string): Promise<{ sha: string; text: string }> {
-  const response = await githubRequest<{ sha?: string; content?: string; encoding?: string }>(
-    "/repos/" + repository + "/contents/" + path.split("/").map(encodeURIComponent).join("/") + "?ref=" + encodeURIComponent(ref),
-    token,
-  );
-  if (!response.sha || !response.content || response.encoding !== "base64") throw new Error("The supported BRVIN test-client config file is missing or cannot be read.");
-  return { sha: response.sha, text: decodeText(response.content.replace(/\s/gu, "")) };
-}
-
-export async function createBrvinTestClientPullRequest(env: Env, request: Request): Promise<Response> {
-  let body: { applicationId?: unknown; environmentId?: unknown; repository?: unknown; baseBranch?: unknown };
-  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid connection request." }, 400); }
-  const applicationId = clean(body.applicationId, 36);
-  const environmentId = clean(body.environmentId, 36);
-  const repository = clean(body.repository, 200);
-  const baseBranch = clean(body.baseBranch, 100);
-  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !/^[a-f0-9-]{36}$/iu.test(environmentId) || repository !== TEST_REPOSITORY || baseBranch !== "main") {
-    return json({ ok: false, error: "This M6 adapter currently supports only the BRVIN text test Worker in ashini-x/askmoina-voice on main." }, 400);
-  }
-  try {
-    if (!env.DB) return json({ ok: false, error: "BRVIN D1 is not configured." }, 503);
-    await ensureAnalyticsSchema(env);
-    const [application, environment] = await Promise.all([
-      env.DB.prepare("SELECT id,slug,name,status FROM brvin_applications WHERE id=?").bind(applicationId).first<{ id: string; slug: string; name: string; status: string }>(),
-      env.DB.prepare("SELECT id,application_id,environment_key,status FROM brvin_application_environments WHERE id=?").bind(environmentId).first<{ id: string; application_id: string; environment_key: string; status: string }>(),
-    ]);
-    if (!application || application.status !== "active" || !environment || environment.status !== "active" || environment.application_id !== applicationId) {
-      return json({ ok: false, error: "Choose an active application and one of its active environment identities." }, 409);
-    }
-    if (application.slug !== "brvin-text-test-client" || environment.environment_key !== "production") {
-      return json({
-        ok: false,
-        error: "This adapter is restricted to the dedicated BRVIN Text Test Client production identity. Existing AskMoina Voice and Parmar AI identities cannot be attached.",
-      }, 409);
-    }
-    const grant = await env.DB.prepare(
-      "SELECT id,project_id FROM brvin_application_project_grants " +
-      "WHERE application_id=? AND status='active' AND project_id<>'fatman' LIMIT 1"
-    ).bind(applicationId).first<{ id: string; project_id: string }>();
-    if (!grant) return json({ ok: false, error: "Grant this dedicated text-test application an isolated non-Fatman BRVIN project before connecting its Worker." }, 409);
-    const cf = await authorizedCloudflare(env, request);
-    const { row: ghRow, bundle } = await getGitHubBundle(env);
-    const token = await githubInstallationToken(env, bundle, repository);
-    const accessible = await githubRequest<{ repositories?: Array<{ full_name?: string }> }>("/installation/repositories?per_page=100", token);
-    if (!(accessible.repositories || []).some(repo => repo.full_name === repository)) return json({ ok: false, error: "The selected repository is not accessible to the selected GitHub App installation." }, 403);
-    const { text: currentConfig } = await readGitHubFile(token, repository, TEST_CONFIG_PATH, baseBranch);
-    let config: Record<string, unknown>;
-    try { config = JSON.parse(currentConfig) as Record<string, unknown>; } catch { return json({ ok: false, error: "The test Worker Wrangler config is not valid JSONC-compatible JSON. The known adapter will not rewrite unsupported config." }, 409); }
-    if (config.name !== TEST_WORKER_NAME || config.main !== "workers/brvin-test-client/src/index.ts") return json({ ok: false, error: "The target repository no longer matches the reviewed BRVIN text test-client adapter. No files were changed." }, 409);
-    const services = Array.isArray(config.services) ? config.services as Array<Record<string, unknown>> : [];
-    if (services.some(binding => binding.binding === "BRVIN_SERVICE")) return json({ ok: false, error: "The test Worker already has a BRVIN_SERVICE binding. Review its existing binding instead of creating a duplicate." }, 409);
-    config.services = [...services, { binding: "BRVIN_SERVICE", service: BRVIN_SERVICE_NAME, entrypoint: "BrvinRetrievalApi", props: { applicationEnvironmentId: environmentId } }];
-    const updated = JSON.stringify(config, null, 2) + "\n";
-    const ref = await githubRequest<{ object?: { sha?: string } }>("/repos/" + repository + "/git/ref/heads/" + encodeURIComponent(baseBranch), token);
-    const currentCommitSha = ref.object?.sha;
-    if (!currentCommitSha) throw new Error("GitHub could not resolve the target branch.");
-    const commit = await githubRequest<{ tree?: { sha?: string } }>("/repos/" + repository + "/git/commits/" + currentCommitSha, token);
-    const treeSha = commit.tree?.sha;
-    if (!treeSha) throw new Error("GitHub could not resolve the target commit tree.");
-    const blob = await githubRequest<{ sha?: string }>("/repos/" + repository + "/git/blobs", token, "POST", { content: encodeText(updated), encoding: "base64" });
-    if (!blob.sha) throw new Error("GitHub did not create the proposed configuration blob.");
-    const tree = await githubRequest<{ sha?: string }>("/repos/" + repository + "/git/trees", token, "POST", { base_tree: treeSha, tree: [{ path: TEST_CONFIG_PATH, mode: "100644", type: "blob", sha: blob.sha }] });
-    if (!tree.sha) throw new Error("GitHub did not create the proposed configuration tree.");
-    const newCommit = await githubRequest<{ sha?: string }>("/repos/" + repository + "/git/commits", token, "POST", {
-      message: "feat(brvin): connect isolated text test Worker to private retrieval",
-      tree: tree.sha, parents: [currentCommitSha],
-    });
-    if (!newCommit.sha) throw new Error("GitHub did not create the review commit.");
-    const branchName = "brvin/connect-" + application.slug + "-" + Date.now().toString(36);
-    await githubRequest("/repos/" + repository + "/git/refs", token, "POST", { ref: "refs/heads/" + branchName, sha: newCommit.sha });
-    const pr = await githubRequest<{ html_url?: string; number?: number; head?: { sha?: string } }>("/repos/" + repository + "/pulls", token, "POST", {
-      title: "Connect " + application.name + " to BRVIN private retrieval",
-      head: branchName, base: baseBranch,
-      body:
-        "## BRVIN Connect Application proposal\n\n" +
-        "This PR connects only the isolated brvin-test-client Worker to the private same-account brvin-service Service Binding.\n\n" +
-        "- Application: " + application.name + " (" + application.slug + ")\n" +
-        "- Environment key: " + environment.environment_key + "\n" +
-        "- Trusted environment ID: " + environmentId + "\n" +
-        "- Project access remains governed by the existing BRVIN application-project grants.\n" +
-        "- No project ID, secret or API token is written to source.\n" +
-        "- The existing AskMoina Voice Worker/configuration is unchanged.\n\n" +
-        "Review the generated binding and standard checks. Merging this PR is an explicit administrator action; the wizard does not merge or deploy.",
-    });
-    if (!pr.html_url || !pr.number) throw new Error("GitHub did not return a pull request URL.");
-    const metadata = JSON.parse(ghRow.metadata_json || "{}") as Record<string, unknown>;
-    await saveConnection(env, "github", "pr_created", {
-      ...metadata, installationId: bundle.installationId, installationAccount: bundle.installationAccount,
-      selectedRepository: repository, pullRequestUrl: pr.html_url, pullRequestNumber: pr.number,
-      pullRequestHeadSha: pr.head?.sha || newCommit.sha, pullRequestCreatedAt: Date.now(),
-      connectedApplicationId: applicationId, connectedEnvironmentId: environmentId,
-      connectedProjectId: grant.project_id,
-    }, { ...bundle, lastRepository: repository, lastPullRequestUrl: pr.html_url });
-    await audit(env, "github", "github.connection_pr_created", "A reviewable GitHub pull request was created for the isolated BRVIN text test Worker.", {
-      repository, pullRequestNumber: pr.number, pullRequestUrl: pr.html_url, applicationId, environmentId,
-      cloudflareWorkerCount: cf.scripts.length,
-    });
-    return json({ ok: true, repository, branch: branchName, pullRequest: { number: pr.number, url: pr.html_url, headSha: pr.head?.sha || newCommit.sha } }, 201);
-  } catch (error) {
-    return json({ ok: false, error: safeError(error) }, 502);
-  }
-}
-
-export async function provisionBrvinTestClientAccessToken(env: Env, request: Request): Promise<Response> {
-  try {
-    if (!env.DB) return json({ ok: false, error: "BRVIN D1 is not configured." }, 503);
-    await ensureAnalyticsSchema(env);
-    const github = await connection(env, "github");
-    if (!github || github.status !== "pr_created") {
-      return json({ ok: false, error: "Create and review the dedicated text-test connection pull request first." }, 409);
-    }
-    const metadata = JSON.parse(github.metadata_json || "{}") as Record<string, unknown>;
-    const applicationId = clean(metadata.connectedApplicationId, 36);
-    const environmentId = clean(metadata.connectedEnvironmentId, 36);
-    const projectId = clean(metadata.connectedProjectId, 128);
-    if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !/^[a-f0-9-]{36}$/iu.test(environmentId) || !/^[a-f0-9-]{36}$/iu.test(projectId)) {
-      return json({ ok: false, error: "The connection PR does not contain the dedicated application, environment and project identities." }, 409);
-    }
-
-    const registered = await env.DB.prepare(
-      "SELECT a.id AS application_id,e.id AS environment_id,g.project_id " +
-      "FROM brvin_applications a " +
-      "JOIN brvin_application_environments e ON e.application_id=a.id " +
-      "JOIN brvin_application_project_grants g ON g.application_id=a.id AND g.project_id=? AND g.status='active' " +
-      "JOIN brvin_projects p ON p.id=g.project_id AND p.status='active' " +
-      "WHERE a.id=? AND e.id=? AND a.slug='brvin-text-test-client' AND e.environment_key='production' " +
-      "AND a.status='active' AND e.status='active' LIMIT 1"
-    ).bind(projectId, applicationId, environmentId).first<{ application_id: string; environment_id: string; project_id: string }>();
-    if (!registered) {
-      return json({ ok: false, error: "The dedicated text-test application, environment or project grant is no longer active. No tester token was installed." }, 409);
-    }
-
-    const { accessToken, scripts } = await authorizedCloudflare(env, request);
-    if (!scripts.some(script => clean(script.id || script.script || script.name, 128) === TEST_WORKER_NAME)) {
-      return json({ ok: false, error: "The independent text Worker has not been deployed yet. Merge the connection PR and wait for its separate deployment workflow." }, 409);
-    }
-    const accountId = clean(env.BRVIN_HOME_ACCOUNT_ID, 32);
-    const settings = await cloudflareApi<{ bindings?: Array<Record<string, unknown>> }>(
-      accessToken,
-      "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/settings",
-    );
-    const binding = (settings.bindings || []).find(item => item.name === "BRVIN_SERVICE" && item.type === "service");
-    if (clean(binding?.service, 128) !== BRVIN_SERVICE_NAME || clean(binding?.entrypoint, 128) !== "BrvinRetrievalApi") {
-      return json({ ok: false, error: "The deployed text Worker is missing the approved private BRVIN Service Binding/entrypoint. No tester token was installed." }, 409);
-    }
-    const deploymentData = await cloudflareApi<{
-      deployments?: Array<{ id?: string; versions?: Array<{ version_id?: string; percentage?: number }> }>;
-    }>(accessToken, "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/deployments");
-    const latestDeployment = deploymentData.deployments?.[0];
-    const versions = latestDeployment?.versions || [];
-    const trafficPercentage = versions.reduce((total, version) => total + Number(version.percentage || 0), 0);
-    if (!latestDeployment?.id || versions.length === 0 || Math.abs(trafficPercentage - 100) > 0.001) {
-      return json({ ok: false, error: "The text Worker does not yet have a fully active 100% deployment. No tester token was installed." }, 409);
-    }
-
-    // Install a fresh, unexposed token, then make the Worker call BRVIN through
-    // its Service Binding. Cloudflare settings intentionally do not expose props.
-    const testerToken = randomToken();
-    const secretResponse = await fetch(
-      CLOUDFLARE_API + "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/secrets",
-      {
-        method: "PUT",
-        headers: { authorization: "Bearer " + accessToken, "content-type": "application/json" },
-        body: JSON.stringify({ name: "BRVIN_TEST_ACCESS_TOKEN", type: "secret_text", text: testerToken }),
-      },
-    );
-    const secretText = await secretResponse.text();
-    let secretPayload: { success?: boolean; errors?: Array<{ message?: string }> } = {};
-    try { secretPayload = secretText ? JSON.parse(secretText) as typeof secretPayload : {}; } catch { secretPayload = {}; }
-    if (!secretResponse.ok || secretPayload.success === false) {
-      const detail = secretPayload.errors?.map(item => clean(item.message, 160)).filter(Boolean).join("; ") || "Cloudflare did not confirm the Worker secret update.";
-      throw new Error("Cloudflare Worker secret update failed (" + secretResponse.status + "): " + detail);
-    }
-
-    const subdomain = await cloudflareApi<{ subdomain?: string }>(
-      accessToken, "/accounts/" + accountId + "/workers/subdomain",
-    );
-    const workerSubdomain = clean(subdomain.subdomain, 100).toLowerCase();
-    if (!workerSubdomain) throw new Error("Cloudflare did not return the workers.dev subdomain needed for live BRVIN identity verification.");
-    const subdomainState = await cloudflareApi<{ enabled?: boolean }>(
-      accessToken, "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/subdomain",
-    );
-    if (subdomainState.enabled !== true) throw new Error("The isolated text Worker is not enabled on its workers.dev subdomain; live BRVIN identity verification cannot run.");
-
-    const runtimeResponse = await fetch(
-      "https://" + TEST_WORKER_NAME + "." + workerSubdomain + ".workers.dev/api/projects",
-      { headers: { authorization: "Bearer " + testerToken, "cache-control": "no-store" }, redirect: "error" },
-    );
-    let runtimePayload: { ok?: boolean; projects?: Array<{ projectId?: string }> } = {};
-    try { runtimePayload = await runtimeResponse.json() as typeof runtimePayload; } catch { runtimePayload = {}; }
-    if (!runtimeResponse.ok || runtimePayload.ok !== true || !Array.isArray(runtimePayload.projects) ||
-      !runtimePayload.projects.some(project => project.projectId === projectId)) {
-      throw new Error("The live text Worker did not return its dedicated BRVIN project through the private Service Binding. The tester token was not disclosed.");
-    }
-
-    await audit(env, "cloudflare", "test_client.access_token_provisioned", "The independent text Worker completed a live BRVIN RPC identity check and returned its dedicated test project.", {
-      applicationId, environmentId, projectId, worker: TEST_WORKER_NAME,
-      deploymentId: latestDeployment.id, tokenFingerprint: (await stateHash(testerToken)).slice(0, 16),
-    });
-    return json({
-      ok: true,
-      testerToken,
-      oneTime: true,
-      runtimeIdentityVerified: true,
-      verifiedProjectId: projectId,
-      worker: TEST_WORKER_NAME,
-      message: "Copy this token now and keep it private. BRVIN does not retain a recoverable copy; generate a new one to rotate it.",
-    }, 201);
-  } catch (error) {
-    return json({ ok: false, error: safeError(error) }, 502);
-  }
-}
-export async function verifyBrvinTestClientDeployment(env: Env, request: Request): Promise<Response> {
-  try {
-    if (!env.DB) return json({ ok: false, connected: false, state: "identity_unavailable", error: "BRVIN D1 is not configured." }, 503);
-    await ensureAnalyticsSchema(env);
-    const connectionRow = await connection(env, "github");
-    if (!connectionRow || connectionRow.status !== "pr_created") {
-      return json({ ok: false, connected: false, state: "connection_pr_missing", error: "Create the dedicated text-test connection PR before checking deployment." }, 409);
-    }
-    const metadata = JSON.parse(connectionRow.metadata_json || "{}") as Record<string, unknown>;
-    const applicationId = clean(metadata.connectedApplicationId, 36);
-    const environmentId = clean(metadata.connectedEnvironmentId, 36);
-    const projectId = clean(metadata.connectedProjectId, 128);
-    if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !/^[a-f0-9-]{36}$/iu.test(environmentId) || !/^[a-f0-9-]{36}$/iu.test(projectId)) {
-      return json({ ok: false, connected: false, state: "identity_missing", error: "The saved connection PR does not contain the dedicated application, environment and project identities." }, 409);
-    }
-    const registered = await env.DB.prepare(
-      "SELECT a.id AS application_id,e.id AS environment_id,g.project_id " +
-      "FROM brvin_applications a " +
-      "JOIN brvin_application_environments e ON e.application_id=a.id " +
-      "JOIN brvin_application_project_grants g ON g.application_id=a.id AND g.project_id=? AND g.status='active' " +
-      "JOIN brvin_projects p ON p.id=g.project_id AND p.status='active' " +
-      "WHERE a.id=? AND e.id=? AND a.slug='brvin-text-test-client' AND e.environment_key='production' " +
-      "AND a.status='active' AND e.status='active' LIMIT 1"
-    ).bind(projectId, applicationId, environmentId).first<{ application_id: string; environment_id: string; project_id: string }>();
-    if (!registered) {
-      return json({ ok: false, connected: false, state: "identity_inactive", error: "The dedicated text-test application, production environment or its project grant is no longer active." }, 409);
-    }
-
-    const { accessToken, scripts } = await authorizedCloudflare(env, request);
-    if (!scripts.some(script => clean(script.id || script.script || script.name, 128) === TEST_WORKER_NAME)) {
-      return json({ ok: false, connected: false, state: "not_deployed", error: "The independent text Worker has not been deployed yet." }, 409);
-    }
-    const accountId = clean(env.BRVIN_HOME_ACCOUNT_ID, 32);
-    const settings = await cloudflareApi<{ bindings?: Array<Record<string, unknown>> }>(
-      accessToken,
-      "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/settings",
-    );
-    const binding = (settings.bindings || []).find(item => item.name === "BRVIN_SERVICE" && item.type === "service");
-    const service = clean(binding?.service, 128);
-    const entrypoint = clean(binding?.entrypoint, 128);
-    if (service !== BRVIN_SERVICE_NAME || entrypoint !== "BrvinRetrievalApi") {
-      return json({ ok: false, connected: false, state: "binding_mismatch", error: "The deployed text Worker does not have the approved private BRVIN Service Binding and entrypoint." }, 409);
-    }
-
-    // Cloudflare's Worker settings API does not return Service Binding props.
-    // The actual application/environment/project identity is proven by the live
-    // RPC probe performed when the one-time tester token is provisioned.
-    const deploymentData = await cloudflareApi<{
-      deployments?: Array<{ id?: string; versions?: Array<{ version_id?: string; percentage?: number }> }>;
-    }>(accessToken, "/accounts/" + accountId + "/workers/scripts/" + TEST_WORKER_NAME + "/deployments");
-    const latestDeployment = deploymentData.deployments?.[0];
-    const versions = latestDeployment?.versions || [];
-    const trafficPercentage = versions.reduce((total, version) => total + Number(version.percentage || 0), 0);
-    if (!latestDeployment?.id || versions.length === 0 || Math.abs(trafficPercentage - 100) > 0.001) {
-      return json({ ok: false, connected: false, state: "deployment_not_active", error: "The text Worker has a binding, but no complete 100% deployment is active yet." }, 409);
-    }
-
-    return json({
-      ok: true, connected: false, state: "deployment_ready", runtimeIdentityVerified: false,
-      worker: TEST_WORKER_NAME, service, entrypoint, deploymentId: latestDeployment.id,
-      trafficPercentage, applicationId, applicationEnvironmentId: environmentId, projectId, accountId,
-      message: "Worker deployment is ready. Generate the tester token to run the live BRVIN identity check.",
-    });
-  } catch (error) {
-    return json({ ok: false, connected: false, error: safeError(error) }, 502);
-  }
-}
 function safeError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.replace(/[\r\n]+/gu, " ").slice(0, 280);

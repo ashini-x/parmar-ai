@@ -1078,7 +1078,7 @@ const HTML = `<!doctype html>
 <div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Applications & access</h1><p class="subtitle">Register consumer apps, deployment identities and explicit project permissions.</p></div></div>
 <div class="overview-grid">
 <section class="view-panel"><div class="panel-toolbar"><div><h2>Register application</h2><p>Create the application record once. It does not grant project access by itself.</p></div></div>
-<div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. BRVIN Text Test Client"></div>
+<div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. PDF Chat Application"></div>
 <div class="field"><label for="application-desc">Description</label><input id="application-desc" maxlength="500" placeholder="What will this application use BRVIN for?"></div>
 <button class="btn primary" id="create-application" type="button">Register application</button>
 </section>
@@ -1098,7 +1098,7 @@ const HTML = `<!doctype html>
 </section>
 
 <section class="view-panel" id="connect-wizard-panel" style="margin-top:14px">
- <div class="panel-toolbar"><div><h2>Provider Administrator Connections</h2><p>One-time GitHub and Cloudflare consent enables BRVIN to create and operate independent software projects. The fixed text-client adapter below is historical and superseded.</p></div><button class="btn" id="connect-refresh" type="button">Refresh connections</button></div>
+ <div class="panel-toolbar"><div><h2>Provider Administrator Connections</h2><p>Connect GitHub and Cloudflare once. BRVIN then provisions repositories, infrastructure, credentials and deployments for future projects automatically.</p></div><button class="btn" id="connect-refresh" type="button">Refresh connections</button></div>
  <section class="tile" style="margin-bottom:12px">
   <div class="panel-toolbar"><div><h3>Administrator capability verification</h3><p>Checks actual GitHub App permissions/installation and Cloudflare OAuth scopes stored by BRVIN. Secret values are never displayed.</p></div><button class="btn primary" id="provider-capability-check" type="button">Verify provider access</button></div>
   <p id="provider-capability-result" class="muted" aria-live="polite">Run the check after approving the expanded provider permissions.</p>
@@ -1106,57 +1106,33 @@ const HTML = `<!doctype html>
  <div class="overview-grid">
   <section class="tile">
    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>GitHub App</strong><span class="pill" id="connect-github-status">Not connected</span></div>
-   <p>BRVIN requires repository creation/administration, contents, Actions workflows, Actions secrets and variables, pull requests, environments and deployment permissions. Install for all repositories so future software projects are covered.</p>
-   <button class="btn primary" id="github-register" type="button">Register BRVIN GitHub App</button>
-   <p id="github-app-meta" class="muted">No BRVIN GitHub App registered.</p>
-   <p><a id="github-app-settings" href="https://github.com/settings/apps" target="_blank" rel="noreferrer">Open GitHub App permission settings</a></p>
-   <p><a id="github-installation-settings" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">Manage installation and repository access</a></p>
-   <div class="field"><label for="github-installation">Installed account</label><select id="github-installation"><option value="">Load installations after registering the app</option></select></div>
-   <div class="job-actions"><button class="btn" id="github-load-installations" type="button">Discover installations</button><button class="btn" id="github-use-installation" type="button">Use selected installation</button></div>
-   <div class="field"><label for="github-repository">Repository</label><select id="github-repository"><option value="">Install the app and select an installation first</option></select></div>
-   <button class="btn" id="github-load-repositories" type="button">Discover repositories</button>
-   <p class="muted" id="github-repository-note">Only ashini-x/askmoina-voice is supported by this first adapter.</p>
+   <p>BRVIN needs repository creation and administration, source control, Actions workflows and secrets, environments, deployments, pull requests and repository settings. The existing BRVIN App is upgraded in place—do not create a duplicate app.</p>
+   <button class="btn primary" id="github-register" type="button">Open BRVIN GitHub App settings</button>
+   <p id="github-app-meta" class="muted">Checking the existing BRVIN GitHub App…</p>
+   <p id="github-access-state" class="muted">Repository access has not been checked yet.</p>
+   <p><a id="github-app-settings" href="https://github.com/settings/apps" target="_blank" rel="noreferrer">Open GitHub App permissions</a></p>
+   <p><a id="github-installation-settings" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">Open BRVIN installation settings</a></p>
+   <div class="notice">One-time GitHub approval: update the existing App with the requested permissions, approve the permission update, then set its installation repository access to <strong>All repositories</strong>. BRVIN will use short-lived GitHub App installation tokens automatically. No personal access token or per-project App installation is required.</div>
   </section>
   <section class="tile">
    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>Cloudflare OAuth</strong><span class="pill" id="connect-cloudflare-status">Not configured</span></div>
-   <p>BRVIN needs the Cloudflare Developer Platform and AI resource scopes, Workers Admin, and Account API Tokens Write. Workers Editor-only consent is not sufficient for autonomous provisioning.</p>
-   <div class="field"><label for="cf-client-id">OAuth client ID</label><input id="cf-client-id" autocomplete="off" maxlength="160" placeholder="Cloudflare OAuth client ID"></div>
-   <div class="field"><label for="cf-client-secret">OAuth client secret</label><input id="cf-client-secret" type="password" autocomplete="new-password" maxlength="500" placeholder="Shown once by Cloudflare"></div>
+   <p>BRVIN needs Developer Platform Admin access for the resources it manages, plus AI/Search and Account API Token creation. Workers Editor-only OAuth consent is not sufficient. The Cloudflare account member is already Super Administrator; only BRVIN's OAuth consent must be upgraded.</p>
+   <div id="cf-client-credentials">
+    <div class="field"><label for="cf-client-id">OAuth client ID</label><input id="cf-client-id" autocomplete="off" maxlength="160" placeholder="Cloudflare OAuth client ID"></div>
+    <div class="field"><label for="cf-client-secret">OAuth client secret</label><input id="cf-client-secret" type="password" autocomplete="new-password" maxlength="500" placeholder="Shown once by Cloudflare"></div>
+   </div>
    <div class="field"><label>Exact callback URL to register</label><input id="cf-callback-url" readonly value="Shown after page load"></div>
+   <p id="cf-client-state" class="muted">Checking the encrypted OAuth client configuration…</p>
    <div class="field"><label for="cf-required-scopes">Required one-time Cloudflare OAuth scopes</label><textarea id="cf-required-scopes" rows="5" readonly spellcheck="false"></textarea></div>
    <button class="btn" id="cf-copy-required-scopes" type="button">Copy required scopes</button>
-   <p class="notice">One-time provider consent: in Cloudflare Dashboard → Manage Account → OAuth clients, edit the existing BRVIN Connect client and add the listed scopes while preserving authorization-code and refresh-token grants and the callback URL. Save it, then authorize again here. The client secret already stored by BRVIN remains encrypted; no new OAuth client is needed.</p>
+   <p class="notice">One-time Cloudflare approval: open Manage Account → OAuth clients, edit the existing BRVIN Connect client, add the scopes shown below (including <code>account_api_tokens:create</code>), preserve authorization-code and refresh-token grants and the callback URL, then save. Finally authorize BRVIN once. Its current client secret is already encrypted in BRVIN; you do not need to create another client or re-enter the secret.</p>
    <button class="btn primary" id="cf-save-client" type="button">Save OAuth client securely</button>
-   <button class="btn" id="cf-authorize" type="button">Authorize BRVIN home account</button>
+   <button class="btn" id="cf-authorize" type="button">Authorize / refresh BRVIN access</button>
    <button class="btn" id="cf-discover-workers" type="button">Discover Workers</button>
    <p class="muted" id="cf-worker-note">Must confirm that this same account contains the private brvin-service Worker.</p>
   </section>
  </div>
- <section class="tile" style="margin-top:12px">
-  <div class="panel-toolbar"><div><h2>Legacy fixed text-client adapter — superseded</h2><p>This historical adapter targets only a Worker inside askmoina-voice. Do not use it for new BRVIN software projects; the Project Factory creates independent repositories and applications.</p></div></div>
-  <div class="formgrid">
-   <div class="field"><label for="connect-app-name">Dedicated application</label><input id="connect-app-name" maxlength="100" value="BRVIN Text Test Client" readonly></div>
-   <div class="field"><label for="connect-env-key">Environment key</label><input id="connect-env-key" maxlength="32" value="production" readonly></div>
-   <div class="field"><label for="connect-project-name">Dedicated project name</label><input id="connect-project-name" maxlength="100" value="BRVIN Text Test Knowledge"></div>
-   <div class="field"><label for="connect-project-description">Project description</label><input id="connect-project-description" maxlength="500" value="Isolated knowledge project for the BRVIN text reference Worker."></div>
-  </div>
-  <button class="btn primary" id="connect-register-consumer" type="button">Create test application and project</button>
-  <p class="muted" id="connect-consumer-note">This action creates four related D1 records in one transaction.</p>
- </section>
- <section class="tile" style="margin-top:12px">
-  <div class="panel-toolbar"><div><h2>Prepare connection pull request</h2><p>Only the test Worker's Wrangler config is updated. The existing voice Worker and production Wrangler config are outside this adapter.</p></div></div>
-  <div class="formgrid">
-   <div class="field"><label for="connect-existing-application">Registered application</label><select id="connect-existing-application"><option value="">Register the test consumer first</option></select></div>
-   <div class="field"><label for="connect-existing-environment">Trusted environment identity</label><select id="connect-existing-environment"><option value="">Choose an application first</option></select></div>
-  </div>
-  <p class="notice">Before creating a PR, BRVIN checks the GitHub installation can write to the selected repository and Cloudflare OAuth can list the same account that hosts brvin-service. The PR will not be merged or deployed by this wizard.</p>
-  <button class="btn primary" id="connect-create-pr" type="button">Create reviewable GitHub PR</button>
-  <button class="btn" id="connect-verify-deployment" type="button">Check Worker deployment</button>
-  <div class="field"><label for="connect-test-token">One-time text test access token</label><input id="connect-test-token" type="password" readonly autocomplete="off" placeholder="Generate only after the test Worker connection is verified"></div>
-  <div class="job-actions"><button class="btn" id="connect-generate-token" type="button">Generate / rotate tester token</button><button class="btn" id="connect-copy-token" type="button">Copy token</button></div>
-  <p class="muted">This token only unlocks the test interface. It does not grant BRVIN project access. Project access remains enforced by the private Service Binding.</p>
-  <p class="muted" id="connect-result" aria-live="polite">No connection PR created yet.</p>
- </section>
+
 </section>
 </div>
 </section>
@@ -1269,52 +1245,35 @@ function detailText(details){if(!details||typeof details!=="object")return"";ret
 function renderEvents(list){$("events").innerHTML=list.length?list.slice(0,60).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong>'+statusPill(e.status)+'</div><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+' · '+esc(e.type)+'</small></div></div>').join(""):'<div class="empty">No operation events recorded yet.</div>';}
 function renderOverview(data){$("overview-books").textContent=String(data.stats.books);$("overview-pages").textContent=data.stats.indexedPages.toLocaleString()+" of "+data.stats.totalPages.toLocaleString()+" pages indexed";$("overview-ready").textContent=String(data.stats.readyBooks);$("overview-running").textContent=String(data.stats.activeBooks);$("overview-attention").textContent=String(data.stats.failedBooks);$("overview-status-note").textContent=data.stats.failedBooks?data.stats.failedBooks+" source(s) need attention. Open Operations to inspect the affected workflow.":data.stats.activeBooks?data.stats.activeBooks+" pipeline(s) are running. Processing continues automatically in the background.":"All tracked sources are stable. New processing events will appear here automatically.";}
 function render(){if(!model)return;renderMetrics(model.stats);renderApplications(model.applications||[]);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOverview(model);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
-let connectState=null,connectInstallations=[],connectRepositories=[];
+let connectState=null;
 async function refreshConnectState(){
  try{connectState=await api(API+"connect/status");renderConnectState();}
- catch(error){$("connect-result").textContent="Connection status could not load: "+error.message;}
+ catch(error){$("provider-capability-result").textContent="Connection status could not load: "+error.message;}
 }
 function renderConnectState(){
  if(!connectState)return;
  const github=connectState.github||{},cloudflare=connectState.cloudflare||{};
  $("connect-github-status").textContent=github.status||"not connected";
  $("connect-cloudflare-status").textContent=cloudflare.status||"not configured";
- $("github-app-meta").textContent=github.appName?(github.appName+" · "+(github.appUrl||github.appSlug||"")+(github.installationAccount?" · installed on "+github.installationAccount:"")):"No BRVIN GitHub App registered.";
+ $("github-app-meta").textContent=github.appName
+  ?github.appName+" · "+(github.appUrl||github.appSlug||"")+(github.installationAccount?" · installed on "+github.installationAccount:"")
+  :"No BRVIN GitHub App registered.";
  $("github-app-settings").href=github.appSettingsUrl||"https://github.com/settings/apps";
  $("github-installation-settings").href=github.installationUrl||"https://github.com/settings/installations";
+ $("github-register").textContent=github.appSettingsUrl?"Open BRVIN App permissions":"Create BRVIN GitHub App";
+ $("github-access-state").textContent=github.repositorySelection==="all"
+  ?"All repositories are selected in the stored installation metadata. Run the live capability check to verify current installation permissions."
+  :"One-time action: approve the expanded App permissions and set installation repository access to All repositories.";
  $("cf-required-scopes").value=(cloudflare.requiredScopes||[]).join(" ");
- $("cf-callback-url").value=window.location.origin+"/admin/brvin/connect/cloudflare/callback";
+ $("cf-callback-url").value=cloudflare.callbackUrl||window.location.origin+"/admin/brvin/connect/cloudflare/callback";
+ $("cf-client-credentials").hidden=cloudflare.oauthClientConfigured===true;
+ $("cf-save-client").hidden=cloudflare.oauthClientConfigured===true;
+ $("cf-client-state").textContent=cloudflare.oauthClientConfigured
+  ?"Existing OAuth client "+(cloudflare.clientIdHint||"") +" is stored encrypted. Its secret does not need to be entered again."
+  :"No OAuth client has been saved yet. Configure the existing BRVIN Connect client only if the encrypted client record is missing.";
  $("cf-worker-note").textContent=cloudflare.brvinServiceVisible
-  ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+"."
-  :"Authorize the account that hosts private brvin-service. No Worker binding will be changed until the PR is reviewed.";
- const apps=(model?.applications||[]).filter(app=>app.status==="active"&&app.slug==="brvin-text-test-client");
- const previousApp=$("connect-existing-application").value;
- $("connect-existing-application").innerHTML=apps.map(app=>'<option value="'+esc(app.id)+'">'+esc(app.name)+' · '+esc(app.slug)+'</option>').join("")||'<option value="">Register the test consumer first</option>';
- if(apps.some(app=>app.id===previousApp))$("connect-existing-application").value=previousApp;
- renderConnectEnvironments();
-}
-function renderConnectEnvironments(){
- const app=(model?.applications||[]).find(item=>item.id===$("connect-existing-application").value);
- const environments=(app?.environments||[]).filter(item=>item.status==="active");
- const previous=$("connect-existing-environment").value;
- $("connect-existing-environment").innerHTML=environments.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.displayName||item.environmentKey)+' · '+esc(item.id)+'</option>').join("")||'<option value="">No active environment for this application</option>';
- if(environments.some(item=>item.id===previous))$("connect-existing-environment").value=previous;
-}
-async function loadConnectRepositories(){
- const data=await api(API+"connect/github/repositories");
- connectRepositories=data.repositories||[];
- $("github-repository").innerHTML=connectRepositories.map(repo=>'<option value="'+esc(repo.fullName)+'" data-branch="'+esc(repo.defaultBranch)+'">'+esc(repo.fullName)+(repo.private?" · private":"")+'</option>').join("")||'<option value="">No repositories installed</option>';
- if(!connectRepositories.some(repo=>repo.fullName==="ashini-x/askmoina-voice")){
-  $("github-repository-note").textContent="Install the BRVIN GitHub App on ashini-x/askmoina-voice to use the first supported adapter.";
- }else{
-  $("github-repository").value="ashini-x/askmoina-voice";
-  $("github-repository-note").textContent="Supported adapter available · default branch main · test Worker only.";
- }
-}
-async function loadConnectInstallations(){
- const data=await api(API+"connect/github/installations");
- connectInstallations=data.installations||[];
- $("github-installation").innerHTML=connectInstallations.map(item=>'<option value="'+item.id+'">'+esc(item.account)+' · '+esc(item.accountType||item.targetType)+'</option>').join("")||'<option value="">No installation yet · install the GitHub App first</option>';
+  ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+". OAuth currently grants "+(cloudflare.grantedScopes||[]).length+" scopes; verify the expanded Admin and token-creation scopes below."
+  :"Authorize the Cloudflare account that hosts private brvin-service. The capability check itself does not create or change Workers.";
 }
 async function refresh(){try{model=await api(API+"overview");render();await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
 function stage(id,state){$("step-"+id).className="step"+(state?" "+state:"");}
@@ -1499,18 +1458,29 @@ $("grant-project-button").addEventListener("click",async()=>{
 $("connect-refresh").addEventListener("click",async()=>{await refresh();});
 $("provider-capability-check").addEventListener("click",async()=>{
  try{
-  $("provider-capability-result").textContent="Checking live provider permissions…";
+  $("provider-capability-result").textContent="Checking live GitHub App permissions, repository coverage and Cloudflare OAuth scopes…";
   const result=await api(API+"connect/capabilities");
   const github=result.github||{},cloudflare=result.cloudflare||{},install=github.installation||{};
   const parts=[];
   if(github.connected){
-   parts.push("GitHub App: "+((github.missingAppPermissions||[]).length?"missing app permissions "+github.missingAppPermissions.join(", "):"app permissions passed")+".");
-   parts.push("GitHub installation: "+(install.repositorySelection==="all"?"all repositories":"not installed for all repositories")+"; missing installation permissions "+((install.missingPermissions||github.missingInstallationPermissions||[]).join(", ")||"none")+".");
+   const missingApp=github.missingAppPermissions||[];
+   const missingInstall=install.missingPermissions||github.missingInstallationPermissions||[];
+   parts.push("GitHub App permissions: "+(missingApp.length?"missing "+missingApp.join(", "):"passed")+".");
+   parts.push("GitHub installation: "+(install.repositorySelection==="all"?"ALL repositories":"selected repositories only")+"; installation permissions "+(missingInstall.length?"missing "+missingInstall.join(", "):"passed")+".");
    if(github.settingsUrl)$("github-app-settings").href=github.settingsUrl;
-  }else parts.push("GitHub: "+(github.error||"not connected")+".");
+   if(install.url)$("github-installation-settings").href=install.url;
+   $("github-access-state").textContent=install.repositorySelection==="all"&&!missingApp.length&&!missingInstall.length
+    ?"Verified: BRVIN App permissions are approved and the installation covers all repositories."
+    :"Action required: open App permissions to approve missing scopes, then set installation repository access to All repositories.";
+  }else{
+   parts.push("GitHub: "+(github.error||"not connected")+".");
+   $("github-access-state").textContent="BRVIN GitHub App permission state could not be verified.";
+  }
   if(cloudflare.connected){
-   parts.push("Cloudflare: "+((cloudflare.missingScopes||[]).length?"missing "+cloudflare.missingScopes.length+" required OAuth scopes":"required OAuth scopes passed")+".");
-   if(cloudflare.missingScopes?.length)parts.push("Missing scope IDs: "+cloudflare.missingScopes.slice(0,12).join(", ")+(cloudflare.missingScopes.length>12?" …":"")+".");
+   const missing=cloudflare.missingScopes||[];
+   parts.push("Cloudflare OAuth: "+(missing.length?"missing "+missing.length+" required scopes":"required scopes passed")+".");
+   if(missing.length)parts.push("Missing scope IDs: "+missing.slice(0,14).join(", ")+(missing.length>14?" …":"")+".");
+   if(!cloudflare.missingScopes?.includes("account_api_tokens:create"))parts.push("Account token-creation OAuth scope is present.");
   }else parts.push("Cloudflare: "+(cloudflare.error||"not authorized")+".");
   $("provider-capability-result").textContent=parts.join(" ");
  }catch(error){$("provider-capability-result").textContent="Provider check failed: "+error.message;}
@@ -1521,25 +1491,21 @@ $("cf-copy-required-scopes").addEventListener("click",async()=>{
 });
 $("github-register").addEventListener("click",async()=>{
  try{
+  const settingsUrl=connectState?.github?.appSettingsUrl;
+  if(settingsUrl){window.open(settingsUrl,"_blank","noopener,noreferrer");return;}
   const data=await post("connect/github/manifest",{});
   const form=document.createElement("form");form.method="POST";form.action=data.action;form.target="_blank";
   const hidden=document.createElement("input");hidden.type="hidden";hidden.name="manifest";hidden.value=JSON.stringify(data.manifest);
   form.appendChild(hidden);document.body.appendChild(form);form.submit();form.remove();
  }catch(error){alert(error.message);}
 });
-$("github-load-installations").addEventListener("click",async()=>{try{await loadConnectInstallations();}catch(error){alert(error.message);}});
-$("github-use-installation").addEventListener("click",async()=>{
- try{const installationId=Number($("github-installation").value);if(!installationId)throw new Error("Choose an installed GitHub account.");await post("connect/github/installation",{installationId});await loadConnectRepositories();await refreshConnectState();}
- catch(error){alert(error.message);}
-});
-$("github-load-repositories").addEventListener("click",async()=>{try{await loadConnectRepositories();}catch(error){alert(error.message);}});
 $("cf-save-client").addEventListener("click",async()=>{
  try{
   const clientId=$("cf-client-id").value.trim(),clientSecret=$("cf-client-secret").value;
   if(!clientId||!clientSecret)throw new Error("Enter both Cloudflare OAuth client values.");
   const result=await post("connect/cloudflare/configure",{clientId,clientSecret});
   $("cf-client-secret").value="";$("cf-callback-url").value=result.redirectUri;
-  $("cf-worker-note").textContent="Client credentials saved encrypted. Start OAuth authorization next.";
+  $("cf-worker-note").textContent="Client credentials saved encrypted. Authorize BRVIN next.";
   await refreshConnectState();
  }catch(error){alert(error.message);}
 });
@@ -1551,63 +1517,9 @@ $("cf-discover-workers").addEventListener("click",async()=>{
  try{
   const result=await api(API+"connect/cloudflare/workers");
   const names=(result.workers||[]).map(worker=>worker.name);
-  $("cf-worker-note").textContent="Same account verified · "+names.length+" Workers discovered · "+(names.includes("brvin-service")?"brvin-service confirmed":"brvin-service missing")+".";
+  $("cf-worker-note").textContent="Same account verified · "+names.length+" Workers discovered · "+(names.includes("brvin-service")?"private brvin-service confirmed":"private brvin-service missing")+".";
   await refreshConnectState();
  }catch(error){$("cf-worker-note").textContent=error.message;alert(error.message);}
-});
-$("connect-register-consumer").addEventListener("click",async()=>{
- try{
-  const result=await post("connect/consumer",{
-   applicationName:$("connect-app-name").value,
-   applicationDescription:"Isolated text-first BRVIN reference consumer; no production voice app changes.",
-   environmentKey:$("connect-env-key").value,
-   projectName:$("connect-project-name").value,
-   projectDescription:$("connect-project-description").value
-  });
-  $("connect-consumer-note").textContent="Created application "+result.application.id+", environment "+result.environment.id+", isolated project "+result.project.id+" and explicit app-project grant.";
-  await refresh();
-  $("connect-existing-application").value=result.application.id;renderConnectEnvironments();$("connect-existing-environment").value=result.environment.id;
- }catch(error){alert(error.message);}
-});
-$("connect-existing-application").addEventListener("change",renderConnectEnvironments);
-$("connect-create-pr").addEventListener("click",async()=>{
- try{
-  const repository=$("github-repository").value;
-  const appId=$("connect-existing-application").value;
-  const environmentId=$("connect-existing-environment").value;
-  if(repository!=="ashini-x/askmoina-voice")throw new Error("Select the supported BRVIN text test-client repository.");
-  if(!appId||!environmentId)throw new Error("Create or select an active application and environment first.");
-  $("connect-result").textContent="Verifying both provider connections and preparing a review branch…";
-  const result=await post("connect/pull-request",{repository,baseBranch:"main",applicationId:appId,environmentId});
-  $("connect-result").innerHTML='Created PR <a href="'+esc(result.pullRequest.url)+'" target="_blank" rel="noopener">#'+result.pullRequest.number+' · Review on GitHub</a>. Nothing was merged or deployed.';
-  await refreshConnectState();
- }catch(error){$("connect-result").textContent=error.message;alert(error.message);}
-});
-$("connect-verify-deployment").addEventListener("click",async()=>{
- try{
-  const result=await api(API+"connect/verify");
-  $("connect-result").textContent=result.state==="deployment_ready"
-   ?"Worker deployment and private BRVIN Service Binding are ready. Generate the tester token next; that action performs the live RPC identity check against the dedicated test project."
-   :"Worker deployment status: "+(result.state||"unknown")+".";
- }catch(error){$("connect-result").textContent=error.message;}
-});
-$("connect-generate-token").addEventListener("click",async()=>{
- try{
-  if(!confirm("Generate or rotate the private tester access token? The previous tester token will stop working."))return;
-  $("connect-generate-token").disabled=true;
-  $("connect-test-token").value="";
-  const result=await post("connect/test-access-token",{});
-  $("connect-test-token").type="text";
-  $("connect-test-token").value=result.testerToken;
-  $("connect-result").textContent="Live BRVIN RPC identity check passed for the dedicated text-test project. Copy the one-time tester token now; it will not be shown again after this page is refreshed.";
- }catch(error){$("connect-result").textContent=error.message;alert(error.message);}
- finally{$("connect-generate-token").disabled=false;}
-});
-$("connect-copy-token").addEventListener("click",async()=>{
- const value=$("connect-test-token").value;
- if(!value){alert("Generate the tester token first.");return;}
- try{await navigator.clipboard.writeText(value);$("connect-result").textContent="Tester token copied. Keep it private and enter it in the BRVIN Test Lab.";}
- catch{$("connect-test-token").type="text";$("connect-test-token").focus();$("connect-test-token").select();$("connect-result").textContent="Select and copy the token above. Keep it private.";}
 });
 $("create-collection").addEventListener("click",async()=>{try{await post("collections",{name:$("collection-name").value,description:$("collection-desc").value});$("collection-name").value="";$("collection-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("save-project-access").addEventListener("click",async()=>{try{const projectId=$("project-access").value;if(!projectId)throw new Error("Create or choose a project first.");const collectionIds=[...$("collection-checks").querySelectorAll("input:checked")].map(i=>i.value);await post("projects/collections",{projectId,collectionIds});await refresh();}catch(e){alert(e.message);}});
