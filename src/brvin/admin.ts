@@ -236,6 +236,8 @@ export async function brvinOverview(env: Env): Promise<Response> {
         slug: String(row.application_slug ?? ""),
         grantId: String(row.id),
         status: String(row.status),
+        createdAt: Number(row.created_at),
+        revokedAt: row.revoked_at === null || row.revoked_at === undefined ? null : Number(row.revoked_at),
       });
       applicationsByProject.set(projectId, projectApplications);
     }
@@ -1465,7 +1467,7 @@ function openProjectDetails(projectId){
  const grants=project.applications||[];
  const appById=new Map((model?.applications||[]).map(app=>[app.id,app]));
  const activeGrantIds=new Set(grants.filter(grant=>grant.status==="active").map(grant=>grant.applicationId));
- const grantableApps=(model?.applications||[]).filter(app=>app.status==="active"&&!activeGrantIds.has(app.id));
+ const grantableApps=project.status==="active"?(model?.applications||[]).filter(app=>app.status==="active"&&!activeGrantIds.has(app.id)):[];
  const events=(model?.events||[]).filter(event=>event.projectId===projectId).slice(0,8);
  const grantRows=grants.length?grants.map(grant=>{
   const app=appById.get(grant.applicationId);
