@@ -1125,7 +1125,7 @@ const HTML = `<!doctype html>
    <p id="cf-client-state" class="muted">Checking the encrypted OAuth client configuration…</p>
    <div class="field"><label for="cf-required-scopes">Required one-time Cloudflare OAuth scopes</label><textarea id="cf-required-scopes" rows="5" readonly spellcheck="false"></textarea></div>
    <button class="btn" id="cf-copy-required-scopes" type="button">Copy required scopes</button>
-   <p class="notice">One-time Cloudflare approval: open Manage Account → OAuth clients, edit the existing BRVIN Connect client, add the scopes shown below (including <code>account_api_tokens:create</code>), preserve authorization-code and refresh-token grants and the callback URL, then save. Finally authorize BRVIN once. Its current client secret is already encrypted in BRVIN; you do not need to create another client or re-enter the secret.</p>
+   <p class="notice">One-time Cloudflare approval: open Manage Account → OAuth clients, edit the existing BRVIN Connect client, add the scopes shown below, and ensure <code>account-api-tokens.write</code> (Account API Tokens Write) is selected. Do not add <code>account_api_tokens:create</code>: Cloudflare does not allow this self-managed OAuth client to request that Cloudflare CLI scope. Preserve authorization-code and refresh-token grants and the callback URL, then save and authorize BRVIN once. Its existing client secret is already encrypted in BRVIN; you do not need to create another client or re-enter the secret.</p>
    <button class="btn primary" id="cf-save-client" type="button">Save OAuth client securely</button>
    <button class="btn" id="cf-authorize" type="button">Authorize / refresh BRVIN access</button>
    <button class="btn" id="cf-discover-workers" type="button">Discover Workers</button>
@@ -1480,7 +1480,7 @@ $("provider-capability-check").addEventListener("click",async()=>{
    const missing=cloudflare.missingScopes||[];
    parts.push("Cloudflare OAuth: "+(missing.length?"missing "+missing.length+" required scopes":"required scopes passed")+".");
    if(missing.length)parts.push("Missing scope IDs: "+missing.slice(0,14).join(", ")+(missing.length>14?" …":"")+".");
-   if(!cloudflare.missingScopes?.includes("account_api_tokens:create"))parts.push("Account token-creation OAuth scope is present.");
+   if(!missing.includes("account-api-tokens.write"))parts.push("Account API Tokens Write OAuth permission is present; token creation itself has not yet been verified.");
   }else parts.push("Cloudflare: "+(cloudflare.error||"not authorized")+".");
   $("provider-capability-result").textContent=parts.join(" ");
  }catch(error){$("provider-capability-result").textContent="Provider check failed: "+error.message;}
