@@ -414,3 +414,15 @@ For a new ChatGPT chat or branch:
 5. Treat [BRVIN_AUTONOMOUS_PROJECT_FACTORY.md](BRVIN_AUTONOMOUS_PROJECT_FACTORY.md) as superseded historical documentation only; do not follow its Project Factory milestones.
 6. Inspect latest GitHub commits, PRs, CI runs and relevant production state. Continue at the first incomplete M6–M11 acceptance item.
 7. Update these documents in every development PR. Never rely on chat memory as the project ledger.
+
+
+## 13. Documentation change log
+
+### 5 November 2026 — final product scope freeze
+
+- **PR:** [#89](https://github.com/ashini-x/parmar-ai/pull/89), merged to `main`.
+- **Merge commit:** `5a40e969a34a98b8150f9a8446c608e36c5f1f46`.
+- **Validation:** [Release Validation #691](https://github.com/ashini-x/parmar-ai/actions/runs/42051789698) passed type-check, unit tests, Node tests and both Worker bundle validations.
+- **Changed:** final product-scope/milestone document, master plan, architecture decisions, system reference, application integration guide and superseded Project Factory notice.
+- **Deployment:** none. This was documentation-only; no runtime, schema, provider credentials or production resources changed.
+- **Next milestone:** M6 — Admin workspace aligned to teacher knowledge operations.
