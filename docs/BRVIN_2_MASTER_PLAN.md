@@ -897,6 +897,32 @@ The D1 query was read-only (`rows_written = 0`). The raw nonce and proof are not
 
 
 
+### Milestone log — 6 November 2026 — M10 teacher knowledge assignment and isolation (complete)
+
+**Status:** COMPLETE — PR #99 merged to `main` and both production Workers deployed successfully.
+
+**Scope of this increment:** close the admin workflow gap and expand automated acceptance around the existing application/environment/project and project/source authorization contracts. No change to the v2 authorization algorithm is intended: the service already checks the active application-project grant before quota reservation or search, then resolves only ready sources granted directly or through an assigned collection.
+
+**Changed paths:**
+- `src/brvin/admin.ts` — add application grant controls in application cards; add grant/revoke controls and grant history in project detail; add direct-book and collection-grant shortcuts from project detail; clarify app-wide grant semantics.
+- `test/brvin-m10-isolation.test.ts` — add two trusted application/environment fixtures, two private teacher projects and a deliberately shared project; test only-granted-project discovery, cross-project denial before quota/search, direct and collection source scoping, shared access, immediate denial after revocation, future ready collection additions and inactive project/environment rejection.
+- `test/brvin-app-admin.test.ts` — add acceptance for one project shared across applications, multiple projects per application and idempotent repeat grant.
+- `test/brvin.test.ts` — assert app/project grant controls, direct/collection source shortcuts and user-to-project warning.
+- `test/brvin-admin-script.node.test.ts` — align the admin script regression check with M9's now-verified connection-state wording.
+
+**Data and security boundary:** no D1 migration, production row, application, project, environment, source assignment, grant, provider secret or Worker binding was changed. The production Fatman grant, AskMoina grant and M9 Parmar AI Connected record are left untouched. Application-project grants remain app-wide; this UI does not imply per-user teacher isolation. A multi-teacher consumer must enforce its authenticated user-to-project mapping in its own server-side code.
+
+**Validation and production evidence:**
+- PR #99 Release Validation [#755](https://github.com/ashini-x/parmar-ai/actions/runs/42098579862) passed `npm run check`, `npm test`, `npm run test:node`, `wrangler deploy --config wrangler.brvin.jsonc --dry-run` and `wrangler deploy --dry-run`.
+- PR #99 was squash-merged to `main` as `0068d74d8b164cfc64fbc43c23d9449ae8745db5`.
+- Main Release Validation [#756](https://github.com/ashini-x/parmar-ai/actions/runs/42098761142) passed paired production deployment and live root, health, private BRVIN Service Binding and Fatman retrieval checks on the first smoke attempt. Acceptance artifact: `13448441278`.
+- Production `brvin-service` deployment `2b3d2330-0c2f-4fa2-9909-48dfe7997070`, version `97c8b017-0994-4be3-9045-110d8a892b99`; `parmar-ai` deployment `70d635d1-b384-41c8-a8a9-6e3d51066198`, version `91222548-5ecc-49e0-8fa8-45daac2e19a6`.
+- Read-only production D1 read-back (`rows_written=0`) confirms the active AskMoina Voice → Fatman and Parmar AI → Fatman grants remain unchanged, the historical BRVIN Text Test Client grant remains revoked, and Parmar AI Production's M9 challenge remains `connected` with one ready authorised source and its proof hash stored. Production counts remain 3 applications, 2 projects, 3 app-project grant records and 1 connection check. No test app/project/source/grant was created, no migration was applied, and no secret or binding changed.
+
+**Scope boundary:** automated acceptance covers separate application identities for Teacher A and Teacher B, private projects, deliberate sharing and revocation. App-project grants remain app-wide. A future app that serves several teachers must enforce its own authenticated user-to-project mapping before calling BRVIN; no app-specific end-user authorization policy was added or claimed by this milestone.
+
+**Next active milestone:** M11 — operations, usage visibility, recovery and administrator handover. Do not create synthetic teacher records in production as a substitute for automated tenant-isolation fixtures.
+
 ### Milestone log — 6 November 2026 — M11 operations and administrator handover (initial operations increment deployed)
 
 **Status:** IN PROGRESS — PR #100 merged and the initial operations increment deployed. Production release acceptance passed in [Main Release Validation #768](https://github.com/ashini-x/parmar-ai/actions/runs/42104739449). The remaining live acceptance and external GCS IAM action are not complete.
@@ -931,29 +957,3 @@ The D1 query was read-only (`rows_written = 0`). The raw nonce and proof are not
 4. Complete the milestone's real teacher-focused consumer acceptance: register a distinct app, connect it via the ChatGPT handoff, grant a real teacher project/source and verify successful and revoked retrieval. No synthetic production teacher or grant has been created as a substitute.
 
 M11 remains IN PROGRESS until these gates have verifiable outcomes. Do not claim end-to-end commercial readiness.
-
-### Milestone log — 6 November 2026 — M10 teacher knowledge assignment and isolation (complete)
-
-**Status:** COMPLETE — PR #99 merged to `main` and both production Workers deployed successfully.
-
-**Scope of this increment:** close the admin workflow gap and expand automated acceptance around the existing application/environment/project and project/source authorization contracts. No change to the v2 authorization algorithm is intended: the service already checks the active application-project grant before quota reservation or search, then resolves only ready sources granted directly or through an assigned collection.
-
-**Changed paths:**
-- `src/brvin/admin.ts` — add application grant controls in application cards; add grant/revoke controls and grant history in project detail; add direct-book and collection-grant shortcuts from project detail; clarify app-wide grant semantics.
-- `test/brvin-m10-isolation.test.ts` — add two trusted application/environment fixtures, two private teacher projects and a deliberately shared project; test only-granted-project discovery, cross-project denial before quota/search, direct and collection source scoping, shared access, immediate denial after revocation, future ready collection additions and inactive project/environment rejection.
-- `test/brvin-app-admin.test.ts` — add acceptance for one project shared across applications, multiple projects per application and idempotent repeat grant.
-- `test/brvin.test.ts` — assert app/project grant controls, direct/collection source shortcuts and user-to-project warning.
-- `test/brvin-admin-script.node.test.ts` — align the admin script regression check with M9's now-verified connection-state wording.
-
-**Data and security boundary:** no D1 migration, production row, application, project, environment, source assignment, grant, provider secret or Worker binding was changed. The production Fatman grant, AskMoina grant and M9 Parmar AI Connected record are left untouched. Application-project grants remain app-wide; this UI does not imply per-user teacher isolation. A multi-teacher consumer must enforce its authenticated user-to-project mapping in its own server-side code.
-
-**Validation and production evidence:**
-- PR #99 Release Validation [#755](https://github.com/ashini-x/parmar-ai/actions/runs/42098579862) passed `npm run check`, `npm test`, `npm run test:node`, `wrangler deploy --config wrangler.brvin.jsonc --dry-run` and `wrangler deploy --dry-run`.
-- PR #99 was squash-merged to `main` as `0068d74d8b164cfc64fbc43c23d9449ae8745db5`.
-- Main Release Validation [#756](https://github.com/ashini-x/parmar-ai/actions/runs/42098761142) passed paired production deployment and live root, health, private BRVIN Service Binding and Fatman retrieval checks on the first smoke attempt. Acceptance artifact: `13448441278`.
-- Production `brvin-service` deployment `2b3d2330-0c2f-4fa2-9909-48dfe7997070`, version `97c8b017-0994-4be3-9045-110d8a892b99`; `parmar-ai` deployment `70d635d1-b384-41c8-a8a9-6e3d51066198`, version `91222548-5ecc-49e0-8fa8-45daac2e19a6`.
-- Read-only production D1 read-back (`rows_written=0`) confirms the active AskMoina Voice → Fatman and Parmar AI → Fatman grants remain unchanged, the historical BRVIN Text Test Client grant remains revoked, and Parmar AI Production's M9 challenge remains `connected` with one ready authorised source and its proof hash stored. Production counts remain 3 applications, 2 projects, 3 app-project grant records and 1 connection check. No test app/project/source/grant was created, no migration was applied, and no secret or binding changed.
-
-**Scope boundary:** automated acceptance covers separate application identities for Teacher A and Teacher B, private projects, deliberate sharing and revocation. App-project grants remain app-wide. A future app that serves several teachers must enforce its own authenticated user-to-project mapping before calling BRVIN; no app-specific end-user authorization policy was added or claimed by this milestone.
-
-**Next active milestone:** M11 — operations, usage visibility, recovery and administrator handover. Do not create synthetic teacher records in production as a substitute for automated tenant-isolation fixtures.
