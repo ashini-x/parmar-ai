@@ -432,12 +432,20 @@ The handoff does not provision or modify a consumer repository, Worker, binding,
 
 **Verification limitation:** This session did not have an authenticated admin browser for a manual visual click-through or an actual per-app copy test. CI validated the generated browser script, route and generator contracts. No specific consumer is claimed Connected.
 
-### 9.5 Remaining admin and connection work
+### 9.5 M9 live connection verification — production accepted
 
-M6 and M7 delivered the teacher-focused Knowledge Projects/Application workspace, editable repository/runtime metadata, generated environment identity registration, explicit project grants, and Pending connection state. M8's one-time ChatGPT handoff generator is complete and deployed in PR #95.
+M9 shipped in [PR #98](https://github.com/ashini-x/parmar-ai/pull/98), merged as `1a57f53965f30c3de89eb51570548f99eb893e4f`. [Release Validation #728](https://github.com/ashini-x/parmar-ai/actions/runs/42079493490) and [Main Release Validation #729](https://github.com/ashini-x/parmar-ai/actions/runs/42079795434) passed. Release #729 deployed both Workers and passed root, health, private BRVIN Service Binding and Fatman retrieval acceptance. Production versions: `brvin-service` `af406a76-ec5c-4e0b-b401-80dfb1ff2a38`; `parmar-ai` `6e27a398-0bf4-4dba-8cc4-a0e17977bb4e`. Release artifact: `13440845149`.
 
-M9 challenge/proof implementation is merged in [PR #98](https://github.com/ashini-x/parmar-ai/pull/98) and deployed through paired Main Release Validation #729. Both production Workers are deployed; root/health/private BRVIN binding/Fatman acceptance passed. Production environment URL metadata is saved and the challenge table exists. No live challenge has yet been issued/finalized through an authenticated admin session, so environments remain Pending until the Verify Connection action passes. The old branch-preview namespace-capacity blocker was resolved by removing obsolete preview environments (80 DO namespace slots freed). M10 still owns the broader teacher assignment/isolation acceptance workflow.
- 
+On 6 November 2026, the administrator used the authenticated BRVIN admin UI to run **Verify connection** for Parmar AI → Production. The user-visible result was **Connected**. A read-only D1 query of `brvin_connection_checks` for environment `00000000-0000-4000-8000-000000000102` independently confirmed `status=connected`, a non-null `proof_hash`, populated `completed_at`, `ready=1`, `authorized_source_count=1` and no failure code. Proof consumption completed at **6 November 2026, 00:12:12.665 IST**. The query wrote zero rows. Raw nonce/proof values are not persisted or disclosed; only hashes are stored.
+
+This closes M9's valid production connection-verification path. Automated M9 tests cover wrong-environment, inactive, expired, forged and replayed challenge/proof rejection. The manual production check exercised the valid Parmar AI Production path; a separate live negative-identity exercise was not performed.
+
+**What Connected proves:** the registered production environment identity is active, the deployed consumer reached private `brvin-service` using its trusted Service Binding identity, the one-time proof was consumed, and the service reported one ready authorised source.
+
+**What it does not prove:** consumer end-user login, Gemini/model/tool wiring, per-teacher user-to-project mapping or cross-teacher isolation. These remain M10/M11 responsibilities. The app-wide application-project grant is not per-user authorisation.
+
+**Next milestone:** M10 — validate teacher A/B separation, explicit project/source/collection grants, deliberate sharing, revocation and the consumer application's authenticated user-to-project policy.
+
 ## 10. Consumer application integration
 
 ### 10.1 Supported same-account v2 connection
