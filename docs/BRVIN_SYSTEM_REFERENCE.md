@@ -9,11 +9,11 @@ This is the canonical technical reference for BRVIN. It records what exists in c
 
 When a future change alters code, D1 schema, bindings, access rules, ingestion, retrieval, deployment, or integrations, update this document and the relevant specialist document in the same change. Do not silently treat a planned feature as already shipped.
 
-> **BRVIN 2 implementation and chat continuity:** see [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md) first, then read [BRVIN_AUTONOMOUS_PROJECT_FACTORY.md](BRVIN_AUTONOMOUS_PROJECT_FACTORY.md) in full. M0–M5 are implemented. The original M6 Connect Application wizard is merged and deployed in the parmar-ai admin Worker (PR #75, merge 7ee4b58320ba457ac2ac94651ad872fd0b937445), but it is a narrow first adapter, not the final autonomous administrator/Project Factory. On 5 November 2026 the user approved a broader goal: administrator-level GitHub/Cloudflare technical authority, automatic credential and secret provisioning, independent GitHub repository creation for each software project, and autonomous build/test/deploy/verification. The revised first incomplete milestone is M6 — Delegated Provider Administration & Credential Lifecycle. PR #82/#83 provide the deployed provider-permission preflight and new admin-panel instructions; actual GitHub/Cloudflare owner consent and automatic token/secret provisioning remain pending. The old brvin-test-client scaffold was removed from askmoina-voice by PR #386; PR #385 was closed without merging. No Worker was deployed and the fixed adapter must not be recreated. The new acceptance app must be generated in its own repository by the Project Factory. This document remains an as-built reference: future Project Factory features are planned, not shipped, until the implementation ledger records evidence. Existing AskMoina Voice remains optional and its runtime must not be modified for BRVIN acceptance.
+> **BRVIN 2 implementation and chat continuity:** read [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md), then [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md), this as-built reference, [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The active product is a teacher-specific digital-brain knowledge platform and application connection manager. ChatGPT remains the user's software engineer using separate GitHub/Cloudflare authorizations. The autonomous Project Factory proposal is superseded historical documentation; do not follow its milestones. M0–M5 foundation status and all as-built behavior below remain subject to the evidence recorded here. The active remaining milestones are M6–M11 in the final product-scope document. The retired `brvin-test-client` scaffold must not be recreated.
 
-## Project Factory direction update — 5 November 2026
+## Product-scope correction — 5 November 2026
 
-The canonical target now includes BRVIN's autonomous technical-administrator and software Project Factory role. The user has approved administrator-level GitHub and Cloudflare authority for BRVIN to create repositories, provision developer infrastructure, manage credentials/secrets, build/test/repair/deploy applications and verify them with dashboard-level oversight. See [BRVIN_AUTONOMOUS_PROJECT_FACTORY.md](BRVIN_AUTONOMOUS_PROJECT_FACTORY.md) for the approved target architecture and acceptance gates. This is a forward design decision, not a statement that those capabilities already exist in production. The current as-built system below remains authoritative for what is actually deployed.
+The user confirmed BRVIN's product goal: manage teacher-specific knowledge projects and securely connect independently built apps to them. BRVIN owns ingestion, OCR/indexing, projects, sources, collections, trusted app/environment identities, app-project grants, private retrieval, quotas, audit and connection verification. ChatGPT owns software design, code, repository work, CI/CD and deployment through its own provider connections. BRVIN does not require an autonomous coding model or software Project Factory. The earlier Project Factory specification is retained as historical only. The canonical target is [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md).
 
 ## 1. Executive architecture
 
@@ -78,10 +78,10 @@ The two planes share the existing D1 registry and AI Search namespace. They do n
 - Latest paired production release: `brvin-service` deployment `d2a63c37-3274-467a-8697-3a1ffa6f0c7d`, version `c22150a0-6aef-4a84-bcd7-ffa4d3d274bb`, and `parmar-ai` deployment `0fa6e194-c1f6-4398-8dc6-1d037c9a1ec2`, version `83fe277d-c667-4e45-89a5-2364197fbf3d`, each at 100% traffic. Release Validation #683 (run `42038383649`) passed; production acceptance artifact `13420620125` records root, health, BRVIN Service Binding and Fatman retrieval checks.
 - End-user Fatman retrieval remains on v1. AskMoina Voice's v2 binding and Gemini Live connector/tool integration are deployed as an optional pilot. Do not make its camera/audio acceptance a BRVIN milestone gate.
 - The former M4 independent reference-client scaffold was originally merged as `brvin-test-client` in AskMoina PR #381, then retired by PR #386. Its Worker source, Wrangler/TypeScript config, tests and dedicated deploy workflow are no longer in the AskMoina repository. It was never deployed. The shared BRVIN connector remains.
-- M6's provider-administrator preflight and configured-scope correction are deployed through Parmar AI PRs #82, #83 and #88. BRVIN requests only the Cloudflare scope IDs present in the administrator-provided scope set. That set contains Workers Editor but not Workers Admin, so the current consent cannot create/delete new Workers. Actual account-token creation, direct GitHub Actions/Worker secret delivery, and generated-project provisioning remain unimplemented; see the 5 November 2026 M6 ledger.
-- The existing BRVIN GitHub App is installed on the `ashini-x` account, but its expanded permissions and All-repositories installation scope still require one-time owner approval. The Cloudflare account member already has Super Administrator — All Privileges; no additional member invitation or permanent role change is needed. BRVIN's current saved Cloudflare OAuth grant remains `workers-scripts.edit offline_access`, so the existing BRVIN Connect OAuth client must be expanded and reauthorized once. Its client secret remains encrypted; no re-entry is needed.
+- The historical Project Factory provider-administrator preflight and configured-scope correction were deployed through PRs #82, #83 and #88. They are part of the as-built code but are no longer an active product milestone. Do not ask the user to complete broad GitHub/Cloudflare administrator re-consent for the narrowed knowledge-platform goal. Audit any runtime dependencies before simplifying or removing this legacy UI; no credential should be revoked or deleted as a side effect.
+- The existing BRVIN GitHub App is installed on the `ashini-x` account. Its broader Project Factory permission upgrade and All-repository scope were never accepted as requirements for the clarified product. The saved Cloudflare OAuth grant remains `workers-scripts.edit offline_access`; this historical connection is not required to deliver the knowledge-platform workflow through ChatGPT's own integrations. Do not request additional consent or delete/revoke the existing provider configuration until its code/runtime dependencies have been audited.
 - The old fixed text-test application/environment are revoked, its project is inactive, its only application-project grant is revoked, and stale PR #385 metadata has been cleared from the GitHub provider connection. PR #385 was closed without merging; PR #386 removed the undeployed scaffold. The sample Rain Gardens PDF remains ready but unassigned.
-- The next live steps are admin GitHub App installation, Cloudflare OAuth authorization, registration of the isolated test identity, addition of the dedicated deployment secret, creation/review/merge of the generated Service Binding PR, separate text Worker deployment, and a successful real text retrieval test. M7 owns broader multi-app/project acceptance.
+- The old provider-admin/test-client sequence above is superseded. Do not create the retired `brvin-test-client`, provision its token/secret, or reauthorize provider scopes for that purpose. The active next product work is M6 — teacher-focused admin workspace, followed by M7 application/repository/runtime registration, M8 ChatGPT integration handoff, M9 live v2 connection verification, M10 knowledge assignment/isolation, and M11 operations/handover as defined in `BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md`.
 ## 2. Architecture decisions that must remain stable
 
 1. **One shared registry:** use the existing BRVIN tables in the shared D1 database. Do not create one D1 database per project or consumer app.
@@ -376,74 +376,76 @@ The protected admin workspace is served by the existing `parmar-ai` Worker:
 
 The old `/admin/vrain` page path redirects to `/admin/brvin`; the old API prefix is normalized to the BRVIN route. These are compatibility details, not the preferred new path.
 
-The current workspace includes:
+### 9.1 Shipped admin capabilities
+
+The production dashboard currently includes:
 
 - **Overview:** source, collection, project and indexed-page metrics; active/failed jobs; recent activity.
-- **Knowledge/library management:** PDF upload, collection selection, optional direct project assignment, per-source progress, pipeline inspection, archive and deletion controls.
-- **Governance:** project and collection creation, direct book grants and project-to-collection grants.
+- **Knowledge sources:** PDF upload, collection selection, optional direct project assignment, per-source progress, pipeline inspection, archive and deletion controls.
+- **Collections:** collection creation and source grouping.
+- **Projects/Governance:** project and collection creation, direct-book grants and project-to-collection grants, project status and metadata.
+- **Applications & access:** application registration, environment identity registration, application-project grants, suspend/disable/revoke lifecycle and registry display.
+- **Provider preflight UI:** a historical GitHub/Cloudflare administrator-preflight section remains in the current application/admin source. It was built for the superseded Project Factory proposal; it is not a requirement for the clarified teacher-knowledge product. Audit code and encrypted credential dependencies before removing or hiding it. Do not reauthorize, delete or revoke stored provider credentials as part of a UI-only cleanup.
 
-Administrative APIs are protected by the existing admin authentication and POST requests are checked for same-origin use. Do not expose these routes as an unauthenticated public integration API.
+Administrative APIs are protected by existing admin authentication and POST requests are checked for same-origin use. Do not expose these routes as an unauthenticated public integration API.
 
-### 9.1 Current capabilities versus the future wizard
+### 9.2 Remaining admin-experience gap
 
-Project creation already auto-generates project UUID, slug and default client ID. The current dashboard does **not** yet provide a complete Connect Application wizard that edits another repository's Wrangler config, installs an app-side adapter, or validates an external application's model tool handler.
+The deployed UI has separate application, environment and grant forms. It does not yet provide the final project-centric teacher workspace or a complete Connect Application journey.
 
-The admin interface can govern BRVIN identity and knowledge grants. Application integration still requires a one-time consumer-side configuration and code adapter unless a future guided automation implements that work.
+The final target is specified in [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md): Knowledge Projects and Applications are the primary admin concepts; application registration captures repository/runtime references; a generated ChatGPT handoff performs the one-time code integration; and the deployed app must pass a live v2 connection check before it is labelled Connected.
+
+A registered application or environment row is not proof of a live Service Binding. Do not show Connected until the verification contract is implemented and a real runtime check passes.
 
 ## 10. Consumer application integration
 
-### 10.1 Same-account Cloudflare Worker
+### 10.1 Supported same-account v2 connection
 
-For an application Worker in the same Cloudflare account:
+For a new consumer Worker in the same Cloudflare account:
 
-1. Create a BRVIN project in the admin dashboard.
-2. Grant the required books or collections.
-3. Add a Service Binding in the consumer Worker's Wrangler config pointing to `brvin-service`, entrypoint `BrvinRetrievalApi`, with the generated project slug in `props.clientId`.
-4. Add the typed binding contract to that application's environment type.
-5. Call `retrieveProjectContext()` from the app's server-side question/tool handler.
-6. Return the passages and provenance to the model as evidence.
-7. Test successful access, denied access, empty results, quota exhaustion and service failure.
+1. Register the consumer application in the BRVIN admin workspace.
+2. Register a trusted environment for each intended deployed environment (production, staging, preview).
+3. Use the generated immutable environment UUID as `props.applicationEnvironmentId`.
+4. Add a private Service Binding in the consumer Worker to `brvin-service`, entrypoint `BrvinRetrievalApi`.
+5. Use the v2 methods `listAuthorizedProjectsV2()`, `getProjectStatusV2({ projectId })` and `retrieveProjectContextV2(input)`.
+6. Wire retrieval into the consumer application's server-side model/tool handler.
+7. Preserve source title, book/source ID and physical PDF page provenance in the consumer's answer flow.
+8. Test allowed/revoked/unknown projects, no evidence, quota exhaustion and service failure.
 
-The consumer app does not need BRVIN's D1 binding, AI Search binding, GCS bucket, PDF, OCR credentials or BRVIN secrets. It should not bypass the service and query the shared index directly.
+The consumer app does not need BRVIN's D1 binding, AI Search binding, GCS bucket, PDF/OCR credentials or BRVIN master secrets. It must not query shared AI Search or D1 directly.
 
-Official platform references:
-- [Cloudflare Service Bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)
-- [Service Binding RPC](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/rpc/)
-- [Worker execution context and props](https://developers.cloudflare.com/workers/runtime-apis/context/)
+V2 identity comes only from deployment-controlled Service Binding `ctx.props.applicationEnvironmentId`. A request body cannot set or override the identity. A project ID is only a selector checked against an active application-project grant. New v2 integrations must not use the legacy v1 `props.clientId`.
 
-### 10.2 What adding Wrangler alone does and does not do
+### 10.2 App-side model and user responsibilities
 
-A Service Binding exposes the private RPC methods to the application. It does **not** automatically:
+A Service Binding exposes private RPC methods; it does not wire the application's model flow. The consumer app must:
+- authenticate its own users;
+- determine which BRVIN project(s) the authenticated user may access;
+- call the appropriate BRVIN v2 method server-side;
+- provide bounded returned evidence to its own model as untrusted source material;
+- generate the final answer and display accurate source/page citations;
+- preserve its own sessions, users and conversation history.
 
-- detect which user question needs a book search;
-- call BRVIN from the application's model flow;
-- place passages in Gemini/LLM context;
-- decide how to cite pages;
-- preserve source evidence through subsequent turns;
-- create a UI or tool/function declaration.
+The existing BRVIN application-project grant is application-wide, not user-specific. A multi-teacher application must enforce user-to-project authorization itself. For a dedicated teacher app, the app may have a single teacher knowledge project grant.
 
-Those responsibilities live in the app-side adapter. Once an app has this reusable adapter, adding another BRVIN project and changing only its binding identity/grants can be an admin/configuration operation rather than a new retrieval implementation.
+### 10.3 ChatGPT's role in the one-time integration
 
-### 10.3 AskMoina Voice — integration status at 4 November 2026
+ChatGPT remains the user's application engineer. BRVIN's intended wizard registers application metadata and environment identity, then generates a non-secret, repository-specific integration handoff. The user ensures that the repository is available in ChatGPT's own GitHub connection. ChatGPT uses its separately authorized GitHub/Cloudflare tools to modify the consumer repo, test and deploy it.
 
-The separate repository `ashini-x/askmoina-voice` was checked during this audit:
+BRVIN cannot authorize OpenAI's GitHub connector or guarantee that a newly created private repository is automatically visible to ChatGPT. A repository URL recorded in BRVIN is metadata, not proof of ChatGPT or BRVIN source-control access.
 
-- no BRVIN source files or BRVIN config were found;
-- its deployed Worker did not have a `BRVIN_SERVICE` binding;
-- it has its own D1 databases and Gemini Live function/tool pipeline;
-- its Gemini Live tool-call handler is a natural integration point for a server-side BRVIN retrieval tool.
+### 10.4 AskMoina Voice and other consumers
 
-AskMoina is in the same Cloudflare account, so the preferred path is a private Service Binding, not a public BRVIN endpoint. The planned integration is to add a BRVIN search function tool to AskMoina's existing Gemini Live tool list, have the handler call BRVIN, and return concise retrieved passages with book title and PDF page provenance to Gemini Live. Gemini Live continues to generate the answer. AskMoina's own conversation D1 and Gemini model remain separate.
+AskMoina Voice remains an optional independent consumer and must not be used as a fixed BRVIN test-client host. Its current integration state must be read from the latest repo and production ledger before any work; historical 4 November audit statements are not current deployment evidence.
 
-No AskMoina code or production configuration was changed as part of this audit/documentation update.
+The first teacher-focused proof consumer may be a separate SSC Mathematics Telegram bot repository, built and deployed by ChatGPT/user. BRVIN's acceptance responsibility is to register and verify its private knowledge connection and prove teacher/project isolation—not to create the bot.
 
-### 10.4 Other Cloudflare accounts or non-Cloudflare applications
+### 10.5 Other Cloudflare accounts or non-Cloudflare applications
 
-A Worker in a different Cloudflare account cannot directly use this private same-account Service Binding. For that future case, build a separate authenticated HTTPS gateway in front of the internal service. The gateway should have per-project credentials, secure hashed credential storage, rotation/revocation, request validation, rate limiting, quotas and audit events.
+A Worker in a different Cloudflare account cannot directly use the private same-account Service Binding. A server outside Cloudflare also cannot call the private Worker directly. Design a separate authenticated HTTPS gateway in a later milestone before supporting those consumers.
 
-Keep `brvin-service` private behind the gateway. Do not turn on `workers.dev` or expose the internal RPC Worker as a shortcut.
+Keep `brvin-service` private. Do not turn on `workers.dev` or expose the internal RPC Worker as a shortcut. The public gateway is not implemented.
 
-The public gateway is **not implemented** as of the verification date. A generic no-code connector for arbitrary applications is also not implemented.
 
 ## 11. Deployment, verification and release safety
 

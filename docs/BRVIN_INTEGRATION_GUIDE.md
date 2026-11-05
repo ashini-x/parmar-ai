@@ -1,62 +1,44 @@
-# BRVIN Application Integration Guide
+# BRVIN Application Integration Guide — RPC v2
 
-> **Version boundary:** This guide describes the legacy v1 connection path used by existing Fatman retrieval. The M1 application/environment/project-grant registry and M2 private RPC v2 are implemented and deployed. New integrations should use the trusted environment identity and v2 contract documented in [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md), preferably through the reusable connector being delivered in M3. Do not migrate existing consumers until their connector/tool-handler milestone is complete.
+**Status:** Active integration guide for new applications  
+**Applies to:** Consumer Cloudflare Workers in the same Cloudflare account as the private BRVIN service  
+**Canonical product scope:** [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md)  
+**RPC contract:** [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md)
 
-This guide explains how to connect an application to the existing private BRVIN retrieval service. It is written for engineers implementing a consumer app and administrators provisioning its project.
+> This guide is for the one-time technical integration of an independently built application with BRVIN. ChatGPT remains responsible for modifying the consumer repository, running its tests and deploying it through the user's separately authorized GitHub and Cloudflare connections. BRVIN's admin panel registers the application/environment, generates the integration handoff, verifies the connection, and manages knowledge-project grants. BRVIN does not build the application.
 
-For the full architecture, data model, security boundaries and current deployment map, start with [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md). For operations, see [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md).
+## 1. Supported connection model
 
-## 1. First decide which connection model applies
-
-| Consumer type | Supported today? | Connection method |
+| Consumer | Current support | Connection |
 |---|---|---|
-| Cloudflare Worker in the same Cloudflare account as BRVIN | Yes | Private Service Binding RPC |
-| Cloudflare Worker in a different Cloudflare account | Not directly | Requires a future authenticated HTTPS gateway |
-| Server outside Cloudflare | Not directly | Requires a future authenticated HTTPS gateway or another approved adapter |
-| Consumer app with no server-side code/tool handler | Not automatically | Needs a prebuilt adapter or integration work before it can use retrieval |
+| Cloudflare Worker in the same Cloudflare account as BRVIN | Supported | Private Service Binding RPC to `brvin-service` |
+| Cloudflare Worker in a different account | Deferred | Requires a separate authenticated HTTPS gateway |
+| Server outside Cloudflare | Deferred | Requires a separate authenticated HTTPS gateway/adapter |
+| Browser/mobile client | Not directly supported | Calls its own backend; never calls BRVIN private RPC directly |
 
-The current BRVIN Worker is intentionally private. Do not turn on a public route to make an integration easier.
+Keep `brvin-service` private: `workers_dev: false`, no public route and default HTTP 404. Do not create a public URL for the internal retrieval service.
 
-Cloudflare references:
-- [Service Bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)
-- [Service Binding RPC](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/rpc/)
-- [Worker context and props](https://developers.cloudflare.com/workers/runtime-apis/context/)
+## 2. What the BRVIN administrator does
 
-## 2. What the administrator does
+1. Open the protected BRVIN admin workspace at `/admin/brvin`.
+2. Create or select the teacher's knowledge project.
+3. Upload the teacher's PDFs, shortcuts, formulas, methods and notes supported by the current ingestion workflow; wait until sources reach the defined ready state.
+4. Open **Applications → Connect application**.
+5. Register the application profile, owner/teacher label, application type, GitHub repository URL/default branch, target Cloudflare account/Worker metadata and environment label (for example, `production`).
+6. BRVIN creates the application and trusted environment records and generates the immutable `applicationEnvironmentId`.
+7. Select **Copy ChatGPT integration prompt**. The handoff is non-secret and is specific to the selected repository, branch, application and environment.
+8. Make sure the target repository is available through ChatGPT's GitHub connection. BRVIN cannot change OpenAI's connector authorization or enable a new repository on ChatGPT's behalf.
+9. Paste the generated prompt into the ChatGPT engineering conversation that can access the repository and Cloudflare. ChatGPT implements the app-side integration, tests it and deploys under the user's existing workflow.
+10. Return to BRVIN and run the live connection check. Do not mark the app Connected from registry records alone.
+11. Grant the application access to the specific teacher knowledge project(s). A grant may be prepared before integration, but retrieval is not accepted until the deployed runtime passes verification.
 
-### Step 1 — Create the BRVIN project
+A new knowledge project does not require a new application, repository, Service Binding or app deployment. It requires only an explicit application-project grant when the application should be allowed to retrieve it.
 
-Open the protected Parmar admin BRVIN workspace at `/admin/brvin`, open Governance, and create the application project.
+## 3. One-time consumer Worker integration
 
-The backend automatically creates:
+The consumer Worker and BRVIN's `brvin-service` must be in the same Cloudflare account for the supported private Service Binding model.
 
-- an internal UUID for the project;
-- a normalized, unique slug;
-- a default service client mapping whose `client_id` equals that slug.
-
-Example: a project named “AskMoina” normally receives slug/client ID `askmoina`.
-
-The administrator does not create an ID, UUID or API key by hand. The generated slug is the value used in the consumer Worker's Service Binding props.
-
-Project creation alone grants no books.
-
-### Step 2 — Grant knowledge
-
-Grant specific books directly or grant a collection. A collection grant allows retrieval from ready books in that collection, including future books placed in it.
-
-Grant only the knowledge that the application is meant to use. Do not grant all collections by default.
-
-### Step 3 — Give the integration engineer the binding identity
-
-The non-secret configuration value required by the same-account Service Binding is the generated project slug/client ID. It is not an API password or bearer token.
-
-Do not send or copy the BRVIN D1 database credentials, Google credentials, GCS bucket secrets or AI Search binding into the consumer app.
-
-## 3. What the application engineer does once per application
-
-### Step 1 — Add the Service Binding
-
-In the consumer Worker's Wrangler configuration, add a service binding:
+Add the following binding to the consumer Worker's Wrangler configuration. Replace the environment ID with the exact value generated by BRVIN for this application environment:
 
 ~~~jsonc
 {
@@ -66,322 +48,98 @@ In the consumer Worker's Wrangler configuration, add a service binding:
       "service": "brvin-service",
       "entrypoint": "BrvinRetrievalApi",
       "props": {
-        "clientId": "askmoina"
+        "applicationEnvironmentId": "<generated-application-environment-uuid>"
       }
     }
   ]
 }
 ~~~
 
-Replace `askmoina` with the actual slug generated in the BRVIN admin workspace.
-
 Important:
+- `service` is the private Worker name.
+- `entrypoint` is the deployed RPC entrypoint.
+- `props.applicationEnvironmentId` is the trusted v2 caller identity.
+- Use the correct registered environment UUID for each deployment environment.
+- This UUID is not an API key. Its trust comes from control of the deployment configuration and private same-account Service Binding.
+- Do not use the legacy v1 `props.clientId` for v2 methods.
+- Do not accept `applicationEnvironmentId` from a browser or request body.
+- Do not add BRVIN D1, AI Search, Google Cloud Storage or master credentials to the consumer.
 
-- `service` must match the deployed private Worker name.
-- `entrypoint` must match the named entrypoint class.
-- `props.clientId` must match the D1 service-client mapping.
-- configure the binding in every environment that needs it, such as preview and production, with the correct registered project identity for that environment.
-- this mechanism is for Workers in the same Cloudflare account.
+## 4. Required v2 RPC methods
 
-The consumer does not need its own BRVIN D1 or AI Search binding.
+Use the exact TypeScript types and failure union in [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md). The required methods are:
 
-### Step 2 — Add the typed environment contract
+- `listAuthorizedProjectsV2()` — returns only projects with an active grant for the trusted application.
+- `getProjectStatusV2({ projectId })` — confirms that the selected project is authorized and reports source readiness/counts.
+- `retrieveProjectContextV2(input)` — returns bounded source passages and provenance for an authorized project.
 
-The consuming application's environment type needs a typed representation of the binding. The current Parmar implementation defines the compatible contract in `src/config/env.ts`.
+A `projectId` in an RPC input is only a selector. Every request must independently verify the active application/environment, project status and exact active application-project grant. A project ID does not grant access.
 
-At minimum, the application should model:
+The consumer should use `listAuthorizedProjectsV2()` to discover only its granted projects. For a dedicated single-teacher application, its server-side policy may select the one intended project. For an application serving multiple teachers, the application's own authenticated server-side user/tenant mapping must select only the project that user is entitled to use. Never trust a browser-supplied project ID as entitlement.
 
-- `getProjectStatus()`;
-- `retrieveProjectContext({ queries: string[]; pageNumbers?: number[] })`;
-- the success/failure result union.
+## 5. Retrieval belongs in the application's existing model/tool flow
 
-The important shape is conceptually:
+BRVIN returns evidence; the consumer application generates the final answer.
 
-~~~ts
-interface BrvinServiceBinding {
-  getProjectStatus(): Promise<
-    | { ok: true; ready: boolean; authorizedSourceCount: number }
-    | BrvinServiceFailure
-  >;
-
-  retrieveProjectContext(input: {
-    queries: string[];
-    pageNumbers?: number[];
-  }): Promise<BrvinServiceRetrievalResult>;
-}
-~~~
-
-The consumer should keep its own app environment type. Do not import the entire Parmar application environment module into an unrelated repository merely to reuse one binding type.
-
-### Step 3 — Add the app-side retrieval adapter
-
-The adapter should be a small server-side module that:
-
-1. Accepts the current user question and optional explicit PDF page numbers.
-2. Calls BRVIN through the binding.
-3. handles a structured failure without performing a global/unfiltered search;
-4. preserves the book title, book ID and PDF page for each passage;
-5. formats a bounded evidence block for the app's model/tool response;
-6. preserves optional exact-page image data where the app can use it;
-7. records or surfaces operational errors without leaking secrets or full raw documents into logs.
-
-Conceptual example:
-
-~~~ts
-async function searchBrvin(
-  env: Env,
-  question: string,
-  pageNumbers?: number[],
-) {
-  const result = await env.BRVIN_SERVICE.retrieveProjectContext({
-    queries: [question],
-    ...(pageNumbers?.length ? { pageNumbers } : {}),
-  });
-
-  if (!result.ok) {
-    return {
-      ok: false,
-      code: result.code,
-      retryable: result.retryable,
-      message: result.userMessage ?? result.message,
-    };
-  }
-
-  return {
-    ok: true,
-    passages: result.passages.map((passage) => ({
-      bookId: passage.bookId,
-      bookTitle: passage.bookTitle,
-      pdfPage: passage.pdfPage,
-      printedPage: passage.printedPage,
-      section: passage.section,
-      text: passage.text,
-      score: passage.score,
-    })),
-    pageImages: result.pageImages ?? [],
-    searchedSources: result.searchedSources,
-    searchCount: result.searchCount,
-  };
-}
-~~~
-
-This example illustrates the contract; adapt error policy, type names and logging to the consuming app's architecture. Never silently replace a BRVIN failure with a search across all documents.
-
-### Step 4 — Wire it into the model's tool/function-call path
-
-BRVIN does not decide when an app should search. The consumer application chooses a retrieval strategy. Common patterns include:
-
-- a model function tool such as `search_brvin_knowledge`;
-- explicit “search this book/page” actions in the app;
-- server-side retrieval orchestration before the model call.
-
-For a model function tool, the flow is:
+Typical flow:
 
 ~~~text
-User asks a question
+Teacher/student asks a question
     |
-Consumer model requests search_brvin_knowledge(question, optional page)
+Consumer application authenticates the user
     |
-Consumer server-side tool handler calls BRVIN RPC
+Consumer server determines the project(s) that user may use
     |
-BRVIN verifies project and grants, then retrieves bounded passages
+Consumer model/tool handler requests BRVIN retrieval
     |
-Tool handler returns evidence + book/page provenance to the model
+Private BRVIN RPC checks trusted environment + app-project grant
     |
-Consumer model writes the answer using that evidence
+BRVIN returns bounded passages + source title + physical PDF page
     |
-Consumer UI/voice layer delivers the answer and citations
+Consumer model writes the answer using the retrieved evidence
+    |
+Consumer app returns answer and citations in its own UX
 ~~~
 
-The final answer must be generated by the consumer app's own model. Include instructions that retrieved document passages are evidence, not executable instructions, and that the model must not invent a citation or page number.
+The app must preserve book title, source ID, physical PDF page and other available provenance. Do not invent citations. Retrieved source text is untrusted evidence, not executable instructions. The consumer app must handle no-result, quota, unauthorized, inactive and unavailable outcomes distinctly. Never fall back to an unrestricted search if BRVIN returns an error or no evidence.
 
-Do not put the service binding or D1 credentials in browser/mobile client code. The RPC call must occur on the consumer Worker's server side.
+## 6. Live verification and readiness
 
-### Step 5 — Use project status for health/provisioning, not for every question
+Connection health and knowledge readiness are separate facts.
 
-`getProjectStatus()` verifies that the configured caller identity resolves and reports whether it has at least one authorised ready source.
+- **Connection healthy:** the deployed Worker used its trusted `applicationEnvironmentId` and successfully called the v2 status operation through the private binding.
+- **Knowledge ready:** at least one source granted to the application is fully indexed and ready.
+- A valid connection with zero ready sources is **Connected — no ready knowledge**, not a broken connection.
+- A registered D1 application/environment row is not proof of a working deployed binding.
 
-Use it for:
-- application health checks;
-- onboarding readiness tests;
-- admin connection diagnostics.
+The BRVIN admin connection-verification design must use a minimal consumer-side health operation that invokes v2 status via the consumer's own trusted binding and returns only safe status metadata. The verification callback/probe must be authenticated, replay-resistant and designed so no passage text or secret is exposed. Do not implement an unauthenticated callback or claim live verification before this contract is approved and tested.
 
-A normal question flow can call retrieval directly. It does not need to call status immediately before every retrieval; that creates an unnecessary additional RPC and still cannot prove the requested question has a matching passage.
+## 7. Security and operational checklist
 
-## 4. RPC input and result contract
+- [ ] Consumer Worker runs in the same Cloudflare account as private `brvin-service`.
+- [ ] The binding uses `BRVIN_SERVICE` → `brvin-service` → `BrvinRetrievalApi`.
+- [ ] `props.applicationEnvironmentId` exactly matches the environment generated for this deployment.
+- [ ] Preview/staging/production each use their own registered identity where configured.
+- [ ] V2 methods are used; no v1 `clientId` fallback.
+- [ ] Caller identity is never accepted from browser input or RPC request data.
+- [ ] Only projects returned by authorized project discovery are offered to the app's user/policy layer.
+- [ ] The consumer server enforces its own authenticated user-to-project mapping for multi-teacher applications.
+- [ ] Direct-book/collection grants and revocation behave as expected.
+- [ ] Unknown, inactive and revoked identities/projects fail closed.
+- [ ] The app preserves physical PDF page citations and handles no evidence.
+- [ ] No BRVIN D1, AI Search, GCS or provider master secrets are present in the app.
+- [ ] No public route has been added to `brvin-service`.
+- [ ] Application CI and deployment succeeded through the user's normal ChatGPT/GitHub/Cloudflare workflow.
+- [ ] The live BRVIN connection check passed before the admin UI shows Connected.
 
-### `getProjectStatus()`
+## 8. Boundary and future work
 
-Success response:
+A repository reference in BRVIN does not authorize ChatGPT to read or modify that repository. The user separately enables the repository in ChatGPT's GitHub connection when required. ChatGPT performs the app code and deployment changes; BRVIN does not take over those provider connections.
 
-~~~json
-{
-  "ok": true,
-  "ready": true,
-  "authorizedSourceCount": 2
-}
-~~~
+The private Service Binding is same-account only. A cross-account or non-Cloudflare gateway is deferred and must be separately designed with application credentials, rotation, quotas, rate limits, audit and strict request authentication. Never expose `brvin-service` directly.
 
-It returns availability/readiness and an authorised-ready-source count. It does not return document text.
-
-### `retrieveProjectContext(input)`
-
-Input:
-
-~~~ts
-{
-  queries: string[];       // up to 3 unique, bounded query variants
-  pageNumbers?: number[]; // up to 3 positive PDF page numbers
-}
-~~~
-
-A call must contain at least one non-empty query or valid page number. Query text is bounded and normalized by BRVIN.
-
-Successful response shape:
-
-~~~json
-{
-  "ok": true,
-  "passages": [
-    {
-      "id": "search-result-id",
-      "bookId": "source-id",
-      "bookTitle": "Reference book",
-      "pdfPage": 17,
-      "printedPage": "12",
-      "section": "Example section",
-      "text": "Retrieved source passage...",
-      "score": 0.74
-    }
-  ],
-  "searchedSources": 1,
-  "searchCount": 1
-}
-~~~
-
-The `printedPage` and `section` fields are optional. PDF page is the stable physical page reference for citations; do not substitute printed page for the PDF page without making the distinction clear.
-
-When exact-page retrieval returns a supported page image, `pageImages` may also be present. Each image identifies its MIME type, base64 data and byte length. Keep image use bounded and only pass it into a model that supports the corresponding image input.
-
-### Structured failures
-
-The service may return structured failure codes including:
-
-- `INVALID_REQUEST`
-- `CLIENT_NOT_REGISTERED`
-- `MONTHLY_LIMIT_REACHED`
-- `RETRIEVAL_FAILED`
-- `BRVIN_UNAVAILABLE`
-
-The failure object includes `ok: false`, code, message, retryable and sometimes a user-facing message.
-
-Consumer behavior:
-- do not retry non-retryable validation or registration errors in a tight loop;
-- do not treat quota exhaustion as “no search results”;
-- retry transient failures only under the app's bounded retry policy;
-- show a graceful unavailable response when BRVIN is down;
-- never fall back to unrestricted search.
-
-## 5. Limits and operational expectations
-
-Current service limits are implementation controls, not values that every consumer may override:
-
-- maximum 3 query variants;
-- maximum 3 explicit page numbers;
-- maximum query length 2,000 characters after normalization;
-- up to 50 candidate chunks per query;
-- bounded passage count and passage size;
-- default relevance threshold 0.2;
-- monthly retrieval allowance capped at 800 per project.
-
-The 800 allowance is service-level. A consumer still needs its own per-user quotas, authentication, abuse controls, concurrency limits and product billing rules.
-
-An exact-page lookup can return `searchCount: 0` because it reads the exact indexed item rather than running semantic search. The service's monthly request allowance is still reserved for a valid retrieval request.
-
-## 6. First-party integration plan: AskMoina Voice
-
-The 4 November 2026 audit found that `ashini-x/askmoina-voice` is not yet connected to BRVIN. The repository and deployed Worker had no BRVIN binding at that time.
-
-The recommended implementation order is:
-
-1. Create an AskMoina project in the BRVIN admin workspace and record its generated slug.
-2. Decide which books/collections AskMoina should be allowed to read and grant only those.
-3. Add `BRVIN_SERVICE` to AskMoina's production and applicable preview Wrangler configuration with the generated client ID.
-4. Add a typed BRVIN binding/result contract to AskMoina's Worker environment.
-5. Add a Gemini Live function tool named for BRVIN knowledge search (for example, `search_brvin_knowledge`).
-6. Route the tool call through AskMoina's existing server-side Gemini Live function handler.
-7. Call `retrieveProjectContext` and return concise passages with book titles and PDF page numbers to Gemini Live.
-8. Keep Gemini Live responsible for composing the answer and speaking it. Do not move Gemini generation into BRVIN.
-9. Preserve AskMoina's own D1 conversation history, audio/video session state and user identity. Do not bind BRVIN's D1 or AI Search directly into AskMoina.
-10. Test voice and camera question flows, page-specific questions, no-result questions, revoked access, quota exhaustion and service outage.
-
-The existing AskMoina function-tool pipeline is the most natural adapter point. The integration should be a contained addition, not a rewrite of its conversation architecture.
-
-No AskMoina implementation or deployment is included in this documentation change.
-
-## 7. Cross-account and external integrations
-
-The private Service Binding approach only applies to same-account Workers. A different Cloudflare account or an application outside Cloudflare needs a future gateway.
-
-The gateway must be a separate public HTTPS Worker/service that authenticates the application and forwards only an authenticated project identity into the internal service. The minimum production design must include:
-
-- per-project high-entropy API credentials;
-- one-way hash storage and constant-time verification where applicable;
-- credential rotation and revocation;
-- strict request schema and size validation;
-- per-project and per-credential rate limiting;
-- monthly quota enforcement;
-- audit events and request correlation IDs;
-- TLS-only access and abuse protection;
-- no direct public route to `brvin-service`.
-
-This gateway is not implemented. Do not give another account a made-up public URL or API key.
-
-## 8. What “no-code onboarding” can truthfully mean
-
-The admin already removes the manual identity-generation work: project UUID, slug and default client ID are automatic. Knowledge grants are admin-managed.
-
-A binding plus an app-side adapter is still required. The admin cannot currently modify any arbitrary repository's source code or automatically inject retrieved passages into its model.
-
-A future Connect Application wizard could automate more of the one-time engineer work by:
-- detecting the repository and Worker environment;
-- creating or updating the Service Binding configuration;
-- installing a standard adapter package/template;
-- creating a pull request with typed env and tool-handler changes;
-- running tests and a private connectivity check;
-- reporting whether the app is actually wired to the model flow.
-
-Until such automation exists, describe the product honestly as **admin-driven project and knowledge provisioning with a one-time app integration**, not universal no-code integration.
-
-## 9. Integration acceptance checklist
-
-### Configuration and identity
-- [ ] Project was created in BRVIN; slug/client ID came from admin.
-- [ ] Consumer Worker is in the same Cloudflare account as BRVIN.
-- [ ] Service, entrypoint and props are exact.
-- [ ] Preview and production environments are configured intentionally.
-- [ ] No BRVIN D1, AI Search or GCS secret is copied into the consumer.
-
-### Runtime and authorisation
-- [ ] Consumer can call `getProjectStatus()`.
-- [ ] Retrieval returns only the project's granted sources.
-- [ ] A source not granted to the project is not returned.
-- [ ] Revoking a grant affects future retrievals.
-- [ ] An unknown client fails closed.
-- [ ] Empty grants return no passages.
-- [ ] Quota exhaustion and service errors are handled distinctly.
-- [ ] There is no unrestricted-search fallback.
-
-### Model and user experience
-- [ ] A genuine user question triggers the retrieval tool when appropriate.
-- [ ] Retrieved passages are returned to the model as evidence.
-- [ ] Final answer generation remains in the consumer app.
-- [ ] Book title and PDF page provenance survive to the final response.
-- [ ] Voice/camera/UI delivery works with real retrieved context.
-- [ ] Logs avoid storing unnecessary raw student/user content.
-
-## 10. Related reference
-
-- [System Reference](BRVIN_SYSTEM_REFERENCE.md) — complete architecture and source map.
-- [Private Retrieval API](BRVIN_PRIVATE_RETRIEVAL_API.md) — RPC security and method contract.
-- [Operations Runbook](BRVIN_OPERATIONS_RUNBOOK.md) — admin and production procedures.
+Related references:
+- [BRVIN System Reference](BRVIN_SYSTEM_REFERENCE.md)
+- [BRVIN 2 Product Scope and Final Milestones](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md)
+- [BRVIN Private Retrieval RPC v2](BRVIN_2_RPC_V2_CONTRACT.md)
+- [BRVIN Operations Runbook](BRVIN_OPERATIONS_RUNBOOK.md)
