@@ -362,6 +362,7 @@ The live production environment displayed **Connected** after one authenticated 
 
 **Implementation update — 6 November 2026 (in progress):** [PR #99](https://github.com/ashini-x/parmar-ai/pull/99) is open from branch `brvin/m10-teacher-isolation-acceptance`; validation is in progress. The existing v2 authorization algorithm already checks an active app-project grant before quota reservation/search and resolves only ready direct-book/collection sources. This increment adds:
 - Project detail controls to grant an active application and revoke each active application grant, with grant history retained in the view.
+- Project detail shortcuts to the existing per-book direct-grant editor and collection-grant selector, so direct and collection source access can be managed while viewing the teacher project.
 - Application-card controls to grant another active knowledge project and retain the existing revoke path.
 - Clear disclosure that app-project grants are application-wide. Any app serving several teachers must perform authenticated user-to-project authorization on its own server; this BRVIN admin control does not provide per-user permissions.
 - A dedicated two-application/three-project isolation suite covering only-granted project discovery, cross-project denial, intentional shared access, revoke denial on the next retrieval, direct/collection source boundaries, future ready collection additions, unready source exclusion and inactive project/environment denial.
