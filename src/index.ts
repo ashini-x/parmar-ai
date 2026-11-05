@@ -44,6 +44,7 @@ import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload
 import { archiveBrvinBook, assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinApplication, createBrvinApplicationEnvironment, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, grantBrvinApplicationProject, revokeBrvinApplicationProject, setBrvinApplicationStatus, setBrvinEnvironmentStatus, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview, updateBrvinProject } from "./brvin/admin";
 import {
   brvinConnectStatus,
+  inspectBrvinProviderCapabilities,
   completeBrvinCloudflareOAuth,
   completeBrvinGitHubManifest,
   configureBrvinCloudflareOAuth,
@@ -2231,6 +2232,7 @@ const worker = {
         if (!(await requireAdmin(request, env))) return withRequestId(json({ ok: false, error: "unauthorized" }, 401), requestId);
         if (adminApiPath === "/admin/api/brvin/overview" && request.method === "GET") return brvinOverview(env);
         if (adminApiPath === "/admin/api/brvin/connect/status" && request.method === "GET") return brvinConnectStatus(env);
+        if (adminApiPath === "/admin/api/brvin/connect/capabilities" && request.method === "GET") return inspectBrvinProviderCapabilities(env);
         if (adminApiPath === "/admin/api/brvin/connect/github/installations" && request.method === "GET") return listBrvinGitHubInstallations(env);
         if (adminApiPath === "/admin/api/brvin/connect/github/repositories" && request.method === "GET") return listBrvinGitHubRepositories(env);
         if (adminApiPath === "/admin/api/brvin/connect/cloudflare/workers" && request.method === "GET") return discoverBrvinCloudflareWorkers(env, request);
