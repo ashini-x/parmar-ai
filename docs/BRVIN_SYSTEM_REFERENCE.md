@@ -380,20 +380,29 @@ The old `/admin/vrain` page path redirects to `/admin/brvin`; the old API prefix
 
 The production dashboard currently includes:
 
-- **Overview:** source, collection, project and indexed-page metrics; active/failed jobs; recent activity.
+- **Overview:** source, collection, knowledge-project, application and indexed-page metrics; active/failed jobs; recent activity.
 - **Knowledge sources:** PDF upload, collection selection, optional direct project assignment, per-source progress, pipeline inspection, archive and deletion controls.
 - **Collections:** collection creation and source grouping.
-- **Projects/Governance:** project and collection creation, direct-book grants and project-to-collection grants, project status and metadata.
-- **Applications & access:** application registration, environment identity registration, application-project grants, suspend/disable/revoke lifecycle and registry display.
-- **Provider preflight UI:** a historical GitHub/Cloudflare administrator-preflight section remains in the current application/admin source. It was built for the superseded Project Factory proposal; it is not a requirement for the clarified teacher-knowledge product. Audit code and encrypted credential dependencies before removing or hiding it. Do not reauthorize, delete or revoke stored provider credentials as part of a UI-only cleanup.
+- **Knowledge projects:** teacher/owner label, project name/description, direct-book and collection grants, source/ready-source counts, active application counts, current-month retrieval usage, project detail modal (sources, collections, applications and project-scoped recent events), edit and activate/deactivate actions.
+- **Applications:** teacher/owner label, purpose, app registry metadata, environment identities, active project grants, edit/suspend/revoke lifecycle and explicit registration-only/unverified status. The UI never presents a registered environment as live-connected; M9 owns live verification.
+- **Legacy provider settings:** historical GitHub/Cloudflare administrator-preflight controls are retained in a collapsed legacy disclosure, are not part of teacher/app onboarding, and do not trigger periodic provider checks while closed. Existing stored provider credentials were not deleted, revoked or reauthorized.
 
 Administrative APIs are protected by existing admin authentication and POST requests are checked for same-origin use. Do not expose these routes as an unauthenticated public integration API.
 
-### 9.2 M6 implementation branch — pending release
+### 9.2 M6 — teacher-focused admin workspace deployed
 
-The M6 teacher-focused workspace implementation is currently under review in [PR #91](https://github.com/ashini-x/parmar-ai/pull/91), branch `brvin/m6-teacher-focused-admin`. It adds the owner-label migration, project/application owner metadata, application-neutral teacher knowledge project creation, project readiness/usage summaries, project detail view and collapses the old provider-admin controls as legacy settings. **These changes are not yet merged or deployed.** The currently deployed admin behavior remains the shipped capability list above until PR #91 passes validation, merges and receives a production release. No provider credential is deleted or reauthorized by this M6 change.
+M6 shipped in [PR #91](https://github.com/ashini-x/parmar-ai/pull/91), merge commit `4ab6c555af64f5972607a9b9f409c181d0883c7f`.
 
-### 9.2 Remaining admin-experience gap
+- PR Release Validation #700 passed type-check, unit tests, Node/browser-script tests and both Worker bundle validations.
+- Main Release Validation #701 deployed the paired Workers and passed root, worker health, private BRVIN Service Binding, Fatman retrieval and production release acceptance.
+- Production `owner_label` columns exist on `brvin_projects` and `brvin_applications`; migration marker `2026-11-05-brvin-owner-label-v1` is present.
+- Production project/application summary queries executed successfully with read-only D1 API calls (`rows_written=0`). Fatman remains active and its existing `fatman -> fatman` v1 mapping remains.
+- Production versions: `brvin-service` `9657e7ef-394e-43ac-abd7-2a3564d9500f` and `parmar-ai` `fbcb906b-8d42-430d-815d-c4b9d4891f4f`, each at 100% traffic in deployment history.
+- No provider credential was removed, reauthorized or revoked. No M7 wizard or M8 prompt generator was started.
+
+**Manual verification limitation:** the admin route requires the administrator's authenticated browser session. This session did not have that login session available for a visual click-through. The dashboard client contract is covered by passing Node/browser-script tests, and the deployed backend/schema/query behavior was verified against production. The administrator can visually confirm the signed-in workspace at `/admin/brvin`; do not claim that this session performed the click-through.
+
+### 9.3 Remaining admin-experience gap
 
 The deployed UI has separate application, environment and grant forms. It does not yet provide the final project-centric teacher workspace or a complete Connect Application journey.
 

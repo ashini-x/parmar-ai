@@ -282,7 +282,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 | M3 | Reusable server-side connector | COMPLETE | Typed connector contract available to consumer applications. |
 | M4 | Reference consumer scaffold | RETIRED / NOT A PRODUCT REQUIREMENT | The old fixed AskMoina text scaffold was removed and never deployed; do not recreate it. |
 | M5 | Core application/project administration | COMPLETE — UX expansion remains | Existing app/environment/grant lifecycle and protected admin are deployed. |
-| M6 | Admin workspace aligned to teacher knowledge operations | IN PROGRESS | Project-centric overview, owner metadata, app-neutral teacher workspace creation, source readiness/usage and application/project detail views; pending PR validation and production acceptance. |
+| M6 | Admin workspace aligned to teacher knowledge operations | COMPLETE | Merged/deployed via PR #91; additive owner-label migration, app-neutral teacher knowledge project creation, project readiness/usage/detail UI, application metadata editing, and legacy provider controls collapsed. Main release #701 and production smoke passed. |
 | M7 | Application connection registry and wizard | NOT STARTED | Register application, repository/runtime references, production/staging environments and honest connection states in one guided flow. |
 | M8 | ChatGPT integration handoff | NOT STARTED | BRVIN generates a complete repository-specific integration prompt/manifest; ChatGPT implements code and deployment using its own provider connections. |
 | M9 | Live connection verification and activation | NOT STARTED | A deployed consumer environment proves its trusted v2 identity and private Service Binding path; UI distinguishes connection health from source readiness. |
@@ -429,9 +429,9 @@ For a new ChatGPT chat or branch:
 
 ## 14. M6 implementation progress
 
-### 5 November 2026 — teacher-focused admin workspace (in progress)
+### 5 November 2026 — teacher-focused admin workspace (complete)
 
-**Status:** IN PROGRESS — branch `brvin/m6-teacher-focused-admin`; changes are committed but still awaiting PR validation, merge, production release and live acceptance.
+**Status:** COMPLETE — implementation merged and deployed; CI and production release/health acceptance passed. An authenticated visual click-through was not performed from this session.
 
 **Implemented on branch:**
 - Added the additive, idempotent `owner_label` metadata migration for existing/fresh knowledge projects and applications.
@@ -448,3 +448,16 @@ For a new ChatGPT chat or branch:
 **Preserved:** existing D1 rows/IDs, app/environment/project grants, direct and collection source grants, Fatman retrieval/usage semantics, private `brvin-service`, v2 RPC identity and consumer runtimes. No M7 connection wizard or M8 ChatGPT prompt generator has been started.
 
 **Next:** finish source review, run Release Validation, merge only after checks pass, inspect the production owner-label migration and live `/admin/brvin` behavior, and record the deployed acceptance evidence before declaring M6 complete.
+
+### M6 completion evidence — 5 November 2026
+
+- **PR:** [#91](https://github.com/ashini-x/parmar-ai/pull/91), merged to `main`.
+- **Merge commit:** `4ab6c555af64f5972607a9b9f409c181d0883c7f`.
+- **PR validation:** [Release Validation #700](https://github.com/ashini-x/parmar-ai/actions/runs/42057326833) passed type-check, unit tests, Node/browser-script tests and both Worker bundle checks.
+- **Production release:** [Release Validation #701](https://github.com/ashini-x/parmar-ai/actions/runs/42057587342) passed paired Worker deployment, root/health/private BRVIN/Fatman smoke and production release acceptance.
+- **Deployments:** `brvin-service` deployment `4417adb9-43db-4bce-b6f3-a4d61bfaf59f`, version `9657e7ef-394e-43ac-abd7-2a3564d9500f`; `parmar-ai` deployment `8ad162b0-9fec-4531-a068-e4c29fa4e1fa`, version `fbcb906b-8d42-430d-815d-c4b9d4891f4f`. Each deployment carried 100% traffic at read-back.
+- **D1 migration:** `owner_label` columns exist on `brvin_projects` and `brvin_applications`, each with empty-string default; marker `2026-11-05-brvin-owner-label-v1` exists. Fatman remains active and `fatman -> fatman` legacy v1 mapping remains.
+- **Live data check:** exact project and application overview SQL ran successfully; the read-back showed project/source readiness, application counts and usage structures. Verification queries wrote zero rows. No new test project/application was created.
+- **Production acceptance artifact:** `13429153708`; root, worker health, BRVIN Service Binding and Fatman retrieval all passed.
+- **Manual note:** no authenticated administrator browser session was available for a visual page click-through. The deployed route/client is covered by Node/browser-script contract tests; user visual confirmation at `/admin/brvin` is the only unperformed check.
+- **Next active milestone:** M7 — Application connection registry and wizard. M7 has not been started in this work.
