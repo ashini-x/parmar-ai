@@ -126,13 +126,13 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "FROM brvin_activity_events WHERE created_at>=? ORDER BY id DESC LIMIT 100"
       ).bind(now - 7 * 86_400_000).all<Record<string, unknown>>(),
       env.DB.prepare(
-        "SELECT a.id,a.slug,a.name,a.description,a.owner_label,a.status,a.created_at,a.updated_at," +
+        "SELECT a.id,a.slug,a.name,a.description,a.owner_label,a.repository_url,a.repository_default_branch,a.runtime_provider,a.status,a.created_at,a.updated_at," +
         "(SELECT COUNT(*) FROM brvin_application_environments e WHERE e.application_id=a.id AND e.status='active') AS active_environment_count," +
         "(SELECT COUNT(*) FROM brvin_application_project_grants g WHERE g.application_id=a.id AND g.status='active') AS active_project_count " +
         "FROM brvin_applications a ORDER BY a.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
-        "SELECT id,application_id,environment_key,display_name,status,created_at,updated_at,revoked_at,revoked_by " +
+        "SELECT id,application_id,environment_key,display_name,worker_name,worker_url,status,created_at,updated_at,revoked_at,revoked_by " +
         "FROM brvin_application_environments ORDER BY application_id,environment_key"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
@@ -174,7 +174,10 @@ export async function brvinOverview(env: Env): Promise<Response> {
         id: String(row.id),
         environmentKey: String(row.environment_key),
         displayName: String(row.display_name ?? ""),
+        workerName: String(row.worker_name ?? ""),
+        workerUrl: String(row.worker_url ?? ""),
         status: String(row.status),
+        connectionStatus: "pending",
         createdAt: Number(row.created_at),
         updatedAt: Number(row.updated_at),
         revokedAt: row.revoked_at === null || row.revoked_at === undefined ? null : Number(row.revoked_at),
@@ -252,6 +255,9 @@ export async function brvinOverview(env: Env): Promise<Response> {
       applications: (applications.results ?? []).map((row) => ({
         id: String(row.id), slug: String(row.slug), name: String(row.name),
         description: String(row.description ?? ""), ownerLabel: String(row.owner_label ?? ""),
+        repositoryUrl: String(row.repository_url ?? ""),
+        repositoryDefaultBranch: String(row.repository_default_branch ?? "main"),
+        runtimeProvider: String(row.runtime_provider ?? "cloudflare-workers"),
         status: String(row.status),
         activeEnvironmentCount: Number(row.active_environment_count ?? 0),
         activeProjectCount: Number(row.active_project_count ?? 0),
