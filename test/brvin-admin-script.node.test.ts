@@ -129,7 +129,7 @@ describe("BRVIN browser script contract", () => {
     expect(adminSource).toContain('id="cf-required-scopes"');
     expect(adminSource).toContain('id="cf-client-credentials"');
     expect(adminSource).toContain("All repositories");
-    expect(adminSource).toContain("account_api_tokens:create");
+    expect(adminSource).not.toContain("BRVIN then provisions repositories, infrastructure, credentials and deployments for future projects automatically.");
     expect(workerSource).toContain("/admin/api/brvin/connect/capabilities");
     expect(workerSource).toContain("/admin/brvin/connect/github/callback");
     expect(workerSource).toContain("/admin/brvin/connect/cloudflare/callback");
