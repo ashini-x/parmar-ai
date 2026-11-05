@@ -737,7 +737,13 @@ export async function completeBrvinCloudflareOAuth(env: Env, request: Request): 
   const url = new URL(request.url);
   const code = clean(url.searchParams.get("code"), 2048);
   const state = clean(url.searchParams.get("state"), 128);
-  if (url.searchParams.has("error")) return callbackHtml("Cloudflare authorization cancelled", "Cloudflare did not authorize the BRVIN connector. Return to BRVIN and try again.", false);
+  if (url.searchParams.has("error")) {
+    const oauthError = clean(url.searchParams.get("error"), 120) || "unknown_error";
+    const errorDescription = clean(url.searchParams.get("error_description"), 240);
+    const diagnostic = "Cloudflare returned OAuth error: " + oauthError +
+      (errorDescription ? ". Details: " + errorDescription : ". No error description was provided.");
+    return callbackHtml("Cloudflare rejected BRVIN authorization", diagnostic, false);
+  }
   if (!code || !state) return callbackHtml("Cloudflare callback is incomplete", "The authorization code or state is missing. Start the connection again from BRVIN.", false);
   try {
     const statePayload = await consumeState(env, "cloudflare", state);
