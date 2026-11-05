@@ -29,11 +29,7 @@ export const BRVIN_GITHUB_REQUIRED_PERMISSIONS = {
 } as const;
 
 export const BRVIN_CLOUDFLARE_REQUIRED_SCOPES = [
-  // Cloudflare's Oct 1, 2026 OAuth token-provisioning scope is a special OAuth
-  // capability and is not returned by GET /oauth/scopes. Keep the API-token
-  // permission group as well: generated account tokens are limited by both
-  // the creator's Cloudflare roles and the scopes granted to this OAuth client.
-  "account_api_tokens:create",
+  // Self-managed OAuth clients can request catalogue-backed permission scopes.
   "account-api-tokens.write",
   "agw.read", "agw.run", "agw.write",
   "ai-model.read", "ai-model.write",
