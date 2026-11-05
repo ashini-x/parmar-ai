@@ -907,6 +907,7 @@ The D1 query was read-only (`rows_written = 0`). The raw nonce and proof are not
 - `test/brvin-m10-isolation.test.ts` — add two trusted application/environment fixtures, two private teacher projects and a deliberately shared project; test only-granted-project discovery, cross-project denial before quota/search, direct and collection source scoping, shared access, immediate denial after revocation, future ready collection additions and inactive project/environment rejection.
 - `test/brvin-app-admin.test.ts` — add administrative acceptance for one project shared across applications, multiple projects per application and idempotent repeat grant.
 - `test/brvin.test.ts` — assert the project-side and app-side grant controls and the user-to-project warning are present in the admin script.
+- `test/brvin-admin-script.node.test.ts` — update the browser-script regression check to assert current connection-state wording after M9 acceptance.
 
 **Data and security boundary:** no D1 migration, production row, application, project, environment, source assignment, grant, provider secret or Worker binding was changed. The production Fatman grant, AskMoina grant and M9 Parmar AI Connected record are left untouched. Application-project grants remain app-wide; this UI does not imply per-user teacher isolation. A multi-teacher consumer must enforce its authenticated user-to-project mapping in its own server-side code.
 
