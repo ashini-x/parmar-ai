@@ -20,6 +20,7 @@ import {
   setBrvinEnvironmentStatus,
   updateBrvinProject,
 } from "../src/brvin/admin";
+import { getBrvinApplicationHandoff } from "../src/brvin/handoff";
 
 type Row = Record<string, unknown>;
 
@@ -420,6 +421,58 @@ describe("BRVIN application and project administration", () => {
       repository_url: "https://github.com/ashini-x/math-bot", repository_default_branch: "develop",
     });
     expect(activity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "application.updated" }));
+  });
+
+  it("generates a handoff only for a saved active application and its own active environment", async () => {
+    const db = new MemoryD1();
+    const appId = "11111111-2222-4333-8444-555555555555";
+    const environmentId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    db.applications.push({
+      id: appId, slug: "math-bot", name: "Mathematics Bot", description: "Teacher assistant",
+      owner_label: "Teacher A", repository_url: "https://github.com/ashini-x/math-bot",
+      repository_default_branch: "main", runtime_provider: "cloudflare-workers",
+      status: "active", updated_at: 1793900000000,
+    });
+    db.environments.push({
+      id: environmentId, application_id: appId, environment_key: "production",
+      display_name: "Production", worker_name: "math-bot",
+      worker_url: "https://math-bot.example.workers.dev", status: "active",
+      updated_at: 1793900000001,
+    });
+    const response = await getBrvinApplicationHandoff(environment(db), appId, environmentId);
+    const body = await response.json() as {
+      ok: boolean; revision: string; generatedAt: string;
+      manifest: { target: { repository: { url: string; defaultBranch: string }; environment: { id: string } } };
+      prompt: string;
+    };
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.revision).toBe("brvin-chatgpt-handoff/v1");
+    expect(body.manifest.target.repository.url).toBe("https://github.com/ashini-x/math-bot");
+    expect(body.manifest.target.repository.defaultBranch).toBe("main");
+    expect(body.manifest.target.environment.id).toBe(environmentId);
+    expect(body.prompt).toContain('"applicationEnvironmentId": "' + environmentId + '"');
+  });
+
+  it("rejects an environment that does not belong to the selected application", async () => {
+    const db = new MemoryD1();
+    const appId = "11111111-2222-4333-8444-555555555555";
+    db.applications.push({
+      id: appId, slug: "math-bot", name: "Mathematics Bot", description: "",
+      owner_label: "", repository_url: "https://github.com/ashini-x/math-bot",
+      repository_default_branch: "main", runtime_provider: "cloudflare-workers",
+      status: "active", updated_at: Date.now(),
+    });
+    db.environments.push({
+      id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+      application_id: "99999999-2222-4333-8444-555555555555",
+      environment_key: "production", display_name: "Production",
+      worker_name: "", worker_url: "", status: "active", updated_at: Date.now(),
+    });
+    const response = await getBrvinApplicationHandoff(
+      environment(db), appId, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    );
+    expect(response.status).toBe(404);
   });
 
   it("does not reactivate a permanently revoked application", async () => {
