@@ -1172,8 +1172,8 @@ const HTML = `<!doctype html>
  <div class="notice">These stored GitHub/Cloudflare settings belong to an earlier autonomous Project Factory proposal. Current application code and deployments are handled by ChatGPT through your separately authorized GitHub and Cloudflare connections. BRVIN does not provision repositories, deployment credentials or CI/CD. Do not reauthorize or delete these legacy settings as part of normal teacher/app onboarding.</div>
  <div class="panel-toolbar"><div><h2>Legacy provider connection status</h2><p>Read-only historical configuration; not part of teacher knowledge management.</p></div><button class="btn" id="connect-refresh" type="button">Refresh legacy status</button></div>
  <section class="tile" style="margin-bottom:12px">
-  <div class="panel-toolbar"><div><h3>Administrator capability verification</h3><p>Checks actual GitHub App permissions/installation and Cloudflare OAuth scopes stored by BRVIN. Secret values are never displayed.</p></div><button class="btn primary" id="provider-capability-check" type="button">Verify provider access</button></div>
-  <p id="provider-capability-result" class="muted" aria-live="polite">Run the check after approving the expanded provider permissions.</p>
+  <div class="panel-toolbar"><div><h3>Historical provider preflight</h3><p>Optional read-only status for legacy BRVIN provider settings. This does not control or validate the GitHub/Cloudflare connections used by ChatGPT.</p></div><button class="btn" id="provider-capability-check" type="button">Check legacy status</button></div>
+  <p id="provider-capability-result" class="muted" aria-live="polite">Not required for teacher knowledge management or application onboarding.</p>
  </section>
  <div class="overview-grid">
   <section class="tile">
@@ -1601,10 +1601,10 @@ $("provider-capability-check").addEventListener("click",async()=>{
    const missing=cloudflare.missingScopes||[];
    parts.push("Cloudflare OAuth: "+(missing.length?"missing "+missing.length+" required scopes":"required scopes passed")+".");
    if(missing.length)parts.push("Missing scope IDs: "+missing.slice(0,14).join(", ")+(missing.length>14?" …":"")+".");
-   if(!missing.includes("account-api-tokens.write"))parts.push("Account API Tokens Write OAuth permission is present; actual token creation still needs a live provider test.");
-    if(!cloudflare.workerAdminScopeGranted)parts.push("BLOCKER: Workers Admin (workers-scripts.admin) is missing. Workers Editor only updates existing Workers and cannot create/delete the new Workers required by the Project Factory.");
-    else parts.push("Workers Admin is granted for create/delete operations.");
-    if(cloudflare.projectFactoryReady!==true)parts.push("Project Factory credential lifecycle is not accepted yet: real account-token creation, project-scoped permission verification and direct secret delivery still need live validation.");
+   if(missing.includes("account-api-tokens.write"))parts.push("Legacy Account API Tokens Write scope is missing.");
+   else parts.push("Legacy Account API Tokens Write scope is present; live token provisioning was not tested.");
+   parts.push("Workers Admin scope: "+(cloudflare.workerAdminScopeGranted?"present":"not granted")+". This is a legacy Project Factory capability, not part of the current knowledge-platform workflow.");
+   if(cloudflare.projectFactoryReady!==true)parts.push("The historical Project Factory credential lifecycle is incomplete and is not an active BRVIN requirement.");
   }else parts.push("Cloudflare: "+(cloudflare.error||"not authorized")+".");
   $("provider-capability-result").textContent=parts.join(" ");
  }catch(error){$("provider-capability-result").textContent="Provider check failed: "+error.message;}
