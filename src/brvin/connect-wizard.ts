@@ -392,7 +392,7 @@ export async function brvinConnectStatus(env: Env): Promise<Response> {
     const [github, cloudflare] = await Promise.all([connection(env, "github"), connection(env, "cloudflare")]);
     const githubMeta = github ? JSON.parse(github.metadata_json || "{}") as Record<string, unknown> : {};
     const cfMeta = cloudflare ? JSON.parse(cloudflare.metadata_json || "{}") as Record<string, unknown> : {};
-    const grantedScopes = clean(cfMeta.scope, 5000).split(/\\s+/u).filter(Boolean);
+    const grantedScopes = clean(cfMeta.scope, 5000).split(/\s+/u).filter(Boolean);
     const missingCloudflareScopes = BRVIN_CLOUDFLARE_REQUIRED_SCOPES.filter(scope => !grantedScopes.includes(scope));
     const slug = clean(githubMeta.slug, 100);
     const installationId = Number(githubMeta.installationId || 0) || null;
@@ -477,7 +477,7 @@ export async function inspectBrvinProviderCapabilities(env: Env): Promise<Respon
   try {
     const cloudflare = await connection(env, "cloudflare");
     const metadata = cloudflare ? JSON.parse(cloudflare.metadata_json || "{}") as Record<string, unknown> : {};
-    const granted = new Set(clean(metadata.scope, 5000).split(/\\s+/u).filter(Boolean));
+    const granted = new Set(clean(metadata.scope, 5000).split(/\s+/u).filter(Boolean));
     const missingScopes = BRVIN_CLOUDFLARE_REQUIRED_SCOPES.filter(scope => !granted.has(scope));
     result.cloudflare = {
       connected: cloudflare?.status === "connected",
