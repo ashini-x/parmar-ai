@@ -233,12 +233,17 @@ describe("BRVIN M10 teacher project isolation", () => {
     expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("dddddddd-dddd-4ddd-8ddd-ddddddddddd1");
     expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3");
     expect(h.search).toHaveBeenCalledWith(expect.objectContaining({
-      ai_search_options: {
+      ai_search_options: expect.objectContaining({
         retrieval: expect.objectContaining({
-          filters: { folder: { $in: ["brvin/books/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1/pages/", "brvin/books/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2/pages/"] } },
+          filters: { folder: { $in: expect.arrayContaining([
+            "brvin/books/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1/pages/",
+            "brvin/books/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2/pages/",
+          ]) } },
         }),
-      },
+      }),
     }));
+    const activeFolders = h.search.mock.calls[0]?.[0]?.ai_search_options?.retrieval?.filters?.folder?.$in;
+    expect(activeFolders).toHaveLength(2);
   });
 
   it("allows intentionally shared knowledge to both apps without exposing either teacher's private sources", async () => {
