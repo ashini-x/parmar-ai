@@ -30,22 +30,25 @@ The current source baseline is **v2.8.0**.
 - [SOURCE_INVENTORY.md](SOURCE_INVENTORY.md): tracked source/assets and their roles.
 - [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md): documentation maintenance requirements.
 
-## BRVIN 2 project continuity and execution
+## BRVIN — current source of truth
 
-**Start every new BRVIN 2 session here:** [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md). It contains the approved future architecture, baseline audit, milestone prompts, acceptance criteria and progress ledger. Update its ledger after every milestone.
+**For every new BRVIN chat, start with [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md).** It is the current continuation handoff, not an archive or aspirational plan. It points to the only active product-scope, architecture, contract and operator references.
 
-## BRVIN knowledge platform
-
-The BRVIN reference set is the source of truth for its shared knowledge registry, private retrieval Worker, project grants, PDF/OCR ingestion pipeline, integrations and release operations.
-
-| Document | Purpose |
+| Active document | Purpose |
 |---|---|
-| [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) | Canonical as-built architecture, infrastructure inventory, D1 model, trust boundary, source lifecycle, deployment and decisions |
-| [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md) | Same-account Service Binding setup, app-side adapter, model tool wiring, AskMoina integration plan and cross-account limitations |
-| [BRVIN_PRIVATE_RETRIEVAL_API.md](BRVIN_PRIVATE_RETRIEVAL_API.md) | Internal RPC contract, identity, request/result types, limits, failures and acceptance criteria |
-| [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md) | Dashboard use, project/collection management, uploads, status, deletion, troubleshooting and deployment/rollback |
+| [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md) | Single current-state and new-chat continuation entry point. |
+| [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md) | Approved product boundary and active M6–M11 acceptance ledger. |
+| [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) | Current as-built architecture, infrastructure, D1 model, trust boundary and production state. |
+| [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) | Accepted architecture decisions; historical evidence is labelled and is not a task list. |
+| [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md) | Current private v2 retrieval and connection-proof contract. |
+| [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md) | One-time integration of a same-account consumer Worker. |
+| [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md) | Day-to-day administrator instructions. |
+| [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md) | Engineering/operator procedures, API references and troubleshooting. |
+| [BRVIN_PRIVATE_RETRIEVAL_API.md](BRVIN_PRIVATE_RETRIEVAL_API.md) | Legacy v1 contract for existing Fatman compatibility only. |
 
-BRVIN's key architectural boundary is deliberate: the admin/ingestion plane remains in the existing `parmar-ai` Worker, while project-scoped application retrieval is served by the separate private `brvin-service` Worker. Consumer applications keep their own model generation and conversation state.
+The active architecture is the shared `parmar-ai` admin/ingestion plane plus private `brvin-service` retrieval Worker. New consumers use the v2 trusted application/environment identity and project grants. Consumer applications own end-user authentication and model generation.
+
+**Superseded plans:** the autonomous Project Factory proposal and the old M3 connector/reference-client design were removed from the active documentation tree. Do not recreate their milestones or the retired `brvin-test-client`. Past text remains recoverable from Git history, not as active requirements.
 
 ## Current feature documentation
 
