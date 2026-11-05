@@ -257,7 +257,6 @@ describe("BRVIN Connect Application wizard", () => {
     const authorization = new URL(startBody.authorizationUrl);
     const requestedScopes = authorization.searchParams.get("scope")!.split(/\s+/u);
     for (const requiredScope of BRVIN_CLOUDFLARE_REQUIRED_SCOPES) expect(requestedScopes).toContain(requiredScope);
-    expect(requestedScopes).toContain("workers-scripts.admin");
     expect(requestedScopes).toContain("account-api-tokens.write");
     expect(requestedScopes).not.toContain("account_api_tokens:create");
     expect(BRVIN_CLOUDFLARE_REQUIRED_SCOPES).not.toContain("account_api_tokens:create");
@@ -326,14 +325,15 @@ describe("BRVIN Connect Application wizard", () => {
     const response = await brvinConnectStatus(env(db));
     const body = await response.json() as {
       github: { requiredPermissions: Record<string, string> };
-      cloudflare: { requiredScopes: string[]; missingScopes: string[] };
+      cloudflare: { requiredScopes: string[]; missingScopes: string[]; workerAdminScopeId: string; workerAdminScopeGranted: boolean };
     };
     expect(response.status).toBe(200);
     expect(body.github.requiredPermissions.administration).toBe("write");
     expect(body.github.requiredPermissions.repository_creation).toBe("write");
-    expect(body.cloudflare.requiredScopes).toContain("workers-scripts.admin");
+    expect(body.cloudflare.requiredScopes).not.toContain("workers-scripts.admin");
     expect(body.cloudflare.requiredScopes).toContain("account-api-tokens.write");
-    expect(body.cloudflare.missingScopes).toContain("workers-scripts.admin");
+    expect(body.cloudflare.workerAdminScopeId).toBe(BRVIN_CLOUDFLARE_WORKER_ADMIN_SCOPE);
+    expect(body.cloudflare.workerAdminScopeGranted).toBe(false);
     expect(JSON.stringify(body)).not.toContain("cloudflare-client-secret-value-123456");
   });
 
