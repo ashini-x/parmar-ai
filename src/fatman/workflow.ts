@@ -1115,8 +1115,8 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         await recordBrvinActivity(this.env, {
           importId, bookId: importedBook?.book_id ?? importId, agent: "Storage retention supervisor",
           phase: "retention", eventType: "source.vision_ocr_delete_failed", status: "failed",
-          message: "Vision OCR output could not be fully deleted; the original PDF and indexed book remain unchanged.",
-          details: { error: message.slice(0, 400), retryable: true },
+          message: "Vision OCR output could not be fully deleted; the original PDF and indexed book remain unchanged. Automatic retries are paused until storage permissions are corrected and an administrator retries cleanup.",
+          details: { error: message.slice(0, 400), retryable: true, automaticRetryPaused: true, manualRetryAvailable: true },
         }).catch(() => undefined);
       } else if (params.task !== "cleanup_chunk" && params.task !== "parmarbot_test") {
         await markFatmanImportFailed(this.env, importId, error).catch(() => undefined);
