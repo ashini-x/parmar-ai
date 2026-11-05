@@ -92,11 +92,11 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "(SELECT COUNT(*) FROM (" +
         " SELECT pb.book_id AS source_id FROM brvin_project_books pb WHERE pb.project_id=p.id" +
         " UNION SELECT b.id AS source_id FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id" +
-        ")) AS source_count," +
+        ") AS project_sources) AS source_count," +
         "(SELECT COUNT(*) FROM (" +
         " SELECT b.id AS source_id FROM brvin_project_books pb JOIN brvin_books b ON b.id=pb.book_id WHERE pb.project_id=p.id AND b.status='ready' AND b.page_count>0 AND b.indexed_pages=b.page_count" +
         " UNION SELECT b.id AS source_id FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id AND b.status='ready' AND b.page_count>0 AND b.indexed_pages=b.page_count" +
-        ")) AS ready_source_count," +
+        ") AS ready_project_sources) AS ready_source_count," +
         "(SELECT COUNT(*) FROM brvin_application_project_grants ag WHERE ag.project_id=p.id AND ag.status='active') AS application_count " +
         "FROM brvin_projects p ORDER BY p.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
