@@ -478,7 +478,7 @@ M10 shipped through [PR #99](https://github.com/ashini-x/parmar-ai/pull/99), squ
 
 ### 9.7 M11 operations, usage and administrator handover — in progress
 
-M11 is being implemented on `brvin/m11-operations-and-admin-handover`.
+M11 is being implemented in [PR #100](https://github.com/ashini-x/parmar-ai/pull/100), branch `brvin/m11-operations-and-admin-handover`. PR Release Validation [#764](https://github.com/ashini-x/parmar-ai/actions/runs/42104068272) passed TypeScript, unit tests, Node/browser-script tests and both Worker bundle dry-runs; merge and production deployment are pending.
 
 The BRVIN Operations view now has a design/implementation path for:
 - Per-project monthly query use and remaining allowance, driven by the same 800/month bounded helper as retrieval enforcement. App grant views show the associated project counter as shared, not as application-attributed usage.
