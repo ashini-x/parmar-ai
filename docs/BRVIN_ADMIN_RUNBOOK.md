@@ -116,44 +116,47 @@ BRVIN retains three different things separately:
 
 The OCR-only cleanup action removes only temporary Vision JSON. It must retain the original PDF, indexed page text, project grants and READY/archived state. Full book deletion is a different, destructive operation.
 
-### Current storage permission issue found in production
+### Production permission and cleanup verification — 6 November 2026
 
-The M11 read-only production audit found that the ingestion service account cannot inspect the bucket policy:
+The earlier production diagnostic found that the ingestion service account lacked `storage.buckets.get`. The administrator subsequently applied the bucket-scoped permission change and reported that the live read-only check showed:
+
+- Core object access: **READY**.
+- Bucket metadata inspection: available.
+- Lifecycle permission check: no remaining permissions requested by the diagnostic.
+
+The relevant bucket and service identity are:
 
 - **Bucket:** `parmar-fatman-ocr-90db7be4`
 - **Ingestion service account:** `telegram-bot@project-90db7be4-619f-4ed7-89b.iam.gserviceaccount.com`
-- **Observed missing permission:** `storage.buckets.get`
-- **Lifecycle safety-net permissions needed:** `storage.buckets.get` and `storage.buckets.update`
 
-The production book observed during the audit remained **READY, 3/3 pages indexed**. OCR-only cleanup had failed. The original PDF and indexed pages were not changed. The 30-day lifecycle safety-net rule could not be verified or installed.
+The Rain Gardens test source was then manually retried using **Vision OCR cleanup only**. Production event `#854` is `source.vision_ocr_deleted`, status `completed`. A read-only D1 check confirmed the source remains `READY`, has `3/3` indexed pages, and has its OCR cleanup completion marker set. The event detail recorded `objectVersionsFound=0` and `objectVersionsDeleted=0`: the workflow checked the exact OCR prefix and verified no live object versions remained; it does not prove that this specific retry physically deleted object bytes. The original PDF and indexed search pages remain available.
 
-### Required administrator action
+### Verify the 30-day OCR lifecycle rule
 
-A Google Cloud administrator with permission to change the bucket IAM policy must grant the ingestion service account the narrowly scoped permissions it needs on this bucket:
+Permission availability and an installed lifecycle rule are separate facts. The read-only diagnostic must report the actual bucket rule, not infer installation from IAM permissions alone.
 
-**Core object operations** (for PDF/OCR object work):
-- `storage.objects.create`
-- `storage.objects.get`
-- `storage.objects.list`
-- `storage.objects.delete`
+After the M11 lifecycle-verification release is deployed:
 
-**Bucket-level lifecycle inspection/configuration**:
-- `storage.buckets.get`
-- `storage.buckets.update`
+1. Open **Live operations** and select **Run read-only storage check**.
+2. Confirm **Core object access: READY**.
+3. Confirm **Lifecycle configuration permissions: READY**.
+4. Confirm **30-day OCR lifecycle rule: INSTALLED (age 30 days)**. The rule must be a GCS Delete rule scoped to exactly `brvin/temporary-vision-ocr/`, with age no greater than 30 days.
+5. If the rule says **NOT INSTALLED**, the scheduled retention supervisor will attempt to install it safely on its next five-minute run. It now checks even when there are no cleanup candidates.
+6. Run the read-only check again. Do not report the safety net as ready until the rule itself says **INSTALLED**.
+7. If the result says **BLOCKED — unsafe existing Delete rule**, stop and ask a Google Cloud administrator to review the existing lifecycle policy. BRVIN intentionally refuses to replace or widen existing Delete rules that could affect original PDFs.
 
-Prefer a bucket-scoped custom role containing only the required permissions, rather than granting broad Storage Admin or Project Owner. Review the organisation's IAM process before applying it. ChatGPT has not changed this GCP IAM policy.
+The scheduled supervisor preserves unrelated bucket rules, refuses unsafe rules that overlap source-PDF paths, and adds only the exact OCR temporary-prefix rule. The read-only diagnostic itself never updates lifecycle configuration, creates or deletes objects, or changes bucket settings.
 
-### Verify and retry safely
+### Safe cleanup procedure
 
-1. Open **Live operations** and select **Run read-only storage check**. This checks OAuth, bucket metadata and permission availability; it does not create, update or delete GCS objects or lifecycle rules.
-2. Confirm core object access is **READY** and that the lifecycle permissions are present. If the lifecycle safety net still reports missing permissions, have the GCP administrator finish the bucket IAM change.
-3. Open the affected source's **Manage** panel. A failed OCR-only cleanup is shown with the last failure reason and the original PDF/index preservation note.
-4. After correcting IAM, select **Retry Vision OCR cleanup**. Confirm the document title when prompted.
-5. Check the Operations timeline for `source.vision_ocr_deleted`, then check the source record for the OCR-cleanup-complete state. Do not treat “cleanup started” as proof of deletion.
-6. If GCS soft delete or a retention policy is enabled, deletion may remain recoverable until the provider's hard-delete time. Do not promise immediate physical erasure based only on the successful delete request.
+1. Open the affected source's **Manage** panel and select **Retry Vision OCR cleanup** only after diagnosing/fixing the underlying storage issue.
+2. Confirm the exact document title when prompted.
+3. Wait for the workflow to finish. “Cleanup started” is not a completion result.
+4. In Operations, verify `source.vision_ocr_deleted` is completed and the source remains `READY` with all indexed pages intact.
+5. Read the event detail carefully. If `objectVersionsFound` is zero, the operation confirmed there were no live versions left under the dedicated OCR prefix; do not describe that run as having deleted a positive number of objects.
+6. If GCS soft delete or a retention policy is enabled, deletion may remain recoverable until the provider's hard-delete time. Do not promise immediate physical erasure based only on a successful delete request.
 
-After one cleanup failure, BRVIN pauses unattended cleanup retries for that source to avoid repeatedly hitting the same IAM failure. The administrator can retry manually after permissions are corrected.
-
+The OCR-only action is separate from full book deletion. Never use full book deletion as an OCR-retention troubleshooting shortcut. The original PDF, indexed page text, project grants and READY/archived state must remain intact.
 ## 9. Connection failures
 
 Open **Applications** and find the exact environment that failed. Review its last-check timestamp and safe failure code.
