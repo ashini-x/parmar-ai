@@ -69,7 +69,8 @@ export async function brvinOverview(env: Env): Promise<Response> {
   try {
     await ensureAnalyticsSchema(env);
     const now = Date.now();
-    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events, applications, environments, applicationGrants] = await Promise.all([
+    const billingMonth = new Date(now).toISOString().slice(0, 7);
+    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events, applications, environments, applicationGrants, projectUsage, fatmanUsage] = await Promise.all([
       env.DB.prepare(
         "SELECT COUNT(*) AS books, COALESCE(SUM(page_count),0) AS total_pages, " +
         "COALESCE(SUM(indexed_pages),0) AS indexed_pages, " +
@@ -85,9 +86,17 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "GROUP BY c.id ORDER BY c.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
-        "SELECT p.id,p.name,p.slug,p.description,p.status,p.created_at,p.updated_at," +
+        "SELECT p.id,p.name,p.slug,p.description,p.owner_label,p.status,p.created_at,p.updated_at," +
         "(SELECT COUNT(DISTINCT pb.book_id) FROM brvin_project_books pb WHERE pb.project_id=p.id) AS direct_books," +
         "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id) AS collection_books," +
+        "(SELECT COUNT(*) FROM (" +
+        " SELECT pb.book_id AS source_id FROM brvin_project_books pb WHERE pb.project_id=p.id" +
+        " UNION SELECT b.id AS source_id FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id" +
+        ")) AS source_count," +
+        "(SELECT COUNT(*) FROM (" +
+        " SELECT b.id AS source_id FROM brvin_project_books pb JOIN brvin_books b ON b.id=pb.book_id WHERE pb.project_id=p.id AND b.status='ready' AND b.page_count>0 AND b.indexed_pages=b.page_count" +
+        " UNION SELECT b.id AS source_id FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id AND b.status='ready' AND b.page_count>0 AND b.indexed_pages=b.page_count" +
+        ")) AS ready_source_count," +
         "(SELECT COUNT(*) FROM brvin_application_project_grants ag WHERE ag.project_id=p.id AND ag.status='active') AS application_count " +
         "FROM brvin_projects p ORDER BY p.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
@@ -117,7 +126,7 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "FROM brvin_activity_events WHERE created_at>=? ORDER BY id DESC LIMIT 100"
       ).bind(now - 7 * 86_400_000).all<Record<string, unknown>>(),
       env.DB.prepare(
-        "SELECT a.id,a.slug,a.name,a.description,a.status,a.created_at,a.updated_at," +
+        "SELECT a.id,a.slug,a.name,a.description,a.owner_label,a.status,a.created_at,a.updated_at," +
         "(SELECT COUNT(*) FROM brvin_application_environments e WHERE e.application_id=a.id AND e.status='active') AS active_environment_count," +
         "(SELECT COUNT(*) FROM brvin_application_project_grants g WHERE g.application_id=a.id AND g.status='active') AS active_project_count " +
         "FROM brvin_applications a ORDER BY a.name COLLATE NOCASE"
@@ -134,6 +143,12 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "JOIN brvin_applications a ON a.id=g.application_id " +
         "ORDER BY g.created_at DESC"
       ).all<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT project_id,query_count FROM brvin_project_search_usage WHERE billing_month=?"
+      ).bind(billingMonth).all<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT query_count FROM fatman_search_usage WHERE billing_month=?"
+      ).bind(billingMonth).first<Record<string, unknown>>(),
     ]);
 
     const directByBook = new Map<string, Array<{ id: string; name: string }>>();
@@ -200,12 +215,20 @@ export async function brvinOverview(env: Env): Promise<Response> {
       applicationsByProject.set(projectId, projectApplications);
     }
 
+    const monthlyQueriesByProject = new Map<string, number>();
+    for (const row of projectUsage.results ?? []) {
+      monthlyQueriesByProject.set(String(row.project_id), Number(row.query_count ?? 0));
+    }
+    // Fatman's existing v1 requests have their own counter; preserve that separate accounting.
+    if (fatmanUsage) monthlyQueriesByProject.set("fatman", Number(fatmanUsage.query_count ?? 0));
+
     return json({
       ok: true,
       generatedAt: now,
       stats: {
         books: Number(stats?.books ?? 0), collections: collections.results?.length ?? 0,
-        projects: projects.results?.length ?? 0, totalPages: Number(stats?.total_pages ?? 0),
+        projects: projects.results?.length ?? 0, applications: applications.results?.length ?? 0,
+        totalPages: Number(stats?.total_pages ?? 0),
         indexedPages: Number(stats?.indexed_pages ?? 0), readyBooks: Number(stats?.ready_books ?? 0),
         activeBooks: Number(stats?.active_books ?? 0), failedBooks: Number(stats?.failed_books ?? 0),
       },
@@ -218,14 +241,18 @@ export async function brvinOverview(env: Env): Promise<Response> {
       })),
       projects: (projects.results ?? []).map((row) => ({
         id: String(row.id), name: String(row.name), slug: String(row.slug),
-        description: String(row.description ?? ""), status: String(row.status),
+        description: String(row.description ?? ""), ownerLabel: String(row.owner_label ?? ""),
+        status: String(row.status),
         directBooks: Number(row.direct_books ?? 0), collectionBooks: Number(row.collection_books ?? 0),
+        sourceCount: Number(row.source_count ?? 0), readySourceCount: Number(row.ready_source_count ?? 0),
         applicationCount: Number(row.application_count ?? 0),
+        monthlyQueries: monthlyQueriesByProject.get(String(row.id)) ?? 0,
         applications: applicationsByProject.get(String(row.id)) ?? [],
       })),
       applications: (applications.results ?? []).map((row) => ({
         id: String(row.id), slug: String(row.slug), name: String(row.name),
-        description: String(row.description ?? ""), status: String(row.status),
+        description: String(row.description ?? ""), ownerLabel: String(row.owner_label ?? ""),
+        status: String(row.status),
         activeEnvironmentCount: Number(row.active_environment_count ?? 0),
         activeProjectCount: Number(row.active_project_count ?? 0),
         environments: environmentsByApplication.get(String(row.id)) ?? [],
