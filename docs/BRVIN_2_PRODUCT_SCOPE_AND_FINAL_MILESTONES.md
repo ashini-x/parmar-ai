@@ -287,7 +287,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 | M8 | ChatGPT integration handoff | COMPLETE — merged, deployed and production release accepted | PR #95 merged; PR Release Validation #711 and Main Release Validation #713 passed. The admin generates a versioned, dated, copyable non-secret prompt and structured manifest per active application/environment. |
 | M9 | Live connection verification and activation | COMPLETE — production browser proof accepted | PR #98 merged and deployed; Release Validation #728 and Main Release Validation #729 passed; the authenticated Parmar AI Production check showed Connected and D1 confirmed one-time proof consumption with one ready authorised source. |
 | M10 | Teacher knowledge assignment and isolation acceptance | COMPLETE — merged, deployed and automated acceptance passed | PR #99 adds application/project grant and revoke controls, direct/collection source-access shortcuts, and two-application isolation tests. PR Release Validation #755 and Main Release Validation #756 passed; both Workers deployed and live production smoke passed. |
-| M11 | Operations, usage and administrator handover | IN PROGRESS — implementation branch | Shared project quota display, live operations filters/summaries, read-only GCS lifecycle diagnostic, safe OCR cleanup retry state and administrator runbook in progress. Production bucket IAM repair requires GCP administrator action. |
+| M11 | Operations, usage and administrator handover | IN PROGRESS — initial operations increment deployed | PR #100 merged; Main Release Validation #768 passed paired production deployment and root/health/private BRVIN/Fatman acceptance. Operations dashboard, project quota display, GCS diagnostics, safe OCR retry controls and runbook are live. GCS IAM, live browser walkthrough and real teacher-app acceptance remain. |
 
 ### M6 — Admin workspace aligned to teacher knowledge operations
 
@@ -387,7 +387,7 @@ No D1 migration or production teacher data was created or modified. Read-only D1
 - No claim of end-to-end commercial readiness is made until the tests and operational evidence are recorded.
 
 
-**Implementation update — 6 November 2026 (in progress):** Work is on branch `brvin/m11-operations-and-admin-handover`. The branch adds:
+**Implementation and deployment update — 6 November 2026 (initial increment deployed):** [PR #100](https://github.com/ashini-x/parmar-ai/pull/100) was squash-merged to `main` as `f7801a558d2a0dae82a449a2ebf0196e24da3fee`. PR validation #764 passed. Main Release Validation [#768](https://github.com/ashini-x/parmar-ai/actions/runs/42104739449) deployed both Workers and passed live root/health/private BRVIN/Fatman acceptance; artifact `13450708616`. The initial branch adds:
 - A shared monthly project query-limit helper used by retrieval enforcement and admin displays; show usage per project, including apps sharing the same project counter.
 - Operations summary and event filters for attention, retention, connections, ingestion and governance.
 - A protected read-only GCS diagnostic that distinguishes core object permissions from lifecycle-policy permissions.
@@ -396,7 +396,11 @@ No D1 migration or production teacher data was created or modified. Read-only D1
 
 [PR #100](https://github.com/ashini-x/parmar-ai/pull/100) is open. PR Release Validation [#764](https://github.com/ashini-x/parmar-ai/actions/runs/42104068272) passed TypeScript, all unit tests, Node/browser-script tests and both Worker bundle dry-runs. Merge and production release acceptance remain pending.
 
-The production audit identified missing `storage.buckets.get` on bucket `parmar-fatman-ocr-90db7be4` for service account `telegram-bot@project-90db7be4-619f-4ed7-89b.iam.gserviceaccount.com`; the lifecycle safety-net additionally needs `storage.buckets.update`. This is an external Google Cloud IAM action. No permissions have been changed by the M11 branch. No production D1 rows, grants, app/project records, secrets or bindings have been changed. PR validation and release evidence are pending.
+Production versions: `brvin-service` `86114707-0bc3-4ee6-a227-bdb9bd9bcc5b` (deployment `10fdd281-5f71-4261-b2da-adf568391458`) and `parmar-ai` `17386b5c-affb-4064-a261-3eb89c98179d` (deployment `224c1165-d65b-4693-9f42-1425ffa70521`). Read-only production D1 checks (`rows_written=0`) confirmed existing Fatman grants and M9 Connected state unchanged. No schema migration, test teacher, app/project/grant, secret, binding or GCP IAM policy was changed.
+
+The production audit identified missing `storage.buckets.get` on bucket `parmar-fatman-ocr-90db7be4` for service account `telegram-bot@project-90db7be4-619f-4ed7-89b.iam.gserviceaccount.com`; the lifecycle safety net additionally needs `storage.buckets.update`. This is an external Google Cloud IAM action, not fixed by deployment.
+
+**Remaining M11 acceptance:** (1) a GCP administrator applies bucket-scoped permissions; (2) an authenticated admin runs the read-only diagnostic and verifies lifecycle configuration; (3) OCR-only cleanup is retried and a successful deletion event is confirmed while PDF/index/READY state remain; (4) an authenticated visual Operations/runbook walkthrough is performed; and (5) a real teacher-focused application is registered, connected and tested with a teacher-specific project, successful retrieval and revocation. No synthetic production teacher has been created. M11 remains IN PROGRESS; no end-to-end commercial readiness claim is made.
 
 ### Deferred M12 — Cross-account / non-Cloudflare consumer gateway
 
