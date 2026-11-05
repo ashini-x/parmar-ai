@@ -248,6 +248,9 @@ CREATE TABLE IF NOT EXISTS brvin_applications (
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   owner_label TEXT NOT NULL DEFAULT '',
+  repository_url TEXT NOT NULL DEFAULT '',
+  repository_default_branch TEXT NOT NULL DEFAULT 'main',
+  runtime_provider TEXT NOT NULL DEFAULT 'cloudflare-workers',
   status TEXT NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'suspended', 'revoked')),
   created_at INTEGER NOT NULL,
@@ -269,6 +272,8 @@ CREATE TABLE IF NOT EXISTS brvin_application_environments (
     AND substr(environment_key, -1, 1) GLOB '[a-z0-9]'
   ),
   display_name TEXT NOT NULL DEFAULT '',
+  worker_name TEXT NOT NULL DEFAULT '',
+  worker_url TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'disabled', 'revoked')),
   created_at INTEGER NOT NULL,
@@ -682,6 +687,40 @@ export async function ensureBrvinOwnerMetadataSchema(db: D1Database): Promise<vo
   ).bind(BRVIN_OWNER_METADATA_MIGRATION_KEY, Date.now()).run();
 }
 
+export const BRVIN_CONNECTION_METADATA_MIGRATION_KEY = "2026-11-05-brvin-connection-metadata-v1";
+
+/**
+ * Store non-secret application integration references only. These values do not
+ * authorize GitHub access or prove that a Cloudflare Worker is connected.
+ */
+export async function ensureBrvinConnectionMetadataSchema(db: D1Database): Promise<void> {
+  const ensureColumn = async (
+    table: "brvin_applications" | "brvin_application_environments",
+    column: "repository_url" | "repository_default_branch" | "runtime_provider" | "worker_name" | "worker_url",
+    definition: string,
+  ): Promise<void> => {
+    const readColumns = async () => db.prepare("PRAGMA table_info(" + table + ")")
+      .all<{ name: string }>();
+    const before = await readColumns();
+    if ((before.results ?? []).some(item => item.name === column)) return;
+    try {
+      await db.prepare("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition).run();
+    } catch (error) {
+      const after = await readColumns();
+      if (!(after.results ?? []).some(item => item.name === column)) throw error;
+    }
+  };
+
+  await ensureColumn("brvin_applications", "repository_url", "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn("brvin_applications", "repository_default_branch", "TEXT NOT NULL DEFAULT 'main'");
+  await ensureColumn("brvin_applications", "runtime_provider", "TEXT NOT NULL DEFAULT 'cloudflare-workers'");
+  await ensureColumn("brvin_application_environments", "worker_name", "TEXT NOT NULL DEFAULT ''");
+  await ensureColumn("brvin_application_environments", "worker_url", "TEXT NOT NULL DEFAULT ''");
+  await db.prepare(
+    "INSERT OR IGNORE INTO brvin_migrations (migration_key,applied_at) VALUES (?,?)"
+  ).bind(BRVIN_CONNECTION_METADATA_MIGRATION_KEY, Date.now()).run();
+}
+
 async function ensureFatmanImportJobSchema(env: Env): Promise<void> {
   if (!env.DB) return;
   // Existing installations have the single-book import table already. Add the
@@ -845,6 +884,7 @@ export async function ensureAnalyticsSchema(env: Env): Promise<void> {
       await ensureFatmanImportJobSchema(env);
       await ensureBrvinCompatibilitySchema(env);
       await ensureBrvinOwnerMetadataSchema(env.DB!);
+      await ensureBrvinConnectionMetadataSchema(env.DB!);
       await ensureBrvin2ApplicationIdentities(env.DB!);
       await ensureBrvin2AskMoinaIdentities(env.DB!);
     })()

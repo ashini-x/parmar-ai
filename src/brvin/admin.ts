@@ -126,13 +126,13 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "FROM brvin_activity_events WHERE created_at>=? ORDER BY id DESC LIMIT 100"
       ).bind(now - 7 * 86_400_000).all<Record<string, unknown>>(),
       env.DB.prepare(
-        "SELECT a.id,a.slug,a.name,a.description,a.owner_label,a.status,a.created_at,a.updated_at," +
+        "SELECT a.id,a.slug,a.name,a.description,a.owner_label,a.repository_url,a.repository_default_branch,a.runtime_provider,a.status,a.created_at,a.updated_at," +
         "(SELECT COUNT(*) FROM brvin_application_environments e WHERE e.application_id=a.id AND e.status='active') AS active_environment_count," +
         "(SELECT COUNT(*) FROM brvin_application_project_grants g WHERE g.application_id=a.id AND g.status='active') AS active_project_count " +
         "FROM brvin_applications a ORDER BY a.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
-        "SELECT id,application_id,environment_key,display_name,status,created_at,updated_at,revoked_at,revoked_by " +
+        "SELECT id,application_id,environment_key,display_name,worker_name,worker_url,status,created_at,updated_at,revoked_at,revoked_by " +
         "FROM brvin_application_environments ORDER BY application_id,environment_key"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
@@ -174,7 +174,10 @@ export async function brvinOverview(env: Env): Promise<Response> {
         id: String(row.id),
         environmentKey: String(row.environment_key),
         displayName: String(row.display_name ?? ""),
+        workerName: String(row.worker_name ?? ""),
+        workerUrl: String(row.worker_url ?? ""),
         status: String(row.status),
+        connectionStatus: "pending",
         createdAt: Number(row.created_at),
         updatedAt: Number(row.updated_at),
         revokedAt: row.revoked_at === null || row.revoked_at === undefined ? null : Number(row.revoked_at),
@@ -252,6 +255,9 @@ export async function brvinOverview(env: Env): Promise<Response> {
       applications: (applications.results ?? []).map((row) => ({
         id: String(row.id), slug: String(row.slug), name: String(row.name),
         description: String(row.description ?? ""), ownerLabel: String(row.owner_label ?? ""),
+        repositoryUrl: String(row.repository_url ?? ""),
+        repositoryDefaultBranch: String(row.repository_default_branch ?? "main"),
+        runtimeProvider: String(row.runtime_provider ?? "cloudflare-workers"),
         status: String(row.status),
         activeEnvironmentCount: Number(row.active_environment_count ?? 0),
         activeProjectCount: Number(row.active_project_count ?? 0),
@@ -758,79 +764,203 @@ function normalizedEnvironmentKey(value: string): string {
     .replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 32).replace(/-+$/gu, "");
 }
 
+function normalizeGitHubRepositoryUrl(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string" || value.length > 300) return null;
+  const match = value.trim().match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\.git)?\/?$/iu);
+  if (!match || match[1] === "." || match[1] === ".." || match[2] === "." || match[2] === "..") return null;
+  return "https://github.com/" + match[1] + "/" + match[2].replace(/\.git$/iu, "");
+}
+
+function normalizeGitDefaultBranch(value: unknown): string | null {
+  const branch = value === undefined || value === null || value === "" ? "main" : typeof value === "string" ? value.trim() : "";
+  if (!branch || branch.length > 100 || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/u.test(branch) ||
+      branch.includes("..") || branch.includes("//") || branch.includes("@{") ||
+      branch.endsWith("/") || branch.endsWith(".") || branch.endsWith(".lock")) return null;
+  return branch;
+}
+
+function normalizeRuntimeProvider(value: unknown): string | null {
+  const provider = value === undefined || value === null || value === "" ? "cloudflare-workers" : value;
+  return provider === "cloudflare-workers" || provider === "other" ? provider : null;
+}
+
+function normalizeWorkerName(value: unknown): string | null {
+  const name = value === undefined || value === null || value === "" ? "" : typeof value === "string" ? value.trim() : null;
+  if (name === null || name.length > 63 || (name && !/^[a-z0-9][a-z0-9_-]*$/u.test(name))) return null;
+  return name;
+}
+
+function normalizeWorkerUrl(value: unknown): string | null {
+  const input = value === undefined || value === null || value === "" ? "" : typeof value === "string" ? value.trim() : null;
+  if (input === null || input.length > 300) return null;
+  if (!input) return "";
+  try {
+    const url = new URL(input);
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password ||
+        url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) return null;
+    return url.origin;
+  } catch { return null; }
+}
+
+function normalizeWorkerMetadata(nameValue: unknown, urlValue: unknown): { workerName: string; workerUrl: string } | null {
+  const workerName = normalizeWorkerName(nameValue);
+  const workerUrl = normalizeWorkerUrl(urlValue);
+  if (workerName === null || workerUrl === null || Boolean(workerName) !== Boolean(workerUrl)) return null;
+  return { workerName, workerUrl };
+}
+
+type BrvinInitialEnvironment = {
+  environmentKey: "production" | "staging" | "preview";
+  displayName: string;
+  workerName: string;
+  workerUrl: string;
+};
+
+function parseBrvinInitialEnvironments(value: unknown): BrvinInitialEnvironment[] | null {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 3) return null;
+  const seen = new Set<string>();
+  const output: BrvinInitialEnvironment[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const row = item as Record<string, unknown>;
+    const key = row.environmentKey;
+    if (key !== "production" && key !== "staging" && key !== "preview") return null;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    const metadata = normalizeWorkerMetadata(row.workerName, row.workerUrl);
+    if (!metadata) return null;
+    const displayName = typeof row.displayName === "string"
+      ? row.displayName.replace(/\s+/gu, " ").trim().slice(0, 80)
+      : key.charAt(0).toUpperCase() + key.slice(1);
+    output.push({ environmentKey: key, displayName: displayName || key, ...metadata });
+  }
+  return output.sort((a,b) => ["production","staging","preview"].indexOf(a.environmentKey) -
+    ["production","staging","preview"].indexOf(b.environmentKey));
+}
+
 export async function createBrvinApplication(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { name?: unknown; description?: unknown; ownerLabel?: unknown; slug?: unknown };
+  let body: {
+    name?: unknown; description?: unknown; ownerLabel?: unknown; slug?: unknown;
+    repositoryUrl?: unknown; repositoryDefaultBranch?: unknown; runtimeProvider?: unknown; environments?: unknown;
+  };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
   const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
   const ownerLabel = body.ownerLabel === undefined ? "" : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
   const slugInput = typeof body.slug === "string" && body.slug.trim() ? body.slug : name;
   const slug = slugify(slugInput);
-  if (!name || !slug || !validBrvinApplicationSlug(slug) || ownerLabel === null) {
-    return json({ ok: false, error: "Enter a valid application name and owner label." }, 400);
+  const repositoryUrl = normalizeGitHubRepositoryUrl(body.repositoryUrl);
+  const repositoryDefaultBranch = normalizeGitDefaultBranch(body.repositoryDefaultBranch);
+  const runtimeProvider = normalizeRuntimeProvider(body.runtimeProvider);
+  const initialEnvironments = body.environments === undefined ? [] : parseBrvinInitialEnvironments(body.environments);
+  if (!name || !slug || !validBrvinApplicationSlug(slug) || ownerLabel === null ||
+      repositoryUrl === null || repositoryDefaultBranch === null || runtimeProvider === null ||
+      (body.environments !== undefined && initialEnvironments === null)) {
+    return json({ ok: false, error: "Enter a valid application profile, GitHub repository reference, default branch and deployment environments." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
-    await env.DB.prepare(
-      "INSERT INTO brvin_applications (id,slug,name,description,owner_label,status,created_at,updated_at) VALUES (?,?,?,?,?,'active',?,?)"
-    ).bind(id, slug, name, description, ownerLabel, now, now).run();
+    const environments = (initialEnvironments ?? []).map(item => ({
+      id: crypto.randomUUID().toLowerCase(), applicationId: id, ...item, status: "active" as const,
+    }));
+    const statements = [
+      env.DB.prepare(
+        "INSERT INTO brvin_applications (id,slug,name,description,owner_label,repository_url,repository_default_branch,runtime_provider,status,created_at,updated_at) " +
+        "VALUES (?,?,?,?,?,?,?,?,'active',?,?)"
+      ).bind(id, slug, name, description, ownerLabel, repositoryUrl, repositoryDefaultBranch, runtimeProvider, now, now),
+      ...environments.map(item => env.DB!.prepare(
+        "INSERT INTO brvin_application_environments (id,application_id,environment_key,display_name,worker_name,worker_url,status,created_at,updated_at) " +
+        "VALUES (?,?,?,?,?,?,'active',?,?)"
+      ).bind(item.id, id, item.environmentKey, item.displayName, item.workerName, item.workerUrl, now, now)),
+    ];
+    if (environments.length) await env.DB.batch(statements);
+    else await statements[0].run();
     await recordBrvinActivity(env, {
       agent: "BRVIN application registry", phase: "governance",
       eventType: "application.created", status: "completed",
-      message: "A BRVIN application record was created. No environment or project access is implied.",
-      details: { applicationId: id, slug, ownerLabel },
+      message: environments.length
+        ? "An application and its deployment environment identities were registered. Repository and Worker values are metadata only; every environment remains pending live connection verification."
+        : "A BRVIN application record was created. No environment or project access is implied.",
+      details: {
+        applicationId: id, slug, ownerLabel, repositoryUrl, repositoryDefaultBranch,
+        runtimeProvider, environmentIds: environments.map(item => item.id),
+      },
     });
-    return json({ ok: true, application: { id, slug, name, description, ownerLabel, status: "active" } }, 201);
+    return json({
+      ok: true,
+      application: { id, slug, name, description, ownerLabel, repositoryUrl, repositoryDefaultBranch, runtimeProvider, status: "active" },
+      environments: environments.map(item => ({ ...item, connectionStatus: "pending" })),
+    }, 201);
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
 export async function updateBrvinApplication(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { applicationId?: unknown; name?: unknown; description?: unknown; ownerLabel?: unknown };
+  let body: {
+    applicationId?: unknown; name?: unknown; description?: unknown; ownerLabel?: unknown;
+    repositoryUrl?: unknown; repositoryDefaultBranch?: unknown; runtimeProvider?: unknown;
+  };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
   const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
   const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : null;
   const description = body.description === undefined ? undefined : typeof body.description === "string" ? body.description.trim().slice(0, 500) : null;
   const ownerLabel = body.ownerLabel === undefined ? undefined : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
+  const repositoryUrl = body.repositoryUrl === undefined ? undefined : normalizeGitHubRepositoryUrl(body.repositoryUrl);
+  const repositoryDefaultBranch = body.repositoryDefaultBranch === undefined ? undefined : normalizeGitDefaultBranch(body.repositoryDefaultBranch);
+  const runtimeProvider = body.runtimeProvider === undefined ? undefined : normalizeRuntimeProvider(body.runtimeProvider);
   if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || name === null || description === null || ownerLabel === null ||
+      repositoryUrl === null || repositoryDefaultBranch === null || runtimeProvider === null ||
       (name !== undefined && (!name || !slugify(name))) ||
-      (name === undefined && description === undefined && ownerLabel === undefined)) {
-    return json({ ok: false, error: "Enter valid application details." }, 400);
+      (name === undefined && description === undefined && ownerLabel === undefined &&
+       repositoryUrl === undefined && repositoryDefaultBranch === undefined && runtimeProvider === undefined)) {
+    return json({ ok: false, error: "Enter valid application profile and repository/runtime details." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
     const current = await env.DB.prepare(
-      "SELECT id,name,description,owner_label,status FROM brvin_applications WHERE id=?"
-    ).bind(applicationId).first<{ id: string; name: string; description: string; owner_label: string; status: string }>();
+      "SELECT id,name,description,owner_label,repository_url,repository_default_branch,runtime_provider,status FROM brvin_applications WHERE id=?"
+    ).bind(applicationId).first<{
+      id: string; name: string; description: string; owner_label: string; repository_url: string;
+      repository_default_branch: string; runtime_provider: string; status: string;
+    }>();
     if (!current) return json({ ok: false, error: "Application not found." }, 404);
     const nextName = name ?? current.name;
     const nextDescription = description ?? current.description;
     const nextOwnerLabel = ownerLabel ?? current.owner_label ?? "";
+    const nextRepositoryUrl = repositoryUrl ?? current.repository_url ?? "";
+    const nextRepositoryDefaultBranch = repositoryDefaultBranch ?? current.repository_default_branch ?? "main";
+    const nextRuntimeProvider = runtimeProvider ?? current.runtime_provider ?? "cloudflare-workers";
     const now = Date.now();
     await env.DB.prepare(
-      "UPDATE brvin_applications SET name=?,description=?,owner_label=?,updated_at=? WHERE id=?"
-    ).bind(nextName, nextDescription, nextOwnerLabel, now, applicationId).run();
+      "UPDATE brvin_applications SET name=?,description=?,owner_label=?,repository_url=?,repository_default_branch=?,runtime_provider=?,updated_at=? WHERE id=?"
+    ).bind(nextName, nextDescription, nextOwnerLabel, nextRepositoryUrl, nextRepositoryDefaultBranch, nextRuntimeProvider, now, applicationId).run();
     await recordBrvinActivity(env, {
       agent: "BRVIN application registry", phase: "governance",
       eventType: "application.updated", status: "completed",
-      message: "Application details and owner metadata were updated.",
-      details: { applicationId, ownerLabel: nextOwnerLabel },
+      message: "Application profile, repository and runtime metadata were updated.",
+      details: { applicationId, ownerLabel: nextOwnerLabel, repositoryUrl: nextRepositoryUrl, runtimeProvider: nextRuntimeProvider },
     });
-    return json({ ok: true, application: { id: applicationId, name: nextName, description: nextDescription, ownerLabel: nextOwnerLabel, status: current.status } });
+    return json({ ok: true, application: {
+      id: applicationId, name: nextName, description: nextDescription, ownerLabel: nextOwnerLabel,
+      repositoryUrl: nextRepositoryUrl, repositoryDefaultBranch: nextRepositoryDefaultBranch,
+      runtimeProvider: nextRuntimeProvider, status: current.status,
+    } });
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
 export async function createBrvinApplicationEnvironment(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { applicationId?: unknown; environmentKey?: unknown; displayName?: unknown };
+  let body: { applicationId?: unknown; environmentKey?: unknown; displayName?: unknown; workerName?: unknown; workerUrl?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid environment details." }, 400); }
   const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
   const environmentKey = normalizedEnvironmentKey(typeof body.environmentKey === "string" ? body.environmentKey : "");
   const displayName = typeof body.displayName === "string" ? body.displayName.replace(/\s+/gu, " ").trim().slice(0, 80) : "";
-  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !environmentKey || !validBrvinApplicationSlug(environmentKey)) {
-    return json({ ok: false, error: "Choose an active application and enter a valid environment label." }, 400);
+  const workerMetadata = normalizeWorkerMetadata(body.workerName, body.workerUrl);
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !environmentKey || !validBrvinApplicationSlug(environmentKey) || !workerMetadata) {
+    return json({ ok: false, error: "Choose an active application and enter a valid environment label and Worker metadata pair." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
@@ -840,16 +970,61 @@ export async function createBrvinApplicationEnvironment(env: Env, request: Reque
     if (!application) return json({ ok: false, error: "The selected application is not active." }, 409);
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
     await env.DB.prepare(
-      "INSERT INTO brvin_application_environments (id,application_id,environment_key,display_name,status,created_at,updated_at) " +
-      "VALUES (?,?,?,?,'active',?,?)"
-    ).bind(id, applicationId, environmentKey, displayName, now, now).run();
+      "INSERT INTO brvin_application_environments (id,application_id,environment_key,display_name,worker_name,worker_url,status,created_at,updated_at) " +
+      "VALUES (?,?,?,?,?,?,'active',?,?)"
+    ).bind(id, applicationId, environmentKey, displayName, workerMetadata.workerName, workerMetadata.workerUrl, now, now).run();
     await recordBrvinActivity(env, {
       agent: "BRVIN application registry", phase: "governance",
       eventType: "application.environment_created", status: "completed",
-      message: "A new trusted environment identity was registered. Attach it through a reviewed Service Binding configuration before treating the environment as connected.",
-      details: { applicationId, environmentId: id, environmentKey },
+      message: "A deployment environment identity and non-secret Worker metadata were registered. Live connection verification is still pending.",
+      details: { applicationId, environmentId: id, environmentKey, workerName: workerMetadata.workerName, workerUrl: workerMetadata.workerUrl },
     });
-    return json({ ok: true, environment: { id, applicationId, environmentKey, displayName, status: "active" } }, 201);
+    return json({ ok: true, environment: {
+      id, applicationId, environmentKey, displayName, ...workerMetadata, status: "active", connectionStatus: "pending",
+    } }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function updateBrvinApplicationEnvironment(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { environmentId?: unknown; displayName?: unknown; workerName?: unknown; workerUrl?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid environment details." }, 400); }
+  const environmentId = typeof body.environmentId === "string" ? body.environmentId.trim() : "";
+  const displayName = body.displayName === undefined ? undefined
+    : typeof body.displayName === "string" ? body.displayName.replace(/\s+/gu, " ").trim().slice(0, 80) : null;
+  const workerMetadata = body.workerName === undefined && body.workerUrl === undefined
+    ? undefined : normalizeWorkerMetadata(body.workerName, body.workerUrl);
+  if (!/^[a-f0-9-]{36}$/iu.test(environmentId) || displayName === null || workerMetadata === null ||
+      (displayName === undefined && workerMetadata === undefined)) {
+    return json({ ok: false, error: "Enter a valid environment display name and Worker name/URL pair." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const current = await env.DB.prepare(
+      "SELECT id,application_id,environment_key,display_name,worker_name,worker_url,status FROM brvin_application_environments WHERE id=?"
+    ).bind(environmentId).first<{
+      id: string; application_id: string; environment_key: string; display_name: string;
+      worker_name: string; worker_url: string; status: string;
+    }>();
+    if (!current) return json({ ok: false, error: "Environment not found." }, 404);
+    const nextDisplayName = displayName ?? current.display_name ?? "";
+    const nextWorkerName = workerMetadata?.workerName ?? current.worker_name ?? "";
+    const nextWorkerUrl = workerMetadata?.workerUrl ?? current.worker_url ?? "";
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_application_environments SET display_name=?,worker_name=?,worker_url=?,updated_at=? WHERE id=?"
+    ).bind(nextDisplayName, nextWorkerName, nextWorkerUrl, now, environmentId).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.environment_metadata_updated", status: "completed",
+      message: "Environment display and Worker metadata were updated. Connection status remains pending until M9 verification.",
+      details: { applicationId: current.application_id, environmentId, environmentKey: current.environment_key },
+    });
+    return json({ ok: true, environment: {
+      id: environmentId, applicationId: current.application_id, environmentKey: current.environment_key,
+      displayName: nextDisplayName, workerName: nextWorkerName, workerUrl: nextWorkerUrl,
+      status: current.status, connectionStatus: "pending",
+    } });
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
@@ -1146,17 +1321,43 @@ const HTML = `<!doctype html>
 <section class="view" id="view-applications" data-view-panel="applications">
 <div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Applications</h1><p class="subtitle">Register independent bots and apps, track their deployment environments, and manage the teacher knowledge projects they are allowed to retrieve.</p></div></div>
 <div class="overview-grid">
-<section class="view-panel"><div class="panel-toolbar"><div><h2>Register an application</h2><p>Record an independently built bot, website or assistant. Its repository and deployment remain managed through ChatGPT.</p></div></div>
-<div class="field"><label for="application-owner">Teacher / owner label</label><input id="application-owner" maxlength="120" placeholder="e.g. Teacher A"></div>
-<div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. SSC Mathematics Telegram Bot"></div>
-<div class="field"><label for="application-desc">Purpose</label><input id="application-desc" maxlength="500" placeholder="What does this application do?"></div>
-<button class="btn primary" id="create-application" type="button">Register application</button>
+<section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Connect an existing application</h2><p>Register the app, its existing GitHub repository and one or more deployment environments in one step.</p></div></div>
+<div class="formgrid">
+ <div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. SSC Mathematics Telegram Bot"></div>
+ <div class="field"><label for="application-owner">Teacher / owner label</label><input id="application-owner" maxlength="120" placeholder="e.g. Teacher A · Mathematics"></div>
+ <div class="field" style="grid-column:1/-1"><label for="application-desc">Purpose</label><input id="application-desc" maxlength="500" placeholder="What does this bot, website or assistant do?"></div>
+ <div class="field"><label for="application-repository">Existing GitHub repository URL</label><input id="application-repository" maxlength="300" inputmode="url" placeholder="https://github.com/owner/repository"></div>
+ <div class="field"><label for="application-branch">Default branch</label><input id="application-branch" maxlength="100" value="main" placeholder="main"></div>
+ <div class="field"><label for="application-runtime">Runtime provider</label><select id="application-runtime"><option value="cloudflare-workers">Cloudflare Workers</option><option value="other">Other / not yet deployed on Workers</option></select></div>
+</div>
+<div class="panel-toolbar" style="margin-top:12px"><div><h3>Deployment environments</h3><p>BRVIN generates a separate immutable environment ID for each selected environment.</p></div></div>
+<div class="overview-grid">
+ <section class="tile">
+  <label class="check"><input id="environment-production-enabled" type="checkbox" checked> Production</label>
+  <div class="field"><label for="environment-production-worker">Worker name (optional)</label><input id="environment-production-worker" maxlength="63" placeholder="my-application"></div>
+  <div class="field"><label for="environment-production-url">Worker URL (optional)</label><input id="environment-production-url" maxlength="300" inputmode="url" placeholder="https://my-application.example.workers.dev"></div>
+ </section>
+ <section class="tile">
+  <label class="check"><input id="environment-staging-enabled" type="checkbox"> Staging</label>
+  <div class="field"><label for="environment-staging-worker">Worker name (optional)</label><input id="environment-staging-worker" maxlength="63" placeholder="my-application-staging"></div>
+  <div class="field"><label for="environment-staging-url">Worker URL (optional)</label><input id="environment-staging-url" maxlength="300" inputmode="url" placeholder="https://my-application-staging.example.workers.dev"></div>
+ </section>
+ <section class="tile">
+  <label class="check"><input id="environment-preview-enabled" type="checkbox"> Preview</label>
+  <div class="field"><label for="environment-preview-worker">Worker name (optional)</label><input id="environment-preview-worker" maxlength="63" placeholder="my-application-preview"></div>
+  <div class="field"><label for="environment-preview-url">Worker URL (optional)</label><input id="environment-preview-url" maxlength="300" inputmode="url" placeholder="https://my-application-preview.example.workers.dev"></div>
+ </section>
+</div>
+<div class="notice">This wizard stores metadata and creates BRVIN environment identities only. It does not create a GitHub repository, Cloudflare Worker, secret, binding or deployment. ChatGPT's GitHub authorization is separate: the repository must also be selected/accessible in its connected GitHub app. Every environment remains <strong>Pending connection</strong> until the live Service Binding verification milestone.</div>
+<button class="btn primary" id="create-application" type="button">Register application and environments</button>
 </section>
-<section class="view-panel"><div class="panel-toolbar"><div><h2>Add deployment environment</h2><p>Environment IDs are generated by BRVIN and are not API keys.</p></div></div>
+<section class="view-panel"><div class="panel-toolbar"><div><h2>Add another deployment environment</h2><p>Environment IDs are generated by BRVIN. This adds registry metadata only; it does not deploy a Worker.</p></div></div>
 <div class="field"><label for="environment-application">Application</label><select id="environment-application"></select></div>
-<div class="field"><label for="environment-key">Environment key</label><input id="environment-key" maxlength="32" placeholder="production, preview, staging"></div>
-<div class="field"><label for="environment-name">Display name</label><input id="environment-name" maxlength="80" placeholder="Production"></div>
-<button class="btn primary" id="create-environment" type="button">Add environment</button>
+<div class="field"><label for="environment-key">Environment key</label><input id="environment-key" maxlength="32" placeholder="e.g. qa, canary, preview-2"></div>
+<div class="field"><label for="environment-name">Display name</label><input id="environment-name" maxlength="80" placeholder="QA"></div>
+<div class="field"><label for="environment-worker">Worker name (optional)</label><input id="environment-worker" maxlength="63" placeholder="my-application-qa"></div>
+<div class="field"><label for="environment-url">Worker URL (optional)</label><input id="environment-url" maxlength="300" inputmode="url" placeholder="https://my-application-qa.example.workers.dev"></div>
+<button class="btn primary" id="create-environment" type="button">Register environment</button>
 </section>
 <section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Grant project access</h2><p>Application grants and source-level book/collection grants are separate permissions.</p></div></div>
 <div class="formgrid"><div class="field"><label for="grant-application">Application</label><select id="grant-application"></select></div><div class="field"><label for="grant-project">Project</label><select id="grant-project"></select></div></div>
@@ -1287,17 +1488,48 @@ function openApplicationEditor(applicationId){
  const app=(model?.applications||[]).find(item=>item.id===applicationId);if(!app)return;
  $("modal-title").textContent="Application · "+app.name;
  $("modal-body").innerHTML=
-  '<div class="field"><label for="edit-app-owner">Teacher / owner</label><input id="edit-app-owner" maxlength="120" value="'+esc(app.ownerLabel||"")+'" placeholder="Teacher or customer label"></div>'+
+  '<div class="field"><label for="edit-app-owner">Teacher / owner</label><input id="edit-app-owner" maxlength="120" value="'+esc(app.ownerLabel||"")+'"></div>'+
   '<div class="field"><label for="edit-app-name">Application name</label><input id="edit-app-name" maxlength="100" value="'+esc(app.name)+'"></div>'+
   '<div class="field"><label for="edit-app-description">Purpose</label><textarea id="edit-app-description" maxlength="500" rows="3">'+esc(app.description||"")+'</textarea></div>'+
-  '<div class="modal-actions"><button class="btn primary" id="save-app-details" type="button">Save details</button></div>';
+  '<div class="field"><label for="edit-app-repository">GitHub repository URL</label><input id="edit-app-repository" maxlength="300" value="'+esc(app.repositoryUrl||"")+'" placeholder="https://github.com/owner/repository"></div>'+
+  '<div class="field"><label for="edit-app-branch">Default branch</label><input id="edit-app-branch" maxlength="100" value="'+esc(app.repositoryDefaultBranch||"main")+'"></div>'+
+  '<div class="field"><label for="edit-app-runtime">Runtime provider</label><select id="edit-app-runtime"><option value="cloudflare-workers"'+(app.runtimeProvider!=="other"?" selected":"")+'>Cloudflare Workers</option><option value="other"'+(app.runtimeProvider==="other"?" selected":"")+'>Other / not yet deployed on Workers</option></select></div>'+
+  '<div class="notice">Repository and runtime references are metadata only. Saving them does not grant ChatGPT repository access or verify a Worker connection.</div>'+
+  '<div class="modal-actions"><button class="btn primary" id="save-app-details" type="button">Save application details</button></div>';
  $("modal").classList.add("open");
  $("save-app-details").addEventListener("click",async()=>{
   const button=$("save-app-details");button.disabled=true;
   try{
    const name=$("edit-app-name").value.trim();
    if(!name)throw new Error("Enter an application name.");
-   await post("applications/update",{applicationId:app.id,name,description:$("edit-app-description").value,ownerLabel:$("edit-app-owner").value});
+   await post("applications/update",{
+    applicationId:app.id,name,description:$("edit-app-description").value,ownerLabel:$("edit-app-owner").value,
+    repositoryUrl:$("edit-app-repository").value,repositoryDefaultBranch:$("edit-app-branch").value,
+    runtimeProvider:$("edit-app-runtime").value
+   });
+   $("modal").classList.remove("open");await refresh();
+  }catch(error){alert(error.message);button.disabled=false;}
+ });
+}
+function openEnvironmentEditor(applicationId,environmentId){
+ const app=(model?.applications||[]).find(item=>item.id===applicationId);
+ const environment=(app?.environments||[]).find(item=>item.id===environmentId);if(!app||!environment)return;
+ $("modal-title").textContent="Environment · "+(environment.displayName||environment.environmentKey);
+ $("modal-body").innerHTML=
+  '<div class="field"><label>Environment key</label><input value="'+esc(environment.environmentKey)+'" disabled></div>'+
+  '<div class="field"><label for="edit-env-display">Display name</label><input id="edit-env-display" maxlength="80" value="'+esc(environment.displayName||"")+'"></div>'+
+  '<div class="field"><label for="edit-env-worker">Worker name</label><input id="edit-env-worker" maxlength="63" value="'+esc(environment.workerName||"")+'" placeholder="my-application-production"></div>'+
+  '<div class="field"><label for="edit-env-url">Worker URL (HTTPS)</label><input id="edit-env-url" maxlength="300" value="'+esc(environment.workerUrl||"")+'" placeholder="https://my-application.example.workers.dev"></div>'+
+  '<div class="notice">The environment identity is immutable. These values describe the runtime only; live connection remains Pending until M9 verification.</div>'+
+  '<div class="modal-actions"><button class="btn primary" id="save-env-details" type="button">Save environment details</button></div>';
+ $("modal").classList.add("open");
+ $("save-env-details").addEventListener("click",async()=>{
+  const button=$("save-env-details");button.disabled=true;
+  try{
+   await post("applications/environments/update",{
+    environmentId:environment.id,displayName:$("edit-env-display").value,
+    workerName:$("edit-env-worker").value,workerUrl:$("edit-env-url").value
+   });
    $("modal").classList.remove("open");await refresh();
   }catch(error){alert(error.message);button.disabled=false;}
  });
@@ -1354,25 +1586,40 @@ function renderApplications(list){
  const html=list.length?list.map(app=>{
   const appAction=app.status==="active"?"suspended":app.status==="suspended"?"active":null;
   const appActionLabel=app.status==="active"?"Suspend application":app.status==="suspended"?"Reactivate application":"Permanently revoked";
+  const repositoryHtml=app.repositoryUrl
+   ?'<a href="'+esc(app.repositoryUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(app.repositoryUrl)+'</a> · branch <strong>'+esc(app.repositoryDefaultBranch||"main")+'</strong>'
+   :'No repository reference saved';
   const envHtml=app.environments.length?app.environments.map(environment=>{
    const next=environment.status==="active"?"disabled":environment.status==="disabled"?"active":null;
    const action=next?'<button class="btn" data-environment-status="'+esc(environment.id)+'" data-status="'+next+'">'+(next==="disabled"?"Disable":"Activate")+'</button>':"";
    const revoke=environment.status!=="revoked"?'<button class="btn danger" data-environment-status="'+esc(environment.id)+'" data-status="revoked">Revoke identity</button>':"";
-   const verification=environment.status==="active"?"Registered · live verification not yet implemented":"Not available";
-   return '<div class="pulse-row"><span><strong>'+esc(environment.displayName||environment.environmentKey)+'</strong><br><small>'+esc(environment.environmentKey)+' · '+esc(verification)+' · '+esc(environment.id)+'</small></span><span>'+statusPill(environment.status)+' '+action+' '+revoke+'</span></div>';
+   const connection=environment.status==="revoked"?"Revoked":environment.status==="disabled"?"Disabled":"Pending connection";
+   const worker=environment.workerName?esc(environment.workerName):"Worker not specified";
+   const workerUrl=environment.workerUrl?'<a href="'+esc(environment.workerUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(environment.workerUrl)+'</a>':"URL not specified";
+   const edit=environment.status!=="revoked"?'<button class="btn" data-environment-edit="'+esc(environment.id)+'" data-application-id="'+esc(app.id)+'">Edit runtime details</button>':"";
+   return '<div class="tile" style="margin-top:8px">'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>'+esc(environment.displayName||environment.environmentKey)+'</strong><span class="pill">'+connection+'</span></div>'+
+    '<p><small>'+esc(environment.environmentKey)+' · '+esc(environment.id)+'</small></p>'+
+    '<div class="pulse-row"><span>Worker / runtime</span><strong>'+worker+'</strong></div>'+
+    '<div class="pulse-row"><span>Runtime URL</span><span>'+workerUrl+'</span></div>'+
+    '<div class="job-actions">'+edit+action+revoke+'</div>'+
+   '</div>';
   }).join(""):'<div class="empty">No deployment environments registered.</div>';
   const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
   return '<article class="tile">'+
    '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>'+esc(app.name)+'</strong><p><small>'+esc(app.ownerLabel||"Owner not assigned")+' · '+esc(app.slug)+'</small></p></div>'+statusPill(app.status)+'</div>'+
    '<p>'+esc(app.description||"No description")+'</p>'+
+   '<div class="pulse-row"><span>GitHub repository</span><span>'+repositoryHtml+'</span></div>'+
+   '<div class="pulse-row"><span>Runtime provider</span><strong>'+esc(app.runtimeProvider==="other"?"Other / external":"Cloudflare Workers")+'</strong></div>'+
    '<div class="pulse-row"><span>Deployment environments</span><strong>'+app.environments.length+'</strong></div>'+
    '<div class="pulse-row"><span>Active knowledge grants</span><strong>'+app.activeProjectCount+'</strong></div>'+
-   '<div class="notice">Registry only — not live-connected. A registered environment is not proof of a deployed private Service Binding. M9 owns live connection verification.</div>'+
-   '<div class="job-actions"><button class="btn" data-application-edit="'+esc(app.id)+'" type="button">Edit details</button>'+(appAction?'<button class="btn '+(appAction==="suspended"?"danger":"")+'" data-application-status="'+esc(app.id)+'" data-status="'+appAction+'">'+appActionLabel+'</button>':"")+'</div>'+
+   '<div class="notice">Repository and Worker references are metadata only. GitHub authorization is separate; no repository access is inferred. Every environment is Pending until a live private Service Binding verification succeeds in M9.</div>'+
+   '<div class="job-actions"><button class="btn" data-application-edit="'+esc(app.id)+'" type="button">Edit application</button>'+(appAction?'<button class="btn '+(appAction==="suspended"?"danger":"")+'" data-application-status="'+esc(app.id)+'" data-status="'+appAction+'">'+appActionLabel+'</button>':"")+'</div>'+
    '<div style="margin-top:14px"><strong>Environments</strong>'+envHtml+'</div><div style="margin-top:14px"><strong>Knowledge access</strong>'+grantHtml+'</div></article>';
- }).join(""):'<div class="empty" style="grid-column:1/-1">No applications registered. Register an independently built app after its repository has been created with ChatGPT.</div>';
+ }).join(""):'<div class="empty" style="grid-column:1/-1">No applications registered. Create the repository with ChatGPT or manually first, then register its existing URL here.</div>';
  $("applications-list").innerHTML=html;
  $("applications-list").querySelectorAll("[data-application-edit]").forEach(button=>button.addEventListener("click",()=>openApplicationEditor(button.dataset.applicationEdit)));
+ $("applications-list").querySelectorAll("[data-environment-edit]").forEach(button=>button.addEventListener("click",()=>openEnvironmentEditor(button.dataset.applicationId,button.dataset.environmentEdit)));
  $("applications-list").querySelectorAll("[data-application-status]").forEach(button=>button.addEventListener("click",async()=>{
   const app=list.find(item=>item.id===button.dataset.applicationStatus);if(!app)return;
   const status=button.dataset.status;
@@ -1595,12 +1842,48 @@ $("close-upload").addEventListener("click",()=>$("upload-modal").classList.remov
 $("clear-brvin").addEventListener("click",clearAllBrvinBooks);$("upload").addEventListener("click",uploadBook);$("refresh").addEventListener("click",()=>refresh());$("logout").addEventListener("click",async()=>{await fetch("/admin/logout",{method:"POST",credentials:"same-origin"});location.assign("/admin/login");});
 $("create-project").addEventListener("click",async()=>{try{const name=$("project-name").value.trim();if(!name)throw new Error("Enter a knowledge project name.");await post("projects",{name,description:$("project-desc").value,ownerLabel:$("project-owner").value,legacyClient:false});$("project-name").value="";$("project-desc").value="";$("project-owner").value="";await refresh();}catch(e){alert(e.message);}});
 $("create-application").addEventListener("click",async()=>{
- try{const name=$("application-name").value.trim();if(!name)throw new Error("Enter an application name.");await post("applications",{name,description:$("application-desc").value,ownerLabel:$("application-owner").value});$("application-name").value="";$("application-desc").value="";$("application-owner").value="";await refresh();}
- catch(error){alert(error.message);}
+ const button=$("create-application");button.disabled=true;
+ try{
+  const name=$("application-name").value.trim();if(!name)throw new Error("Enter an application name.");
+  const keys=["production","staging","preview"];
+  const environments=keys.filter(key=>$("environment-"+key+"-enabled").checked).map(key=>({
+   environmentKey:key,
+   displayName:key.charAt(0).toUpperCase()+key.slice(1),
+   workerName:$("environment-"+key+"-worker").value.trim(),
+   workerUrl:$("environment-"+key+"-url").value.trim()
+  }));
+  if(!environments.length)throw new Error("Select at least one deployment environment.");
+  for(const item of environments){
+   if(Boolean(item.workerName)!==Boolean(item.workerUrl))throw new Error("For "+item.environmentKey+", enter both the Worker name and HTTPS URL, or leave both blank.");
+  }
+  await post("applications",{
+   name,description:$("application-desc").value,ownerLabel:$("application-owner").value,
+   repositoryUrl:$("application-repository").value,repositoryDefaultBranch:$("application-branch").value,
+   runtimeProvider:$("application-runtime").value,environments
+  });
+  $("application-name").value="";$("application-desc").value="";$("application-owner").value="";
+  $("application-repository").value="";$("application-branch").value="main";
+  $("application-runtime").value="cloudflare-workers";
+  for(const key of keys){
+   $("environment-"+key+"-enabled").checked=key==="production";
+   $("environment-"+key+"-worker").value="";$("environment-"+key+"-url").value="";
+  }
+  await refresh();
+ }catch(error){alert(error.message);}
+ finally{button.disabled=false;}
 });
 $("create-environment").addEventListener("click",async()=>{
- try{const applicationId=$("environment-application").value;if(!applicationId)throw new Error("Select an active application.");const environmentKey=$("environment-key").value.trim();if(!environmentKey)throw new Error("Enter an environment key.");await post("applications/environments",{applicationId,environmentKey,displayName:$("environment-name").value});$("environment-key").value="";$("environment-name").value="";await refresh();}
- catch(error){alert(error.message);}
+ const button=$("create-environment");button.disabled=true;
+ try{
+  const applicationId=$("environment-application").value;if(!applicationId)throw new Error("Select an active application.");
+  const environmentKey=$("environment-key").value.trim();if(!environmentKey)throw new Error("Enter an environment key.");
+  const workerName=$("environment-worker").value.trim(),workerUrl=$("environment-url").value.trim();
+  if(Boolean(workerName)!==Boolean(workerUrl))throw new Error("Enter both the Worker name and HTTPS URL, or leave both blank.");
+  await post("applications/environments",{applicationId,environmentKey,displayName:$("environment-name").value,workerName,workerUrl});
+  $("environment-key").value="";$("environment-name").value="";$("environment-worker").value="";$("environment-url").value="";
+  await refresh();
+ }catch(error){alert(error.message);}
+ finally{button.disabled=false;}
 });
 $("grant-project-button").addEventListener("click",async()=>{
  try{const applicationId=$("grant-application").value,projectId=$("grant-project").value;if(!applicationId||!projectId)throw new Error("Select an active application and project.");await post("applications/grants",{applicationId,projectId});await refresh();}

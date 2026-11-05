@@ -283,7 +283,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 | M4 | Reference consumer scaffold | RETIRED / NOT A PRODUCT REQUIREMENT | The old fixed AskMoina text scaffold was removed and never deployed; do not recreate it. |
 | M5 | Core application/project administration | COMPLETE — UX expansion remains | Existing app/environment/grant lifecycle and protected admin are deployed. |
 | M6 | Admin workspace aligned to teacher knowledge operations | COMPLETE | Merged/deployed via PR #91; additive owner-label migration, app-neutral teacher knowledge project creation, project readiness/usage/detail UI, application metadata editing, and legacy provider controls collapsed. Main release #701 and production smoke passed. |
-| M7 | Application connection registry and wizard | NOT STARTED | Register application, repository/runtime references, production/staging environments and honest connection states in one guided flow. |
+| M7 | Application connection registry and wizard | IN PROGRESS | Metadata-only app wizard, existing GitHub repository/default branch, Worker/runtime references, multiple generated environment identities and Pending connection status; pending PR validation and production acceptance. |
 | M8 | ChatGPT integration handoff | NOT STARTED | BRVIN generates a complete repository-specific integration prompt/manifest; ChatGPT implements code and deployment using its own provider connections. |
 | M9 | Live connection verification and activation | NOT STARTED | A deployed consumer environment proves its trusted v2 identity and private Service Binding path; UI distinguishes connection health from source readiness. |
 | M10 | Teacher knowledge assignment and isolation acceptance | NOT STARTED | Multiple teacher projects and independent apps; grant, revoke, multi-project, sharing and cross-project denial tests pass. |
@@ -460,4 +460,26 @@ For a new ChatGPT chat or branch:
 - **Live data check:** exact project and application overview SQL ran successfully; the read-back showed project/source readiness, application counts and usage structures. Verification queries wrote zero rows. No new test project/application was created.
 - **Production acceptance artifact:** `13429153708`; root, worker health, BRVIN Service Binding and Fatman retrieval all passed.
 - **Manual note:** no authenticated administrator browser session was available for a visual page click-through. The deployed route/client is covered by Node/browser-script contract tests; user visual confirmation at `/admin/brvin` is the only unperformed check.
-- **Next active milestone:** M7 — Application connection registry and wizard. M7 has not been started in this work.
+- **Current active milestone:** M7 — Application connection registry and wizard. Implementation is on `brvin/m7-application-connection-wizard`; it is not yet merged/deployed.
+
+
+## 15. M7 implementation progress
+
+### 5 November 2026 — application connection registry and wizard (in progress)
+
+**Status:** IN PROGRESS — branch `brvin/m7-application-connection-wizard`; implementation and tests are committed but awaiting PR validation, merge and production acceptance.
+
+**Implemented on branch:**
+- Additive application metadata: repository URL, default branch and runtime provider.
+- Additive environment metadata: Worker name and HTTPS runtime URL.
+- One wizard to register an application plus production/staging/preview environment identities in a single D1 batch. Every selected environment receives a BRVIN-generated UUID.
+- Optional Worker name/URL pair per environment; input validation requires both or neither.
+- Editing of application repository/runtime metadata and environment Worker references.
+- Admin UI makes the Pending connection state explicit. It never labels stored repository/Worker metadata as verified.
+- ChatGPT repository access is explicitly separate. No call is made to GitHub or Cloudflare by this wizard.
+
+**Migration:** key `2026-11-05-brvin-connection-metadata-v1`; existing records default to empty repository/Worker references, default branch `main`, and runtime provider `cloudflare-workers`.
+
+**Preserved:** no repository or Worker creation, no secret or binding write, no deployment, no new knowledge project, no application-project grant, no change to the trusted v2 identity contract or Fatman retrieval. Existing app/environment IDs and status lifecycle remain.
+
+**Next:** finish CI/source review, open PR, merge only after all checks pass, run the paired production release and verify migration/read-back data before marking M7 complete.

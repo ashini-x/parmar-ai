@@ -151,6 +151,17 @@ describe("BRVIN browser script contract", () => {
     expect(script).toContain('data-project-details=');
     expect(script).toContain("function openApplicationEditor");
     expect(workerSource).toContain('/admin/api/brvin/applications/update');
+    expect(workerSource).toContain('/admin/api/brvin/applications/environments/update');
     expect(workerSource).toContain("/admin/api/brvin/applications/grants/revoke");
+    expect(adminSource).toContain('id="application-repository"');
+    expect(adminSource).toContain('id="application-branch"');
+    expect(adminSource).toContain('id="environment-production-enabled"');
+    expect(adminSource).toContain('id="environment-staging-enabled"');
+    expect(adminSource).toContain('id="environment-preview-enabled"');
+    expect(adminSource).toContain("ChatGPT's GitHub authorization is separate");
+    expect(adminSource).toContain("Pending connection");
+    expect(script).toContain('post("applications/environments/update"');
+    expect(script).toContain('repositoryDefaultBranch:$("application-branch").value');
+    expect(script).toContain("function openEnvironmentEditor");
   });
 });
