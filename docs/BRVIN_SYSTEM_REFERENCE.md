@@ -75,7 +75,7 @@ The two planes share the existing D1 registry and AI Search namespace. They do n
 - M1 added `brvin_applications`, `brvin_application_environments` and `brvin_application_project_grants` to the existing shared D1. The Parmar AI production application/environment and explicit Fatman project grant are seeded and active.
 - M2 added `listAuthorizedProjectsV2()`, `getProjectStatusV2(input)` and `retrieveProjectContextV2(input)` to the private `BrvinRetrievalApi` entrypoint. V1 methods remain available.
 - Parmar AI production carries both `clientId: fatman` and the generated production `applicationEnvironmentId`. `/health` checks v1/v2 Fatman readiness and source-count parity.
-- Latest paired production release after M8: `brvin-service` deployment `d7436bd2-d0b8-435b-9a6f-d224abaf9c77`, version `797ea8a6-6735-44c4-afad-2dd19bf2363c`; `parmar-ai` deployment `f7dac7cd-8215-4748-86b1-296eb4219c27`, version `5e248a66-1c1a-45df-a23a-fd7b8d941032`. Main Release Validation #713 (run `42067800093`) passed paired deployment and root/health/private BRVIN/Fatman production acceptance; artifact `13434543663`.
+- Latest paired production release after M8: `brvin-service` deployment `d7436bd2-d0b8-435b-9a6f-d224abaf9c77`, version `797ea8a6-6735-44c4-afad-2dd19bf2363c`; `parmar-ai` deployment `f7dac7cd-8215-4748-86b1-296eb4219c27`, version `5e248a66-1c1a-45df-a23a-fd7b8d941032`. Main Release Validation #713 (run `42067800093`) passed the initial feature rollout; main release #715 (run `42068966058`) redeployed the unchanged M8 code after documentation closeout and again passed paired deployment and root/health/private BRVIN/Fatman production acceptance; latest artifact `13434968943`.
 - End-user Fatman retrieval remains on v1. AskMoina Voice's v2 binding and Gemini Live connector/tool integration are deployed as an optional pilot. Do not make its camera/audio acceptance a BRVIN milestone gate.
 - The former M4 independent reference-client scaffold was originally merged as `brvin-test-client` in AskMoina PR #381, then retired by PR #386. Its Worker source, Wrangler/TypeScript config, tests and dedicated deploy workflow are no longer in the AskMoina repository. It was never deployed. The shared BRVIN connector remains.
 - The historical Project Factory provider-administrator preflight and configured-scope correction were deployed through PRs #82, #83 and #88. They are part of the as-built code but are no longer an active product milestone. Do not ask the user to complete broad GitHub/Cloudflare administrator re-consent for the narrowed knowledge-platform goal. Audit any runtime dependencies before simplifying or removing this legacy UI; no credential should be revoked or deleted as a side effect.
@@ -621,16 +621,3 @@ Also update:
 - [Operations Runbook](BRVIN_OPERATIONS_RUNBOOK.md) for admin or operational changes.
 
 The canonical principle: **code and deployed configuration define the implementation; this document explains the current design and where to verify it.** Never use this guide as a reason to skip tests, release manifests, or a targeted check after a material code/infrastructure change.
-
-
-## M8 handoff generator — implementation in progress (5 November 2026)
-
-The implementation branch brvin/m8-chatgpt-integration-handoff adds:
-- src/brvin/handoff.ts: pure manifest/prompt builder plus the read-only D1-backed handoff endpoint;
-- GET /admin/api/brvin/applications/handoff?applicationId=...&environmentId=...: validates UUIDs, requires an active app and environment, verifies the environment belongs to that app, and regenerates from current saved metadata;
-- src/brvin/admin.ts: per-environment Generate ChatGPT handoff control, revision/date display, copyable prompt and JSON manifest;
-- tests for manifest fields, exact v2 binding identity, environment/app scoping, secret exclusion, unsupported runtime and browser-script/route integration.
-
-The generator includes only explicitly allowlisted application, repository, environment, runtime and non-secret BRVIN account metadata. It does not read legacy GitHub App or Cloudflare OAuth vault entries. The target Cloudflare account is not stored in M7, so the handoff records it as unverified and instructs ChatGPT to compare the actual target deployment with the BRVIN account before deploying. Non-Cloudflare runtime providers are blocked for this private same-account binding design.
-
-**Current status:** implementation and unit/UI tests are on the branch; PR validation and production deployment are pending. This does not mark an environment Connected and does not implement M9.
