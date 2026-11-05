@@ -1491,7 +1491,7 @@ function openProjectDetails(projectId){
    grantControls+grantRows+
   '</section>'+
   '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Knowledge sources</h2><p>Sources are included only through direct book grants or assigned collections, and only after indexing is ready.</p></div></div>'+
-   (sources.length?sources.map(book=>'<div class="pulse-row"><span><strong>'+esc(book.title)+'</strong><br><small>'+esc(book.collectionName)+' · '+book.indexedPages+'/'+book.pageCount+' pages</small></span>'+statusPill(book.status)+'</div>').join(""):'<div class="empty">No assigned sources are visible for this project.</div>')+
+   (sources.length?sources.map(book=>'<div class="pulse-row"><span><strong>'+esc(book.title)+'</strong><br><small>'+esc(book.collectionName)+' · '+book.indexedPages+'/'+book.pageCount+' pages · direct and collection access are managed separately</small></span><span>'+statusPill(book.status)+' <button class="btn" data-project-book-access="'+esc(book.id)+'" type="button">Manage direct grants</button></span></div>').join(""):'<div class="empty">No assigned sources are visible for this project.</div>')+
   '</section>'+
   '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Collections</h2><p>Collection grants include eligible ready sources added later.</p></div></div>'+
    (collections.length?collections.map(collection=>'<div class="pulse-row"><span>'+esc(collection.name)+'</span><strong>'+Number(collection.bookCount||0)+' sources</strong></div>').join(""):'<div class="empty">No collections assigned.</div>')+
@@ -1508,6 +1508,7 @@ function openProjectDetails(projectId){
   try{await post("applications/grants",{applicationId,projectId});await refresh();openProjectDetails(projectId);}
   catch(error){alert(error.message);grantButton.disabled=false;}
  });
+ $("modal-body").querySelectorAll("[data-project-book-access]").forEach(button=>button.addEventListener("click",()=>editBookAccess(button.dataset.projectBookAccess)));
  $("modal-body").querySelectorAll("[data-project-grant-revoke]").forEach(button=>button.addEventListener("click",async()=>{
   if(!confirm("Revoke this application's access to "+project.name+"? Future retrieval requests will be denied."))return;
   button.disabled=true;
