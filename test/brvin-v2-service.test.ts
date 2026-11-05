@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  brvinMonthlyQueryLimit,
   getBrvinProjectStatusV2,
   listAuthorizedProjectsV2,
   retrieveBrvinForApplicationV2,
@@ -53,6 +54,17 @@ const fatmanSource: Source = {
   search_prefix: "fatman/pages/",
   page_count: 538,
 };
+
+describe("BRVIN monthly project query limit", () => {
+  it("uses the same bounded monthly limit as retrieval enforcement", () => {
+    expect(brvinMonthlyQueryLimit("400")).toBe(400);
+    expect(brvinMonthlyQueryLimit("800")).toBe(800);
+    expect(brvinMonthlyQueryLimit("1200")).toBe(800);
+    expect(brvinMonthlyQueryLimit("0")).toBe(800);
+    expect(brvinMonthlyQueryLimit("invalid")).toBe(800);
+    expect(brvinMonthlyQueryLimit(undefined)).toBe(800);
+  });
+});
 
 describe("BRVIN private application retrieval RPC v2", () => {
   const search = vi.fn();
