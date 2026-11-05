@@ -698,13 +698,14 @@ export async function startBrvinBookUpload(env: Env, request: Request): Promise<
 
 export async function createBrvinProject(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { name?: unknown; description?: unknown; applicationId?: unknown };
+  let body: { name?: unknown; description?: unknown; ownerLabel?: unknown; applicationId?: unknown; legacyClient?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project details." }, 400); }
   const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  const ownerLabel = body.ownerLabel === undefined ? "" : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
   const slug = slugify(name);
   const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
-  if (!name || !slug) return json({ ok: false, error: "Enter a valid project name." }, 400);
+  if (!name || !slug || ownerLabel === null) return json({ ok: false, error: "Enter a valid project name and teacher/owner label." }, 400);
   if (applicationId && !/^[a-f0-9-]{36}$/iu.test(applicationId)) {
     return json({ ok: false, error: "Select a registered application." }, 400);
   }
@@ -719,16 +720,18 @@ export async function createBrvinProject(env: Env, request: Request): Promise<Re
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
     const statements = [
       env.DB.prepare(
-        "INSERT INTO brvin_projects (id,name,slug,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
-      ).bind(id, name, slug, description, now, now),
+        "INSERT INTO brvin_projects (id,name,slug,description,owner_label,status,created_at,updated_at) VALUES (?,?,?,?,?,'active',?,?)"
+      ).bind(id, name, slug, description, ownerLabel, now, now),
     ];
     if (applicationId) {
       statements.push(env.DB.prepare(
         "INSERT INTO brvin_application_project_grants (id,application_id,project_id,status,created_at,created_by) " +
         "VALUES (?,?,?,'active',?,'admin-dashboard')"
       ).bind(crypto.randomUUID().toLowerCase(), applicationId, id, now));
-    } else {
-      // Legacy creation remains available for existing v1 clients and Fatman-compatible integrations.
+    } else if (body.legacyClient !== false) {
+      // Preserve the historical v1 default for existing callers. The new teacher
+      // workspace sends legacyClient:false so knowledge projects remain app-neutral
+      // until an application is explicitly granted access.
       statements.push(env.DB.prepare(
         "INSERT INTO brvin_service_clients (client_id,project_id,created_at,updated_at) VALUES (?,?,?,?)"
       ).bind(slug, id, now, now));
@@ -740,9 +743,9 @@ export async function createBrvinProject(env: Env, request: Request): Promise<Re
       message: applicationId
         ? "A new project was created and explicitly granted to its selected BRVIN application. It has no knowledge access until sources are assigned."
         : "A legacy project and its default private Worker identity were created. It has no knowledge access until sources are assigned.",
-      details: { applicationId: applicationId || null, serviceClientId: applicationId ? null : slug },
+      details: { applicationId: applicationId || null, ownerLabel, legacyClient: !applicationId && body.legacyClient !== false },
     });
-    return json({ ok: true, project: { id, name, slug, description, applicationId: applicationId || null } }, 201);
+    return json({ ok: true, project: { id, name, slug, description, ownerLabel, applicationId: applicationId || null } }, 201);
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
@@ -757,28 +760,65 @@ function normalizedEnvironmentKey(value: string): string {
 
 export async function createBrvinApplication(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { name?: unknown; description?: unknown; slug?: unknown };
+  let body: { name?: unknown; description?: unknown; ownerLabel?: unknown; slug?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
   const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  const ownerLabel = body.ownerLabel === undefined ? "" : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
   const slugInput = typeof body.slug === "string" && body.slug.trim() ? body.slug : name;
   const slug = slugify(slugInput);
-  if (!name || !slug || !validBrvinApplicationSlug(slug)) {
-    return json({ ok: false, error: "Enter an application name that produces a valid lowercase slug." }, 400);
+  if (!name || !slug || !validBrvinApplicationSlug(slug) || ownerLabel === null) {
+    return json({ ok: false, error: "Enter a valid application name and owner label." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
     await env.DB.prepare(
-      "INSERT INTO brvin_applications (id,slug,name,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
-    ).bind(id, slug, name, description, now, now).run();
+      "INSERT INTO brvin_applications (id,slug,name,description,owner_label,status,created_at,updated_at) VALUES (?,?,?,?,?,'active',?,?)"
+    ).bind(id, slug, name, description, ownerLabel, now, now).run();
     await recordBrvinActivity(env, {
       agent: "BRVIN application registry", phase: "governance",
       eventType: "application.created", status: "completed",
       message: "A BRVIN application record was created. No environment or project access is implied.",
-      details: { applicationId: id, slug },
+      details: { applicationId: id, slug, ownerLabel },
     });
-    return json({ ok: true, application: { id, slug, name, description, status: "active" } }, 201);
+    return json({ ok: true, application: { id, slug, name, description, ownerLabel, status: "active" } }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function updateBrvinApplication(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { applicationId?: unknown; name?: unknown; description?: unknown; ownerLabel?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : null;
+  const description = body.description === undefined ? undefined : typeof body.description === "string" ? body.description.trim().slice(0, 500) : null;
+  const ownerLabel = body.ownerLabel === undefined ? undefined : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || name === null || description === null || ownerLabel === null ||
+      (name !== undefined && (!name || !slugify(name))) ||
+      (name === undefined && description === undefined && ownerLabel === undefined)) {
+    return json({ ok: false, error: "Enter valid application details." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const current = await env.DB.prepare(
+      "SELECT id,name,description,owner_label,status FROM brvin_applications WHERE id=?"
+    ).bind(applicationId).first<{ id: string; name: string; description: string; owner_label: string; status: string }>();
+    if (!current) return json({ ok: false, error: "Application not found." }, 404);
+    const nextName = name ?? current.name;
+    const nextDescription = description ?? current.description;
+    const nextOwnerLabel = ownerLabel ?? current.owner_label ?? "";
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_applications SET name=?,description=?,owner_label=?,updated_at=? WHERE id=?"
+    ).bind(nextName, nextDescription, nextOwnerLabel, now, applicationId).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.updated", status: "completed",
+      message: "Application details and owner metadata were updated.",
+      details: { applicationId, ownerLabel: nextOwnerLabel },
+    });
+    return json({ ok: true, application: { id: applicationId, name: nextName, description: nextDescription, ownerLabel: nextOwnerLabel, status: current.status } });
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
