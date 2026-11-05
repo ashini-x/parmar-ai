@@ -1,5 +1,11 @@
 export const FATMAN_PAGE_RETRY_LIMIT = 12;
 
+/** Bucket IAM/policy failures require human repair; never spin an unattended retry loop. */
+export function shouldPauseAutomaticVisionCleanupRetry(priorFailureCount: number): boolean {
+  return Number.isFinite(priorFailureCount) && priorFailureCount > 0;
+}
+
+
 export function isTransientFatmanIndexError(error: unknown): boolean {
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
   return /unable_to_connect_to_ai_search|fetch failed|network error|network timeout|timed out|timeout|http 429|http 5\d\d|service unavailable|temporarily unavailable|connection reset|econnreset|socket hang up/.test(message);
