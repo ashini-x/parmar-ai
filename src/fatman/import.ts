@@ -208,23 +208,45 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
     let permissionData: { permissions?: string[]; error?: { message?: string } } = {};
     try { permissionData = JSON.parse(permissionText) as typeof permissionData; } catch { /* report HTTP status only */ }
     const granted = permissionData.permissions ?? [];
-    const required = ["storage.objects.create", "storage.objects.get", "storage.objects.list", "storage.objects.delete", "storage.buckets.get"];
+    const requiredObjectPermissions = ["storage.objects.create", "storage.objects.get", "storage.objects.list", "storage.objects.delete"];
+    const missingObjectPermissions = requiredObjectPermissions.filter(permission => !granted.includes(permission));
     const lifecycleRuleGetGranted = granted.includes("storage.buckets.get");
     const lifecycleRuleUpdateGranted = granted.includes("storage.buckets.update");
     const lifecycleRuleManagementGranted = lifecycleRuleGetGranted && lifecycleRuleUpdateGranted;
+    const coreObjectPermissionsPassed = permissionResponse.ok && missingObjectPermissions.length === 0;
     checks.permissions = permissionResponse.ok
-      ? { ok: true, granted, missing: required.filter(permission => !granted.includes(permission)), lifecycleRuleGetGranted, lifecycleRuleUpdateGranted, lifecycleRuleManagementGranted }
+      ? {
+          ok: coreObjectPermissionsPassed,
+          granted,
+          requiredObjectPermissions,
+          missingObjectPermissions,
+          lifecycleRuleGetGranted,
+          lifecycleRuleUpdateGranted,
+          lifecycleRuleManagementGranted,
+          lifecycleMissingPermissions: [
+            ...(!lifecycleRuleGetGranted ? ["storage.buckets.get"] : []),
+            ...(!lifecycleRuleUpdateGranted ? ["storage.buckets.update"] : []),
+          ],
+        }
       : { ok: false, status: permissionResponse.status, error: permissionData.error?.message ?? permissionText.slice(0, 240) };
 
-    const createGranted = granted.includes("storage.objects.create");
-    const permissionCheckPassed = permissionResponse.ok && required.every(permission => granted.includes(permission));
-    const bucketCheckPassed = metadataResponse.ok || permissionCheckPassed;
     return json({
-      ok: bucketCheckPassed && permissionCheckPassed,
+      // Core PDF upload/OCR object access is distinct from the optional
+      // bucket-level lifecycle configuration safety net.
+      ok: coreObjectPermissionsPassed,
       stage: "complete",
       bucketName,
+      serviceAccountEmail: env.GCP_CLIENT_EMAIL?.trim() || null,
       checks,
-      uploadStartReady: bucketCheckPassed && createGranted,
+      uploadStartReady: coreObjectPermissionsPassed,
+      retentionLifecycleReady: metadataResponse.ok && lifecycleRuleManagementGranted,
+      retentionLifecycleMissingPermissions: [
+        ...(!lifecycleRuleGetGranted ? ["storage.buckets.get"] : []),
+        ...(!lifecycleRuleUpdateGranted ? ["storage.buckets.update"] : []),
+      ],
+      note: metadataResponse.ok
+        ? "Core object permissions and bucket metadata were inspected. Lifecycle management is reported separately."
+        : "Bucket metadata/lifecycle inspection is separate from core object access. A missing bucket-level permission must not be confused with PDF object upload/read/delete permissions.",
     });
   } catch (error) {
     checks.failure = safeError(error);
