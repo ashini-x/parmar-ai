@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 6 November 2026 (M11 PR #101 lifecycle diagnostic/supervisor update deployed by Main Release Validation #778; bucket permission and OCR-only cleanup user-verified; actual lifecycle-rule result and real-consumer acceptance remain open)  
+**Last verified against source and production infrastructure:** 6 November 2026 (M11 PR #101 lifecycle diagnostic/supervisor update deployed by Main Release Validation #778; bucket permissions, exact 30-day OCR lifecycle rule and OCR-only cleanup user-verified; Operations walkthrough and real-consumer acceptance remain open)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/askmoina-voice`
 
