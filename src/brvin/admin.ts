@@ -1458,18 +1458,29 @@ $("grant-project-button").addEventListener("click",async()=>{
 $("connect-refresh").addEventListener("click",async()=>{await refresh();});
 $("provider-capability-check").addEventListener("click",async()=>{
  try{
-  $("provider-capability-result").textContent="Checking live provider permissions…";
+  $("provider-capability-result").textContent="Checking live GitHub App permissions, repository coverage and Cloudflare OAuth scopes…";
   const result=await api(API+"connect/capabilities");
   const github=result.github||{},cloudflare=result.cloudflare||{},install=github.installation||{};
   const parts=[];
   if(github.connected){
-   parts.push("GitHub App: "+((github.missingAppPermissions||[]).length?"missing app permissions "+github.missingAppPermissions.join(", "):"app permissions passed")+".");
-   parts.push("GitHub installation: "+(install.repositorySelection==="all"?"all repositories":"not installed for all repositories")+"; missing installation permissions "+((install.missingPermissions||github.missingInstallationPermissions||[]).join(", ")||"none")+".");
+   const missingApp=github.missingAppPermissions||[];
+   const missingInstall=install.missingPermissions||github.missingInstallationPermissions||[];
+   parts.push("GitHub App permissions: "+(missingApp.length?"missing "+missingApp.join(", "):"passed")+".");
+   parts.push("GitHub installation: "+(install.repositorySelection==="all"?"ALL repositories":"selected repositories only")+"; installation permissions "+(missingInstall.length?"missing "+missingInstall.join(", "):"passed")+".");
    if(github.settingsUrl)$("github-app-settings").href=github.settingsUrl;
-  }else parts.push("GitHub: "+(github.error||"not connected")+".");
+   if(install.url)$("github-installation-settings").href=install.url;
+   $("github-access-state").textContent=install.repositorySelection==="all"&&!missingApp.length&&!missingInstall.length
+    ?"Verified: BRVIN App permissions are approved and the installation covers all repositories."
+    :"Action required: open App permissions to approve missing scopes, then set installation repository access to All repositories.";
+  }else{
+   parts.push("GitHub: "+(github.error||"not connected")+".");
+   $("github-access-state").textContent="BRVIN GitHub App permission state could not be verified.";
+  }
   if(cloudflare.connected){
-   parts.push("Cloudflare: "+((cloudflare.missingScopes||[]).length?"missing "+cloudflare.missingScopes.length+" required OAuth scopes":"required OAuth scopes passed")+".");
-   if(cloudflare.missingScopes?.length)parts.push("Missing scope IDs: "+cloudflare.missingScopes.slice(0,12).join(", ")+(cloudflare.missingScopes.length>12?" …":"")+".");
+   const missing=cloudflare.missingScopes||[];
+   parts.push("Cloudflare OAuth: "+(missing.length?"missing "+missing.length+" required scopes":"required scopes passed")+".");
+   if(missing.length)parts.push("Missing scope IDs: "+missing.slice(0,14).join(", ")+(missing.length>14?" …":"")+".");
+   if(!cloudflare.missingScopes?.includes("account_api_tokens:create"))parts.push("Account token-creation OAuth scope is present.");
   }else parts.push("Cloudflare: "+(cloudflare.error||"not authorized")+".");
   $("provider-capability-result").textContent=parts.join(" ");
  }catch(error){$("provider-capability-result").textContent="Provider check failed: "+error.message;}
