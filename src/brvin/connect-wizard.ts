@@ -787,7 +787,7 @@ export async function completeBrvinCloudflareOAuth(env: Env, request: Request): 
     const metadata = JSON.parse(row.metadata_json || "{}") as Record<string, unknown>;
     await saveConnection(env, "cloudflare", "connected", {
       ...metadata, accountId, brvinServiceVisible: true, lastWorkerDiscoveryAt: Date.now(),
-      workerCount: names.length, scope: clean(token.scope, 500), authorizedAt: Date.now(),
+      workerCount: names.length, scope: clean(token.scope, 6000), authorizedAt: Date.now(),
     }, next);
     await audit(env, "cloudflare", "cloudflare.account_authorized", "Cloudflare OAuth access was verified against the account hosting the private brvin-service Worker.", { accountId, workerCount: names.length });
     return callbackHtml("Cloudflare account connected", "BRVIN confirmed the authorised account, full requested Developer Platform scopes, Account API Tokens Write and private brvin-service presence. Return to BRVIN to run the provider capability check.", true);
