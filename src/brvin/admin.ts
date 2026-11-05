@@ -177,8 +177,8 @@ export async function brvinOverview(env: Env): Promise<Response> {
       ).bind(now - 7 * 86_400_000).first<Record<string, number>>(),
     ]);
 
-    const retentionSummaryRow = retentionSummaryResult.results?.[0] ?? null;
-    const eventSummaryRow = eventSummaryResult.results?.[0] ?? null;
+    const retentionSummaryRow = retentionSummaryResult ?? null;
+    const eventSummaryRow = eventSummaryResult ?? null;
 
     const directByBook = new Map<string, Array<{ id: string; name: string }>>();
     for (const row of bookAssignments.results ?? []) {
