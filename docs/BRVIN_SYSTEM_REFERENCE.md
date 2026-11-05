@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 5 November 2026  
+**Last verified against source and production infrastructure:** 5 November 2026 (M7 production release; M8 implementation branch in progress)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/askmoina-voice`
 
@@ -70,7 +70,7 @@ Consumer application's own Gemini/LLM prompt and answer
 
 The two planes share the existing D1 registry and AI Search namespace. They do not create a database or index per app.
 
-## 1.1 BRVIN 2 production state (5 November 2026 — after M6 wizard release)
+## 1.1 BRVIN 2 production state (5 November 2026 — after M7 registry release)
 
 - M1 added `brvin_applications`, `brvin_application_environments` and `brvin_application_project_grants` to the existing shared D1. The Parmar AI production application/environment and explicit Fatman project grant are seeded and active.
 - M2 added `listAuthorizedProjectsV2()`, `getProjectStatusV2(input)` and `retrieveProjectContextV2(input)` to the private `BrvinRetrievalApi` entrypoint. V1 methods remain available.
@@ -422,7 +422,7 @@ The pending change adds non-secret metadata for an existing GitHub repository UR
 
 The additive D1 migration marker is `2026-11-05-brvin-connection-metadata-v1`. Existing application/environment IDs and grants are preserved. Production status must not be claimed until PR checks, merge, release and live D1 read-back have passed.
 
-### 9.4 Remaining admin-experience gap
+### 9.5 Remaining admin-experience gap
 
 The deployed UI has separate application, environment and grant forms. It does not yet provide the final project-centric teacher workspace or a complete Connect Application journey.
 
@@ -463,7 +463,7 @@ The existing BRVIN application-project grant is application-wide, not user-speci
 
 ### 10.3 ChatGPT's role in the one-time integration
 
-ChatGPT remains the user's application engineer. BRVIN's intended wizard registers application metadata and environment identity, then generates a non-secret, repository-specific integration handoff. The user ensures that the repository is available in ChatGPT's own GitHub connection. ChatGPT uses its separately authorized GitHub/Cloudflare tools to modify the consumer repo, test and deploy it.
+ChatGPT remains the user's application engineer. The M8 admin handoff generator creates a non-secret, repository- and environment-specific prompt plus structured manifest from current BRVIN registry values. It supplies the exact private v2 binding identity, connector source location, security rules and test checklist. The user ensures that the repository is available in ChatGPT's own GitHub connection. ChatGPT uses its separately authorized GitHub/Cloudflare tools to modify the consumer repo, test and deploy it. The handoff does not authorize those connections or itself create infrastructure.
 
 BRVIN cannot authorize OpenAI's GitHub connector or guarantee that a newly created private repository is automatically visible to ChatGPT. A repository URL recorded in BRVIN is metadata, not proof of ChatGPT or BRVIN source-control access.
 
@@ -613,3 +613,16 @@ Also update:
 - [Operations Runbook](BRVIN_OPERATIONS_RUNBOOK.md) for admin or operational changes.
 
 The canonical principle: **code and deployed configuration define the implementation; this document explains the current design and where to verify it.** Never use this guide as a reason to skip tests, release manifests, or a targeted check after a material code/infrastructure change.
+
+
+## M8 handoff generator — implementation in progress (5 November 2026)
+
+The implementation branch brvin/m8-chatgpt-integration-handoff adds:
+- src/brvin/handoff.ts: pure manifest/prompt builder plus the read-only D1-backed handoff endpoint;
+- GET /admin/api/brvin/applications/handoff?applicationId=...&environmentId=...: validates UUIDs, requires an active app and environment, verifies the environment belongs to that app, and regenerates from current saved metadata;
+- src/brvin/admin.ts: per-environment Generate ChatGPT handoff control, revision/date display, copyable prompt and JSON manifest;
+- tests for manifest fields, exact v2 binding identity, environment/app scoping, secret exclusion, unsupported runtime and browser-script/route integration.
+
+The generator includes only explicitly allowlisted application, repository, environment, runtime and non-secret BRVIN account metadata. It does not read legacy GitHub App or Cloudflare OAuth vault entries. The target Cloudflare account is not stored in M7, so the handoff records it as unverified and instructs ChatGPT to compare the actual target deployment with the BRVIN account before deploying. Non-Cloudflare runtime providers are blocked for this private same-account binding design.
+
+**Current status:** implementation and unit/UI tests are on the branch; PR validation and production deployment are pending. This does not mark an environment Connected and does not implement M9.
