@@ -150,7 +150,7 @@ describe("BRVIN browser script contract", () => {
     expect(adminSource).toContain('id="application-owner"');
     expect(adminSource).toContain("Knowledge projects");
     expect(adminSource).toContain("Legacy provider settings · not required for the current BRVIN workflow");
-    expect(adminSource).toContain("live private Service Binding verification is a later milestone");
+    expect(adminSource).toContain("Connection status reflects the last environment check");
     expect(script).toContain('legacyClient:false');
     expect(script).toContain('post("applications/update"');
     expect(script).toContain('post("projects/update"');
