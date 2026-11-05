@@ -569,7 +569,7 @@ export async function startBrvinCloudflareOAuth(env: Env, request: Request): Pro
     url.searchParams.set("client_id", bundle.clientId);
     url.searchParams.set("redirect_uri", callbackUrl(request, "cloudflare"));
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", "workers-scripts.read workers-scripts.write offline_access");
+    url.searchParams.set("scope", "workers-scripts.edit offline_access");
     url.searchParams.set("state", state);
     return json({ ok: true, authorizationUrl: url.toString() });
   } catch (error) {
@@ -605,10 +605,10 @@ export async function completeBrvinCloudflareOAuth(env: Env, request: Request): 
     const { row, bundle } = await getCloudflareBundle(env);
     const token = await exchangeCloudflareToken(bundle, { grant_type: "authorization_code", code }, callbackUrl(request, "cloudflare"));
     const grantedScopes = new Set((token.scope || "").split(/\s+/u).filter(Boolean));
-    if (!grantedScopes.has("workers-scripts.read") || !grantedScopes.has("workers-scripts.write") || !token.refresh_token) {
+    if (!grantedScopes.has("workers-scripts.edit") || !token.refresh_token) {
       return callbackHtml(
         "Cloudflare permissions incomplete",
-        "BRVIN requires both Workers Scripts Read and Workers Scripts Write, plus a refresh token. Update the OAuth client so these scopes are required, then authorize again.",
+        "BRVIN requires Workers Editor at the Workers product scope, plus a refresh token. Update the OAuth client so the Workers Editor permission is required, then authorize again.",
         false,
       );
     }
