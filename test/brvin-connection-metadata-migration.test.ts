@@ -53,13 +53,13 @@ describe("BRVIN application connection metadata migration", () => {
     const db = new ConnectionMetadataDb();
     await ensureBrvinConnectionMetadataSchema(db as never);
 
-    expect(db.columns.get("brvin_applications")).toEqual(expect.objectContaining(new Set([
+    expect([...(db.columns.get("brvin_applications") ?? [])]).toEqual(expect.arrayContaining([
       "id", "slug", "name", "description", "owner_label", "status",
       "repository_url", "repository_default_branch", "runtime_provider",
-    ])));
-    expect(db.columns.get("brvin_application_environments")).toEqual(expect.objectContaining(new Set([
+    ]));
+    expect([...(db.columns.get("brvin_application_environments") ?? [])]).toEqual(expect.arrayContaining([
       "id", "application_id", "environment_key", "display_name", "status", "worker_name", "worker_url",
-    ])));
+    ]));
     expect(db.alters).toEqual([
       "brvin_applications.repository_url",
       "brvin_applications.repository_default_branch",
