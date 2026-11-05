@@ -6,7 +6,7 @@
 **Product scope:** [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md)  
 **As-built reference:** [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md)  
 **Planning baseline:** `main`  
-**Status at 6 November 2026:** M0–M9 are complete; M4's fixed reference scaffold was retired and is not a product requirement. M6's teacher-focused admin workspace, M7's application/environment registry, M8's ChatGPT integration handoff and M9's live production connection verification are merged, deployed and accepted. M10 — teacher knowledge assignment and isolation acceptance — is complete and deployed. M11 — operations, usage and administrator handover — is the next active milestone.
+**Status at 6 November 2026:** M0–M10 are complete; M4's fixed reference scaffold was retired and is not a product requirement. M6's teacher-focused admin workspace, M7's application/environment registry, M8's ChatGPT integration handoff and M9's live production connection verification are merged, deployed and accepted. M10 — teacher knowledge assignment and isolation acceptance — is complete and deployed. M11 — operations, usage and administrator handover — is the next active milestone.
 
 > **Scope correction:** The user's confirmed goal is a multi-application, teacher-specific knowledge platform. ChatGPT remains the user's software engineer through its separately authorized GitHub and Cloudflare connections. The previously proposed autonomous BRVIN coding brain, repository factory, broad provider-admin credential vault and BRVIN-owned CI/CD are superseded and are not active BRVIN 2 requirements. See [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md).
 
