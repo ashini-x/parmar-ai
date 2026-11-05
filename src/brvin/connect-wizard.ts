@@ -105,16 +105,6 @@ function fromBase64(value: string): Uint8Array {
   return bytes;
 }
 
-function base64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const value of bytes) binary += String.fromCharCode(value);
-  return btoa(binary);
-}
-
-function encodeText(value: string): string {
-  return base64(new TextEncoder().encode(value));
-}
-
 function ownedBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
@@ -376,13 +366,6 @@ async function getCloudflareBundle(env: Env): Promise<{ row: ConnectionRow; bund
   const bundle = await decryptSecret<CloudflareBundle>(env, row.secret_ciphertext);
   if (!bundle.clientId || !bundle.clientSecret) throw new Error("Cloudflare OAuth client credentials are incomplete.");
   return { row, bundle };
-}
-
-function accountScripts(scripts: Array<Record<string, unknown>>): Array<{ name: string; modifiedOn: string | null }> {
-  return scripts.map(script => ({
-    name: clean(script.id || script.script || script.name, 128),
-    modifiedOn: typeof script.modified_on === "string" ? script.modified_on : null,
-  })).filter(script => script.name).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function brvinConnectStatus(env: Env): Promise<Response> {
