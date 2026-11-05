@@ -240,7 +240,7 @@ describe("BRVIN Connect Application wizard", () => {
     const start = await startBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/start", {}));
     const startBody = await start.json() as { authorizationUrl: string };
     const authorization = new URL(startBody.authorizationUrl);
-    const requestedScopes = authorization.searchParams.get("scope")!.split(/\\s+/u);
+    const requestedScopes = authorization.searchParams.get("scope")!.split(/\s+/u);
     for (const requiredScope of BRVIN_CLOUDFLARE_REQUIRED_SCOPES) expect(requestedScopes).toContain(requiredScope);
     expect(requestedScopes).toContain("workers-scripts.admin");
     expect(requestedScopes).toContain("account-api-tokens.write");
