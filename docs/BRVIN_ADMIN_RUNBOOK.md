@@ -147,6 +147,8 @@ The M11 lifecycle-verification release is now deployed (PR #101 / Main Release V
 
 The scheduled supervisor preserves unrelated bucket rules, refuses unsafe rules that overlap source-PDF paths, and adds only the exact OCR temporary-prefix rule. The read-only diagnostic itself never updates lifecycle configuration, creates or deletes objects, or changes bucket settings.
 
+**Production verification — 6 November 2026:** After deployment, the user ran the protected read-only check and confirmed **Lifecycle configuration permissions: READY** and **30-day OCR lifecycle rule: INSTALLED (age 30 days)**. The live retention-rule acceptance check is complete. The remaining administrator handover walkthrough should still review Operational summary, Live pipelines and Specialist activity; do not repeat or manually modify the lifecycle configuration.
+
 ### Safe cleanup procedure
 
 1. Open the affected source's **Manage** panel and select **Retry Vision OCR cleanup** only after diagnosing/fixing the underlying storage issue.
