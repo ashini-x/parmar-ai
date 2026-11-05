@@ -450,7 +450,7 @@ This closes M9's valid production connection-verification path. Automated M9 tes
 
 The existing v2 private service enforces an active application-project grant before quota reservation or search. Its source resolver then includes only ready, fully indexed books assigned directly or through an active project-collection grant. The source grant lookup is repeated for each request, so a newly ready book added to an already granted collection becomes available without an app deployment, while a revoked app-project grant blocks the next request.
 
-The active M10 branch, `brvin/m10-teacher-isolation-acceptance`, adds:
+The active M10 change is in [PR #99](https://github.com/ashini-x/parmar-ai/pull/99), branch `brvin/m10-teacher-isolation-acceptance`; CI is in progress. It adds:
 - App-card controls to grant an additional active knowledge project and retain the existing revoke action.
 - Project-detail controls to grant an active application, revoke existing app grants and view grant history.
 - Explicit admin copy that app-project grants are application-wide, not teacher-user-specific.
