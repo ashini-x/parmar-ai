@@ -138,7 +138,17 @@ describe("BRVIN browser script contract", () => {
     expect(workerSource).not.toContain("/admin/api/brvin/connect/test-access-token");
     expect(workerSource).not.toContain("/admin/api/brvin/connect/pull-request");
     expect(workerSource).not.toContain("/admin/api/brvin/connect/verify");
-    expect(adminSource).toContain('id="project-application"');
+    expect(adminSource).toContain('id="project-owner"');
+    expect(adminSource).toContain('id="application-owner"');
+    expect(adminSource).toContain("Knowledge projects");
+    expect(adminSource).toContain("Legacy provider settings · not required for the current BRVIN workflow");
+    expect(adminSource).toContain("live private Service Binding verification is a later milestone");
+    expect(script).toContain('legacyClient:false');
+    expect(script).toContain('post("applications/update"');
+    expect(script).toContain('post("projects/update"');
+    expect(script).toContain("function openProjectEditor");
+    expect(script).toContain("function openApplicationEditor");
+    expect(workerSource).toContain('/admin/api/brvin/applications/update');
     expect(workerSource).toContain("/admin/api/brvin/applications/grants/revoke");
   });
 });
