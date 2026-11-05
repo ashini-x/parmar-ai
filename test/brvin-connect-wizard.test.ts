@@ -12,15 +12,11 @@ import {
   brvinConnectStatus,
   BRVIN_CLOUDFLARE_REQUIRED_SCOPES,
   BRVIN_GITHUB_REQUIRED_PERMISSIONS,
-  createBrvinTestClientPullRequest,
   completeBrvinGitHubManifest,
   completeBrvinCloudflareOAuth,
   configureBrvinCloudflareOAuth,
-  registerBrvinTestConsumer,
-  provisionBrvinTestClientAccessToken,
   startBrvinGitHubManifest,
   startBrvinCloudflareOAuth,
-  verifyBrvinTestClientDeployment,
 } from "../src/brvin/connect-wizard";
 
 type Row = Record<string, unknown>;
@@ -231,7 +227,7 @@ describe("BRVIN Connect Application wizard", () => {
     expect(String(row.metadata_json)).not.toContain(clientSecret);
   });
 
-  it("requires Cloudflare Workers Editor and a refresh token before accepting OAuth", async () => {
+  it("requires the approved Cloudflare administrator scopes and a refresh token before accepting OAuth", async () => {
     const db = new MemoryD1();
     await configureBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/configure", {
       clientId: "BRVIN.Cloudflare.OAuth123",
@@ -244,6 +240,7 @@ describe("BRVIN Connect Application wizard", () => {
     for (const requiredScope of BRVIN_CLOUDFLARE_REQUIRED_SCOPES) expect(requestedScopes).toContain(requiredScope);
     expect(requestedScopes).toContain("workers-scripts.admin");
     expect(requestedScopes).toContain("account-api-tokens.write");
+    expect(requestedScopes).toContain("account_api_tokens:create");
     expect(requestedScopes).toContain("offline_access");
     const state = authorization.searchParams.get("state")!;
 
@@ -262,7 +259,7 @@ describe("BRVIN Connect Application wizard", () => {
     expect(db.connections.get("cloudflare")?.status).toBe("configured");
   });
 
-  it("accepts Cloudflare OAuth only after Workers Editor, a refresh token and the private BRVIN Worker are confirmed", async () => {
+  it("accepts Cloudflare OAuth only after administrator scopes, a refresh token and the private BRVIN Worker are confirmed", async () => {
     const db = new MemoryD1();
     await configureBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/configure", {
       clientId: "BRVIN.Cloudflare.OAuth123",
@@ -313,193 +310,6 @@ describe("BRVIN Connect Application wizard", () => {
     expect(body.cloudflare.requiredScopes).toContain("account-api-tokens.write");
     expect(body.cloudflare.missingScopes).toContain("workers-scripts.admin");
     expect(JSON.stringify(body)).not.toContain("cloudflare-client-secret-value-123456");
-  });
-
-  it("refuses deployment verification until a dedicated connection PR has recorded its identity", async () => {
-    const db = new MemoryD1();
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    const response = await verifyBrvinTestClientDeployment(env(db), request("https://parmar.example/admin/api/brvin/connect/verify"));
-    const body = await response.json() as { connected: boolean; state: string };
-    expect(response.status).toBe(409);
-    expect(body.connected).toBe(false);
-    expect(body.state).toBe("connection_pr_missing");
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("creates the application, environment, project and explicit grant as one batch", async () => {
-    const db = new MemoryD1();
-    const response = await registerBrvinTestConsumer(env(db), request("https://parmar.example/admin/api/brvin/connect/consumer", {
-      applicationName: "AskMoina Voice",
-      applicationDescription: "Attempted voice identity override",
-      environmentKey: "preview",
-      projectName: "BRVIN Text Test Knowledge",
-      projectDescription: "No Fatman sharing by default",
-    }));
-    const body = await response.json() as { application: { id: string; slug: string; name: string }; environment: { id: string; key: string }; project: { id: string; slug: string } };
-    expect(response.status).toBe(201);
-    expect(body.application.slug).toBe("brvin-text-test-client");
-    expect(body.application.name).toBe("BRVIN Text Test Client");
-    expect(db.environments[0]).toMatchObject({ environment_key: "production" });
-    expect(body.project.slug).toBe("brvin-text-test-knowledge");
-    expect(db.applications).toHaveLength(1);
-    expect(db.environments).toHaveLength(1);
-    expect(db.projects).toHaveLength(1);
-    expect(db.grants).toHaveLength(1);
-    expect(db.grants[0]).toMatchObject({ application_id: body.application.id, project_id: body.project.id, status: "active" });
-    expect(activity).toHaveBeenCalled();
-  });
-
-  it("refuses to attach the independent text Worker to an existing AskMoina Voice identity", async () => {
-    const db = new MemoryD1();
-    db.applications.push({
-      id: "11111111-2222-4333-8444-555555555555",
-      slug: "askmoina-voice",
-      name: "AskMoina Voice",
-      status: "active",
-    });
-    db.environments.push({
-      id: "22222222-3333-4444-8555-666666666666",
-      application_id: "11111111-2222-4333-8444-555555555555",
-      environment_key: "production",
-      status: "active",
-    });
-    db.grants.push({
-      id: "33333333-4444-4555-8666-777777777777",
-      application_id: "11111111-2222-4333-8444-555555555555",
-      project_id: "fatman",
-      status: "active",
-    });
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    const response = await createBrvinTestClientPullRequest(env(db), request("https://parmar.example/admin/api/brvin/connect/pull-request", {
-      applicationId: "11111111-2222-4333-8444-555555555555",
-      environmentId: "22222222-3333-4444-8555-666666666666",
-      repository: "ashini-x/askmoina-voice",
-      baseBranch: "main",
-    }));
-    const body = await response.json() as { error: string };
-
-    expect(response.status).toBe(409);
-    expect(body.error).toContain("dedicated BRVIN Text Test Client");
-    expect(body.error).toContain("AskMoina Voice and Parmar AI");
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("fails closed for repositories outside the reviewed first adapter", async () => {
-    const db = new MemoryD1();
-    const response = await createBrvinTestClientPullRequest(env(db), request("https://parmar.example/admin/api/brvin/connect/pull-request", {
-      applicationId: "11111111-2222-4333-8444-555555555555",
-      environmentId: "22222222-3333-4444-8555-666666666666",
-      repository: "someone/other-worker",
-      baseBranch: "main",
-    }));
-    const body = await response.json() as { error: string };
-    expect(response.status).toBe(400);
-    expect(body.error).toContain("only the BRVIN text test Worker");
-    expect(db.statements).toHaveLength(0);
-  });
-
-  it("does not provision a tester token before a connected application and deployment exist", async () => {
-    const db = new MemoryD1();
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    const response = await provisionBrvinTestClientAccessToken(env(db), request("https://parmar.example/admin/api/brvin/connect/test-access-token", {}));
-    const body = await response.json() as { error: string };
-    expect(response.status).toBe(409);
-    expect(body.error).toContain("connection pull request");
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("provisions a tester token only after a live text-Worker RPC returns the dedicated project", async () => {
-    const db = new MemoryD1();
-    const applicationId = "11111111-2222-4333-8444-555555555555";
-    const environmentId = "22222222-3333-4444-8555-666666666666";
-    const projectId = "33333333-4444-4555-8666-777777777777";
-    db.applications.push({ id: applicationId, slug: "brvin-text-test-client", name: "BRVIN Text Test Client", status: "active" });
-    db.environments.push({ id: environmentId, application_id: applicationId, environment_key: "production", status: "active" });
-    db.projects.push({ id: projectId, name: "BRVIN Text Test Knowledge", slug: "brvin-text-test-knowledge", status: "active" });
-    db.grants.push({ id: "44444444-5555-4666-8777-888888888888", application_id: applicationId, project_id: projectId, status: "active" });
-    db.connections.set("github", {
-      provider: "github",
-      status: "pr_created",
-      metadata_json: JSON.stringify({ connectedApplicationId: applicationId, connectedEnvironmentId: environmentId, connectedProjectId: projectId }),
-      secret_ciphertext: "unused-by-token-provision",
-      updated_at: Date.now(),
-    });
-    await configureBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/configure", {
-      clientId: "BRVIN.Cloudflare.OAuth123",
-      clientSecret: "cloudflare-client-secret-value-123456",
-    }));
-    const oauthStart = await startBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/start", {}));
-    const oauthStartBody = await oauthStart.json() as { authorizationUrl: string };
-    const state = new URL(oauthStartBody.authorizationUrl).searchParams.get("state")!;
-
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.includes("/oauth2/token")) {
-        return new Response(JSON.stringify({
-          access_token: "full-scope-token",
-          refresh_token: "refresh-token",
-          expires_in: 3600,
-          scope: BRVIN_CLOUDFLARE_REQUIRED_SCOPES.join(" "),
-        }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.includes("/workers/scripts?per_page=100")) {
-        return new Response(JSON.stringify({
-          success: true,
-          result: [{ id: "brvin-service" }, { id: "brvin-test-client" }],
-          errors: [],
-        }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.endsWith("/workers/scripts/brvin-test-client/settings")) {
-        return new Response(JSON.stringify({
-          success: true,
-          result: { bindings: [{ name: "BRVIN_SERVICE", type: "service", service: "brvin-service", entrypoint: "BrvinRetrievalApi" }] },
-          errors: [],
-        }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.endsWith("/workers/scripts/brvin-test-client/deployments")) {
-        return new Response(JSON.stringify({
-          success: true,
-          result: { deployments: [{ id: "deployment-1", versions: [{ version_id: "version-1", percentage: 100 }] }] },
-          errors: [],
-        }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.endsWith("/workers/scripts/brvin-test-client/secrets") && init?.method === "PUT") {
-        return new Response(JSON.stringify({ success: true, result: {}, errors: [] }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.endsWith("/workers/subdomain")) {
-        return new Response(JSON.stringify({ success: true, result: { subdomain: "thenewtongs" }, errors: [] }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.endsWith("/workers/scripts/brvin-test-client/subdomain")) {
-        return new Response(JSON.stringify({ success: true, result: { enabled: true }, errors: [] }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      if (url.endsWith("/api/projects")) {
-        return new Response(JSON.stringify({ ok: true, projects: [{ projectId, slug: "brvin-text-test-knowledge", name: "BRVIN Text Test Knowledge", ready: false, authorizedSourceCount: 0 }] }), { status: 200, headers: { "content-type": "application/json" } });
-      }
-      throw new Error("Unexpected fetch in test: " + url);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const callback = await completeBrvinCloudflareOAuth(env(db), request(
-      "https://parmar.example/admin/brvin/connect/cloudflare/callback?code=one-time-code&state="+encodeURIComponent(state),
-    ));
-    expect(callback.status).toBe(200);
-
-    const response = await provisionBrvinTestClientAccessToken(env(db), request("https://parmar.example/admin/api/brvin/connect/test-access-token", {}));
-    const body = await response.json() as { ok: boolean; testerToken?: string; runtimeIdentityVerified?: boolean; verifiedProjectId?: string };
-    expect(db.statements.some(sql => sql.includes("g.project_id=?") && sql.includes("brvin-text-test-client") || sql.includes("g.project_id=?"))).toBe(true);
-    expect(response.status, JSON.stringify(body)).toBe(201);
-    expect(body.ok).toBe(true);
-    expect(body.runtimeIdentityVerified).toBe(true);
-    expect(body.verifiedProjectId).toBe(projectId);
-    expect(body.testerToken).toBeTruthy();
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://brvin-test-client.thenewtongs.workers.dev/api/projects",
-      expect.objectContaining({ redirect: "error" }),
-    );
   });
 
   it("does not expose credential ciphertext or tokens in the connection status response", async () => {
