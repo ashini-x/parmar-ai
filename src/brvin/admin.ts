@@ -1939,16 +1939,23 @@ async function runStorageDiagnostics(){
   const response=await fetch(API+"diagnostics/storage",{method:"GET",credentials:"same-origin"});
   let data={};try{data=await response.json();}catch{}
   if(!response.ok)throw new Error(data.error||"Storage diagnostic failed (HTTP "+response.status+").");
-  const perms=data.checks?.permissions||{},bucket=data.checks?.bucket||{};
+  const perms=data.checks?.permissions||{},bucket=data.checks?.bucket||{},rule=data.retentionLifecycleRule||{};
   const objectMissing=perms.missingObjectPermissions||[];
   const lifecycleMissing=data.retentionLifecycleMissingPermissions||perms.lifecycleMissingPermissions||[];
+  const lifecycleRuleLabel=rule.status==="installed"
+   ?"INSTALLED (age "+(rule.configuredAgeDays??"≤30")+" days)"
+   :rule.status==="blocked_unsafe_delete_rule"
+    ?"BLOCKED — unsafe existing Delete rule"
+    :rule.status==="missing"?"NOT INSTALLED"
+    :"NOT VERIFIED";
   result.textContent=[
    "Service account: "+(data.serviceAccountEmail||"not configured"),
    "Bucket: "+(data.bucketName||"not configured"),
    "Core object access: "+(data.uploadStartReady?"READY":"BLOCKED"),
    "Missing object permissions: "+(objectMissing.length?objectMissing.join(", "):"none reported"),
    "Bucket metadata inspection: "+(bucket.ok?"available":"not available"),
-   "30-day OCR lifecycle safety net: "+(data.retentionLifecycleReady?"READY":"NOT CONFIGURED"),
+   "30-day OCR lifecycle rule: "+lifecycleRuleLabel,
+   "Lifecycle configuration permissions: "+(data.retentionLifecyclePermissionsReady?"READY":"NOT READY"),
    "Lifecycle permissions still needed: "+(lifecycleMissing.length?lifecycleMissing.join(", "):"none reported"),
    data.note||""
   ].filter(Boolean).join("\\n");
