@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 6 November 2026 (M11 PR #101 lifecycle diagnostic/supervisor update deployed by Main Release Validation #778; bucket permissions, exact 30-day OCR lifecycle rule and OCR-only cleanup user-verified; Operations walkthrough and real-consumer acceptance remain open)  
+**Last verified against source and production infrastructure:** 6 November 2026 (M11 PR #101 lifecycle diagnostic/supervisor update deployed by Main Release Validation #778; bucket permissions and exact 30-day OCR rule live-verified; authenticated Operations walkthrough completed 6 November 2026; real-consumer acceptance remains open)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/askmoina-voice`
 
@@ -81,7 +81,7 @@ The two planes share the existing D1 registry and AI Search namespace. They do n
 - The historical Project Factory provider-administrator preflight and configured-scope correction were deployed through PRs #82, #83 and #88. They are part of the as-built code but are no longer an active product milestone. Do not ask the user to complete broad GitHub/Cloudflare administrator re-consent for the narrowed knowledge-platform goal. Audit any runtime dependencies before simplifying or removing this legacy UI; no credential should be revoked or deleted as a side effect.
 - The existing BRVIN GitHub App is installed on the `ashini-x` account. Its broader Project Factory permission upgrade and All-repository scope were never accepted as requirements for the clarified product. The saved Cloudflare OAuth grant remains `workers-scripts.edit offline_access`; this historical connection is not required to deliver the knowledge-platform workflow through ChatGPT's own integrations. Do not request additional consent or delete/revoke the existing provider configuration until its code/runtime dependencies have been audited.
 - The old fixed text-test application/environment are revoked, its project is inactive, its only application-project grant is revoked, and stale PR #385 metadata has been cleared from the GitHub provider connection. PR #385 was closed without merging; PR #386 removed the undeployed scaffold. The sample Rain Gardens PDF remains ready but unassigned.
-- The old provider-admin/test-client sequence above is superseded. Do not create the retired `brvin-test-client`, provision its token/secret, or reauthorize provider scopes for that purpose. M6 teacher-focused admin workspace, M7 application/repository/runtime registration, M8 ChatGPT integration handoff, M9 live v2 connection verification and M10 teacher knowledge assignment/isolation are complete. M11's initial Operations increment is deployed. The user completed bucket-scoped IAM remediation and the Rain Gardens OCR-only cleanup flow; event #854 is completed and D1 confirms READY 3/3 with the source PDF/index retained. The event details show zero object versions found/deleted. The exact lifecycle-rule installation still needs direct post-deployment verification; full admin walkthrough and genuine teacher-app retrieval/revocation acceptance remain open.
+- The old provider-admin/test-client sequence above is superseded. Do not create the retired `brvin-test-client`, provision its token/secret, or reauthorize provider scopes for that purpose. M6 teacher-focused admin workspace, M7 application/repository/runtime registration, M8 ChatGPT integration handoff, M9 live v2 connection verification and M10 teacher knowledge assignment/isolation are complete. M11's initial Operations increment is deployed. The user completed bucket-scoped IAM remediation and the Rain Gardens OCR-only cleanup flow; event #854 is completed and D1 confirms READY 3/3 with the source PDF/index retained. The event details show zero object versions found/deleted. The user also verified lifecycle configuration permissions READY and the exact 30-day OCR rule INSTALLED. The authenticated Operations walkthrough completed on 6 November 2026; only genuine teacher-app retrieval/revocation acceptance remains open.
 ## 2. Architecture decisions that must remain stable
 
 1. **One shared registry:** use the existing BRVIN tables in the shared D1 database. Do not create one D1 database per project or consumer app.
@@ -476,7 +476,7 @@ M10 shipped through [PR #99](https://github.com/ashini-x/parmar-ai/pull/99), squ
 
 **Next milestone:** M11 — operations, usage and quota visibility, connection/ingestion recovery, audit and administrator handover.
 
-### 9.7 M11 operations, usage and administrator handover — initial increment deployed; acceptance open
+### 9.7 M11 operations, usage and administrator handover — operations walkthrough complete; real-consumer acceptance open
 
 M11's initial implementation shipped in [PR #100](https://github.com/ashini-x/parmar-ai/pull/100), squash-merged as `f7801a558d2a0dae82a449a2ebf0196e24da3fee`. PR Release Validation [#764](https://github.com/ashini-x/parmar-ai/actions/runs/42104068272) passed TypeScript, unit tests, Node/browser-script tests and both Worker bundle dry-runs. Main Release Validation [#768](https://github.com/ashini-x/parmar-ai/actions/runs/42104739449) deployed both Workers; root/health/private BRVIN/Fatman smoke and release acceptance passed; artifact `13450708616`.
 
@@ -494,13 +494,11 @@ Production versions: `brvin-service` deployment `10fdd281-5f71-4261-b2da-adf5683
 
 **Read-only D1 verification:** (`rows_written=0`) confirmed existing AskMoina Voice → Fatman and Parmar AI → Fatman grants unchanged, the historical test grant still revoked, and Parmar AI Production's M9 connection record still `connected`, `ready=1`, one authorised source and proof hash present. Production counts remain 3 applications, 2 projects, 3 grant records and 1 connection check. No D1 migration, test tenant, app/project/grant, secret or binding was added or changed.
 
-**Remaining M11 acceptance gates:**
-1. A Google Cloud administrator must apply the bucket-scoped object/lifecycle permissions in the runbook.
-2. An authenticated administrator must run the read-only diagnostic and verify the lifecycle safety net; after IAM repair, retry OCR-only cleanup and confirm `source.vision_ocr_deleted` while the PDF, indexed pages and READY/archived state remain available.
-3. Perform an authenticated visual walkthrough of the Operations view and administrator runbook.
-4. Complete a real teacher-focused consumer application acceptance: register a distinct app, connect it through the ChatGPT handoff, grant a real teacher project/source, verify retrieval, then revoke and verify denial. No synthetic production teacher or grant has been created.
+**Authenticated Operations walkthrough — 6 November 2026:** The administrator reviewed Operational summary, Live pipelines and Specialist activity. The dashboard showed 33 project searches this month, 0 active-environment connection failures, 404 failed events in the last seven days, 0 OCR cleanup failures and no attention required. Source inspection confirms the failed-events card is a seven-day count of activity rows with status `failed`; it is not an HTTP 404 code or a count of currently recoverable failures. Live pipelines reported no active processing or deletion jobs. The failure filter showed repeated older 5 November `storage.buckets.get` permission failures. The latest storage-retention records showed an OCR-only deletion request at 3:36:38 AM and a completed retention event at 3:36:44 AM on 6 November. The original PDF and indexed pages remain available; event details report `objectVersionsFound=0` and `objectVersionsDeleted=0`, so this event does not establish that any object bytes were deleted. No retry or delete control was used during the walkthrough.
 
-M11 remains IN PROGRESS until these items have verifiable outcomes. No commercial or end-to-end readiness claim is made.
+**Remaining M11 acceptance gate:** Complete a real teacher-focused consumer application acceptance: register a distinct app, connect it through the ChatGPT handoff, use a real teacher project/source, verify useful retrieval, revoke the grant and verify denial. No synthetic production teacher or grant has been created.
+
+M11 remains IN PROGRESS until the real-consumer test has verifiable outcomes. No commercial or end-to-end readiness claim is made.
  
 ## 10. Consumer application integration
 
