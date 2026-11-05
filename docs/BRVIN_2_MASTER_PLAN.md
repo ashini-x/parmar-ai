@@ -36,8 +36,6 @@ AskMoina Voice, Parmar/Fatman and future Telegram/web applications are separate 
 
 ## 2. Approved target architecture
 
-## 2. Approved target architecture
-
 ### 2.1 Core relationship
 
 The current project-bound client model must evolve into an application-bound identity with explicit project permissions.
