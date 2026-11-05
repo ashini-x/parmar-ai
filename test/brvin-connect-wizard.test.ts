@@ -224,7 +224,7 @@ describe("BRVIN Connect Application wizard", () => {
     expect(String(row.metadata_json)).not.toContain(clientSecret);
   });
 
-  it("requires both Cloudflare Workers Scripts scopes and a refresh token before accepting OAuth", async () => {
+  it("requires Cloudflare Workers Editor and a refresh token before accepting OAuth", async () => {
     const db = new MemoryD1();
     await configureBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/configure", {
       clientId: "BRVIN.Cloudflare.OAuth123",
@@ -233,13 +233,15 @@ describe("BRVIN Connect Application wizard", () => {
     const start = await startBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/start", {}));
     const startBody = await start.json() as { authorizationUrl: string };
     const authorization = new URL(startBody.authorizationUrl);
-    expect(authorization.searchParams.get("scope")).toContain("workers-scripts.read");
-    expect(authorization.searchParams.get("scope")).toContain("workers-scripts.write");
+    expect(authorization.searchParams.get("scope")).toContain("workers-scripts.edit");
+    expect(authorization.searchParams.get("scope")).toContain("offline_access");
+    expect(authorization.searchParams.get("scope")).not.toContain("workers-scripts.read");
+    expect(authorization.searchParams.get("scope")).not.toContain("workers-scripts.write");
     const state = authorization.searchParams.get("state")!;
 
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       access_token: "read-only-token",
-      scope: "workers-scripts.read",
+      scope: "workers-scripts.content_read",
     }), { status: 200, headers: { "content-type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -252,7 +254,7 @@ describe("BRVIN Connect Application wizard", () => {
     expect(db.connections.get("cloudflare")?.status).toBe("configured");
   });
 
-  it("accepts Cloudflare OAuth only after both scopes, a refresh token and the private BRVIN Worker are confirmed", async () => {
+  it("accepts Cloudflare OAuth only after Workers Editor, a refresh token and the private BRVIN Worker are confirmed", async () => {
     const db = new MemoryD1();
     await configureBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/configure", {
       clientId: "BRVIN.Cloudflare.OAuth123",
@@ -266,7 +268,7 @@ describe("BRVIN Connect Application wizard", () => {
         access_token: "full-scope-token",
         refresh_token: "refresh-token",
         expires_in: 900,
-        scope: "workers-scripts.read workers-scripts.write offline_access",
+        scope: "workers-scripts.edit offline_access",
       }), { status: 200, headers: { "content-type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         success: true,
@@ -413,7 +415,7 @@ describe("BRVIN Connect Application wizard", () => {
           access_token: "full-scope-token",
           refresh_token: "refresh-token",
           expires_in: 3600,
-          scope: "workers-scripts.read workers-scripts.write offline_access",
+          scope: "workers-scripts.edit offline_access",
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
       if (url.includes("/workers/scripts?per_page=100")) {
