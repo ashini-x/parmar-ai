@@ -988,37 +988,39 @@ export async function revokeBrvinApplicationProject(env: Env, request: Request):
 
 export async function updateBrvinProject(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { projectId?: unknown; name?: unknown; description?: unknown; status?: unknown };
+  let body: { projectId?: unknown; name?: unknown; description?: unknown; ownerLabel?: unknown; status?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project details." }, 400); }
   const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
   const status = body.status === undefined ? undefined : body.status;
   const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = body.description === undefined ? undefined : typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  const ownerLabel = body.ownerLabel === undefined ? undefined : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
   if (!projectId || projectId.length > 128 || projectId !== body.projectId ||
       (status !== undefined && !["active", "inactive"].includes(String(status))) ||
-      (name !== undefined && (!name || !slugify(name)))) {
+      (name !== undefined && (!name || !slugify(name))) || ownerLabel === null) {
     return json({ ok: false, error: "Enter a valid project name and status." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
     const current = await env.DB.prepare(
-      "SELECT id,name,description,status FROM brvin_projects WHERE id=?"
-    ).bind(projectId).first<{ id: string; name: string; description: string; status: string }>();
+      "SELECT id,name,description,owner_label,status FROM brvin_projects WHERE id=?"
+    ).bind(projectId).first<{ id: string; name: string; description: string; owner_label: string; status: string }>();
     if (!current) return json({ ok: false, error: "Project not found." }, 404);
     const nextName = name ?? current.name;
     const nextDescription = description ?? current.description;
+    const nextOwnerLabel = ownerLabel ?? current.owner_label ?? "";
     const nextStatus = String(status ?? current.status);
     const now = Date.now();
     await env.DB.prepare(
-      "UPDATE brvin_projects SET name=?,description=?,status=?,updated_at=? WHERE id=?"
-    ).bind(nextName, nextDescription, nextStatus, now, projectId).run();
+      "UPDATE brvin_projects SET name=?,description=?,owner_label=?,status=?,updated_at=? WHERE id=?"
+    ).bind(nextName, nextDescription, nextOwnerLabel, nextStatus, now, projectId).run();
     await recordBrvinActivity(env, {
       projectId, agent: "BRVIN access control", phase: "governance",
       eventType: "project.updated", status: "completed",
       message: "Project details or activation status were updated.",
-      details: { previousStatus: current.status, status: nextStatus },
+      details: { previousStatus: current.status, status: nextStatus, ownerLabel: nextOwnerLabel },
     });
-    return json({ ok: true, project: { id: projectId, name: nextName, description: nextDescription, status: nextStatus } });
+    return json({ ok: true, project: { id: projectId, name: nextName, description: nextDescription, ownerLabel: nextOwnerLabel, status: nextStatus } });
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
