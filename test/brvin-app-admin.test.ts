@@ -57,6 +57,9 @@ class MemoryD1 {
     if (sql.includes("FROM brvin_applications WHERE id=?")) {
       return this.applications.find(row => row.id === values[0]) ?? null;
     }
+    if (sql.includes("FROM brvin_application_environments WHERE id=? AND application_id=?")) {
+      return this.environments.find(row => row.id === values[0] && row.application_id === values[1]) ?? null;
+    }
     if (sql.includes("FROM brvin_application_environments WHERE id=?")) {
       return this.environments.find(row => row.id === values[0]) ?? null;
     }
