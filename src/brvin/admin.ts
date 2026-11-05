@@ -1738,10 +1738,12 @@ function renderApplications(list){
   }).join(""):'<div class="empty">No deployment environments registered.</div>';
   const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
   const activeGrantProjectIds=new Set(app.projects.filter(grant=>grant.status==="active").map(grant=>grant.projectId));
-  const grantableProjects=(model?.projects||[]).filter(project=>project.status==="active"&&!activeGrantProjectIds.has(project.id));
-  const inlineGrantHtml=grantableProjects.length
-   ?'<div data-app-grant-controls="'+esc(app.id)+'" class="formgrid"><div class="field"><label>Grant another knowledge project</label><select data-app-grant-select>'+grantableProjects.map(project=>'<option value="'+esc(project.id)+'">'+esc(project.name)+' · '+esc(project.ownerLabel||"No owner")+'</option>').join("")+'</select></div><div class="field" style="justify-content:flex-end"><button class="btn" data-app-grant="'+esc(app.id)+'" type="button">Grant selected project</button></div></div>'
-   :'<div class="notice">No additional active knowledge projects are available to grant.</div>';
+  const grantableProjects=app.status==="active"?(model?.projects||[]).filter(project=>project.status==="active"&&!activeGrantProjectIds.has(project.id)):[];
+  const inlineGrantHtml=app.status!=="active"
+   ?'<div class="notice">Only an active application can receive additional project grants.</div>'
+   :grantableProjects.length
+    ?'<div data-app-grant-controls="'+esc(app.id)+'" class="formgrid"><div class="field"><label>Grant another knowledge project</label><select data-app-grant-select>'+grantableProjects.map(project=>'<option value="'+esc(project.id)+'">'+esc(project.name)+' · '+esc(project.ownerLabel||"No owner")+'</option>').join("")+'</select></div><div class="field" style="justify-content:flex-end"><button class="btn" data-app-grant="'+esc(app.id)+'" type="button">Grant selected project</button></div></div>'
+    :'<div class="notice">No additional active knowledge projects are available to grant.</div>';
   return '<article class="tile">'+
    '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>'+esc(app.name)+'</strong><p><small>'+esc(app.ownerLabel||"Owner not assigned")+' · '+esc(app.slug)+'</small></p></div>'+statusPill(app.status)+'</div>'+
    '<p>'+esc(app.description||"No description")+'</p>'+
