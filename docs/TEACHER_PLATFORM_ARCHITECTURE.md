@@ -2,22 +2,22 @@
 
 **Status:** Architecture direction selected; implementation has not started  
 **Decision date:** 6 November 2026  
-**Planning location:** \`ashini-x/parmar-ai/docs\`  
-**Proposed implementation repository:** \`ashini-x/teacher-platform\` (working name; repository not yet created)  
+**Planning location:** `ashini-x/parmar-ai/docs`  
+**Proposed implementation repository:** `ashini-x/teacher-platform` (working name; repository not yet created)  
 **Relationship to BRVIN:** Downstream consumer platform; not a BRVIN subsystem or BRVIN milestone
 
 > This document records the selected direction for the next product build. It is a forward-looking architecture and build plan, not a description of deployed capabilities. Do not infer that the proposed repository, Workers, schemas, channels or features already exist.
 
 ## 1. Executive decision
 
-Build a **managed, multi-tenant teacher application platform** in a new repository, provisionally named \`teacher-platform\`.
+Build a **managed, multi-tenant teacher application platform** in a new repository, provisionally named `teacher-platform`.
 
 The platform will let the operator build and operate teacher-specific AI experiences across channels such as Telegram, WhatsApp, websites, mobile applications and Telegram Mini Apps. Teachers provide their approved knowledge, teaching methods, product requirements and branding. The platform supplies the shared runtime, AI orchestration, channel adapters, feature modules, student/session handling, observability and cost controls.
 
 The architecture decisions are:
 
-1. **Keep the existing \`ashini-x/parmar-ai\` repository and its production behavior intact.** It currently contains a Telegram-first SSC application as well as BRVIN administration/ingestion responsibilities. It is not an empty generic platform skeleton. Do not turn it into the new monorepo by broad refactor.
-2. **Create a separate implementation repository** for the downstream teacher platform when implementation is authorized. The proposed name is \`ashini-x/teacher-platform\`; the name can change without changing the architecture.
+1. **Keep the existing `ashini-x/parmar-ai` repository and its production behavior intact.** It currently contains a Telegram-first SSC application as well as BRVIN administration/ingestion responsibilities. It is not an empty generic platform skeleton. Do not turn it into the new monorepo by broad refactor.
+2. **Create a separate implementation repository** for the downstream teacher platform when implementation is authorized. The proposed name is `ashini-x/teacher-platform`; the name can change without changing the architecture.
 3. **Use one shared codebase with tenant-aware configuration and reusable feature modules.** Do not create a copied codebase, branch, Worker or database for every teacher by default.
 4. **Separate logical modules from deployed infrastructure.** The codebase must allow independent deployment boundaries, but the first release should use the fewest runtime services that meet the pilot's security and reliability requirements.
 5. **Start with one runtime Worker and one application-runtime D1 database**, plus Durable Objects for stateful coordination where justified. Split Workers or shard databases only when isolation requirements, measured workload, provider boundaries or operational needs justify it.
@@ -53,7 +53,7 @@ These are recommended defaults, not claims that every teacher has already agreed
 
 Default to Level 1. Build a Level 2 feature when it is reusable or has a clear product owner and acceptance test. Use Level 3 only when the requirement cannot reasonably be represented by configuration or a module, or when ownership, compliance, security or release independence requires a separate product.
 
-Do not create \`teachers/teacher-a\` and \`teachers/teacher-b\` code copies. A tenant is primarily a data/configuration identity, not a directory of duplicated source code.
+Do not create `teachers/teacher-a` and `teachers/teacher-b` code copies. A tenant is primarily a data/configuration identity, not a directory of duplicated source code.
 
 ### 2.3 Dedicated identity does not require dedicated infrastructure
 
@@ -67,10 +67,10 @@ A genuinely independent customer-owned application can be a separate deployment 
 
 ### 3.1 Existing production boundary
 
-The current BRVIN system remains in \`ashini-x/parmar-ai\`:
+The current BRVIN system remains in `ashini-x/parmar-ai`:
 
-- \`parmar-ai\` continues to own the protected BRVIN admin/ingestion plane and its existing Parmar AI application responsibilities.
-- \`brvin-service\` remains the private retrieval Worker.
+- `parmar-ai` continues to own the protected BRVIN admin/ingestion plane and its existing Parmar AI application responsibilities.
+- `brvin-service` remains the private retrieval Worker.
 - Existing BRVIN D1, AI Search, GCS, OCR, source grants, project grants, quotas, activity, connection verification and retention behavior remain under BRVIN ownership.
 - Existing Fatman and AskMoina data, identity, deployment and production behavior must not be changed as a side effect of building the new platform.
 
@@ -80,15 +80,15 @@ The new teacher platform is an **independent consumer** of BRVIN. It is not a ne
 
 New platform retrieval uses the existing private same-account Service Binding and frozen v2 contract:
 
-- Binding: \`BRVIN_SERVICE\`
-- Service: \`brvin-service\`
-- Entrypoint: \`BrvinRetrievalApi\`
-- Trusted identity: deployment-controlled \`props.applicationEnvironmentId\`
-- Methods: \`listAuthorizedProjectsV2()\`, \`getProjectStatusV2({ projectId })\`, \`retrieveProjectContextV2(input)\`
+- Binding: `BRVIN_SERVICE`
+- Service: `brvin-service`
+- Entrypoint: `BrvinRetrievalApi`
+- Trusted identity: deployment-controlled `props.applicationEnvironmentId`
+- Methods: `listAuthorizedProjectsV2()`, `getProjectStatusV2({ projectId })`, `retrieveProjectContextV2(input)`
 
 Use a separate registered BRVIN application/environment identity for the platform's deployed environments. Do not invent or hardcode an environment UUID. Obtain it from the BRVIN admin registration and generated integration handoff.
 
-The application must authenticate its own students and maintain a server-side mapping from authenticated user/tenant context to the BRVIN project(s) that user may access. BRVIN app-project grants are application-wide, not individual-student grants. A \`projectId\` is a selector checked by BRVIN, not a credential.
+The application must authenticate its own students and maintain a server-side mapping from authenticated user/tenant context to the BRVIN project(s) that user may access. BRVIN app-project grants are application-wide, not individual-student grants. A `projectId` is a selector checked by BRVIN, not a credential.
 
 Every retrieval request must:
 1. Resolve the authenticated student and tenant from trusted server-side identity.
@@ -150,9 +150,9 @@ teacher-platform/
 └── wrangler.jsonc
 ~~~
 
-This is a logical organization, not a requirement to deploy each directory as a separate Worker. The first deployable runtime is \`apps/runtime-worker\`. Frontends can be static deployments. Shared packages contain business logic and contracts, not hidden network services.
+This is a logical organization, not a requirement to deploy each directory as a separate Worker. The first deployable runtime is `apps/runtime-worker`. Frontends can be static deployments. Shared packages contain business logic and contracts, not hidden network services.
 
-A custom teacher feature should enter through a declared module interface and capability configuration. Do not place teacher-specific product logic as scattered \`if (teacherId === ...)\` statements in the shared engine.
+A custom teacher feature should enter through a declared module interface and capability configuration. Do not place teacher-specific product logic as scattered `if (teacherId === ...)` statements in the shared engine.
 
 ## 5. Worker and channel deployment strategy
 
@@ -203,12 +203,12 @@ A tenant count alone is not a reason to split Workers.
 **Websites and mobile applications**
 - Expose authenticated server API contracts, not direct BRVIN RPC.
 - Use a proper user/session or scoped API credential model.
-- A teacher slug, \`X-Teacher-ID\` header, origin or query-string value is a routing hint at most, never authorization.
+- A teacher slug, `X-Teacher-ID` header, origin or query-string value is a routing hint at most, never authorization.
 - Support streaming (for example SSE) when it improves progressive answer delivery and works with the chosen hosting/client contract. Do not claim a fixed latency saving without measurement.
 
 **Telegram Mini Apps**
 - Treat the Mini App as an authenticated web client of the platform API.
-- Validate Telegram launch \`initData\` on the server, including its signature and freshness, before deriving the user identity.
+- Validate Telegram launch `initData` on the server, including its signature and freshness, before deriving the user identity.
 - Never trust a teacher ID or user ID supplied only through URL parameters or browser state.
 - Share session and quiz state through the authenticated backend/DO flow, not ordinary Worker instance memory.
 
@@ -231,13 +231,13 @@ interface TenantRequestContext {
 
 This is an illustrative domain contract; final TypeScript names and validation schemas are selected during implementation.
 
-Do not accept \`tenantId\`, \`teacherId\`, \`applicationEnvironmentId\`, user entitlement or BRVIN project permission from untrusted request bodies. Resolve identity using verified provider credentials/session and server-side records. Bind the resulting tenant context to the rest of the request lifecycle.
+Do not accept `tenantId`, `teacherId`, `applicationEnvironmentId`, user entitlement or BRVIN project permission from untrusted request bodies. Resolve identity using verified provider credentials/session and server-side records. Bind the resulting tenant context to the rest of the request lifecycle.
 
 ### 6.2 Tenant-scoped data access
 
-Application-runtime records that belong to a tenant must include tenant ownership in their keys, relationships and query boundaries. Use composite uniqueness and indexes such as \`(tenant_id, external_user_id, channel_id)\` where that matches the access pattern.
+Application-runtime records that belong to a tenant must include tenant ownership in their keys, relationships and query boundaries. Use composite uniqueness and indexes such as `(tenant_id, external_user_id, channel_id)` where that matches the access pattern.
 
-A SQL \`WHERE tenant_id = ?\` predicate is necessary but is not, by itself, a complete security guarantee. Enforce authorization in a small number of trusted repository/service boundaries, validate parent-child ownership, reject cross-tenant identifiers, and test every access path.
+A SQL `WHERE tenant_id = ?` predicate is necessary but is not, by itself, a complete security guarantee. Enforce authorization in a small number of trusted repository/service boundaries, validate parent-child ownership, reject cross-tenant identifiers, and test every access path.
 
 Never allow the browser or model to select an arbitrary tenant or BRVIN project.
 
@@ -271,7 +271,7 @@ At minimum, automated tests must prove:
 
 ### 7.1 D1
 
-Use one application-runtime D1 database initially, separate from BRVIN's existing \`parmar-ai-admin-prod\` database.
+Use one application-runtime D1 database initially, separate from BRVIN's existing `parmar-ai-admin-prod` database.
 
 The runtime database owns only consumer-application data, such as:
 
@@ -321,7 +321,7 @@ Before enabling multiple live bots, implement and review a dedicated credential 
 
 This is a consumer-platform credential store for the specific channels it operates. It does not authorize creating a broad BRVIN-owned provider-token vault or exposing provider administrator credentials through BRVIN.
 
-The selected encryption/key-management implementation must be validated against current Cloudflare capabilities and the actual threat model during the security design phase. Do not assume a generic \`credentials JSON\` column is secure.
+The selected encryption/key-management implementation must be validated against current Cloudflare capabilities and the actual threat model during the security design phase. Do not assume a generic `credentials JSON` column is secure.
 
 ## 9. Channel-neutral AI execution
 
@@ -480,12 +480,12 @@ No production teacher should be enabled until the applicable checks pass:
 
 ## 14. Explicit non-goals and prohibited shortcuts
 
-- Do not refactor the live \`parmar-ai\` repository into the new platform as the first step.
+- Do not refactor the live `parmar-ai` repository into the new platform as the first step.
 - Do not create one repository, branch, Worker or D1 database for each teacher by default.
 - Do not force all future components into one Worker if an actual security/release/scaling boundary justifies a split.
 - Do not treat one shared Worker as shared in-memory session state.
-- Do not trust \`X-Teacher-ID\`, URL parameters, a bot username or a browser-supplied project ID as authorization.
-- Do not store raw provider tokens in plaintext D1 columns or generic \`credentials JSON\`.
+- Do not trust `X-Teacher-ID`, URL parameters, a bot username or a browser-supplied project ID as authorization.
+- Do not store raw provider tokens in plaintext D1 columns or generic `credentials JSON`.
 - Do not claim that a tenant filter alone guarantees isolation.
 - Do not duplicate BRVIN source files, OCR, retrieval indexes or grants in the consumer platform.
 - Do not call BRVIN's private Worker through a public URL.
@@ -508,4 +508,4 @@ This architecture is subordinate to the actual BRVIN contract for knowledge acce
 
 When implementation starts, create and maintain the new repository's own README, architecture decision records, runtime data model, threat model, integration contract, operator runbook and release process. Keep this document as the architecture handoff until the new repository has its own canonical source of truth.
 
-**Continuation instruction:** Build the teacher platform as a separate, managed, multi-tenant consumer application. Preserve \`parmar-ai\` and BRVIN production. Start with one real pilot teacher, one approved BRVIN project and one channel. Use configuration for ordinary teacher differences, reusable modules for repeatable features, and bespoke deployments only when justified. Do not create infrastructure for hypothetical scale; measure the first real workflow and evolve from evidence.
+**Continuation instruction:** Build the teacher platform as a separate, managed, multi-tenant consumer application. Preserve `parmar-ai` and BRVIN production. Start with one real pilot teacher, one approved BRVIN project and one channel. Use configuration for ordinary teacher differences, reusable modules for repeatable features, and bespoke deployments only when justified. Do not create infrastructure for hypothetical scale; measure the first real workflow and evolve from evidence.
