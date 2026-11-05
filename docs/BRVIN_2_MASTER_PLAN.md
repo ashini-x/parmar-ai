@@ -1,32 +1,40 @@
-# BRVIN — Master Architecture, Implementation Plan and Continuity Tracker
+# BRVIN 2 — Multi-application Knowledge Platform and Admin Connection Manager
 
-**Document type:** Canonical project handover and implementation tracker  
-**Project:** BRVIN — Autonomous Software Project Factory and Application-aware Knowledge Platform  
+**Document type:** Canonical BRVIN 2 architecture, implementation plan and chat-continuity tracker  
+**Project:** BRVIN — Teacher Digital-Brain Knowledge Platform  
 **Owning repository:** `ashini-x/parmar-ai`  
-**Historical reference-test-client repository:** `ashini-x/askmoina-voice` (the scaffold is not the Project Factory target; do not deploy it for the new PDF-chat proof app)
-**Created:** 4 November 2026  
-**Planning baseline:** `main` at the current BRVIN 2 implementation baseline
-**Overall implementation status (5 November 2026):** M0–M5 are complete and merged. The original M6 Connect Application wizard (PR #75) is implemented and production-deployed, but its fixed text-client path has now been retired. M6's first administrator-preflight slice is merged and production-deployed (PRs #82 and #83); the full credential lifecycle is not yet complete. The old text-client PR #385 was closed without merging; the isolated scaffold was removed from askmoina-voice by PR #386. The first incomplete milestone remains M6: obtain one-time GitHub/Cloudflare provider consent, then implement automated project-scoped token creation and secret delivery. The first software proof app will be generated independently by the Project Factory.
+**Product scope:** [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md)  
+**As-built reference:** [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md)  
+**Planning baseline:** `main`  
+**Status at 5 November 2026:** M0–M3 are complete; M4's reference scaffold was retired and is not a product requirement; M5's core application/project administration is deployed. The first remaining product milestone is M6 — Admin workspace aligned to teacher knowledge operations. The full final plan is M6–M11 in the product-scope document.
 
-> **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
+> **Scope correction:** The user's confirmed goal is a multi-application, teacher-specific knowledge platform. ChatGPT remains the user's software engineer through its separately authorized GitHub and Cloudflare connections. The previously proposed autonomous BRVIN coding brain, repository factory, broad provider-admin credential vault and BRVIN-owned CI/CD are superseded and are not active BRVIN 2 requirements. See [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md).
+
+> **New-chat rule:** Read this file first, then the product-scope/final-milestones document, system reference, architecture decisions and RPC v2 contract. Inspect the latest GitHub/production evidence and resume at the first incomplete milestone. Do not ask the user to repeat the product goal.
 
 ---
 
 ## 1. Project vision
 
-BRVIN is both a shared, application-aware knowledge platform and the user's autonomous technical administrator and engineering brain across GitHub and Cloudflare.
+BRVIN is a shared, application-aware knowledge platform for creating, managing and securely serving teacher-specific digital brains.
 
-The user provides an idea, outcome or instruction. BRVIN independently determines the engineering steps, provider resources, credentials, secrets, workflows, tests and deployment operations required to make that outcome work. It executes routine work end to end, validates external state and live behavior, repairs failures within policy and reports the result in its dashboard. The user intends to authorise administrator-level provider authority so routine technical administration is not repeatedly handed back to them.
+A teacher's digital brain may contain PDFs, shortcuts, formulas, personal teaching methods, notes and other approved learning material. BRVIN centralizes upload, storage, OCR, indexing, collections, readiness, project permissions, retrieval, quotas and audit. Independent applications—such as Telegram bots, websites, APIs or assistants—connect once to BRVIN and retrieve only the knowledge projects explicitly granted to them.
 
-BRVIN must turn a plain-language software idea into a working, independently maintained application: plan its architecture, create its GitHub repository, write code, provision Cloudflare infrastructure, configure credentials and deployment, test, repair, release and verify the result.
+The administrator's primary jobs are:
+1. Create and maintain a knowledge project for each teacher or use case.
+2. Upload and organize the teacher's material.
+3. Register an application and its repository/runtime reference.
+4. complete its one-time server-side BRVIN integration using ChatGPT and the user's connected engineering tools;
+5. Verify the deployed application-to-BRVIN connection.
+6. Assign or revoke knowledge-project access in the admin panel.
 
-The platform continues to provide shared, application-aware knowledge services. Applications connect once through a trusted environment identity and explicit application-project grants. They can then use independent knowledge projects, upload PDFs, organise collections, assign access, test retrieval and activate projects without a new application deployment for each knowledge project.
+**ChatGPT remains the developer.** It plans, writes, tests, commits, merges and deploys the independent application through the user's own connected GitHub and Cloudflare tools. BRVIN does not need a separate LLM brain or autonomous software Project Factory.
 
-> Describe what you want to build. BRVIN creates and operates the software and infrastructure. Connect an application to BRVIN knowledge once; thereafter create additional knowledge projects without recurring code changes, token copying, Wrangler edits or application deployments.
+The central BRVIN ingestion and retrieval system must be reused. A new teacher knowledge project is a data/permission workspace, not a new GitHub repository, Worker, D1 database, AI Search instance or OCR pipeline. A new application is independently built and maintained outside BRVIN, then registered and connected to the shared knowledge platform.
 
-This extends BRVIN's existing architecture; it does not rebuild the existing PDF/OCR/AI Search pipeline. Preserve the central ingestion and retrieval platform. Create a separate GitHub repository for each independent software application, not for each knowledge workspace.
+AskMoina Voice, Parmar/Fatman and future Telegram/web applications are separate consumers. Do not force unrelated applications into one repository or make AskMoina Voice a required BRVIN test harness.
 
-AskMoina Voice is optional and is not a dependency for completing BRVIN 2. The brvin-test-client scaffold in ashini-x/askmoina-voice is a historical reference/test harness, not the target Project Factory architecture. The existing AskMoina Voice production runtime, Gemini Live sessions, camera, audio and conversation state must remain untouched by BRVIN Project Factory work.
+## 2. Approved target architecture
 
 ## 2. Approved target architecture
 
@@ -205,341 +213,117 @@ The detailed existing references are:
 
 Read them alongside this master plan. The master plan covers the future implementation and progress; the System Reference describes the audited as-built baseline.
 
-## 4. Target administrator and project-factory experience
+## 4. Target administrator experience
 
-### 4.1 Core operating model
+The final admin experience is defined in [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md). It must extend the existing protected `/admin/brvin` workspace, not create a parallel admin product.
 
-BRVIN is the delegated engineering administrator for the user's GitHub and Cloudflare accounts. The user explicitly intends to authorise administrator-level access so BRVIN can independently decide which repositories, credentials, secrets, Workers, databases, storage, workflows and deployments are needed.
+The dashboard is organized around two connected responsibilities:
 
-The normal interaction is:
-1. User describes an idea or goal in the BRVIN dashboard.
-2. BRVIN analyses requirements, proposes an implementation plan, identifies permissions/resources and classifies risk.
-3. User approves the project plan and any genuinely consequential provider-permission expansion.
-4. BRVIN performs routine engineering and infrastructure work without asking the user to copy tokens, create resources manually, edit YAML, use Wrangler or repeat provider setup.
-5. BRVIN reports evidence: repository, checks, deployed URL, resource inventory, security/permission state, test outcomes and recovery path.
+- **Knowledge management:** teacher/owner labels, knowledge projects, sources, collections, processing readiness, usage, grants and revocations.
+- **Application management:** applications, repository/runtime references, deployment environments, generated ChatGPT integration handoff, live connection verification and knowledge-project assignments.
 
-BRVIN should support a policy-driven approval model. Once the user approves a project plan and the configured operating policy, routine steps within that plan—including repository creation, code changes, tests, repair iterations, project-scoped credential provisioning, pull-request creation/merging and deployment—may proceed automatically. Ask again only for actions outside the approved policy, material changes in scope, public exposure or destructive/irreversible actions affecting protected production assets, billing or account ownership/security settings.
+The primary navigation should be Overview, Knowledge Projects, Sources & Collections, Applications, Connections, Operations & Usage, and Security & Audit.
 
-### 4.2 Provider administrator — GitHub
+A Connect Application wizard records application metadata, repository URL/default branch, runtime/Worker reference and environment identities. It does not create the GitHub repository or build the app. It generates a precise, non-secret integration brief for ChatGPT. ChatGPT performs the code and deployment work using the user's independently authorized provider connections. BRVIN verifies the deployed app's v2 private retrieval connection and manages knowledge grants.
 
-BRVIN must have administrator-level technical authority across the user's GitHub personal account and all repositories the user authorises, including new repositories created later. The GitHub App/provider connection must request the granular permissions needed to create repositories; administer repository settings; read/write code, branches, commits, tags and releases; manage pull requests and merges; manage Actions workflows and runs; manage Actions secrets and variables; manage environments and deployments; and manage webhooks, rulesets/branch protection and security configuration when required.
+A repository URL saved in BRVIN is a reference, not proof of GitHub access. ChatGPT's GitHub repository selection is controlled separately by the user and OpenAI's connector. Never claim BRVIN can authorize that connection.
 
-GitHub Apps do not receive one undifferentiated account-owner permission. Request the broadest relevant GitHub App permissions supported by the API and account, and obtain owner approval when permissions or installation scope change. Use GitHub App installation tokens for normal automation and short-lived credentials. Use user-authorised OAuth/user-to-server access only for operations that GitHub does not expose to an installation token. Do not claim that a GitHub App can mint a classic personal access token (PAT) through an API; never make recurring manual PAT generation the normal workflow.
-
-For repository creation, request the GitHub Repository Creation permission where sufficient. GitHub documents Repository Creation write or repository Administration write for the authenticated-user repository creation endpoint. Use Administration write for additional owner-level repository settings when needed. The app should be installed for all repositories when the user approves that scope, so future repos do not require another installation.
-
-### 4.3 Provider administrator — Cloudflare
-
-BRVIN must have account-level administrator authority over the Cloudflare Developer Platform resources it operates. This includes the relevant Admin permissions—not Editor-only permissions—for Workers, D1, R2, KV, Queues, Workflows, AI/Search/Vectorize and additional Cloudflare products required by a project. It must be able to create, configure, update, deploy, inspect, rotate and delete project-owned resources.
-
-Cloudflare distinguishes Editor (updates existing resources) from Admin (creates and deletes resources). The current workers-scripts.edit / Workers Editor connection is not sufficient for the approved Project Factory. Provider bootstrap must request the relevant Admin scopes and Account API Token Provisioning capability. If a necessary account-level operation is available only to a higher account role, the required one-time approval must be recorded accurately; do not imply that Workers Admin is equivalent to Super Administrator.
-
-For dynamic credential provisioning, request the catalogue-backed Account API Tokens Write permission (`account-api-tokens.write`) for the existing self-managed OAuth client; do not request `account_api_tokens:create`, which Cloudflare reserves for its own CLI OAuth flow. Verify the actual account-token creation API operation before claiming it works. Cloudflare-generated tokens are constrained by the creator's permissions and granted scopes; verify the created token's actual permission groups and resource scope before saving or using it. Do not assume the current Editor OAuth grant upgrades itself.
-
-### 4.4 Autonomous credential and secret manager
-
-Credential provisioning is a first-class BRVIN service, not a manual setup checklist. BRVIN decides which credential mechanism is appropriate for each task and manages its lifecycle.
-
-Supported decisions include:
-- GitHub App installation tokens for routine GitHub API operations; request fresh short-lived tokens on demand.
-- User-authorised GitHub OAuth access only for operations that require acting on behalf of the user and are unavailable to installation tokens.
-- Cloudflare account-owned API tokens created through the authorised token-provisioning path when a deployment or API workflow needs one.
-- GitHub Actions repository or environment secrets for CI/CD credentials.
-- Cloudflare Worker secrets for runtime credentials.
-- Provider OAuth refresh tokens and app private keys encrypted in BRVIN's credential vault.
-
-For each credential, store owner/provider, purpose, target project/repository/environment, permissions, resource scope, creation/expiry/rotation/revocation metadata and a non-reversible fingerprint. Encrypt secret material at rest using a versioned envelope/key-management design; never persist secret plaintext in logs, commits, PRs, browser storage, generated code or chat. Deliver credentials directly from the provider to the intended secret store. Never make the user copy a Cloudflare token into GitHub Actions by hand.
-
-Prefer short-lived credentials, provider-native federated/OIDC authentication where genuinely supported, and project-specific least privilege. BRVIN is authorised to use administrator-level connections, but must not give each generated application the master administrator credential. A generated project's Actions workflow receives only the deployment token/identity it needs. A runtime Worker receives only its required runtime secrets. Project revocation must remove/expire that project's credentials without breaking unrelated projects.
-
-Do not create tokens merely because a project exists. Create them when the selected deployment/runtime architecture requires them, and verify their use. Reuse a safely scoped existing provider connection where appropriate; otherwise create a project- or environment-scoped credential. Credential lifecycle operations must be idempotent, audited and recoverable.
-
-### 4.5 Software project versus knowledge project
-
-**Software project:** an independent application/API/service. Normally receives its own GitHub repository, codebase, CI/CD workflows, deployment resources and BRVIN application/environment identity if it consumes BRVIN knowledge. The Project Factory owns its build, deployment and maintenance lifecycle.
-
-**Knowledge project:** a workspace of PDFs/books/collections and access grants inside BRVIN. It does not receive a GitHub repository or new application deployment. It uses the existing shared ingestion, OCR, indexing and retrieval infrastructure. It can be assigned to one or more explicitly authorised applications.
-
-Creating a new software project may automatically create an associated BRVIN knowledge project if the app needs document knowledge. Creating a new knowledge project alone must never create a repository, Worker or deployment.
-
-### 4.6 Project Factory and engineering orchestrator
-
-The Project Factory accepts a plain-language objective and maintains a machine-readable project plan with requirements, assumptions, architecture, repository, services, data model, identity, permissions, secrets, environments, tests, deployment steps, cost/limits, approval requirements and rollback instructions.
-
-Its cooperating capabilities are:
-1. **Planner:** clarifies only material ambiguities, decomposes requirements and creates an auditable implementation plan.
-2. **Architecture selector:** chooses a stack and reusable templates/adapters based on requirements, not a single hardcoded application type.
-3. **Repository operator:** creates a new GitHub repository, branch policy, README, docs, source tree, tests and automation.
-4. **Infrastructure operator:** provisions Cloudflare resources, bindings, domains/subdomains and deployment targets.
-5. **Credential manager:** creates and distributes the right scoped provider credentials directly to GitHub Actions or Worker secrets.
-6. **Engineering agent:** writes code, runs static checks/tests, inspects failures, fixes and reruns within bounded budgets.
-7. **Release operator:** creates review artifacts, merges or deploys according to the approved policy, checks live health and runs synthetic acceptance.
-8. **Maintenance operator:** tracks deployment versions, failed workflows, credential expiry, drift and recovery/rollback status.
-
-The orchestrator must use idempotent operations, persistent job state, retry/backoff, per-step checkpoints, concurrency locks, quotas, cancellation, audit events and compensating actions. It must never report success until external provider state and runtime behavior are verified.
-
-### 4.7 First Project Factory acceptance application — Chat with Your PDFs
-
-The first software project generated by BRVIN must be a separate GitHub repository and independent application with a simple ChatGPT-like text interface. The user can add PDFs through a protected upload flow and ask questions. Answers must be grounded in BRVIN retrieval evidence and display the source title plus physical PDF page citations; exact-page queries must return the requested physical page when available.
-
-The generated application owns its UI, user authentication, conversation history and final answer generation. BRVIN owns PDF registration/upload orchestration, OCR, indexing, source grants, application/project authorisation and evidence retrieval. Use the existing private brvin-service and shared ingestion/search infrastructure; do not create a duplicate OCR/search platform for the generated app. Choose a model/provider through an explicit configuration adapter; never hardcode a provider key or assume AskMoina Voice/Gemini Live is required.
-
-The acceptance journey is end-to-end: BRVIN creates the repository and Cloudflare resources; provisions credentials and Actions secrets automatically; runs checks; deploys the app; reports its URL; an administrator uploads a test PDF; the app answers representative questions with accurate citations; an ungranted/revoked project is denied; and no existing Fatman or AskMoina Voice runtime is changed.
-
-### 4.8 Approval, deletion and production safety
-
-User intent authorises broad administrative capability, but operational policy still protects against accidental destruction and runaway automation:
-- The user can approve a complete project plan once; routine in-scope tasks then proceed automatically.
-- A generated project's own resources may be automatically updated, redeployed and (when explicitly enabled by project policy) removed.
-- Deleting BRVIN core resources, Fatman data, shared retrieval infrastructure, account-wide resources or another project's resources requires a separate confirmation.
-- Expanding provider permissions, changing account membership/ownership, billing/subscriptions, disabling security controls or exposing private services publicly requires explicit dashboard confirmation.
-- Maintain audit logs, resource ownership tags/metadata where supported, backups, deployment rollback and credential revocation.
-- Fail closed on identity or permission ambiguity. Never expose BRVIN's master provider credentials to a generated project.
-
-### 4.9 Repeatability promise
-
-After the one-time provider bootstrap, creating another software project should not require repeated app registration, API-token copy/paste, manual GitHub Actions secret entry, Worker creation through the dashboard or hand-written Wrangler configuration. BRVIN determines and provisions what is needed. Creating another knowledge project requires no new repository or app deployment.
+Do not make the broad Provider Administrator / Autonomous Project Factory wizard a primary product feature. Audit existing code and credential dependencies before removing old provider-connection UI or credentials; this product-scope decision does not authorize destructive credential cleanup.
 
 
-## 5. Implementation milestones and completion gates
 
-The foundational M0–M5 work remains complete. The earlier M6 Connect Application wizard (PR #75) is an implemented starting point, not the final acceptance target. The 5 November 2026 direction broadens the unfinished work into delegated provider administration, autonomous credential lifecycle and a reusable software Project Factory. The revised sequence below supersedes the earlier M6–M8 target and their copy-ready prompts; historical milestone logs remain records of what was actually shipped.
+## 5. Final implementation milestones and completion gates
 
-| Milestone | Name | Status | Completion outcome |
+The active final milestone sequence is **M6–M11**. The authoritative detailed acceptance criteria live in [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md). Historical Project Factory milestones and progress entries remain in this file as historical records only; they must not be resumed.
+
+| Milestone | Name | Status at 5 November 2026 | Completion outcome |
 |---|---|---|---|
-| 0 | Architecture freeze and migration blueprint | COMPLETE | M0 design package merged in PR #61 |
-| 1 | Multi-application, multi-project identity | COMPLETE | Additive identity registry and production migration verified; Fatman preserved |
-| 2 | Private retrieval API v2 | COMPLETE | Trusted environment identity, app-project authorisation and private RPC deployed |
-| 3 | Reusable BRVIN application connector | COMPLETE | Typed server-side connector merged and validated |
-| 4 | Independent BRVIN text reference consumer scaffold | COMPLETE — historical proof of concept, now retired | The scaffold was removed from askmoina-voice in PR #386; no brvin-test-client Worker was deployed. The generic BRVIN connector remains. |
-| 5 | Application/project administration | COMPLETE | Protected admin dashboard, app/environment lifecycle and project grants deployed |
-| 6 | Delegated Provider Administration & Credential Lifecycle | IN PROGRESS — first incomplete milestone | GitHub and Cloudflare administrator connections, automatic credential provisioning, encrypted vault, Actions/Worker secret distribution, rotation/revocation and permission verification work without manual token copy/paste |
-| 7 | Autonomous Software Project Factory | NOT STARTED | A natural-language request creates a new repo, architecture plan, code, tests, Cloudflare resources, credentials, CI/CD and verified deployment |
-| 8 | First generated application — Chat with Your PDFs | NOT STARTED | Factory creates an independent ChatGPT-like PDF application with grounded responses, physical PDF-page citations and access-denial tests |
-| 9 | Generalisation and multi-project acceptance | NOT STARTED | Generate a second distinct application type; prove multiple apps/projects, grants, revocation, isolation and no repeated provider bootstrap |
-| 10 | Security, release completion and administrator handover | NOT STARTED | Full audit, recovery/rollback, credential lifecycle evidence and nontechnical operating manual |
+| 0 | Architecture freeze and migration blueprint | COMPLETE | Existing identity, trust, data and migration decisions accepted. |
+| 1 | Multi-application, multi-project identity | COMPLETE | Application/environment/grant registry deployed; Fatman preserved. |
+| 2 | Private retrieval RPC v2 | COMPLETE | Trusted environment identity and grant-checked private retrieval deployed. |
+| 3 | Reusable server-side connector | COMPLETE | Typed v2 connector available to consumer applications. |
+| 4 | Reference consumer scaffold | RETIRED / NOT A PRODUCT REQUIREMENT | Historical scaffold removed; never recreate the fixed test client. |
+| 5 | Core application/project administration | COMPLETE — UX expansion remains | Protected application/environment/grant lifecycle and knowledge admin deployed. |
+| 6 | Admin workspace aligned to teacher knowledge operations | NOT STARTED | Project-centric admin experience, teacher/owner metadata and useful application/project detail views. |
+| 7 | Application connection registry and wizard | NOT STARTED | Guided registration of app, repository/runtime references and environments. |
+| 8 | ChatGPT integration handoff | NOT STARTED | Repository-specific non-secret prompt/manifest for ChatGPT to perform the one-time code integration. |
+| 9 | Live connection verification and activation | NOT STARTED | Deployed consumer proves trusted v2 identity and private Service Binding; readiness is shown separately. |
+| 10 | Teacher knowledge assignment and isolation acceptance | NOT STARTED | Multi-teacher/multi-app grant, revoke, isolation and sharing tests. |
+| 11 | Operations, usage and administrator handover | NOT STARTED | Usage, failures, audit, operating guide and a real teacher-focused app acceptance run. |
 
-Optional expansion after M0–M10: M11 Cross-account gateway for separately authenticated applications outside the BRVIN Cloudflare account. Keep same-account private Service Binding as default and keep brvin-service private.
+M12, an authenticated gateway for applications outside the BRVIN Cloudflare account or outside Workers, is deferred and not required for M0–M11.
 
-### Milestone 0 — Architecture freeze and migration blueprint
+**M6 — Admin workspace aligned to teacher knowledge operations.** Reshape the existing dashboard around Knowledge Projects and Applications. Add admin-managed owner/teacher labels where useful. Show each project's sources, collections, assigned apps, readiness, usage and activity. Do not build teacher logins, billing or a second knowledge pipeline.
 
-The existing ADR and RPC v2 contract remain authoritative for identity, data migration, retrieval trust, source grants and Fatman compatibility. This milestone is complete; the Project Factory specification adds provider administration and software generation without weakening these contracts.
-
-### Milestone 1 — Multi-application, multi-project identity
-
-COMPLETE. Preserve the existing application/environment/project/grant tables, stable identities and legacy Fatman compatibility.
-
-### Milestone 2 — Private retrieval API v2
-
-COMPLETE. Preserve trusted binding identity, per-request application/project authorisation, ready-source filtering, exact-page retrieval, quotas and structured failures.
-
-### Milestone 3 — Reusable connector
-
-COMPLETE. Generated apps should consume this server-side connector through the approved package/module pattern. They must not query D1 or AI Search directly.
-
-### Milestone 4 — Independent BRVIN text reference consumer scaffold
+**M7 — Application connection registry and wizard.** Register application profile, repository reference, runtime/Worker metadata and production/staging/preview environment records. Generate environment IDs through the existing backend. A saved repository reference is not proof that ChatGPT can access it. Do not create repositories or infrastructure automatically.
 
-COMPLETE as a historical proof of concept, now retired. Its fixed Worker/config/test/deployment files were removed from askmoina-voice by PR #386; no brvin-test-client Worker was ever deployed. The generic BRVIN connector remains available for future generated applications. Do not recreate the fixture. The new PDF-chat app must be generated in its own repository by the Project Factory.
+**M8 — ChatGPT integration handoff.** Generate a deterministic, copyable repository-specific prompt/manifest containing the v2 binding identity, private service/entrypoint, connector methods, tests and security restrictions. ChatGPT implements source/config changes, runs CI and deploys via the user's own connections. Never include secrets.
 
-### Milestone 5 — Application and project administration
+**M9 — Live connection verification and activation.** Define and implement a safe health/verification contract. A registered application must remain pending until its deployed Worker proves its trusted environment identity and private v2 Service Binding. Connection health and ready knowledge are separate states. Design the probe/callback authentication and replay controls before implementation.
 
-COMPLETE. Preserve the protected administration lifecycle, app-project grants and knowledge-source management. Extend the dashboard rather than creating a parallel admin product.
+**M10 — Teacher knowledge assignment and isolation acceptance.** Provide easy grant/revoke from both application and knowledge-project views. Test teacher A/B isolation, app-wide grant semantics, multiple grants per app, deliberate project sharing, collections, readiness, suspension and revocation. A multi-teacher app must enforce its own authenticated user-to-project mapping.
 
-### Milestone 6 — Delegated Provider Administration & Credential Lifecycle
+**M11 — Operations, usage and administrator handover.** Finish operational visibility, quota and activity reporting, pipeline/connection recovery, revocation and a nontechnical admin manual. Use a separate teacher-focused app (for example, an SSC Mathematics Telegram bot) as the real acceptance consumer, built/deployed by ChatGPT—not by a BRVIN Project Factory.
 
-Implement the foundation that lets BRVIN act as the user's delegated technical administrator.
+Milestones are complete only when shipped code and the relevant automated/live evidence are recorded. A documentation proposal, mock, unit test or registered D1 row alone is not acceptance evidence.
 
-Deliverables:
-- GitHub App permission upgrade and all-repository installation/owner approval, including repository creation/administration, contents, pull requests, Actions, secrets, variables, environments, deployments and other required technical permissions.
-- Correct GitHub authentication selection: installation tokens for normal app automation; user-authorised OAuth/user access only for actions that cannot be performed with installation tokens. Never claim to create PATs through an unsupported API.
-- Cloudflare OAuth scope upgrade to the relevant configured Developer Platform scopes, plus Account API Tokens Write (`account-api-tokens.write`). Worker creation/deletion additionally requires Workers Admin (`workers-scripts.admin`); Workers Editor (`workers-scripts.edit`) is not sufficient. Do not request the CLI-only `account_api_tokens:create` scope.
-- Provider capability discovery and permission preflight. BRVIN must know which endpoint/resource needs which permission, detect missing scopes before performing changes and show the exact one-time consent required.
-- Encrypted, versioned provider credential vault with key rotation, redaction, expiry, ownership, purpose, scope and audit metadata.
-- Credential selection and automatic creation. Create a Cloudflare API token only when the chosen task requires it; validate permission groups/resource scope; deliver it directly to the appropriate GitHub Actions repository/environment secret or Worker secret.
-- No administrator/master credential in generated repositories, browser code, frontend bundles, chat, logs, PRs or source files.
-- Automatic rotation/revocation and project teardown of project-owned credentials, without breaking other applications.
-- Tests for missing permissions, token creation limits, invalid scopes, secret encryption, secret delivery failures, rotation, revocation and idempotent recovery.
-- Migrate the narrow M6 wizard without losing valid encrypted provider connections; require re-consent explicitly when scopes expand.
 
-Acceptance gate: after one-time provider authorisation/consent, create a test GitHub repository and a test Cloudflare Worker from the BRVIN dashboard without the user manually creating a Worker, generating a Cloudflare token or copying a secret into Actions. Verify the project credential can deploy only its intended resources. Do not mark M6 complete from mocked API tests alone; exercise provider APIs in dedicated test resources and record evidence.
 
-**Live status after PR #83 / Release Validation #675 (5 November 2026):**
-- The BRVIN admin panel now exposes GitHub App permission and repository-scope preflight, Cloudflare OAuth scope preflight, a copyable required-scope list, and links to the existing GitHub App/installation settings. It no longer contains the fixed AskMoina-hosted text-client adapter.
-- The existing GitHub App is BRVIN Connect, already installed for the user's `ashini-x` account. Its registration and installation permissions have not yet been expanded/approved. The user must approve the requested App permissions and change installation repository access to **All repositories** once.
-- The Cloudflare account has one member with **Super Administrator — All Privileges**; no additional member invitation or permanent role change is required. However, BRVIN's encrypted OAuth connection still contains only `workers-scripts.edit offline_access`. The existing BRVIN Connect OAuth client must be re-authorized with the scopes actually configured in the client, including `account-api-tokens.write`; do not request the CLI-only `account_api_tokens:create`. The uploaded permission list includes Workers Editor (`workers-scripts.edit`) but not Workers Admin (`workers-scripts.admin`), so Worker creation/deletion remains blocked until Cloudflare permits Workers Admin for this client or a separately approved architecture/credential is adopted. The existing client secret is already stored encrypted; do not ask the user to re-enter it.
-- PR #82 added the expanded permission manifest/scope request and the read-only capability preflight. PR #83 removed the old fixed test-client functions/routes/UI and updated the admin panel. These changes passed Release Validation #673 and were deployed in Release Validation #675. The live smoke gate verified BRVIN service binding and Fatman retrieval; it did not verify the newly requested provider scopes because user re-consent is still pending.
-- Next M6 implementation work: implement Cloudflare account API token creation through the approved OAuth token-provisioning scope; validate returned token permission groups/resource selectors; create and distribute project-scoped GitHub Actions and Worker secrets directly; persist encrypted metadata/fingerprints/expiry/owner; verify actual deployment with the new credential; then add rotation and revocation. GitHub App installation tokens remain the default GitHub API credential; do not create manual PATs.
+## 6. Copy-ready prompts and chat continuity
 
-### Milestone 7 — Autonomous Software Project Factory
+### Current continuation prompt
 
-Build the general software factory above the existing BRVIN knowledge core.
+```text
+Continue BRVIN 2 in ashini-x/parmar-ai.
 
-Deliverables:
-- Natural-language project intake and persistent project brief.
-- Planner that produces a reviewable scope, architecture, assumptions, data model, security model, infrastructure plan, cost/limit estimate, test plan, rollout and rollback plan.
-- Reusable templates/adapters for common app classes, but no fixed single-app assumption. BRVIN must support varied software goals by selecting/extending an appropriate blueprint and clearly identifying unsupported requirements.
-- Automatic GitHub repository creation per independent software project, with coherent naming, visibility, default branch, README, docs, issue/PR templates, branch protections where supported, Actions workflows, dependency/security defaults and project metadata.
-- Cloudflare resource graph and provisioning/deprovisioning with ownership tracking, idempotency and drift detection.
-- Per-project application/environment identity and explicit BRVIN knowledge-project grant when the app consumes BRVIN.
-- Engineering agent that writes/updates code, runs type checks/unit/integration/security tests, reads build logs, repairs failures and retries within bounded time/token/cost budgets.
-- Persistent orchestrator with queued jobs, state checkpoints, locks, retries/backoff, cancellation, concurrency controls, step evidence and recovery after Worker restarts.
-- Release automation that creates reviewable commits/PRs, runs checks, merges/deploys under the user's approved policy, verifies the live deployment and publishes results to the dashboard.
-- Project activity timeline explaining what BRVIN decided, created, changed, tested, deployed and why.
+Read these documents first:
+1. docs/BRVIN_2_MASTER_PLAN.md
+2. docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md
+3. docs/BRVIN_SYSTEM_REFERENCE.md
+4. docs/BRVIN_2_ARCHITECTURE_DECISIONS.md
+5. docs/BRVIN_2_RPC_V2_CONTRACT.md
 
-Acceptance gate: one dashboard instruction creates a new repository and a functioning deployed application using the authorised providers. No manual token generation, Actions-secret copying, Cloudflare dashboard resource creation or hand-written Wrangler setup. Every action has provider response evidence and an auditable resource owner.
+The user's confirmed product goal is a teacher-specific digital-brain knowledge platform with an admin panel to register independent applications, connect their runtime to BRVIN once, and assign/revoke teacher knowledge projects. ChatGPT remains the software engineer using the user's separately authorized GitHub and Cloudflare connections. BRVIN does not build apps, create repositories, manage application CI/CD, or run an autonomous coding agent.
 
-### Milestone 8 — First generated application: Chat with Your PDFs
+Inspect current main, recent commits/PRs/checks and production state. Continue from the first incomplete milestone M6–M11 in the canonical final-milestones document. Do not resume the superseded autonomous Project Factory plan. Preserve the current private retrieval, D1, OCR/indexing and Fatman compatibility contracts. Implement one milestone at a time, validate it, and update both documentation files in the same PR with evidence.
+```
 
-Use the Project Factory—not a manually assembled repository—to generate an independent PDF-chat application.
+### Continuation prompt for a new chat branch
 
-Minimum user experience:
-- Responsive, mobile-friendly ChatGPT-style text interface.
-- Protected administrator sign-in and secure PDF upload flow.
-- Source library with document title, processing/readiness status and failure/retry status.
-- Conversational question/answer interface with conversation history.
-- Responses grounded in BRVIN-returned passages; visibly cite document title and physical PDF page.
-- Clickable citation opens the exact source page or page preview when supported.
-- Exact-page retrieval test and clear no-evidence/no-answer behavior.
-- The generated app owns its user/session/authentication, conversation history and model answer generation. BRVIN owns ingestion/indexing, source grants, application/project authorisation and evidence retrieval.
-- Model provider is configured through an adapter and managed credentials; Gemini Live/AskMoina Voice is not required.
-- Dedicated GitHub repository, independent Worker/runtime, project-specific resources and credentials, full CI/CD and live health check.
+Use this when the current conversation reaches its context limit. The user should paste the full prompt from [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md) together with the master-plan link. The blob links must point to `main` after the documentation PR is merged.
 
-Acceptance gate:
-1. Factory produces the repository and deployment from the approved brief.
-2. BRVIN registers a new application, environment, knowledge project and grant.
-3. BRVIN provisions its Worker, Service Binding and secrets automatically.
-4. User opens the deployed URL and uploads a test PDF through the protected UI.
-5. Ingestion reaches the defined ready state.
-6. Representative questions return correct grounded answers and physical-page citations.
-7. Exact-page question cites the requested physical page.
-8. Unauthorised, guessed, revoked and inactive project requests fail closed.
-9. Existing Fatman, parmar-ai, brvin-service and AskMoina Voice production state is unchanged except for explicitly approved shared BRVIN improvements.
+```text
+Resume BRVIN 2 exactly where the previous ChatGPT branch stopped.
 
-### Milestone 9 — Generalisation and multi-project acceptance
+Repository: https://github.com/ashini-x/parmar-ai
 
-Generate a second, materially different software application from a plain-language brief. It must not be a copy of the PDF-chat app with a changed label.
+Read the current main-branch documents in this order:
+1. https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_2_MASTER_PLAN.md
+2. https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md
+3. https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_SYSTEM_REFERENCE.md
+4. https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_2_ARCHITECTURE_DECISIONS.md
+5. https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_2_RPC_V2_CONTRACT.md
 
-Additionally verify:
-- one application with multiple BRVIN knowledge projects;
-- one BRVIN knowledge project deliberately shared with multiple applications;
-- direct-book and collection grants;
-- multiple PDFs and collections;
-- readiness and page-level citations where knowledge applies;
-- denial before explicit grant, and denial after revocation/deactivation;
-- unknown identities and malformed selectors;
-- quotas, service outage and recovery;
-- Fatman's original flow and usage history;
-- adding a knowledge project requires no repository, Service Binding or application deployment;
-- adding a software project does create an independent repository and only the resources it needs;
-- credential rotation and project teardown do not affect other projects.
+Also read the latest progress-log entries and inspect the latest GitHub commits, branches, open/merged PRs, CI runs, deployment evidence and relevant Cloudflare state. The documentation is the source of truth; do not rely on prior chat memory or ask me to explain BRVIN again.
 
-### Milestone 10 — Security, release completion and administrator handover
+Confirmed product goal:
+BRVIN is a shared knowledge platform for teacher-specific digital brains (PDFs, shortcuts, formulas, methods and notes). It manages knowledge projects, applications, trusted environments, private retrieval and explicit app-to-project grants. ChatGPT remains my engineer: I use my separately connected GitHub and Cloudflare integrations to build, test and deploy each independent app. BRVIN supplies the knowledge connection and admin controls; it is NOT an autonomous coding brain or software Project Factory.
 
-Audit GitHub App/OAuth permissions, Cloudflare roles/scopes, credential vault, provider token lifecycle, GitHub Actions secret delivery, Worker runtime secrets, resource ownership, audit logs, approval policy, repository/resource deletion protections and rollback. Verify the full journey on the deployed system. Publish a nontechnical manual for describing an idea, approving a plan, operating generated apps, uploading PDFs, inspecting citations, managing project access, recovering from failures and revoking a project. Declare BRVIN 2 complete only after M0–M10 have evidence.
+Resume at the first incomplete M6–M11 acceptance item. Do not restart completed milestones. Do not implement the superseded Project Factory, autonomous coding agent, repository factory, BRVIN-owned CI/CD or provider-token vault. Preserve Fatman, the shared ingestion/search resources, private brvin-service, v2 trusted environment identity and all existing security contracts. Do not recreate brvin-test-client in askmoina-voice.
 
+For every implementation change:
+- inspect relevant source and production before editing;
+- implement in a feature branch and create a focused PR;
+- run relevant tests, type checks and deployment/preview checks;
+- merge only after required checks pass and the diff is safe;
+- record files, tests, CI run, PR, merge commit, deployment IDs/versions and live verification in docs/BRVIN_2_MASTER_PLAN.md and docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md in the same PR;
+- update docs/BRVIN_SYSTEM_REFERENCE.md when shipped architecture/behavior changes;
+- leave an explicit next action and remaining blockers in the progress ledger.
 
-## 6. Copy-ready prompts for each milestone
+Start by stating the exact current milestone and evidence found. Do not repeat a completed audit unless new evidence requires it.
+```
 
-Use the revised prompts below for M6–M10. Older milestone prompts are retained as historical context, not as current implementation instructions. The project goal and requirements are in GitHub; the user should not have to explain them again.
 
-> **5 November 2026 direction update:** The Project Factory specification in BRVIN_AUTONOMOUS_PROJECT_FACTORY.md is the binding forward architecture. Older M6/M7/M8 prompts below are historical context and are superseded where they describe a fixed brvin-test-client adapter or manual token/secret setup.
-
-### Current continuation prompt (use in every new chat)
-
-Read these GitHub files first: BRVIN_2_MASTER_PLAN.md, BRVIN_AUTONOMOUS_PROJECT_FACTORY.md, BRVIN_SYSTEM_REFERENCE.md, BRVIN_2_ARCHITECTURE_DECISIONS.md and BRVIN_2_RPC_V2_CONTRACT.md. Inspect latest main, open PRs, commits, workflow runs and relevant Cloudflare state. Resume at the first incomplete revised milestone (currently M6: Delegated Provider Administration & Credential Lifecycle). PR #385 in askmoina-voice is closed without merging; PR #386 removed the retired, undeployed test-client scaffold. Do not recreate that adapter or modify/deploy the existing AskMoina Voice runtime for BRVIN acceptance. Preserve Fatman, parmar-ai and private brvin-service. Do not ask the user to repeat the product vision or manually perform recurring token/secret/resource setup. The two one-time provider approvals still pending are expanded GitHub App permissions/All-repository installation and expanded Cloudflare OAuth scopes/re-consent. After those approvals, continue automated token and secret provisioning.
-
-### Revised Milestone 6 prompt
-
-Execute revised BRVIN M6 from BRVIN_AUTONOMOUS_PROJECT_FACTORY.md. Implement delegated GitHub administrator permissions, Cloudflare Developer Platform Admin and account API token provisioning, provider capability discovery, encrypted credential lifecycle, automatic creation/distribution of GitHub Actions and Worker secrets, rotation and revocation. Distinguish GitHub App installation tokens and user-authorised OAuth; never claim to create PATs through an unsupported API. Preserve current provider credentials where possible and require consent only for expanded scopes. Validate with real provider-backed test resources. No manual API-token copy/paste or changes to AskMoina Voice runtime.
-
-### Revised Milestone 7 prompt
-
-Build the reusable natural-language Software Project Factory and persistent engineering orchestrator. Create an independent GitHub repository per software project, plan architecture, provision required Cloudflare resources, create appropriate credentials/secrets automatically, write code and tests, repair failures within bounded budgets, merge/deploy under the approved policy, verify live behavior and maintain an audit/recovery trail. Distinguish software projects from knowledge projects.
-
-### Revised Milestone 8 prompt
-
-Use BRVIN's Project Factory to generate the first independent Chat with Your PDFs application from a plain-language brief. Create a new repository and dedicated deployment; integrate existing BRVIN PDF ingestion and private retrieval. Implement a ChatGPT-like text UI, protected PDF upload, conversation history, grounded answers and physical PDF-page citations. Automatically provision identities, grants, Worker bindings and CI/CD secrets. Run live upload/OCR/index/retrieval/citation and unauthorised/revoked-access tests. Do not manually create a repo or Worker.
-
-### Revised Milestone 9 prompt
-
-Generate a second, materially different software application through BRVIN's Project Factory. Verify that templates/orchestration are reusable and not limited to PDF chat. Complete multi-app/project sharing, grants, revocation, quota, recovery, credential rotation and Fatman preservation acceptance. Adding another knowledge project must not require another repository or deployment.
-
-### Revised Milestone 10 prompt
-
-Complete the final BRVIN security, release and handover audit. Inspect GitHub and Cloudflare administrator permissions, OAuth scopes, generated token permission groups, encrypted credential vault, GitHub Actions and Worker secret delivery, project ownership, audit history, approval policy, protected-resource deletion and rollback. Verify M0–M10 evidence. Publish the nontechnical administrator manual. Do not mark BRVIN complete without deployed end-to-end acceptance.
-
-### Prompt to start a new chat / branch
-
-~~~text
-Continue BRVIN 2 from the GitHub source of truth:
-https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_2_MASTER_PLAN.md
-
-First read that master plan and all linked BRVIN references. Inspect the latest main/feature branch and current code/infrastructure to determine the actual progress; do not rely only on a previous chat summary.
-
-Read the progress ledger and identify the first milestone that is not fully complete. Tell me briefly what the tracker says and what repository evidence confirms it. Then execute only that milestone, following its scope and acceptance criteria.
-
-Use the existing BRVIN architecture and protect Fatman production. Work in a feature branch and PR, update this master plan's progress ledger and all affected docs as part of the work, run tests and verify actual behavior. Do not ask me to repeat the architecture. Do not move to the next milestone until this one is completed and reported with commit/PR, tests, deployment state and remaining issues.
-~~~
-
-### Milestone 0 prompt
-
-~~~text
-Execute BRVIN 2 Milestone 0 from docs/BRVIN_2_MASTER_PLAN.md. This is architecture freeze and migration blueprint only: inspect current code and infrastructure, produce the complete ADR, exact D1 data model, RPC v2 contract, application/environment trust model, legacy Fatman migration/backward compatibility, AskMoina integration design, admin wizard design, rollout/rollback plan and acceptance criteria. Do not change application code, D1 production schema or Cloudflare infrastructure. Update the master plan with evidence and commit the documentation.
-~~~
-
-### Milestone 1 prompt
-
-~~~text
-Execute BRVIN 2 Milestone 1 from docs/BRVIN_2_MASTER_PLAN.md using the approved Milestone 0 ADR. Implement the multi-application/multi-environment/multi-project D1 identity and authorisation model with safe migrations. Preserve Fatman data, identity, permissions and usage accounting. Add migration, idempotency, uniqueness, revocation and backward-compatibility tests. Do not switch consumers to RPC v2 yet. Update docs and tracker; verify tests and report the commit/PR.
-~~~
-
-### Milestone 2 prompt
-
-~~~text
-Execute BRVIN 2 Milestone 2 from docs/BRVIN_2_MASTER_PLAN.md. Implement the private BRVIN retrieval RPC v2 with trusted application identity, explicit project authorisation on every call, project status/discovery as specified by the ADR, scoped source resolution, filtered AI Search and post-retrieval key validation, exact-page retrieval, quotas and structured errors. Keep brvin-service private and maintain the Fatman compatibility path. Add comprehensive authorised/unauthorised tests. Update API docs and tracker; do not migrate AskMoina yet.
-~~~
-
-### Milestone 3 prompt
-
-~~~text
-Execute BRVIN 2 Milestone 3 from docs/BRVIN_2_MASTER_PLAN.md. Build and test the reusable typed server-side BRVIN connector, select an appropriate reusable package/module distribution method after inspecting both repos, provide an integration example and consistent status, retrieval, provenance, page-image and failure handling. No unrestricted fallback. Update docs/tracker and report tests/commit.
-~~~
-
-### Milestone 4 prompt
-
-~~~text
-Execute BRVIN 2 Milestone 4 from docs/BRVIN_2_MASTER_PLAN.md. Build the isolated text-first BRVIN reference Worker inside the askmoina-voice repository with a separate Wrangler config, entrypoint, tester-token boundary, text retrieval interface and server-side v2 connector. Do not modify or deploy the existing AskMoina Voice Worker. Validate mocked authorised-project discovery, query retrieval, exact PDF page citations, ungranted-project denial and not-ready handling. Keep the test Worker unconnected until M5 provisions its app/environment/project/grant records and M6 attaches the trusted binding through the wizard.
-~~~
-
-### Milestone 5 prompt
-
-~~~text
-M5 is implemented and deployed in main. Verify the protected BRVIN administration experience for applications, environments, application-project grants, project association/edit/activation and the existing knowledge/collection/source-grant workflows. Keep registered environment state distinct from a verified live Service Binding. Preserve Fatman and its legacy v1 mapping.
-~~~
-
-### Milestone 6 prompt
-
-~~~text
-Execute BRVIN 2 Milestone 6 from docs/BRVIN_2_MASTER_PLAN.md. Implement the Connect Application wizard with explicit GitHub and Cloudflare authorisation, repository/branch/Worker/environment discovery, same-account verification, generated identity/binding/adapter changes, tested GitHub PR, admin approval and post-deploy connection verification. Use least privilege; do not store tokens in source or silently modify/deploy production. Be honest about unsupported app architectures. Prove that after the initial connection, additional projects require no PR or Wrangler changes. Update tracker/docs and test the wizard.
-~~~
-
-### Milestone 7 prompt
-
-~~~text
-Execute BRVIN 2 Milestone 7 from docs/BRVIN_2_MASTER_PLAN.md. Run the complete synthetic end-to-end acceptance for multiple apps, multiple projects, shared-project permissions, PDF/collection ingestion, direct/collection grants, page citations, denied/revoked/deactivated access, quotas, outage/recovery and preserved Fatman operation. Verify a new project can be added with no code/Wrangler change. Capture test and production evidence, deployed versions and release manifest. Fix failures before marking complete. Update tracker/docs.
-~~~
-
-### Milestone 8 prompt
-
-~~~text
-Execute BRVIN 2 Milestone 8 from docs/BRVIN_2_MASTER_PLAN.md. Conduct the final code, database, Cloudflare and GitHub Actions audit against the approved ADR. Verify every milestone and acceptance gate, production behavior, Fatman compatibility, app onboarding, repeat project creation, permissions, secrets and rollback. Finalise the nontechnical admin manual and all docs. Record exact source revision, deployment versions and test evidence. Declare BRVIN 2 complete only if the end-to-end system works in production; otherwise mark remaining blockers clearly in the tracker.
-~~~
-
-### Optional Milestone 9 prompt
-
-~~~text
-Execute optional BRVIN 2 Milestone 9 from docs/BRVIN_2_MASTER_PLAN.md only after Milestones 0–8 are complete or explicitly reprioritised. Design and implement a separate authenticated HTTPS gateway for applications outside the BRVIN Cloudflare account. Keep brvin-service private. Include high-entropy per-project/application credentials, hashed storage, rotation/revocation, validation, rate limits, usage controls, audit trail, abuse protection and complete cross-account tests. Do not weaken same-account Service Binding security.
-~~~
 
 ## 7. Progress ledger — update after every milestone
 
@@ -946,3 +730,13 @@ The first owner-run Cloudflare consent attempt returned `invalid_scope`: the sel
 - Production acceptance artifact `13420620125` records both Workers at 100% traffic: `brvin-service` deployment `d2a63c37-3274-467a-8697-3a1ffa6f0c7d`, version `c22150a0-6aef-4a84-bcd7-ffa4d3d274bb`; `parmar-ai` deployment `0fa6e194-c1f6-4398-8dc6-1d037c9a1ec2`, version `83fe277d-c667-4e45-89a5-2364197fbf3d`. Root, health, private BRVIN Service Binding and Fatman retrieval smoke checks passed.
 - The Cloudflare Workers Builds branch-preview check separately failed because the account has reached the Free-plan limit of 100 Durable Object namespaces (Cloudflare error 10067). This is an account preview quota limitation, not a source/test failure; the main production release deployed and passed. No paid-plan change or quota workaround was made.
 - **Current M6 boundary:** the invalid-scope request mismatch is corrected and deployed. M6 is not complete: re-consent still needs to succeed, Workers Admin is not in the supplied configured scopes, account-token creation must be tested using the BRVIN OAuth credential, project-scoped token permissions/resource selectors must be verified, and direct GitHub Actions/Worker secret delivery, rotation and revocation remain outstanding.
+
+
+### Product scope and milestone correction — 5 November 2026 — authoritative update
+
+The user clarified that BRVIN's goal is to make teacher-specific digital brains reusable across multiple independently built applications. ChatGPT remains the software developer through its own GitHub/Cloudflare connections. BRVIN's product is knowledge administration, application/environment registration, connection handoff, live retrieval verification, knowledge grants/revocations, usage and operational oversight.
+
+The former autonomous technical administrator/Project Factory scope is superseded. Do not continue its M6 provider credential lifecycle, M7 code-generation factory, M8 generated PDF chat app, or PR/CI/CD automation work as BRVIN requirements. The historical document remains in the repository with an explicit superseded warning.
+
+The active final milestones are M6–M11 as defined in [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md). The first incomplete milestone is M6 — Admin workspace aligned to teacher knowledge operations. This is a scope/documentation decision; it does not claim any new runtime capability or production deployment.
+
