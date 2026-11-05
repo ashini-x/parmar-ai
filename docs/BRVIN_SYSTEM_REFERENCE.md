@@ -402,7 +402,19 @@ M6 shipped in [PR #91](https://github.com/ashini-x/parmar-ai/pull/91), merge com
 
 **Manual verification limitation:** the admin route requires the administrator's authenticated browser session. This session did not have that login session available for a visual click-through. The dashboard client contract is covered by passing Node/browser-script tests, and the deployed backend/schema/query behavior was verified against production. The administrator can visually confirm the signed-in workspace at `/admin/brvin`; do not claim that this session performed the click-through.
 
-### 9.3 M7 application connection registry — implementation pending release
+### 9.3 M7 application connection registry — deployed
+
+M7 shipped in [PR #93](https://github.com/ashini-x/parmar-ai/pull/93), merge commit `3f7803fe5e3cc0f9894292a8ce7ad6c79a6d11d6`.
+
+- PR Release Validation #704 passed type-check, unit tests, Node/browser-script tests and both Worker bundle checks.
+- Main Release Validation #705 deployed the paired Workers and passed root, worker health, private BRVIN Service Binding, Fatman retrieval and production release acceptance.
+- Production D1 migration marker `2026-11-05-brvin-connection-metadata-v1` is present. Application repository/default branch/runtime fields and environment Worker name/URL fields are available with safe defaults.
+- Production read-back confirmed the existing Parmar AI and AskMoina app/environment identity records remain, including the revoked historical BRVIN Text Test Client. Fatman remains active and its `fatman -> fatman` v1 mapping remains. November 2026 Fatman usage read back as 31. All checks were read-only (`rows_written=0`).
+- Production versions: `brvin-service` `146cb9f6-84c2-4321-87f6-c82045643fef`; `parmar-ai` `4c4cfe12-ea03-417d-bf1e-8ee8e26c9d81`.
+- The wizard stores an existing GitHub repository URL/default branch and optional Worker name/HTTPS URL references. It does not provision repositories, Workers, secrets, bindings or deployments. It does not prove ChatGPT can access a GitHub repo.
+- Environments are intentionally still Pending. M9 owns live private Service Binding verification before they may be shown as Connected.
+
+### 9.4 Remaining application integration gap
 
 M7 is being implemented on branch `brvin/m7-application-connection-wizard`; it is not yet merged or deployed.
 

@@ -283,7 +283,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 | M4 | Reference consumer scaffold | RETIRED / NOT A PRODUCT REQUIREMENT | The old fixed AskMoina text scaffold was removed and never deployed; do not recreate it. |
 | M5 | Core application/project administration | COMPLETE — UX expansion remains | Existing app/environment/grant lifecycle and protected admin are deployed. |
 | M6 | Admin workspace aligned to teacher knowledge operations | COMPLETE | Merged/deployed via PR #91; additive owner-label migration, app-neutral teacher knowledge project creation, project readiness/usage/detail UI, application metadata editing, and legacy provider controls collapsed. Main release #701 and production smoke passed. |
-| M7 | Application connection registry and wizard | IN PROGRESS | Metadata-only app wizard, existing GitHub repository/default branch, Worker/runtime references, multiple generated environment identities and Pending connection status; pending PR validation and production acceptance. |
+| M7 | Application connection registry and wizard | COMPLETE | PR #93 merged and deployed; production release #705 and smoke accepted; repository/default-branch/runtime metadata, generated env identities, Worker metadata, Pending status and D1 migration verified. No provider resource provisioning. |
 | M8 | ChatGPT integration handoff | NOT STARTED | BRVIN generates a complete repository-specific integration prompt/manifest; ChatGPT implements code and deployment using its own provider connections. |
 | M9 | Live connection verification and activation | NOT STARTED | A deployed consumer environment proves its trusted v2 identity and private Service Binding path; UI distinguishes connection health from source readiness. |
 | M10 | Teacher knowledge assignment and isolation acceptance | NOT STARTED | Multiple teacher projects and independent apps; grant, revoke, multi-project, sharing and cross-project denial tests pass. |
@@ -465,9 +465,9 @@ For a new ChatGPT chat or branch:
 
 ## 15. M7 implementation progress
 
-### 5 November 2026 — application connection registry and wizard (in progress)
+### 5 November 2026 — application connection registry and wizard (complete)
 
-**Status:** IN PROGRESS — branch `brvin/m7-application-connection-wizard`; implementation and tests are committed but awaiting PR validation, merge and production acceptance.
+**Status:** COMPLETE — merged as PR #93, production release #705 passed and D1 read-back confirmed the new metadata schema and preserved existing identities.
 
 **Implemented on branch:**
 - Additive application metadata: repository URL, default branch and runtime provider.
@@ -483,3 +483,18 @@ For a new ChatGPT chat or branch:
 **Preserved:** no repository or Worker creation, no secret or binding write, no deployment, no new knowledge project, no application-project grant, no change to the trusted v2 identity contract or Fatman retrieval. Existing app/environment IDs and status lifecycle remain.
 
 **Next:** finish CI/source review, open PR, merge only after all checks pass, run the paired production release and verify migration/read-back data before marking M7 complete.
+
+
+### M7 completion evidence — 5 November 2026
+
+- **PR:** [#93](https://github.com/ashini-x/parmar-ai/pull/93), merged to `main`.
+- **Merge commit:** `3f7803fe5e3cc0f9894292a8ce7ad6c79a6d11d6`.
+- **PR validation:** [Release Validation #704](https://github.com/ashini-x/parmar-ai/actions/runs/42062007227) passed type-check, unit tests, Node/browser-script tests and both Worker bundle validations.
+- **Production release:** [Release Validation #705](https://github.com/ashini-x/parmar-ai/actions/runs/42062174803) passed paired Worker deployment, root/health/private BRVIN/Fatman smoke and release acceptance.
+- **Deployments:** `brvin-service` deployment `8a98e1b0-650e-4421-b79f-0bcd443c6d9c`, version `146cb9f6-84c2-4321-87f6-c82045643fef`; `parmar-ai` deployment `15e68daf-1a53-47df-8a00-26b3223c8ffa`, version `4c4cfe12-ea03-417d-bf1e-8ee8e26c9d81`.
+- **D1 migration:** marker `2026-11-05-brvin-connection-metadata-v1` exists. Application repository/default branch/runtime-provider columns and environment Worker name/URL columns exist with documented defaults.
+- **Preservation:** Parmar AI, AskMoina Voice and revoked BRVIN Text Test Client app records remain. Existing application/environment IDs and status values remain. Fatman project and `fatman -> fatman` mapping remain. Fatman November counter read back as 31. Every verification query wrote zero rows.
+- **No provider side effects:** no GitHub repository, Cloudflare Worker, secret, binding, token, project, grant or deployment was created by the wizard. Repository and runtime values remain descriptive metadata. GitHub access is separate.
+- **Connection state:** every environment remains Pending until M9 live private Service Binding verification. This is intentional, not an unverified success.
+- **Production acceptance artifact:** `13430623895`.
+- **Next active milestone:** M8 — ChatGPT integration handoff. It has not been started by this work.
