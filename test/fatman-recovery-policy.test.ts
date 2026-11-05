@@ -3,6 +3,7 @@ import {
   FATMAN_PAGE_RETRY_LIMIT,
   fatmanPageRetryDelay,
   isTransientFatmanIndexError,
+  shouldPauseAutomaticVisionCleanupRetry,
 } from "../src/fatman/recovery-policy";
 
 describe("Fatman self-healing retry policy", () => {
@@ -15,6 +16,13 @@ describe("Fatman self-healing retry policy", () => {
   it("does not retry permanent input or configuration errors", () => {
     expect(isTransientFatmanIndexError(new Error("Vision OCR returned no readable text"))).toBe(false);
     expect(isTransientFatmanIndexError(new Error("Fatman AI Search is not configured"))).toBe(false);
+  });
+
+  it("pauses automatic Vision OCR cleanup retries after a deletion failure", () => {
+    expect(shouldPauseAutomaticVisionCleanupRetry(0)).toBe(false);
+    expect(shouldPauseAutomaticVisionCleanupRetry(1)).toBe(true);
+    expect(shouldPauseAutomaticVisionCleanupRetry(20)).toBe(true);
+    expect(shouldPauseAutomaticVisionCleanupRetry(Number.NaN)).toBe(false);
   });
 
   it("uses bounded exponential backoff for up to twelve attempts", () => {
