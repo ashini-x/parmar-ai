@@ -457,6 +457,7 @@ The active M10 change is in [PR #99](https://github.com/ashini-x/parmar-ai/pull/
 - Automated two-application fixtures with independent Teacher A and Teacher B projects plus one deliberately shared project.
 - Tests for only-granted-project discovery, cross-project denial before quota/search, immediate revocation denial, multi-project app access, intentional sharing, direct-book and collection scope, future collection additions, unready sources and inactive identities/projects.
 - Admin API tests for one project shared across apps, multiple projects per app and idempotent grant behavior, plus browser-script checks for both grant-control locations.
+- The Node browser-script regression check now expects the connection-state wording introduced after M9 was accepted.
 
 **Implementation status:** in progress. Branch CI and production release validation are pending. No production D1 rows, test teachers, applications, projects, grants, bindings or secrets were changed; this increment adds no schema migration. Automated two-tenant fixtures are used instead of test data in the live Fatman production registry.
 
