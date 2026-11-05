@@ -24,7 +24,7 @@ The current architecture deliberately separates **knowledge administration and i
 - The existing `parmar-ai` Worker owns the protected BRVIN admin workspace, upload gateway, Google Cloud upload/OCR orchestration, Cloudflare Workflow, D1 registration, access grants, and release verification.
 - A second Worker, `brvin-service`, is the private retrieval boundary. Consumer Workers call it with Cloudflare Service Binding RPC. Legacy v1 methods resolve `ctx.props.clientId` to a single project; v2 methods resolve `ctx.props.applicationEnvironmentId` to an application, then verify its active grant for the requested project. Both paths check D1 source grants, search only authorised folders, and validate returned page keys again.
 - The application that called BRVIN remains responsible for its own model, prompt, conversation state, tool/function-call handling, response formatting, and user delivery. BRVIN returns evidence; it does not generate the final answer.
-- The first controlled reference consumer is implemented as a separate text-only Worker in `ashini-x/askmoina-voice`. It does not share the AskMoina Voice runtime or production state. It uses its own app/environment identity, isolated test-project grant, tester token and Worker deployment. Its code repository is not a runtime dependency.
+- A historical text-only reference-client scaffold exists as a separate Worker in `ashini-x/askmoina-voice`. It does not share the AskMoina Voice runtime or production state. It was designed to use its own app/environment identity, isolated test-project grant, tester token and Worker deployment. It is not deployed or connected, PR #385 is superseded, and it is not the Project Factory acceptance application.
 
 ### High-level flow
 
