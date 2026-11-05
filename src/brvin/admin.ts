@@ -1396,7 +1396,7 @@ function renderConnectState(){
   ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+". OAuth currently grants "+(cloudflare.grantedScopes||[]).length+" scopes. "+(cloudflare.workerAdminScopeGranted?"Workers Admin is granted.":"BLOCKER: Workers Editor is not Workers Admin; BRVIN cannot create/delete new Workers until workers-scripts.admin is granted.")
   :"Authorize the Cloudflare account that hosts private brvin-service. The capability check itself does not create or change Workers.";
 }
-async function refresh(){try{model=await api(API+"overview");render();await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
+async function refresh(){try{model=await api(API+"overview");render();if($("connect-wizard-panel")?.open)await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
 function stage(id,state){$("step-"+id).className="step"+(state?" "+state:"");}
 function renderJob(job,pipeline){const uploaded=job.uploadedBytes>=job.expectedSize&&job.expectedSize>0;const ocr=pipeline?.vision?.status||"not_started";const status=job.status;
  stage("upload",uploaded?"done":status==="uploading"?"active":"");
@@ -1556,7 +1556,7 @@ async function clearAllBrvinBooks(){
  }catch(error){alert(error.message);}
  finally{button.disabled=false;}
 }
-function activateView(view){const allowed=["overview","books","collections","projects","operations","governance","applications"];if(!allowed.includes(view))return;document.querySelectorAll("[data-view-panel]").forEach(panel=>panel.classList.toggle("active",panel.dataset.viewPanel===view));document.querySelectorAll(".nav-item[data-view]").forEach(button=>button.classList.toggle("active",button.dataset.view===view));if(view==="applications")refreshConnectState();}
+function activateView(view){const allowed=["overview","books","collections","projects","operations","governance","applications"];if(!allowed.includes(view))return;document.querySelectorAll("[data-view-panel]").forEach(panel=>panel.classList.toggle("active",panel.dataset.viewPanel===view));document.querySelectorAll(".nav-item[data-view]").forEach(button=>button.classList.toggle("active",button.dataset.view===view));}
 document.querySelectorAll("[data-view]").forEach(button=>button.addEventListener("click",()=>activateView(button.dataset.view)));
 function openUpload(){activateView("books");$("upload-modal").classList.add("open");}
 $("open-upload").addEventListener("click",openUpload);$("open-upload-secondary").addEventListener("click",openUpload);$("open-upload-books").addEventListener("click",openUpload);
@@ -1576,7 +1576,7 @@ $("grant-project-button").addEventListener("click",async()=>{
  try{const applicationId=$("grant-application").value,projectId=$("grant-project").value;if(!applicationId||!projectId)throw new Error("Select an active application and project.");await post("applications/grants",{applicationId,projectId});await refresh();}
  catch(error){alert(error.message);}
 });
-$("connect-refresh").addEventListener("click",async()=>{await refresh();});
+$("connect-refresh").addEventListener("click",async()=>{await refresh();});$("connect-wizard-panel").addEventListener("toggle",()=>{if($("connect-wizard-panel").open)refreshConnectState();});
 $("provider-capability-check").addEventListener("click",async()=>{
  try{
   $("provider-capability-result").textContent="Checking live GitHub App permissions, repository coverage and Cloudflare OAuth scopes…";
