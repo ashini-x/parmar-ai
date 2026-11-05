@@ -117,6 +117,14 @@ describe("BRVIN browser script contract", () => {
     expect(script).toContain('post("projects"');
     expect(script).toContain('post("collections"');
     expect(script).toContain("function renderApplications");
+    expect(script).toContain("verifyBrvinEnvironment");
+    expect(script).toContain('data-environment-verify="');
+    expect(script).toContain('post("connections/challenge"');
+    expect(script).toContain('post("connections/complete"');
+    expect(workerSource).toContain("/brvin/connection-probe");
+    expect(workerSource).toContain("startBrvinConnectionVerification");
+    expect(workerSource).toContain("completeBrvinConnectionVerification");
+    expect(adminSource).toContain("brvin_connection_checks");
     expect(script).toContain('post("applications/status"');
     expect(script).toContain('post("applications/environments/status"');
     expect(script).toContain('post("applications/grants/revoke"');

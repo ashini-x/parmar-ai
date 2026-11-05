@@ -56,8 +56,8 @@ export function buildBrvinHandoff(input: BrvinHandoffInput) {
 
   const manifest = {
     format: "brvin.chatgpt-integration-handoff",
-    schemaVersion: 1,
-    revision: "brvin-chatgpt-handoff/v1",
+    schemaVersion: 2,
+    revision: "brvin-chatgpt-handoff/v2",
     generatedAt,
     sourceMetadata: {
       applicationUpdatedAt: Number(app.updatedAt ?? 0),
@@ -105,6 +105,7 @@ export function buildBrvinHandoff(input: BrvinHandoffInput) {
         "listAuthorizedProjectsV2()",
         "getProjectStatusV2({ projectId })",
         "retrieveProjectContextV2(input)",
+        "proveConnectionV2({ challengeId, nonce }) — connection probe only",
       ],
       rpcContract: "https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_2_RPC_V2_CONTRACT.md",
       integrationGuide: "https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_INTEGRATION_GUIDE.md",
@@ -119,6 +120,10 @@ export function buildBrvinHandoff(input: BrvinHandoffInput) {
       "Use only v2 RPC methods. Do not add a v1 clientId fallback or infer identity from a project ID.",
       "Keep brvin-service private with workers_dev disabled and no public route. Do not create a public URL or public retrieval proxy.",
       "Call BRVIN only from the consumer server-side Worker. Never expose the Service Binding to browser or mobile code.",
+      "Implement POST /brvin/connection-probe and OPTIONS on the consumer Worker; it must call proveConnectionV2 using only the trusted binding and return only the one-time proof.",
+      "The connection probe may accept only a challengeId and nonce, must not accept caller identity/project/source fields, and must not expose retrieval or source text.",
+      "Return the probe proof without credentials or cookies; the admin browser relays it to BRVIN's authenticated finalization route. Never mark a connection healthy from a browser-supplied boolean.",
+      "Keep the one-time proof endpoint content-free and replay-resistant; do not configure a public route on brvin-service or add shared master credentials to the consumer.",
       "Do not add BRVIN D1, AI Search, GCS, OCR storage, provider OAuth tokens, API tokens or master secrets to the consumer.",
       "Preserve the consumer application's own authentication, user mapping, model, prompts, sessions and final answer generation.",
       "A projectId is only a selector. The consumer must enforce its own user-to-project policy and BRVIN must enforce the app-project grant.",
@@ -136,12 +141,15 @@ export function buildBrvinHandoff(input: BrvinHandoffInput) {
       "A normal retrieval preserves source title, source ID and physical PDF page provenance.",
       "No-evidence, quota-limit, malformed-input, timeout, unavailable-service and retrieval-failure outcomes are handled distinctly.",
       "Revoking a grant removes access on the next request; no permission cache or automatic retrieval retry is introduced.",
+      "The consumer probe requires a fresh challenge and fails for a wrong, missing, inactive or revoked environment identity.",
+      "A challenge can be proven and finalized only once; expired and replayed challenges fail closed.",
+      "The probe response contains a one-time proof only and never contains passages, OCR, PDF data or source identifiers.",
     ],
     deliveryChecklist: [
       "Report changed files and the exact vendored upstream BRVIN commit SHA.",
       "Report the commit or PR, required CI checks and their results.",
       "Report the target Worker name, Cloudflare account confirmation and deployment/version evidence.",
-      "Do not claim Connected: BRVIN M9 live verification is a separate milestone.",
+      "Do not claim Connected until the BRVIN admin accepts a one-time proof from the deployed consumer probe.",
     ],
   };
 
@@ -191,6 +199,9 @@ export function buildBrvinHandoff(input: BrvinHandoffInput) {
     "- listAuthorizedProjectsV2()",
     "- getProjectStatusV2({ projectId })",
     "- retrieveProjectContextV2(input)",
+    "- proveConnectionV2({ challengeId, nonce }) — only for the content-free live connection probe",
+    "",
+    "Implement POST /brvin/connection-probe and OPTIONS in the consumer Worker. The POST accepts only the short-lived challengeId and nonce supplied by the BRVIN admin browser, calls BRVIN_SERVICE.proveConnectionV2(), and returns only { ok: true, proof }. It must not return source readiness claims, passages or other tenant data. The admin finalization endpoint verifies the one-time proof itself.",
     "",
     "Read the exact contract at " + manifest.service.rpcContract + " and the consumer guide at " + manifest.service.integrationGuide + ".",
     "",

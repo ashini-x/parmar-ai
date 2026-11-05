@@ -622,3 +622,93 @@ export async function retrieveBrvinForApplicationV2(
     return logBrvinV2Unavailable("retrieveProjectContextV2", startedAt, parsed.requestId);
   }
 }
+
+
+const BRVIN_CONNECTION_CHALLENGE_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
+const BRVIN_CONNECTION_NONCE = /^[a-f0-9]{64}$/u;
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), item => item.toString(16).padStart(2, "0")).join("");
+}
+
+function randomProof(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, item => item.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Issues a short-lived, single-use proof only when the caller identity comes
+ * from this entrypoint's trusted ctx.props and matches an admin-created nonce.
+ */
+export async function proveBrvinConnectionV2(
+  env: BrvinServiceEnv,
+  applicationEnvironmentId: string,
+  input: unknown,
+): Promise<BrvinV2Result<{
+  challengeId: string;
+  proof: string;
+  ready: boolean;
+  authorizedSourceCount: number;
+}>> {
+  const startedAt = Date.now();
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return logBrvinV2Result("proveConnectionV2", startedAt, v2Failure("INVALID_REQUEST", "A valid connection challenge is required."));
+  }
+  const value = input as Record<string, unknown>;
+  const challengeId = typeof value.challengeId === "string" ? value.challengeId : "";
+  const nonce = typeof value.nonce === "string" ? value.nonce : "";
+  if (!BRVIN_CONNECTION_CHALLENGE_ID.test(challengeId) || !BRVIN_CONNECTION_NONCE.test(nonce) ||
+      Object.keys(value).some(key => key !== "challengeId" && key !== "nonce")) {
+    return logBrvinV2Result("proveConnectionV2", startedAt, v2Failure("INVALID_REQUEST", "A valid connection challenge is required."));
+  }
+
+  try {
+    const callerResult = await resolveBrvinV2Caller(env, applicationEnvironmentId);
+    if (!callerResult.ok) return logBrvinV2Result("proveConnectionV2", startedAt, callerResult.failure);
+    if (!env.DB) throw new Error("BRVIN database is not configured.");
+
+    const challenge = await env.DB.prepare(
+      "SELECT id,environment_id,nonce_hash,status,expires_at FROM brvin_connection_checks WHERE id=? LIMIT 1",
+    ).bind(challengeId).first<{
+      id: string; environment_id: string; nonce_hash: string; status: string; expires_at: number;
+    }>();
+    if (!challenge || challenge.environment_id !== callerResult.value.environmentId ||
+        challenge.status !== "pending" || Number(challenge.expires_at) <= Date.now()) {
+      return logBrvinV2Result("proveConnectionV2", startedAt, v2Failure("INVALID_REQUEST", "The connection challenge is invalid or expired."));
+    }
+    if (await sha256Hex(nonce) !== challenge.nonce_hash) {
+      return logBrvinV2Result("proveConnectionV2", startedAt, v2Failure("INVALID_REQUEST", "The connection challenge is invalid or expired."));
+    }
+
+    const projects = await listAuthorizedProjectsV2(env, callerResult.value.environmentId);
+    if (!projects.ok) return logBrvinV2Result("proveConnectionV2", startedAt, projects);
+    const authorizedSourceCount = projects.data.reduce(
+      (total, project) => total + Math.max(0, Number(project.authorizedSourceCount) || 0),
+      0,
+    );
+    const ready = authorizedSourceCount > 0;
+    const proof = randomProof();
+    const now = Date.now();
+    const update = await env.DB.prepare(
+      "UPDATE brvin_connection_checks SET proof_hash=?,status='proof_issued',ready=?,authorized_source_count=? " +
+      "WHERE id=? AND environment_id=? AND status='pending' AND nonce_hash=? AND expires_at>?",
+    ).bind(
+      await sha256Hex(proof), ready ? 1 : 0, authorizedSourceCount,
+      challengeId, callerResult.value.environmentId, challenge.nonce_hash, now,
+    ).run();
+    if (Number(update.meta?.changes ?? 0) !== 1) {
+      return logBrvinV2Result("proveConnectionV2", startedAt, v2Failure("INVALID_REQUEST", "The connection challenge is invalid, expired or already used."));
+    }
+
+    return logBrvinV2Result(
+      "proveConnectionV2",
+      startedAt,
+      { ok: true, data: { challengeId, proof, ready, authorizedSourceCount } },
+      { caller: callerResult.value, sourceCount: authorizedSourceCount },
+    );
+  } catch {
+    return logBrvinV2Unavailable("proveConnectionV2", startedAt);
+  }
+}

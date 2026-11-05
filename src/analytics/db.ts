@@ -289,6 +289,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_brvin_app_env_one_active_key
   ON brvin_application_environments(application_id, environment_key)
   WHERE status = 'active';
 
+CREATE TABLE IF NOT EXISTS brvin_connection_checks (
+  id TEXT PRIMARY KEY CHECK (length(id) = 36),
+  environment_id TEXT NOT NULL REFERENCES brvin_application_environments(id) ON DELETE RESTRICT,
+  nonce_hash TEXT NOT NULL CHECK (length(nonce_hash) = 64),
+  proof_hash TEXT CHECK (proof_hash IS NULL OR length(proof_hash) = 64),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'proof_issued', 'connected', 'failed', 'expired')),
+  ready INTEGER CHECK (ready IS NULL OR ready IN (0, 1)),
+  authorized_source_count INTEGER CHECK (authorized_source_count IS NULL OR authorized_source_count >= 0),
+  failure_code TEXT,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  completed_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_brvin_connection_checks_environment_created
+  ON brvin_connection_checks(environment_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_brvin_connection_checks_expiry
+  ON brvin_connection_checks(status, expires_at);
+
 CREATE TABLE IF NOT EXISTS brvin_application_project_grants (
   id TEXT PRIMARY KEY CHECK (length(id) = 36),
   application_id TEXT NOT NULL

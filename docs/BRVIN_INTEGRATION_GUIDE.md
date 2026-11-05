@@ -72,6 +72,7 @@ Use the exact TypeScript types and failure union in [BRVIN_2_RPC_V2_CONTRACT.md]
 - `listAuthorizedProjectsV2()` — returns only projects with an active grant for the trusted application.
 - `getProjectStatusV2({ projectId })` — confirms that the selected project is authorized and reports source readiness/counts.
 - `retrieveProjectContextV2(input)` — returns bounded source passages and provenance for an authorized project.
+- `proveConnectionV2({ challengeId, nonce })` — probe-only RPC. It issues a one-time proof after checking the active caller identity against an admin-created challenge. It is not a retrieval API and must not be exposed through the retrieval connector.
 
 A `projectId` in an RPC input is only a selector. Every request must independently verify the active application/environment, project status and exact active application-project grant. A project ID does not grant access.
 
@@ -107,12 +108,23 @@ The app must preserve book title, source ID, physical PDF page and other availab
 
 Connection health and knowledge readiness are separate facts.
 
-- **Connection healthy:** the deployed Worker used its trusted `applicationEnvironmentId` and successfully called the v2 status operation through the private binding.
-- **Knowledge ready:** at least one source granted to the application is fully indexed and ready.
-- A valid connection with zero ready sources is **Connected — no ready knowledge**, not a broken connection.
-- A registered D1 application/environment row is not proof of a working deployed binding.
+- **Connection healthy:** the deployed consumer Worker calls `proveConnectionV2({ challengeId, nonce })` through its own private Service Binding. The service resolves the caller only from the trusted `applicationEnvironmentId` prop and issues a one-time proof for the exact pending challenge.
+- **Knowledge ready:** the service computes the count of ready sources across projects currently granted to that application. A valid connection with zero ready sources is **Connected — no ready knowledge**, not a broken connection.
+- A registered D1 application/environment row, a saved Worker URL or a browser-supplied boolean is not proof of a working deployed binding.
 
-The BRVIN admin connection-verification design must use a minimal consumer-side health operation that invokes v2 status via the consumer's own trusted binding and returns only safe status metadata. The verification callback/probe must be authenticated, replay-resistant and designed so no passage text or secret is exposed. Do not implement an unauthenticated callback or claim live verification before this contract is approved and tested.
+### Consumer probe endpoint
+
+Implement `POST /brvin/connection-probe` and `OPTIONS /brvin/connection-probe` in the consumer Worker:
+
+1. `OPTIONS` returns a no-store CORS preflight for `POST` and `content-type`; do not enable cookies or credentialed CORS.
+2. `POST` accepts exactly `{ challengeId, nonce }`. Reject any additional caller identity, project or source fields.
+3. Call `env.BRVIN_SERVICE.proveConnectionV2({ challengeId, nonce })`. Do not call the v2 proof method from browser/mobile code.
+4. On success return only `{ ok: true, proof }`. Do not return readiness assertions, project IDs, source IDs, text, OCR, passage data or credentials.
+5. On failure return a generic safe error code and no service internals.
+
+The BRVIN admin first creates a two-minute challenge through its administrator-session and same-origin protected API. Its browser sends the challenge to the saved consumer HTTPS origin, then relays the returned proof to the protected finalizer. The finalizer verifies the proof hash persisted by the private service and consumes the challenge exactly once. Expired, wrong-environment, inactive, invalid and replayed challenges fail closed. The nonce and proof are random, short-lived capabilities; there is no shared BRVIN master secret in the consumer.
+
+The public route is on the consumer Worker only. The private `brvin-service` remains `workers_dev: false`, has no public route, and retains its default HTTP 404 handler. No source text is retrieved or exposed during a connection check.
 
 ## 7. Security and operational checklist
 
