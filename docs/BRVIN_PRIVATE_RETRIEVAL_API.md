@@ -1,12 +1,14 @@
 # BRVIN Private Retrieval API
 
-**Contract status:** implemented  
-**Last verified:** 4 November 2026  
+**Contract status:** legacy v1 compatibility contract; still implemented for existing consumers  
+
 **Implementation:** `src/brvin/service-worker.ts`, `src/brvin/service-core.ts`, `src/brvin/retrieval.ts`
 
 This document describes the internal WorkerEntrypoint RPC contract. It is not a public HTTP API specification.
 
-> **Version boundary:** This page documents the implemented v1 methods for existing consumers. The additional v2 methods are now also implemented and deployed; see [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md) for their trusted application/environment identity and project-grant contract. Parmar AI's live health check exercises both versions, but Fatman end-user retrieval remains on v1 until connector/consumer migration.
+> **Version boundary:** This is the legacy v1 contract for existing consumers only. New consumer integrations must use v2. This page documents the implemented v1 methods. The additional v2 methods are now also implemented and deployed; see [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md) for their trusted application/environment identity and project-grant contract. Parmar AI's live health check exercises both versions, but Fatman end-user retrieval remains on v1 until connector/consumer migration.
+
+Do not use this document as the onboarding contract for a new application. New integrations start from [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md).
 
 For the complete system design, see [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md). For onboarding a consumer Worker, see [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md). For admin and production procedures, see [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md).
 
