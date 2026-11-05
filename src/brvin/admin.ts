@@ -831,7 +831,7 @@ function parseBrvinInitialEnvironments(value: unknown): BrvinInitialEnvironment[
     const metadata = normalizeWorkerMetadata(row.workerName, row.workerUrl);
     if (!metadata) return null;
     const displayName = typeof row.displayName === "string"
-      ? row.displayName.replace(/\\s+/gu, " ").trim().slice(0, 80)
+      ? row.displayName.replace(/\s+/gu, " ").trim().slice(0, 80)
       : key.charAt(0).toUpperCase() + key.slice(1);
     output.push({ environmentKey: key, displayName: displayName || key, ...metadata });
   }
@@ -846,9 +846,9 @@ export async function createBrvinApplication(env: Env, request: Request): Promis
     repositoryUrl?: unknown; repositoryDefaultBranch?: unknown; runtimeProvider?: unknown; environments?: unknown;
   };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
-  const name = typeof body.name === "string" ? body.name.replace(/\\s+/gu, " ").trim().slice(0, 100) : "";
+  const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
-  const ownerLabel = body.ownerLabel === undefined ? "" : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\\s+/gu, " ").trim().slice(0, 120) : null;
+  const ownerLabel = body.ownerLabel === undefined ? "" : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
   const slugInput = typeof body.slug === "string" && body.slug.trim() ? body.slug : name;
   const slug = slugify(slugInput);
   const repositoryUrl = normalizeGitHubRepositoryUrl(body.repositoryUrl);
@@ -905,9 +905,9 @@ export async function updateBrvinApplication(env: Env, request: Request): Promis
   };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
   const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
-  const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\\s+/gu, " ").trim().slice(0, 100) : null;
+  const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : null;
   const description = body.description === undefined ? undefined : typeof body.description === "string" ? body.description.trim().slice(0, 500) : null;
-  const ownerLabel = body.ownerLabel === undefined ? undefined : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\\s+/gu, " ").trim().slice(0, 120) : null;
+  const ownerLabel = body.ownerLabel === undefined ? undefined : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
   const repositoryUrl = body.repositoryUrl === undefined ? undefined : normalizeGitHubRepositoryUrl(body.repositoryUrl);
   const repositoryDefaultBranch = body.repositoryDefaultBranch === undefined ? undefined : normalizeGitDefaultBranch(body.repositoryDefaultBranch);
   const runtimeProvider = body.runtimeProvider === undefined ? undefined : normalizeRuntimeProvider(body.runtimeProvider);
@@ -957,7 +957,7 @@ export async function createBrvinApplicationEnvironment(env: Env, request: Reque
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid environment details." }, 400); }
   const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
   const environmentKey = normalizedEnvironmentKey(typeof body.environmentKey === "string" ? body.environmentKey : "");
-  const displayName = typeof body.displayName === "string" ? body.displayName.replace(/\\s+/gu, " ").trim().slice(0, 80) : "";
+  const displayName = typeof body.displayName === "string" ? body.displayName.replace(/\s+/gu, " ").trim().slice(0, 80) : "";
   const workerMetadata = normalizeWorkerMetadata(body.workerName, body.workerUrl);
   if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !environmentKey || !validBrvinApplicationSlug(environmentKey) || !workerMetadata) {
     return json({ ok: false, error: "Choose an active application and enter a valid environment label and Worker metadata pair." }, 400);
@@ -991,7 +991,7 @@ export async function updateBrvinApplicationEnvironment(env: Env, request: Reque
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid environment details." }, 400); }
   const environmentId = typeof body.environmentId === "string" ? body.environmentId.trim() : "";
   const displayName = body.displayName === undefined ? undefined
-    : typeof body.displayName === "string" ? body.displayName.replace(/\\s+/gu, " ").trim().slice(0, 80) : null;
+    : typeof body.displayName === "string" ? body.displayName.replace(/\s+/gu, " ").trim().slice(0, 80) : null;
   const workerMetadata = body.workerName === undefined && body.workerUrl === undefined
     ? undefined : normalizeWorkerMetadata(body.workerName, body.workerUrl);
   if (!/^[a-f0-9-]{36}$/iu.test(environmentId) || displayName === null || workerMetadata === null ||
