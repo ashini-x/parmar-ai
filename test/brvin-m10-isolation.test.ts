@@ -63,22 +63,22 @@ function makeHarness() {
     { application_id: APP_B, project_id: shared.id, status: "active" },
   ];
   const directBooks = [
-    { project_id: teacherA.id, book_id: "book-a-direct" },
-    { project_id: teacherB.id, book_id: "book-b-direct" },
-    { project_id: shared.id, book_id: "book-shared" },
+    { project_id: teacherA.id, book_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1" },
+    { project_id: teacherB.id, book_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1" },
+    { project_id: shared.id, book_id: "cccccccc-cccc-4ccc-8ccc-ccccccccccc1" },
   ];
   const collectionGrants = [
     { project_id: teacherA.id, collection_id: "collection-a" },
     { project_id: teacherB.id, collection_id: "collection-b" },
   ];
   const books: Book[] = [
-    { id: "book-a-direct", title: "Teacher A private formula", search_prefix: "teacher-a/direct/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "none" },
-    { id: "book-a-collection", title: "Teacher A collection notes", search_prefix: "teacher-a/collection/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "collection-a" },
-    { id: "book-a-unready", title: "Teacher A unready draft", search_prefix: "teacher-a/unready/", page_count: 2, indexed_pages: 1, status: "processing", collection_id: "collection-a" },
-    { id: "book-b-direct", title: "Teacher B private method", search_prefix: "teacher-b/direct/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "none" },
-    { id: "book-b-collection", title: "Teacher B collection notes", search_prefix: "teacher-b/collection/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "collection-b" },
-    { id: "book-shared", title: "Shared exam reference", search_prefix: "shared/reference/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "none" },
-    { id: "book-unassigned", title: "Unassigned source", search_prefix: "unassigned/source/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "none" },
+    { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1", title: "Teacher A private formula", search_prefix: "brvin/books/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1/pages/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "none" },
+    { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2", title: "Teacher A collection notes", search_prefix: "brvin/books/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2/pages/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "collection-a" },
+    { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3", title: "Teacher A unready draft", search_prefix: "brvin/books/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3/pages/", page_count: 2, indexed_pages: 1, status: "processing", collection_id: "collection-a" },
+    { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1", title: "Teacher B private method", search_prefix: "brvin/books/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1/pages/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "none" },
+    { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2", title: "Teacher B collection notes", search_prefix: "brvin/books/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2/pages/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "collection-b" },
+    { id: "cccccccc-cccc-4ccc-8ccc-ccccccccccc1", title: "Shared exam reference", search_prefix: "brvin/books/cccccccc-cccc-4ccc-8ccc-ccccccccccc1/pages/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "none" },
+    { id: "dddddddd-dddd-4ddd-8ddd-ddddddddddd1", title: "Unassigned source", search_prefix: "brvin/books/dddddddd-dddd-4ddd-8ddd-ddddddddddd1/pages/", page_count: 1, indexed_pages: 1, status: "ready", collection_id: "none" },
   ];
   const search = vi.fn(async () => ({
     chunks: books
@@ -223,19 +223,19 @@ describe("BRVIN M10 teacher project isolation", () => {
       data: {
         searchedSources: 2,
         passages: expect.arrayContaining([
-          expect.objectContaining({ bookId: "book-a-direct" }),
-          expect.objectContaining({ bookId: "book-a-collection" }),
+          expect.objectContaining({ bookId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1" }),
+          expect.objectContaining({ bookId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2" }),
         ]),
       },
     });
-    expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("book-b-direct");
-    expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("book-shared");
-    expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("book-unassigned");
-    expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("book-a-unready");
+    expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1");
+    expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("cccccccc-cccc-4ccc-8ccc-ccccccccccc1");
+    expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("dddddddd-dddd-4ddd-8ddd-ddddddddddd1");
+    expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3");
     expect(h.search).toHaveBeenCalledWith(expect.objectContaining({
       ai_search_options: {
         retrieval: expect.objectContaining({
-          filters: { folder: { $in: ["teacher-a/direct/", "teacher-a/collection/"] } },
+          filters: { folder: { $in: ["brvin/books/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1/pages/", "brvin/books/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2/pages/"] } },
         }),
       },
     }));
@@ -252,10 +252,10 @@ describe("BRVIN M10 teacher project isolation", () => {
     for (const result of [a, b]) {
       expect(result).toMatchObject({
         ok: true,
-        data: { searchedSources: 1, passages: [expect.objectContaining({ bookId: "book-shared" })] },
+        data: { searchedSources: 1, passages: [expect.objectContaining({ bookId: "cccccccc-cccc-4ccc-8ccc-ccccccccccc1" })] },
       });
-      expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("book-a-direct");
-      expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("book-b-direct");
+      expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1");
+      expect(result.ok && result.data.passages.map(item => item.bookId)).not.toContain("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1");
     }
   });
 
@@ -289,9 +289,9 @@ describe("BRVIN M10 teacher project isolation", () => {
     expect(before).toMatchObject({ ok: true, data: { searchedSources: 2 } });
 
     h.books.push({
-      id: "book-a-added-later",
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4",
       title: "Teacher A later collection addition",
-      search_prefix: "teacher-a/collection-later/",
+      search_prefix: "brvin/books/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4/pages/",
       page_count: 1,
       indexed_pages: 1,
       status: "ready",
@@ -305,7 +305,7 @@ describe("BRVIN M10 teacher project isolation", () => {
       ok: true,
       data: {
         searchedSources: 3,
-        passages: expect.arrayContaining([expect.objectContaining({ bookId: "book-a-added-later" })]),
+        passages: expect.arrayContaining([expect.objectContaining({ bookId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4" })]),
       },
     });
   });
