@@ -69,7 +69,8 @@ export async function brvinOverview(env: Env): Promise<Response> {
   try {
     await ensureAnalyticsSchema(env);
     const now = Date.now();
-    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events, applications, environments, applicationGrants] = await Promise.all([
+    const billingMonth = new Date(now).toISOString().slice(0, 7);
+    const [stats, collections, projects, books, bookAssignments, collectionAssignments, jobs, events, applications, environments, applicationGrants, projectUsage, fatmanUsage] = await Promise.all([
       env.DB.prepare(
         "SELECT COUNT(*) AS books, COALESCE(SUM(page_count),0) AS total_pages, " +
         "COALESCE(SUM(indexed_pages),0) AS indexed_pages, " +
@@ -85,9 +86,17 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "GROUP BY c.id ORDER BY c.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
-        "SELECT p.id,p.name,p.slug,p.description,p.status,p.created_at,p.updated_at," +
+        "SELECT p.id,p.name,p.slug,p.description,p.owner_label,p.status,p.created_at,p.updated_at," +
         "(SELECT COUNT(DISTINCT pb.book_id) FROM brvin_project_books pb WHERE pb.project_id=p.id) AS direct_books," +
         "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id) AS collection_books," +
+        "(SELECT COUNT(*) FROM (" +
+        " SELECT pb.book_id AS source_id FROM brvin_project_books pb WHERE pb.project_id=p.id" +
+        " UNION SELECT b.id AS source_id FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id" +
+        ") AS project_sources) AS source_count," +
+        "(SELECT COUNT(*) FROM (" +
+        " SELECT b.id AS source_id FROM brvin_project_books pb JOIN brvin_books b ON b.id=pb.book_id WHERE pb.project_id=p.id AND b.status='ready' AND b.page_count>0 AND b.indexed_pages=b.page_count" +
+        " UNION SELECT b.id AS source_id FROM brvin_project_collections pc JOIN brvin_books b ON b.collection_id=pc.collection_id WHERE pc.project_id=p.id AND b.status='ready' AND b.page_count>0 AND b.indexed_pages=b.page_count" +
+        ") AS ready_project_sources) AS ready_source_count," +
         "(SELECT COUNT(*) FROM brvin_application_project_grants ag WHERE ag.project_id=p.id AND ag.status='active') AS application_count " +
         "FROM brvin_projects p ORDER BY p.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
@@ -117,7 +126,7 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "FROM brvin_activity_events WHERE created_at>=? ORDER BY id DESC LIMIT 100"
       ).bind(now - 7 * 86_400_000).all<Record<string, unknown>>(),
       env.DB.prepare(
-        "SELECT a.id,a.slug,a.name,a.description,a.status,a.created_at,a.updated_at," +
+        "SELECT a.id,a.slug,a.name,a.description,a.owner_label,a.status,a.created_at,a.updated_at," +
         "(SELECT COUNT(*) FROM brvin_application_environments e WHERE e.application_id=a.id AND e.status='active') AS active_environment_count," +
         "(SELECT COUNT(*) FROM brvin_application_project_grants g WHERE g.application_id=a.id AND g.status='active') AS active_project_count " +
         "FROM brvin_applications a ORDER BY a.name COLLATE NOCASE"
@@ -134,6 +143,12 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "JOIN brvin_applications a ON a.id=g.application_id " +
         "ORDER BY g.created_at DESC"
       ).all<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT project_id,query_count FROM brvin_project_search_usage WHERE billing_month=?"
+      ).bind(billingMonth).all<Record<string, unknown>>(),
+      env.DB.prepare(
+        "SELECT query_count FROM fatman_search_usage WHERE billing_month=?"
+      ).bind(billingMonth).first<Record<string, unknown>>(),
     ]);
 
     const directByBook = new Map<string, Array<{ id: string; name: string }>>();
@@ -200,12 +215,20 @@ export async function brvinOverview(env: Env): Promise<Response> {
       applicationsByProject.set(projectId, projectApplications);
     }
 
+    const monthlyQueriesByProject = new Map<string, number>();
+    for (const row of projectUsage.results ?? []) {
+      monthlyQueriesByProject.set(String(row.project_id), Number(row.query_count ?? 0));
+    }
+    // Fatman's existing v1 requests have their own counter; preserve that separate accounting.
+    if (fatmanUsage) monthlyQueriesByProject.set("fatman", Number(fatmanUsage.query_count ?? 0));
+
     return json({
       ok: true,
       generatedAt: now,
       stats: {
         books: Number(stats?.books ?? 0), collections: collections.results?.length ?? 0,
-        projects: projects.results?.length ?? 0, totalPages: Number(stats?.total_pages ?? 0),
+        projects: projects.results?.length ?? 0, applications: applications.results?.length ?? 0,
+        totalPages: Number(stats?.total_pages ?? 0),
         indexedPages: Number(stats?.indexed_pages ?? 0), readyBooks: Number(stats?.ready_books ?? 0),
         activeBooks: Number(stats?.active_books ?? 0), failedBooks: Number(stats?.failed_books ?? 0),
       },
@@ -218,14 +241,18 @@ export async function brvinOverview(env: Env): Promise<Response> {
       })),
       projects: (projects.results ?? []).map((row) => ({
         id: String(row.id), name: String(row.name), slug: String(row.slug),
-        description: String(row.description ?? ""), status: String(row.status),
+        description: String(row.description ?? ""), ownerLabel: String(row.owner_label ?? ""),
+        status: String(row.status),
         directBooks: Number(row.direct_books ?? 0), collectionBooks: Number(row.collection_books ?? 0),
+        sourceCount: Number(row.source_count ?? 0), readySourceCount: Number(row.ready_source_count ?? 0),
         applicationCount: Number(row.application_count ?? 0),
+        monthlyQueries: monthlyQueriesByProject.get(String(row.id)) ?? 0,
         applications: applicationsByProject.get(String(row.id)) ?? [],
       })),
       applications: (applications.results ?? []).map((row) => ({
         id: String(row.id), slug: String(row.slug), name: String(row.name),
-        description: String(row.description ?? ""), status: String(row.status),
+        description: String(row.description ?? ""), ownerLabel: String(row.owner_label ?? ""),
+        status: String(row.status),
         activeEnvironmentCount: Number(row.active_environment_count ?? 0),
         activeProjectCount: Number(row.active_project_count ?? 0),
         environments: environmentsByApplication.get(String(row.id)) ?? [],
@@ -671,13 +698,14 @@ export async function startBrvinBookUpload(env: Env, request: Request): Promise<
 
 export async function createBrvinProject(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { name?: unknown; description?: unknown; applicationId?: unknown };
+  let body: { name?: unknown; description?: unknown; ownerLabel?: unknown; applicationId?: unknown; legacyClient?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project details." }, 400); }
   const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  const ownerLabel = body.ownerLabel === undefined ? "" : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
   const slug = slugify(name);
   const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
-  if (!name || !slug) return json({ ok: false, error: "Enter a valid project name." }, 400);
+  if (!name || !slug || ownerLabel === null) return json({ ok: false, error: "Enter a valid project name and teacher/owner label." }, 400);
   if (applicationId && !/^[a-f0-9-]{36}$/iu.test(applicationId)) {
     return json({ ok: false, error: "Select a registered application." }, 400);
   }
@@ -692,16 +720,18 @@ export async function createBrvinProject(env: Env, request: Request): Promise<Re
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
     const statements = [
       env.DB.prepare(
-        "INSERT INTO brvin_projects (id,name,slug,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
-      ).bind(id, name, slug, description, now, now),
+        "INSERT INTO brvin_projects (id,name,slug,description,owner_label,status,created_at,updated_at) VALUES (?,?,?,?,?,'active',?,?)"
+      ).bind(id, name, slug, description, ownerLabel, now, now),
     ];
     if (applicationId) {
       statements.push(env.DB.prepare(
         "INSERT INTO brvin_application_project_grants (id,application_id,project_id,status,created_at,created_by) " +
         "VALUES (?,?,?,'active',?,'admin-dashboard')"
       ).bind(crypto.randomUUID().toLowerCase(), applicationId, id, now));
-    } else {
-      // Legacy creation remains available for existing v1 clients and Fatman-compatible integrations.
+    } else if (body.legacyClient !== false) {
+      // Preserve the historical v1 default for existing callers. The new teacher
+      // workspace sends legacyClient:false so knowledge projects remain app-neutral
+      // until an application is explicitly granted access.
       statements.push(env.DB.prepare(
         "INSERT INTO brvin_service_clients (client_id,project_id,created_at,updated_at) VALUES (?,?,?,?)"
       ).bind(slug, id, now, now));
@@ -713,9 +743,9 @@ export async function createBrvinProject(env: Env, request: Request): Promise<Re
       message: applicationId
         ? "A new project was created and explicitly granted to its selected BRVIN application. It has no knowledge access until sources are assigned."
         : "A legacy project and its default private Worker identity were created. It has no knowledge access until sources are assigned.",
-      details: { applicationId: applicationId || null, serviceClientId: applicationId ? null : slug },
+      details: { applicationId: applicationId || null, ownerLabel, legacyClient: !applicationId && body.legacyClient !== false },
     });
-    return json({ ok: true, project: { id, name, slug, description, applicationId: applicationId || null } }, 201);
+    return json({ ok: true, project: { id, name, slug, description, ownerLabel, applicationId: applicationId || null } }, 201);
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
@@ -730,28 +760,65 @@ function normalizedEnvironmentKey(value: string): string {
 
 export async function createBrvinApplication(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { name?: unknown; description?: unknown; slug?: unknown };
+  let body: { name?: unknown; description?: unknown; ownerLabel?: unknown; slug?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
   const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  const ownerLabel = body.ownerLabel === undefined ? "" : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
   const slugInput = typeof body.slug === "string" && body.slug.trim() ? body.slug : name;
   const slug = slugify(slugInput);
-  if (!name || !slug || !validBrvinApplicationSlug(slug)) {
-    return json({ ok: false, error: "Enter an application name that produces a valid lowercase slug." }, 400);
+  if (!name || !slug || !validBrvinApplicationSlug(slug) || ownerLabel === null) {
+    return json({ ok: false, error: "Enter a valid application name and owner label." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
     await env.DB.prepare(
-      "INSERT INTO brvin_applications (id,slug,name,description,status,created_at,updated_at) VALUES (?,?,?,?,'active',?,?)"
-    ).bind(id, slug, name, description, now, now).run();
+      "INSERT INTO brvin_applications (id,slug,name,description,owner_label,status,created_at,updated_at) VALUES (?,?,?,?,?,'active',?,?)"
+    ).bind(id, slug, name, description, ownerLabel, now, now).run();
     await recordBrvinActivity(env, {
       agent: "BRVIN application registry", phase: "governance",
       eventType: "application.created", status: "completed",
       message: "A BRVIN application record was created. No environment or project access is implied.",
-      details: { applicationId: id, slug },
+      details: { applicationId: id, slug, ownerLabel },
     });
-    return json({ ok: true, application: { id, slug, name, description, status: "active" } }, 201);
+    return json({ ok: true, application: { id, slug, name, description, ownerLabel, status: "active" } }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function updateBrvinApplication(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { applicationId?: unknown; name?: unknown; description?: unknown; ownerLabel?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
+  const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
+  const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : null;
+  const description = body.description === undefined ? undefined : typeof body.description === "string" ? body.description.trim().slice(0, 500) : null;
+  const ownerLabel = body.ownerLabel === undefined ? undefined : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || name === null || description === null || ownerLabel === null ||
+      (name !== undefined && (!name || !slugify(name))) ||
+      (name === undefined && description === undefined && ownerLabel === undefined)) {
+    return json({ ok: false, error: "Enter valid application details." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const current = await env.DB.prepare(
+      "SELECT id,name,description,owner_label,status FROM brvin_applications WHERE id=?"
+    ).bind(applicationId).first<{ id: string; name: string; description: string; owner_label: string; status: string }>();
+    if (!current) return json({ ok: false, error: "Application not found." }, 404);
+    const nextName = name ?? current.name;
+    const nextDescription = description ?? current.description;
+    const nextOwnerLabel = ownerLabel ?? current.owner_label ?? "";
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_applications SET name=?,description=?,owner_label=?,updated_at=? WHERE id=?"
+    ).bind(nextName, nextDescription, nextOwnerLabel, now, applicationId).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.updated", status: "completed",
+      message: "Application details and owner metadata were updated.",
+      details: { applicationId, ownerLabel: nextOwnerLabel },
+    });
+    return json({ ok: true, application: { id: applicationId, name: nextName, description: nextDescription, ownerLabel: nextOwnerLabel, status: current.status } });
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
@@ -921,37 +988,39 @@ export async function revokeBrvinApplicationProject(env: Env, request: Request):
 
 export async function updateBrvinProject(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { projectId?: unknown; name?: unknown; description?: unknown; status?: unknown };
+  let body: { projectId?: unknown; name?: unknown; description?: unknown; ownerLabel?: unknown; status?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid project details." }, 400); }
   const projectId = typeof body.projectId === "string" ? body.projectId.trim() : "";
   const status = body.status === undefined ? undefined : body.status;
   const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
   const description = body.description === undefined ? undefined : typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
+  const ownerLabel = body.ownerLabel === undefined ? undefined : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
   if (!projectId || projectId.length > 128 || projectId !== body.projectId ||
       (status !== undefined && !["active", "inactive"].includes(String(status))) ||
-      (name !== undefined && (!name || !slugify(name)))) {
+      (name !== undefined && (!name || !slugify(name))) || ownerLabel === null) {
     return json({ ok: false, error: "Enter a valid project name and status." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
     const current = await env.DB.prepare(
-      "SELECT id,name,description,status FROM brvin_projects WHERE id=?"
-    ).bind(projectId).first<{ id: string; name: string; description: string; status: string }>();
+      "SELECT id,name,description,owner_label,status FROM brvin_projects WHERE id=?"
+    ).bind(projectId).first<{ id: string; name: string; description: string; owner_label: string; status: string }>();
     if (!current) return json({ ok: false, error: "Project not found." }, 404);
     const nextName = name ?? current.name;
     const nextDescription = description ?? current.description;
+    const nextOwnerLabel = ownerLabel ?? current.owner_label ?? "";
     const nextStatus = String(status ?? current.status);
     const now = Date.now();
     await env.DB.prepare(
-      "UPDATE brvin_projects SET name=?,description=?,status=?,updated_at=? WHERE id=?"
-    ).bind(nextName, nextDescription, nextStatus, now, projectId).run();
+      "UPDATE brvin_projects SET name=?,description=?,owner_label=?,status=?,updated_at=? WHERE id=?"
+    ).bind(nextName, nextDescription, nextOwnerLabel, nextStatus, now, projectId).run();
     await recordBrvinActivity(env, {
       projectId, agent: "BRVIN access control", phase: "governance",
       eventType: "project.updated", status: "completed",
       message: "Project details or activation status were updated.",
-      details: { previousStatus: current.status, status: nextStatus },
+      details: { previousStatus: current.status, status: nextStatus, ownerLabel: nextOwnerLabel },
     });
-    return json({ ok: true, project: { id: projectId, name: nextName, description: nextDescription, status: nextStatus } });
+    return json({ ok: true, project: { id: projectId, name: nextName, description: nextDescription, ownerLabel: nextOwnerLabel, status: nextStatus } });
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
@@ -1064,22 +1133,23 @@ const HTML = `<!doctype html>
 .modal{display:none;position:fixed;inset:0;background:#11182766;z-index:30;padding:18px;align-items:center;justify-content:center;backdrop-filter:blur(5px)}.modal.open{display:flex}.modalbox{width:min(720px,100%);max-height:90vh;overflow:auto;background:#fff;border:1px solid #ffffff90;border-radius:19px;padding:22px;box-shadow:0 24px 80px #11182730}.modalbox.wide{width:min(820px,100%)}.modalhead{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:18px}.modalhead h2{font-size:18px;letter-spacing:-.035em;margin:0;font-weight:710}.modal-subtitle{font-size:11px;color:var(--muted);margin:-10px 0 16px}.modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}.management-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.management-actions .btn{justify-content:flex-start;padding:12px}.management-actions .btn.danger{grid-column:1/-1}.footer-note{font-size:10px;color:#989eaa;text-align:center;margin:26px 0 0}
 @media(max-width:1050px){.shell{padding:18px}.app-layout{grid-template-columns:1fr;gap:20px}.sidebar{position:static;display:block;border-bottom:1px solid var(--line);padding-bottom:13px}.nav-group{display:inline-block;vertical-align:top;margin-right:18px}.nav-label{padding:0 8px 6px}.nav-list{flex-direction:row;gap:4px}.nav-item{width:auto;white-space:nowrap;padding:9px 11px}.workspace{max-width:none}.overview-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:680px){.shell{padding:13px 12px 30px}.top{align-items:flex-start;padding-bottom:14px}.brand-mark{width:34px;height:34px}.brand{font-size:18px}.brand-caption{font-size:10px}.actions{gap:6px}.actions .btn{padding:8px 9px;font-size:10px}.live{width:100%;justify-content:flex-end;font-size:10px}.app-layout{padding-top:13px;gap:16px}.sidebar{overflow-x:auto;white-space:nowrap;margin:0 -12px;padding:0 12px 10px}.nav-group{margin-right:12px}.nav-label{display:none}.nav-item{font-size:11px;padding:8px 10px;gap:6px}.nav-icon{width:auto}.page-heading{align-items:flex-start;flex-direction:column;margin:4px 0 16px}.page-heading h1{font-size:25px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.metric{padding:13px}.metric strong{font-size:22px}.overview-grid,.quick-grid,.collection-grid,.project-grid,.job-grid{grid-template-columns:1fr}.panel,.view-panel{padding:15px}.feature-panel{padding:18px}.feature-number{font-size:36px}.formgrid{grid-template-columns:1fr;gap:0}.steps{grid-template-columns:repeat(2,1fr)}.modal{padding:10px;align-items:flex-end}.modalbox{padding:18px;border-radius:18px 18px 12px 12px;max-height:92vh;width:100%}.management-actions{grid-template-columns:1fr}.management-actions .btn.danger{grid-column:auto}.table{min-width:680px}}</style></head><body><body><main class="shell"><header class="top"><div class="brand-wrap"><div class="brand-mark" aria-hidden="true">B</div><div><div class="brand">BRVIN</div><div class="brand-caption">Knowledge intelligence · परमार्थAI</div></div></div><div class="actions"><span class="live"><i></i><span id="live-label">LIVE · connecting</span></span><button class="btn" id="refresh" type="button">↻ Refresh</button><a class="btn" href="/admin">Admin home</a><button class="btn" id="logout" type="button">Sign out</button></div></header>
-<div class="app-layout"><aside class="sidebar" aria-label="BRVIN navigation"><div class="nav-group"><div class="nav-label">Workspace</div><nav class="nav-list" aria-label="Workspace"><button class="nav-item active" type="button" data-view="overview"><span class="nav-icon">⌂</span>Overview</button><button class="nav-item" type="button" data-view="books"><span class="nav-icon">▤</span>Knowledge sources</button><button class="nav-item" type="button" data-view="collections"><span class="nav-icon">▧</span>Knowledge collections</button><button class="nav-item" type="button" data-view="projects"><span class="nav-icon">◫</span>Projects</button><button class="nav-item" type="button" data-view="operations"><span class="nav-icon">◷</span>Live operations</button></nav></div><div class="nav-group"><div class="nav-label">Administration</div><nav class="nav-list" aria-label="Administration"><button class="nav-item" type="button" data-view="governance"><span class="nav-icon">⚙</span>Governance</button><button class="nav-item" type="button" data-view="applications"><span class="nav-icon">◇</span>Applications & access</button></nav></div></aside>
+<div class="app-layout"><aside class="sidebar" aria-label="BRVIN navigation"><div class="nav-group"><div class="nav-label">Workspace</div><nav class="nav-list" aria-label="Workspace"><button class="nav-item active" type="button" data-view="overview"><span class="nav-icon">⌂</span>Overview</button><button class="nav-item" type="button" data-view="books"><span class="nav-icon">▤</span>Knowledge sources</button><button class="nav-item" type="button" data-view="collections"><span class="nav-icon">▧</span>Knowledge collections</button><button class="nav-item" type="button" data-view="projects"><span class="nav-icon">◫</span>Knowledge projects</button><button class="nav-item" type="button" data-view="operations"><span class="nav-icon">◷</span>Live operations</button></nav></div><div class="nav-group"><div class="nav-label">Administration</div><nav class="nav-list" aria-label="Administration"><button class="nav-item" type="button" data-view="governance"><span class="nav-icon">⚙</span>Governance</button><button class="nav-item" type="button" data-view="applications"><span class="nav-icon">◇</span>Applications</button></nav></div></aside>
 <div class="workspace">
-<section class="view active" id="view-overview" data-view-panel="overview"><div class="page-heading"><div><div class="eyebrow">BRVIN workspace</div><h1>Knowledge, organised.</h1><p class="subtitle">A single governed library, connected to projects with intention.</p></div><div class="heading-actions"><button class="btn primary" id="open-upload" type="button">＋ Add knowledge source</button></div></div>
+<section class="view active" id="view-overview" data-view-panel="overview"><div class="page-heading"><div><div class="eyebrow">BRVIN workspace</div><h1>Teacher knowledge, connected.</h1><p class="subtitle">Organise each teacher's digital brain, then grant independent applications exactly the knowledge they need.</p></div><div class="heading-actions"><button class="btn primary" id="open-upload" type="button">＋ Add knowledge source</button></div></div>
 <div class="metrics" id="metrics"><div class="metric"><span>Knowledge sources</span><strong>—</strong><small>Across all collections</small></div><div class="metric"><span>Collections</span><strong>—</strong><small>Governed groups</small></div><div class="metric"><span>Projects</span><strong>—</strong><small>Independent consumers</small></div><div class="metric"><span>Indexed pages</span><strong>—</strong><small>Verified / total</small></div><div class="metric"><span>Active pipelines</span><strong>—</strong><small>Running now</small></div><div class="metric"><span>Needs attention</span><strong>—</strong><small>Failed or blocked</small></div></div>
-<div class="overview-grid"><div class="stack"><section class="panel feature-panel"><div class="eyebrow">Knowledge library</div><div class="feature-number" id="overview-books">—</div><div class="feature-meta" id="overview-pages">Sources · indexed pages</div><p class="panel-copy">Your source documents stay in one place. Each project receives only the books or collections explicitly assigned to it.</p><div class="feature-actions"><button class="btn primary" type="button" data-view="books">Open knowledge sources</button><button class="btn" type="button" id="open-upload-secondary">Add a PDF</button></div></section><div class="quick-grid"><section class="quick-card"><div class="quick-symbol">▧</div><h3>Collections</h3><p>Group related books without automatically sharing them.</p><button class="text-link" type="button" data-view="collections">View collections →</button></section><section class="quick-card"><div class="quick-symbol">◫</div><h3>Projects</h3><p>Control which project can use BRVIN knowledge.</p><button class="text-link" type="button" data-view="projects">View projects →</button></section></div></div><div class="stack"><section class="panel"><div class="panel-head"><h2>System overview</h2><span class="live"><i></i>Live</span></div><div class="pulse-row"><span>Ready sources</span><strong id="overview-ready">—</strong></div><div class="pulse-row"><span>Active pipelines</span><strong id="overview-running">—</strong></div><div class="pulse-row"><span>Needs attention</span><strong id="overview-attention">—</strong></div><div class="notice" id="overview-status-note">Pipeline activity and indexing status update automatically.</div><div class="feature-actions"><button class="btn" type="button" data-view="operations">View operations →</button></div></section><section class="panel"><div class="panel-head"><h2>Access model</h2></div><p class="panel-copy">BRVIN never exposes every book to every project by default. Direct book access and collection access are managed independently and combined for retrieval.</p><div class="notice">A book becomes available after indexing and retrieval QA pass, and only to explicitly authorised projects.</div><div class="feature-actions"><button class="btn" type="button" data-view="governance">Manage governance →</button></div></section></div></div></section>
+<div class="overview-grid"><div class="stack"><section class="panel feature-panel"><div class="eyebrow">Knowledge library</div><div class="feature-number" id="overview-books">—</div><div class="feature-meta" id="overview-pages">Sources · indexed pages</div><p class="panel-copy">Your source documents stay in one place. Each project receives only the books or collections explicitly assigned to it.</p><div class="feature-actions"><button class="btn primary" type="button" data-view="books">Open knowledge sources</button><button class="btn" type="button" id="open-upload-secondary">Add a PDF</button></div></section><div class="quick-grid"><section class="quick-card"><div class="quick-symbol">◫</div><h3>Knowledge projects</h3><p>Each teacher gets a separate, governed knowledge workspace.</p><button class="text-link" type="button" data-view="projects">Manage teacher knowledge →</button></section><section class="quick-card"><div class="quick-symbol">◇</div><h3>Applications</h3><p>See which bots and apps are registered and which knowledge they can access.</p><button class="text-link" type="button" data-view="applications">Manage applications →</button></section></div></div><div class="stack"><section class="panel"><div class="panel-head"><h2>System overview</h2><span class="live"><i></i>Live</span></div><div class="pulse-row"><span>Ready sources</span><strong id="overview-ready">—</strong></div><div class="pulse-row"><span>Active pipelines</span><strong id="overview-running">—</strong></div><div class="pulse-row"><span>Needs attention</span><strong id="overview-attention">—</strong></div><div class="notice" id="overview-status-note">Pipeline activity and indexing status update automatically.</div><div class="feature-actions"><button class="btn" type="button" data-view="operations">View operations →</button></div></section><section class="panel"><div class="panel-head"><h2>Access model</h2></div><p class="panel-copy">BRVIN never exposes every book to every project by default. Direct book access and collection access are managed independently and combined for retrieval.</p><div class="notice">A book becomes available after indexing and retrieval QA pass, and only to explicitly authorised projects.</div><div class="feature-actions"><button class="btn" type="button" data-view="governance">Manage governance →</button></div></section></div></div></section>
 <section class="view" id="view-books" data-view-panel="books"><div class="page-heading"><div><div class="eyebrow">Library</div><h1>Knowledge sources</h1><p class="subtitle">Books and documents indexed for your projects.</p></div><div class="heading-actions"><button class="btn danger" id="clear-brvin" type="button">Clear all imported books</button><button class="btn primary" type="button" id="open-upload-books">＋ Add source</button></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>All sources</h2><p id="book-count">Loading knowledge registry…</p></div><span class="muted" style="font-size:11px">Select Manage for source actions</span></div><div class="tablewrap"><table class="table"><thead><tr><th>Source</th><th>Collection</th><th>Indexed</th><th>Status</th><th>Project access</th><th>Actions</th></tr></thead><tbody id="books"><tr><td class="empty" colspan="6">Loading knowledge registry…</td></tr></tbody></table></div><div class="notice">The original PDF and searchable page index are retained independently. Google Vision OCR JSON is temporary processing output, but it may remain in private cloud storage when the required Google Cloud permissions do not allow cleanup; this does not affect retrieval from indexed pages. “Delete OCR files” keeps the PDF and searchable pages. “Delete book” removes the PDF, OCR output, indexed pages, project grants and registry records. Bulk clear preserves the protected built-in Fatman reference, project and collection definitions, and the audit trail.</div></section></section>
 <section class="view" id="view-collections" data-view-panel="collections"><div class="page-heading"><div><div class="eyebrow">Organisation</div><h1>Collections</h1><p class="subtitle">Arrange sources into logical groups. A collection is not shared until assigned to a project.</p></div><div class="heading-actions"><button class="btn" type="button" data-view="governance">＋ Create collection</button></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Your collections</h2><p>Each collection can be connected to one or more projects.</p></div></div><div id="collections" class="collection-grid"><div class="empty">Loading collections…</div></div></section></section>
-<section class="view" id="view-projects" data-view-panel="projects"><div class="page-heading"><div><div class="eyebrow">Knowledge consumers</div><h1>Projects</h1><p class="subtitle">Manage the project spaces that can retrieve BRVIN knowledge.</p></div><div class="heading-actions"><button class="btn" type="button" data-view="governance">＋ Create project</button></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Connected projects</h2><p>Direct book access and collection access are additive.</p></div></div><div id="projects" class="project-grid"><div class="empty">Loading projects…</div></div></section></section>
+<section class="view" id="view-projects" data-view-panel="projects"><div class="page-heading"><div><div class="eyebrow">Teacher workspaces</div><h1>Knowledge projects</h1><p class="subtitle">One digital brain per teacher or learning use case. Applications receive access only through explicit grants.</p></div><div class="heading-actions"><button class="btn" type="button" data-view="governance">＋ Create project</button></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Teacher knowledge workspaces</h2><p>Review source readiness, assigned applications and monthly retrieval usage.</p></div></div><div id="projects" class="project-grid"><div class="empty">Loading projects…</div></div></section></section>
 <section class="view" id="view-operations" data-view-panel="operations"><div class="page-heading"><div><div class="eyebrow">System activity</div><h1>Operations</h1><p class="subtitle">Follow ingestion, indexing, retrieval checks and cleanup workflows.</p></div><div class="heading-actions"><span class="live"><i></i>5-second refresh · automatic</span></div></div><section class="view-panel"><div class="panel-toolbar"><div><h2>Live pipelines</h2><p>Active jobs and recoverable failures.</p></div></div><div id="jobs" class="job-grid"><div class="empty">No active processing jobs.</div></div></section><section class="view-panel"><div class="panel-toolbar"><div><h2>Specialist activity</h2><p>Actual workflow events · <span id="event-stamp">Waiting for events</span></p></div></div><div class="timeline" id="events"><div class="empty">Waiting for BRVIN events…</div></div></section></section>
-<section class="view" id="view-governance" data-view-panel="governance"><div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Governance</h1><p class="subtitle">Create projects and collections, then explicitly grant collection access.</p></div></div><div class="overview-grid"><section class="view-panel"><div class="panel-toolbar"><div><h2>Create a project</h2><p>A project is an isolated knowledge consumer.</p></div></div><div class="field"><label for="project-application">Connected application</label><select id="project-application"><option value="">Loading applications…</option></select></div><div class="field"><label for="project-name">Project name</label><input id="project-name" maxlength="100" placeholder="Project name"></div><div class="field"><label for="project-desc">Description</label><input id="project-desc" maxlength="500" placeholder="What will this platform use BRVIN for?"></div><button class="btn primary" id="create-project" type="button">Create project</button></section><section class="view-panel"><div class="panel-toolbar"><div><h2>Create a collection</h2><p>Group sources by subject or purpose.</p></div></div><div class="field"><label for="collection-name">Collection name</label><input id="collection-name" maxlength="100" placeholder="Collection name"></div><div class="field"><label for="collection-desc">Description</label><input id="collection-desc" maxlength="500" placeholder="What belongs in this collection?"></div><button class="btn primary" id="create-collection" type="button">Create collection</button></section><section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Collection access</h2><p>Choose which collections a project can retrieve. This does not replace direct book assignments.</p></div></div><div class="formgrid"><div class="field"><label for="project-access">Project</label><select id="project-access"></select></div><div class="field"><label>Available collections</label><div class="checks" id="collection-checks"></div></div></div><button class="btn primary" id="save-project-access" type="button">Save collection access</button><div class="notice">Access is additive: projects receive content through direct book assignments and/or collection assignments. Empty projects have no BRVIN knowledge access.</div></section></div></section>
+<section class="view" id="view-governance" data-view-panel="governance"><div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Knowledge setup</h1><p class="subtitle">Create teacher workspaces, organise source collections and control exactly which material each project can retrieve.</p></div></div><div class="overview-grid"><section class="view-panel"><div class="panel-toolbar"><div><h2>Create a teacher knowledge project</h2><p>Start with the teacher or customer label. You can connect applications and grant access separately.</p></div></div><div class="field"><label for="project-owner">Teacher / owner label</label><input id="project-owner" maxlength="120" placeholder="e.g. Teacher A · Mathematics"></div><div class="field"><label for="project-name">Knowledge project name</label><input id="project-name" maxlength="100" placeholder="e.g. Teacher A Mathematics"></div><div class="field"><label for="project-desc">Description</label><input id="project-desc" maxlength="500" placeholder="Subjects, methods or intended learning use"></div><div class="notice">Creating a knowledge project does not create an application, repository, Worker or legacy service credential. Connect an application separately and grant access when ready.</div><button class="btn primary" id="create-project" type="button">Create knowledge project</button></section><section class="view-panel"><div class="panel-toolbar"><div><h2>Create a collection</h2><p>Group sources by subject or purpose.</p></div></div><div class="field"><label for="collection-name">Collection name</label><input id="collection-name" maxlength="100" placeholder="Collection name"></div><div class="field"><label for="collection-desc">Description</label><input id="collection-desc" maxlength="500" placeholder="What belongs in this collection?"></div><button class="btn primary" id="create-collection" type="button">Create collection</button></section><section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Collection access</h2><p>Choose which collections a project can retrieve. This does not replace direct book assignments.</p></div></div><div class="formgrid"><div class="field"><label for="project-access">Project</label><select id="project-access"></select></div><div class="field"><label>Available collections</label><div class="checks" id="collection-checks"></div></div></div><button class="btn primary" id="save-project-access" type="button">Save collection access</button><div class="notice">Access is additive: projects receive content through direct book assignments and/or collection assignments. Empty projects have no BRVIN knowledge access.</div></section></div></section>
 <section class="view" id="view-applications" data-view-panel="applications">
-<div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Applications & access</h1><p class="subtitle">Register consumer apps, deployment identities and explicit project permissions.</p></div></div>
+<div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Applications</h1><p class="subtitle">Register independent bots and apps, track their deployment environments, and manage the teacher knowledge projects they are allowed to retrieve.</p></div></div>
 <div class="overview-grid">
-<section class="view-panel"><div class="panel-toolbar"><div><h2>Register application</h2><p>Create the application record once. It does not grant project access by itself.</p></div></div>
-<div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. PDF Chat Application"></div>
-<div class="field"><label for="application-desc">Description</label><input id="application-desc" maxlength="500" placeholder="What will this application use BRVIN for?"></div>
+<section class="view-panel"><div class="panel-toolbar"><div><h2>Register an application</h2><p>Record an independently built bot, website or assistant. Its repository and deployment remain managed through ChatGPT.</p></div></div>
+<div class="field"><label for="application-owner">Teacher / owner label</label><input id="application-owner" maxlength="120" placeholder="e.g. Teacher A"></div>
+<div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. SSC Mathematics Telegram Bot"></div>
+<div class="field"><label for="application-desc">Purpose</label><input id="application-desc" maxlength="500" placeholder="What does this application do?"></div>
 <button class="btn primary" id="create-application" type="button">Register application</button>
 </section>
 <section class="view-panel"><div class="panel-toolbar"><div><h2>Add deployment environment</h2><p>Environment IDs are generated by BRVIN and are not API keys.</p></div></div>
@@ -1091,22 +1161,24 @@ const HTML = `<!doctype html>
 <section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Grant project access</h2><p>Application grants and source-level book/collection grants are separate permissions.</p></div></div>
 <div class="formgrid"><div class="field"><label for="grant-application">Application</label><select id="grant-application"></select></div><div class="field"><label for="grant-project">Project</label><select id="grant-project"></select></div></div>
 <button class="btn primary" id="grant-project-button" type="button">Grant application access</button>
-<div class="notice">Only active applications, active environments and active grants can retrieve. A project selector never proves entitlement. Registered environments are not marked live-connected until the M6 wizard verifies the Service Binding.</div>
+<div class="notice">Application grants are independent of source grants. A registered environment is not yet a verified connection: live private Service Binding verification is a later milestone. ChatGPT's GitHub repository access is authorized separately; BRVIN cannot grant that access from this panel.</div>
 </section>
 <section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Application registry</h2><p>Environment identities, lifecycle status and project grants. Revoked records remain in the audit history.</p></div></div>
 <div id="applications-list" class="project-grid"><div class="empty">Loading application registry…</div></div>
 </section>
 
-<section class="view-panel" id="connect-wizard-panel" style="margin-top:14px">
- <div class="panel-toolbar"><div><h2>Provider Administrator Connections</h2><p>Connect GitHub and Cloudflare once. BRVIN then provisions repositories, infrastructure, credentials and deployments for future projects automatically.</p></div><button class="btn" id="connect-refresh" type="button">Refresh connections</button></div>
+<details class="view-panel legacy-settings" id="connect-wizard-panel" style="margin-top:14px">
+ <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#69717e">Legacy provider settings · not required for the current BRVIN workflow</summary>
+ <div class="notice">These stored GitHub/Cloudflare settings belong to an earlier autonomous Project Factory proposal. Current application code and deployments are handled by ChatGPT through your separately authorized GitHub and Cloudflare connections. BRVIN does not provision repositories, deployment credentials or CI/CD. Do not reauthorize or delete these legacy settings as part of normal teacher/app onboarding.</div>
+ <div class="panel-toolbar"><div><h2>Legacy provider connection status</h2><p>Read-only historical configuration; not part of teacher knowledge management.</p></div><button class="btn" id="connect-refresh" type="button">Refresh legacy status</button></div>
  <section class="tile" style="margin-bottom:12px">
-  <div class="panel-toolbar"><div><h3>Administrator capability verification</h3><p>Checks actual GitHub App permissions/installation and Cloudflare OAuth scopes stored by BRVIN. Secret values are never displayed.</p></div><button class="btn primary" id="provider-capability-check" type="button">Verify provider access</button></div>
-  <p id="provider-capability-result" class="muted" aria-live="polite">Run the check after approving the expanded provider permissions.</p>
+  <div class="panel-toolbar"><div><h3>Historical provider preflight</h3><p>Optional read-only status for legacy BRVIN provider settings. This does not control or validate the GitHub/Cloudflare connections used by ChatGPT.</p></div><button class="btn" id="provider-capability-check" type="button">Check legacy status</button></div>
+  <p id="provider-capability-result" class="muted" aria-live="polite">Not required for teacher knowledge management or application onboarding.</p>
  </section>
  <div class="overview-grid">
   <section class="tile">
    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>GitHub App</strong><span class="pill" id="connect-github-status">Not connected</span></div>
-   <p>BRVIN needs repository creation and administration, source control, Actions workflows and secrets, environments, deployments, pull requests and repository settings. The existing BRVIN App is upgraded in place—do not create a duplicate app.</p>
+   <p>Historical BRVIN GitHub App registration and installation metadata. Current consumer repositories are managed by ChatGPT's separate GitHub connection.</p>
    <button class="btn primary" id="github-register" type="button">Open BRVIN GitHub App settings</button>
    <p id="github-app-meta" class="muted">Checking the existing BRVIN GitHub App…</p>
    <p id="github-access-state" class="muted">Repository access has not been checked yet.</p>
@@ -1116,7 +1188,7 @@ const HTML = `<!doctype html>
   </section>
   <section class="tile">
    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>Cloudflare OAuth</strong><span class="pill" id="connect-cloudflare-status">Not configured</span></div>
-   <p>BRVIN needs Developer Platform Admin access for the resources it manages, plus AI/Search and Account API Token creation. Workers Editor-only OAuth consent is not sufficient. The Cloudflare account member is already Super Administrator; only BRVIN's OAuth consent must be upgraded.</p>
+   <p>Historical Cloudflare OAuth client metadata retained for compatibility. Current consumer Worker configuration and deployment are managed through ChatGPT's separate Cloudflare connection.</p>
    <div id="cf-client-credentials">
     <div class="field"><label for="cf-client-id">OAuth client ID</label><input id="cf-client-id" autocomplete="off" maxlength="160" placeholder="Cloudflare OAuth client ID"></div>
     <div class="field"><label for="cf-client-secret">OAuth client secret</label><input id="cf-client-secret" type="password" autocomplete="new-password" maxlength="500" placeholder="Shown once by Cloudflare"></div>
@@ -1125,16 +1197,14 @@ const HTML = `<!doctype html>
    <p id="cf-client-state" class="muted">Checking the encrypted OAuth client configuration…</p>
    <div class="field"><label for="cf-required-scopes">Required one-time Cloudflare OAuth scopes</label><textarea id="cf-required-scopes" rows="5" readonly spellcheck="false"></textarea></div>
    <button class="btn" id="cf-copy-required-scopes" type="button">Copy required scopes</button>
-   <p class="notice">One-time Cloudflare approval: edit the existing BRVIN Connect client and allow the requested scopes shown below, including <code>account-api-tokens.write</code> (Account API Tokens Write). Do not add <code>account_api_tokens:create</code>; it is reserved for Cloudflare CLI OAuth. Your supplied scope list includes <code>workers-scripts.edit</code> (Workers Editor), but not <code>workers-scripts.admin</code> (Workers Admin). Editor can deploy/update existing Workers but cannot create/delete Workers. If Cloudflare offers <code>workers-scripts.admin</code> for this OAuth client, add it and re-authorize; otherwise full autonomous Worker creation is not available through this client and BRVIN will show that blocker rather than claim the Project Factory is ready. Preserve the callback URL and authorization-code/refresh-token grants. The client secret remains encrypted; do not create another client or re-enter it.</p>
+   <p class="notice">This is legacy OAuth configuration only. Do not expand permissions or reauthorize for current BRVIN application onboarding. Preserve the existing encrypted record unless a separately reviewed maintenance task establishes that it is unused.</p>
    <button class="btn primary" id="cf-save-client" type="button">Save OAuth client securely</button>
    <button class="btn" id="cf-authorize" type="button">Authorize / refresh BRVIN access</button>
    <button class="btn" id="cf-discover-workers" type="button">Discover Workers</button>
    <p class="muted" id="cf-worker-note">Must confirm that this same account contains the private brvin-service Worker.</p>
   </section>
  </div>
-
-</section>
-</div>
+</details>
 </section>
 </div></div><p class="footer-note">BRVIN · Administrator-only · Operational data refreshes automatically · Knowledge is never globally exposed by default</p></main>
 <div class="modal" id="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title"><div class="modalbox wide"><div class="modalhead"><div><div class="eyebrow">Secure ingestion</div><h2 id="upload-modal-title">Add knowledge source</h2></div><button class="btn" id="close-upload" type="button">Close</button></div><p class="modal-subtitle">Upload a private PDF. BRVIN handles OCR, indexing and retrieval verification in the background.</p><div class="formgrid"><div class="field"><label for="book-title">Book / document name</label><input id="book-title" maxlength="160" placeholder="e.g. Indian Polity Reference"></div><div class="field"><label for="collection">Knowledge collection</label><select id="collection"></select></div></div><div class="field"><label>PDF document</label><label class="drop" for="pdf"><span><strong>Choose PDF from this device</strong><small>Private resumable upload · up to 1 GB · 2,000 pages · OCR costs may apply</small><input id="pdf" type="file" accept="application/pdf"></span></label><div class="file" id="file-info">No PDF selected.</div></div><div class="field"><label>Grant project access (optional)</label><div class="checks" id="project-checks"><span class="muted">Loading projects…</span></div></div><label class="check"><input type="checkbox" id="cost"> I understand Google Cloud Vision OCR may incur usage charges.</label><div class="modal-actions"><button class="btn primary" id="upload" disabled type="button">Add to BRVIN</button></div><progress class="progress" id="progress" value="0" max="100"></progress><p class="statusline" id="upload-status" aria-live="polite">Choose a PDF to start. Processing continues on the server after upload completes.</p><div class="steps"><div class="step" id="step-upload"><b>01 · Secure upload</b><small>Private object storage</small></div><div class="step" id="step-ocr"><b>02 · Vision OCR</b><small>Document text detection</small></div><div class="step" id="step-index"><b>03 · Indexing</b><small>Page-level search</small></div><div class="step" id="step-qa"><b>04 · Retrieval QA</b><small>Source-page verification</small></div><div class="step" id="step-ready"><b>05 · Ready</b><small>Project access enabled</small></div></div><div class="notice">BRVIN does not automatically share every book with every project. A book is searchable only after indexing and retrieval QA pass, and only for projects explicitly assigned the book or its collection.</div></div></div>
@@ -1150,8 +1220,8 @@ function time(value){return value?new Date(Number(value)).toLocaleString():"—"
 function pct(a,b){return b?Math.max(0,Math.min(100,Math.floor(a/b*100))):0;}
 function statusPill(s){return '<span class="pill '+esc(s)+'">'+esc(String(s||"unknown").replaceAll("_"," "))+"</span>";}
 function renderMetrics(s){$("metrics").innerHTML=[
-["Knowledge sources",s.books,"Across all collections"],["Collections",s.collections,"Governed groups"],["Projects",s.projects,"Independent consumers"],
-["Indexed pages",s.indexedPages.toLocaleString()+" / "+s.totalPages.toLocaleString(),"Page-level coverage"],
+["Knowledge sources",s.books,"Across all teacher projects"],["Knowledge projects",s.projects,"Teacher digital brains"],["Applications",s.applications||0,"Independent consumer apps"],
+["Collections",s.collections,"Governed groups"],["Indexed pages",s.indexedPages.toLocaleString()+" / "+s.totalPages.toLocaleString(),"Page-level coverage"],
 ["Active pipelines",s.activeBooks,"Running now"],["Needs attention",s.failedBooks,"Failed or blocked"]
 ].map(x=>'<div class="metric"><span>'+x[0]+'</span><strong>'+x[1]+'</strong><small>'+x[2]+'</small></div>').join("");}
 function renderCollections(list){
@@ -1165,6 +1235,73 @@ function renderCollections(list){
  $("collection").value=selectedCollectionId;
  $("collection-checks").innerHTML=list.filter(c=>c.status==="active").map(c=>'<label class="check"><input type="checkbox" value="'+esc(c.id)+'"'+(selectedCollectionIds.has(c.id)?" checked":"")+'> '+esc(c.name)+'</label>').join("")||'<span class="muted">Create a collection first.</span>';
 }
+function openProjectDetails(projectId){
+ const project=(model?.projects||[]).find(item=>item.id===projectId);if(!project)return;
+ const sources=(model?.books||[]).filter(book=>(book.projects||[]).some(link=>link.id===projectId));
+ const collections=(model?.collections||[]).filter(collection=>(collection.projects||[]).some(link=>link.id===projectId));
+ const applications=(project.applications||[]).filter(app=>app.status==="active");
+ const events=(model?.events||[]).filter(event=>event.projectId===projectId).slice(0,8);
+ $("modal-title").textContent=project.name;
+ $("modal-body").innerHTML=
+  '<div class="metrics" style="grid-template-columns:repeat(3,minmax(0,1fr))">'+
+   '<div class="metric"><span>Ready sources</span><strong>'+Number(project.readySourceCount||0)+' / '+Number(project.sourceCount||0)+'</strong></div>'+
+   '<div class="metric"><span>Applications</span><strong>'+Number(project.applicationCount||0)+'</strong></div>'+
+   '<div class="metric"><span>Queries this month</span><strong>'+Number(project.monthlyQueries||0).toLocaleString()+'</strong></div>'+
+  '</div>'+
+  '<p class="modal-subtitle">'+esc(project.ownerLabel||"Owner not assigned")+' · '+statusPill(project.status)+'</p>'+
+  '<p class="muted">'+esc(project.description||"No description")+'</p>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Knowledge sources</h2><p>Latest source records currently returned by the BRVIN admin registry.</p></div></div>'+
+   (sources.length?sources.map(book=>'<div class="pulse-row"><span><strong>'+esc(book.title)+'</strong><br><small>'+esc(book.collectionName)+' · '+book.indexedPages+'/'+book.pageCount+' pages</small></span>'+statusPill(book.status)+'</div>').join(""):'<div class="empty">No assigned sources are visible for this project.</div>')+
+  '</section>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Collections</h2><p>Collection grants add the ready sources in each collection.</p></div></div>'+
+   (collections.length?collections.map(collection=>'<div class="pulse-row"><span>'+esc(collection.name)+'</span><strong>'+Number(collection.bookCount||0)+' sources</strong></div>').join(""):'<div class="empty">No collections assigned.</div>')+
+  '</section>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Applications with access</h2><p>Only active application-project grants are listed.</p></div></div>'+
+   (applications.length?applications.map(app=>'<div class="pulse-row"><span>'+esc(app.name||app.slug)+'</span>'+statusPill(app.status)+'</div>').join(""):'<div class="empty">No applications have been granted access.</div>')+
+  '</section>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Recent activity</h2><p>Project-scoped governance and ingestion events.</p></div></div>'+
+   (events.length?events.map(event=>'<div class="pulse-row"><span>'+esc(event.message)+'</span><small>'+esc(time(event.createdAt))+'</small></div>').join(""):'<div class="empty">No project-scoped events in the current activity window.</div>')+
+  '</section>';
+ $("modal").classList.add("open");
+}
+function openProjectEditor(projectId){
+ const project=(model?.projects||[]).find(item=>item.id===projectId);if(!project)return;
+ $("modal-title").textContent="Knowledge project · "+project.name;
+ $("modal-body").innerHTML=
+  '<div class="field"><label for="edit-project-owner">Teacher / owner</label><input id="edit-project-owner" maxlength="120" value="'+esc(project.ownerLabel||"")+'" placeholder="Teacher or customer label"></div>'+
+  '<div class="field"><label for="edit-project-name">Knowledge project name</label><input id="edit-project-name" maxlength="100" value="'+esc(project.name)+'"></div>'+
+  '<div class="field"><label for="edit-project-description">Description</label><textarea id="edit-project-description" maxlength="500" rows="3">'+esc(project.description||"")+'</textarea></div>'+
+  '<div class="modal-actions"><button class="btn primary" id="save-project-details" type="button">Save details</button></div>';
+ $("modal").classList.add("open");
+ $("save-project-details").addEventListener("click",async()=>{
+  const button=$("save-project-details");button.disabled=true;
+  try{
+   const name=$("edit-project-name").value.trim();
+   if(!name)throw new Error("Enter a knowledge project name.");
+   await post("projects/update",{projectId:project.id,name,description:$("edit-project-description").value,ownerLabel:$("edit-project-owner").value});
+   $("modal").classList.remove("open");await refresh();
+  }catch(error){alert(error.message);button.disabled=false;}
+ });
+}
+function openApplicationEditor(applicationId){
+ const app=(model?.applications||[]).find(item=>item.id===applicationId);if(!app)return;
+ $("modal-title").textContent="Application · "+app.name;
+ $("modal-body").innerHTML=
+  '<div class="field"><label for="edit-app-owner">Teacher / owner</label><input id="edit-app-owner" maxlength="120" value="'+esc(app.ownerLabel||"")+'" placeholder="Teacher or customer label"></div>'+
+  '<div class="field"><label for="edit-app-name">Application name</label><input id="edit-app-name" maxlength="100" value="'+esc(app.name)+'"></div>'+
+  '<div class="field"><label for="edit-app-description">Purpose</label><textarea id="edit-app-description" maxlength="500" rows="3">'+esc(app.description||"")+'</textarea></div>'+
+  '<div class="modal-actions"><button class="btn primary" id="save-app-details" type="button">Save details</button></div>';
+ $("modal").classList.add("open");
+ $("save-app-details").addEventListener("click",async()=>{
+  const button=$("save-app-details");button.disabled=true;
+  try{
+   const name=$("edit-app-name").value.trim();
+   if(!name)throw new Error("Enter an application name.");
+   await post("applications/update",{applicationId:app.id,name,description:$("edit-app-description").value,ownerLabel:$("edit-app-owner").value});
+   $("modal").classList.remove("open");await refresh();
+  }catch(error){alert(error.message);button.disabled=false;}
+ });
+}
 function renderProjects(list){
  const previousProjectId=$("project-access").value;
  const selectedProjectIds=new Set([...$("project-checks").querySelectorAll("input:checked")].map(input=>input.value));
@@ -1172,17 +1309,28 @@ function renderProjects(list){
   const apps=(p.applications||[]).filter(a=>a.status==="active").map(a=>a.name||a.slug).join(", ");
   const nextStatus=p.status==="active"?"inactive":"active";
   const action=p.status==="active"?"Deactivate":"Activate";
-  return '<div class="tile"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><strong>'+esc(p.name)+'</strong>'+statusPill(p.status)+'</div><p>'+esc(p.description||"No description")+'</p><small>Direct books: '+p.directBooks+' · via collections: '+p.collectionBooks+' · slug '+esc(p.slug)+'</small><p><small>Application access: '+esc(apps||"No application grants")+'</small></p><div class="job-actions"><button class="btn" data-project-edit="'+esc(p.id)+'" type="button">Edit details</button><button class="btn" data-project-status="'+esc(p.id)+'" data-status="'+nextStatus+'" type="button">'+action+'</button></div></div>';
- }).join(""):'<div class="empty">No projects have been registered.</div>';
+  const ready=Number(p.readySourceCount||0),total=Number(p.sourceCount||0);
+  return '<article class="tile">'+
+   '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><strong>'+esc(p.name)+'</strong><div class="muted" style="font-size:10px;margin-top:4px">'+esc(p.ownerLabel||"Owner not assigned")+'</div></div>'+statusPill(p.status)+'</div>'+
+   '<p>'+esc(p.description||"No description")+'</p>'+
+   '<div class="pulse-row"><span>Knowledge sources ready</span><strong>'+ready+' / '+total+'</strong></div>'+
+   '<div class="pulse-row"><span>Books via collections</span><strong>'+Number(p.collectionBooks||0)+'</strong></div>'+
+   '<div class="pulse-row"><span>Connected applications</span><strong>'+Number(p.applicationCount||0)+'</strong></div>'+
+   '<div class="pulse-row"><span>Retrieval queries this month</span><strong>'+Number(p.monthlyQueries||0).toLocaleString()+'</strong></div>'+
+   '<div style="margin-top:9px"><small>Apps with active permission: '+esc(apps||"None assigned")+'</small></div>'+
+   '<div class="job-actions"><button class="btn primary" data-project-details="'+esc(p.id)+'" type="button">View details</button><button class="btn" data-project-edit="'+esc(p.id)+'" type="button">Edit details</button><button class="btn" data-project-access="'+esc(p.id)+'" type="button">Manage collections</button><button class="btn" data-project-status="'+esc(p.id)+'" data-status="'+nextStatus+'" type="button">'+action+'</button></div>'+
+  '</article>';
+ }).join(""):'<div class="empty" style="grid-column:1/-1">No knowledge projects yet. Create a teacher workspace to start organizing source material.</div>';
  $("project-checks").innerHTML=list.filter(p=>p.status==="active").map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.id)+'"'+(selectedProjectIds.has(p.id)?" checked":"")+'> '+esc(p.name)+'</label>').join("")||'<span class="muted">No active projects. Create one below.</span>';
- $("project-access").innerHTML=list.filter(p=>p.status==="active").map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join("");
+ $("project-access").innerHTML=list.filter(p=>p.status==="active").map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+esc(p.ownerLabel||"No owner")+'</option>').join("");
  if(list.some(p=>p.id===previousProjectId&&p.status==="active"))$("project-access").value=previousProjectId;
- $("project-access").onchange=()=>{const p=list.find(item=>item.id===$("project-access").value);const allowed=new Set((model?.collections||[]).filter(c=>c.projects.some(link=>link.id===p?.id)).map(c=>c.id));$("collection-checks").querySelectorAll("input").forEach(input=>input.checked=allowed.has(input.value));};
- $("projects").querySelectorAll("[data-project-edit]").forEach(button=>button.addEventListener("click",async()=>{
-  const project=list.find(item=>item.id===button.dataset.projectEdit);if(!project)return;
-  const name=prompt("Project name",project.name);if(name===null)return;
-  const description=prompt("Project description",project.description||"");if(description===null)return;
-  try{await post("projects/update",{projectId:project.id,name,description});await refresh();}catch(error){alert(error.message);}
+ $("project-access").onchange=()=>{const p=list.find(item=>item.id===$("project-access").value);const allowed=new Set((model?.collections||[]).filter(col=>col.projects.some(link=>link.id===p?.id)).map(col=>col.id));$("collection-checks").querySelectorAll("input").forEach(input=>input.checked=allowed.has(input.value));};
+ $("projects").querySelectorAll("[data-project-details]").forEach(button=>button.addEventListener("click",()=>openProjectDetails(button.dataset.projectDetails)));
+ $("projects").querySelectorAll("[data-project-edit]").forEach(button=>button.addEventListener("click",()=>openProjectEditor(button.dataset.projectEdit)));
+ $("projects").querySelectorAll("[data-project-access]").forEach(button=>button.addEventListener("click",()=>{
+  $("project-access").value=button.dataset.projectAccess;
+  $("project-access").dispatchEvent(new Event("change"));
+  activateView("governance");
  }));
  $("projects").querySelectorAll("[data-project-status]").forEach(button=>button.addEventListener("click",async()=>{
   const project=list.find(item=>item.id===button.dataset.projectStatus);if(!project)return;
@@ -1194,21 +1342,15 @@ function renderProjects(list){
 }
 function renderApplications(list){
  const active=list.filter(app=>app.status==="active");
- const previous={
-  project:$("project-application").value,
-  env:$("environment-application").value,
-  grantApp:$("grant-application").value,
-  grantProject:$("grant-project").value,
- };
+ const previous={env:$("environment-application").value,grantApp:$("grant-application").value,grantProject:$("grant-project").value};
  const fill=(id,items,previousValue,emptyLabel)=>{
   const select=$(id);select.innerHTML=items.length?items.map(item=>'<option value="'+esc(item.value)+'">'+esc(item.label)+'</option>').join(""):'<option value="">'+emptyLabel+'</option>';
   if(items.some(item=>item.value===previousValue))select.value=previousValue;
  };
  const options=active.map(app=>({value:app.id,label:app.name+" · "+app.slug}));
- fill("project-application",options,previous.project,"Register an application first");
  fill("environment-application",options,previous.env,"Register an active application first");
  fill("grant-application",options,previous.grantApp,"No active applications");
- fill("grant-project",(model?.projects||[]).filter(project=>project.status==="active").map(project=>({value:project.id,label:project.name+" · "+project.slug})),previous.grantProject,"No active projects");
+ fill("grant-project",(model?.projects||[]).filter(project=>project.status==="active").map(project=>({value:project.id,label:project.name+" · "+(project.ownerLabel||"No owner")})),previous.grantProject,"No active knowledge projects");
  const html=list.length?list.map(app=>{
   const appAction=app.status==="active"?"suspended":app.status==="suspended"?"active":null;
   const appActionLabel=app.status==="active"?"Suspend application":app.status==="suspended"?"Reactivate application":"Permanently revoked";
@@ -1216,12 +1358,21 @@ function renderApplications(list){
    const next=environment.status==="active"?"disabled":environment.status==="disabled"?"active":null;
    const action=next?'<button class="btn" data-environment-status="'+esc(environment.id)+'" data-status="'+next+'">'+(next==="disabled"?"Disable":"Activate")+'</button>':"";
    const revoke=environment.status!=="revoked"?'<button class="btn danger" data-environment-status="'+esc(environment.id)+'" data-status="revoked">Revoke identity</button>':"";
-   return '<div class="pulse-row"><span><strong>'+esc(environment.displayName||environment.environmentKey)+'</strong><br><small>'+esc(environment.environmentKey)+' · '+esc(environment.id)+'</small></span><span>'+statusPill(environment.status)+' '+action+' '+revoke+'</span></div>';
+   const verification=environment.status==="active"?"Registered · live verification not yet implemented":"Not available";
+   return '<div class="pulse-row"><span><strong>'+esc(environment.displayName||environment.environmentKey)+'</strong><br><small>'+esc(environment.environmentKey)+' · '+esc(verification)+' · '+esc(environment.id)+'</small></span><span>'+statusPill(environment.status)+' '+action+' '+revoke+'</span></div>';
   }).join(""):'<div class="empty">No deployment environments registered.</div>';
-  const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No project grants. Application cannot retrieve knowledge.</div>';
-  return '<article class="tile"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>'+esc(app.name)+'</strong><p><small>'+esc(app.slug)+' · '+esc(app.id)+'</small></p></div>'+statusPill(app.status)+'</div><p>'+esc(app.description||"No description")+'</p><div class="pulse-row"><span>Active environments</span><strong>'+app.activeEnvironmentCount+'</strong></div><div class="pulse-row"><span>Active project grants</span><strong>'+app.activeProjectCount+'</strong></div><div class="notice">Registry status only. A registered environment is not a live connection check; M6 verifies its Service Binding.</div>'+(appAction?'<button class="btn '+(appAction==="suspended"?"danger":"")+'" data-application-status="'+esc(app.id)+'" data-status="'+appAction+'">'+appActionLabel+'</button>':"")+'<div style="margin-top:14px"><strong>Environments</strong>'+envHtml+'</div><div style="margin-top:14px"><strong>Project access</strong>'+grantHtml+'</div></article>';
- }).join(""):'<div class="empty">No applications registered. Create the first application to start onboarding.</div>';
+  const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
+  return '<article class="tile">'+
+   '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><strong>'+esc(app.name)+'</strong><p><small>'+esc(app.ownerLabel||"Owner not assigned")+' · '+esc(app.slug)+'</small></p></div>'+statusPill(app.status)+'</div>'+
+   '<p>'+esc(app.description||"No description")+'</p>'+
+   '<div class="pulse-row"><span>Deployment environments</span><strong>'+app.environments.length+'</strong></div>'+
+   '<div class="pulse-row"><span>Active knowledge grants</span><strong>'+app.activeProjectCount+'</strong></div>'+
+   '<div class="notice">Registry only — not live-connected. A registered environment is not proof of a deployed private Service Binding. M9 owns live connection verification.</div>'+
+   '<div class="job-actions"><button class="btn" data-application-edit="'+esc(app.id)+'" type="button">Edit details</button>'+(appAction?'<button class="btn '+(appAction==="suspended"?"danger":"")+'" data-application-status="'+esc(app.id)+'" data-status="'+appAction+'">'+appActionLabel+'</button>':"")+'</div>'+
+   '<div style="margin-top:14px"><strong>Environments</strong>'+envHtml+'</div><div style="margin-top:14px"><strong>Knowledge access</strong>'+grantHtml+'</div></article>';
+ }).join(""):'<div class="empty" style="grid-column:1/-1">No applications registered. Register an independently built app after its repository has been created with ChatGPT.</div>';
  $("applications-list").innerHTML=html;
+ $("applications-list").querySelectorAll("[data-application-edit]").forEach(button=>button.addEventListener("click",()=>openApplicationEditor(button.dataset.applicationEdit)));
  $("applications-list").querySelectorAll("[data-application-status]").forEach(button=>button.addEventListener("click",async()=>{
   const app=list.find(item=>item.id===button.dataset.applicationStatus);if(!app)return;
   const status=button.dataset.status;
@@ -1275,7 +1426,7 @@ function renderConnectState(){
   ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+". OAuth currently grants "+(cloudflare.grantedScopes||[]).length+" scopes. "+(cloudflare.workerAdminScopeGranted?"Workers Admin is granted.":"BLOCKER: Workers Editor is not Workers Admin; BRVIN cannot create/delete new Workers until workers-scripts.admin is granted.")
   :"Authorize the Cloudflare account that hosts private brvin-service. The capability check itself does not create or change Workers.";
 }
-async function refresh(){try{model=await api(API+"overview");render();await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
+async function refresh(){try{model=await api(API+"overview");render();if($("connect-wizard-panel")?.open)await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
 function stage(id,state){$("step-"+id).className="step"+(state?" "+state:"");}
 function renderJob(job,pipeline){const uploaded=job.uploadedBytes>=job.expectedSize&&job.expectedSize>0;const ocr=pipeline?.vision?.status||"not_started";const status=job.status;
  stage("upload",uploaded?"done":status==="uploading"?"active":"");
@@ -1435,16 +1586,16 @@ async function clearAllBrvinBooks(){
  }catch(error){alert(error.message);}
  finally{button.disabled=false;}
 }
-function activateView(view){const allowed=["overview","books","collections","projects","operations","governance","applications"];if(!allowed.includes(view))return;document.querySelectorAll("[data-view-panel]").forEach(panel=>panel.classList.toggle("active",panel.dataset.viewPanel===view));document.querySelectorAll(".nav-item[data-view]").forEach(button=>button.classList.toggle("active",button.dataset.view===view));if(view==="applications")refreshConnectState();}
+function activateView(view){const allowed=["overview","books","collections","projects","operations","governance","applications"];if(!allowed.includes(view))return;document.querySelectorAll("[data-view-panel]").forEach(panel=>panel.classList.toggle("active",panel.dataset.viewPanel===view));document.querySelectorAll(".nav-item[data-view]").forEach(button=>button.classList.toggle("active",button.dataset.view===view));}
 document.querySelectorAll("[data-view]").forEach(button=>button.addEventListener("click",()=>activateView(button.dataset.view)));
 function openUpload(){activateView("books");$("upload-modal").classList.add("open");}
 $("open-upload").addEventListener("click",openUpload);$("open-upload-secondary").addEventListener("click",openUpload);$("open-upload-books").addEventListener("click",openUpload);
 $("close-upload").addEventListener("click",()=>$("upload-modal").classList.remove("open"));$("upload-modal").addEventListener("click",event=>{if(event.target===$("upload-modal"))$("upload-modal").classList.remove("open");});
 $("close-upload").addEventListener("click",()=>$("upload-modal").classList.remove("open"));$("upload-modal").addEventListener("click",event=>{if(event.target===$("upload-modal"))$("upload-modal").classList.remove("open");});
 $("clear-brvin").addEventListener("click",clearAllBrvinBooks);$("upload").addEventListener("click",uploadBook);$("refresh").addEventListener("click",()=>refresh());$("logout").addEventListener("click",async()=>{await fetch("/admin/logout",{method:"POST",credentials:"same-origin"});location.assign("/admin/login");});
-$("create-project").addEventListener("click",async()=>{try{const applicationId=$("project-application").value;if(!applicationId)throw new Error("Select an active application for this project.");await post("projects",{name:$("project-name").value,description:$("project-desc").value,applicationId});$("project-name").value="";$("project-desc").value="";await refresh();}catch(e){alert(e.message);}});
+$("create-project").addEventListener("click",async()=>{try{const name=$("project-name").value.trim();if(!name)throw new Error("Enter a knowledge project name.");await post("projects",{name,description:$("project-desc").value,ownerLabel:$("project-owner").value,legacyClient:false});$("project-name").value="";$("project-desc").value="";$("project-owner").value="";await refresh();}catch(e){alert(e.message);}});
 $("create-application").addEventListener("click",async()=>{
- try{const name=$("application-name").value.trim();if(!name)throw new Error("Enter an application name.");await post("applications",{name,description:$("application-desc").value});$("application-name").value="";$("application-desc").value="";await refresh();}
+ try{const name=$("application-name").value.trim();if(!name)throw new Error("Enter an application name.");await post("applications",{name,description:$("application-desc").value,ownerLabel:$("application-owner").value});$("application-name").value="";$("application-desc").value="";$("application-owner").value="";await refresh();}
  catch(error){alert(error.message);}
 });
 $("create-environment").addEventListener("click",async()=>{
@@ -1455,7 +1606,7 @@ $("grant-project-button").addEventListener("click",async()=>{
  try{const applicationId=$("grant-application").value,projectId=$("grant-project").value;if(!applicationId||!projectId)throw new Error("Select an active application and project.");await post("applications/grants",{applicationId,projectId});await refresh();}
  catch(error){alert(error.message);}
 });
-$("connect-refresh").addEventListener("click",async()=>{await refresh();});
+$("connect-refresh").addEventListener("click",async()=>{await refresh();});$("connect-wizard-panel").addEventListener("toggle",()=>{if($("connect-wizard-panel").open)refreshConnectState();});
 $("provider-capability-check").addEventListener("click",async()=>{
  try{
   $("provider-capability-result").textContent="Checking live GitHub App permissions, repository coverage and Cloudflare OAuth scopes…";
@@ -1480,10 +1631,10 @@ $("provider-capability-check").addEventListener("click",async()=>{
    const missing=cloudflare.missingScopes||[];
    parts.push("Cloudflare OAuth: "+(missing.length?"missing "+missing.length+" required scopes":"required scopes passed")+".");
    if(missing.length)parts.push("Missing scope IDs: "+missing.slice(0,14).join(", ")+(missing.length>14?" …":"")+".");
-   if(!missing.includes("account-api-tokens.write"))parts.push("Account API Tokens Write OAuth permission is present; actual token creation still needs a live provider test.");
-    if(!cloudflare.workerAdminScopeGranted)parts.push("BLOCKER: Workers Admin (workers-scripts.admin) is missing. Workers Editor only updates existing Workers and cannot create/delete the new Workers required by the Project Factory.");
-    else parts.push("Workers Admin is granted for create/delete operations.");
-    if(cloudflare.projectFactoryReady!==true)parts.push("Project Factory credential lifecycle is not accepted yet: real account-token creation, project-scoped permission verification and direct secret delivery still need live validation.");
+   if(missing.includes("account-api-tokens.write"))parts.push("Legacy Account API Tokens Write scope is missing.");
+   else parts.push("Legacy Account API Tokens Write scope is present; live token provisioning was not tested.");
+   parts.push("Workers Admin scope: "+(cloudflare.workerAdminScopeGranted?"present":"not granted")+". This is a legacy Project Factory capability, not part of the current knowledge-platform workflow.");
+   if(cloudflare.projectFactoryReady!==true)parts.push("The historical Project Factory credential lifecycle is incomplete and is not an active BRVIN requirement.");
   }else parts.push("Cloudflare: "+(cloudflare.error||"not authorized")+".");
   $("provider-capability-result").textContent=parts.join(" ");
  }catch(error){$("provider-capability-result").textContent="Provider check failed: "+error.message;}

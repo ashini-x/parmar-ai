@@ -389,6 +389,10 @@ The production dashboard currently includes:
 
 Administrative APIs are protected by existing admin authentication and POST requests are checked for same-origin use. Do not expose these routes as an unauthenticated public integration API.
 
+### 9.2 M6 implementation branch — pending release
+
+The M6 teacher-focused workspace implementation is currently under review in [PR #91](https://github.com/ashini-x/parmar-ai/pull/91), branch `brvin/m6-teacher-focused-admin`. It adds the owner-label migration, project/application owner metadata, application-neutral teacher knowledge project creation, project readiness/usage summaries, project detail view and collapses the old provider-admin controls as legacy settings. **These changes are not yet merged or deployed.** The currently deployed admin behavior remains the shipped capability list above until PR #91 passes validation, merges and receives a production release. No provider credential is deleted or reauthorized by this M6 change.
+
 ### 9.2 Remaining admin-experience gap
 
 The deployed UI has separate application, environment and grant forms. It does not yet provide the final project-centric teacher workspace or a complete Connect Application journey.

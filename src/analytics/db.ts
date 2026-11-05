@@ -227,6 +227,7 @@ CREATE TABLE IF NOT EXISTS brvin_projects (
   name TEXT NOT NULL,
   slug TEXT NOT NULL UNIQUE,
   description TEXT NOT NULL DEFAULT '',
+  owner_label TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'active',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
@@ -246,6 +247,7 @@ CREATE TABLE IF NOT EXISTS brvin_applications (
   ),
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
+  owner_label TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'active'
     CHECK (status IN ('active', 'suspended', 'revoked')),
   created_at INTEGER NOT NULL,
@@ -651,6 +653,35 @@ async function ensureQuizSessionSchema(env: Env): Promise<void> {
   }
 }
 
+export const BRVIN_OWNER_METADATA_MIGRATION_KEY = "2026-11-05-brvin-owner-label-v1";
+
+/**
+ * Add teacher/owner display metadata to existing BRVIN projects and applications.
+ * This is descriptive admin metadata only; it is not an authorization boundary.
+ * The checks make the migration safe for databases created before these columns
+ * existed, and the read-back handles concurrent Worker isolates racing the ALTER.
+ */
+export async function ensureBrvinOwnerMetadataSchema(db: D1Database): Promise<void> {
+  const ensureColumn = async (table: "brvin_projects" | "brvin_applications"): Promise<void> => {
+    const readColumns = async () => db.prepare("PRAGMA table_info(" + table + ")")
+      .all<{ name: string }>();
+    const before = await readColumns();
+    if ((before.results ?? []).some(column => column.name === "owner_label")) return;
+    try {
+      await db.prepare("ALTER TABLE " + table + " ADD COLUMN owner_label TEXT NOT NULL DEFAULT ''").run();
+    } catch (error) {
+      const after = await readColumns();
+      if (!(after.results ?? []).some(column => column.name === "owner_label")) throw error;
+    }
+  };
+
+  await ensureColumn("brvin_projects");
+  await ensureColumn("brvin_applications");
+  await db.prepare(
+    "INSERT OR IGNORE INTO brvin_migrations (migration_key,applied_at) VALUES (?,?)"
+  ).bind(BRVIN_OWNER_METADATA_MIGRATION_KEY, Date.now()).run();
+}
+
 async function ensureFatmanImportJobSchema(env: Env): Promise<void> {
   if (!env.DB) return;
   // Existing installations have the single-book import table already. Add the
@@ -813,6 +844,7 @@ export async function ensureAnalyticsSchema(env: Env): Promise<void> {
       await ensureQuizSessionSchema(env);
       await ensureFatmanImportJobSchema(env);
       await ensureBrvinCompatibilitySchema(env);
+      await ensureBrvinOwnerMetadataSchema(env.DB!);
       await ensureBrvin2ApplicationIdentities(env.DB!);
       await ensureBrvin2AskMoinaIdentities(env.DB!);
     })()

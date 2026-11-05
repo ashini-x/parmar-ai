@@ -41,7 +41,7 @@ import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
 import { completeFatmanUpload, diagnoseFatmanGcsUpload, fatmanUploadStatus, resumeFatmanImport, startFatmanUpload, uploadFatmanChunk } from "./fatman/import";
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
-import { archiveBrvinBook, assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinApplication, createBrvinApplicationEnvironment, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, grantBrvinApplicationProject, revokeBrvinApplicationProject, setBrvinApplicationStatus, setBrvinEnvironmentStatus, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview, updateBrvinProject } from "./brvin/admin";
+import { archiveBrvinBook, assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinApplication, createBrvinApplicationEnvironment, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, grantBrvinApplicationProject, revokeBrvinApplicationProject, setBrvinApplicationStatus, setBrvinEnvironmentStatus, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview, updateBrvinApplication, updateBrvinProject } from "./brvin/admin";
 import {
   brvinConnectStatus,
   inspectBrvinProviderCapabilities,
@@ -2250,6 +2250,7 @@ const worker = {
           if (adminApiPath === "/admin/api/brvin/projects") return createBrvinProject(env, request);
           if (adminApiPath === "/admin/api/brvin/projects/update") return updateBrvinProject(env, request);
           if (adminApiPath === "/admin/api/brvin/applications") return createBrvinApplication(env, request);
+          if (adminApiPath === "/admin/api/brvin/applications/update") return updateBrvinApplication(env, request);
           if (adminApiPath === "/admin/api/brvin/applications/environments") return createBrvinApplicationEnvironment(env, request);
           if (adminApiPath === "/admin/api/brvin/applications/status") return setBrvinApplicationStatus(env, request);
           if (adminApiPath === "/admin/api/brvin/applications/environments/status") return setBrvinEnvironmentStatus(env, request);
