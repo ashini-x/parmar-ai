@@ -11,6 +11,7 @@ vi.mock("../src/analytics/db", () => ({
 import {
   createBrvinApplication,
   createBrvinApplicationEnvironment,
+  updateBrvinApplicationEnvironment,
   createBrvinProject,
   updateBrvinApplication,
   grantBrvinApplicationProject,
@@ -81,12 +82,17 @@ class MemoryD1 {
   async run(sql: string, values: unknown[]): Promise<{ success: boolean }> {
     this.statements.push(sql);
     if (sql.includes("INSERT INTO brvin_applications")) {
-      const [id, slug, name, description, ownerLabel, createdAt, updatedAt] = values;
-      this.applications.push({ id, slug, name, description, owner_label: ownerLabel, status: "active", created_at: createdAt, updated_at: updatedAt });
+      const [id, slug, name, description, ownerLabel, repositoryUrl, repositoryDefaultBranch, runtimeProvider, createdAt, updatedAt] = values;
+      this.applications.push({
+        id, slug, name, description, owner_label: ownerLabel, repository_url: repositoryUrl,
+        repository_default_branch: repositoryDefaultBranch, runtime_provider: runtimeProvider,
+        status: "active", created_at: createdAt, updated_at: updatedAt,
+      });
     } else if (sql.includes("INSERT INTO brvin_application_environments")) {
-      const [id, applicationId, environmentKey, displayName, createdAt, updatedAt] = values;
+      const [id, applicationId, environmentKey, displayName, workerName, workerUrl, createdAt, updatedAt] = values;
       this.environments.push({
         id, application_id: applicationId, environment_key: environmentKey, display_name: displayName,
+        worker_name: workerName, worker_url: workerUrl,
         status: "active", created_at: createdAt, updated_at: updatedAt, revoked_at: null, revoked_by: null,
       });
     } else if (sql.includes("INSERT INTO brvin_projects")) {
@@ -120,9 +126,16 @@ class MemoryD1 {
       const row = this.projects.find(item => item.id === id);
       if (row) Object.assign(row, { name, description, owner_label: ownerLabel, status, updated_at: updatedAt });
     } else if (sql.includes("UPDATE brvin_applications SET name")) {
-      const [name, description, ownerLabel, updatedAt, id] = values;
+      const [name, description, ownerLabel, repositoryUrl, repositoryDefaultBranch, runtimeProvider, updatedAt, id] = values;
       const row = this.applications.find(item => item.id === id);
-      if (row) Object.assign(row, { name, description, owner_label: ownerLabel, updated_at: updatedAt });
+      if (row) Object.assign(row, {
+        name, description, owner_label: ownerLabel, repository_url: repositoryUrl,
+        repository_default_branch: repositoryDefaultBranch, runtime_provider: runtimeProvider, updated_at: updatedAt,
+      });
+    } else if (sql.includes("UPDATE brvin_application_environments SET display_name")) {
+      const [displayName, workerName, workerUrl, updatedAt, id] = values;
+      const row = this.environments.find(item => item.id === id);
+      if (row) Object.assign(row, { display_name: displayName, worker_name: workerName, worker_url: workerUrl, updated_at: updatedAt });
     }
     return { success: true };
   }
@@ -160,7 +173,75 @@ describe("BRVIN application and project administration", () => {
     expect(body.application.status).toBe("active");
     expect(body.application.ownerLabel).toBe("Teacher A");
     expect(db.applications[0].owner_label).toBe("Teacher A");
+    expect(db.applications[0]).toMatchObject({
+      repository_url: "", repository_default_branch: "main", runtime_provider: "cloudflare-workers",
+    });
     expect(activity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "application.created" }));
+  });
+
+  it("registers an application and several deployment identities atomically without creating projects or repos", async () => {
+    const db = new MemoryD1();
+    const response = await createBrvinApplication(environment(db), request({
+      name: "SSC Mathematics Bot",
+      ownerLabel: "Teacher A",
+      description: "A Telegram study bot",
+      repositoryUrl: "https://github.com/ashini-x/ssc-math-bot.git",
+      repositoryDefaultBranch: "release/production",
+      runtimeProvider: "cloudflare-workers",
+      environments: [
+        { environmentKey: "production", displayName: "Production", workerName: "ssc-math", workerUrl: "https://ssc-math.example.workers.dev" },
+        { environmentKey: "staging", displayName: "Staging", workerName: "ssc-math-staging", workerUrl: "https://ssc-math-staging.example.workers.dev" },
+      ],
+    }));
+    const body = await response.json() as {
+      application: { id: string; repositoryUrl: string; repositoryDefaultBranch: string };
+      environments: Array<{ id: string; environmentKey: string; connectionStatus: string }>;
+    };
+    expect(response.status).toBe(201);
+    expect(body.application.repositoryUrl).toBe("https://github.com/ashini-x/ssc-math-bot");
+    expect(body.application.repositoryDefaultBranch).toBe("release/production");
+    expect(body.environments).toHaveLength(2);
+    expect(body.environments.map(item => item.environmentKey)).toEqual(["production", "staging"]);
+    expect(body.environments.every(item => item.connectionStatus === "pending")).toBe(true);
+    expect(body.environments.every(item => /^[a-f0-9-]{36}$/iu.test(item.id))).toBe(true);
+    expect(db.applications).toHaveLength(1);
+    expect(db.environments).toHaveLength(2);
+    expect(db.projects).toHaveLength(0);
+    expect(db.legacyClients).toHaveLength(0);
+    expect(db.environments[0]).toMatchObject({
+      application_id: body.application.id, worker_name: "ssc-math", worker_url: "https://ssc-math.example.workers.dev",
+    });
+  });
+
+  it("rejects non-GitHub repository URLs and insecure or partial Worker metadata", async () => {
+    const db = new MemoryD1();
+    const badRepository = await createBrvinApplication(environment(db), request({
+      name: "Bad URL App", repositoryUrl: "http://github.com/owner/repo",
+      environments: [{ environmentKey: "production" }],
+    }));
+    expect(badRepository.status).toBe(400);
+    expect(db.applications).toHaveLength(0);
+    const partialWorker = await createBrvinApplication(environment(db), request({
+      name: "Partial Worker App",
+      repositoryUrl: "https://github.com/owner/repo",
+      environments: [{ environmentKey: "production", workerName: "worker-only" }],
+    }));
+    expect(partialWorker.status).toBe(400);
+    expect(db.applications).toHaveLength(0);
+  });
+
+  it("rejects duplicate initial environment keys before writing the application", async () => {
+    const db = new MemoryD1();
+    const response = await createBrvinApplication(environment(db), request({
+      name: "Duplicate Environment App",
+      environments: [
+        { environmentKey: "production" },
+        { environmentKey: "production" },
+      ],
+    }));
+    expect(response.status).toBe(400);
+    expect(db.applications).toHaveLength(0);
+    expect(db.environments).toHaveLength(0);
   });
 
   it("creates only an active environment under an active application", async () => {
@@ -171,12 +252,42 @@ describe("BRVIN application and project administration", () => {
       applicationId: appId,
       environmentKey: "Preview QA",
       displayName: "Preview QA",
+      workerName: "math-preview",
+      workerUrl: "https://math-preview.example.workers.dev",
     }));
-    const body = await response.json() as { environment: { id: string; environmentKey: string; status: string } };
+    const body = await response.json() as { environment: { id: string; environmentKey: string; status: string; workerName: string; workerUrl: string; connectionStatus: string } };
     expect(response.status).toBe(201);
     expect(body.environment.id).toMatch(/^[a-f0-9-]{36}$/u);
     expect(body.environment.environmentKey).toBe("preview-qa");
     expect(body.environment.status).toBe("active");
+    expect(body.environment.connectionStatus).toBe("pending");
+    expect(body.environment.workerName).toBe("math-preview");
+    expect(body.environment.workerUrl).toBe("https://math-preview.example.workers.dev");
+    expect(db.environments[0]).toMatchObject({ worker_name: "math-preview", worker_url: "https://math-preview.example.workers.dev" });
+  });
+
+  it("updates a deployment environment's Worker metadata without changing its trusted identity", async () => {
+    const db = new MemoryD1();
+    const appId = "11111111-2222-4333-8444-555555555555";
+    const envId = "22222222-3333-4444-8555-666666666666";
+    db.applications.push({ id: appId, status: "active" });
+    db.environments.push({
+      id: envId, application_id: appId, environment_key: "production", display_name: "Production",
+      worker_name: "", worker_url: "", status: "active",
+    });
+    const response = await updateBrvinApplicationEnvironment(environment(db), request({
+      environmentId: envId, displayName: "Main production",
+      workerName: "math-prod", workerUrl: "https://math-prod.example.workers.dev",
+    }));
+    const body = await response.json() as { environment: { id: string; connectionStatus: string; workerName: string } };
+    expect(response.status).toBe(200);
+    expect(body.environment.id).toBe(envId);
+    expect(body.environment.connectionStatus).toBe("pending");
+    expect(body.environment.workerName).toBe("math-prod");
+    expect(db.environments[0]).toMatchObject({
+      id: envId, environment_key: "production", worker_name: "math-prod",
+      worker_url: "https://math-prod.example.workers.dev", display_name: "Main production",
+    });
   });
 
   it("creates a new app-associated project with a grant, not a legacy client mapping", async () => {
@@ -291,14 +402,19 @@ describe("BRVIN application and project administration", () => {
       name: "SSC Mathematics Bot",
       description: "Teacher-specific mathematics assistant",
       ownerLabel: "Teacher A · Mathematics",
+      repositoryUrl: "https://github.com/ashini-x/math-bot",
+      repositoryDefaultBranch: "develop",
+      runtimeProvider: "cloudflare-workers",
     }));
-    const body = await response.json() as { application: { name: string; ownerLabel: string; status: string } };
+    const body = await response.json() as { application: { name: string; ownerLabel: string; status: string; repositoryUrl: string; repositoryDefaultBranch: string } };
     expect(response.status).toBe(200);
     expect(body.application).toMatchObject({
       name: "SSC Mathematics Bot", ownerLabel: "Teacher A · Mathematics", status: "active",
+      repositoryUrl: "https://github.com/ashini-x/math-bot", repositoryDefaultBranch: "develop",
     });
     expect(db.applications[0]).toMatchObject({
       slug: "math-bot", owner_label: "Teacher A · Mathematics", status: "active",
+      repository_url: "https://github.com/ashini-x/math-bot", repository_default_branch: "develop",
     });
     expect(activity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: "application.updated" }));
   });
