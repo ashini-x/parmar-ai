@@ -98,6 +98,7 @@ The Operations walkthrough on 6 November 2026 recorded 33 project searches this 
 - Do not revive the retired `brvin-test-client` reference scaffold.
 - Cross-account/non-Cloudflare gateway work is deferred. It is not required to finish M11.
 - Preserve existing Fatman and AskMoina data, identity and production behavior. Do not remove historical provider configuration or legacy UI without a separate dependency audit and approved change.
+- The planned multi-channel teacher application platform is a separate downstream consumer workstream, documented in [TEACHER_PLATFORM_ARCHITECTURE.md](TEACHER_PLATFORM_ARCHITECTURE.md). Implement it in a separate repository (proposed working name: `ashini-x/teacher-platform`); do not refactor this production repository or expand BRVIN scope to host it. This plan does not change or satisfy the remaining M11 real-consumer acceptance gate.
 
 ## 7. New-chat continuation instruction
 
