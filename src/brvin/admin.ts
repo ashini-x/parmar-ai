@@ -1543,7 +1543,7 @@ function openProjectDetails(projectId){
   '<div class="metrics" style="grid-template-columns:repeat(3,minmax(0,1fr))">'+
    '<div class="metric"><span>Ready sources</span><strong>'+Number(project.readySourceCount||0)+' / '+Number(project.sourceCount||0)+'</strong></div>'+
    '<div class="metric"><span>Applications</span><strong>'+Number(project.applicationCount||0)+'</strong></div>'+
-   '<div class="metric"><span>Queries this month</span><strong>'+Number(project.monthlyQueries||0).toLocaleString()+'</strong></div>'+
+   '<div class="metric"><span>Project searches this month</span><strong>'+Number(project.monthlyQueries||0).toLocaleString()+' / '+Number(project.monthlyLimit||800).toLocaleString()+'</strong><small>'+Number(project.monthlyRemaining??Math.max(0,Number(project.monthlyLimit||800)-Number(project.monthlyQueries||0))).toLocaleString()+' remaining · shared by all granted apps</small></div>'+
   '</div>'+
   '<p class="modal-subtitle">'+esc(project.ownerLabel||"Owner not assigned")+' · '+statusPill(project.status)+'</p>'+
   '<p class="muted">'+esc(project.description||"No description")+'</p>'+
@@ -1708,7 +1708,9 @@ function renderProjects(list){
    '<div class="pulse-row"><span>Knowledge sources ready</span><strong>'+ready+' / '+total+'</strong></div>'+
    '<div class="pulse-row"><span>Books via collections</span><strong>'+Number(p.collectionBooks||0)+'</strong></div>'+
    '<div class="pulse-row"><span>Connected applications</span><strong>'+Number(p.applicationCount||0)+'</strong></div>'+
-   '<div class="pulse-row"><span>Retrieval queries this month</span><strong>'+Number(p.monthlyQueries||0).toLocaleString()+'</strong></div>'+
+   '<div class="pulse-row"><span>Project searches this month</span><strong>'+Number(p.monthlyQueries||0).toLocaleString()+' / '+Number(p.monthlyLimit||800).toLocaleString()+'</strong></div>'+
+    '<div class="bar" style="max-width:none"><i style="width:'+pct(Number(p.monthlyQueries||0),Number(p.monthlyLimit||800))+'%"></i></div>'+
+    '<p><small>'+Number(p.monthlyRemaining??Math.max(0,Number(p.monthlyLimit||800)-Number(p.monthlyQueries||0))).toLocaleString()+' remaining · counts are shared across all apps granted to this project.</small></p>'+
    '<div style="margin-top:9px"><small>Apps with active permission: '+esc(apps||"None assigned")+'</small></div>'+
    '<div class="job-actions"><button class="btn primary" data-project-details="'+esc(p.id)+'" type="button">View details</button><button class="btn" data-project-edit="'+esc(p.id)+'" type="button">Edit details</button><button class="btn" data-project-access="'+esc(p.id)+'" type="button">Manage collections</button><button class="btn" data-project-status="'+esc(p.id)+'" data-status="'+nextStatus+'" type="button">'+action+'</button></div>'+
   '</article>';
@@ -1806,7 +1808,7 @@ function renderApplications(list){
     '<div class="job-actions">'+edit+(app.status==="active"&&environment.status==="active"&&app.repositoryUrl?'<button class="btn primary" data-handoff="true" data-application-id="'+esc(app.id)+'" data-environment-id="'+esc(environment.id)+'" type="button">Generate ChatGPT handoff</button>':"")+(app.status==="active"&&environment.status==="active"&&environment.workerUrl?'<button class="btn" data-environment-verify="'+esc(environment.id)+'" type="button">Verify connection</button>':"")+action+revoke+'</div>'+
    '</div>';
   }).join(""):'<div class="empty">No deployment environments registered.</div>';
-  const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
+  const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small><br><small>'+Number(grant.monthlyQueries||0).toLocaleString()+' / '+Number(grant.monthlyLimit||800).toLocaleString()+' project searches this month · shared project counter</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
   const activeGrantProjectIds=new Set(app.projects.filter(grant=>grant.status==="active").map(grant=>grant.projectId));
   const grantableProjects=app.status==="active"?(model?.projects||[]).filter(project=>project.status==="active"&&!activeGrantProjectIds.has(project.id)):[];
   const inlineGrantHtml=app.status!=="active"
@@ -1859,7 +1861,43 @@ function renderApplications(list){
 function renderBooks(list,projects){$("book-count").textContent=list.length+" sources";$("books").innerHTML=list.length?list.map(b=>{const access=b.projects.map(p=>p.name).join(", ")||"No project access",progress=pct(b.indexedPages,b.pageCount),archived=b.status==="archived",manageLabel=archived?"Manage · archived":"Manage";const inspect=["uploading","uploaded","processing","failed","delete_failed"].includes(b.status)?'<button class="btn" data-inspect="'+esc(b.id)+'" type="button">Inspect</button> ':"";return '<tr><td class="source-name"><strong>'+esc(b.title)+'</strong><div class="muted">'+esc(b.filename)+'</div><div class="bar"><i style="width:'+progress+'%"></i></div></td><td>'+esc(b.collectionName)+'</td><td>'+b.indexedPages+'/'+b.pageCount+'</td><td>'+statusPill(b.status)+(b.error?'<div class="error" style="font-size:10px;margin-top:5px">'+esc(b.error)+'</div>':"")+'</td><td>'+esc(access)+'</td><td class="source-actions">'+inspect+'<button class="btn" data-manage="'+esc(b.id)+'" data-archived="'+archived+'" type="button">'+manageLabel+'</button></td></tr>';}).join(""):'<tr><td class="empty" colspan="6">No knowledge sources yet. Add the first PDF to start your library.</td></tr>';$("books").querySelectorAll("[data-inspect]").forEach(button=>button.addEventListener("click",()=>showImport(button.dataset.inspect)));$("books").querySelectorAll("[data-manage]").forEach(button=>button.addEventListener("click",()=>manageBook(button.dataset.manage)));}
 function renderJobs(list){$("jobs").innerHTML=list.length?list.map(j=>{const deleting=j.status==="deleting"||j.status==="delete_failed",percent=j.status==="uploading"?pct(j.uploadedBytes,j.expectedBytes):pct(j.indexedPages,j.pageCount),label=deleting?"Removing AI Search pages and private PDF/OCR storage":j.status==="uploading"?fmtBytes(j.uploadedBytes)+" / "+fmtBytes(j.expectedBytes):j.indexedPages+" / "+j.pageCount+" pages";return '<div class="job-card"><div class="job-card-head"><strong>'+esc(j.title)+'</strong>'+statusPill(j.status)+'</div><p>'+esc(label)+(deleting?"":" · "+percent+"% · updated "+esc(time(j.updatedAt)))+'</p>'+(deleting?"":'<div class="bar" style="max-width:none"><i style="width:'+percent+'%"></i></div>')+(j.error?'<p class="error">'+esc(j.error)+'</p>':"")+'<div class="job-actions"><button class="btn" data-inspect="'+esc(j.id)+'" type="button">Inspect pipeline</button>'+(j.status==="failed"&&j.hasOcrOperation?'<button class="btn" data-resume="'+esc(j.id)+'" type="button">Resume</button>':"")+'</div></div>';}).join(""):'<div class="empty" style="grid-column:1/-1">No active processing or deletion jobs. New BRVIN operations will appear here.</div>';$("jobs").querySelectorAll("[data-inspect]").forEach(b=>b.addEventListener("click",()=>showImport(b.dataset.inspect)));$("jobs").querySelectorAll("[data-resume]").forEach(b=>b.addEventListener("click",()=>resumeImport(b.dataset.resume)));}
 function detailText(details){if(!details||typeof details!=="object")return"";return Object.entries(details).map(([key,value])=>key+": "+(typeof value==="object"?JSON.stringify(value):String(value))).join(" · ").slice(0,700);}
-function renderEvents(list){$("events").innerHTML=list.length?list.slice(0,60).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong>'+statusPill(e.status)+'</div><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+' · '+esc(e.type)+'</small></div></div>').join(""):'<div class="empty">No operation events recorded yet.</div>';}
+function renderEvents(list){
+ const filter=$("event-filter")?.value||"all";
+ const filtered=(list||[]).filter(event=>{
+  const phase=String(event.phase||"").toLowerCase(),type=String(event.type||"").toLowerCase(),status=String(event.status||"").toLowerCase();
+  if(filter==="attention")return status==="failed"||status==="warning";
+  if(filter==="retention")return phase==="retention"||type.includes("storage")||type.includes("vision_ocr");
+  if(filter==="connections")return type.includes("connection")||type.includes("environment");
+  if(filter==="ingestion")return ["upload","ocr","indexing","verification","processing","recovery"].includes(phase)||type.startsWith("book.")||type.startsWith("index.")||type.startsWith("ocr.");
+  if(filter==="governance")return phase==="governance"||type.includes("grant")||type.includes("revok")||type.includes("application.");
+  return true;
+ });
+ $("events").innerHTML=filtered.length?filtered.slice(0,60).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong>'+statusPill(e.status)+'</div><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+' · '+esc(e.type)+'</small></div></div>').join(""):'<div class="empty">No events match this filter.</div>';
+}
+function renderOperations(data){
+ const ops=data.operations||{},connections=ops.connections||{},retention=ops.retention||{},events=ops.events||{};
+ const projectSearches=(data.projects||[]).reduce((total,project)=>total+Number(project.monthlyQueries||0),0);
+ const cards=[
+  ["Project searches",projectSearches.toLocaleString(),"This month · project counters"],
+  ["Connection failures",Number(connections.failed||0),"Active environment checks"],
+  ["Failed events",Number(events.failed||0),"Last seven days"],
+  ["OCR cleanup failures",Number(retention.failed||0),"Paused for manual recovery"],
+ ];
+ $("operations-metrics").innerHTML=cards.map(([label,value,note])=>'<div class="metric"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong><small>'+esc(note)+'</small></div>').join("");
+ let note;
+ if(Number(retention.failed||0)>0){
+  note=Number(retention.failed)+" source(s) have failed OCR-only cleanup. Their original PDFs, indexed pages and READY/archived status are retained. Automatic retries are paused; run the read-only storage check, correct GCS permissions, then use Manage → Retry Vision OCR cleanup.";
+ }else if(Number(retention.running||0)>0){
+  note=Number(retention.running)+" OCR cleanup job(s) are currently running. The source PDFs and indexed pages remain retained.";
+ }else if(Number(retention.totalDue||0)>0){
+  note=Number(retention.totalDue)+" ready/archived source(s) still have temporary Vision OCR output pending cleanup.";
+ }else{
+  note="No eligible temporary Vision OCR cleanup remains outstanding.";
+ }
+ $("retention-note").textContent=note;
+}
+function renderOverview(data){$("overview-books").textContent=String(data.stats.books);$("overview-pages").textContent=data.stats.indexedPages.toLocaleString()+" of "+data.stats.totalPages.toLocaleString()+" pages indexed";$("overview-ready").textContent=String(data.stats.readyBooks);$("overview-running").textContent=String(data.stats.activeBooks);$("overview-attention").textContent=String(data.stats.failedBooks);$("overview-status-note").textContent=data.stats.failedBooks?data.stats.failedBooks+" source(s) need attention. Open Operations to inspect the affected workflow.":data.stats.activeBooks?data.stats.activeBooks+" pipeline(s) are running. Processing continues automatically in the background.":"All tracked sources are stable. New processing events will appear here automatically.";}
+function render(){if(!model)return;renderMetrics(model.stats);renderApplications(model.applications||[]);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOperations(model);renderOverview(model);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
 function renderOverview(data){$("overview-books").textContent=String(data.stats.books);$("overview-pages").textContent=data.stats.indexedPages.toLocaleString()+" of "+data.stats.totalPages.toLocaleString()+" pages indexed";$("overview-ready").textContent=String(data.stats.readyBooks);$("overview-running").textContent=String(data.stats.activeBooks);$("overview-attention").textContent=String(data.stats.failedBooks);$("overview-status-note").textContent=data.stats.failedBooks?data.stats.failedBooks+" source(s) need attention. Open Operations to inspect the affected workflow.":data.stats.activeBooks?data.stats.activeBooks+" pipeline(s) are running. Processing continues automatically in the background.":"All tracked sources are stable. New processing events will appear here automatically.";}
 function render(){if(!model)return;renderMetrics(model.stats);renderApplications(model.applications||[]);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOverview(model);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
 let connectState=null;
@@ -1893,6 +1931,32 @@ function renderConnectState(){
   :"Authorize the Cloudflare account that hosts private brvin-service. The capability check itself does not create or change Workers.";
 }
 async function refresh(){try{model=await api(API+"overview");render();if($("connect-wizard-panel")?.open)await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
+async function runStorageDiagnostics(){
+ const button=$("storage-diagnostics"),result=$("storage-diagnostic-result");
+ button.disabled=true;result.hidden=false;result.textContent="Checking service-account permissions and bucket metadata without changing storage…";
+ try{
+  const response=await fetch(API+"diagnostics/storage",{method:"GET",credentials:"same-origin"});
+  let data={};try{data=await response.json();}catch{}
+  if(!response.ok)throw new Error(data.error||"Storage diagnostic failed (HTTP "+response.status+").");
+  const perms=data.checks?.permissions||{},bucket=data.checks?.bucket||{};
+  const objectMissing=perms.missingObjectPermissions||[];
+  const lifecycleMissing=data.retentionLifecycleMissingPermissions||perms.lifecycleMissingPermissions||[];
+  result.textContent=[
+   "Service account: "+(data.serviceAccountEmail||"not configured"),
+   "Bucket: "+(data.bucketName||"not configured"),
+   "Core object access: "+(data.uploadStartReady?"READY":"BLOCKED"),
+   "Missing object permissions: "+(objectMissing.length?objectMissing.join(", "):"none reported"),
+   "Bucket metadata inspection: "+(bucket.ok?"available":"not available"),
+   "30-day OCR lifecycle safety net: "+(data.retentionLifecycleReady?"READY":"NOT CONFIGURED"),
+   "Lifecycle permissions still needed: "+(lifecycleMissing.length?lifecycleMissing.join(", "):"none reported"),
+   data.note||""
+  ].filter(Boolean).join("\n");
+  result.style.whiteSpace="pre-wrap";
+ }catch(error){result.textContent="Diagnostic could not complete: "+(error instanceof Error?error.message:String(error));}
+ finally{button.disabled=false;}
+}
+$("storage-diagnostics").addEventListener("click",runStorageDiagnostics);
+$("event-filter").addEventListener("change",()=>renderEvents(model?.events||[]));
 function stage(id,state){$("step-"+id).className="step"+(state?" "+state:"");}
 function renderJob(job,pipeline){const uploaded=job.uploadedBytes>=job.expectedSize&&job.expectedSize>0;const ocr=pipeline?.vision?.status||"not_started";const status=job.status;
  stage("upload",uploaded?"done":status==="uploading"?"active":"");
@@ -1908,7 +1972,33 @@ async function showImport(id){activeImportId=id;try{const d=await api(API+"statu
  $("modal-body").innerHTML='<div class="metrics" style="grid-template-columns:repeat(3,1fr)"><div class="metric"><span>State</span><strong style="font-size:17px">'+esc(job.status)+'</strong></div><div class="metric"><span>Indexed</span><strong style="font-size:17px">'+job.indexedPages+'/'+job.expectedPages+'</strong></div><div class="metric"><span>Upload</span><strong style="font-size:17px">'+pct(job.uploadedBytes,job.expectedSize)+'%</strong></div></div><p class="muted">Vision OCR: '+esc(d.pipeline?.vision?.status||"not started")+' · Workflow: '+esc(d.pipeline?.workflow?.status||"not started")+'</p><div class="timeline">'+(d.events||[]).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+'</small></div></div>').join("")+'</div>';
  $("modal").classList.add("open");
  }catch(e){say(e.message,true);}}
-function manageBook(id){const book=model?.books?.find(item=>item.id===id);if(!book)return;const canDelete=book.sourceType==="pdf"&&!book.visionOcrDeleting&&["ready","failed","delete_failed","completed","archived"].includes(book.status),canArchive=book.sourceType==="pdf"&&book.status==="ready",canRestore=book.sourceType==="pdf"&&book.status==="archived",canDeleteOcr=book.sourceType==="pdf"&&book.status==="ready"&&!book.visionOcrDeleted&&!book.visionOcrDeleting,busyOcr=book.visionOcrDeleting,needsInspect=["uploading","uploaded","processing","failed","delete_failed"].includes(book.status);$("modal-title").textContent=book.title;$("modal-body").innerHTML='<p class="modal-subtitle" style="margin:0 0 16px">'+esc(book.collectionName)+' · '+book.indexedPages+'/'+book.pageCount+' pages indexed · '+esc(book.status.replaceAll("_"," "))+'</p><div class="management-actions">'+(needsInspect?'<button class="btn" id="manage-inspect" type="button">Inspect processing pipeline</button>':'')+(book.status==="deleting"?"":'<button class="btn" id="manage-access" type="button">Manage direct project access</button>')+(canArchive?'<button class="btn" id="manage-archive" data-book-archive type="button">Archive source</button>':'')+(canRestore?'<button class="btn" id="manage-restore" data-book-restore type="button">Restore source</button>':'')+(canDeleteOcr?'<button class="btn" id="manage-ocr" type="button">Delete Vision OCR files only</button>':busyOcr?'<span class="muted">Vision OCR cleanup is running…</span>':book.visionOcrDeleted?'<span class="muted">Vision OCR files marked as removed.</span>':'')+(canDelete?'<button class="btn danger" id="manage-delete" type="button">Delete this book permanently</button>':book.sourceType!=="pdf"?'<span class="muted">This built-in source is protected.</span>':'')+'</div><div class="notice">'+(book.status==="deleting"?"Full book deletion is already in progress. The source will disappear from this library when its background workflow completes.":"Direct project access is managed separately from collection access. Archiving pauses retrieval but retains stored data. Deleting the book is permanent and removes its searchable pages and imported storage.")+'</div>';$("modal").classList.add("open");if(needsInspect)$("manage-inspect").addEventListener("click",()=>showImport(id));if(book.status!=="deleting")$("manage-access").addEventListener("click",()=>editBookAccess(id));if(canArchive)$("manage-archive").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await archiveBook(id,"archive",button);});if(canRestore)$("manage-restore").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await archiveBook(id,"restore",button);});if(canDeleteOcr)$("manage-ocr").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await deleteVisionOutput(id,button);});if(canDelete)$("manage-delete").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await deleteBook(id,button);});}
+function manageBook(id){
+ const book=model?.books?.find(item=>item.id===id);if(!book)return;
+ const canDelete=book.sourceType==="pdf"&&!book.visionOcrDeleting&&["ready","failed","delete_failed","completed","archived"].includes(book.status);
+ const canArchive=book.sourceType==="pdf"&&book.status==="ready",canRestore=book.sourceType==="pdf"&&book.status==="archived";
+ const canDeleteOcr=book.sourceType==="pdf"&&(book.status==="ready"||book.status==="archived")&&!book.visionOcrDeleted&&!book.visionOcrDeleting;
+ const busyOcr=book.visionOcrDeleting,needsInspect=["uploading","uploaded","processing","failed","delete_failed"].includes(book.status);
+ const failedOcr=Boolean(book.visionOcrCleanupError),ocrAction=failedOcr?"Retry Vision OCR cleanup":"Delete Vision OCR files only";
+ $("modal-title").textContent=book.title;
+ $("modal-body").innerHTML=
+  '<p class="modal-subtitle" style="margin:0 0 16px">'+esc(book.collectionName)+' · '+book.indexedPages+'/'+book.pageCount+' pages indexed · '+esc(book.status.replaceAll("_"," "))+'</p>'+
+  '<div class="management-actions">'+(needsInspect?'<button class="btn" id="manage-inspect" type="button">Inspect processing pipeline</button>':"")+
+   (book.status==="deleting"?"":'<button class="btn" id="manage-access" type="button">Manage direct project access</button>')+
+   (canArchive?'<button class="btn" id="manage-archive" data-book-archive type="button">Archive source</button>':"")+
+   (canRestore?'<button class="btn" id="manage-restore" data-book-restore type="button">Restore source</button>':"")+
+   (canDeleteOcr?'<button class="btn" id="manage-ocr" type="button">'+ocrAction+'</button>':busyOcr?'<span class="muted">Vision OCR cleanup is running…</span>':book.visionOcrDeleted?'<span class="muted">Vision OCR files marked as removed.</span>':"")+
+   (canDelete?'<button class="btn danger" id="manage-delete" type="button">Delete this book permanently</button>':book.sourceType!=="pdf"?'<span class="muted">This built-in source is protected.</span>':"")+
+  '</div>'+
+  (failedOcr?'<div class="notice error" style="margin-top:12px">Last OCR cleanup failed: '+esc(book.visionOcrCleanupError)+'<br>Automatic retries are paused. Run the read-only storage check in Operations, correct the bucket permissions, then retry here. The original PDF, indexed pages and retrieval-ready status have been retained.</div>':"")+
+  '<div class="notice">'+(book.status==="deleting"?"Full book deletion is already in progress. The source will disappear from this library when its background workflow completes.":"Direct project access is managed separately from collection access. Archiving pauses retrieval but retains stored data. Deleting the book is permanent and removes its searchable pages and imported storage.")+'</div>';
+ $("modal").classList.add("open");
+ if(needsInspect)$("manage-inspect").addEventListener("click",()=>showImport(id));
+ if(book.status!=="deleting")$("manage-access").addEventListener("click",()=>editBookAccess(id));
+ if(canArchive)$("manage-archive").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await archiveBook(id,"archive",button);});
+ if(canRestore)$("manage-restore").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await archiveBook(id,"restore",button);});
+ if(canDeleteOcr)$("manage-ocr").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await deleteVisionOutput(id,button);});
+ if(canDelete)$("manage-delete").addEventListener("click",async event=>{const button=event.currentTarget;$("modal").classList.remove("open");await deleteBook(id,button);});
+}
 async function editBookAccess(id){const book=model.books.find(b=>b.id===id);if(!book)return;const selected=new Set((book.directProjects||[]).map(p=>p.id));
  $("modal-title").textContent="Project access · "+book.title;
  $("modal-body").innerHTML='<p class="muted">Choose exactly which projects can retrieve this source. Saving replaces its direct project assignments.</p><div class="checks" id="access-choices">'+model.projects.filter(p=>p.status==="active").map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.id)+'" '+(selected.has(p.id)?"checked":"")+'> '+esc(p.name)+'</label>').join("")+'</div><button class="btn primary" id="save-book-access" style="margin-top:12px">Save access</button>';
