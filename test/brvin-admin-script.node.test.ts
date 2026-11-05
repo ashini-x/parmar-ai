@@ -146,7 +146,9 @@ describe("BRVIN browser script contract", () => {
     expect(script).toContain('legacyClient:false');
     expect(script).toContain('post("applications/update"');
     expect(script).toContain('post("projects/update"');
+    expect(script).toContain("function openProjectDetails");
     expect(script).toContain("function openProjectEditor");
+    expect(script).toContain('data-project-details=');
     expect(script).toContain("function openApplicationEditor");
     expect(workerSource).toContain('/admin/api/brvin/applications/update');
     expect(workerSource).toContain("/admin/api/brvin/applications/grants/revoke");
