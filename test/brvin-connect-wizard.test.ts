@@ -258,7 +258,8 @@ describe("BRVIN Connect Application wizard", () => {
     for (const requiredScope of BRVIN_CLOUDFLARE_REQUIRED_SCOPES) expect(requestedScopes).toContain(requiredScope);
     expect(requestedScopes).toContain("workers-scripts.admin");
     expect(requestedScopes).toContain("account-api-tokens.write");
-    expect(requestedScopes).toContain("account_api_tokens:create");
+    expect(requestedScopes).not.toContain("account_api_tokens:create");
+    expect(BRVIN_CLOUDFLARE_REQUIRED_SCOPES).not.toContain("account_api_tokens:create");
     expect(requestedScopes).toContain("offline_access");
     const state = authorization.searchParams.get("state")!;
 
