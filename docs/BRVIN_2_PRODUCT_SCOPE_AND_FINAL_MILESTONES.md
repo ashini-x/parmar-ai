@@ -15,7 +15,7 @@ BRVIN exists to let the administrator create and manage multiple teacher-specifi
 
 The target commercial workflow is:
 
-1. A teacher supplies PDFs, shortcuts, formulas, methods, notes and other approved teaching material.
+1. A teacher supplies PDFs containing the teacher's shortcuts, formulas, methods, notes and other approved teaching material. The first delivery is PDF-oriented; native text/notes and additional file formats are not assumed until implemented.
 2. The administrator creates that teacher's BRVIN knowledge project, uploads and organizes the material, and waits for indexing/readiness checks.
 3. The administrator or developer creates an independent application (for example, a mathematics Telegram bot) in its own GitHub repository. ChatGPT builds and maintains that application using the user's connected GitHub and Cloudflare tools.
 4. The administrator registers the application, its repository reference and its runtime environment in BRVIN.
