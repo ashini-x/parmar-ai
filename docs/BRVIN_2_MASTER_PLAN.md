@@ -6,7 +6,7 @@
 **Product scope:** [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md)  
 **As-built reference:** [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md)  
 **Planning baseline:** `main`  
-**Status at 5 November 2026:** M0–M8 are complete; M4's fixed reference scaffold was retired and is not a product requirement. M6's teacher-focused admin workspace, M7's application/environment registry and M8's ChatGPT integration handoff are merged, deployed and production-accepted. M9 — live connection verification and activation is the first incomplete milestone; M10–M11 remain not started.
+**Status at 6 November 2026:** M0–M9 are complete; M4's fixed reference scaffold was retired and is not a product requirement. M6's teacher-focused admin workspace, M7's application/environment registry, M8's ChatGPT integration handoff and M9's live production connection verification are merged, deployed and accepted. M10 — teacher knowledge assignment and isolation acceptance — is the next active milestone; M11 remains not started.
 
 > **Scope correction:** The user's confirmed goal is a multi-application, teacher-specific knowledge platform. ChatGPT remains the user's software engineer through its separately authorized GitHub and Cloudflare connections. The previously proposed autonomous BRVIN coding brain, repository factory, broad provider-admin credential vault and BRVIN-owned CI/CD are superseded and are not active BRVIN 2 requirements. See [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md).
 
@@ -234,7 +234,7 @@ Do not make the broad Provider Administrator / Autonomous Project Factory wizard
 
 The active final milestone sequence is **M6–M11**. The authoritative detailed acceptance criteria live in [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md). Historical Project Factory milestones and progress entries remain in this file as historical records only; they must not be resumed.
 
-| Milestone | Name | Status at 5 November 2026 | Completion outcome |
+| Milestone | Name | Status at 6 November 2026 | Completion outcome |
 |---|---|---|---|
 | 0 | Architecture freeze and migration blueprint | COMPLETE | Existing identity, trust, data and migration decisions accepted. |
 | 1 | Multi-application, multi-project identity | COMPLETE | Application/environment/grant registry deployed; Fatman preserved. |
@@ -245,7 +245,7 @@ The active final milestone sequence is **M6–M11**. The authoritative detailed 
 | 6 | Admin workspace aligned to teacher knowledge operations | COMPLETE — merged, deployed and production smoke accepted | Teacher/owner metadata, app-neutral knowledge project creation, source readiness/usage, project detail view, application metadata and legacy provider settings de-emphasized. |
 | 7 | Application connection registry and wizard | COMPLETE — merged, deployed and production acceptance passed | Existing app repository/default-branch/runtime metadata, generated production/staging/preview environment identities, editable Worker references and explicit Pending connection status. |
 | 8 | ChatGPT integration handoff | COMPLETE — merged, deployed and production release accepted | Admin generates a versioned, dated, copyable non-secret prompt and structured manifest for each active application/environment. |
-| 9 | Live connection verification and activation | NOT STARTED | Deployed consumer proves trusted v2 identity and private Service Binding; readiness is shown separately. |
+| 9 | Live connection verification and activation | COMPLETE — live production proof accepted | Parmar AI Production completed the authenticated browser challenge/proof flow; D1 records `connected`, proof consumed, and one ready authorised source. |
 | 10 | Teacher knowledge assignment and isolation acceptance | NOT STARTED | Multi-teacher/multi-app grant, revoke, isolation and sharing tests. |
 | 11 | Operations, usage and administrator handover | NOT STARTED | Usage, failures, audit, operating guide and a real teacher-focused app acceptance run. |
 
@@ -338,7 +338,7 @@ This table is the human-readable status. The evidence fields must be filled from
 | 6 — Admin workspace aligned to teacher knowledge operations | COMPLETE — merged and deployed | [PR #91](https://github.com/ashini-x/parmar-ai/pull/91), merge `4ab6c555af64f5972607a9b9f409c181d0883c7f` | Release Validation #700 passed typecheck, unit tests, Node/browser-script tests and both Worker bundle validations. Main release #701 passed paired deployment, root/health/private BRVIN/Fatman smoke and release acceptance. D1 owner-label migration marker/columns and dashboard summary SQL were verified read-only. | Authenticated visual click-through was not performed in this session; browser login remains a manual confirmation. No M7 work started. |
 | 7 — Application connection registry and wizard | COMPLETE — merged and deployed | [PR #93](https://github.com/ashini-x/parmar-ai/pull/93), merge `3f7803fe5e3cc0f9894292a8ce7ad6c79a6d11d6` | Release Validation #704 passed type-check, unit tests, Node/browser-script tests and both Worker bundle validations. Main release #705 passed paired deployment, root/health/private BRVIN/Fatman smoke and release acceptance. Production D1 migration marker/columns and existing app/environment records were verified read-only. | Wizard is metadata-only; no GitHub repository, Worker, secret, binding or deployment is provisioned. All environments remain Pending until M9. |
 | 8 — ChatGPT integration handoff | COMPLETE — merged and deployed | [PR #95](https://github.com/ashini-x/parmar-ai/pull/95), merge `81bc036ca1ffd2ae7d3ce6ed0170ee2e1e69d9fd` | PR Release Validation #711 passed typecheck, all unit/integration tests, Node/browser-script tests and both Worker bundle checks. Main Release Validation #713 passed the initial feature deployment. The subsequent main release #715 also redeployed the unchanged M8 code and passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance; latest artifact `13434968943`. | `brvin-service` deployment `d7436bd2-d0b8-435b-9a6f-d224abaf9c77`, version `797ea8a6-6735-44c4-afad-2dd19bf2363c`; `parmar-ai` deployment `f7dac7cd-8215-4748-86b1-296eb4219c27`, version `5e248a66-1c1a-45df-a23a-fd7b8d941032`. No M8 D1 migration or provider-secret mutation. Environment remains Pending until M9 live verification. |
-| 9 — Live connection verification and activation | NOT STARTED | — | — | Deployed consumer proves trusted v2 identity and private Service Binding; readiness is shown separately. |
+| 9 — Live connection verification and activation | COMPLETE | [PR #98](https://github.com/ashini-x/parmar-ai/pull/98), merge `1a57f53965f30c3de89eb51570548f99eb893e4f` | Release Validation #728; Main Release Validation #729; authenticated production Verify Connection; D1 status `connected`, proof hash stored, completed timestamp present, ready=1/source_count=1 | Valid production proof accepted; no raw nonce/proof is persisted. M10 is next. |
 | 10 — Teacher knowledge assignment and isolation acceptance | NOT STARTED | — | — | Multi-teacher/multi-app grants, revocation, sharing and cross-project denial tests. |
 | 11 — Operations, usage and administrator handover | NOT STARTED | — | — | Usage, pipeline/connection failures, audit/revocation, recovery guidance and nontechnical admin manual. |
 | 12 — Cross-account / non-Cloudflare gateway | DEFERRED | — | — | Optional later expansion; same-account private Service Binding remains the initial supported connection. |
@@ -870,4 +870,27 @@ The BRVIN Cloudflare account ID is only a non-secret comparison reference. M7 do
 
 **Production / live status:** production release #729 is successful. The active Parmar production environment ID `00000000-0000-4000-8000-000000000102` retains its Fatman grant and private `BRVIN_SERVICE` binding. Its saved Worker URL is `https://parmar-ai.thenewtongs.workers.dev`. The additive M9 challenge table is deployed, but no live challenge has been created; therefore it is intentionally still Pending. No admin browser session was available to click Verify Connection or complete the final authenticated proof exchange.
 
-**Next action:** in the authenticated BRVIN admin workspace, open Applications & Access → Parmar AI → production and run **Verify connection**. Confirm the real consumer returns the one-time proof, the admin finalizer consumes it, and the environment shows either Connected or Connected — no ready knowledge. Also exercise a wrong/revoked environment denial. Only then mark M9 complete and start M10.
+**Next action at the time of this implementation log:** run **Verify connection** in the authenticated BRVIN admin workspace and confirm the one-time proof is consumed. This was subsequently completed; see the dated M9 live acceptance closeout below.
+
+
+### Milestone log — 6 November 2026 — M9 live production acceptance (complete)
+
+**Status:** COMPLETE — the authenticated production browser check passed and the Cloudflare D1 record independently confirms successful one-time proof consumption.
+
+**Application and environment:** Parmar AI → Production. Environment ID: `00000000-0000-4000-8000-000000000102`. Consumer Worker: `parmar-ai` at `https://parmar-ai.thenewtongs.workers.dev`.
+
+**User-visible result:** The administrator opened the existing BRVIN admin workspace, selected **Verify connection** once, and reported the exact result **Connected**.
+
+**Production D1 evidence (read-only verification):** the latest row in `brvin_connection_checks` for the production environment has:
+- `status = connected`;
+- a non-null `proof_hash` and populated `completed_at`, confirming the issued one-time proof was consumed;
+- `ready = 1` and `authorized_source_count = 1` in the service-generated readiness snapshot;
+- no failure code.
+
+The D1 query was read-only (`rows_written = 0`). The raw nonce and proof are not stored in the record or copied into this log; only their hashes are persisted. The check completed at **6 November 2026, 00:12:12.665 IST**.
+
+**Implementation / release evidence:** [PR #98](https://github.com/ashini-x/parmar-ai/pull/98), merged as `1a57f53965f30c3de89eb51570548f99eb893e4f`. [Release Validation #728](https://github.com/ashini-x/parmar-ai/actions/runs/42079493490) and [Main Release Validation #729](https://github.com/ashini-x/parmar-ai/actions/runs/42079795434) passed. Release #729 deployed both Workers and passed root, health, private BRVIN Service Binding and Fatman retrieval acceptance; release artifact `13440845149`. Production versions: `brvin-service` `af406a76-ec5c-4e0b-b401-80dfb1ff2a38`; `parmar-ai` `6e27a398-0bf4-4dba-8cc4-a0e17977bb4e`.
+
+**Scope boundary:** This proves that the registered Parmar AI Production Worker used its trusted environment identity to reach the private BRVIN service and completed the authenticated one-time verification. The service reported one ready authorised source. It does not prove teacher-by-teacher user isolation, end-user login enforcement or the consumer's final model/tool experience. Automated tests cover wrong-environment, inactive, expired, forged and replayed proof rejection; the manual live check exercised the valid production path.
+
+**Next active milestone:** M10 — teacher knowledge assignment and isolation acceptance. Test separate teacher projects and applications, explicit grants, revocation, intentional sharing, collection grants, and the consumer application's own user-to-project authorization policy. M9 must not be reopened unless new production evidence contradicts this accepted record.
