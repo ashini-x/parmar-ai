@@ -1480,25 +1480,21 @@ $("cf-copy-required-scopes").addEventListener("click",async()=>{
 });
 $("github-register").addEventListener("click",async()=>{
  try{
+  const settingsUrl=connectState?.github?.appSettingsUrl;
+  if(settingsUrl){window.open(settingsUrl,"_blank","noopener,noreferrer");return;}
   const data=await post("connect/github/manifest",{});
   const form=document.createElement("form");form.method="POST";form.action=data.action;form.target="_blank";
   const hidden=document.createElement("input");hidden.type="hidden";hidden.name="manifest";hidden.value=JSON.stringify(data.manifest);
   form.appendChild(hidden);document.body.appendChild(form);form.submit();form.remove();
  }catch(error){alert(error.message);}
 });
-$("github-load-installations").addEventListener("click",async()=>{try{await loadConnectInstallations();}catch(error){alert(error.message);}});
-$("github-use-installation").addEventListener("click",async()=>{
- try{const installationId=Number($("github-installation").value);if(!installationId)throw new Error("Choose an installed GitHub account.");await post("connect/github/installation",{installationId});await loadConnectRepositories();await refreshConnectState();}
- catch(error){alert(error.message);}
-});
-$("github-load-repositories").addEventListener("click",async()=>{try{await loadConnectRepositories();}catch(error){alert(error.message);}});
 $("cf-save-client").addEventListener("click",async()=>{
  try{
   const clientId=$("cf-client-id").value.trim(),clientSecret=$("cf-client-secret").value;
   if(!clientId||!clientSecret)throw new Error("Enter both Cloudflare OAuth client values.");
   const result=await post("connect/cloudflare/configure",{clientId,clientSecret});
   $("cf-client-secret").value="";$("cf-callback-url").value=result.redirectUri;
-  $("cf-worker-note").textContent="Client credentials saved encrypted. Start OAuth authorization next.";
+  $("cf-worker-note").textContent="Client credentials saved encrypted. Authorize BRVIN next.";
   await refreshConnectState();
  }catch(error){alert(error.message);}
 });
@@ -1510,63 +1506,9 @@ $("cf-discover-workers").addEventListener("click",async()=>{
  try{
   const result=await api(API+"connect/cloudflare/workers");
   const names=(result.workers||[]).map(worker=>worker.name);
-  $("cf-worker-note").textContent="Same account verified · "+names.length+" Workers discovered · "+(names.includes("brvin-service")?"brvin-service confirmed":"brvin-service missing")+".";
+  $("cf-worker-note").textContent="Same account verified · "+names.length+" Workers discovered · "+(names.includes("brvin-service")?"private brvin-service confirmed":"private brvin-service missing")+".";
   await refreshConnectState();
  }catch(error){$("cf-worker-note").textContent=error.message;alert(error.message);}
-});
-$("connect-register-consumer").addEventListener("click",async()=>{
- try{
-  const result=await post("connect/consumer",{
-   applicationName:$("connect-app-name").value,
-   applicationDescription:"Isolated text-first BRVIN reference consumer; no production voice app changes.",
-   environmentKey:$("connect-env-key").value,
-   projectName:$("connect-project-name").value,
-   projectDescription:$("connect-project-description").value
-  });
-  $("connect-consumer-note").textContent="Created application "+result.application.id+", environment "+result.environment.id+", isolated project "+result.project.id+" and explicit app-project grant.";
-  await refresh();
-  $("connect-existing-application").value=result.application.id;renderConnectEnvironments();$("connect-existing-environment").value=result.environment.id;
- }catch(error){alert(error.message);}
-});
-$("connect-existing-application").addEventListener("change",renderConnectEnvironments);
-$("connect-create-pr").addEventListener("click",async()=>{
- try{
-  const repository=$("github-repository").value;
-  const appId=$("connect-existing-application").value;
-  const environmentId=$("connect-existing-environment").value;
-  if(repository!=="ashini-x/askmoina-voice")throw new Error("Select the supported BRVIN text test-client repository.");
-  if(!appId||!environmentId)throw new Error("Create or select an active application and environment first.");
-  $("connect-result").textContent="Verifying both provider connections and preparing a review branch…";
-  const result=await post("connect/pull-request",{repository,baseBranch:"main",applicationId:appId,environmentId});
-  $("connect-result").innerHTML='Created PR <a href="'+esc(result.pullRequest.url)+'" target="_blank" rel="noopener">#'+result.pullRequest.number+' · Review on GitHub</a>. Nothing was merged or deployed.';
-  await refreshConnectState();
- }catch(error){$("connect-result").textContent=error.message;alert(error.message);}
-});
-$("connect-verify-deployment").addEventListener("click",async()=>{
- try{
-  const result=await api(API+"connect/verify");
-  $("connect-result").textContent=result.state==="deployment_ready"
-   ?"Worker deployment and private BRVIN Service Binding are ready. Generate the tester token next; that action performs the live RPC identity check against the dedicated test project."
-   :"Worker deployment status: "+(result.state||"unknown")+".";
- }catch(error){$("connect-result").textContent=error.message;}
-});
-$("connect-generate-token").addEventListener("click",async()=>{
- try{
-  if(!confirm("Generate or rotate the private tester access token? The previous tester token will stop working."))return;
-  $("connect-generate-token").disabled=true;
-  $("connect-test-token").value="";
-  const result=await post("connect/test-access-token",{});
-  $("connect-test-token").type="text";
-  $("connect-test-token").value=result.testerToken;
-  $("connect-result").textContent="Live BRVIN RPC identity check passed for the dedicated text-test project. Copy the one-time tester token now; it will not be shown again after this page is refreshed.";
- }catch(error){$("connect-result").textContent=error.message;alert(error.message);}
- finally{$("connect-generate-token").disabled=false;}
-});
-$("connect-copy-token").addEventListener("click",async()=>{
- const value=$("connect-test-token").value;
- if(!value){alert("Generate the tester token first.");return;}
- try{await navigator.clipboard.writeText(value);$("connect-result").textContent="Tester token copied. Keep it private and enter it in the BRVIN Test Lab.";}
- catch{$("connect-test-token").type="text";$("connect-test-token").focus();$("connect-test-token").select();$("connect-result").textContent="Select and copy the token above. Keep it private.";}
 });
 $("create-collection").addEventListener("click",async()=>{try{await post("collections",{name:$("collection-name").value,description:$("collection-desc").value});$("collection-name").value="";$("collection-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("save-project-access").addEventListener("click",async()=>{try{const projectId=$("project-access").value;if(!projectId)throw new Error("Create or choose a project first.");const collectionIds=[...$("collection-checks").querySelectorAll("input:checked")].map(i=>i.value);await post("projects/collections",{projectId,collectionIds});await refresh();}catch(e){alert(e.message);}});
