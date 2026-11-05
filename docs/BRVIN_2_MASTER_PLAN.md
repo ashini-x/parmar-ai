@@ -18,13 +18,13 @@
 
 BRVIN is a shared, application-aware knowledge platform for creating, managing and securely serving teacher-specific digital brains.
 
-A teacher's digital brain may contain PDFs, shortcuts, formulas, personal teaching methods, notes and other approved learning material. BRVIN centralizes upload, storage, OCR, indexing, collections, readiness, project permissions, retrieval, quotas and audit. Independent applications—such as Telegram bots, websites, APIs or assistants—connect once to BRVIN and retrieve only the knowledge projects explicitly granted to them.
+A teacher's digital brain is initially PDF-oriented; those PDFs can contain the teacher's shortcuts, formulas, methods, explanations and notes. Native text/notes or additional formats are not assumed until implemented. BRVIN centralizes supported upload, storage, OCR, indexing, collections, readiness, project permissions, retrieval, quotas and audit. Independent applications—such as Telegram bots, websites, APIs or assistants—connect once to BRVIN and retrieve only the knowledge projects explicitly granted to them.
 
 The administrator's primary jobs are:
 1. Create and maintain a knowledge project for each teacher or use case.
 2. Upload and organize the teacher's material.
 3. Register an application and its repository/runtime reference.
-4. complete its one-time server-side BRVIN integration using ChatGPT and the user's connected engineering tools;
+4. Complete its one-time server-side BRVIN integration using ChatGPT and the user's connected engineering tools;
 5. Verify the deployed application-to-BRVIN connection.
 6. Assign or revoke knowledge-project access in the admin panel.
 
@@ -325,7 +325,7 @@ Start by stating the exact current milestone and evidence found. Do not repeat a
 
 ## 7. Progress ledger — update after every milestone
 
-This table is the human-readable status. The evidence fields must be filled from actual GitHub/Cloudflare/test results, not assumptions.
+This table is the human-readable status. The evidence fields must be filled from actual GitHub/Cloudflare/test results, not assumptions. Historical M6–M10 entries later in this ledger describe the superseded autonomous Project Factory direction; they are preserved for audit only and must not be resumed. The active final milestones are M6–M11 in the product-scope document.
 
 | Milestone | Status | PR / commit | Verification evidence | Notes |
 |---|---|---|---|---|
@@ -335,12 +335,13 @@ This table is the human-readable status. The evidence fields must be filled from
 | 3 — Reusable connector | COMPLETE | [PR #63](https://github.com/ashini-x/parmar-ai/pull/63), merge commit `91b6a499bd782ae298b41e790157c23682f10881` | Release Validation #608 passed; Cloudflare Preview build `a4c154e3-c056-489a-9b14-8ebac9ed9c0d` succeeded | Connector vendored by AskMoina PR #370 |
 | 4 — Independent BRVIN text reference Worker | COMPLETE — scaffold/contract tests delivered | [AskMoina PR #381](https://github.com/ashini-x/askmoina-voice/pull/381), merge `bf8e5a1e9fe7f451ad31430143ab52aaf801214e` | Separate `brvin-test-client` Worker, own Wrangler and TypeScript configs, tester-token gate, text UI, server-side v2 connector, authorisation/provenance tests; Release Validation and independent Wrangler dry-run passed on main | No test identity, project grant, Service Binding or deployment. Historical scaffold only; superseded as the acceptance app by the factory-generated independent PDF-chat repository. |
 | 5 — Application/project administration | COMPLETE — merged, deployed and production release accepted | [PR #72](https://github.com/ashini-x/parmar-ai/pull/72), merge `5872c2d21cdef17feb21d661e50ddde820c51f40` | Main Release Validation and paired production release [#41900067751](https://github.com/ashini-x/parmar-ai/actions/runs/41900067751) passed typecheck, unit/Node tests, both Worker bundle checks, production deployment and root/BRVIN/Fatman smoke; acceptance artifact `13357333270` | `brvin-service` version `c6755ca2-5b5f-4968-8bbc-e957a767926d`; `parmar-ai` version `d239c941-f119-4ad1-9020-63e9a2353434`. No migration or production data mutation. Cloudflare preview PR build alone hit the account's 100 Durable Object Free-plan namespace limit; main production build/deploy passed |
-| 6 — Delegated provider administration and credential lifecycle | IN PROGRESS — permission preflight is deployed; owner approvals and credential automation remain | [PR #82](https://github.com/ashini-x/parmar-ai/pull/82) merged `5ade1aede0a215166fb827a08f1fdaf84e303c22`; [PR #83](https://github.com/ashini-x/parmar-ai/pull/83) merged `ceef8f17927b190a5bba71bce61732c7067e34a0` | PR #83 Release Validation #673 passed (run `42020393642`). Main production Release Validation #675 passed (run `42020525691`): `brvin-service` deployment `5d1b649d-5041-4957-9c2c-09ad52f18b5d` / version `82e902c9-be00-47da-81fa-c4d879e58fcc` at 100%; `parmar-ai` deployment `fdc896dd-d0cb-437d-8bbb-cf9491f49dea` / version `c6f4fd4f-00aa-42e0-af68-dc3af1b83144` at 100%; root, health, private Service Binding and Fatman retrieval passed. | First incomplete implementation milestone. The admin panel now preflights provider permissions and displays the one-time consent steps. Current Cloudflare OAuth still stores `workers-scripts.edit offline_access`; the user must re-consent to expanded scopes. The existing Cloudflare account member is already Super Administrator. The existing BRVIN GitHub App still needs the expanded permission approval and All-repositories installation scope. Token creation, Actions/Worker secret delivery, vault lifecycle, rotation/revocation and project-level credential provisioning remain to implement. |
-| 7 — Autonomous Software Project Factory | NOT STARTED | — | — | Natural-language brief → new GitHub repository → code/tests → Cloudflare resources/credentials → verified deployment |
-| 8 — First generated application: Chat with Your PDFs | NOT STARTED | — | — | Factory-generated independent app; grounded answers and physical PDF page citations |
-| 9 — Generalisation and multi-project acceptance | NOT STARTED | — | — | Generate a second app type; multi-app/project grants, isolation, revocation, recovery and Fatman preservation |
-| 10 — Security, release and handover | NOT STARTED | — | — | Final account/provider, credential, deployment, audit and nontechnical manual |
-| 11 — Cross-account gateway (optional) | DEFERRED | — | — | Separate cross-account expansion; private same-account Service Binding remains default |
+| 6 — Admin workspace aligned to teacher knowledge operations | IN PROGRESS — implementation on `brvin/m6-teacher-focused-admin`, pending PR validation and production release | Pending | Owner-label migration, independent teacher knowledge project creation, project readiness/usage summaries, teacher-focused overview and application/project metadata editing are implemented on the feature branch. | Do not mark complete until CI, merge, release and live admin verification pass. |
+| 7 — Application connection registry and wizard | NOT STARTED | — | — | Register application, repository/runtime references and production/staging environments in one guided flow. |
+| 8 — ChatGPT integration handoff | NOT STARTED | — | — | Generate repository-specific non-secret integration prompt/manifest; ChatGPT performs code/deployment with its own provider connections. |
+| 9 — Live connection verification and activation | NOT STARTED | — | — | Deployed consumer proves trusted v2 identity and private Service Binding; readiness is shown separately. |
+| 10 — Teacher knowledge assignment and isolation acceptance | NOT STARTED | — | — | Multi-teacher/multi-app grants, revocation, sharing and cross-project denial tests. |
+| 11 — Operations, usage and administrator handover | NOT STARTED | — | — | Usage, pipeline/connection failures, audit/revocation, recovery guidance and nontechnical admin manual. |
+| 12 — Cross-account / non-Cloudflare gateway | DEFERRED | — | — | Optional later expansion; same-account private Service Binding remains the initial supported connection. |
 
 ### Required milestone log entry format
 
@@ -749,3 +750,21 @@ The active final milestones are M6–M11 as defined in [BRVIN_2_PRODUCT_SCOPE_AN
 - **Documents:** final product scope/milestones added; master plan, architecture decisions, system reference and RPC v2 integration guide updated; autonomous Project Factory document marked superseded historical proposal.
 - **Boundary:** documentation only. No D1/schema changes, code changes, provider re-consent, credential mutation, Cloudflare deployment or production resource changes.
 - **Next:** M6 — Admin workspace aligned to teacher knowledge operations. See [the final milestone register](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md#10-final-milestone-register).
+
+### Milestone log — 5 November 2026 — M6 teacher-focused admin workspace (implementation in progress)
+
+**Status:** IN PROGRESS — feature branch implementation is underway; not merged, deployed or production-verified.
+
+**Branch:** `brvin/m6-teacher-focused-admin`.
+
+**Implementation committed on branch:**
+- `src/analytics/db.ts` — additive `owner_label` metadata for existing/fresh BRVIN knowledge projects and applications. The idempotent migration checks `PRAGMA table_info`, adds only missing columns, handles concurrent duplicate-column races by reading the schema again, and records `2026-11-05-brvin-owner-label-v1`.
+- `src/brvin/admin.ts` — overview now returns project owner, distinct assigned source count, fully indexed ready-source count, active application count and current-month retrieval usage. Existing Fatman v1 usage continues to read its own monthly counter. Project and application create/update APIs accept owner labels; new teacher-project UI explicitly sends `legacyClient:false`, preserving old default v1 behavior for legacy callers. Project/application cards show teacher/owner, source readiness, current-month usage, grants/environments and clear unverified connection state. Edit dialogs replace browser prompt editing. Main navigation/overview now prioritize Knowledge Projects and Applications. Historical provider settings are collapsed and explicitly marked legacy; no stored provider credential was deleted or reauthorized.
+- `src/index.ts` — protected same-origin POST route for application metadata updates.
+- `test/brvin-app-admin.test.ts` — teacher metadata create/update coverage and app-neutral project creation without legacy client mapping.
+- `test/brvin-owner-metadata-migration.test.ts` — additive/idempotent owner column migration tests.
+- `test/brvin-admin-script.node.test.ts` — browser/admin contract assertions updated for the teacher-focused workspace.
+
+**Compatibility and data safety:** existing project IDs, app IDs, environment identities, grants, direct book grants, collection grants, source data, usage tables and Fatman compatibility are retained. The schema change adds columns with an empty-string default; it does not rebuild tables or change authorization semantics. Owner labels are descriptive metadata, not a security boundary. The existing application-project grant remains application-wide. No provider credentials, secrets, Worker bindings or runtime resources are intentionally changed by M6.
+
+**Pending verification:** run full Release Validation for the implementation PR; verify typecheck, unit/Node tests and both Worker bundle checks. After merge, inspect production migration marker/columns, confirm pre-existing owner labels default to empty, verify the dashboard loads, create/update a dedicated test project/application, verify a new teacher project creates no legacy `brvin_service_clients` mapping, and confirm Fatman rows/grants/counters remain unchanged. M6 is not complete until release/live checks are recorded below.
