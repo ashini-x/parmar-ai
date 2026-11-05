@@ -416,19 +416,19 @@ M7 shipped in [PR #93](https://github.com/ashini-x/parmar-ai/pull/93), merge com
 
 ### 9.4 M8 ChatGPT integration handoff — deployed and complete
 
-M8 shipped in [PR #95](https://github.com/ashini-x/parmar-ai/pull/95), merged to main as \`81bc036ca1ffd2ae7d3ce6ed0170ee2e1e69d9fd\`.
+M8 shipped in [PR #95](https://github.com/ashini-x/parmar-ai/pull/95), merged to main as `81bc036ca1ffd2ae7d3ce6ed0170ee2e1e69d9fd`.
 
 The admin application/environment cards expose Generate ChatGPT handoff. A protected read-only endpoint regenerates the handoff from current saved application and environment metadata, validates active status and environment-to-application ownership, and returns a versioned prompt plus structured manifest. The modal shows the revision and generation date and provides copy controls for both outputs.
 
-The generator names private service \`brvin-service\`, entrypoint \`BrvinRetrievalApi\`, binding \`BRVIN_SERVICE\`, and v2 methods \`listAuthorizedProjectsV2()\`, \`getProjectStatusV2({ projectId })\` and \`retrieveProjectContextV2(input)\`. The trusted binding property is \`applicationEnvironmentId\`, never the legacy v1 \`clientId\`. The prompt directs ChatGPT to vendor a reviewed, pinned copy of \`packages/brvin-connector\`, integrate retrieval server-side into the consumer's existing model/tool path, preserve source/page provenance, and complete the security/test checklist.
+The generator names private service `brvin-service`, entrypoint `BrvinRetrievalApi`, binding `BRVIN_SERVICE`, and v2 methods `listAuthorizedProjectsV2()`, `getProjectStatusV2({ projectId })` and `retrieveProjectContextV2(input)`. The trusted binding property is `applicationEnvironmentId`, never the legacy v1 `clientId`. The prompt directs ChatGPT to vendor a reviewed, pinned copy of `packages/brvin-connector`, integrate retrieval server-side into the consumer's existing model/tool path, preserve source/page provenance, and complete the security/test checklist.
 
 The generator reads only allowlisted application, repository, environment and runtime metadata plus a configured non-secret BRVIN account-ID reference. It does not inspect the legacy GitHub App/Cloudflare OAuth credential vault. M7 does not record the target consumer's actual Cloudflare account ID, so the handoff requires explicit same-account verification before deployment. Non-Cloudflare runtime providers are blocked for this same-account Service Binding path.
 
 The handoff does not provision or modify a consumer repository, Worker, binding, secret, project grant or deployment, and does not claim a live connection. Every registered environment remains Pending until M9 live verification succeeds.
 
-**Validation:** PR Release Validation [#711](https://github.com/ashini-x/parmar-ai/actions/runs/42067500863) passed typecheck, unit/integration tests, Node/browser-script tests and both Worker bundle validations. Main Release Validation [#713](https://github.com/ashini-x/parmar-ai/actions/runs/42067800093) passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance; artifact \`13434543663\`.
+**Validation:** PR Release Validation [#711](https://github.com/ashini-x/parmar-ai/actions/runs/42067500863) passed typecheck, unit/integration tests, Node/browser-script tests and both Worker bundle validations. Main Release Validation [#713](https://github.com/ashini-x/parmar-ai/actions/runs/42067800093) passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance; artifact `13434543663`.
 
-**Production deployment versions:** \`brvin-service\` version \`3737180d-9317-464f-8e12-816b266f1fc2\`; \`parmar-ai\` version \`96a626c5-c11c-4e7b-9202-a040cd434da7\`.
+**Production deployment versions:** `brvin-service` version `3737180d-9317-464f-8e12-816b266f1fc2`; `parmar-ai` version `96a626c5-c11c-4e7b-9202-a040cd434da7`.
 
 **Verification limitation:** This session did not have an authenticated admin browser for a manual visual click-through or an actual per-app copy test. CI validated the generated browser script, route and generator contracts. No specific consumer is claimed Connected.
 
