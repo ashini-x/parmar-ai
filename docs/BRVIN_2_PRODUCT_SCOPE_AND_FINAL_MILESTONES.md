@@ -282,7 +282,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 | M3 | Reusable server-side connector | COMPLETE | Typed connector contract available to consumer applications. |
 | M4 | Reference consumer scaffold | RETIRED / NOT A PRODUCT REQUIREMENT | The old fixed AskMoina text scaffold was removed and never deployed; do not recreate it. |
 | M5 | Core application/project administration | COMPLETE — UX expansion remains | Existing app/environment/grant lifecycle and protected admin are deployed. |
-| M6 | Admin workspace aligned to teacher knowledge operations | NOT STARTED | Project-centric overview, teacher/owner metadata, clear knowledge/app navigation and useful project/application detail views. |
+| M6 | Admin workspace aligned to teacher knowledge operations | IN PROGRESS | Project-centric overview, owner metadata, app-neutral teacher workspace creation, source readiness/usage and application/project detail views; pending PR validation and production acceptance. |
 | M7 | Application connection registry and wizard | NOT STARTED | Register application, repository/runtime references, production/staging environments and honest connection states in one guided flow. |
 | M8 | ChatGPT integration handoff | NOT STARTED | BRVIN generates a complete repository-specific integration prompt/manifest; ChatGPT implements code and deployment using its own provider connections. |
 | M9 | Live connection verification and activation | NOT STARTED | A deployed consumer environment proves its trusted v2 identity and private Service Binding path; UI distinguishes connection health from source readiness. |
@@ -426,3 +426,25 @@ For a new ChatGPT chat or branch:
 - **Changed:** final product-scope/milestone document, master plan, architecture decisions, system reference, application integration guide and superseded Project Factory notice.
 - **Deployment:** none. This was documentation-only; no runtime, schema, provider credentials or production resources changed.
 - **Next milestone:** M6 — Admin workspace aligned to teacher knowledge operations.
+
+## 14. M6 implementation progress
+
+### 5 November 2026 — teacher-focused admin workspace (in progress)
+
+**Status:** IN PROGRESS — branch `brvin/m6-teacher-focused-admin`; changes are committed but still awaiting PR validation, merge, production release and live acceptance.
+
+**Implemented on branch:**
+- Added the additive, idempotent `owner_label` metadata migration for existing/fresh knowledge projects and applications.
+- Added teacher/owner labels to knowledge-project and application create/update APIs.
+- Changed the new teacher-workspace form to create an application-neutral knowledge project. It sends `legacyClient:false`, so a teacher knowledge workspace does not silently create a legacy v1 service-client identity. Existing API callers retain the old legacy behavior unless they explicitly opt out.
+- Added project overview metrics for distinct assigned sources, fully indexed ready sources, active app grants and current-month retrieval queries (including Fatman's existing separate v1 counter).
+- Updated admin navigation and overview to foreground Knowledge Projects and Applications.
+- Updated project cards to show teacher label, source readiness, assigned apps and retrieval usage; added edit dialogs for project/application metadata.
+- Updated application cards to show owner label, environment/grant state and an explicit registration-only/unverified message. Live connection verification remains M9.
+- Collapsed the older provider-admin section under a legacy-settings disclosure and clarified that ChatGPT uses its own GitHub/Cloudflare authorization. No provider credentials were deleted, reauthorized or revoked.
+
+**Files:** `src/analytics/db.ts`, `src/brvin/admin.ts`, `src/index.ts`, `test/brvin-app-admin.test.ts`, `test/brvin-owner-metadata-migration.test.ts`, `test/brvin-admin-script.node.test.ts`.
+
+**Preserved:** existing D1 rows/IDs, app/environment/project grants, direct and collection source grants, Fatman retrieval/usage semantics, private `brvin-service`, v2 RPC identity and consumer runtimes. No M7 connection wizard or M8 ChatGPT prompt generator has been started.
+
+**Next:** finish source review, run Release Validation, merge only after checks pass, inspect the production owner-label migration and live `/admin/brvin` behavior, and record the deployed acceptance evidence before declaring M6 complete.
