@@ -1109,6 +1109,7 @@ const HTML = `<!doctype html>
    <p>BRVIN needs repository creation and administration, source control, Actions workflows and secrets, environments, deployments, pull requests and repository settings. The existing BRVIN App is upgraded in place—do not create a duplicate app.</p>
    <button class="btn primary" id="github-register" type="button">Open BRVIN GitHub App settings</button>
    <p id="github-app-meta" class="muted">Checking the existing BRVIN GitHub App…</p>
+   <p id="github-access-state" class="muted">Repository access has not been checked yet.</p>
    <p><a id="github-app-settings" href="https://github.com/settings/apps" target="_blank" rel="noreferrer">Open GitHub App permissions</a></p>
    <p><a id="github-installation-settings" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">Open BRVIN installation settings</a></p>
    <div class="notice">One-time GitHub approval: update the existing App with the requested permissions, approve the permission update, then set its installation repository access to <strong>All repositories</strong>. BRVIN will use short-lived GitHub App installation tokens automatically. No personal access token or per-project App installation is required.</div>
@@ -1244,52 +1245,35 @@ function detailText(details){if(!details||typeof details!=="object")return"";ret
 function renderEvents(list){$("events").innerHTML=list.length?list.slice(0,60).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><div style="display:flex;justify-content:space-between;gap:8px"><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong>'+statusPill(e.status)+'</div><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+' · '+esc(e.type)+'</small></div></div>').join(""):'<div class="empty">No operation events recorded yet.</div>';}
 function renderOverview(data){$("overview-books").textContent=String(data.stats.books);$("overview-pages").textContent=data.stats.indexedPages.toLocaleString()+" of "+data.stats.totalPages.toLocaleString()+" pages indexed";$("overview-ready").textContent=String(data.stats.readyBooks);$("overview-running").textContent=String(data.stats.activeBooks);$("overview-attention").textContent=String(data.stats.failedBooks);$("overview-status-note").textContent=data.stats.failedBooks?data.stats.failedBooks+" source(s) need attention. Open Operations to inspect the affected workflow.":data.stats.activeBooks?data.stats.activeBooks+" pipeline(s) are running. Processing continues automatically in the background.":"All tracked sources are stable. New processing events will appear here automatically.";}
 function render(){if(!model)return;renderMetrics(model.stats);renderApplications(model.applications||[]);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOverview(model);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
-let connectState=null,connectInstallations=[],connectRepositories=[];
+let connectState=null;
 async function refreshConnectState(){
  try{connectState=await api(API+"connect/status");renderConnectState();}
- catch(error){$("connect-result").textContent="Connection status could not load: "+error.message;}
+ catch(error){$("provider-capability-result").textContent="Connection status could not load: "+error.message;}
 }
 function renderConnectState(){
  if(!connectState)return;
  const github=connectState.github||{},cloudflare=connectState.cloudflare||{};
  $("connect-github-status").textContent=github.status||"not connected";
  $("connect-cloudflare-status").textContent=cloudflare.status||"not configured";
- $("github-app-meta").textContent=github.appName?(github.appName+" · "+(github.appUrl||github.appSlug||"")+(github.installationAccount?" · installed on "+github.installationAccount:"")):"No BRVIN GitHub App registered.";
+ $("github-app-meta").textContent=github.appName
+  ?github.appName+" · "+(github.appUrl||github.appSlug||"")+(github.installationAccount?" · installed on "+github.installationAccount:"")
+  :"No BRVIN GitHub App registered.";
  $("github-app-settings").href=github.appSettingsUrl||"https://github.com/settings/apps";
  $("github-installation-settings").href=github.installationUrl||"https://github.com/settings/installations";
+ $("github-register").textContent=github.appSettingsUrl?"Open BRVIN App permissions":"Create BRVIN GitHub App";
+ $("github-access-state").textContent=github.repositorySelection==="all"
+  ?"All repositories are selected in the stored installation metadata. Run the live capability check to verify current installation permissions."
+  :"One-time action: approve the expanded App permissions and set installation repository access to All repositories.";
  $("cf-required-scopes").value=(cloudflare.requiredScopes||[]).join(" ");
- $("cf-callback-url").value=window.location.origin+"/admin/brvin/connect/cloudflare/callback";
+ $("cf-callback-url").value=cloudflare.callbackUrl||window.location.origin+"/admin/brvin/connect/cloudflare/callback";
+ $("cf-client-credentials").hidden=cloudflare.oauthClientConfigured===true;
+ $("cf-save-client").hidden=cloudflare.oauthClientConfigured===true;
+ $("cf-client-state").textContent=cloudflare.oauthClientConfigured
+  ?"Existing OAuth client "+(cloudflare.clientIdHint||"") +" is stored encrypted. Its secret does not need to be entered again."
+  :"No OAuth client has been saved yet. Configure the existing BRVIN Connect client only if the encrypted client record is missing.";
  $("cf-worker-note").textContent=cloudflare.brvinServiceVisible
-  ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+"."
-  :"Authorize the account that hosts private brvin-service. No Worker binding will be changed until the PR is reviewed.";
- const apps=(model?.applications||[]).filter(app=>app.status==="active"&&app.slug==="brvin-text-test-client");
- const previousApp=$("connect-existing-application").value;
- $("connect-existing-application").innerHTML=apps.map(app=>'<option value="'+esc(app.id)+'">'+esc(app.name)+' · '+esc(app.slug)+'</option>').join("")||'<option value="">Register the test consumer first</option>';
- if(apps.some(app=>app.id===previousApp))$("connect-existing-application").value=previousApp;
- renderConnectEnvironments();
-}
-function renderConnectEnvironments(){
- const app=(model?.applications||[]).find(item=>item.id===$("connect-existing-application").value);
- const environments=(app?.environments||[]).filter(item=>item.status==="active");
- const previous=$("connect-existing-environment").value;
- $("connect-existing-environment").innerHTML=environments.map(item=>'<option value="'+esc(item.id)+'">'+esc(item.displayName||item.environmentKey)+' · '+esc(item.id)+'</option>').join("")||'<option value="">No active environment for this application</option>';
- if(environments.some(item=>item.id===previous))$("connect-existing-environment").value=previous;
-}
-async function loadConnectRepositories(){
- const data=await api(API+"connect/github/repositories");
- connectRepositories=data.repositories||[];
- $("github-repository").innerHTML=connectRepositories.map(repo=>'<option value="'+esc(repo.fullName)+'" data-branch="'+esc(repo.defaultBranch)+'">'+esc(repo.fullName)+(repo.private?" · private":"")+'</option>').join("")||'<option value="">No repositories installed</option>';
- if(!connectRepositories.some(repo=>repo.fullName==="ashini-x/askmoina-voice")){
-  $("github-repository-note").textContent="Install the BRVIN GitHub App on ashini-x/askmoina-voice to use the first supported adapter.";
- }else{
-  $("github-repository").value="ashini-x/askmoina-voice";
-  $("github-repository-note").textContent="Supported adapter available · default branch main · test Worker only.";
- }
-}
-async function loadConnectInstallations(){
- const data=await api(API+"connect/github/installations");
- connectInstallations=data.installations||[];
- $("github-installation").innerHTML=connectInstallations.map(item=>'<option value="'+item.id+'">'+esc(item.account)+' · '+esc(item.accountType||item.targetType)+'</option>').join("")||'<option value="">No installation yet · install the GitHub App first</option>';
+  ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+". OAuth currently grants "+(cloudflare.grantedScopes||[]).length+" scopes; verify the expanded Admin and token-creation scopes below."
+  :"Authorize the Cloudflare account that hosts private brvin-service. The capability check itself does not create or change Workers.";
 }
 async function refresh(){try{model=await api(API+"overview");render();await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
 function stage(id,state){$("step-"+id).className="step"+(state?" "+state:"");}
