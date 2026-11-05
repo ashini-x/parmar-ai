@@ -258,6 +258,13 @@ describe("BRVIN Connect Application wizard", () => {
     for (const requiredScope of BRVIN_CLOUDFLARE_REQUIRED_SCOPES) expect(requestedScopes).toContain(requiredScope);
     expect(requestedScopes).toContain("workers-scripts.admin");
     expect(requestedScopes).toContain("account-api-tokens.write");
+    for (const obsoleteScope of [
+      "ai-search.metadata_read", "aig.metadata_read", "d1.metadata_read", "messaging.metadata_read",
+      "pages.metadata_read", "queues.metadata_read", "websearch.metadata_read",
+      "workers-kv-storage.metadata_read", "workers-r2.metadata_read", "workers_ai.metadata_read",
+      "workers-scripts.content_read", "workers-scripts.edit", "workers-scripts.metadata_read",
+      "workers-scripts.read", "workers-scripts.write",
+    ]) expect(requestedScopes).not.toContain(obsoleteScope);
     expect(requestedScopes).not.toContain("account_api_tokens:create");
     expect(BRVIN_CLOUDFLARE_REQUIRED_SCOPES).not.toContain("account_api_tokens:create");
     expect(requestedScopes).toContain("offline_access");
