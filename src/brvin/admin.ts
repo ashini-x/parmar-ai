@@ -105,8 +105,9 @@ export async function brvinOverview(env: Env): Promise<Response> {
       env.DB.prepare(
         "SELECT b.id,b.title,b.source_filename,b.page_count,b.indexed_pages,b.status,b.error_message,b.collection_id," +
         "b.search_prefix,b.source_type,b.vision_output_deleted_at,b.vision_output_deletion_started_at,b.created_at,b.updated_at,c.name AS collection_name," +
-        "(SELECT e.message FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type='source.vision_ocr_delete_failed' ORDER BY e.created_at DESC LIMIT 1) AS vision_cleanup_error," +
-        "(SELECT e.created_at FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type='source.vision_ocr_delete_failed' ORDER BY e.created_at DESC LIMIT 1) AS vision_cleanup_failed_at " +
+        "(SELECT e.event_type FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS vision_cleanup_last_event_type," +
+        "(SELECT e.message FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS vision_cleanup_last_message," +
+        "(SELECT e.created_at FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS vision_cleanup_last_at " +
         "FROM brvin_books b LEFT JOIN brvin_collections c ON c.id=b.collection_id " +
         "ORDER BY b.updated_at DESC LIMIT 200"
       ).all<Record<string, unknown>>(),
@@ -163,8 +164,9 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "SELECT " +
         "SUM(CASE WHEN source_type='pdf' AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL THEN 1 ELSE 0 END) AS total_due," +
         "SUM(CASE WHEN source_type='pdf' AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NOT NULL THEN 1 ELSE 0 END) AS running," +
-        "SUM(CASE WHEN source_type='pdf' AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NULL AND EXISTS (" +
-          "SELECT 1 FROM brvin_activity_events e WHERE e.book_id=brvin_books.id AND e.event_type='source.vision_ocr_delete_failed') THEN 1 ELSE 0 END) AS failed " +
+        "SUM(CASE WHEN source_type='pdf' AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NULL AND (" +
+          "SELECT e.event_type FROM brvin_activity_events e WHERE e.book_id=brvin_books.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1" +
+        ")='source.vision_ocr_delete_failed' THEN 1 ELSE 0 END) AS failed " +
         "FROM brvin_books"
       ).first<Record<string, number>>(),
       env.DB.prepare(
@@ -355,8 +357,9 @@ export async function brvinOverview(env: Env): Promise<Response> {
         searchPrefix: String(row.search_prefix), sourceType: String(row.source_type),
         visionOcrDeleted: row.vision_output_deleted_at !== null && row.vision_output_deleted_at !== undefined,
         visionOcrDeleting: row.vision_output_deletion_started_at !== null && row.vision_output_deletion_started_at !== undefined,
-        visionOcrCleanupError: row.vision_cleanup_error ? String(row.vision_cleanup_error) : undefined,
-        visionOcrCleanupFailedAt: row.vision_cleanup_failed_at == null ? null : Number(row.vision_cleanup_failed_at),
+        visionOcrCleanupError: row.vision_cleanup_last_event_type === "source.vision_ocr_delete_failed" && row.vision_cleanup_last_message ? String(row.vision_cleanup_last_message) : undefined,
+        visionOcrCleanupLastEvent: row.vision_cleanup_last_event_type ? String(row.vision_cleanup_last_event_type) : undefined,
+        visionOcrCleanupLastAt: row.vision_cleanup_last_at == null ? null : Number(row.vision_cleanup_last_at),
         directProjects: directByBook.get(String(row.id)) ?? [],
         collectionProjects: collectionProjectMap.get(String(row.collection_id)) ?? [],
         projects: [...(directByBook.get(String(row.id)) ?? []), ...(collectionProjectMap.get(String(row.collection_id)) ?? []).filter(project =>
