@@ -1078,7 +1078,7 @@ const HTML = `<!doctype html>
 <div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Applications & access</h1><p class="subtitle">Register consumer apps, deployment identities and explicit project permissions.</p></div></div>
 <div class="overview-grid">
 <section class="view-panel"><div class="panel-toolbar"><div><h2>Register application</h2><p>Create the application record once. It does not grant project access by itself.</p></div></div>
-<div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. BRVIN Text Test Client"></div>
+<div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. PDF Chat Application"></div>
 <div class="field"><label for="application-desc">Description</label><input id="application-desc" maxlength="500" placeholder="What will this application use BRVIN for?"></div>
 <button class="btn primary" id="create-application" type="button">Register application</button>
 </section>
