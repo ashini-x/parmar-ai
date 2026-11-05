@@ -1321,17 +1321,43 @@ const HTML = `<!doctype html>
 <section class="view" id="view-applications" data-view-panel="applications">
 <div class="page-heading"><div><div class="eyebrow">Administration</div><h1>Applications</h1><p class="subtitle">Register independent bots and apps, track their deployment environments, and manage the teacher knowledge projects they are allowed to retrieve.</p></div></div>
 <div class="overview-grid">
-<section class="view-panel"><div class="panel-toolbar"><div><h2>Register an application</h2><p>Record an independently built bot, website or assistant. Its repository and deployment remain managed through ChatGPT.</p></div></div>
-<div class="field"><label for="application-owner">Teacher / owner label</label><input id="application-owner" maxlength="120" placeholder="e.g. Teacher A"></div>
-<div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. SSC Mathematics Telegram Bot"></div>
-<div class="field"><label for="application-desc">Purpose</label><input id="application-desc" maxlength="500" placeholder="What does this application do?"></div>
-<button class="btn primary" id="create-application" type="button">Register application</button>
+<section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Connect an existing application</h2><p>Register the app, its existing GitHub repository and one or more deployment environments in one step.</p></div></div>
+<div class="formgrid">
+ <div class="field"><label for="application-name">Application name</label><input id="application-name" maxlength="100" placeholder="e.g. SSC Mathematics Telegram Bot"></div>
+ <div class="field"><label for="application-owner">Teacher / owner label</label><input id="application-owner" maxlength="120" placeholder="e.g. Teacher A · Mathematics"></div>
+ <div class="field" style="grid-column:1/-1"><label for="application-desc">Purpose</label><input id="application-desc" maxlength="500" placeholder="What does this bot, website or assistant do?"></div>
+ <div class="field"><label for="application-repository">Existing GitHub repository URL</label><input id="application-repository" maxlength="300" inputmode="url" placeholder="https://github.com/owner/repository"></div>
+ <div class="field"><label for="application-branch">Default branch</label><input id="application-branch" maxlength="100" value="main" placeholder="main"></div>
+ <div class="field"><label for="application-runtime">Runtime provider</label><select id="application-runtime"><option value="cloudflare-workers">Cloudflare Workers</option><option value="other">Other / not yet deployed on Workers</option></select></div>
+</div>
+<div class="panel-toolbar" style="margin-top:12px"><div><h3>Deployment environments</h3><p>BRVIN generates a separate immutable environment ID for each selected environment.</p></div></div>
+<div class="overview-grid">
+ <section class="tile">
+  <label class="check"><input id="environment-production-enabled" type="checkbox" checked> Production</label>
+  <div class="field"><label for="environment-production-worker">Worker name (optional)</label><input id="environment-production-worker" maxlength="63" placeholder="my-application"></div>
+  <div class="field"><label for="environment-production-url">Worker URL (optional)</label><input id="environment-production-url" maxlength="300" inputmode="url" placeholder="https://my-application.example.workers.dev"></div>
+ </section>
+ <section class="tile">
+  <label class="check"><input id="environment-staging-enabled" type="checkbox"> Staging</label>
+  <div class="field"><label for="environment-staging-worker">Worker name (optional)</label><input id="environment-staging-worker" maxlength="63" placeholder="my-application-staging"></div>
+  <div class="field"><label for="environment-staging-url">Worker URL (optional)</label><input id="environment-staging-url" maxlength="300" inputmode="url" placeholder="https://my-application-staging.example.workers.dev"></div>
+ </section>
+ <section class="tile">
+  <label class="check"><input id="environment-preview-enabled" type="checkbox"> Preview</label>
+  <div class="field"><label for="environment-preview-worker">Worker name (optional)</label><input id="environment-preview-worker" maxlength="63" placeholder="my-application-preview"></div>
+  <div class="field"><label for="environment-preview-url">Worker URL (optional)</label><input id="environment-preview-url" maxlength="300" inputmode="url" placeholder="https://my-application-preview.example.workers.dev"></div>
+ </section>
+</div>
+<div class="notice">This wizard stores metadata and creates BRVIN environment identities only. It does not create a GitHub repository, Cloudflare Worker, secret, binding or deployment. ChatGPT's GitHub authorization is separate: the repository must also be selected/accessible in its connected GitHub app. Every environment remains <strong>Pending connection</strong> until the live Service Binding verification milestone.</div>
+<button class="btn primary" id="create-application" type="button">Register application and environments</button>
 </section>
-<section class="view-panel"><div class="panel-toolbar"><div><h2>Add deployment environment</h2><p>Environment IDs are generated by BRVIN and are not API keys.</p></div></div>
+<section class="view-panel"><div class="panel-toolbar"><div><h2>Add another deployment environment</h2><p>Environment IDs are generated by BRVIN. This adds registry metadata only; it does not deploy a Worker.</p></div></div>
 <div class="field"><label for="environment-application">Application</label><select id="environment-application"></select></div>
-<div class="field"><label for="environment-key">Environment key</label><input id="environment-key" maxlength="32" placeholder="production, preview, staging"></div>
-<div class="field"><label for="environment-name">Display name</label><input id="environment-name" maxlength="80" placeholder="Production"></div>
-<button class="btn primary" id="create-environment" type="button">Add environment</button>
+<div class="field"><label for="environment-key">Environment key</label><input id="environment-key" maxlength="32" placeholder="e.g. qa, canary, preview-2"></div>
+<div class="field"><label for="environment-name">Display name</label><input id="environment-name" maxlength="80" placeholder="QA"></div>
+<div class="field"><label for="environment-worker">Worker name (optional)</label><input id="environment-worker" maxlength="63" placeholder="my-application-qa"></div>
+<div class="field"><label for="environment-url">Worker URL (optional)</label><input id="environment-url" maxlength="300" inputmode="url" placeholder="https://my-application-qa.example.workers.dev"></div>
+<button class="btn primary" id="create-environment" type="button">Register environment</button>
 </section>
 <section class="view-panel" style="grid-column:1/-1"><div class="panel-toolbar"><div><h2>Grant project access</h2><p>Application grants and source-level book/collection grants are separate permissions.</p></div></div>
 <div class="formgrid"><div class="field"><label for="grant-application">Application</label><select id="grant-application"></select></div><div class="field"><label for="grant-project">Project</label><select id="grant-project"></select></div></div>
