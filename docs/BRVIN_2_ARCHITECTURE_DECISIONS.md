@@ -434,7 +434,7 @@ This ADR does not claim production acceptance or implementation. It freezes the 
 
 ## ADR-012 — One-time private proof for live application connection verification
 
-**Status:** Accepted for M9 implementation; PR validation passed; production acceptance pending. PR #98 GitHub Release Validation #726 passed typecheck, unit/Node tests and both Worker bundle dry-runs. A separate Cloudflare Workers Builds preview check failed on the account Free-plan 100 Durable Object namespace limit (code 10067); no preview deployment or production deployment succeeded.  
+**Status:** Accepted for M9 implementation; GitHub Release Validation #726 and #727 passed typecheck, unit/Node tests and both Worker bundle dry-runs; production acceptance pending. The separate Cloudflare Workers Builds preview check failed twice on the account Free-plan 100 Durable Object namespace limit (code 10067); this did not invalidate the passing source/Worker dry-run checks. No preview or production deployment succeeded.  
 **Date:** 5 November 2026.  
 **Scope:** M9 same-account Cloudflare Worker connection proof only.
 
