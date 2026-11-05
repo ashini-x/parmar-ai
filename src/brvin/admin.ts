@@ -447,15 +447,15 @@ async function startBrvinDeletionWorkflow(
     crypto.randomUUID().replaceAll("-", "").slice(0, 12);
 
   if (mode === "vision_output") {
-    if (candidate.status !== "ready" || candidate.import_status !== "completed" ||
+    if ((candidate.status !== "ready" && candidate.status !== "archived") || candidate.import_status !== "completed" ||
         Number(candidate.indexed_pages) !== Number(candidate.page_count)) {
-      throw new Error("OCR-only cleanup is available only after the book is ready and all pages passed retrieval QA.");
+      throw new Error("OCR-only cleanup is available only after the book is ready or archived and all pages passed retrieval QA.");
     }
     if (candidate.vision_output_deleted_at) throw new Error("Vision OCR output has already been removed for this book.");
     if (candidate.vision_output_deletion_started_at) throw new Error("Vision OCR cleanup is already running for this book.");
     const reserved = await env.DB.prepare(
       "UPDATE brvin_books SET vision_output_deletion_started_at=?,updated_at=? " +
-      "WHERE id=? AND status='ready' AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NULL"
+      "WHERE id=? AND status IN ('ready','archived') AND vision_output_deleted_at IS NULL AND vision_output_deletion_started_at IS NULL"
     ).bind(Date.now(), Date.now(), candidate.id).run();
     if ((reserved.meta?.changes ?? 0) !== 1) throw new Error("The book changed state. Refresh the dashboard and retry.");
     try {
