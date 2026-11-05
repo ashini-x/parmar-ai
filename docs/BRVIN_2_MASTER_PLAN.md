@@ -242,7 +242,7 @@ The active final milestone sequence is **M6–M11**. The authoritative detailed 
 | 3 | Reusable server-side connector | COMPLETE | Typed v2 connector available to consumer applications. |
 | 4 | Reference consumer scaffold | RETIRED / NOT A PRODUCT REQUIREMENT | Historical scaffold removed; never recreate the fixed test client. |
 | 5 | Core application/project administration | COMPLETE — UX expansion remains | Protected application/environment/grant lifecycle and knowledge admin deployed. |
-| 6 | Admin workspace aligned to teacher knowledge operations | NOT STARTED | Project-centric admin experience, teacher/owner metadata and useful application/project detail views. |
+| 6 | Admin workspace aligned to teacher knowledge operations | IN PROGRESS — PR #91 open, CI validation pending | Project-centric overview, owner metadata, app-neutral teacher project creation, source readiness/usage summaries and project/application detail views. |
 | 7 | Application connection registry and wizard | NOT STARTED | Guided registration of app, repository/runtime references and environments. |
 | 8 | ChatGPT integration handoff | NOT STARTED | Repository-specific non-secret prompt/manifest for ChatGPT to perform the one-time code integration. |
 | 9 | Live connection verification and activation | NOT STARTED | Deployed consumer proves trusted v2 identity and private Service Binding; readiness is shown separately. |
