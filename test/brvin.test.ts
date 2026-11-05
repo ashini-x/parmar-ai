@@ -137,6 +137,11 @@ describe("BRVIN governed retrieval", () => {
     expect(html).toContain("5-second refresh");
     expect(html).toContain("project access");
     expect(script).toContain('const previousCollectionId=$("collection").value;');
+    expect(script).toContain("data-project-grant-revoke");
+    expect(script).toContain("data-app-grant");
+    expect(script).toContain("user-to-project");
+    expect(script).toContain("Grant application access");
+    expect(script).toContain("Application grants are app-wide, not teacher-user-specific.");
     expect(script).toContain('c.id==="general"');
     expect(script).toContain("countSimplePdfPages(buffer)");
     expect(script).toContain("The operation paused during ");
