@@ -367,7 +367,7 @@ The live production environment displayed **Connected** after one authenticated 
 - A dedicated two-application/three-project isolation suite covering only-granted project discovery, cross-project denial, intentional shared access, revoke denial on the next retrieval, direct/collection source boundaries, future ready collection additions, unready source exclusion and inactive project/environment denial.
 - Administration tests for multiple projects per app, one project shared across apps and idempotent grants, plus browser-script assertions for both sides of the controls.
 
-Files changed in this increment: `src/brvin/admin.ts`, `test/brvin-m10-isolation.test.ts`, `test/brvin-app-admin.test.ts` and `test/brvin.test.ts`. No production D1 rows, projects, apps, grants, bindings or secrets have been changed; no migration is introduced. The automated suite uses isolated in-memory fixtures rather than synthetic production teacher records. CI and full acceptance are pending; this is not an M10 completion claim.
+Files changed in this increment: `src/brvin/admin.ts`, `test/brvin-m10-isolation.test.ts`, `test/brvin-app-admin.test.ts`, `test/brvin.test.ts` and `test/brvin-admin-script.node.test.ts`. No production D1 rows, projects, apps, grants, bindings or secrets have been changed; no migration is introduced. The automated suite uses isolated in-memory fixtures rather than synthetic production teacher records. CI and full acceptance are pending; this is not an M10 completion claim.
 
 ### M11 — Operations, usage and administrator handover
 
