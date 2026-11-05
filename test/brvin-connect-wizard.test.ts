@@ -227,6 +227,24 @@ describe("BRVIN Connect Application wizard", () => {
     expect(String(row.metadata_json)).not.toContain(clientSecret);
   });
 
+  it("shows the actual Cloudflare OAuth rejection instead of reporting every error as cancellation", async () => {
+    const db = new MemoryD1();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const callback = await completeBrvinCloudflareOAuth(env(db), request(
+      "https://parmar.example/admin/brvin/connect/cloudflare/callback?error=invalid_scope&error_description=" +
+      encodeURIComponent("The requested scope is not authorized for this OAuth client."),
+    ));
+    const html = await callback.text();
+    expect(callback.status).toBe(400);
+    expect(html).toContain("Cloudflare rejected BRVIN authorization");
+    expect(html).toContain("invalid_scope");
+    expect(html).toContain("The requested scope is not authorized for this OAuth client.");
+    expect(html).not.toContain("authorization cancelled");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(db.connections.has("cloudflare")).toBe(false);
+  });
+
   it("requires the approved Cloudflare administrator scopes and a refresh token before accepting OAuth", async () => {
     const db = new MemoryD1();
     await configureBrvinCloudflareOAuth(env(db), request("https://parmar.example/admin/api/brvin/connect/cloudflare/configure", {
