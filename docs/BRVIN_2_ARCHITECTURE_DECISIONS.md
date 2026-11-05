@@ -11,7 +11,7 @@ This ADR records the additive application/environment/project-grant model, priva
 
 ## 1. Decision summary
 
-BRVIN 2 will introduce three additive D1 entities:
+The current shared D1 model includes three additive BRVIN 2 entities:
 
 1. `brvin_applications` — the software product connected to BRVIN.
 2. `brvin_application_environments` — a trusted deployment identity for one application environment.
@@ -346,7 +346,7 @@ The user clarified that the primary value of BRVIN is to manage teacher-specific
 2. ChatGPT and the consumer application own repository creation/maintenance, application design/code, model/provider selection, app-side user auth/session/conversation, connector implementation, CI/CD and deployment.
 3. BRVIN's Connect Application wizard records repository/runtime references, creates application/environment registry records and generates a non-secret, repository-specific ChatGPT integration handoff.
 4. ChatGPT must separately have access to the target private repository. BRVIN cannot authorize or modify OpenAI's GitHub connector.
-5. The consumer Worker in the same Cloudflare account adds the `BRVIN_SERVICE` binding to private `brvin-service`, entrypoint `BrvinRetrievalApi`, and trusted `props.applicationEnvironmentId`. The exact live-verification contract must be separately designed and tested.
+5. The consumer Worker in the same Cloudflare account adds the `BRVIN_SERVICE` binding to private `brvin-service`, entrypoint `BrvinRetrievalApi`, and trusted `props.applicationEnvironmentId`. The live connection-verification contract is implemented by the probe-only `proveConnectionV2` method and was accepted in production on 6 November 2026.
 6. Creating another knowledge project or granting it to an already-connected application must not require another application code integration or deployment.
 7. The current app-project grant is application-wide. Multi-teacher consumer apps must enforce their own authenticated user-to-project mapping.
 8. The superseded autonomous Project Factory proposal was removed from the active documentation tree. Do not implement its repository creation, coding agent, provider token vault or BRVIN-owned CI/CD concepts.
@@ -354,53 +354,55 @@ The user clarified that the primary value of BRVIN is to manage teacher-specific
 
 This decision does not change the already deployed D1 identity model, v2 RPC contract, private retrieval transport, shared ingestion pipeline, legacy Fatman compatibility or existing consumer runtime behavior.
 
-## 9. Acceptance and threat checklist
+## 9. Acceptance and threat criteria
+
+The bullets below are architecture/security acceptance criteria, not a live task checklist. Current completion status is tracked only in [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md) and [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md).
 
 ### Data model and migration
 
-- [ ] One application can have multiple active environment identities.
-- [ ] One application can have multiple active project grants.
-- [ ] One project can have multiple active application grants.
-- [ ] Duplicate active app/environment labels are rejected.
-- [ ] Duplicate active application/project grants are rejected.
-- [ ] Revoked environment identities and grants remain auditable.
-- [ ] Re-granting does not duplicate an active permission edge.
-- [ ] Unknown, conflicting or partially seeded migration state fails visibly.
-- [ ] Existing Fatman project, book, collection, direct and collection grants remain unchanged.
-- [ ] Existing Fatman monthly usage rows remain unchanged.
-- [ ] Existing non-Fatman project usage rows remain unchanged.
-- [ ] Existing v1 client mapping continues to resolve.
+- One application can have multiple active environment identities.
+- One application can have multiple active project grants.
+- One project can have multiple active application grants.
+- Duplicate active app/environment labels are rejected.
+- Duplicate active application/project grants are rejected.
+- Revoked environment identities and grants remain auditable.
+- Re-granting does not duplicate an active permission edge.
+- Unknown, conflicting or partially seeded migration state fails visibly.
+- Existing Fatman project, book, collection, direct and collection grants remain unchanged.
+- Existing Fatman monthly usage rows remain unchanged.
+- Existing non-Fatman project usage rows remain unchanged.
+- Existing v1 client mapping continues to resolve.
 
 ### Runtime security
 
-- [ ] Identity is read only from trusted `ctx.props.applicationEnvironmentId`.
-- [ ] No request-body field can override application or environment identity.
-- [ ] An invalid v2 environment identity does not fall back to a co-present v1 identity.
-- [ ] Inactive/revoked app or environment is denied.
-- [ ] A project ID without an active application-project grant is denied before search and quota reservation.
-- [ ] A project inactive at request time is denied.
-- [ ] Source-level direct and collection grants still apply after app-level permission.
-- [ ] Search is filtered to D1-derived safe prefixes before retrieval.
-- [ ] Every returned key is checked against the authorised source list.
-- [ ] No cross-project/global fallback exists.
+- Identity is read only from trusted `ctx.props.applicationEnvironmentId`.
+- No request-body field can override application or environment identity.
+- An invalid v2 environment identity does not fall back to a co-present v1 identity.
+- Inactive/revoked app or environment is denied.
+- A project ID without an active application-project grant is denied before search and quota reservation.
+- A project inactive at request time is denied.
+- Source-level direct and collection grants still apply after app-level permission.
+- Search is filtered to D1-derived safe prefixes before retrieval.
+- Every returned key is checked against the authorised source list.
+- No cross-project/global fallback exists.
 
 ### Fatman and consumer isolation
 
-- [ ] Parmar AI v1 continues to work during M1.
-- [ ] Fatman's `fatman_search_usage` history is preserved.
-- [ ] Fatman's original 538-page book and grants remain intact.
-- [ ] Rain Gardens or any other ungranted test book is not exposed to Fatman.
-- [ ] AskMoina retains its own D1, auth, model generation, voice/video continuity and user memory.
-- [ ] AskMoina receives only BRVIN passages and provenance through its server-side tool handler.
+- Parmar AI v1 continues to work during M1.
+- Fatman's `fatman_search_usage` history is preserved.
+- Fatman's original 538-page book and grants remain intact.
+- Rain Gardens or any other ungranted test book is not exposed to Fatman.
+- AskMoina retains its own D1, auth, model generation, voice/video continuity and user memory.
+- AskMoina receives only BRVIN passages and provenance through its server-side tool handler.
 
 ### Production and rollback
 
-- [ ] `brvin-service` remains private with no public route and `workers_dev: false`.
-- [ ] Shared AI Search namespace and instance remain unchanged.
-- [ ] Both Worker configs dry-run before deployment.
-- [ ] Existing paired deployment captures both rollback version IDs.
-- [ ] Deployment manifest records source SHA and both Worker versions.
-- [ ] Synthetic permission and end-user acceptance passes before release completion.
+- `brvin-service` remains private with no public route and `workers_dev: false`.
+- Shared AI Search namespace and instance remain unchanged.
+- Both Worker configs dry-run before deployment.
+- Existing paired deployment captures both rollback version IDs.
+- Deployment manifest records source SHA and both Worker versions.
+- Synthetic permission and end-user acceptance passes before release completion.
 
 ## 10. Explicit non-decisions / deferred scope
 
