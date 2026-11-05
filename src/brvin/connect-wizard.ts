@@ -380,13 +380,62 @@ export async function completeBrvinGitHubManifest(env: Env, request: Request): P
       method: "POST",
       headers: { accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28" },
     });
-    const text = await response.text();
+    const responseText = await response.text();
     let payload: unknown = {};
-    try { payload = text ? JSON.parse(text) : {}; } catch { payload = {}; }
+    try { payload = responseText ? JSON.parse(responseText) : {}; } catch { payload = {}; }
+    const apiPayload = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+    const requestId = clean(response.headers.get("x-github-request-id"), 100);
+    const rateLimitRemaining = clean(response.headers.get("x-ratelimit-remaining"), 20);
+    const githubErrors = Array.isArray(apiPayload.errors)
+      ? apiPayload.errors.map((item: unknown) => {
+          if (typeof item === "string") return clean(item, 180);
+          if (!item || typeof item !== "object") return "";
+          const detail = item as Record<string, unknown>;
+          return [
+            clean(detail.field, 60),
+            clean(detail.code, 60),
+            clean(detail.message, 180),
+          ].filter(Boolean).join(": ");
+        }).filter(Boolean).slice(0, 3)
+      : [];
+    if (!response.ok) {
+      const githubMessage = clean(apiPayload.message, 200) || "GitHub did not return a validation message.";
+      const statusGuidance = response.status === 422
+        ? "GitHub uses HTTP 422 for manifest validation failures or conversion rate limiting. Do not repeatedly retry; wait briefly, then start a fresh registration from BRVIN."
+        : response.status === 404
+          ? "GitHub could not find the temporary manifest code. Start a fresh registration from BRVIN and complete the GitHub flow promptly."
+          : "Check the GitHub response details below before retrying.";
+      const diagnostic = [
+        "GitHub returned HTTP " + response.status + ".",
+        githubMessage,
+        ...githubErrors,
+        statusGuidance,
+        requestId ? "GitHub request ID: " + requestId + "." : "",
+        rateLimitRemaining ? "GitHub API rate-limit remaining: " + rateLimitRemaining + "." : "",
+      ].filter(Boolean).join(" ").slice(0, 900);
+      if (env.DB) {
+        await env.DB.prepare(
+          "INSERT INTO brvin_connection_events (provider,event_type,status,message,detail_json,created_at) VALUES (?,?,?,?,?,?)"
+        ).bind(
+          "github",
+          "github.manifest_conversion_failed",
+          "failed",
+          "GitHub manifest conversion returned HTTP " + response.status + ".",
+          JSON.stringify({ status: response.status, message: githubMessage, errors: githubErrors, requestId, rateLimitRemaining }).slice(0, 3000),
+          Date.now(),
+        ).run();
+      }
+      return callbackHtml("GitHub app registration failed", diagnostic, false);
+    }
     const app = payload as { id?: number; slug?: string; name?: string; html_url?: string; pem?: string; permissions?: Record<string, string> };
-    if (!response.ok || !app.id || !app.slug || !app.pem) {
-      const message = (payload as { message?: string }).message || "GitHub could not complete the manifest registration.";
-      return callbackHtml("GitHub app registration failed", clean(message, 240), false);
+    if (!app.id || !app.slug || !app.pem) {
+      const diagnostic = "GitHub returned HTTP " + response.status + " but the response did not include the required App ID, slug and private key. Request ID: " + (requestId || "not provided") + ".";
+      if (env.DB) {
+        await env.DB.prepare(
+          "INSERT INTO brvin_connection_events (provider,event_type,status,message,detail_json,created_at) VALUES (?,?,?,?,?,?)"
+        ).bind("github", "github.manifest_conversion_invalid_response", "failed", "GitHub returned an incomplete manifest-conversion response.", JSON.stringify({ status: response.status, requestId }), Date.now()).run();
+      }
+      return callbackHtml("GitHub returned an incomplete App response", diagnostic, false);
     }
     const permissions = app.permissions || {};
     if (permissions.metadata !== "read" || permissions.contents !== "write" || permissions.pull_requests !== "write") {
