@@ -171,6 +171,30 @@ describe("BRVIN Connect Application wizard", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("surfaces GitHub manifest conversion status, validation details and request ID without storing credentials", async () => {
+    const db = new MemoryD1();
+    const start = await startBrvinGitHubManifest(env(db), request("https://parmar.example/admin/api/brvin/connect/github/manifest", {}));
+    const startBody = await start.json() as { action: string };
+    const state = new URL(startBody.action).searchParams.get("state")!;
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      message: "Validation Failed",
+      errors: [{ resource: "Integration", field: "name", code: "already_exists", message: "name has already been taken" }],
+    }), { status: 422, headers: { "content-type": "application/json", "x-github-request-id": "GHREQ-TEST-123", "x-ratelimit-remaining": "42" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const callback = await completeBrvinGitHubManifest(env(db), request("https://parmar.example/admin/brvin/connect/github/callback?code=temporary-code&state="+encodeURIComponent(state)));
+    const html = await callback.text();
+    expect(callback.status).toBe(400);
+    expect(html).toContain("GitHub returned HTTP 422");
+    expect(html).toContain("Validation Failed");
+    expect(html).toContain("name has already been taken");
+    expect(html).toContain("GHREQ-TEST-123");
+    expect(html).toContain("Do not repeatedly retry");
+    expect(db.connections.has("github")).toBe(false);
+    expect(db.events).toHaveLength(1);
+    expect(db.events[0].status).toBe("failed");
+    expect(JSON.stringify(db.events[0])).not.toContain("temporary-code");
+  });
+
   it("rejects a callback with missing or invalid state without calling GitHub", async () => {
     const db = new MemoryD1();
     const fetchMock = vi.fn();
