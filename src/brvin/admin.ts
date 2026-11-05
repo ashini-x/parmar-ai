@@ -1098,13 +1098,19 @@ const HTML = `<!doctype html>
 </section>
 
 <section class="view-panel" id="connect-wizard-panel" style="margin-top:14px">
- <div class="panel-toolbar"><div><h2>Connect Application</h2><p>First supported adapter: the separate BRVIN text test Worker. The existing AskMoina Voice Worker is not modified.</p></div><button class="btn" id="connect-refresh" type="button">Refresh connections</button></div>
+ <div class="panel-toolbar"><div><h2>Provider Administrator Connections</h2><p>One-time GitHub and Cloudflare consent enables BRVIN to create and operate independent software projects. The fixed text-client adapter below is historical and superseded.</p></div><button class="btn" id="connect-refresh" type="button">Refresh connections</button></div>
+ <section class="tile" style="margin-bottom:12px">
+  <div class="panel-toolbar"><div><h3>Administrator capability verification</h3><p>Checks actual GitHub App permissions/installation and Cloudflare OAuth scopes stored by BRVIN. Secret values are never displayed.</p></div><button class="btn primary" id="provider-capability-check" type="button">Verify provider access</button></div>
+  <p id="provider-capability-result" class="muted" aria-live="polite">Run the check after approving the expanded provider permissions.</p>
+ </section>
  <div class="overview-grid">
   <section class="tile">
    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>GitHub App</strong><span class="pill" id="connect-github-status">Not connected</span></div>
-   <p>Create a private BRVIN GitHub App using GitHub's manifest flow. It requests repository metadata read, contents write and pull-request write only.</p>
+   <p>BRVIN requires repository creation/administration, contents, Actions workflows, Actions secrets and variables, pull requests, environments and deployment permissions. Install for all repositories so future software projects are covered.</p>
    <button class="btn primary" id="github-register" type="button">Register BRVIN GitHub App</button>
    <p id="github-app-meta" class="muted">No BRVIN GitHub App registered.</p>
+   <p><a id="github-app-settings" href="https://github.com/settings/apps" target="_blank" rel="noreferrer">Open GitHub App permission settings</a></p>
+   <p><a id="github-installation-settings" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">Manage installation and repository access</a></p>
    <div class="field"><label for="github-installation">Installed account</label><select id="github-installation"><option value="">Load installations after registering the app</option></select></div>
    <div class="job-actions"><button class="btn" id="github-load-installations" type="button">Discover installations</button><button class="btn" id="github-use-installation" type="button">Use selected installation</button></div>
    <div class="field"><label for="github-repository">Repository</label><select id="github-repository"><option value="">Install the app and select an installation first</option></select></div>
@@ -1113,10 +1119,13 @@ const HTML = `<!doctype html>
   </section>
   <section class="tile">
    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>Cloudflare OAuth</strong><span class="pill" id="connect-cloudflare-status">Not configured</span></div>
-   <p>Create a private Cloudflare OAuth client with authorization-code and refresh-token grants. Request only Workers Scripts Read and Workers Scripts Write.</p>
+   <p>BRVIN needs the Cloudflare Developer Platform and AI resource scopes, Workers Admin, and Account API Tokens Write. Workers Editor-only consent is not sufficient for autonomous provisioning.</p>
    <div class="field"><label for="cf-client-id">OAuth client ID</label><input id="cf-client-id" autocomplete="off" maxlength="160" placeholder="Cloudflare OAuth client ID"></div>
    <div class="field"><label for="cf-client-secret">OAuth client secret</label><input id="cf-client-secret" type="password" autocomplete="new-password" maxlength="500" placeholder="Shown once by Cloudflare"></div>
    <div class="field"><label>Exact callback URL to register</label><input id="cf-callback-url" readonly value="Shown after page load"></div>
+   <div class="field"><label for="cf-required-scopes">Required one-time Cloudflare OAuth scopes</label><textarea id="cf-required-scopes" rows="5" readonly spellcheck="false"></textarea></div>
+   <button class="btn" id="cf-copy-required-scopes" type="button">Copy required scopes</button>
+   <p class="notice">One-time provider consent: in Cloudflare Dashboard → Manage Account → OAuth clients, edit the existing BRVIN Connect client and add the listed scopes while preserving authorization-code and refresh-token grants and the callback URL. Save it, then authorize again here. The client secret already stored by BRVIN remains encrypted; no new OAuth client is needed.</p>
    <button class="btn primary" id="cf-save-client" type="button">Save OAuth client securely</button>
    <button class="btn" id="cf-authorize" type="button">Authorize BRVIN home account</button>
    <button class="btn" id="cf-discover-workers" type="button">Discover Workers</button>
@@ -1124,7 +1133,7 @@ const HTML = `<!doctype html>
   </section>
  </div>
  <section class="tile" style="margin-top:12px">
-  <div class="panel-toolbar"><div><h2>Register the controlled test consumer</h2><p>Generates a new app identity, environment identity, isolated project and explicit app-project grant. No source document is shared automatically.</p></div></div>
+  <div class="panel-toolbar"><div><h2>Legacy fixed text-client adapter — superseded</h2><p>This historical adapter targets only a Worker inside askmoina-voice. Do not use it for new BRVIN software projects; the Project Factory creates independent repositories and applications.</p></div></div>
   <div class="formgrid">
    <div class="field"><label for="connect-app-name">Dedicated application</label><input id="connect-app-name" maxlength="100" value="BRVIN Text Test Client" readonly></div>
    <div class="field"><label for="connect-env-key">Environment key</label><input id="connect-env-key" maxlength="32" value="production" readonly></div>
@@ -1271,6 +1280,9 @@ function renderConnectState(){
  $("connect-github-status").textContent=github.status||"not connected";
  $("connect-cloudflare-status").textContent=cloudflare.status||"not configured";
  $("github-app-meta").textContent=github.appName?(github.appName+" · "+(github.appUrl||github.appSlug||"")+(github.installationAccount?" · installed on "+github.installationAccount:"")):"No BRVIN GitHub App registered.";
+ $("github-app-settings").href=github.appSettingsUrl||"https://github.com/settings/apps";
+ $("github-installation-settings").href=github.installationUrl||"https://github.com/settings/installations";
+ $("cf-required-scopes").value=(cloudflare.requiredScopes||[]).join(" ");
  $("cf-callback-url").value=window.location.origin+"/admin/brvin/connect/cloudflare/callback";
  $("cf-worker-note").textContent=cloudflare.brvinServiceVisible
   ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+"."
@@ -1485,6 +1497,28 @@ $("grant-project-button").addEventListener("click",async()=>{
  catch(error){alert(error.message);}
 });
 $("connect-refresh").addEventListener("click",async()=>{await refresh();});
+$("provider-capability-check").addEventListener("click",async()=>{
+ try{
+  $("provider-capability-result").textContent="Checking live provider permissions…";
+  const result=await api(API+"connect/capabilities");
+  const github=result.github||{},cloudflare=result.cloudflare||{},install=github.installation||{};
+  const parts=[];
+  if(github.connected){
+   parts.push("GitHub App: "+((github.missingAppPermissions||[]).length?"missing app permissions "+github.missingAppPermissions.join(", "):"app permissions passed")+".");
+   parts.push("GitHub installation: "+(install.repositorySelection==="all"?"all repositories":"not installed for all repositories")+"; missing installation permissions "+((install.missingPermissions||github.missingInstallationPermissions||[]).join(", ")||"none")+".");
+   if(github.settingsUrl)$("github-app-settings").href=github.settingsUrl;
+  }else parts.push("GitHub: "+(github.error||"not connected")+".");
+  if(cloudflare.connected){
+   parts.push("Cloudflare: "+((cloudflare.missingScopes||[]).length?"missing "+cloudflare.missingScopes.length+" required OAuth scopes":"required OAuth scopes passed")+".");
+   if(cloudflare.missingScopes?.length)parts.push("Missing scope IDs: "+cloudflare.missingScopes.slice(0,12).join(", ")+(cloudflare.missingScopes.length>12?" …":"")+".");
+  }else parts.push("Cloudflare: "+(cloudflare.error||"not authorized")+".");
+  $("provider-capability-result").textContent=parts.join(" ");
+ }catch(error){$("provider-capability-result").textContent="Provider check failed: "+error.message;}
+});
+$("cf-copy-required-scopes").addEventListener("click",async()=>{
+ try{await navigator.clipboard.writeText($("cf-required-scopes").value);$("cf-worker-note").textContent="Required OAuth scope IDs copied. Add them once to the existing BRVIN Connect OAuth client, then authorize again.";}
+ catch(error){$("cf-worker-note").textContent="Clipboard copy unavailable. Select and copy the required scope text.";}
+});
 $("github-register").addEventListener("click",async()=>{
  try{
   const data=await post("connect/github/manifest",{});
