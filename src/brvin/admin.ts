@@ -758,79 +758,203 @@ function normalizedEnvironmentKey(value: string): string {
     .replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 32).replace(/-+$/gu, "");
 }
 
+function normalizeGitHubRepositoryUrl(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string" || value.length > 300) return null;
+  const match = value.trim().match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?:\.git)?\/?$/iu);
+  if (!match || match[1] === "." || match[1] === ".." || match[2] === "." || match[2] === "..") return null;
+  return "https://github.com/" + match[1] + "/" + match[2].replace(/\.git$/iu, "");
+}
+
+function normalizeGitDefaultBranch(value: unknown): string | null {
+  const branch = value === undefined || value === null || value === "" ? "main" : typeof value === "string" ? value.trim() : "";
+  if (!branch || branch.length > 100 || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/u.test(branch) ||
+      branch.includes("..") || branch.includes("//") || branch.includes("@{") ||
+      branch.endsWith("/") || branch.endsWith(".") || branch.endsWith(".lock")) return null;
+  return branch;
+}
+
+function normalizeRuntimeProvider(value: unknown): string | null {
+  const provider = value === undefined || value === null || value === "" ? "cloudflare-workers" : value;
+  return provider === "cloudflare-workers" || provider === "other" ? provider : null;
+}
+
+function normalizeWorkerName(value: unknown): string | null {
+  const name = value === undefined || value === null || value === "" ? "" : typeof value === "string" ? value.trim() : null;
+  if (name === null || name.length > 63 || (name && !/^[a-z0-9][a-z0-9_-]*$/u.test(name))) return null;
+  return name;
+}
+
+function normalizeWorkerUrl(value: unknown): string | null {
+  const input = value === undefined || value === null || value === "" ? "" : typeof value === "string" ? value.trim() : null;
+  if (input === null || input.length > 300) return null;
+  if (!input) return "";
+  try {
+    const url = new URL(input);
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password ||
+        url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) return null;
+    return url.origin;
+  } catch { return null; }
+}
+
+function normalizeWorkerMetadata(nameValue: unknown, urlValue: unknown): { workerName: string; workerUrl: string } | null {
+  const workerName = normalizeWorkerName(nameValue);
+  const workerUrl = normalizeWorkerUrl(urlValue);
+  if (workerName === null || workerUrl === null || Boolean(workerName) !== Boolean(workerUrl)) return null;
+  return { workerName, workerUrl };
+}
+
+type BrvinInitialEnvironment = {
+  environmentKey: "production" | "staging" | "preview";
+  displayName: string;
+  workerName: string;
+  workerUrl: string;
+};
+
+function parseBrvinInitialEnvironments(value: unknown): BrvinInitialEnvironment[] | null {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 3) return null;
+  const seen = new Set<string>();
+  const output: BrvinInitialEnvironment[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") return null;
+    const row = item as Record<string, unknown>;
+    const key = row.environmentKey;
+    if (key !== "production" && key !== "staging" && key !== "preview") return null;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    const metadata = normalizeWorkerMetadata(row.workerName, row.workerUrl);
+    if (!metadata) return null;
+    const displayName = typeof row.displayName === "string"
+      ? row.displayName.replace(/\\s+/gu, " ").trim().slice(0, 80)
+      : key.charAt(0).toUpperCase() + key.slice(1);
+    output.push({ environmentKey: key, displayName: displayName || key, ...metadata });
+  }
+  return output.sort((a,b) => ["production","staging","preview"].indexOf(a.environmentKey) -
+    ["production","staging","preview"].indexOf(b.environmentKey));
+}
+
 export async function createBrvinApplication(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { name?: unknown; description?: unknown; ownerLabel?: unknown; slug?: unknown };
+  let body: {
+    name?: unknown; description?: unknown; ownerLabel?: unknown; slug?: unknown;
+    repositoryUrl?: unknown; repositoryDefaultBranch?: unknown; runtimeProvider?: unknown; environments?: unknown;
+  };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
-  const name = typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : "";
+  const name = typeof body.name === "string" ? body.name.replace(/\\s+/gu, " ").trim().slice(0, 100) : "";
   const description = typeof body.description === "string" ? body.description.trim().slice(0, 500) : "";
-  const ownerLabel = body.ownerLabel === undefined ? "" : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
+  const ownerLabel = body.ownerLabel === undefined ? "" : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\\s+/gu, " ").trim().slice(0, 120) : null;
   const slugInput = typeof body.slug === "string" && body.slug.trim() ? body.slug : name;
   const slug = slugify(slugInput);
-  if (!name || !slug || !validBrvinApplicationSlug(slug) || ownerLabel === null) {
-    return json({ ok: false, error: "Enter a valid application name and owner label." }, 400);
+  const repositoryUrl = normalizeGitHubRepositoryUrl(body.repositoryUrl);
+  const repositoryDefaultBranch = normalizeGitDefaultBranch(body.repositoryDefaultBranch);
+  const runtimeProvider = normalizeRuntimeProvider(body.runtimeProvider);
+  const initialEnvironments = body.environments === undefined ? [] : parseBrvinInitialEnvironments(body.environments);
+  if (!name || !slug || !validBrvinApplicationSlug(slug) || ownerLabel === null ||
+      repositoryUrl === null || repositoryDefaultBranch === null || runtimeProvider === null ||
+      (body.environments !== undefined && initialEnvironments === null)) {
+    return json({ ok: false, error: "Enter a valid application profile, GitHub repository reference, default branch and deployment environments." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
-    await env.DB.prepare(
-      "INSERT INTO brvin_applications (id,slug,name,description,owner_label,status,created_at,updated_at) VALUES (?,?,?,?,?,'active',?,?)"
-    ).bind(id, slug, name, description, ownerLabel, now, now).run();
+    const environments = (initialEnvironments ?? []).map(item => ({
+      id: crypto.randomUUID().toLowerCase(), applicationId: id, ...item, status: "active" as const,
+    }));
+    const statements = [
+      env.DB.prepare(
+        "INSERT INTO brvin_applications (id,slug,name,description,owner_label,repository_url,repository_default_branch,runtime_provider,status,created_at,updated_at) " +
+        "VALUES (?,?,?,?,?,?,?,?,'active',?,?)"
+      ).bind(id, slug, name, description, ownerLabel, repositoryUrl, repositoryDefaultBranch, runtimeProvider, now, now),
+      ...environments.map(item => env.DB!.prepare(
+        "INSERT INTO brvin_application_environments (id,application_id,environment_key,display_name,worker_name,worker_url,status,created_at,updated_at) " +
+        "VALUES (?,?,?,?,?,?,'active',?,?)"
+      ).bind(item.id, id, item.environmentKey, item.displayName, item.workerName, item.workerUrl, now, now)),
+    ];
+    if (environments.length) await env.DB.batch(statements);
+    else await statements[0].run();
     await recordBrvinActivity(env, {
       agent: "BRVIN application registry", phase: "governance",
       eventType: "application.created", status: "completed",
-      message: "A BRVIN application record was created. No environment or project access is implied.",
-      details: { applicationId: id, slug, ownerLabel },
+      message: environments.length
+        ? "An application and its deployment environment identities were registered. Repository and Worker values are metadata only; every environment remains pending live connection verification."
+        : "A BRVIN application record was created. No environment or project access is implied.",
+      details: {
+        applicationId: id, slug, ownerLabel, repositoryUrl, repositoryDefaultBranch,
+        runtimeProvider, environmentIds: environments.map(item => item.id),
+      },
     });
-    return json({ ok: true, application: { id, slug, name, description, ownerLabel, status: "active" } }, 201);
+    return json({
+      ok: true,
+      application: { id, slug, name, description, ownerLabel, repositoryUrl, repositoryDefaultBranch, runtimeProvider, status: "active" },
+      environments: environments.map(item => ({ ...item, connectionStatus: "pending" })),
+    }, 201);
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
 export async function updateBrvinApplication(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { applicationId?: unknown; name?: unknown; description?: unknown; ownerLabel?: unknown };
+  let body: {
+    applicationId?: unknown; name?: unknown; description?: unknown; ownerLabel?: unknown;
+    repositoryUrl?: unknown; repositoryDefaultBranch?: unknown; runtimeProvider?: unknown;
+  };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid application details." }, 400); }
   const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
-  const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\s+/gu, " ").trim().slice(0, 100) : null;
+  const name = body.name === undefined ? undefined : typeof body.name === "string" ? body.name.replace(/\\s+/gu, " ").trim().slice(0, 100) : null;
   const description = body.description === undefined ? undefined : typeof body.description === "string" ? body.description.trim().slice(0, 500) : null;
-  const ownerLabel = body.ownerLabel === undefined ? undefined : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\s+/gu, " ").trim().slice(0, 120) : null;
+  const ownerLabel = body.ownerLabel === undefined ? undefined : typeof body.ownerLabel === "string" ? body.ownerLabel.replace(/\\s+/gu, " ").trim().slice(0, 120) : null;
+  const repositoryUrl = body.repositoryUrl === undefined ? undefined : normalizeGitHubRepositoryUrl(body.repositoryUrl);
+  const repositoryDefaultBranch = body.repositoryDefaultBranch === undefined ? undefined : normalizeGitDefaultBranch(body.repositoryDefaultBranch);
+  const runtimeProvider = body.runtimeProvider === undefined ? undefined : normalizeRuntimeProvider(body.runtimeProvider);
   if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || name === null || description === null || ownerLabel === null ||
+      repositoryUrl === null || repositoryDefaultBranch === null || runtimeProvider === null ||
       (name !== undefined && (!name || !slugify(name))) ||
-      (name === undefined && description === undefined && ownerLabel === undefined)) {
-    return json({ ok: false, error: "Enter valid application details." }, 400);
+      (name === undefined && description === undefined && ownerLabel === undefined &&
+       repositoryUrl === undefined && repositoryDefaultBranch === undefined && runtimeProvider === undefined)) {
+    return json({ ok: false, error: "Enter valid application profile and repository/runtime details." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
     const current = await env.DB.prepare(
-      "SELECT id,name,description,owner_label,status FROM brvin_applications WHERE id=?"
-    ).bind(applicationId).first<{ id: string; name: string; description: string; owner_label: string; status: string }>();
+      "SELECT id,name,description,owner_label,repository_url,repository_default_branch,runtime_provider,status FROM brvin_applications WHERE id=?"
+    ).bind(applicationId).first<{
+      id: string; name: string; description: string; owner_label: string; repository_url: string;
+      repository_default_branch: string; runtime_provider: string; status: string;
+    }>();
     if (!current) return json({ ok: false, error: "Application not found." }, 404);
     const nextName = name ?? current.name;
     const nextDescription = description ?? current.description;
     const nextOwnerLabel = ownerLabel ?? current.owner_label ?? "";
+    const nextRepositoryUrl = repositoryUrl ?? current.repository_url ?? "";
+    const nextRepositoryDefaultBranch = repositoryDefaultBranch ?? current.repository_default_branch ?? "main";
+    const nextRuntimeProvider = runtimeProvider ?? current.runtime_provider ?? "cloudflare-workers";
     const now = Date.now();
     await env.DB.prepare(
-      "UPDATE brvin_applications SET name=?,description=?,owner_label=?,updated_at=? WHERE id=?"
-    ).bind(nextName, nextDescription, nextOwnerLabel, now, applicationId).run();
+      "UPDATE brvin_applications SET name=?,description=?,owner_label=?,repository_url=?,repository_default_branch=?,runtime_provider=?,updated_at=? WHERE id=?"
+    ).bind(nextName, nextDescription, nextOwnerLabel, nextRepositoryUrl, nextRepositoryDefaultBranch, nextRuntimeProvider, now, applicationId).run();
     await recordBrvinActivity(env, {
       agent: "BRVIN application registry", phase: "governance",
       eventType: "application.updated", status: "completed",
-      message: "Application details and owner metadata were updated.",
-      details: { applicationId, ownerLabel: nextOwnerLabel },
+      message: "Application profile, repository and runtime metadata were updated.",
+      details: { applicationId, ownerLabel: nextOwnerLabel, repositoryUrl: nextRepositoryUrl, runtimeProvider: nextRuntimeProvider },
     });
-    return json({ ok: true, application: { id: applicationId, name: nextName, description: nextDescription, ownerLabel: nextOwnerLabel, status: current.status } });
+    return json({ ok: true, application: {
+      id: applicationId, name: nextName, description: nextDescription, ownerLabel: nextOwnerLabel,
+      repositoryUrl: nextRepositoryUrl, repositoryDefaultBranch: nextRepositoryDefaultBranch,
+      runtimeProvider: nextRuntimeProvider, status: current.status,
+    } });
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
 export async function createBrvinApplicationEnvironment(env: Env, request: Request): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
-  let body: { applicationId?: unknown; environmentKey?: unknown; displayName?: unknown };
+  let body: { applicationId?: unknown; environmentKey?: unknown; displayName?: unknown; workerName?: unknown; workerUrl?: unknown };
   try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid environment details." }, 400); }
   const applicationId = typeof body.applicationId === "string" ? body.applicationId.trim() : "";
   const environmentKey = normalizedEnvironmentKey(typeof body.environmentKey === "string" ? body.environmentKey : "");
-  const displayName = typeof body.displayName === "string" ? body.displayName.replace(/\s+/gu, " ").trim().slice(0, 80) : "";
-  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !environmentKey || !validBrvinApplicationSlug(environmentKey)) {
-    return json({ ok: false, error: "Choose an active application and enter a valid environment label." }, 400);
+  const displayName = typeof body.displayName === "string" ? body.displayName.replace(/\\s+/gu, " ").trim().slice(0, 80) : "";
+  const workerMetadata = normalizeWorkerMetadata(body.workerName, body.workerUrl);
+  if (!/^[a-f0-9-]{36}$/iu.test(applicationId) || !environmentKey || !validBrvinApplicationSlug(environmentKey) || !workerMetadata) {
+    return json({ ok: false, error: "Choose an active application and enter a valid environment label and Worker metadata pair." }, 400);
   }
   try {
     await ensureAnalyticsSchema(env);
@@ -840,16 +964,61 @@ export async function createBrvinApplicationEnvironment(env: Env, request: Reque
     if (!application) return json({ ok: false, error: "The selected application is not active." }, 409);
     const id = crypto.randomUUID().toLowerCase(), now = Date.now();
     await env.DB.prepare(
-      "INSERT INTO brvin_application_environments (id,application_id,environment_key,display_name,status,created_at,updated_at) " +
-      "VALUES (?,?,?,?,'active',?,?)"
-    ).bind(id, applicationId, environmentKey, displayName, now, now).run();
+      "INSERT INTO brvin_application_environments (id,application_id,environment_key,display_name,worker_name,worker_url,status,created_at,updated_at) " +
+      "VALUES (?,?,?,?,?,?,'active',?,?)"
+    ).bind(id, applicationId, environmentKey, displayName, workerMetadata.workerName, workerMetadata.workerUrl, now, now).run();
     await recordBrvinActivity(env, {
       agent: "BRVIN application registry", phase: "governance",
       eventType: "application.environment_created", status: "completed",
-      message: "A new trusted environment identity was registered. Attach it through a reviewed Service Binding configuration before treating the environment as connected.",
-      details: { applicationId, environmentId: id, environmentKey },
+      message: "A deployment environment identity and non-secret Worker metadata were registered. Live connection verification is still pending.",
+      details: { applicationId, environmentId: id, environmentKey, workerName: workerMetadata.workerName, workerUrl: workerMetadata.workerUrl },
     });
-    return json({ ok: true, environment: { id, applicationId, environmentKey, displayName, status: "active" } }, 201);
+    return json({ ok: true, environment: {
+      id, applicationId, environmentKey, displayName, ...workerMetadata, status: "active", connectionStatus: "pending",
+    } }, 201);
+  } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
+}
+
+export async function updateBrvinApplicationEnvironment(env: Env, request: Request): Promise<Response> {
+  if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
+  let body: { environmentId?: unknown; displayName?: unknown; workerName?: unknown; workerUrl?: unknown };
+  try { body = await request.json() as typeof body; } catch { return json({ ok: false, error: "Invalid environment details." }, 400); }
+  const environmentId = typeof body.environmentId === "string" ? body.environmentId.trim() : "";
+  const displayName = body.displayName === undefined ? undefined
+    : typeof body.displayName === "string" ? body.displayName.replace(/\\s+/gu, " ").trim().slice(0, 80) : null;
+  const workerMetadata = body.workerName === undefined && body.workerUrl === undefined
+    ? undefined : normalizeWorkerMetadata(body.workerName, body.workerUrl);
+  if (!/^[a-f0-9-]{36}$/iu.test(environmentId) || displayName === null || workerMetadata === null ||
+      (displayName === undefined && workerMetadata === undefined)) {
+    return json({ ok: false, error: "Enter a valid environment display name and Worker name/URL pair." }, 400);
+  }
+  try {
+    await ensureAnalyticsSchema(env);
+    const current = await env.DB.prepare(
+      "SELECT id,application_id,environment_key,display_name,worker_name,worker_url,status FROM brvin_application_environments WHERE id=?"
+    ).bind(environmentId).first<{
+      id: string; application_id: string; environment_key: string; display_name: string;
+      worker_name: string; worker_url: string; status: string;
+    }>();
+    if (!current) return json({ ok: false, error: "Environment not found." }, 404);
+    const nextDisplayName = displayName ?? current.display_name ?? "";
+    const nextWorkerName = workerMetadata?.workerName ?? current.worker_name ?? "";
+    const nextWorkerUrl = workerMetadata?.workerUrl ?? current.worker_url ?? "";
+    const now = Date.now();
+    await env.DB.prepare(
+      "UPDATE brvin_application_environments SET display_name=?,worker_name=?,worker_url=?,updated_at=? WHERE id=?"
+    ).bind(nextDisplayName, nextWorkerName, nextWorkerUrl, now, environmentId).run();
+    await recordBrvinActivity(env, {
+      agent: "BRVIN application registry", phase: "governance",
+      eventType: "application.environment_metadata_updated", status: "completed",
+      message: "Environment display and Worker metadata were updated. Connection status remains pending until M9 verification.",
+      details: { applicationId: current.application_id, environmentId, environmentKey: current.environment_key },
+    });
+    return json({ ok: true, environment: {
+      id: environmentId, applicationId: current.application_id, environmentKey: current.environment_key,
+      displayName: nextDisplayName, workerName: nextWorkerName, workerUrl: nextWorkerUrl,
+      status: current.status, connectionStatus: "pending",
+    } });
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 409); }
 }
 
