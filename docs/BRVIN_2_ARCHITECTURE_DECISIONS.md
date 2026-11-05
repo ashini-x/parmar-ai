@@ -1,13 +1,13 @@
 # BRVIN 2 — Architecture Decision Record
 
 **ADR:** BRVIN2-001  
-**Status:** Proposed for review  
-**Date:** 4 November 2026  
-**Scope:** Milestones 0–8  
+**Status:** Accepted baseline decisions; product-scope ADR-011 accepted 5 November 2026  
+**Original date:** 4 November 2026  
+**Scope:** BRVIN 2 identity, private retrieval and application integration through M0–M11  
 **Owning repository:** `ashini-x/parmar-ai`  
-**First additional consumer:** `ashini-x/askmoina-voice`
+**Active product scope:** [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md)
 
-This ADR freezes the target model for BRVIN 2. It is a design decision document, not evidence that the schema, RPC v2 or consumer integrations have been implemented. Production remains on the current legacy contract until the later implementation milestones.
+This ADR records the additive application/environment/project-grant model, private v2 retrieval contract, migration and compatibility decisions. Its original architecture decisions remain in force unless explicitly superseded by a later ADR. **ADR-011 records the current product boundary:** BRVIN manages teacher knowledge and application connections; ChatGPT remains responsible for consumer-application engineering through its separately authorized integrations. The autonomous Project Factory proposal is archived and is not an active requirement.
 
 ## 1. Decision summary
 
