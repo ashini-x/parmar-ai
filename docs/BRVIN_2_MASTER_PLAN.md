@@ -6,7 +6,7 @@
 **Historical reference-test-client repository:** `ashini-x/askmoina-voice` (the scaffold is not the Project Factory target; do not deploy it for the new PDF-chat proof app)
 **Created:** 4 November 2026  
 **Planning baseline:** `main` at the current BRVIN 2 implementation baseline
-**Overall implementation status (5 November 2026):** M0–M5 are complete and merged. The original M6 Connect Application wizard (PR #75) is implemented and production-deployed, but its onboarding path is incomplete and too narrowly tied to one pre-existing test Worker. The user has approved a broader direction: BRVIN becomes an autonomous technical administrator and software Project Factory across GitHub and Cloudflare. The first incomplete work is the delegated provider-administration and credential lifecycle, followed by the reusable engineering orchestrator and a generated PDF-chat application. The older brvin-test-client scaffold is a historical reference only; PR #385 is superseded and must not be merged.
+**Overall implementation status (5 November 2026):** M0–M5 are complete and merged. The original M6 Connect Application wizard (PR #75) is implemented and production-deployed, but its fixed text-client path has now been retired. M6's first administrator-preflight slice is merged and production-deployed (PRs #82 and #83); the full credential lifecycle is not yet complete. The old text-client PR #385 was closed without merging; the isolated scaffold was removed from askmoina-voice by PR #386. The first incomplete milestone remains M6: obtain one-time GitHub/Cloudflare provider consent, then implement automated project-scoped token creation and secret delivery. The first software proof app will be generated independently by the Project Factory.
 
 > **Read this document first when continuing BRVIN 2 in a new ChatGPT chat, Codex task, or work branch.** It contains the approved target architecture, the implementation sequence, progress ledger, acceptance rules and copy-ready milestone instructions. Do not ask the user to repeat the architecture.
 
@@ -311,7 +311,7 @@ The foundational M0–M5 work remains complete. The earlier M6 Connect Applicati
 | 1 | Multi-application, multi-project identity | COMPLETE | Additive identity registry and production migration verified; Fatman preserved |
 | 2 | Private retrieval API v2 | COMPLETE | Trusted environment identity, app-project authorisation and private RPC deployed |
 | 3 | Reusable BRVIN application connector | COMPLETE | Typed server-side connector merged and validated |
-| 4 | Independent BRVIN text reference consumer scaffold | COMPLETE — historical scaffold | brvin-test-client contract/UI exists in askmoina-voice; it is not the target Project Factory proof app |
+| 4 | Independent BRVIN text reference consumer scaffold | COMPLETE — historical proof of concept, now retired | The scaffold was removed from askmoina-voice in PR #386; no brvin-test-client Worker was deployed. The generic BRVIN connector remains. |
 | 5 | Application/project administration | COMPLETE | Protected admin dashboard, app/environment lifecycle and project grants deployed |
 | 6 | Delegated Provider Administration & Credential Lifecycle | IN PROGRESS — first incomplete milestone | GitHub and Cloudflare administrator connections, automatic credential provisioning, encrypted vault, Actions/Worker secret distribution, rotation/revocation and permission verification work without manual token copy/paste |
 | 7 | Autonomous Software Project Factory | NOT STARTED | A natural-language request creates a new repo, architecture plan, code, tests, Cloudflare resources, credentials, CI/CD and verified deployment |
@@ -339,7 +339,7 @@ COMPLETE. Generated apps should consume this server-side connector through the a
 
 ### Milestone 4 — Independent BRVIN text reference consumer scaffold
 
-COMPLETE as a historical scaffold only. It proves the isolated connector/UI contract. It is not deployed and is not the required final user-facing app. The new PDF-chat app must be generated in its own repository by the Project Factory.
+COMPLETE as a historical proof of concept, now retired. Its fixed Worker/config/test/deployment files were removed from askmoina-voice by PR #386; no brvin-test-client Worker was ever deployed. The generic BRVIN connector remains available for future generated applications. Do not recreate the fixture. The new PDF-chat app must be generated in its own repository by the Project Factory.
 
 ### Milestone 5 — Application and project administration
 
@@ -362,6 +362,13 @@ Deliverables:
 - Migrate the narrow M6 wizard without losing valid encrypted provider connections; require re-consent explicitly when scopes expand.
 
 Acceptance gate: after one-time provider authorisation/consent, create a test GitHub repository and a test Cloudflare Worker from the BRVIN dashboard without the user manually creating a Worker, generating a Cloudflare token or copying a secret into Actions. Verify the project credential can deploy only its intended resources. Do not mark M6 complete from mocked API tests alone; exercise provider APIs in dedicated test resources and record evidence.
+
+**Live status after PR #83 / Release Validation #675 (5 November 2026):**
+- The BRVIN admin panel now exposes GitHub App permission and repository-scope preflight, Cloudflare OAuth scope preflight, a copyable required-scope list, and links to the existing GitHub App/installation settings. It no longer contains the fixed AskMoina-hosted text-client adapter.
+- The existing GitHub App is BRVIN Connect, already installed for the user's `ashini-x` account. Its registration and installation permissions have not yet been expanded/approved. The user must approve the requested App permissions and change installation repository access to **All repositories** once.
+- The Cloudflare account has one member with **Super Administrator — All Privileges**; no additional member invitation or permanent role change is required. However, BRVIN's encrypted OAuth connection still contains only `workers-scripts.edit offline_access`. The existing BRVIN Connect OAuth client must be expanded with the required Developer Platform/AI scopes and `account_api_tokens:create`, then the user must authorize BRVIN once. The existing client secret is already stored encrypted; do not ask the user to re-enter it.
+- PR #82 added the expanded permission manifest/scope request and the read-only capability preflight. PR #83 removed the old fixed test-client functions/routes/UI and updated the admin panel. These changes passed Release Validation #673 and were deployed in Release Validation #675. The live smoke gate verified BRVIN service binding and Fatman retrieval; it did not verify the newly requested provider scopes because user re-consent is still pending.
+- Next M6 implementation work: implement Cloudflare account API token creation through the approved OAuth token-provisioning scope; validate returned token permission groups/resource selectors; create and distribute project-scoped GitHub Actions and Worker secrets directly; persist encrypted metadata/fingerprints/expiry/owner; verify actual deployment with the new credential; then add rotation and revocation. GitHub App installation tokens remain the default GitHub API credential; do not create manual PATs.
 
 ### Milestone 7 — Autonomous Software Project Factory
 
@@ -439,7 +446,7 @@ Use the revised prompts below for M6–M10. Older milestone prompts are retained
 
 ### Current continuation prompt (use in every new chat)
 
-Read these GitHub files first: BRVIN_2_MASTER_PLAN.md, BRVIN_AUTONOMOUS_PROJECT_FACTORY.md, BRVIN_SYSTEM_REFERENCE.md, BRVIN_2_ARCHITECTURE_DECISIONS.md and BRVIN_2_RPC_V2_CONTRACT.md. Inspect latest main, open PRs, commits, workflow runs and relevant Cloudflare state. Resume at the first incomplete revised milestone (currently M6: Delegated Provider Administration & Credential Lifecycle). Do not merge PR #385 in ashini-x/askmoina-voice; it is superseded. Do not modify/deploy the existing AskMoina Voice runtime for BRVIN acceptance. Preserve Fatman, parmar-ai and private brvin-service. Do not ask the user to repeat the product vision or manually perform recurring token/secret/resource setup. Use approved GitHub/Cloudflare administrator connections; ask only for genuinely required one-time provider consent or consequential actions outside the approved policy.
+Read these GitHub files first: BRVIN_2_MASTER_PLAN.md, BRVIN_AUTONOMOUS_PROJECT_FACTORY.md, BRVIN_SYSTEM_REFERENCE.md, BRVIN_2_ARCHITECTURE_DECISIONS.md and BRVIN_2_RPC_V2_CONTRACT.md. Inspect latest main, open PRs, commits, workflow runs and relevant Cloudflare state. Resume at the first incomplete revised milestone (currently M6: Delegated Provider Administration & Credential Lifecycle). PR #385 in askmoina-voice is closed without merging; PR #386 removed the retired, undeployed test-client scaffold. Do not recreate that adapter or modify/deploy the existing AskMoina Voice runtime for BRVIN acceptance. Preserve Fatman, parmar-ai and private brvin-service. Do not ask the user to repeat the product vision or manually perform recurring token/secret/resource setup. The two one-time provider approvals still pending are expanded GitHub App permissions/All-repository installation and expanded Cloudflare OAuth scopes/re-consent. After those approvals, continue automated token and secret provisioning.
 
 ### Revised Milestone 6 prompt
 
@@ -546,7 +553,7 @@ This table is the human-readable status. The evidence fields must be filled from
 | 3 — Reusable connector | COMPLETE | [PR #63](https://github.com/ashini-x/parmar-ai/pull/63), merge commit `91b6a499bd782ae298b41e790157c23682f10881` | Release Validation #608 passed; Cloudflare Preview build `a4c154e3-c056-489a-9b14-8ebac9ed9c0d` succeeded | Connector vendored by AskMoina PR #370 |
 | 4 — Independent BRVIN text reference Worker | COMPLETE — scaffold/contract tests delivered | [AskMoina PR #381](https://github.com/ashini-x/askmoina-voice/pull/381), merge `bf8e5a1e9fe7f451ad31430143ab52aaf801214e` | Separate `brvin-test-client` Worker, own Wrangler and TypeScript configs, tester-token gate, text UI, server-side v2 connector, authorisation/provenance tests; Release Validation and independent Wrangler dry-run passed on main | No test identity, project grant, Service Binding or deployment. Historical scaffold only; superseded as the acceptance app by the factory-generated independent PDF-chat repository. |
 | 5 — Application/project administration | COMPLETE — merged, deployed and production release accepted | [PR #72](https://github.com/ashini-x/parmar-ai/pull/72), merge `5872c2d21cdef17feb21d661e50ddde820c51f40` | Main Release Validation and paired production release [#41900067751](https://github.com/ashini-x/parmar-ai/actions/runs/41900067751) passed typecheck, unit/Node tests, both Worker bundle checks, production deployment and root/BRVIN/Fatman smoke; acceptance artifact `13357333270` | `brvin-service` version `c6755ca2-5b5f-4968-8bbc-e957a767926d`; `parmar-ai` version `d239c941-f119-4ad1-9020-63e9a2353434`. No migration or production data mutation. Cloudflare preview PR build alone hit the account's 100 Durable Object Free-plan namespace limit; main production build/deploy passed |
-| 6 — Delegated provider administration and credential lifecycle | IN PROGRESS — design approved; implementation not started | Existing base: [PR #75](https://github.com/ashini-x/parmar-ai/pull/75), merge 7ee4b58320ba457ac2ac94651ad872fd0b937445 | The narrow Connect wizard is deployed and provider credentials are encrypted in D1; current Cloudflare OAuth was upgraded only to Workers Editor. No automated token provisioning, GitHub Actions secret delivery or end-to-end provider provisioning has been verified. | First incomplete work. Expand GitHub App permissions and Cloudflare Admin/token-provisioning scopes; implement provider capability checks, encrypted credential lifecycle and automated secret delivery. |
+| 6 — Delegated provider administration and credential lifecycle | IN PROGRESS — permission preflight is deployed; owner approvals and credential automation remain | [PR #82](https://github.com/ashini-x/parmar-ai/pull/82) merged `5ade1aede0a215166fb827a08f1fdaf84e303c22`; [PR #83](https://github.com/ashini-x/parmar-ai/pull/83) merged `ceef8f17927b190a5bba71bce61732c7067e34a0` | PR #83 Release Validation #673 passed (run `42020393642`). Main production Release Validation #675 passed (run `42020525691`): `brvin-service` deployment `5d1b649d-5041-4957-9c2c-09ad52f18b5d` / version `82e902c9-be00-47da-81fa-c4d879e58fcc` at 100%; `parmar-ai` deployment `fdc896dd-d0cb-437d-8bbb-cf9491f49dea` / version `c6f4fd4f-00aa-42e0-af68-dc3af1b83144` at 100%; root, health, private Service Binding and Fatman retrieval passed. | First incomplete implementation milestone. The admin panel now preflights provider permissions and displays the one-time consent steps. Current Cloudflare OAuth still stores `workers-scripts.edit offline_access`; the user must re-consent to expanded scopes. The existing Cloudflare account member is already Super Administrator. The existing BRVIN GitHub App still needs the expanded permission approval and All-repositories installation scope. Token creation, Actions/Worker secret delivery, vault lifecycle, rotation/revocation and project-level credential provisioning remain to implement. |
 | 7 — Autonomous Software Project Factory | NOT STARTED | — | — | Natural-language brief → new GitHub repository → code/tests → Cloudflare resources/credentials → verified deployment |
 | 8 — First generated application: Chat with Your PDFs | NOT STARTED | — | — | Factory-generated independent app; grounded answers and physical PDF page citations |
 | 9 — Generalisation and multi-project acceptance | NOT STARTED | — | — | Generate a second app type; multi-app/project grants, isolation, revocation, recovery and Fatman preservation |
@@ -735,7 +742,7 @@ A benchmark-only fix was merged in AskMoina PR #372 as `7893ea5f79a930c2e425dc9a
 
 ## 8. Rules for future ChatGPT/Codex sessions
 
-**Canonical product direction:** read BRVIN_AUTONOMOUS_PROJECT_FACTORY.md in full. The user wants BRVIN to be the autonomous GitHub/Cloudflare technical administrator and software Project Factory. M6 is the first incomplete milestone. PR #385 in askmoina-voice is superseded and must not be merged. Do not make the user repeat this goal or manually provision routine tokens, secrets, repos or Workers.
+**Canonical product direction:** read BRVIN_AUTONOMOUS_PROJECT_FACTORY.md in full. The user wants BRVIN to be the autonomous GitHub/Cloudflare technical administrator and software Project Factory. M6 is the first incomplete milestone. PR #385 in askmoina-voice is closed without merging; PR #386 removed the retired test-client scaffold. Do not recreate that adapter. Do not make the user repeat this goal or manually provision routine tokens, secrets, repos or Workers.
 
 At the start of every new session:
 
@@ -782,7 +789,10 @@ The connected application must retrieve only its authorised project's content an
 
 
 
-### Milestone log — 5 November 2026 — acceptance target correction
+### Historical milestone log — 5 November 2026 — acceptance target correction (superseded by Project Factory direction)
+
+**Retirement note:** At the time of this historical entry the first test was planned as a separate text-only Worker inside askmoina-voice. That fixture was later removed by PR #386; PR #385 was closed without merging. Do not follow the old test-Worker implementation steps recorded below. The current target is an independent PDF-chat application generated by the Project Factory.
+
 
 **User direction:** Stop treating the existing AskMoina Voice application as the product BRVIN must repair. BRVIN is the product; the existing AskMoina voice app is only an optional consumer/pilot. The first controlled architecture test will be a separate, text-only Worker housed in the `askmoina-voice` repository.
 
@@ -818,9 +828,12 @@ The connected application must retrieve only its authorised project's content an
 
 **M5 boundary:** The dashboard distinguishes a registered environment from a live-verified Worker connection. M6 owns GitHub/Cloudflare discovery, Service Binding provisioning and post-deployment connection verification. The production release acceptance verified root, private BRVIN connectivity and Fatman retrieval; the new administrative lifecycle is covered by code/route tests and is now deployed.
 
-**Next milestone:** M6 — Automated Connect Application wizard. Use the M5 protected dashboard to register the isolated text test application, its production environment, dedicated test project and explicit grant. Then use M6 to attach the trusted environment identity and deploy/connect the test Worker. Do not add ad-hoc D1 rows, reuse AskMoina Voice's production identity or default the test Worker to Fatman.
+**Historical next step (superseded):** M6 was originally planned to register and deploy the fixed text-test Worker. That path has been retired. Follow the revised M6 — Delegated Provider Administration & Credential Lifecycle section at the start of this plan.
 
-### Milestone log — 5 November 2026 — M6 Connect Application wizard merged/deployed; onboarding pending
+### Historical milestone log — 5 November 2026 — original fixed-adapter M6 Connect Application wizard (retired)
+
+**Retirement note:** The fixed test-client provisioning and deployment workflow described in this historical entry was removed in PR #83/#386. PR #385 was closed without merging. Do not follow its test-client registration, secret-copy, adapter-PR or deployment steps. The revised M6 is provider administrator consent, credential creation and secret delivery for the Project Factory.
+
 
 **Status:** IN PROGRESS — Connect Application is merged and production-deployed, but the first independent text consumer is not yet registered, deployed or live-connected. M6 is not complete until the administrator's provider setup, generated adapter PR, independent Worker deployment, live identity check and a real text retrieval smoke test all pass.
 
@@ -855,10 +868,13 @@ The connected application must retrieve only its authorised project's content an
 6. Verify the deployed `BRVIN_SERVICE` binding/entrypoint and 100% traffic. The Worker settings API does not expose `props`, so the wizard's definitive check must be its authenticated live `/api/projects` response containing the dedicated project ID before it reveals the one-time tester token.
 7. Run a real text question / exact-page retrieval smoke test after assigning at least one ready source to the test project.
 
-**Next milestone:** Continue M6 onboarding until the independent test Worker is live and a real text retrieval smoke test passes. Only then begin M7 multi-app/project, shared grants, multiple PDFs/collections, page citations, revocation, quota and outage/recovery acceptance. Do not resume AskMoina Voice-specific testing as a BRVIN blocker.
+**Current next milestone:** Continue revised M6 — delegated GitHub/Cloudflare administrator authorization and credential lifecycle. Do not provision or deploy the old text-test Worker. After the two provider consents are approved, implement real account-token creation, direct Actions/Worker secret delivery, project-scoped verification, rotation and revocation before M7.
 
 
-### Milestone log — 5 November 2026 — M4 reference Worker scaffold delivered
+### Historical milestone log — 5 November 2026 — M4 reference Worker scaffold delivered (retired later the same day)
+
+**Retirement note:** AskMoina PR #386 removed this scaffold's Worker, configuration, tests and deployment workflow. No test Worker was ever deployed. PR #385 was closed without merging. The generic connector is preserved; do not follow historical steps here to provision, bind or deploy `brvin-test-client`.
+
 
 **Implementation:** AskMoina PR #381, “M4: add isolated text-first BRVIN test client Worker”, merged to main as `bf8e5a1e9fe7f451ad31430143ab52aaf801214e`. It adds an independent `brvin-test-client` Worker with `wrangler.brvin-test-client.jsonc`, `workers/brvin-test-client/src/index.ts`, `tsconfig.brvin-test-client.json`, a text retrieval UI and its dedicated tests.
 
@@ -885,11 +901,11 @@ The connected application must retrieve only its authorised project's content an
 
 **Existing implementation truth:** M0–M5 remain complete. The narrow M6 Connect Application wizard (PR #75, merge 7ee4b58320ba457ac2ac94651ad872fd0b937445) remains deployed as a foundation, but it is not accepted as the complete delegated-administrator/Project Factory capability. The current provider connection supports Workers Editor, not the full approved Admin/token-provisioning model. The fixed adapter remains limited to ashini-x/askmoina-voice.
 
-**Superseded proposal:** AskMoina PR #385 (Connect BRVIN Text Test Client to BRVIN private retrieval) remains open but is superseded by the independent-repository Project Factory plan. Do not merge it, deploy brvin-test-client from it, or ask the user to create a Worker or BRVIN_TEST_CLOUDFLARE_API_TOKEN manually. No claim is made that PR #385 has been closed.
+**Retired proposal and adapter:** AskMoina PR #385 was closed without merging. The isolated text-client source/config/tests/deployment workflow were removed from `askmoina-voice` by [PR #386](https://github.com/ashini-x/askmoina-voice/pull/386), merged as `6ed5b5f59f5d972dd3af8e832261ef7168206703`. Release Validation #1815 passed (run `42016305287`). The Cloudflare account inventory confirmed no `brvin-test-client` Worker had been deployed. The old BRVIN app/environment/project/grant records were revoked/inactivated, and the GitHub connection's PR #385 metadata was cleared. The ready `BRVIN Test - Rain Gardens (3 pages)` PDF remains in the library as an unassigned source; no document bytes or OCR/index data were deleted. Do not reopen PR #385 or recreate this fixed adapter. The new proof application must be generated in its own repository by the Project Factory.
 
 **Revised sequence:** M6 Delegated Provider Administration & Credential Lifecycle; M7 Autonomous Software Project Factory; M8 first factory-generated Chat with Your PDFs app; M9 generate a second distinct app and complete multi-app/project acceptance; M10 security, release and nontechnical handover. Optional cross-account gateway moves to M11 and remains deferred.
 
-**Implementation starting point:** M6 is the first incomplete milestone. Inspect current GitHub App manifest permissions, installation state, Cloudflare OAuth client scopes, encrypted provider-connection vault, existing provider APIs and relevant GitHub/Cloudflare API operations. Design the permission/capability matrix from real API contracts, implement upgrades and consent safely, build project credential provisioning and secret delivery, then validate with isolated test resources before starting M7. Do not mutate live account permissions or secrets in this documentation-only change.
+**Implementation starting point:** M6 remains the first incomplete milestone. The live admin panel is deployed at `https://parmar-ai.thenewtongs.workers.dev/admin/brvin`. The next user-side actions are one-time provider approvals only: (1) update the existing BRVIN GitHub App permissions and set its installation to All repositories; (2) update the existing BRVIN Connect Cloudflare OAuth client scopes using the panel's Copy button, preserving its callback URL and authorization-code/refresh-token grants, then click Authorize once. After those approvals, run Verify provider access and continue implementing token provisioning and direct secret delivery. Do not ask the user to create an API token, Worker, repository secret or test-client Worker manually.
 
 **Files changed by this documentation proposal:** docs/BRVIN_AUTONOMOUS_PROJECT_FACTORY.md (new), docs/BRVIN_2_MASTER_PLAN.md (revised goal, administrator experience, milestones, prompts and ledger), docs/BRVIN_SYSTEM_REFERENCE.md (as-built boundary and continuity pointer). The source commit/PR and checks are recorded when this documentation branch is reviewed and merged.
 
@@ -897,3 +913,20 @@ The connected application must retrieve only its authorised project's content an
 ### Documentation release record — 5 November 2026
 
 The autonomous Project Factory specification was merged through [PR #80](https://github.com/ashini-x/parmar-ai/pull/80) as commit `8fb34381aef72f510f512fa2b31e24376403171d`. Release Validation [#664](https://github.com/ashini-x/parmar-ai/actions/runs/42012212458) passed type-checking, unit tests, Node tests, and both Worker bundle validations. Production deployment and live-production verification were skipped because this was a documentation-only change. Exactly three documentation files changed; no production infrastructure was modified.
+
+
+### Milestone log — 5 November 2026 — M6 provider-admin preflight deployed; text adapter retired
+
+**Implementation PRs:** [PR #82](https://github.com/ashini-x/parmar-ai/pull/82) merged as `5ade1aede0a215166fb827a08f1fdaf84e303c22`; [PR #83](https://github.com/ashini-x/parmar-ai/pull/83) merged as `ceef8f17927b190a5bba71bce61732c7067e34a0`. The production main commit is `ceef8f17927b190a5bba71bce61732c7067e34a0`.
+
+**Code delivered:** expanded GitHub App manifest permission set, Cloudflare Developer Platform/AI OAuth permission set, special `account_api_tokens:create` scope, provider capability endpoint, GitHub app/installation links, live repository-selection and permission output, copyable Cloudflare scope list, preservation of the existing encrypted OAuth client, and removal of all fixed `brvin-test-client` registration/PR/deployment-verification/test-token functions, API routes, admin controls and tests. The generic BRVIN connector and private retrieval service remain.
+
+**PR validation:** Release Validation [#673](https://github.com/ashini-x/parmar-ai/actions/runs/42020393642) passed type-check, Vitest, Node integration tests and both Worker bundle checks. Main push Release Validation [#675](https://github.com/ashini-x/parmar-ai/actions/runs/42020525691) passed all validation and production release gates. Production smoke and acceptance confirmed root and health endpoints, BRVIN Service Binding, Fatman retrieval and one authorised source. No rollback was needed.
+
+**Production deployment evidence:** `brvin-service` deployment `5d1b649d-5041-4957-9c2c-09ad52f18b5d`, version `82e902c9-be00-47da-81fa-c4d879e58fcc`, 100% traffic. `parmar-ai` deployment `fdc896dd-d0cb-437d-8bbb-cf9491f49dea`, version `c6f4fd4f-00aa-42e0-af68-dc3af1b83144`, 100% traffic.
+
+**One-time provider approvals still pending:** GitHub App permission expansion and installation repository selection All; Cloudflare OAuth re-consent. Live account inspection found one Cloudflare member with Super Administrator — All Privileges, so no new member role assignment or invitation is required. BRVIN's saved Cloudflare OAuth scope remains the prior `workers-scripts.edit offline_access` until re-consent is completed. The existing OAuth client secret remains encrypted in D1.
+
+**Retired adapter and D1 cleanup:** AskMoina PR #385 closed without merging. AskMoina PR #386 merged as `6ed5b5f59f5d972dd3af8e832261ef7168206703`; Release Validation #1815 (run `42016305287`) passed. No `brvin-test-client` Worker was deployed. The fixed app and environment were revoked, the test project set inactive, the project grant revoked, stale PR metadata removed from the GitHub connection, and a `brvin_connection_events` audit record inserted. The sample Rain Gardens PDF remains ready but unassigned; it was not deleted.
+
+**M6 remaining work:** implement actual API-token provisioning; scope and verify project-specific Cloudflare deployment tokens; write them directly to GitHub Actions repository/environment secrets or Worker secrets; test real create/deploy/rotation/revocation; finish the encrypted credential vault and provider audit lifecycle. Provider preflight is deployed but M6 is not complete.
