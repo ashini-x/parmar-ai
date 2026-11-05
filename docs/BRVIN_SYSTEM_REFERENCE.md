@@ -436,7 +436,7 @@ The handoff does not provision or modify a consumer repository, Worker, binding,
 
 M6 and M7 delivered the teacher-focused Knowledge Projects/Application workspace, editable repository/runtime metadata, generated environment identity registration, explicit project grants, and Pending connection state. M8's one-time ChatGPT handoff generator is complete and deployed in PR #95.
 
-M9 challenge/proof implementation is in progress on `brvin/m9-live-connection-verification`. The branch adds a content-free consumer probe route, a private service-issued one-time proof, administrator-authenticated finalization and separate connection/readiness states. The branch is not yet merged or deployed, so production environments must remain Pending until the real live proof flow passes. M10 still owns the broader teacher assignment/isolation acceptance workflow.
+M9 challenge/proof implementation is in progress in [PR #98](https://github.com/ashini-x/parmar-ai/pull/98), branch `brvin/m9-live-connection-verification`, head `e849fcd3afd1299031008a6efa158220bc75bcdd`. GitHub Release Validation #726 passed typecheck, all unit tests, Node/browser-script tests and both Worker bundle dry-runs. A separate Cloudflare Workers Builds preview check failed because the branch's existing `npx wrangler preview` trigger hit the account's Workers Free 100 Durable Object namespace limit (code `10067`). No M9 production deployment or live consumer proof has occurred, so production environments must remain Pending. M10 still owns the broader teacher assignment/isolation acceptance workflow.
  
 ## 10. Consumer application integration
 

@@ -836,4 +836,32 @@ The BRVIN Cloudflare account ID is only a non-secret comparison reference. M7 do
 
 **Verification limitation:** CI parsed and checked the generated admin script and route contracts, but this session did not have an authenticated administrator browser session for a manual visual click-through or an actual per-app handoff-copy test. The deployed code and paired release were accepted; do not describe a specific consumer as connected or claim the admin modal was manually exercised.
 
-**Next milestone:** M9 — Live connection verification and activation. Stop here; do not begin M9 without the user's instruction.
+**M9 validation update — 5 November 2026:** PR #98 is open on `brvin/m9-live-connection-verification`, latest head `e849fcd3afd1299031008a6efa158220bc75bcdd`. GitHub Release Validation #726 (run `42078543876`) passed `npm run check`, `npm test`, `npm run test:node`, private BRVIN Worker bundle validation and Parmar AI Worker bundle validation. Its production deployment and live verification jobs were correctly skipped because this is a PR run. A separate Cloudflare Workers Builds check failed at `npx wrangler preview` with account Free-plan limit code `10067` (100 Durable Object namespaces); this did not fail the PR workflow or its Wrangler dry-runs. No production deployment, database write or live Connected state is claimed.
+
+### Milestone log — 5 November 2026 — M9 live connection verification (implementation in progress)
+
+**Status:** IN PROGRESS — implementation and focused tests are committed to a feature branch; PR CI and both Worker dry-runs pass. Merge, production deployment and real browser-driven proof acceptance remain outstanding.
+
+**Exact first incomplete task:** implement the M9 consumer-side connection proof and authenticated admin acceptance path. A D1 registry row or a status call performed only from a different Worker does not prove that the registered deployment is using its own trusted v2 Service Binding identity.
+
+**Branch / PR:** `brvin/m9-live-connection-verification`; [PR #98](https://github.com/ashini-x/parmar-ai/pull/98). Latest branch commit: `e849fcd3afd1299031008a6efa158220bc75bcdd`.
+
+**Protocol:** ADR-012 defines a two-minute, single-use, environment-bound challenge. The admin creates a random nonce and stores only its SHA-256 hash. The registered consumer Worker exposes a content-free `POST /brvin/connection-probe` route which calls private `proveConnectionV2({ challengeId, nonce })`. The private service resolves the caller only from `ctx.props.applicationEnvironmentId`, checks the exact active environment and nonce, then issues a random proof and persists only its hash plus a readiness snapshot. The administrator-session and same-origin protected finalizer verifies and consumes the proof once. Browser-supplied readiness counts are never trusted.
+
+**Changed files (18):**
+- `src/analytics/db.ts` — additive challenge/proof D1 table and indexes.
+- `src/config/env.ts`, `src/brvin/service-core.ts`, `src/brvin/service-worker.ts` — probe-only private v2 proof RPC and trusted identity binding.
+- `src/brvin/connection-verification.ts` — challenge issue, proof finalization, expiry/replay checks and consumer probe route.
+- `src/index.ts` — consumer probe route plus protected admin challenge/finalizer routes.
+- `src/brvin/admin.ts` — connection status, freshness, last-check details and Verify Connection UI in existing `/admin/brvin`.
+- `src/brvin/handoff.ts` — handoff revision v2 includes the probe contract for new integrations.
+- Tests: `test/brvin-connection-verification.test.ts`, `test/brvin-v2-connection-proof.test.ts`, `test/brvin-app-admin.test.ts`, `test/brvin-admin-script.node.test.ts`, `test/brvin-handoff.test.ts`.
+- Documentation: this plan, product/final milestone register, system reference, RPC v2 contract, integration guide and ADR-012.
+
+**Validation:** GitHub Release Validation [#726](https://github.com/ashini-x/parmar-ai/actions/runs/42078543876) passed the type check, complete unit suite, Node/browser-script suite and both Worker bundle dry-runs. The earlier run #724 caught strict-null test-fixture errors; run #725 then caught the old M8 handoff-version expectation in an admin test. Both were fixed in follow-up commits before run #726 passed.
+
+**Separate Cloudflare build check:** Cloudflare Workers Builds reported a failed preview build `9b4b6d59-ee6a-4487-a6d3-d1af31c2de7f` because the existing branch trigger runs `npx wrangler preview`, which attempted to create a preview deployment but the account had reached the Workers Free limit of 100 Durable Object namespaces (Cloudflare error `10067`). This is an account capacity/preview-build blocker, not a TypeScript, unit-test or Wrangler dry-run failure. No plan upgrade, namespace deletion or build-trigger mutation was made. Do not bypass this by deleting existing resources.
+
+**Production / live status:** production remains on the M8 release. PR #98's production jobs were skipped, so no M9 code is deployed. The earlier read-only Cloudflare/D1 audit verified the active Parmar AI production environment ID `00000000-0000-4000-8000-000000000102`, its Fatman app-project grant and the existing `BRVIN_SERVICE` binding, but the registry's Worker URL metadata was empty. Before a browser-driven check, the exact deployed Parmar AI HTTPS origin must be saved as environment metadata. No production D1 rows, credentials, Worker bindings or deployments were modified for M9.
+
+**Next action:** resolve whether the separate Workers Builds preview limit is a required merge gate or explicitly document its infrastructure-only status with the reviewer; merge PR #98 only after review. Then use the existing paired Release Validation path, capture both deployed Worker version IDs and perform the real challenge/proof flow against the deployed consumer. Verify an invalid/revoked identity is denied and a valid no-ready-source app reports Connected separately from knowledge readiness. Do not mark M9 complete from mocks or registration state.

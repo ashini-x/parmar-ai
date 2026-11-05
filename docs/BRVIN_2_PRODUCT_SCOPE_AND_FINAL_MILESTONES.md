@@ -340,7 +340,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 - The result distinguishes Connected from Connected — no ready knowledge.
 - The service remains private and no unfiltered retrieval path is introduced.
 
-**Implementation state (5 November 2026):** the protocol, D1 schema, v2 proof RPC, consumer probe route, admin challenge/finalizer, application-card status display and focused tests are on `brvin/m9-live-connection-verification`. This milestone remains IN PROGRESS until PR CI passes, the paired production release is accepted, and the deployed consumer returns a proof that the administrator finalizer verifies. A registered D1 row or mock result is not completion evidence.
+**Implementation and validation state (5 November 2026):** PR #98 is open on `brvin/m9-live-connection-verification`, head `e849fcd3afd1299031008a6efa158220bc75bcdd`. GitHub Release Validation #726 passed typecheck, all unit tests, Node/browser-script tests and both Worker bundle dry-runs. The separate Cloudflare Workers Builds preview check failed because the existing `wrangler preview` trigger hit Free-plan Durable Object namespace limit `10067`; this is an account capacity blocker, not a source/test failure. Production deployment and live proof acceptance remain pending. The branch has not been merged or deployed, and production environments must remain unverified. A registered D1 row or mock result is not completion evidence.
 
 ### M10 — Teacher knowledge assignment and isolation acceptance
 
