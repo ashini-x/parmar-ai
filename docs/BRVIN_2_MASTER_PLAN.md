@@ -524,51 +524,50 @@ A benchmark-only fix was merged in AskMoina PR #372 as `7893ea5f79a930c2e425dc9a
 
 ## 8. Rules for future ChatGPT/Codex sessions
 
-**Canonical product direction:** read BRVIN_AUTONOMOUS_PROJECT_FACTORY.md in full. The user wants BRVIN to be the autonomous GitHub/Cloudflare technical administrator and software Project Factory. M6 is the first incomplete milestone. PR #385 in askmoina-voice is closed without merging; PR #386 removed the retired test-client scaffold. Do not recreate that adapter. Do not make the user repeat this goal or manually provision routine tokens, secrets, repos or Workers.
+**Active product direction:** BRVIN is the teacher digital-brain knowledge platform and application connection manager. ChatGPT remains the user's application engineer through its separately authorized GitHub and Cloudflare integrations. Do not implement the superseded autonomous Project Factory.
 
 At the start of every new session:
 
-1. Open this master plan from GitHub.
-2. Read [BRVIN_AUTONOMOUS_PROJECT_FACTORY.md](BRVIN_AUTONOMOUS_PROJECT_FACTORY.md) in full; it contains the canonical autonomous-administrator and Project Factory specification.
-3. Open [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) to understand the audited current architecture.
-3. Open [BRVIN_PRIVATE_RETRIEVAL_API.md](BRVIN_PRIVATE_RETRIEVAL_API.md), [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md) and [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md) as relevant.
-4. Inspect current repo branches, latest commits, PRs, workflow runs and live Cloudflare state when the next task depends on them.
-5. Compare actual progress to the ledger. Correct the ledger if evidence disagrees.
-6. Resume from the first incomplete milestone. Do not redo finished work or skip unfinished prerequisites.
-7. Work only on the milestone requested/next in sequence unless the user explicitly changes priority.
-8. Update this tracker and related docs before closing each milestone.
+1. Read [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md) in full.
+2. Read this master plan and its latest progress/scope-decision log.
+3. Read [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) for the as-built code and production facts.
+4. Read [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) and [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md) before touching application identity, grants, Service Binding or retrieval.
+5. Treat [BRVIN_AUTONOMOUS_PROJECT_FACTORY.md](BRVIN_AUTONOMOUS_PROJECT_FACTORY.md) as superseded historical documentation only. Do not follow its milestones.
+6. Inspect the current main branch, latest commits, PRs, workflow runs and relevant production state. Do not assume the previous chat's status is still current.
+7. Resume at the first incomplete M6–M11 acceptance item. Do not redo completed milestones or create the retired fixed test client.
+8. Implement one milestone at a time. Use a feature branch and focused PR.
+9. Update the master plan, final product-scope document and relevant as-built/contract documents in the same PR. Record tests, CI run, PR, merge, deployment and live-verification evidence.
+10. Clearly distinguish planned, coded, deployed and live-verified behavior. Never mark a milestone complete from a mock, registry row or unit test alone.
 
-### Repository and infrastructure safety
+### Repository, runtime and data safety
 
-- Do not deploy or modify production infrastructure during Milestone 0.
-- Use a feature branch and PR for implementation.
-- Do not overwrite a concurrent branch or skip reviewing latest main.
-- Do not commit credentials, private keys, access tokens, production student data or raw OCR/PDF payloads.
-- Preserve the current paired deployment and rollback controls.
-- Keep `brvin-service` private.
-- Never let a project selector bypass application-project authorisation.
-- Preserve Fatman's current user-facing flow and usage history.
-- Do not claim an unverified deployment or test result.
+- ChatGPT performs consumer repository code changes, CI/CD and deployment using the user's own authorized integrations.
+- BRVIN does not create repositories, build application code, administer ChatGPT's provider connection or run an autonomous coding agent.
+- Never expose `brvin-service` publicly.
+- Never put BRVIN D1, AI Search, GCS or master credentials in a consumer application.
+- Never accept app/environment identity from browser or request-body fields.
+- Preserve Fatman's data, quota history and current retrieval behavior.
+- Preserve existing AskMoina Voice runtime; it is optional and not a fixed test harness.
+- Audit dependencies before hiding/removing historical provider-admin UI or stored credentials. This scope change alone does not authorize credential deletion/revocation.
+- Do not create a new knowledge database/index/Worker/repository for each teacher knowledge project.
+- Do not claim a live connection without a real v2 Service Binding verification.
 
 ## 9. Completion definition
 
-BRVIN is complete only when a nontechnical user can:
+BRVIN 2 is complete when a nontechnical administrator can:
 
-1. Authorise the GitHub and Cloudflare provider connections once at the required administrator level.
-2. Describe a software idea in the BRVIN dashboard and approve its project plan.
-3. Have BRVIN create a new GitHub repository, codebase, tests, CI/CD, required Cloudflare resources, application/environment identities and project credentials without manual token/secret copy-paste.
-4. Have BRVIN build, test, repair, merge/deploy under the stored approval policy, verify live behavior and maintain an auditable resource/deployment history.
-5. Create an independent Chat with Your PDFs application through the factory, upload PDF documents, ask questions and receive grounded answers with correct physical PDF-page citations.
-6. Create a second, materially different software application through the same factory without a bespoke manual infrastructure process.
-7. Create additional BRVIN knowledge projects, collections and source grants for connected apps without creating new software repositories, Service Bindings or application deployments.
-8. Share projects only through explicit application-project grants; prove denial, revocation, deactivation, quota and recovery behavior.
-9. Preserve Fatman's data, ingestion, retrieval, permissions and usage history, keep brvin-service private, and leave AskMoina Voice runtime independent.
-10. Inspect the audit trail, credentials, deployments, errors and rollback/recovery instructions from the BRVIN dashboard.
+1. Create a distinct knowledge project for a teacher/use case.
+2. Upload and organize PDFs, shortcuts, formulas, methods and notes supported by the ingestion pipeline.
+3. See OCR/indexing progress, readiness, failures and recovery actions.
+4. Register an independently built application, its repository/runtime references and trusted deployment environments.
+5. Generate a correct, non-secret ChatGPT integration handoff for the application's first-time code integration.
+6. Use ChatGPT and the user's separately authorized GitHub/Cloudflare connections to integrate, test and deploy the application.
+7. Verify that the deployed consumer calls private BRVIN v2 through its trusted environment identity.
+8. Grant one or more knowledge projects to an application and revoke them without another code deployment.
+9. Prove teacher/project isolation, cross-application grants, source readiness, no-result behavior, quotas and failure recovery.
+10. Inspect application health, project/source usage, audit events, grants, revocations and operating instructions from the BRVIN admin panel.
 
-The connected application must retrieve only its authorised project's content and generate an answer using its own model/provider. BRVIN must not expose its master administrator credentials to generated applications.
-
-**The finish line is a working autonomous engineering and knowledge platform—not a collection of merged code changes or a wizard that still depends on manual provider setup.**
-
+The connected application generates its final answers using its own model/provider. BRVIN supplies only authorized evidence and provenance. The finish line is a reliable, reusable knowledge service with low-friction application onboarding—not an autonomous software factory.
 
 
 ### Historical milestone log — 5 November 2026 — acceptance target correction (superseded by Project Factory direction)
