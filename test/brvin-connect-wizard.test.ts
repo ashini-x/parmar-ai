@@ -11,6 +11,7 @@ vi.mock("../src/analytics/db", () => ({
 import {
   brvinConnectStatus,
   BRVIN_CLOUDFLARE_REQUIRED_SCOPES,
+  BRVIN_CLOUDFLARE_WORKER_ADMIN_SCOPE,
   BRVIN_GITHUB_REQUIRED_PERMISSIONS,
   completeBrvinGitHubManifest,
   completeBrvinCloudflareOAuth,
@@ -260,6 +261,11 @@ describe("BRVIN Connect Application wizard", () => {
     expect(requestedScopes).toContain("account-api-tokens.write");
     expect(requestedScopes).not.toContain("account_api_tokens:create");
     expect(BRVIN_CLOUDFLARE_REQUIRED_SCOPES).not.toContain("account_api_tokens:create");
+    expect(requestedScopes).not.toContain("ai-search.metadata_read");
+    expect(requestedScopes).not.toContain(BRVIN_CLOUDFLARE_WORKER_ADMIN_SCOPE);
+    expect(requestedScopes).not.toContain("workers-scripts.read");
+    expect(requestedScopes).not.toContain("workers-scripts.write");
+    expect(requestedScopes).toContain("workers-scripts.edit");
     expect(requestedScopes).toContain("offline_access");
     const state = authorization.searchParams.get("state")!;
 
