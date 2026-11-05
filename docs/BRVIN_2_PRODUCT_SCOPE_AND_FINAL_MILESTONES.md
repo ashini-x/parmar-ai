@@ -360,7 +360,7 @@ The live production environment displayed **Connected** after one authenticated 
 - Empty, unready, inactive and revoked scopes return no passages or fail closed.
 - If one application serves several teachers, its own authenticated user-to-project policy is tested; BRVIN app-wide grants are not misrepresented as per-user grants.
 
-**Implementation update — 6 November 2026 (in progress):** Working on branch `brvin/m10-teacher-isolation-acceptance`. The existing v2 authorization algorithm already checks an active app-project grant before quota reservation/search and resolves only ready direct-book/collection sources. This increment adds:
+**Implementation update — 6 November 2026 (in progress):** [PR #99](https://github.com/ashini-x/parmar-ai/pull/99) is open from branch `brvin/m10-teacher-isolation-acceptance`; validation is in progress. The existing v2 authorization algorithm already checks an active app-project grant before quota reservation/search and resolves only ready direct-book/collection sources. This increment adds:
 - Project detail controls to grant an active application and revoke each active application grant, with grant history retained in the view.
 - Application-card controls to grant another active knowledge project and retain the existing revoke path.
 - Clear disclosure that app-project grants are application-wide. Any app serving several teachers must perform authenticated user-to-project authorization on its own server; this BRVIN admin control does not provide per-user permissions.
