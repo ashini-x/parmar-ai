@@ -162,7 +162,7 @@ export async function fatmanUploadStatus(env: Env, id?: string | null, includeLi
 
 /**
  * Read-only production diagnostic for the reusable BRVIN upload path.
- * Does not create, overwrite, or delete any GCS objects.
+ * Does not create, overwrite, delete, or update any GCS objects or bucket rules.
  */
 export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
   const checks: Record<string, unknown> = {
@@ -179,15 +179,49 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
 
     stage = "gcs_bucket_metadata";
     const metadataResponse = await fetch(
-      GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) + "?fields=name,location,storageClass,projectNumber",
+      GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) + "?fields=name,location,storageClass,projectNumber,lifecycle",
       { headers: { authorization: "Bearer " + token } },
     );
     const metadataText = await metadataResponse.text();
-    let metadata: Record<string, unknown> = {};
-    try { metadata = JSON.parse(metadataText) as Record<string, unknown>; } catch { /* report HTTP status only */ }
+    let metadata: {
+      name?: string;
+      location?: string;
+      storageClass?: string;
+      projectNumber?: string;
+      lifecycle?: { rule?: Array<{ action?: { type?: string }; condition?: { age?: number; matchesPrefix?: string[] } }> };
+      error?: { message?: string };
+    } = {};
+    try { metadata = JSON.parse(metadataText) as typeof metadata; } catch { /* report HTTP status only */ }
     checks.bucket = metadataResponse.ok
       ? { ok: true, name: metadata.name ?? bucketName, location: metadata.location ?? null, storageClass: metadata.storageClass ?? null, projectNumber: metadata.projectNumber ?? null }
-      : { ok: false, status: metadataResponse.status, error: String((metadata.error as Record<string, unknown> | undefined)?.message ?? metadataText.slice(0, 240)) };
+      : { ok: false, status: metadataResponse.status, error: metadata.error?.message ?? metadataText.slice(0, 240) };
+
+    const lifecycleRules = metadata.lifecycle?.rule ?? [];
+    const unsafeDeleteRules = lifecycleRules.filter((rule) => {
+      if (rule.action?.type !== "Delete") return false;
+      const prefixes = rule.condition?.matchesPrefix ?? [];
+      return !prefixes.length || prefixes.some((value) => isUnsafeFatmanVisionLifecycleDeletePrefix(String(value)));
+    });
+    const matchingLifecycleRule = lifecycleRules.find((rule) =>
+      rule.action?.type === "Delete" &&
+      (rule.condition?.matchesPrefix ?? []).includes(BRVIN_TEMP_VISION_OCR_ROOT) &&
+      Number(rule.condition?.age ?? Number.MAX_SAFE_INTEGER) <= BRVIN_TEMP_VISION_OCR_RETENTION_DAYS
+    );
+    const lifecycleRuleStatus = !metadataResponse.ok
+      ? "not_verified"
+      : unsafeDeleteRules.length
+        ? "blocked_unsafe_delete_rule"
+        : matchingLifecycleRule
+          ? "installed"
+          : "missing";
+    const configuredLifecycleAgeDays = matchingLifecycleRule?.condition?.age ?? null;
+    checks.lifecycleRule = {
+      status: lifecycleRuleStatus,
+      prefix: BRVIN_TEMP_VISION_OCR_ROOT,
+      requiredMaxAgeDays: BRVIN_TEMP_VISION_OCR_RETENTION_DAYS,
+      configuredAgeDays: configuredLifecycleAgeDays,
+      unsafeDeleteRuleCount: unsafeDeleteRules.length,
+    };
 
     stage = "gcs_object_permissions";
     const permissionUrl = new URL(
@@ -230,23 +264,36 @@ export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
         }
       : { ok: false, status: permissionResponse.status, error: permissionData.error?.message ?? permissionText.slice(0, 240) };
 
+    const lifecyclePermissionsReady = metadataResponse.ok && permissionResponse.ok && lifecycleRuleManagementGranted;
+    const lifecycleRuleInstalled = lifecycleRuleStatus === "installed";
     return json({
-      // Core PDF upload/OCR object access is distinct from the optional
-      // bucket-level lifecycle configuration safety net.
       ok: coreObjectPermissionsPassed,
       stage: "complete",
       bucketName,
       serviceAccountEmail: env.GCP_CLIENT_EMAIL?.trim() || null,
       checks,
       uploadStartReady: coreObjectPermissionsPassed,
-      retentionLifecycleReady: metadataResponse.ok && lifecycleRuleManagementGranted,
+      retentionLifecycleReady: lifecyclePermissionsReady && lifecycleRuleInstalled,
+      retentionLifecyclePermissionsReady: lifecyclePermissionsReady,
+      retentionLifecycleRule: {
+        status: lifecycleRuleStatus,
+        prefix: BRVIN_TEMP_VISION_OCR_ROOT,
+        requiredMaxAgeDays: BRVIN_TEMP_VISION_OCR_RETENTION_DAYS,
+        configuredAgeDays: configuredLifecycleAgeDays,
+      },
       retentionLifecycleMissingPermissions: [
         ...(!lifecycleRuleGetGranted ? ["storage.buckets.get"] : []),
         ...(!lifecycleRuleUpdateGranted ? ["storage.buckets.update"] : []),
       ],
-      note: metadataResponse.ok
-        ? "Core object permissions and bucket metadata were inspected. Lifecycle management is reported separately."
-        : "Bucket metadata/lifecycle inspection is separate from core object access. A missing bucket-level permission must not be confused with PDF object upload/read/delete permissions.",
+      note: !metadataResponse.ok
+        ? "Bucket metadata and lifecycle rules could not be read. Permission availability alone is not proof that the 30-day rule is installed."
+        : lifecycleRuleStatus === "blocked_unsafe_delete_rule"
+          ? "An existing Delete rule may overlap source PDFs. BRVIN will not alter lifecycle rules until a Google Cloud administrator reviews it."
+          : lifecycleRuleStatus === "missing"
+            ? "The exact 30-day OCR-prefix lifecycle rule is not installed. The scheduled retention supervisor will attempt to add it safely."
+            : lifecycleRuleStatus === "not_verified"
+              ? "The lifecycle rule could not be verified."
+              : "The exact OCR-prefix lifecycle rule is installed. This diagnostic is read-only and does not modify bucket settings.",
     });
   } catch (error) {
     checks.failure = safeError(error);
