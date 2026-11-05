@@ -6,7 +6,7 @@
 **Product scope:** [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md)  
 **As-built reference:** [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md)  
 **Planning baseline:** `main`  
-**Status at 6 November 2026:** M0–M10 are complete; M4's fixed reference scaffold was retired and is not a product requirement. M6's teacher-focused admin workspace, M7's application/environment registry, M8's ChatGPT integration handoff and M9's live production connection verification are merged, deployed and accepted. M10 — teacher knowledge assignment and isolation acceptance — is complete and deployed. M11 — operations, usage and administrator handover — is the next active milestone.
+**Status at 6 November 2026:** M0–M10 are complete; M4's fixed reference scaffold was retired and is not a product requirement. M6's teacher-focused admin workspace, M7's application/environment registry, M8's ChatGPT integration handoff and M9's live production connection verification are merged, deployed and accepted. M10 — teacher knowledge assignment and isolation acceptance — is complete and deployed. M11 — operations, usage and administrator handover — is IN PROGRESS on `brvin/m11-operations-and-admin-handover`. The current production GCS lifecycle-policy permission issue requires a Google Cloud administrator action; it has not been changed by this work.
 
 > **Scope correction:** The user's confirmed goal is a multi-application, teacher-specific knowledge platform. ChatGPT remains the user's software engineer through its separately authorized GitHub and Cloudflare connections. The previously proposed autonomous BRVIN coding brain, repository factory, broad provider-admin credential vault and BRVIN-owned CI/CD are superseded and are not active BRVIN 2 requirements. See [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md).
 
@@ -247,7 +247,7 @@ The active final milestone sequence is **M6–M11**. The authoritative detailed 
 | 8 | ChatGPT integration handoff | COMPLETE — merged, deployed and production release accepted | Admin generates a versioned, dated, copyable non-secret prompt and structured manifest for each active application/environment. |
 | 9 | Live connection verification and activation | COMPLETE — live production proof accepted | Parmar AI Production completed the authenticated browser challenge/proof flow; D1 records `connected`, proof consumed, and one ready authorised source. |
 | 10 | Teacher knowledge assignment and isolation acceptance | COMPLETE — merged, deployed and automated acceptance passed | Application/project grant controls, direct/collection access shortcuts and two-application teacher isolation are deployed; cross-project, revoke, sharing, readiness and source-boundary tests pass. |
-| 11 | Operations, usage and administrator handover | NOT STARTED | Usage, failures, audit, operating guide and a real teacher-focused app acceptance run. |
+| 11 | Operations, usage and administrator handover | IN PROGRESS — implementation branch | Shared project quota visibility, live operations summaries/filters, read-only GCS diagnostics, safe OCR cleanup retry handling and an administrator runbook are being implemented. Production GCS lifecycle IAM remains an external administrator action. |
 
 M12, an authenticated gateway for applications outside the BRVIN Cloudflare account or outside Workers, is deferred and not required for M0–M11.
 
@@ -340,7 +340,7 @@ This table is the human-readable status. The evidence fields must be filled from
 | 8 — ChatGPT integration handoff | COMPLETE — merged and deployed | [PR #95](https://github.com/ashini-x/parmar-ai/pull/95), merge `81bc036ca1ffd2ae7d3ce6ed0170ee2e1e69d9fd` | PR Release Validation #711 passed typecheck, all unit/integration tests, Node/browser-script tests and both Worker bundle checks. Main Release Validation #713 passed the initial feature deployment. The subsequent main release #715 also redeployed the unchanged M8 code and passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance; latest artifact `13434968943`. | `brvin-service` deployment `d7436bd2-d0b8-435b-9a6f-d224abaf9c77`, version `797ea8a6-6735-44c4-afad-2dd19bf2363c`; `parmar-ai` deployment `f7dac7cd-8215-4748-86b1-296eb4219c27`, version `5e248a66-1c1a-45df-a23a-fd7b8d941032`. No M8 D1 migration or provider-secret mutation. Environment remains Pending until M9 live verification. |
 | 9 — Live connection verification and activation | COMPLETE | [PR #98](https://github.com/ashini-x/parmar-ai/pull/98), merge `1a57f53965f30c3de89eb51570548f99eb893e4f` | Release Validation #728; Main Release Validation #729; authenticated production Verify Connection; D1 status `connected`, proof hash stored, completed timestamp present, ready=1/source_count=1 | Valid production proof accepted; no raw nonce/proof is persisted. M10 is next. |
 | 10 — Teacher knowledge assignment and isolation acceptance | COMPLETE | [PR #99](https://github.com/ashini-x/parmar-ai/pull/99), squash merge `0068d74d8b164cfc64fbc43c23d9449ae8745db5` | PR Release Validation #755 passed `npm run check`, unit tests, Node/browser-script tests and both Worker bundle dry-runs. Main Release Validation #756 deployed both Workers; root/health/private BRVIN/Fatman smoke and release acceptance passed. Automated fixtures cover separate app identities, private projects, sharing, revocation, direct/collection boundaries and readiness. | No production test apps/projects/grants or D1 migration. Read-only production D1 confirmed existing grants and M9 Connected record unchanged. App-project grants remain application-wide; consumer user-to-project policy is consumer-owned where needed. |
-| 11 — Operations, usage and administrator handover | NOT STARTED | — | — | Usage, pipeline/connection failures, audit/revocation, recovery guidance and nontechnical admin manual. |
+| 11 — Operations, usage and administrator handover | IN PROGRESS | `brvin/m11-operations-and-admin-handover` — PR not yet opened | Add shared project quota/remaining displays, connection/failure/retention summaries, event filters, read-only GCS permission diagnostics, manual OCR cleanup retry affordance and `docs/BRVIN_ADMIN_RUNBOOK.md`; tests pending. | No production D1 writes, GCP IAM changes, D1 migration or synthetic tenant records. Production bucket lifecycle requires GCP administrator to grant bucket-scoped permissions; see runbook. |
 | 12 — Cross-account / non-Cloudflare gateway | DEFERRED | — | — | Optional later expansion; same-account private Service Binding remains the initial supported connection. |
 
 ### Required milestone log entry format
@@ -895,6 +895,29 @@ The D1 query was read-only (`rows_written = 0`). The raw nonce and proof are not
 
 **Next active milestone:** M10 — teacher knowledge assignment and isolation acceptance. Test separate teacher projects and applications, explicit grants, revocation, intentional sharing, collection grants, and the consumer application's own user-to-project authorization policy. M9 must not be reopened unless new production evidence contradicts this accepted record.
 
+
+
+### Milestone log — 6 November 2026 — M11 operations and administrator handover (implementation in progress)
+
+**Status:** IN PROGRESS on `brvin/m11-operations-and-admin-handover`. PR validation, paired production release and final administrator handover are pending.
+
+**Current production finding (read-only):** the Vision OCR retention cleanup for a ready 3/3-page imported source failed because the ingestion service account could not inspect GCS bucket policy (`storage.buckets.get`) on bucket `parmar-fatman-ocr-90db7be4`. The 30-day lifecycle safety-net also requires `storage.buckets.get` and `storage.buckets.update`. The original PDF, indexed page text and READY state were retained. No GCP IAM policy has been changed by this work.
+
+**Implementation in this increment:**
+- Centralize the same 800-query/month bounded BRVIN project limit for enforcement and display.
+- Show project-shared monthly use/remaining allowance in project and application access views; do not invent per-app usage attribution where multiple apps share a project counter.
+- Add Operations summary cards for project usage, failed environment connections, operation failures and outstanding OCR cleanup; filter the activity stream by attention, retention, connections, ingestion and governance.
+- Add a protected, read-only GCS storage diagnostic to the Operations view; separate core object permissions from optional bucket lifecycle configuration permissions.
+- Pause unattended OCR cleanup retries after a failure, disclose the paused/manual-retry state, and allow an administrator to retry cleanup after IAM is corrected. Keep the source PDF, index and READY/archived state unaffected.
+- Add an administrator runbook at `docs/BRVIN_ADMIN_RUNBOOK.md`.
+
+**Changed paths so far:** `src/brvin/service-core.ts`, `src/brvin/admin.ts`, `src/fatman/import.ts`, `src/fatman/workflow.ts`, `src/fatman/recovery-policy.ts`, `test/brvin-v2-service.test.ts`, `test/brvin.test.ts`, `test/fatman-import-diagnostics.test.ts`, `test/fatman-recovery-policy.test.ts`, and `docs/BRVIN_ADMIN_RUNBOOK.md`.
+
+**Safety and data boundary:** no D1 migration or production database row changes; no production teacher/application/project/grant creation; no Cloudflare secret or binding changes; no GCP IAM change. The storage diagnostic is read-only. OCR-only cleanup remains separate from full book deletion.
+
+**External administrator action required:** grant the ingestion service account the bucket-scoped object permissions and bucket lifecycle permissions listed in `docs/BRVIN_ADMIN_RUNBOOK.md`; use the read-only diagnostic to verify. Do not grant broad Storage Admin or Project Owner merely to silence the warning.
+
+**Validation:** pending. The PR must pass TypeScript, unit/Node tests and both Worker bundle dry-runs. Production release must pass root, health, private BRVIN binding and Fatman retrieval smoke checks. M11 cannot be marked complete until the admin runbook is reviewed and the GCS retention remediation has a verified outcome or is explicitly recorded as a blocked external action.
 
 ### Milestone log — 6 November 2026 — M10 teacher knowledge assignment and isolation (complete)
 
