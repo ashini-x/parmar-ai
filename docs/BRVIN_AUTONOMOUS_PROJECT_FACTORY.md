@@ -1,7 +1,5 @@
 # BRVIN Autonomous Software Project Factory — Superseded Historical Proposal
 
-<badge-placeholder/>
-
 > **SUPERSEDED — DO NOT IMPLEMENT AS THE ACTIVE BRVIN 2 PRODUCT.**
 >
 > On 5 November 2026, the user clarified BRVIN's intended product: a shared, application-aware knowledge platform for teacher-specific digital brains, with an administrator experience for registering independent applications, handing off a one-time integration task to ChatGPT, verifying the private connection, and assigning/revoking knowledge projects. ChatGPT remains the user's application engineer through its separately authorized GitHub and Cloudflare connections.
