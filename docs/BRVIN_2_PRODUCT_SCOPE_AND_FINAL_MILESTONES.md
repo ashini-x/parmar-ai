@@ -287,7 +287,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 | M8 | ChatGPT integration handoff | COMPLETE — merged, deployed and production release accepted | PR #95 merged; PR Release Validation #711 and Main Release Validation #713 passed. The admin generates a versioned, dated, copyable non-secret prompt and structured manifest per active application/environment. |
 | M9 | Live connection verification and activation | COMPLETE — production browser proof accepted | PR #98 merged and deployed; Release Validation #728 and Main Release Validation #729 passed; the authenticated Parmar AI Production check showed Connected and D1 confirmed one-time proof consumption with one ready authorised source. |
 | M10 | Teacher knowledge assignment and isolation acceptance | COMPLETE — merged, deployed and automated acceptance passed | PR #99 adds application/project grant and revoke controls, direct/collection source-access shortcuts, and two-application isolation tests. PR Release Validation #755 and Main Release Validation #756 passed; both Workers deployed and live production smoke passed. |
-| M11 | Operations, usage and administrator handover | NOT STARTED | Live project/app usage, pipeline/connection failures, audit/revocation, recovery guidance and nontechnical admin manual. |
+| M11 | Operations, usage and administrator handover | IN PROGRESS — implementation branch | Shared project quota display, live operations filters/summaries, read-only GCS lifecycle diagnostic, safe OCR cleanup retry state and administrator runbook in progress. Production bucket IAM repair requires GCP administrator action. |
 
 ### M6 — Admin workspace aligned to teacher knowledge operations
 
@@ -385,6 +385,16 @@ No D1 migration or production teacher data was created or modified. Read-only D1
 - Admin can inspect source pipeline failures, connection failures, usage/quota, grants, revocations and activity.
 - The nontechnical manual explains create teacher brain, upload sources, register app, hand off to ChatGPT, verify connection, assign knowledge and revoke access.
 - No claim of end-to-end commercial readiness is made until the tests and operational evidence are recorded.
+
+
+**Implementation update — 6 November 2026 (in progress):** Work is on branch `brvin/m11-operations-and-admin-handover`. The branch adds:
+- A shared monthly project query-limit helper used by retrieval enforcement and admin displays; show usage per project, including apps sharing the same project counter.
+- Operations summary and event filters for attention, retention, connections, ingestion and governance.
+- A protected read-only GCS diagnostic that distinguishes core object permissions from lifecycle-policy permissions.
+- Failure-aware OCR-only cleanup status, paused unattended retries after a GCS failure, and manual retry after permissions are repaired. The original PDF, indexed pages and READY/archived state remain independent.
+- A detailed administrator runbook at [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md).
+
+The production audit identified missing `storage.buckets.get` on bucket `parmar-fatman-ocr-90db7be4` for service account `telegram-bot@project-90db7be4-619f-4ed7-89b.iam.gserviceaccount.com`; the lifecycle safety-net additionally needs `storage.buckets.update`. This is an external Google Cloud IAM action. No permissions have been changed by the M11 branch. No production D1 rows, grants, app/project records, secrets or bindings have been changed. PR validation and release evidence are pending.
 
 ### Deferred M12 — Cross-account / non-Cloudflare consumer gateway
 
