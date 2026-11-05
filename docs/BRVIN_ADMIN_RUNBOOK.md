@@ -147,9 +147,15 @@ The M11 lifecycle-verification release is now deployed (PR #101 / Main Release V
 
 The scheduled supervisor preserves unrelated bucket rules, refuses unsafe rules that overlap source-PDF paths, and adds only the exact OCR temporary-prefix rule. The read-only diagnostic itself never updates lifecycle configuration, creates or deletes objects, or changes bucket settings.
 
-**Production verification — 6 November 2026:** The user ran the protected read-only check after deployment and confirmed **Lifecycle configuration permissions: READY** and **30-day OCR lifecycle rule: INSTALLED (age 30 days)**. The live retention-rule acceptance check is complete. The remaining administrator handover walkthrough should review Operational summary, Live pipelines and Specialist activity; do not repeat or manually modify the lifecycle configuration.
+**Production verification — 6 November 2026:** The user ran the protected read-only check after deployment and confirmed **Lifecycle configuration permissions: READY** and **30-day OCR lifecycle rule: INSTALLED (age 30 days)**. The live retention-rule acceptance check is complete. Do not repeat or manually modify the lifecycle configuration.
 
-**Production verification — 6 November 2026:** After deployment, the user ran the protected read-only check and confirmed **Lifecycle configuration permissions: READY** and **30-day OCR lifecycle rule: INSTALLED (age 30 days)**. The live retention-rule acceptance check is complete. The remaining administrator handover walkthrough should still review Operational summary, Live pipelines and Specialist activity; do not repeat or manually modify the lifecycle configuration.
+**Authenticated Operations walkthrough — 6 November 2026:** The user reviewed Operational summary, Live pipelines and Specialist activity:
+- Operational summary: 33 project searches this month; 0 connection failures across active environments; 404 failed events during the last seven days; 0 OCR cleanup failures; retention note reported no attention required. The dashboard implementation confirms that “Failed events” is a seven-day count of activity rows whose status is `failed`; 404 is not an HTTP status code and does not by itself represent active/recoverable jobs.
+- Live pipelines: the panel reported no active processing or deletion jobs. No retry or recovery action was used.
+- Failures and warnings: the visible historical failures dated 5 November repeated the same `storage.buckets.get` denial for the ingestion service account on the private OCR bucket. The screenshots did not show a new failure type.
+- Storage and OCR retention: the latest visible request at 3:36:38 AM on 6 November was an OCR-output-only deletion request that explicitly retained the original PDF and indexed pages. The 3:36:44 AM event was marked **COMPLETED** and stated that the OCR output was removed from the private prefix while the original PDF and indexed search pages remained available. Event detail reported `objectVersionsFound=0` and `objectVersionsDeleted=0`, so this specific run found no object versions and does not support a claim of a positive physical-deletion count.
+
+The authenticated Operations walkthrough is complete. The remaining M11 gate is genuine teacher-focused application acceptance: connect an independent consumer app, verify retrieval from a real teacher project/source, revoke access and confirm denial.
 
 ### Safe cleanup procedure
 
