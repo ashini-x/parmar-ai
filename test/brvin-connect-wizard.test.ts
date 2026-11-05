@@ -257,7 +257,7 @@ describe("BRVIN Connect Application wizard", () => {
       "https://parmar.example/admin/brvin/connect/cloudflare/callback?code=one-time-code&state="+encodeURIComponent(state),
     ));
     expect(callback.status).toBe(400);
-    expect(await callback.text()).toContain("Cloudflare permissions incomplete");
+    expect(await callback.text()).toContain("Cloudflare administrator permissions incomplete");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(db.connections.get("cloudflare")?.status).toBe("configured");
   });
