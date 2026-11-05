@@ -1,13 +1,27 @@
-# BRVIN — Autonomous Technical Administrator and Software Project Factory
+# BRVIN Autonomous Software Project Factory — Superseded Historical Proposal
 
-**Document type:** Canonical product/architecture specification and implementation acceptance contract  
-**Decision date:** 5 November 2026  
-**Status:** APPROVED PRODUCT DIRECTION — implementation not yet complete  
-**Owning repository:** ashini-x/parmar-ai  
-**Companion continuity tracker:** [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md)  
-**As-built reference:** [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md)
+<badge-placeholder/>
 
-## 1. Executive decision
+> **SUPERSEDED — DO NOT IMPLEMENT AS THE ACTIVE BRVIN 2 PRODUCT.**
+>
+> On 5 November 2026, the user clarified BRVIN's intended product: a shared, application-aware knowledge platform for teacher-specific digital brains, with an administrator experience for registering independent applications, handing off a one-time integration task to ChatGPT, verifying the private connection, and assigning/revoking knowledge projects. ChatGPT remains the user's application engineer through its separately authorized GitHub and Cloudflare connections.
+>
+> The autonomous coding brain, repository factory, broad BRVIN-owned provider credential lifecycle, application code generation, and BRVIN-owned CI/CD described in this historical proposal are **not active BRVIN 2 requirements**. Retain this document as decision history only. Do not resume its milestones or use it as the target design.
+>
+> **Current sources of truth:**
+> - [BRVIN 2 Master Plan](BRVIN_2_MASTER_PLAN.md)
+> - [BRVIN 2 Product Scope and Final Milestones](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md)
+> - [BRVIN System Reference](BRVIN_SYSTEM_REFERENCE.md)
+> - [BRVIN 2 Architecture Decisions](BRVIN_2_ARCHITECTURE_DECISIONS.md)
+> - [BRVIN Private Retrieval RPC v2](BRVIN_2_RPC_V2_CONTRACT.md)
+>
+> This file is intentionally retained; the presence of historical text below does not authorize implementation.
+
+**Archive status:** Historical proposal, superseded 5 November 2026.
+
+## Historical proposal (not active requirements)
+
+## Historical proposal details (retained for context)
 
 BRVIN is to become the user's autonomous technical administrator and engineering brain across GitHub and Cloudflare.
 
