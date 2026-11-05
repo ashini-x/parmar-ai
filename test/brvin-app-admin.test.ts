@@ -450,7 +450,7 @@ describe("BRVIN application and project administration", () => {
     };
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
-    expect(body.revision).toBe("brvin-chatgpt-handoff/v1");
+    expect(body.revision).toBe("brvin-chatgpt-handoff/v2");
     expect(body.manifest.target.repository.url).toBe("https://github.com/ashini-x/math-bot");
     expect(body.manifest.target.repository.defaultBranch).toBe("main");
     expect(body.manifest.target.environment.id).toBe(environmentId);
