@@ -1235,6 +1235,35 @@ function renderCollections(list){
  $("collection").value=selectedCollectionId;
  $("collection-checks").innerHTML=list.filter(c=>c.status==="active").map(c=>'<label class="check"><input type="checkbox" value="'+esc(c.id)+'"'+(selectedCollectionIds.has(c.id)?" checked":"")+'> '+esc(c.name)+'</label>').join("")||'<span class="muted">Create a collection first.</span>';
 }
+function openProjectDetails(projectId){
+ const project=(model?.projects||[]).find(item=>item.id===projectId);if(!project)return;
+ const sources=(model?.books||[]).filter(book=>(book.projects||[]).some(link=>link.id===projectId));
+ const collections=(model?.collections||[]).filter(collection=>(collection.projects||[]).some(link=>link.id===projectId));
+ const applications=(project.applications||[]).filter(app=>app.status==="active");
+ const events=(model?.events||[]).filter(event=>event.projectId===projectId).slice(0,8);
+ $("modal-title").textContent=project.name;
+ $("modal-body").innerHTML=
+  '<div class="metrics" style="grid-template-columns:repeat(3,minmax(0,1fr))">'+
+   '<div class="metric"><span>Ready sources</span><strong>'+Number(project.readySourceCount||0)+' / '+Number(project.sourceCount||0)+'</strong></div>'+
+   '<div class="metric"><span>Applications</span><strong>'+Number(project.applicationCount||0)+'</strong></div>'+
+   '<div class="metric"><span>Queries this month</span><strong>'+Number(project.monthlyQueries||0).toLocaleString()+'</strong></div>'+
+  '</div>'+
+  '<p class="modal-subtitle">'+esc(project.ownerLabel||"Owner not assigned")+' · '+statusPill(project.status)+'</p>'+
+  '<p class="muted">'+esc(project.description||"No description")+'</p>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Knowledge sources</h2><p>Latest source records currently returned by the BRVIN admin registry.</p></div></div>'+
+   (sources.length?sources.map(book=>'<div class="pulse-row"><span><strong>'+esc(book.title)+'</strong><br><small>'+esc(book.collectionName)+' · '+book.indexedPages+'/'+book.pageCount+' pages</small></span>'+statusPill(book.status)+'</div>').join(""):'<div class="empty">No assigned sources are visible for this project.</div>')+
+  '</section>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Collections</h2><p>Collection grants add the ready sources in each collection.</p></div></div>'+
+   (collections.length?collections.map(collection=>'<div class="pulse-row"><span>'+esc(collection.name)+'</span><strong>'+Number(collection.bookCount||0)+' sources</strong></div>').join(""):'<div class="empty">No collections assigned.</div>')+
+  '</section>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Applications with access</h2><p>Only active application-project grants are listed.</p></div></div>'+
+   (applications.length?applications.map(app=>'<div class="pulse-row"><span>'+esc(app.name||app.slug)+'</span>'+statusPill(app.status)+'</div>').join(""):'<div class="empty">No applications have been granted access.</div>')+
+  '</section>'+
+  '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Recent activity</h2><p>Project-scoped governance and ingestion events.</p></div></div>'+
+   (events.length?events.map(event=>'<div class="pulse-row"><span>'+esc(event.message)+'</span><small>'+esc(time(event.createdAt))+'</small></div>').join(""):'<div class="empty">No project-scoped events in the current activity window.</div>')+
+  '</section>';
+ $("modal").classList.add("open");
+}
 function openProjectEditor(projectId){
  const project=(model?.projects||[]).find(item=>item.id===projectId);if(!project)return;
  $("modal-title").textContent="Knowledge project · "+project.name;
@@ -1285,17 +1314,18 @@ function renderProjects(list){
    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><strong>'+esc(p.name)+'</strong><div class="muted" style="font-size:10px;margin-top:4px">'+esc(p.ownerLabel||"Owner not assigned")+'</div></div>'+statusPill(p.status)+'</div>'+
    '<p>'+esc(p.description||"No description")+'</p>'+
    '<div class="pulse-row"><span>Knowledge sources ready</span><strong>'+ready+' / '+total+'</strong></div>'+
-   '<div class="pulse-row"><span>Collections</span><strong>'+Number(p.collectionBooks||0)+'</strong></div>'+
+   '<div class="pulse-row"><span>Books via collections</span><strong>'+Number(p.collectionBooks||0)+'</strong></div>'+
    '<div class="pulse-row"><span>Connected applications</span><strong>'+Number(p.applicationCount||0)+'</strong></div>'+
    '<div class="pulse-row"><span>Retrieval queries this month</span><strong>'+Number(p.monthlyQueries||0).toLocaleString()+'</strong></div>'+
    '<div style="margin-top:9px"><small>Apps with active permission: '+esc(apps||"None assigned")+'</small></div>'+
-   '<div class="job-actions"><button class="btn" data-project-edit="'+esc(p.id)+'" type="button">Edit details</button><button class="btn" data-project-access="'+esc(p.id)+'" type="button">Manage sources</button><button class="btn" data-project-status="'+esc(p.id)+'" data-status="'+nextStatus+'" type="button">'+action+'</button></div>'+
+   '<div class="job-actions"><button class="btn primary" data-project-details="'+esc(p.id)+'" type="button">View details</button><button class="btn" data-project-edit="'+esc(p.id)+'" type="button">Edit details</button><button class="btn" data-project-access="'+esc(p.id)+'" type="button">Manage collections</button><button class="btn" data-project-status="'+esc(p.id)+'" data-status="'+nextStatus+'" type="button">'+action+'</button></div>'+
   '</article>';
  }).join(""):'<div class="empty" style="grid-column:1/-1">No knowledge projects yet. Create a teacher workspace to start organizing source material.</div>';
  $("project-checks").innerHTML=list.filter(p=>p.status==="active").map(p=>'<label class="check"><input type="checkbox" value="'+esc(p.id)+'"'+(selectedProjectIds.has(p.id)?" checked":"")+'> '+esc(p.name)+'</label>').join("")||'<span class="muted">No active projects. Create one below.</span>';
  $("project-access").innerHTML=list.filter(p=>p.status==="active").map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+' · '+esc(p.ownerLabel||"No owner")+'</option>').join("");
  if(list.some(p=>p.id===previousProjectId&&p.status==="active"))$("project-access").value=previousProjectId;
  $("project-access").onchange=()=>{const p=list.find(item=>item.id===$("project-access").value);const allowed=new Set((model?.collections||[]).filter(col=>col.projects.some(link=>link.id===p?.id)).map(col=>col.id));$("collection-checks").querySelectorAll("input").forEach(input=>input.checked=allowed.has(input.value));};
+ $("projects").querySelectorAll("[data-project-details]").forEach(button=>button.addEventListener("click",()=>openProjectDetails(button.dataset.projectDetails)));
  $("projects").querySelectorAll("[data-project-edit]").forEach(button=>button.addEventListener("click",()=>openProjectEditor(button.dataset.projectEdit)));
  $("projects").querySelectorAll("[data-project-access]").forEach(button=>button.addEventListener("click",()=>{
   $("project-access").value=button.dataset.projectAccess;
