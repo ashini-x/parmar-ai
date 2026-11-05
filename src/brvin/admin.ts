@@ -1842,12 +1842,48 @@ $("close-upload").addEventListener("click",()=>$("upload-modal").classList.remov
 $("clear-brvin").addEventListener("click",clearAllBrvinBooks);$("upload").addEventListener("click",uploadBook);$("refresh").addEventListener("click",()=>refresh());$("logout").addEventListener("click",async()=>{await fetch("/admin/logout",{method:"POST",credentials:"same-origin"});location.assign("/admin/login");});
 $("create-project").addEventListener("click",async()=>{try{const name=$("project-name").value.trim();if(!name)throw new Error("Enter a knowledge project name.");await post("projects",{name,description:$("project-desc").value,ownerLabel:$("project-owner").value,legacyClient:false});$("project-name").value="";$("project-desc").value="";$("project-owner").value="";await refresh();}catch(e){alert(e.message);}});
 $("create-application").addEventListener("click",async()=>{
- try{const name=$("application-name").value.trim();if(!name)throw new Error("Enter an application name.");await post("applications",{name,description:$("application-desc").value,ownerLabel:$("application-owner").value});$("application-name").value="";$("application-desc").value="";$("application-owner").value="";await refresh();}
- catch(error){alert(error.message);}
+ const button=$("create-application");button.disabled=true;
+ try{
+  const name=$("application-name").value.trim();if(!name)throw new Error("Enter an application name.");
+  const keys=["production","staging","preview"];
+  const environments=keys.filter(key=>$("environment-"+key+"-enabled").checked).map(key=>({
+   environmentKey:key,
+   displayName:key.charAt(0).toUpperCase()+key.slice(1),
+   workerName:$("environment-"+key+"-worker").value.trim(),
+   workerUrl:$("environment-"+key+"-url").value.trim()
+  }));
+  if(!environments.length)throw new Error("Select at least one deployment environment.");
+  for(const item of environments){
+   if(Boolean(item.workerName)!==Boolean(item.workerUrl))throw new Error("For "+item.environmentKey+", enter both the Worker name and HTTPS URL, or leave both blank.");
+  }
+  await post("applications",{
+   name,description:$("application-desc").value,ownerLabel:$("application-owner").value,
+   repositoryUrl:$("application-repository").value,repositoryDefaultBranch:$("application-branch").value,
+   runtimeProvider:$("application-runtime").value,environments
+  });
+  $("application-name").value="";$("application-desc").value="";$("application-owner").value="";
+  $("application-repository").value="";$("application-branch").value="main";
+  $("application-runtime").value="cloudflare-workers";
+  for(const key of keys){
+   $("environment-"+key+"-enabled").checked=key==="production";
+   $("environment-"+key+"-worker").value="";$("environment-"+key+"-url").value="";
+  }
+  await refresh();
+ }catch(error){alert(error.message);}
+ finally{button.disabled=false;}
 });
 $("create-environment").addEventListener("click",async()=>{
- try{const applicationId=$("environment-application").value;if(!applicationId)throw new Error("Select an active application.");const environmentKey=$("environment-key").value.trim();if(!environmentKey)throw new Error("Enter an environment key.");await post("applications/environments",{applicationId,environmentKey,displayName:$("environment-name").value});$("environment-key").value="";$("environment-name").value="";await refresh();}
- catch(error){alert(error.message);}
+ const button=$("create-environment");button.disabled=true;
+ try{
+  const applicationId=$("environment-application").value;if(!applicationId)throw new Error("Select an active application.");
+  const environmentKey=$("environment-key").value.trim();if(!environmentKey)throw new Error("Enter an environment key.");
+  const workerName=$("environment-worker").value.trim(),workerUrl=$("environment-url").value.trim();
+  if(Boolean(workerName)!==Boolean(workerUrl))throw new Error("Enter both the Worker name and HTTPS URL, or leave both blank.");
+  await post("applications/environments",{applicationId,environmentKey,displayName:$("environment-name").value,workerName,workerUrl});
+  $("environment-key").value="";$("environment-name").value="";$("environment-worker").value="";$("environment-url").value="";
+  await refresh();
+ }catch(error){alert(error.message);}
+ finally{button.disabled=false;}
 });
 $("grant-project-button").addEventListener("click",async()=>{
  try{const applicationId=$("grant-application").value,projectId=$("grant-project").value;if(!applicationId||!projectId)throw new Error("Select an active application and project.");await post("applications/grants",{applicationId,projectId});await refresh();}
