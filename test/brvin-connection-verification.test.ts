@@ -64,23 +64,26 @@ class MemoryD1 {
       return { success: true, meta: { changes: 1 } };
     }
     if (sql.includes("SET status='connected'")) {
-      if (this.check?.id === values[1] && this.check.status === "proof_issued" && this.check.proof_hash === values[2]) {
-        this.check.status = "connected";
-        this.check.completed_at = values[0];
+      const check = this.check;
+      if (check && check.id === values[1] && check.status === "proof_issued" && check.proof_hash === values[2]) {
+        check.status = "connected";
+        check.completed_at = values[0];
         return { success: true, meta: { changes: 1 } };
       }
       return { success: true, meta: { changes: 0 } };
     }
     if (sql.includes("SET status='failed'")) {
-      if (this.check?.id === values[2]) {
-        this.check.status = "failed";
-        this.check.failure_code = values[0];
-        this.check.completed_at = values[1];
+      const check = this.check;
+      if (check && check.id === values[2]) {
+        check.status = "failed";
+        check.failure_code = values[0];
+        check.completed_at = values[1];
       }
       return { success: true, meta: { changes: 1 } };
     }
     if (sql.includes("SET status='expired'")) {
-      if (this.check?.id === values[1]) this.check.status = "expired";
+      const check = this.check;
+      if (check && check.id === values[1]) check.status = "expired";
       return { success: true, meta: { changes: 1 } };
     }
     return { success: true, meta: { changes: 1 } };
