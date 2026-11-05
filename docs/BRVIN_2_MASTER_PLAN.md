@@ -827,10 +827,10 @@ The BRVIN Cloudflare account ID is only a non-secret comparison reference. M7 do
 
 **Validation:** PR Release Validation [#711](https://github.com/ashini-x/parmar-ai/actions/runs/42067500863) passed `npm run check`, `npm test`, `npm run test:node`, private BRVIN Worker bundle validation and Parmar AI Worker bundle validation. The initial repository-URL regression test identified that query strings could be accepted; the URL parser was tightened and the final PR validation passed.
 
-**Production deployment:** Main Release Validation [#713](https://github.com/ashini-x/parmar-ai/actions/runs/42067800093) passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance. Acceptance artifact ID `13434543663` records root, worker health, BRVIN Service Binding and Fatman retrieval as passed. Rollback steps were skipped because acceptance passed.
+**Production deployment:** Main Release Validation [#713](https://github.com/ashini-x/parmar-ai/actions/runs/42067800093) passed the initial M8 feature rollout. The subsequent main release [#715](https://github.com/ashini-x/parmar-ai/actions/runs/42068966058) redeployed the unchanged M8 code after documentation closeout and again passed paired deployment, root/health/private BRVIN/Fatman smoke and release acceptance. Latest acceptance artifact ID `13434968943` records root, worker health, BRVIN Service Binding and Fatman retrieval as passed. Rollback steps were skipped because acceptance passed.
 
-- `brvin-service`: deployment `b778ed64-c168-4e17-9473-eec04ed67e00`, version `3737180d-9317-464f-8e12-816b266f1fc2`.
-- `parmar-ai`: deployment `fab3a262-b1c9-415d-9431-738c953d6451`, version `96a626c5-c11c-4e7b-9202-a040cd434da7`.
+- Latest `brvin-service`: deployment `d7436bd2-d0b8-435b-9a6f-d224abaf9c77`, version `797ea8a6-6735-44c4-afad-2dd19bf2363c`.
+- Latest `parmar-ai`: deployment `f7dac7cd-8215-4748-86b1-296eb4219c27`, version `5e248a66-1c1a-45df-a23a-fd7b8d941032`.
 
 **Data and preservation:** M8 adds no D1 schema migration and no application/project/grant test records. It does not alter Fatman ingestion, retrieval, usage accounting, existing app/environment identities, source grants or provider credentials. The existing application/environment state remains Pending until M9.
 
