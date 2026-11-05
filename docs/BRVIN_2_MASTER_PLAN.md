@@ -812,25 +812,25 @@ The active final milestones are M6–M11 as defined in [BRVIN_2_PRODUCT_SCOPE_AN
 **Scope:** Generate a deterministic, copyable, repository-specific integration prompt and structured manifest for each active application/environment. ChatGPT remains responsible for consumer code changes, CI and deployment using its separately authorized GitHub and Cloudflare connections.
 
 **Implementation:**
-- \`src/brvin/handoff.ts\` — deterministic manifest/prompt builder and protected read-only endpoint. It loads only allowlisted registry fields, verifies that the selected active environment belongs to the selected active application, and regenerates from current D1 metadata on each request.
-- \`src/index.ts\` — administrator-session-protected GET endpoint \`/admin/api/brvin/applications/handoff\`.
-- \`src/brvin/admin.ts\` — per-environment Generate ChatGPT handoff action and modal with visible revision/date, copyable prompt and structured JSON manifest.
-- \`test/brvin-handoff.test.ts\` — manifest/prompt contract, exact v2 identity, runtime gate, repository validation and secret-exclusion tests.
-- \`test/brvin-app-admin.test.ts\` — successful handoff generation and application/environment scoping tests.
-- \`test/brvin-admin-script.node.test.ts\` — browser script parsing and handoff route/UI contract checks.
+- `src/brvin/handoff.ts` — deterministic manifest/prompt builder and protected read-only endpoint. It loads only allowlisted registry fields, verifies that the selected active environment belongs to the selected active application, and regenerates from current D1 metadata on each request.
+- `src/index.ts` — administrator-session-protected GET endpoint `/admin/api/brvin/applications/handoff`.
+- `src/brvin/admin.ts` — per-environment Generate ChatGPT handoff action and modal with visible revision/date, copyable prompt and structured JSON manifest.
+- `test/brvin-handoff.test.ts` — manifest/prompt contract, exact v2 identity, runtime gate, repository validation and secret-exclusion tests.
+- `test/brvin-app-admin.test.ts` — successful handoff generation and application/environment scoping tests.
+- `test/brvin-admin-script.node.test.ts` — browser script parsing and handoff route/UI contract checks.
 
-**Trust and safety boundary:** The generated handoff names private service \`brvin-service\`, entrypoint \`BrvinRetrievalApi\`, binding \`BRVIN_SERVICE\`, and v2 methods \`listAuthorizedProjectsV2()\`, \`getProjectStatusV2({ projectId })\`, and \`retrieveProjectContextV2(input)\`. It uses \`applicationEnvironmentId\`, never legacy v1 \`clientId\`. It directs ChatGPT to vendor a reviewed, pinned copy of \`packages/brvin-connector\`, integrate server-side into the consumer's existing model/tool path, preserve source/page citations, and apply the security and test checklist. It contains no provider/master/deployment secrets, D1/Search credentials or legacy provider-vault material.
+**Trust and safety boundary:** The generated handoff names private service `brvin-service`, entrypoint `BrvinRetrievalApi`, binding `BRVIN_SERVICE`, and v2 methods `listAuthorizedProjectsV2()`, `getProjectStatusV2({ projectId })`, and `retrieveProjectContextV2(input)`. It uses `applicationEnvironmentId`, never legacy v1 `clientId`. It directs ChatGPT to vendor a reviewed, pinned copy of `packages/brvin-connector`, integrate server-side into the consumer's existing model/tool path, preserve source/page citations, and apply the security and test checklist. It contains no provider/master/deployment secrets, D1/Search credentials or legacy provider-vault material.
 
 The BRVIN Cloudflare account ID is only a non-secret comparison reference. M7 does not prove the target consumer is in the same Cloudflare account, so the handoff explicitly requires ChatGPT to verify the actual target account before deployment. A non-Cloudflare runtime is blocked rather than routed through an invented public gateway. The generator does not create repositories, Workers, secrets, bindings, grants or deployments, and does not claim a live connection.
 
-**PR:** [PR #95](https://github.com/ashini-x/parmar-ai/pull/95), merged to \`main\` as \`81bc036ca1ffd2ae7d3ce6ed0170ee2e1e69d9fd\`.
+**PR:** [PR #95](https://github.com/ashini-x/parmar-ai/pull/95), merged to `main` as `81bc036ca1ffd2ae7d3ce6ed0170ee2e1e69d9fd`.
 
-**Validation:** PR Release Validation [#711](https://github.com/ashini-x/parmar-ai/actions/runs/42067500863) passed \`npm run check\`, \`npm test\`, \`npm run test:node\`, private BRVIN Worker bundle validation and Parmar AI Worker bundle validation. The initial repository-URL regression test identified that query strings could be accepted; the URL parser was tightened and the final PR validation passed.
+**Validation:** PR Release Validation [#711](https://github.com/ashini-x/parmar-ai/actions/runs/42067500863) passed `npm run check`, `npm test`, `npm run test:node`, private BRVIN Worker bundle validation and Parmar AI Worker bundle validation. The initial repository-URL regression test identified that query strings could be accepted; the URL parser was tightened and the final PR validation passed.
 
-**Production deployment:** Main Release Validation [#713](https://github.com/ashini-x/parmar-ai/actions/runs/42067800093) passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance. Acceptance artifact ID \`13434543663\` records root, worker health, BRVIN Service Binding and Fatman retrieval as passed. Rollback steps were skipped because acceptance passed.
+**Production deployment:** Main Release Validation [#713](https://github.com/ashini-x/parmar-ai/actions/runs/42067800093) passed paired deployment, root/health/private BRVIN/Fatman smoke and production release acceptance. Acceptance artifact ID `13434543663` records root, worker health, BRVIN Service Binding and Fatman retrieval as passed. Rollback steps were skipped because acceptance passed.
 
-- \`brvin-service\`: deployment \`b778ed64-c168-4e17-9473-eec04ed67e00\`, version \`3737180d-9317-464f-8e12-816b266f1fc2\`.
-- \`parmar-ai\`: deployment \`fab3a262-b1c9-415d-9431-738c953d6451\`, version \`96a626c5-c11c-4e7b-9202-a040cd434da7\`.
+- `brvin-service`: deployment `b778ed64-c168-4e17-9473-eec04ed67e00`, version `3737180d-9317-464f-8e12-816b266f1fc2`.
+- `parmar-ai`: deployment `fab3a262-b1c9-415d-9431-738c953d6451`, version `96a626c5-c11c-4e7b-9202-a040cd434da7`.
 
 **Data and preservation:** M8 adds no D1 schema migration and no application/project/grant test records. It does not alter Fatman ingestion, retrieval, usage accounting, existing app/environment identities, source grants or provider credentials. The existing application/environment state remains Pending until M9.
 
