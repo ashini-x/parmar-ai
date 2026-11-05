@@ -2,7 +2,7 @@ import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloud
 import type { Env } from "../config/env";
 import { runFatmanReleaseQaForEnv } from "./release-qa-runner";
 import { ensureAnalyticsSchema, recordBrvinActivity, setFatmanBookState } from "../analytics/db";
-import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError } from "./recovery-policy";
+import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexError, shouldPauseAutomaticVisionCleanupRetry } from "./recovery-policy";
 import { buildFatmanBookVerificationPages, buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
 import { retrieveFatmanContext } from "./retrieval";
 import { getGoogleAccessToken } from "../auth/google";
@@ -321,7 +321,7 @@ export async function runBrvinVisionRetentionSupervisor(env: Env): Promise<{ sca
     // A failed GCS deletion is usually an IAM/retention-policy issue, not a
     // transient index issue. Stop unattended retries after the first failure;
     // the administrator can diagnose storage permissions and explicitly retry.
-    if (Number(failures?.count ?? 0) > 0) { paused += 1; continue; }
+    if (shouldPauseAutomaticVisionCleanupRetry(Number(failures?.count ?? 0))) { paused += 1; continue; }
     const result = await startBrvinVisionOutputCleanup(env, candidate.id, "scheduled_retention_supervisor");
     if (result.started) started += 1;
     else if (result.reason === "workflow_create_failed") deferred += 1;
