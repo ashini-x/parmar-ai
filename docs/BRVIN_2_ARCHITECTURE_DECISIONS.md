@@ -434,8 +434,8 @@ This ADR does not claim production acceptance or implementation. It freezes the 
 
 ## ADR-012 — One-time private proof for live application connection verification
 
-**Status:** Accepted and deployed. GitHub Release Validation #728 and paired Main Release Validation #729 passed; both Workers are live and root/health/private Service Binding/Fatman release acceptance passed. The remaining M9 acceptance is a real browser-driven challenge/proof exchange through the authenticated admin session. Cleanup subsequently freed 80 obsolete preview namespace slots; production namespaces were preserved.  
-**Date:** 5 November 2026.  
+**Status:** M9 COMPLETE — implementation, paired production deployment and authenticated live browser proof accepted on 6 November 2026. Release Validation #728 and Main Release Validation #729 passed; both Workers are live and root/health/private Service Binding/Fatman release acceptance passed. The production environment records `connected` with a consumed one-time proof and one ready authorised source.  
+**Date:** 6 November 2026 (live acceptance closeout; original decision accepted 5 November 2026).  
 **Scope:** M9 same-account Cloudflare Worker connection proof only.
 
 ### Context
@@ -465,9 +465,20 @@ Use an administrator-authorized, short-lived, single-use challenge with a proof 
 - The probe is not a retrieval endpoint. It never exposes passages, OCR, page images or project/source identifiers.
 - `brvin-service` remains private, with `workers_dev: false`, no public route and an HTTP 404 default handler.
 
+### Production acceptance — 6 November 2026
+
+The administrator completed the actual Verify Connection action in the authenticated BRVIN admin browser for Parmar AI → Production and reported **Connected**.
+
+The read-only production D1 record for environment `00000000-0000-4000-8000-000000000102` confirms `status=connected`, a non-null `proof_hash`, populated `completed_at`, `ready=1`, `authorized_source_count=1` and no failure code. The one-time proof was consumed at **6 November 2026, 00:12:12.665 IST**. The D1 query was read-only. Raw nonce/proof values are intentionally not documented; only hashes are persisted.
+
+The implementation is in [PR #98](https://github.com/ashini-x/parmar-ai/pull/98), merged as `1a57f53965f30c3de89eb51570548f99eb893e4f`. Release Validation [#728](https://github.com/ashini-x/parmar-ai/actions/runs/42079493490) and Main Release Validation [#729](https://github.com/ashini-x/parmar-ai/actions/runs/42079795434) passed. The paired production deployment and root/health/private-binding/Fatman retrieval acceptance passed. This completes the M9 live acceptance gate.
+
+Automated tests cover wrong-environment, inactive, expired, forged and replayed challenge/proof rejection. The manual production exercise tested the valid live connection path; it did not perform a separate live negative-identity attempt.
+
 ### Consequences and limitations
 
 - The admin browser must be able to reach the consumer Worker's saved HTTPS origin; the admin UI requires this non-secret metadata to be present.
 - A CORS preflight is required for cross-origin consumers. The probe response does not use credentialed CORS; the random challenge is the scoped one-time capability and the private service still validates identity.
 - This verifies the private Service Binding and its trusted environment identity, not the consumer's end-user login, model/tool wiring, or per-teacher user-to-project policy. Those remain M10/M11 acceptance items.
-- The first release must prove the flow against a real deployed consumer Worker before M9 is marked complete.
+- The live production challenge/proof exchange has now been accepted for Parmar AI Production. M9 is complete.
+- This verifies the registered environment's private Service Binding identity and the challenge/proof flow; it does not verify end-user authentication, consumer model/tool wiring or teacher-level user isolation. M10/M11 own those checks.
