@@ -3,11 +3,11 @@
 **ADR:** BRVIN2-001  
 **Status:** Accepted baseline decisions; product-scope ADR-011 accepted 5 November 2026  
 **Original date:** 4 November 2026  
-**Scope:** BRVIN 2 identity, private retrieval and application integration through M0–M11  
+**Scope:** Current BRVIN application identity, private retrieval and same-account integration architecture  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Active product scope:** [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md)
 
-This ADR records the additive application/environment/project-grant model, private v2 retrieval contract, migration and compatibility decisions. Its original architecture decisions remain in force unless explicitly superseded by a later ADR. **ADR-011 records the current product boundary:** BRVIN manages teacher knowledge and application connections; ChatGPT remains responsible for consumer-application engineering through its separately authorized integrations. The autonomous Project Factory proposal is archived and is not an active requirement.
+This ADR records the additive application/environment/project-grant model, private v2 retrieval contract, migration and compatibility decisions. Its original architecture decisions remain in force unless explicitly superseded by a later ADR. **ADR-011 records the current product boundary:** BRVIN manages teacher knowledge and application connections; ChatGPT remains responsible for consumer-application engineering through its separately authorized integrations. The superseded Project Factory proposal has been removed from the active documentation tree and is not an active requirement. Git history is retained for historical traceability.
 
 ## 1. Decision summary
 
@@ -349,7 +349,7 @@ The user clarified that the primary value of BRVIN is to manage teacher-specific
 5. The consumer Worker in the same Cloudflare account adds the `BRVIN_SERVICE` binding to private `brvin-service`, entrypoint `BrvinRetrievalApi`, and trusted `props.applicationEnvironmentId`. The exact live-verification contract must be separately designed and tested.
 6. Creating another knowledge project or granting it to an already-connected application must not require another application code integration or deployment.
 7. The current app-project grant is application-wide. Multi-teacher consumer apps must enforce their own authenticated user-to-project mapping.
-8. The previous autonomous Project Factory proposal is retained as historical documentation but superseded. Do not implement its repository creation, coding agent, provider token vault or BRVIN-owned CI/CD milestones.
+8. The superseded autonomous Project Factory proposal was removed from the active documentation tree. Do not implement its repository creation, coding agent, provider token vault or BRVIN-owned CI/CD concepts.
 9. Same-account private Service Binding is the required initial scope. Cross-account/external gateway remains deferred.
 
 This decision does not change the already deployed D1 identity model, v2 RPC contract, private retrieval transport, shared ingestion pipeline, legacy Fatman compatibility or existing consumer runtime behavior.
@@ -404,7 +404,7 @@ This decision does not change the already deployed D1 identity model, v2 RPC con
 
 ## 10. Explicit non-decisions / deferred scope
 
-- No public or cross-account API gateway in Milestones 0–8.
+- No public or cross-account API gateway in the current delivery; cross-account access is deferred beyond M11.
 - No per-project D1 database or AI Search instance.
 - No per-app ingestion pipeline.
 - No universal arbitrary-repository code injection.
@@ -414,7 +414,7 @@ This decision does not change the already deployed D1 identity model, v2 RPC con
 - No rename of legacy Fatman importer modules merely for aesthetics.
 - No per-environment project permission model in the first delivery.
 
-## 11. Current evidence baseline used to make these decisions
+## 11. Historical decision baseline — 4 November 2026 (not current production state)
 
 Read-only evidence inspected on 4 November 2026:
 
@@ -429,7 +429,7 @@ Read-only evidence inspected on 4 November 2026:
 - The current private service code resolves a project from `brvin_service_clients` and does not yet resolve application/environment/project grants.
 - AskMoina's Wrangler config uses its own `askmoina-prod` and `askmoina-preview` D1 databases and does not yet contain `BRVIN_SERVICE`. Its production Worker is separate and must be integrated through the private binding only.
 
-This ADR does not claim production acceptance or implementation. It freezes the target design for review before Milestone 1 changes D1.
+The observations in this section are a frozen historical baseline from 4 November 2026 and must not be used as current production facts. Application/environment/project-grant v2 implementation and production acceptance are now complete; consult [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) for the current deployed state.
 
 
 ## ADR-012 — One-time private proof for live application connection verification
@@ -479,6 +479,6 @@ Automated tests cover wrong-environment, inactive, expired, forged and replayed 
 
 - The admin browser must be able to reach the consumer Worker's saved HTTPS origin; the admin UI requires this non-secret metadata to be present.
 - A CORS preflight is required for cross-origin consumers. The probe response does not use credentialed CORS; the random challenge is the scoped one-time capability and the private service still validates identity.
-- This verifies the private Service Binding and its trusted environment identity, not the consumer's end-user login, model/tool wiring, or per-teacher user-to-project policy. Those remain M10/M11 acceptance items.
+- This verifies the private Service Binding and its trusted environment identity, not the consumer's end-user login, model/tool wiring, or per-teacher user-to-project policy. Those are consumer-application responsibilities; the only remaining BRVIN M11 acceptance is a real teacher-focused consumer retrieval and post-revocation denial test.
 - The live production challenge/proof exchange has now been accepted for Parmar AI Production. M9 is complete.
 - This verifies the registered environment's private Service Binding identity and the challenge/proof flow; it does not verify end-user authentication, consumer model/tool wiring or teacher-level user isolation. M10/M11 own those checks.
