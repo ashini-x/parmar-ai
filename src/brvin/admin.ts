@@ -132,8 +132,14 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "FROM brvin_applications a ORDER BY a.name COLLATE NOCASE"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
-        "SELECT id,application_id,environment_key,display_name,worker_name,worker_url,status,created_at,updated_at,revoked_at,revoked_by " +
-        "FROM brvin_application_environments ORDER BY application_id,environment_key"
+        "SELECT e.id,e.application_id,e.environment_key,e.display_name,e.worker_name,e.worker_url,e.status,e.created_at,e.updated_at,e.revoked_at,e.revoked_by,a.status AS application_status,a.updated_at AS application_updated_at," +
+        "(SELECT c.status FROM brvin_connection_checks c WHERE c.environment_id=e.id ORDER BY c.created_at DESC LIMIT 1) AS last_check_status," +
+        "(SELECT c.ready FROM brvin_connection_checks c WHERE c.environment_id=e.id ORDER BY c.created_at DESC LIMIT 1) AS last_check_ready," +
+        "(SELECT c.authorized_source_count FROM brvin_connection_checks c WHERE c.environment_id=e.id ORDER BY c.created_at DESC LIMIT 1) AS last_check_source_count," +
+        "(SELECT c.failure_code FROM brvin_connection_checks c WHERE c.environment_id=e.id ORDER BY c.created_at DESC LIMIT 1) AS last_check_failure_code," +
+        "(SELECT c.created_at FROM brvin_connection_checks c WHERE c.environment_id=e.id ORDER BY c.created_at DESC LIMIT 1) AS last_check_created_at," +
+        "(SELECT c.completed_at FROM brvin_connection_checks c WHERE c.environment_id=e.id ORDER BY c.created_at DESC LIMIT 1) AS last_check_completed_at " +
+        "FROM brvin_application_environments e JOIN brvin_applications a ON a.id=e.application_id ORDER BY e.application_id,e.environment_key"
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
         "SELECT g.id,g.application_id,g.project_id,g.status,g.created_at,g.created_by,g.revoked_at,g.revoked_by," +
@@ -170,14 +176,30 @@ export async function brvinOverview(env: Env): Promise<Response> {
     for (const row of environments.results ?? []) {
       const applicationId = String(row.application_id);
       const list = environmentsByApplication.get(applicationId) ?? [];
+      const environmentStatus = String(row.status);
+      const applicationStatus = String(row.application_status ?? "");
+      const lastCheckStatus = String(row.last_check_status ?? "");
+      const lastCheckedAt = row.last_check_completed_at === null || row.last_check_completed_at === undefined
+        ? Number(row.last_check_created_at ?? 0) : Number(row.last_check_completed_at);
+      const checkIsCurrent = lastCheckedAt >= Math.max(Number(row.updated_at ?? 0), Number(row.application_updated_at ?? 0)) && lastCheckedAt > 0;
+      let connectionStatus = "pending";
+      if (environmentStatus === "revoked") connectionStatus = "revoked";
+      else if (environmentStatus === "disabled" || applicationStatus !== "active") connectionStatus = "disabled";
+      else if (checkIsCurrent && lastCheckStatus === "connected") {
+        connectionStatus = Number(row.last_check_ready ?? 0) === 1 ? "connected" : "connected_no_ready";
+      } else if (checkIsCurrent && lastCheckStatus === "failed") connectionStatus = "failed";
       list.push({
         id: String(row.id),
         environmentKey: String(row.environment_key),
         displayName: String(row.display_name ?? ""),
         workerName: String(row.worker_name ?? ""),
         workerUrl: String(row.worker_url ?? ""),
-        status: String(row.status),
-        connectionStatus: "pending",
+        status: environmentStatus,
+        connectionStatus,
+        connectionLastCheckedAt: lastCheckedAt || null,
+        connectionFailureCode: checkIsCurrent && lastCheckStatus === "failed" ? String(row.last_check_failure_code ?? "") : "",
+        connectionReady: checkIsCurrent && lastCheckStatus === "connected" ? Number(row.last_check_ready ?? 0) === 1 : null,
+        connectionAuthorizedSourceCount: checkIsCurrent && lastCheckStatus === "connected" ? Number(row.last_check_source_count ?? 0) : null,
         createdAt: Number(row.created_at),
         updatedAt: Number(row.updated_at),
         revokedAt: row.revoked_at === null || row.revoked_at === undefined ? null : Number(row.revoked_at),
@@ -1612,6 +1634,37 @@ function renderProjects(list){
   try{await post("projects/update",{projectId:project.id,status});await refresh();}catch(error){alert(error.message);}
  }));
 }
+async function verifyBrvinEnvironment(environmentId){
+ let challenge=null,finalized=false;
+ try{
+  challenge=await post("connections/challenge",{environmentId});
+  const response=await fetch(challenge.probeUrl,{
+   method:"POST",mode:"cors",credentials:"omit",
+   headers:{"content-type":"application/json"},
+   body:JSON.stringify({challengeId:challenge.challengeId,nonce:challenge.nonce})
+  });
+  let result={};try{result=await response.json();}catch{}
+  if(!response.ok||result.ok!==true||typeof result.proof!=="string"){
+   const error=new Error("The deployed Worker did not prove its private BRVIN identity.");
+   error.failureCode="PROBE_REJECTED";throw error;
+  }
+  const completed=await post("connections/complete",{challengeId:challenge.challengeId,proof:result.proof});
+  finalized=true;
+  await refresh();
+  alert(completed.status==="connected"
+   ?"Connection verified. The application has "+completed.authorizedSourceCount+" ready authorised source(s)."
+   :"Connection verified. The private BRVIN connection works, but this application currently has no ready authorised knowledge sources.");
+ }catch(error){
+  if(challenge?.challengeId&&!finalized){
+   await post("connections/complete",{
+    challengeId:challenge.challengeId,
+    failureCode:error?.failureCode==="PROBE_REJECTED"?"PROBE_REJECTED":"PROBE_UNREACHABLE"
+   }).catch(()=>undefined);
+  }
+  await refresh();
+  alert(error?.message||"The BRVIN connection could not be verified.");
+ }
+}
 function renderApplications(list){
  const active=list.filter(app=>app.status==="active");
  const previous={env:$("environment-application").value,grantApp:$("grant-application").value,grantProject:$("grant-project").value};
@@ -1633,16 +1686,26 @@ function renderApplications(list){
    const next=environment.status==="active"?"disabled":environment.status==="disabled"?"active":null;
    const action=next?'<button class="btn" data-environment-status="'+esc(environment.id)+'" data-status="'+next+'">'+(next==="disabled"?"Disable":"Activate")+'</button>':"";
    const revoke=environment.status!=="revoked"?'<button class="btn danger" data-environment-status="'+esc(environment.id)+'" data-status="revoked">Revoke identity</button>':"";
-   const connection=environment.status==="revoked"?"Revoked":environment.status==="disabled"?"Disabled":"Pending connection";
+   const connection=environment.connectionStatus==="revoked"?"Revoked":
+    environment.connectionStatus==="disabled"?"Disabled":
+    environment.connectionStatus==="connected"?"Connected":
+    environment.connectionStatus==="connected_no_ready"?"Connected · no ready knowledge":
+    environment.connectionStatus==="failed"?"Verification failed":"Pending connection";
+   const checkNote=environment.connectionLastCheckedAt
+    ?'<p><small>Last connection check: '+esc(time(environment.connectionLastCheckedAt))+
+     (environment.connectionFailureCode?' · '+esc(environment.connectionFailureCode):
+      (environment.connectionAuthorizedSourceCount!==null&&environment.connectionAuthorizedSourceCount!==undefined?' · '+esc(environment.connectionAuthorizedSourceCount)+' ready authorised source(s)':""))+'</small></p>'
+    :'';
    const worker=environment.workerName?esc(environment.workerName):"Worker not specified";
    const workerUrl=environment.workerUrl?'<a href="'+esc(environment.workerUrl)+'" target="_blank" rel="noopener noreferrer">'+esc(environment.workerUrl)+'</a>':"URL not specified";
    const edit=environment.status!=="revoked"?'<button class="btn" data-environment-edit="'+esc(environment.id)+'" data-application-id="'+esc(app.id)+'">Edit runtime details</button>':"";
    return '<div class="tile" style="margin-top:8px">'+
     '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>'+esc(environment.displayName||environment.environmentKey)+'</strong><span class="pill">'+connection+'</span></div>'+
     '<p><small>'+esc(environment.environmentKey)+' · '+esc(environment.id)+'</small></p>'+
+    checkNote+
     '<div class="pulse-row"><span>Worker / runtime</span><strong>'+worker+'</strong></div>'+
     '<div class="pulse-row"><span>Runtime URL</span><span>'+workerUrl+'</span></div>'+
-    '<div class="job-actions">'+edit+(app.status==="active"&&environment.status==="active"&&app.repositoryUrl?'<button class="btn primary" data-handoff="true" data-application-id="'+esc(app.id)+'" data-environment-id="'+esc(environment.id)+'" type="button">Generate ChatGPT handoff</button>':"")+action+revoke+'</div>'+
+    '<div class="job-actions">'+edit+(app.status==="active"&&environment.status==="active"&&app.repositoryUrl?'<button class="btn primary" data-handoff="true" data-application-id="'+esc(app.id)+'" data-environment-id="'+esc(environment.id)+'" type="button">Generate ChatGPT handoff</button>':"")+(app.status==="active"&&environment.status==="active"&&environment.workerUrl?'<button class="btn" data-environment-verify="'+esc(environment.id)+'" type="button">Verify connection</button>':"")+action+revoke+'</div>'+
    '</div>';
   }).join(""):'<div class="empty">No deployment environments registered.</div>';
   const grantHtml=app.projects.length?app.projects.map(grant=>'<div class="pulse-row"><span><strong>'+esc(grant.projectName)+'</strong><br><small>'+esc(grant.projectSlug)+' · '+esc(grant.projectStatus)+' · granted '+esc(time(grant.createdAt))+'</small></span><span>'+statusPill(grant.status)+(grant.status==="active"?' <button class="btn danger" data-grant-revoke="true" data-application-id="'+esc(app.id)+'" data-project-id="'+esc(grant.projectId)+'">Revoke access</button>':"")+'</span></div>').join(""):'<div class="empty">No knowledge projects granted. This application cannot retrieve BRVIN knowledge.</div>';
@@ -1659,6 +1722,7 @@ function renderApplications(list){
  }).join(""):'<div class="empty" style="grid-column:1/-1">No applications registered. Create the repository with ChatGPT or manually first, then register its existing URL here.</div>';
  $("applications-list").innerHTML=html;
  $("applications-list").querySelectorAll("[data-handoff]").forEach(button=>button.addEventListener("click",()=>openApplicationHandoff(button.dataset.applicationId,button.dataset.environmentId)));
+ $("applications-list").querySelectorAll("[data-environment-verify]").forEach(button=>button.addEventListener("click",()=>verifyBrvinEnvironment(button.dataset.environmentVerify)));
  $("applications-list").querySelectorAll("[data-application-edit]").forEach(button=>button.addEventListener("click",()=>openApplicationEditor(button.dataset.applicationEdit)));
  $("applications-list").querySelectorAll("[data-environment-edit]").forEach(button=>button.addEventListener("click",()=>openEnvironmentEditor(button.dataset.applicationId,button.dataset.environmentEdit)));
  $("applications-list").querySelectorAll("[data-application-status]").forEach(button=>button.addEventListener("click",async()=>{

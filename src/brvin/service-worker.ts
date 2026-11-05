@@ -6,6 +6,7 @@ import {
   listAuthorizedProjectsV2,
   getBrvinProjectStatusV2,
   retrieveBrvinForApplicationV2,
+  proveBrvinConnectionV2,
 } from "./service-core";
 
 export interface BrvinServiceProps {
@@ -38,6 +39,14 @@ export class BrvinRetrievalApi extends WorkerEntrypoint<BrvinServiceEnv, BrvinSe
 
   async retrieveProjectContextV2(input: unknown) {
     return retrieveBrvinForApplicationV2(
+      this.env,
+      this.ctx.props?.applicationEnvironmentId ?? "",
+      input,
+    );
+  }
+
+  async proveConnectionV2(input: unknown) {
+    return proveBrvinConnectionV2(
       this.env,
       this.ctx.props?.applicationEnvironmentId ?? "",
       input,

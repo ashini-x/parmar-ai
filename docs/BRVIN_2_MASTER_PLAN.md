@@ -257,7 +257,7 @@ M12, an authenticated gateway for applications outside the BRVIN Cloudflare acco
 
 **M8 — ChatGPT integration handoff.** Generate a deterministic, copyable repository-specific prompt/manifest containing the v2 binding identity, private service/entrypoint, connector methods, tests and security restrictions. ChatGPT implements source/config changes, runs CI and deploys via the user's own connections. Never include secrets.
 
-**M9 — Live connection verification and activation.** Define and implement a safe health/verification contract. A registered application must remain pending until its deployed Worker proves its trusted environment identity and private v2 Service Binding. Connection health and ready knowledge are separate states. Design the probe/callback authentication and replay controls before implementation.
+**M9 — Live connection verification and activation.** Implement the ADR-012 challenge/proof flow: BRVIN admin creates a two-minute challenge for one environment; the deployed consumer Worker calls `proveConnectionV2({ challengeId, nonce })` through its trusted private Service Binding; the service issues a single-use proof; and an administrator-session-protected finalizer verifies and consumes it. Connection health and ready knowledge are separate states. Keep the consumer probe content-free and do not place a BRVIN master secret in consumer applications.
 
 **M10 — Teacher knowledge assignment and isolation acceptance.** Provide easy grant/revoke from both application and knowledge-project views. Test teacher A/B isolation, app-wide grant semantics, multiple grants per app, deliberate project sharing, collections, readiness, suspension and revocation. A multi-teacher app must enforce its own authenticated user-to-project mapping.
 

@@ -4,7 +4,7 @@
 **ADR:** [BRVIN 2 Architecture Decision Record](BRVIN_2_ARCHITECTURE_DECISIONS.md)  
 **Existing contract:** [BRVIN Private Retrieval API v1](BRVIN_PRIVATE_RETRIEVAL_API.md)
 
-This document specifies the versioned private WorkerEntrypoint v2 contract now implemented in `src/brvin/service-worker.ts` and `src/brvin/service-core.ts`, and deployed to the private `brvin-service` Worker on 4 November 2026. V1 methods remain available and explicitly use only `ctx.props.clientId`; v2 methods use only `ctx.props.applicationEnvironmentId`. Normal Fatman/student retrieval remains on v1 until the later connector and consumer-integration milestones.
+This document specifies the versioned private WorkerEntrypoint v2 contract implemented in `src/brvin/service-worker.ts` and `src/brvin/service-core.ts`. Retrieval methods preserve v1 compatibility and use only `ctx.props.applicationEnvironmentId` for v2. M9 adds the probe-only `proveConnectionV2` method; it is not a retrieval method and is not part of the consumer retrieval connector.
 
 ## 1. Transport and identity
 
@@ -232,6 +232,40 @@ Exact-page retrieval remains part of `retrieveProjectContextV2` through `pageNum
 - A page-only request with no exact indexed item returns successful empty results.
 - Never search arbitrary keys or folders based on request input.
 
+### 3.5 `proveConnectionV2({ challengeId, nonce })`
+
+**Purpose:** issue a one-time proof that the deployed consumer Worker reached the private BRVIN service using the trusted environment identity passed through its Service Binding.
+
+Input:
+
+```ts
+{ challengeId: string; nonce: string }
+```
+
+Success data:
+
+```ts
+{
+  challengeId: string;
+  proof: string; // 32 random bytes encoded as 64 lowercase hex characters
+  ready: boolean;
+  authorizedSourceCount: number;
+}
+```
+
+Rules:
+
+- This method is only for the M9 connection-verification protocol. Do not expose it through the retrieval connector or a browser/mobile binding.
+- The caller identity is resolved only from `ctx.props.applicationEnvironmentId`; no environment or application ID is accepted in the input.
+- BRVIN admin creates a 2-minute challenge row with a cryptographically random nonce hash and one environment ID.
+- The method requires that the caller's trusted environment matches the challenge's environment, and that the application, environment and pending challenge are active/unexpired.
+- The nonce is SHA-256 checked. The method calculates current ready-authorised source counts through the same project discovery/status resolver.
+- A proof is minted with cryptographically secure randomness. Only its SHA-256 hash is persisted. A conditional D1 update changes `pending` to `proof_issued`; a second call cannot issue another proof.
+- The admin finalizer verifies the proof hash, verifies the environment is still active and consumes the challenge. Browser-supplied readiness/source-count fields are ignored.
+- No passage, OCR, source ID, source title, file URL, credential or provider token is returned.
+
+The consumer's public `POST /brvin/connection-probe` endpoint accepts only `challengeId` and `nonce`, invokes this private method, and returns only the proof. Its `OPTIONS` response supports browser CORS without cookies or credentials. The BRVIN retrieval Worker itself remains private and returns HTTP 404 to ordinary HTTP requests.
+
 ## 4. Failure contract
 
 All v2 failures use:
@@ -315,7 +349,8 @@ The placeholder above is illustrative only; the admin must read the generated ID
 
 ## 7. Versioning and compatibility
 
-- Add the exact v2 methods `listAuthorizedProjectsV2()`, `getProjectStatusV2(input)` and `retrieveProjectContextV2(input)` to the existing `BrvinRetrievalApi` entrypoint; do not create a public URL.
+- Add the exact retrieval v2 methods `listAuthorizedProjectsV2()`, `getProjectStatusV2(input)` and `retrieveProjectContextV2(input)` to the existing `BrvinRetrievalApi` entrypoint; do not create a public URL.
+- The probe-only `proveConnectionV2(input)` method may be called only from a consumer Worker using its trusted Service Binding. It does not return passages and is not exposed as HTTP on `brvin-service`.
 - Preserve v1 `getProjectStatus()` and `retrieveProjectContext(input)` semantics for the legacy `clientId` identity during migration.
 - Do not make v1 methods accept a project selector; v1 remains bound to one project.
 - V2 methods require a project selector and perform an application-project grant check on every call.

@@ -182,6 +182,12 @@ export type BrvinV2Result<T> = BrvinV2Success<T> | BrvinV2Failure;
 
 export interface BrvinServiceV2Binding {
   listAuthorizedProjectsV2(): Promise<BrvinV2Result<BrvinAuthorizedProject[]>>;
+  proveConnectionV2(input: { challengeId: string; nonce: string }): Promise<BrvinV2Result<{
+    challengeId: string;
+    proof: string;
+    ready: boolean;
+    authorizedSourceCount: number;
+  }>>;
   getProjectStatusV2(input: BrvinProjectSelector): Promise<BrvinV2Result<{
     projectId: string;
     ready: boolean;

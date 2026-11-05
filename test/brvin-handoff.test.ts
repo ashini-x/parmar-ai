@@ -30,7 +30,7 @@ const baseInput = {
 describe("BRVIN M8 ChatGPT handoff", () => {
   it("generates a repository- and environment-specific prompt plus structured manifest", () => {
     const result = buildBrvinHandoff(baseInput);
-    expect(result.manifest.revision).toBe("brvin-chatgpt-handoff/v1");
+    expect(result.manifest.revision).toBe("brvin-chatgpt-handoff/v2");
     expect(result.manifest.generatedAt).toBe("2026-11-05T18:30:00.000Z");
     expect(result.manifest.target.repository).toMatchObject({
       url: "https://github.com/ashini-x/ssc-math-bot",
@@ -51,13 +51,16 @@ describe("BRVIN M8 ChatGPT handoff", () => {
       "listAuthorizedProjectsV2()",
       "getProjectStatusV2({ projectId })",
       "retrieveProjectContextV2(input)",
+      "proveConnectionV2({ challengeId, nonce }) — connection probe only",
     ]);
     expect(result.prompt).toContain("https://github.com/ashini-x/ssc-math-bot");
     expect(result.prompt).toContain('"applicationEnvironmentId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"');
     expect(result.prompt).toContain("listAuthorizedProjectsV2()");
     expect(result.prompt).toContain("retrieveProjectContextV2(input)");
     expect(result.prompt).toContain("physical PDF page");
-    expect(result.prompt).toContain("BRVIN M9 live verification is a separate milestone");
+    expect(result.prompt).toContain("POST /brvin/connection-probe");
+    expect(result.prompt).toContain("proveConnectionV2({ challengeId, nonce })");
+    expect(result.prompt).toContain("one-time proof");
     expect(result.prompt).toContain("same Cloudflare account");
   });
 

@@ -44,6 +44,11 @@ import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload
 import { archiveBrvinBook, assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinApplication, createBrvinApplicationEnvironment, updateBrvinApplicationEnvironment, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, grantBrvinApplicationProject, revokeBrvinApplicationProject, setBrvinApplicationStatus, setBrvinEnvironmentStatus, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview, updateBrvinApplication, updateBrvinProject } from "./brvin/admin";
 import { getBrvinApplicationHandoff } from "./brvin/handoff";
 import {
+  completeBrvinConnectionVerification,
+  handleBrvinConnectionProbe,
+  startBrvinConnectionVerification,
+} from "./brvin/connection-verification";
+import {
   brvinConnectStatus,
   inspectBrvinProviderCapabilities,
   completeBrvinCloudflareOAuth,
@@ -2133,6 +2138,10 @@ const worker = {
     const url = new URL(request.url);
 
     try {
+      if (url.pathname === "/brvin/connection-probe") {
+        return withRequestId(await handleBrvinConnectionProbe(request, env), requestId);
+      }
+
       if (url.pathname === "/contact") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         return withRequestId(creatorContactPage(), requestId);
@@ -2250,6 +2259,8 @@ const worker = {
         if (adminApiPath === "/admin/api/fatman/upload/status" && request.method === "GET") return fatmanUploadStatus(env, url.searchParams.get("id"));
         if (request.method === "POST" && adminApiPath.startsWith("/admin/api/brvin/")) {
           if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          if (adminApiPath === "/admin/api/brvin/connections/challenge") return startBrvinConnectionVerification(env, request);
+          if (adminApiPath === "/admin/api/brvin/connections/complete") return completeBrvinConnectionVerification(env, request);
           if (adminApiPath === "/admin/api/brvin/connect/github/manifest") return startBrvinGitHubManifest(env, request);
           if (adminApiPath === "/admin/api/brvin/connect/github/installation") return selectBrvinGitHubInstallation(env, request);
           if (adminApiPath === "/admin/api/brvin/connect/cloudflare/configure") return configureBrvinCloudflareOAuth(env, request);

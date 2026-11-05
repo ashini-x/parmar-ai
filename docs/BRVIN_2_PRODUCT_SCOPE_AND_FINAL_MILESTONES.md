@@ -285,7 +285,7 @@ Milestone completion is based on shipped code and evidence, not documentation al
 | M6 | Admin workspace aligned to teacher knowledge operations | COMPLETE | Merged/deployed via PR #91; additive owner-label migration, app-neutral teacher knowledge project creation, project readiness/usage/detail UI, application metadata editing, and legacy provider controls collapsed. Main release #701 and production smoke passed. |
 | M7 | Application connection registry and wizard | COMPLETE | PR #93 merged and deployed; production release #705 and smoke accepted; repository/default-branch/runtime metadata, generated env identities, Worker metadata, Pending status and D1 migration verified. No provider resource provisioning. |
 | M8 | ChatGPT integration handoff | COMPLETE — merged, deployed and production release accepted | PR #95 merged; PR Release Validation #711 and Main Release Validation #713 passed. The admin generates a versioned, dated, copyable non-secret prompt and structured manifest per active application/environment. |
-| M9 | Live connection verification and activation | NOT STARTED | A deployed consumer environment proves its trusted v2 identity and private Service Binding path; UI distinguishes connection health from source readiness. |
+| M9 | Live connection verification and activation | IN PROGRESS — implementation branch | One-time environment-bound challenge/proof protocol, private proof RPC, consumer probe endpoint and admin finalization/status UI are implemented on a feature branch; CI, merge, deployment and live acceptance remain pending. |
 | M10 | Teacher knowledge assignment and isolation acceptance | NOT STARTED | Multiple teacher projects and independent apps; grant, revoke, multi-project, sharing and cross-project denial tests pass. |
 | M11 | Operations, usage and administrator handover | NOT STARTED | Live project/app usage, pipeline/connection failures, audit/revocation, recovery guidance and nontechnical admin manual. |
 
@@ -328,15 +328,19 @@ Milestone completion is based on shipped code and evidence, not documentation al
 
 ### M9 — Live connection verification and activation
 
-**Build:** Specify and implement a minimal, safe consumer-side connection health contract. The deployed consumer Worker must invoke v2 status through its own Service Binding using its trusted environment prop. BRVIN admin must obtain a verifiable success/failure result without retrieving or exposing source text. Design the callback/probe authentication and replay protection in an ADR before implementation.
+**Build:** Use the accepted challenge/proof protocol in ADR-012. BRVIN admin creates a short-lived challenge for one active environment. The deployed consumer Worker invokes `proveConnectionV2({ challengeId, nonce })` through its private Service Binding, using its trusted binding props. The service issues a single-use proof only for the matching active environment and stores only the proof hash. The authenticated admin UI relays the proof to the finalizer; no consumer master credential, shared secret, passage text or source content is involved. The browser probe may call only the target Worker's content-free `POST /brvin/connection-probe` endpoint.
 
 **Acceptance:**
 - A registered but undeployed app cannot be marked Connected.
 - A wrong/missing/revoked environment identity fails.
 - A valid same-account Service Binding passes the v2 identity/status check.
 - The result distinguishes connected/no-ready-source from connected/ready.
-- BRVIN can show last check time, environment and failure reason without secret disclosure.
+- BRVIN can show last check time, environment and safe failure code without secret disclosure.
+- Expired, wrong-environment, inactive, forged and replayed challenges fail closed.
+- The result distinguishes Connected from Connected — no ready knowledge.
 - The service remains private and no unfiltered retrieval path is introduced.
+
+**Implementation state (5 November 2026):** the protocol, D1 schema, v2 proof RPC, consumer probe route, admin challenge/finalizer, application-card status display and focused tests are on `brvin/m9-live-connection-verification`. This milestone remains IN PROGRESS until PR CI passes, the paired production release is accepted, and the deployed consumer returns a proof that the administrator finalizer verifies. A registered D1 row or mock result is not completion evidence.
 
 ### M10 — Teacher knowledge assignment and isolation acceptance
 
