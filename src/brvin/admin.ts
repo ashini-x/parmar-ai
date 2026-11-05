@@ -1495,6 +1495,7 @@ function openProjectDetails(projectId){
   '</section>'+
   '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Collections</h2><p>Collection grants include eligible ready sources added later.</p></div></div>'+
    (collections.length?collections.map(collection=>'<div class="pulse-row"><span>'+esc(collection.name)+'</span><strong>'+Number(collection.bookCount||0)+' sources</strong></div>').join(""):'<div class="empty">No collections assigned.</div>')+
+   (project.status==="active"?' <button class="btn" data-project-collection-access="'+esc(projectId)+'" type="button">Manage collection grants</button>':"")+
   '</section>'+
   '<section class="view-panel" style="margin-top:12px"><div class="panel-toolbar"><div><h2>Recent activity</h2><p>Project-scoped governance and ingestion events.</p></div></div>'+
    (events.length?events.map(event=>'<div class="pulse-row"><span>'+esc(event.message)+'</span><small>'+esc(time(event.createdAt))+'</small></div>').join(""):'<div class="empty">No project-scoped events in the current activity window.</div>')+
@@ -1509,6 +1510,14 @@ function openProjectDetails(projectId){
   catch(error){alert(error.message);grantButton.disabled=false;}
  });
  $("modal-body").querySelectorAll("[data-project-book-access]").forEach(button=>button.addEventListener("click",()=>editBookAccess(button.dataset.projectBookAccess)));
+ $("modal-body").querySelectorAll("[data-project-collection-access]").forEach(button=>button.addEventListener("click",()=>{
+  const selectedProjectId=button.dataset.projectCollectionAccess;
+  if(!selectedProjectId)return;
+  $("project-access").value=selectedProjectId;
+  $("project-access").dispatchEvent(new Event("change"));
+  $("modal").classList.remove("open");
+  activateView("governance");
+ }));
  $("modal-body").querySelectorAll("[data-project-grant-revoke]").forEach(button=>button.addEventListener("click",async()=>{
   if(!confirm("Revoke this application's access to "+project.name+"? Future retrieval requests will be denied."))return;
   button.disabled=true;
