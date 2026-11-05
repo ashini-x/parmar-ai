@@ -316,9 +316,12 @@ export async function runBrvinVisionRetentionSupervisor(env: Env): Promise<{ sca
   let paused = 0;
   for (const candidate of rows) {
     const failures = await env.DB.prepare(
-      "SELECT COUNT(*) AS count FROM brvin_activity_events WHERE book_id=? AND event_type='source.vision_ocr_delete_failed' AND created_at>=?"
-    ).bind(candidate.id, Date.now() - 60 * 60 * 1000).first<{ count: number }>();
-    if (Number(failures?.count ?? 0) >= 5) { paused += 1; continue; }
+      "SELECT COUNT(*) AS count FROM brvin_activity_events WHERE book_id=? AND event_type='source.vision_ocr_delete_failed'"
+    ).bind(candidate.id).first<{ count: number }>();
+    // A failed GCS deletion is usually an IAM/retention-policy issue, not a
+    // transient index issue. Stop unattended retries after the first failure;
+    // the administrator can diagnose storage permissions and explicitly retry.
+    if (Number(failures?.count ?? 0) > 0) { paused += 1; continue; }
     const result = await startBrvinVisionOutputCleanup(env, candidate.id, "scheduled_retention_supervisor");
     if (result.started) started += 1;
     else if (result.reason === "workflow_create_failed") deferred += 1;
