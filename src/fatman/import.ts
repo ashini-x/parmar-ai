@@ -162,7 +162,8 @@ export async function fatmanUploadStatus(env: Env, id?: string | null, includeLi
 
 /**
  * Read-only production diagnostic for the reusable BRVIN upload path.
- * Does not create, overwrite, delete, or update any GCS objects or bucket rules.
+ * Does not create, overwrite, or delete any GCS objects.
+ * It also does not update bucket rules or metadata.
  */
 export async function diagnoseFatmanGcsUpload(env: Env): Promise<Response> {
   const checks: Record<string, unknown> = {
