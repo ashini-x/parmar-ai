@@ -96,18 +96,19 @@ async function resolveCaller(env: Env, environmentId: unknown): Promise<Manageme
   if (!env.DB || typeof environmentId !== "string" || !UUID.test(environmentId)) return null;
   await ensureAnalyticsSchema(env);
   const row = await env.DB.prepare(
-    "SELECT e.id AS environment_id,e.status AS environment_status,a.id AS application_id," +
-    "a.slug AS application_slug,a.status AS application_status " +
+    "SELECT e.id AS environment_id,e.status AS environment_status,e.worker_name," +
+    "a.id AS application_id,a.slug AS application_slug,a.status AS application_status " +
     "FROM brvin_application_environments e JOIN brvin_applications a ON a.id=e.application_id " +
     "WHERE e.id=? LIMIT 1",
   ).bind(environmentId).first<{
     environment_id: string;
     environment_status: string;
+    worker_name: string;
     application_id: string;
     application_slug: string;
     application_status: string;
   }>();
-  if (!row || row.application_slug !== "brvin-teachers" ||
+  if (!row || row.application_slug !== "brvin-teachers" || row.worker_name !== "brvin-teachers" ||
       row.application_status !== "active" || row.environment_status !== "active") return null;
   return { applicationId: row.application_id, environmentId: row.environment_id };
 }
