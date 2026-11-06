@@ -484,3 +484,44 @@ Automated tests cover wrong-environment, inactive, expired, forged and replayed 
 - This verifies the private Service Binding and its trusted environment identity, not the consumer's end-user login, model/tool wiring, or per-teacher user-to-project policy. Those are consumer-application responsibilities; the only remaining BRVIN M11 acceptance is a real teacher-focused consumer retrieval and post-revocation denial test.
 - The live production challenge/proof exchange has now been accepted for Parmar AI Production. M9 is complete.
 - This verifies the registered environment's private Service Binding identity and the challenge/proof flow; it does not verify end-user authentication, consumer model/tool wiring or teacher-level user isolation. M10/M11 own those checks.
+
+## ADR-013 — Hierarchical human-readable references for BRVIN Teachers knowledge records
+
+**Decision date:** 6 November 2026  
+**Status:** Accepted architecture policy; implementation not started  
+**Scope:** New BRVIN Teachers tenants and their BRVIN knowledge projects, collections and sources. Existing BRVIN/Parmar AI records are excluded from automatic renumbering.
+
+### Context
+
+BRVIN Teachers needs operator-friendly references that make it easy to identify a teacher, that teacher's subject project, a collection within the project and a source within the collection. A single global counter for all child records would produce confusing, ever-growing sequences and would not show the ownership hierarchy.
+
+### Decision
+
+Adopt parent-scoped hierarchical references:
+
+- Tenant: `TCH-000001`.
+- Project: `TCH-000001-PRJ-001`; the project sequence restarts for each tenant.
+- Collection: `TCH-000001-PRJ-001-COL-001`; the collection sequence restarts for each originating project.
+- Source: `TCH-000001-PRJ-001-COL-001-SRC-001`; the source sequence restarts for each originating collection.
+
+Tenant numbers are globally allocated within the BRVIN Teachers application. Child sequences begin at `001` beneath their own parent. Numeric widths are minimums, not caps; values expand naturally after 999. Deleted/archived numbers are never reused. Sharing grants preserve the source record's original reference and do not allocate another code.
+
+Human-readable references are not system IDs. BRVIN's existing opaque project/collection/source IDs remain authoritative for database relations, grants and retrieval. The consumer's immutable tenant system ID remains authoritative for tenant relations. The human-readable codes are not credentials and do not change the frozen v2 RPC method or project selector.
+
+### Ownership and coordination
+
+- `brvin-teachers` creates tenant records and allocates tenant references in its own application D1.
+- BRVIN in `parmar-ai` owns and allocates references for project, collection and source records in the BRVIN registry.
+- BRVIN Admin receives the tenant reference as non-secret external owner metadata when provisioning the teacher's project.
+- Per-parent counters and reference uniqueness must be implemented atomically in the database belonging to each record owner.
+- Collection/source codes identify their originating registration hierarchy. Grants or additional sharing memberships do not change the canonical reference. Reorganisation must preserve the internal ID and original reference; any independently owned copy is a new record with a new reference.
+
+### Consequences
+
+1. The full hierarchy remains understandable even when every project has a collection numbered `001` and every collection has a source numbered `001`; the parent segments make the complete code unique.
+2. Reference allocation requires coordinated D1 schema/admin changes in both repositories. It must not be partially implemented in only the consumer or only BRVIN.
+3. No existing production records are automatically backfilled or renamed. The legacy Fatman project identifier and all existing project/source/grant/usage records remain unchanged.
+4. No change to the frozen BRVIN v2 retrieval contract is required: v2 continues to receive the actual opaque `projectId`, never the human-readable code.
+5. Until implementation is reviewed, migrated and deployed, operators continue using BRVIN-generated internal IDs and must not manually invent production reference codes.
+
+**Normative consumer policy:** [BRVIN Teachers Identifier Policy](https://github.com/ashini-x/brvin-teachers/blob/main/docs/IDENTIFIER_POLICY.md).
