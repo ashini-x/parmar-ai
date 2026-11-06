@@ -306,9 +306,12 @@ async function createTeacherProject(
     return { ok: true, project: { id, reference: projectReference, name, subject, description, slug } };
   } catch {
     const retry = await env.DB.prepare(
-      "SELECT id,project_ref,name,slug,description,subject FROM brvin_projects WHERE owner_application_id=? AND owner_tenant_ref=? AND management_request_id=? LIMIT 1",
-    ).bind(caller.applicationId, tenantReference, requestId).first<{ id: string; project_ref: string; name: string; slug: string; description: string; subject: string }>();
-    if (retry) return { ok: true, project: { id: retry.id, reference: retry.project_ref, name: retry.name, subject: retry.subject, slug: retry.slug, description: retry.description } };
+      "SELECT id,project_ref,name,slug,description,subject,management_request_hash FROM brvin_projects WHERE owner_application_id=? AND owner_tenant_ref=? AND management_request_id=? LIMIT 1",
+    ).bind(caller.applicationId, tenantReference, requestId).first<{ id: string; project_ref: string; name: string; slug: string; description: string; subject: string; management_request_hash: string | null }>();
+    if (retry) {
+      if (retry.management_request_hash !== requestHash) return failure("IDEMPOTENCY_CONFLICT", "This request ID was already used with different project details.");
+      return { ok: true, project: { id: retry.id, reference: retry.project_ref, name: retry.name, subject: retry.subject, slug: retry.slug, description: retry.description } };
+    }
     return failure("MANAGEMENT_WRITE_FAILED", "BRVIN could not create the teacher project. The request can be retried safely.", true);
   }
 }
@@ -393,9 +396,14 @@ async function createTeacherCollection(
     return { ok: true, collection: { id, reference: collectionReference, name, description, originProjectId: project.id } };
   } catch {
     const retry = await env.DB.prepare(
-      "SELECT id,collection_ref,name,description FROM brvin_collections WHERE owner_application_id=? AND owner_tenant_ref=? AND management_request_id=? LIMIT 1",
-    ).bind(caller.applicationId, tenantReference, requestId).first<{ id: string; collection_ref: string; name: string; description: string }>();
-    if (retry) return { ok: true, collection: { id: retry.id, reference: retry.collection_ref, name: retry.name, description: retry.description } };
+      "SELECT id,collection_ref,name,description,origin_project_id,management_request_hash FROM brvin_collections WHERE owner_application_id=? AND owner_tenant_ref=? AND management_request_id=? LIMIT 1",
+    ).bind(caller.applicationId, tenantReference, requestId).first<{ id: string; collection_ref: string; name: string; description: string; origin_project_id: string; management_request_hash: string | null }>();
+    if (retry) {
+      if (retry.management_request_hash !== requestHash || retry.origin_project_id !== project.id) {
+        return failure("IDEMPOTENCY_CONFLICT", "This request ID was already used with different collection details.");
+      }
+      return { ok: true, collection: { id: retry.id, reference: retry.collection_ref, name: retry.name, description: retry.description } };
+    }
     return failure("MANAGEMENT_WRITE_FAILED", "BRVIN could not create the teacher collection. The request can be retried safely.", true);
   }
 }
@@ -413,6 +421,9 @@ async function changeCollectionGrant(
   const project = await resolveOwnedProject(env, caller, input.tenantReference, input.projectId);
   const collection = await resolveOwnedCollection(env, caller, input.tenantReference, input.collectionId);
   if (!project || !collection) return failure("RESOURCE_NOT_FOUND", "The classroom or collection is unavailable.");
+  if (!grant && collection.originProjectId === project.id) {
+    return failure("ORIGIN_GRANT_REQUIRED", "A collection must remain granted to its originating classroom.");
+  }
   if (grant) {
     await env.DB.prepare(
       "INSERT OR IGNORE INTO brvin_project_collections(project_id,collection_id,created_at,created_by) VALUES(?,?,?,'brvin-teachers-management')",
@@ -498,7 +509,9 @@ async function startTeacherSourceUpload(
       sha256: input.sha256, size: input.size, pageCount: input.pageCount, costConfirmed: input.costConfirmed,
     }),
   });
-  const forwarded = await jsonResponse(await startBrvinBookUpload(env, uploadRequest));
+  const forwarded = await jsonResponse(await startBrvinBookUpload(env, uploadRequest, {
+    preserveExistingProjectGrants: true,
+  }));
   if (forwarded.status < 200 || forwarded.status >= 300 || forwarded.body.ok !== true ||
       typeof forwarded.body.importId !== "string") {
     return failure(

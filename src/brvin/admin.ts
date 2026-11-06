@@ -726,7 +726,11 @@ export async function brvinImportStatus(env: Env, importId: string | null): Prom
   } catch (error) { return json({ ok: false, error: friendlyError(error) }, 502); }
 }
 
-export async function startBrvinBookUpload(env: Env, request: Request): Promise<Response> {
+export async function startBrvinBookUpload(
+  env: Env,
+  request: Request,
+  options: { preserveExistingProjectGrants?: boolean } = {},
+): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
   let body: Record<string, unknown>;
   try { body = await request.json() as Record<string, unknown>; }
@@ -773,8 +777,10 @@ export async function startBrvinBookUpload(env: Env, request: Request): Promise<
     const now = Date.now();
     const statements = [
       env.DB.prepare("UPDATE brvin_books SET collection_id=?,updated_at=? WHERE id=?").bind(collectionId, now, payload.importId),
-      env.DB.prepare("DELETE FROM brvin_project_books WHERE book_id=?").bind(payload.importId),
     ];
+    if (!options.preserveExistingProjectGrants) {
+      statements.push(env.DB.prepare("DELETE FROM brvin_project_books WHERE book_id=?").bind(payload.importId));
+    }
     for (const projectId of projectIds) {
       statements.push(env.DB.prepare(
         "INSERT OR IGNORE INTO brvin_project_books (project_id,book_id,created_at,created_by) VALUES (?,?,?,'admin-dashboard')"
