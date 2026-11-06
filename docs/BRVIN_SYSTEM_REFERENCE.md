@@ -1,9 +1,9 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 6 November 2026 (paired Worker deployment #778; lifecycle permissions/rule live-verified; authenticated Operations walkthrough completed; genuine consumer retrieval/revocation acceptance remains open)  
+**Last verified against source and production infrastructure:** 6 November 2026 (paired Core release #42171109140 and BRVIN Teachers release #42171352464; lifecycle permissions/rule live-verified; consumer UI and management binding deployed; production application registration and retrieval/revocation acceptance remain open)  
 **Owning repository:** `ashini-x/parmar-ai`  
-**Related consumer repository checked:** `ashini-x/askmoina-voice`
+**Related consumer repository checked:** `ashini-x/brvin-teachers` (separate downstream app); `ashini-x/askmoina-voice` remains an optional consumer
 
 This is the canonical technical reference for BRVIN. It records what exists in code and production, where the important pieces live, how trust and knowledge access work, and which future integrations are not yet implemented. It is intended to prevent repeated repository and Cloudflare audits for ordinary design discussions.
 
@@ -23,7 +23,7 @@ BRVIN is a shared, project-scoped knowledge and retrieval layer. Multiple applic
 
 The current architecture deliberately separates **knowledge administration and ingestion** from **private application retrieval**:
 
-- The existing `parmar-ai` Worker owns the protected BRVIN admin workspace, upload gateway, Google Cloud upload/OCR orchestration, Cloudflare Workflow, D1 registration, access grants, and release verification.
+- The existing `parmar-ai` Worker owns the protected BRVIN admin workspace, upload gateway, Google Cloud upload/OCR orchestration, Cloudflare Workflow, D1 registration, access grants, release verification, and the separate named `BrvinTeachersManagementApi` WorkerEntrypoint used by BRVIN Teachers for administrative project/collection/source lifecycle operations.
 - A second Worker, `brvin-service`, is the private retrieval boundary. Consumer Workers call it with Cloudflare Service Binding RPC. Legacy v1 methods resolve `ctx.props.clientId` to a single project; v2 methods resolve `ctx.props.applicationEnvironmentId` to an application, then verify its active grant for the requested project. Both paths check D1 source grants, search only authorised folders, and validate returned page keys again.
 - The application that called BRVIN remains responsible for its own model, prompt, conversation state, tool/function-call handling, response formatting, and user delivery. BRVIN returns evidence; it does not generate the final answer.
 - The former text-only reference-client scaffold was removed from `ashini-x/askmoina-voice` by PR #386 (merged 5 November 2026); PR #385 was closed without merging. It had never been deployed to Cloudflare. Its D1 application/environment/project/grant were retired. The generic connector and private BRVIN retrieval boundary remain. The remaining M11 acceptance app is a genuine independent teacher-focused consumer, engineered and deployed by ChatGPT/user through the existing authorized workflows.
@@ -50,6 +50,21 @@ parmar-ai Worker
                                                Shared indexed pages
 
 
+PRIVATE TEACHER MANAGEMENT PLANE
+BRVIN Teachers Operator Console / server
+    |
+    | same-account Service Binding
+    | named export: BrvinTeachersManagementApi
+    | deployment-controlled applicationEnvironmentId
+    v
+parmar-ai Worker
+    |-- validate active brvin-teachers app/environment + Worker name
+    |-- create/update teacher-owned projects and collections
+    |-- manage same-teacher collection grants
+    |-- register and transfer source PDF chunks
+    +-- reuse existing GCS / Vision / Workflow ingestion
+
+
 PRIVATE RETRIEVAL PLANE
 Consumer Worker (currently parmar-ai / Fatman)
     |
@@ -74,13 +89,15 @@ The two planes share the existing D1 registry and AI Search namespace. They do n
 
 ## 1.1 Current production state — 6 November 2026
 
-- The paired Workers are deployed and accepted through Main Release Validation [#778](https://github.com/ashini-x/parmar-ai/actions/runs/42121049494). `brvin-service` is at 100% traffic on version `00ad4201-0380-4f4a-89eb-a40d32d1cd46` (deployment `b498be3f-3dc7-4bab-af95-0c9f8b1efe03`); `parmar-ai` is at 100% traffic on version `28ef219c-7c24-45de-bcad-56fd64d35a06` (deployment `63e2fb68-2091-45e8-ba1f-1c033e3d4118`).
+- The paired Core release [#42171109140](https://github.com/ashini-x/parmar-ai/actions/runs/42171109140) deployed successfully and passed root/health/private BRVIN/Fatman smoke acceptance. `brvin-service` is at 100% traffic on version `72760779-3e3a-4a53-ad15-23b2a621a444` (deployment `2d812a4f-569f-484b-983d-dfaedd8c016f`); `parmar-ai` is at 100% traffic on version `a6febaa0-7b2e-4387-878b-d4a63d16fb8f` (deployment `f1072878-ee8e-4bec-9872-965816358f03`).
 - The private `brvin-service` exposes `BrvinRetrievalApi` through same-account Service Binding. V2 resolves identity only from trusted `ctx.props.applicationEnvironmentId`; existing v1 `clientId` support remains for Fatman compatibility.
 - The production admin/registry is in the existing `parmar-ai` Worker and D1 database `parmar-ai-admin-prod`. The shared AI Search namespace and existing GCS bucket `parmar-fatman-ocr-90db7be4` remain in use.
 - The post-deployment read-only storage diagnostic was user-verified: lifecycle configuration permissions **READY** and the exact 30-day OCR lifecycle rule **INSTALLED**. The rule is limited to the dedicated temporary Vision OCR prefix; source PDF paths are protected.
 - The Rain Gardens 3-page acceptance source remains `READY`, 3/3 indexed, with the original PDF and indexed search pages retained. The latest visible OCR-only cleanup completion on 6 November stated that the OCR output was removed from the private prefix and the original PDF/index remained available. Its detail reported `objectVersionsFound=0` and `objectVersionsDeleted=0`; it is not evidence of a positive physical-deletion count.
 - The authenticated Operations walkthrough was completed on 6 November 2026. Operational summary showed 33 project searches this month, zero active-environment connection failures, 404 failed activity events in the last seven days, zero OCR cleanup failures and no attention required. The failed-events metric counts seven-day activity rows with status `failed`; it is not an HTTP 404 code or active recoverable-job count. Live pipelines reported no active processing/deletion jobs. The visible old failures repeated the 5 November `storage.buckets.get` permission denial.
-- M6–M10 are complete. M11's lifecycle/Operations/admin-handover gates are complete. The remaining M11 gate is a real teacher-focused consumer application test proving useful retrieval from an actual teacher project and denial after grant revocation. No synthetic production teacher, app or grant has been created.
+- The separate `ashini-x/brvin-teachers` Operator Console is deployed. The consumer main-release run [#42171352464](https://github.com/ashini-x/brvin-teachers/actions/runs/42171352464) passed its D1 migration, Worker deployment, public health and Access-protection smoke checks. Its `BRVIN_MANAGEMENT` Service Binding targets `parmar-ai` / `BrvinTeachersManagementApi`.
+- BRVIN Teachers is **not yet registered** as an active application/environment in the BRVIN registry. A read-only D1 check found no application row with slug `brvin-teachers`; its deployment-controlled binding config intentionally retains `BRVIN_TEACHERS_ENVIRONMENT_ID_REQUIRED`. The management entrypoint fails closed until the actual environment UUID is generated in BRVIN Admin and added to the consumer deployment config. No teacher, project, collection, source or grant has been seeded.
+- M6–M10 are complete. M11's lifecycle/Operations/admin-handover gates are complete. The remaining M11 gate is a real teacher-focused consumer application test proving useful retrieval from an actual teacher project and denial after grant revocation. The management capability is now available, but the consumer's separate v2 retrieval binding and environment registration still need activation.
 - AskMoina Voice's v2 binding/tool integration remains an optional consumer pilot; its camera/audio/session continuity is not a BRVIN milestone gate. The retired `brvin-test-client` scaffold must not be recreated.
 
 ## 2. Architecture decisions that must remain stable
@@ -188,14 +205,15 @@ The BRVIN schema is created and compatibility-managed by `ensureAnalyticsSchema(
 
 | Table | Meaning |
 |---|---|
-| `brvin_projects` | One logical consumer/application project. Stores UUID, display name, unique slug, description and active/inactive status. |
-| `brvin_collections` | Named reusable grouping of knowledge sources. |
-| `brvin_books` | One registered source. Includes title, filename, SHA-256, expected size, page count, processing status, indexed page count, collection, search prefix, source type and timestamps. |
+| `brvin_projects` | One logical consumer/application project. In addition to UUID/name/slug/description/status, BRVIN Teachers-managed records store owning application, external TCH tenant reference, subject, PRJ reference and idempotent management-request metadata. |
+| `brvin_collections` | Named reusable grouping of knowledge sources. BRVIN Teachers-managed collections record owning application/tenant, originating project, COL reference and idempotency metadata. |
+| `brvin_books` | One registered source. Includes title, filename, SHA-256, expected size, page count, processing status, indexed page count, collection, search prefix, source type and timestamps. BRVIN Teachers sources also store owning application/tenant, originating collection and SRC reference. |
 | `brvin_project_books` | Direct project-to-book grants. |
 | `brvin_project_collections` | Project-to-collection grants. A project can retrieve ready books in a granted collection. |
 | `brvin_service_clients` | Maps trusted Worker client IDs to projects. |
 | `brvin_project_search_usage` | Monthly query counter for non-Fatman projects, keyed by project and billing month. |
 | `brvin_activity_events` | Append-style audit/activity trail for ingestion, governance, Workflow and deletion phases. |
+| `brvin_reference_sequences` | Atomic parent-scoped PRJ/COL/SRC human-readable reference counters for BRVIN Teachers-managed records. |
 | `brvin_migrations` | Idempotent migration markers and compatibility state. |
 
 The legacy `fatman_search_usage` table remains in use for the Fatman project so the existing Fatman usage counter is preserved. Do not reset or delete it when changing BRVIN project permissions.
@@ -252,6 +270,8 @@ Removing a direct grant or collection grant changes the source set used by futur
 - `search_prefix`: authoritative folder prefix for this book's page items in AI Search.
 - `source_sha256` and `expected_size`: upload identity/fingerprint and expected file length.
 - `vision_output_deleted_at` and `vision_output_deletion_started_at`: state for optional OCR-output-only cleanup.
+- `owner_application_id` and `owner_tenant_ref`: non-secret BRVIN Teachers owner correlation; not a credential.
+- `origin_collection_id` and `source_ref`: the original collection identity and SRC reference for a teacher-managed source.
 
 The D1 `search_prefix` is the authoritative relationship between a granted source and its indexed pages. Do not let a consumer choose an arbitrary folder or AI Search filter.
 
@@ -542,7 +562,7 @@ BRVIN cannot authorize OpenAI's GitHub connector or guarantee that a newly creat
 
 AskMoina Voice remains an optional independent consumer and must not be used as a fixed BRVIN test-client host. Its current integration state must be read from the latest repo and production ledger before any work; historical 4 November audit statements are not current deployment evidence.
 
-The planned BRVIN Teachers platform (`ashini-x/brvin-teachers`) is a separate downstream consumer repository, not part of the BRVIN implementation and not yet created or deployed. It may provide the genuine teacher-focused consumer for the remaining M11 acceptance, but only if a real teacher, approved BRVIN project/source, successful useful retrieval and post-revocation denial are demonstrated. Merely creating the repository or a synthetic demo does not satisfy M11. Existing Parmar AI remains a standalone product and is not automatically a BRVIN Teachers tenant. BRVIN's acceptance responsibility is to register and verify the consumer's private knowledge connection and enforce its project/source grants—not to create or operate the consumer application.
+The BRVIN Teachers platform (`ashini-x/brvin-teachers`) is a separate downstream consumer repository, not part of BRVIN Core. Its Operator Console, teacher profile foundation and classroom/collection/source workflows are deployed, as is the private management binding to the named `BrvinTeachersManagementApi` entrypoint in `parmar-ai`. It still needs its production application/environment registration and separate retrieval v2 connection before it can provide genuine teacher-focused M11 acceptance. A real teacher, approved BRVIN project/source, useful retrieval with provenance and post-revocation denial must all be demonstrated. Merely deploying the console or using a synthetic demo does not satisfy M11. Existing Parmar AI remains a standalone product and is not automatically a BRVIN Teachers tenant. BRVIN's acceptance responsibility is to register and verify the consumer's private knowledge connection and enforce its project/source grants—not to create or operate the consumer application.
 
 ### 10.5 Other Cloudflare accounts or non-Cloudflare applications
 
@@ -550,6 +570,17 @@ A Worker in a different Cloudflare account cannot directly use the private same-
 
 Keep `brvin-service` private. Do not turn on `workers.dev` or expose the internal RPC Worker as a shortcut. The public gateway is not implemented.
 
+### 10.6 BRVIN Teachers management capability — deployed, activation pending
+
+The separate BRVIN Teachers application lives in `ashini-x/brvin-teachers`. Its main-release run [#42171352464](https://github.com/ashini-x/brvin-teachers/actions/runs/42171352464) deployed Worker version `961500a1-462f-46aa-9fc6-6d02fdafc09a` (deployment `ed86feab-8ea8-47ec-ac98-4c460ecb90d6`) and passed application D1 migration, health and Cloudflare Access protection checks.
+
+The Core management implementation was merged as [parmar-ai PR #107](https://github.com/ashini-x/parmar-ai/pull/107) and deployed in release [#42171109140](https://github.com/ashini-x/parmar-ai/actions/runs/42171109140). It exposes the named `BrvinTeachersManagementApi` WorkerEntrypoint from the existing `parmar-ai` Worker. The consumer has a private same-account Service Binding named `BRVIN_MANAGEMENT` that targets this named entrypoint. It is a management/control-plane capability, not a public HTTP API and not part of `BrvinRetrievalApi`. The separate `BRVIN_SERVICE` retrieval binding is still not configured.
+
+The Core entrypoint receives its `applicationEnvironmentId` only through deployment-controlled WorkerEntrypoint props. It verifies the active BRVIN application/environment, exact application slug `brvin-teachers` and registered Worker name `brvin-teachers`. Every project/collection/source operation checks the trusted application, TCH owner reference, BRVIN-owned record and active project/collection grant. It supports project/collection create/list/update, same-tenant collection sharing/revocation and source list/start/chunk/complete/resume/status. PDFs continue through the existing private GCS, Google Vision and Cloudflare Workflow pipeline. The consumer never receives GCS session URIs, provider credentials or direct Core D1/AI Search access.
+
+The additive D1 metadata migration is present in production: owner/origin/reference columns on the BRVIN project/collection/source records, request-id/hash fields, `brvin_reference_sequences`, and `fatman_import_jobs.dedupe_scope`. Existing BRVIN Admin uploads retain their legacy global deduplication scope; Teachers uploads use the originating collection as deduplication scope so identical files in unrelated collections remain independent records.
+
+**Activation remains pending:** the production registry currently has no `brvin-teachers` application/environment row, and the consumer config intentionally retains `BRVIN_TEACHERS_ENVIRONMENT_ID_REQUIRED`. Register the exact app/environment in BRVIN Admin, copy its generated UUID into the consumer's Worker binding config and deploy that config before using classroom/source management. The consumer's separate `brvin-service` retrieval v2 binding is also not yet configured. No tenant/project/source has been created. See [BRVIN_TEACHERS_ARCHITECTURE.md](BRVIN_TEACHERS_ARCHITECTURE.md), [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md) and [BRVIN Teachers management integration](https://github.com/ashini-x/brvin-teachers/blob/main/docs/BRVIN_MANAGEMENT_INTEGRATION.md).
 
 ## 11. Deployment, verification and release safety
 
