@@ -11,7 +11,11 @@ const google = vi.hoisted(() => ({ getGoogleAccessToken: vi.fn() }));
 vi.mock("../src/analytics/db", () => analytics);
 vi.mock("../src/auth/google", () => google);
 
-import { diagnoseFatmanGcsUpload } from "../src/fatman/import";
+import {
+  diagnoseFatmanGcsUpload,
+  listFatmanVisionOutputObjects,
+  parseFatmanVisionOperationResult,
+} from "../src/fatman/import";
 
 describe("BRVIN GCS read-only permission diagnostic", () => {
   const env = {
@@ -156,5 +160,108 @@ describe("BRVIN GCS read-only permission diagnostic", () => {
     expect(result.retentionLifecycleRule.status).toBe("blocked_unsafe_delete_rule");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls.every(call => (call[1] as RequestInit | undefined)?.method !== "PATCH")).toBe(true);
+  });
+});
+
+
+describe("Google Vision asynchronous output verification", () => {
+  const expectedUri = "gs://brvin-test-bucket/brvin/temporary-vision-ocr/import-123/";
+
+  it("accepts a completed operation only when its response confirms the expected GCS destination", () => {
+    const result = parseFatmanVisionOperationResult({
+      done: true,
+      response: {
+        responses: [{
+          outputConfig: {
+            gcsDestination: { uri: expectedUri }
+          }
+        }]
+      }
+    }, expectedUri);
+
+    expect(result).toEqual({ done: true, outputDestinations: [expectedUri] });
+  });
+
+  it("normalizes only trailing slashes when comparing the returned GCS destination", () => {
+    const result = parseFatmanVisionOperationResult({
+      done: true,
+      response: {
+        responses: [{
+          outputConfig: {
+            gcsDestination: { uri: expectedUri.slice(0, -1) }
+          }
+        }]
+      }
+    }, expectedUri);
+
+    expect(result.done).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it("does not treat done=true without a response payload as successful OCR", () => {
+    const result = parseFatmanVisionOperationResult({ done: true }, expectedUri);
+    expect(result.done).toBe(true);
+    expect(result.error).toContain("returned no file response metadata");
+  });
+
+  it("surfaces an operation-level Vision error even when done=true", () => {
+    const result = parseFatmanVisionOperationResult({
+      done: true,
+      error: { message: "permission denied writing output" }
+    }, expectedUri);
+    expect(result.error).toContain("permission denied writing output");
+  });
+
+  it("fails closed when Vision reports a different output destination", () => {
+    const result = parseFatmanVisionOperationResult({
+      done: true,
+      response: {
+        responses: [{
+          outputConfig: {
+            gcsDestination: { uri: "gs://brvin-test-bucket/somewhere-else/" }
+          }
+        }]
+      }
+    }, expectedUri);
+    expect(result.error).toContain("does not match the import's registered temporary OCR prefix");
+    expect(result.outputDestinations).toEqual(["gs://brvin-test-bucket/somewhere-else/"]);
+  });
+
+  it("rejects successful operation metadata without a GCS output URI", () => {
+    const result = parseFatmanVisionOperationResult({
+      done: true,
+      response: { responses: [{}] }
+    }, expectedUri);
+    expect(result.error).toContain("without a valid Cloud Storage output destination");
+  });
+
+  it("lists only bounded metadata under this import's expected temporary prefix", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      items: [
+        { name: "brvin/temporary-vision-ocr/import-123/ocr/output-1-to-1.json", size: "512", timeCreated: "2026-11-06T08:00:00Z" },
+        { name: "brvin/temporary-vision-ocr/import-123/ocr/output-2-to-2.json", size: "640" },
+        { name: "brvin/temporary-vision-ocr/another-import/ocr/output-1-to-1.json", size: "999" }
+      ],
+      nextPageToken: "more"
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await listFatmanVisionOutputObjects(env, {
+      id: "import-123",
+      source_object: "brvin/source-pdfs/import-123/source.pdf"
+    } as any);
+
+    expect(result.prefix).toBe(expectedUri);
+    expect(result.objects).toHaveLength(2);
+    expect(result.objects.map(item => item.name)).toEqual([
+      "brvin/temporary-vision-ocr/import-123/ocr/output-1-to-1.json",
+      "brvin/temporary-vision-ocr/import-123/ocr/output-2-to-2.json"
+    ]);
+    expect(result.truncated).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(url.searchParams.get("prefix")).toBe("brvin/temporary-vision-ocr/import-123/");
+    expect(url.searchParams.get("maxResults")).toBe("25");
+    expect(fetchMock.mock.calls[0][1]?.method).toBeUndefined();
   });
 });
