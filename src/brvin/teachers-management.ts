@@ -21,9 +21,10 @@ type ManagementCaller = {
   environmentId: string;
 };
 
+type ManagementFailure = { ok: false; code: string; message: string; retryable?: boolean };
 type RpcResult<T extends Record<string, unknown> = Record<string, unknown>> =
   | ({ ok: true } & T)
-  | { ok: false; code: string; message: string; retryable?: boolean };
+  | ManagementFailure;
 
 type TenantInput = { tenantReference?: unknown };
 type ProjectInput = TenantInput & { projectId?: unknown };
