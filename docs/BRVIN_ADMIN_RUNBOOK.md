@@ -106,7 +106,7 @@ Use the activity filter to narrow the event list to failures/warnings, storage r
 
 For a failed or stuck source, open the source's **Manage** panel and select **Inspect processing pipeline**. Read the latest workflow, Vision and activity status before choosing any action. Use **Resume** only when the system reports that the failed import is resumable. Do not use full book deletion as a troubleshooting shortcut.
 
-For PDF OCR failures, distinguish Vision's long-running operation status from the existence of its GCS output JSON. In **Inspect processing pipeline**, review the Vision-reported output destination and the object inventory under the expected temporary OCR prefix. If Vision reports complete but the page JSON objects are missing, do not re-upload the PDF or resume indexing against absent files. Correct the Vision/GCS output issue first; a fresh OCR operation can incur another Vision charge and requires operator approval.
+For PDF OCR failures, distinguish Vision's long-running operation status from the existence of its GCS output JSON. In **Inspect processing pipeline**, review the Vision-reported output destination and the object inventory under the expected temporary OCR prefix. Vision writes `output-N-to-N.json` directly inside the returned destination prefix; do not append a second `ocr/` directory. If Vision reports complete but the page JSON objects are missing, do not re-upload the PDF or resume indexing against absent files. Correct the Vision/GCS output issue first; a fresh OCR operation can incur another Vision charge and requires operator approval.
 
 ## 8. Google Cloud Storage and OCR retention
 
