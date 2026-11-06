@@ -409,6 +409,62 @@ async function createTeacherCollection(
   }
 }
 
+async function updateTeacherProject(
+  env: Env,
+  caller: ManagementCaller,
+  input: ProjectInput & { name?: unknown; subject?: unknown; description?: unknown },
+): Promise<RpcResult<{ project: Record<string, unknown> }>> {
+  if (!env.DB || !isValidBrvinTeachersTenantReference(input.tenantReference) || typeof input.projectId !== "string") {
+    return failure("INVALID_REQUEST", "A valid teacher and classroom are required.");
+  }
+  const project = await resolveOwnedProject(env, caller, input.tenantReference, input.projectId);
+  if (!project) return failure("PROJECT_NOT_FOUND", "The requested teacher classroom is unavailable.");
+  const name = cleanText(input.name, 100);
+  const subject = cleanText(input.subject, 80);
+  const description = cleanText(input.description, 500);
+  if (!name || !subject) return failure("INVALID_REQUEST", "Enter a classroom name and subject.");
+  const now = Date.now();
+  await env.DB.prepare(
+    "UPDATE brvin_projects SET name=?,subject=?,description=?,updated_at=? WHERE id=? AND owner_application_id=? AND owner_tenant_ref=?",
+  ).bind(name, subject, description, now, project.id, caller.applicationId, input.tenantReference).run();
+  await recordManagementActivity(env, {
+    projectId: project.id, eventType: "teacher_project.renamed",
+    message: "The teacher classroom display details were updated; its project ID and reference remain unchanged.",
+    details: { tenantReference: input.tenantReference, projectId: project.id },
+  });
+  return { ok: true, project: { id: project.id, reference: project.projectRef, name, subject, description } };
+}
+
+async function updateTeacherCollection(
+  env: Env,
+  caller: ManagementCaller,
+  input: CollectionInput & { name?: unknown; description?: unknown },
+): Promise<RpcResult<{ collection: Record<string, unknown> }>> {
+  if (!env.DB || !isValidBrvinTeachersTenantReference(input.tenantReference) ||
+      typeof input.projectId !== "string" || typeof input.collectionId !== "string") {
+    return failure("INVALID_REQUEST", "A valid teacher, originating classroom and collection are required.");
+  }
+  const project = await resolveOwnedProject(env, caller, input.tenantReference, input.projectId);
+  const collection = await resolveOwnedCollection(env, caller, input.tenantReference, input.collectionId);
+  if (!project || !collection) return failure("RESOURCE_NOT_FOUND", "The classroom or collection is unavailable.");
+  if (collection.originProjectId !== project.id) {
+    return failure("COLLECTION_OWNER_REQUIRED", "Only the originating classroom can rename this collection.");
+  }
+  const name = cleanText(input.name, 100);
+  const description = cleanText(input.description, 500);
+  if (!name) return failure("INVALID_REQUEST", "Enter a collection name.");
+  const now = Date.now();
+  await env.DB.prepare(
+    "UPDATE brvin_collections SET name=?,description=?,updated_at=? WHERE id=? AND owner_application_id=? AND owner_tenant_ref=? AND origin_project_id=?",
+  ).bind(name, description, now, collection.id, caller.applicationId, input.tenantReference, project.id).run();
+  await recordManagementActivity(env, {
+    projectId: project.id, eventType: "teacher_collection.renamed",
+    message: "The teacher collection display details were updated; its origin and reference remain unchanged.",
+    details: { tenantReference: input.tenantReference, collectionId: collection.id },
+  });
+  return { ok: true, collection: { id: collection.id, reference: collection.collectionRef, name, description, originProjectId: project.id } };
+}
+
 async function changeCollectionGrant(
   env: Env,
   caller: ManagementCaller,
@@ -633,6 +689,20 @@ export class BrvinTeachersManagementApi extends WorkerEntrypoint<Env, BrvinTeach
     if (!caller) return failure("APPLICATION_ENVIRONMENT_NOT_REGISTERED", "The BRVIN Teachers application environment is not registered or active.");
     try { return await createTeacherCollection(this.env, caller, input ?? {}); }
     catch { return failure("BRVIN_UNAVAILABLE", "BRVIN could not create this collection.", true); }
+  }
+
+  async updateTeacherProject(input: ProjectInput & { name?: unknown; subject?: unknown; description?: unknown }): Promise<RpcResult<{ project: Record<string, unknown> }>> {
+    const caller = await this.caller();
+    if (!caller) return failure("APPLICATION_ENVIRONMENT_NOT_REGISTERED", "The BRVIN Teachers application environment is not registered or active.");
+    try { return await updateTeacherProject(this.env, caller, input ?? {}); }
+    catch { return failure("BRVIN_UNAVAILABLE", "BRVIN could not update this classroom.", true); }
+  }
+
+  async updateTeacherCollection(input: CollectionInput & { name?: unknown; description?: unknown }): Promise<RpcResult<{ collection: Record<string, unknown> }>> {
+    const caller = await this.caller();
+    if (!caller) return failure("APPLICATION_ENVIRONMENT_NOT_REGISTERED", "The BRVIN Teachers application environment is not registered or active.");
+    try { return await updateTeacherCollection(this.env, caller, input ?? {}); }
+    catch { return failure("BRVIN_UNAVAILABLE", "BRVIN could not update this collection.", true); }
   }
 
   async grantTeacherCollection(input: CollectionInput): Promise<RpcResult<{ projectId: string; collectionId: string }>> {
