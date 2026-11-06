@@ -196,3 +196,20 @@ Check the Worker URL, the consumer's private Service Binding target/entrypoint a
 4. Check new application environments are correctly connected.
 5. Review project/application grants and revoke access that is no longer required.
 6. Preserve the existing Fatman and AskMoina production state.
+
+
+## 12. Register the BRVIN Teachers management environment
+
+This step is required before BRVIN Teachers classroom/collection/source screens can call Core. It does not create a teacher or knowledge project. BRVIN remains the knowledge authority.
+
+1. Open **Applications** in BRVIN Admin.
+2. Register an application with slug exactly `brvin-teachers`, name `BRVIN Teachers`, repository `https://github.com/ashini-x/brvin-teachers`, default branch `main`, and runtime provider **Cloudflare Workers**.
+3. Add the production environment with key `production`, display name `BRVIN Teachers Production`, Worker name `brvin-teachers`, and Worker URL `https://brvin-teachers.thenewtongs.workers.dev`.
+4. Save the application/environment. Confirm both are **Active** and the registered Worker name is exactly `brvin-teachers`.
+5. Copy the environment UUID into the BRVIN Teachers repository's deployment-controlled Service Binding configuration in place of `BRVIN_TEACHERS_ENVIRONMENT_ID_REQUIRED`. This UUID is an integration identifier, not a secret; do not put it in a browser request or user-controlled field.
+6. Deploy the consumer through its GitHub Actions release workflow. Its Service Binding targets the named `BrvinTeachersManagementApi` entrypoint on the same-account `parmar-ai` Worker. The manager health method must return the registered application/environment state before knowledge actions are enabled.
+7. Do not create an application-project grant manually for each teacher classroom. The management entrypoint creates the application-project grant when it creates a teacher-owned project. That grant is application-wide, not end-user tenant authorization; the consumer still resolves the teacher from its own database on every operation.
+
+**Deployment order:** release the Core entrypoint first, then release BRVIN Teachers with the real environment UUID. Do not replace the placeholder with an invented ID. The first teacher, project, collection or PDF must be created by an actual operator action, not deployment or migration.
+
+The existing v2 retrieval API remains a separate Service Binding (`brvin-service` / `BrvinRetrievalApi`). The management entrypoint is a separate capability hosted by `parmar-ai`; it is not part of the retrieval contract and is not exposed as a public HTTP endpoint.

@@ -63,6 +63,7 @@ import {
 } from "./brvin/connect-wizard";
 import { runBrvinRecoverySupervisor, runBrvinVisionRetentionSupervisor } from "./fatman/workflow";
 export { FatmanImportWorkflow } from "./fatman/workflow";
+export { BrvinTeachersManagementApi } from "./brvin/teachers-management";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getActiveTelegramBot, hasTelegramBotRecords, isTelegramBotConnectionActive } from "./telegram/bot-store";
 
 const QUEUE_MAX_RETRIES = 10;

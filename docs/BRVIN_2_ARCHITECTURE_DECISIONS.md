@@ -488,7 +488,7 @@ Automated tests cover wrong-environment, inactive, expired, forged and replayed 
 ## ADR-013 — Hierarchical human-readable references for BRVIN Teachers knowledge records
 
 **Decision date:** 6 November 2026  
-**Status:** Accepted architecture policy; implementation not started  
+**Status:** Accepted architecture policy; management metadata/reference implementation validated in PR #107, deployment pending  
 **Scope:** New BRVIN Teachers tenants and their BRVIN knowledge projects, collections and sources. Existing BRVIN/Parmar AI records are excluded from automatic renumbering.
 
 ### Context
@@ -525,3 +525,33 @@ Human-readable references are not system IDs. BRVIN's existing opaque project/co
 5. Until implementation is reviewed, migrated and deployed, operators continue using BRVIN-generated internal IDs and must not manually invent production reference codes.
 
 **Normative consumer policy:** [BRVIN Teachers Identifier Policy](https://github.com/ashini-x/brvin-teachers/blob/main/docs/IDENTIFIER_POLICY.md).
+
+
+## ADR-014 — Separate private BRVIN Teachers management entrypoint
+
+**Decision date:** 6 November 2026  
+**Status:** Implemented and validated in PR #107; production merge/deployment pending  
+**Scope:** BRVIN Teachers management of BRVIN-owned projects, collections and sources.
+
+### Context
+
+The downstream teacher Operator Console needs ordinary onboarding and knowledge-management actions without direct access to BRVIN D1, private GCS, AI Search or existing admin-session HTTP endpoints. The frozen v2 retrieval service is intentionally retrieval-oriented and uses application-project grants, readiness and quota checks. Administrative writes must not be mixed into it.
+
+### Decision
+
+Expose a separate named `BrvinTeachersManagementApi` WorkerEntrypoint from the existing `parmar-ai` Worker. Call it only through a same-account Cloudflare Service Binding. The consuming deployment supplies the registered `applicationEnvironmentId` through trusted WorkerEntrypoint props. The management entrypoint resolves it against BRVIN's application/environment registry and permits only the active `brvin-teachers` application and active environment whose registered Worker name is `brvin-teachers`.
+
+The management API owns project/collection create/list, explicit collection share/revoke, source listing, and start/chunk/complete/resume/status operations that reuse the existing GCS/Google Vision/Cloudflare Workflow importer. It allocates PRJ/COL/SRC references in BRVIN D1 and stores TCH tenant-reference owner metadata without changing existing opaque IDs. It uses stable request IDs and content hashes for safe project/collection retries. An identical PDF is deduplicated only inside the same collection; another collection receives an independently owned source record.
+
+### Security and ownership invariants
+
+1. Environment identity is not accepted from method input or browser; it comes from deployment-controlled Service Binding props.
+2. Browser input is not authoritative for tenant ownership. The consumer resolves the tenant from its own D1, and BRVIN rechecks the TCH reference and ownership metadata on every project/collection/source operation.
+3. The consumer receives opaque record IDs and human-readable references only; it does not receive BRVIN D1, GCS, AI Search, provider credentials or the GCS resumable-upload URI.
+4. Project/collection grants are checked on every action. Collection revocation also removes direct source grants for that collection from the target project. The originating collection grant is protected from revocation through this API.
+5. Retrieval v2 methods and `brvin-service` remain unchanged and retrieval-only.
+6. No existing project/source identity is renumbered or backfilled by this change.
+
+### Consequences
+
+Core and consumer releases are coordinated but separate. Register the application and production environment in BRVIN Admin, then set that environment UUID in the consumer's deployment-controlled Service Binding configuration. The placeholder deliberately fails closed. No teacher or knowledge records are seeded by deployment; first real records are created by an operator action.

@@ -403,3 +403,12 @@ Implemented and deployed on 4 November 2026 through PR #62, merge commit `3b68aa
 - Consumer retrieval remains v1 until the connector and app-specific migration milestones. AskMoina has not yet been connected.
 - The post-deployment D1 audit found no foreign-key violations and confirmed Fatman's original mapping, project, ready 538-page book, direct/collection grants, and November 2026 usage counter were preserved.
 
+
+
+## 10. Separate BRVIN Teachers management capability (not part of v2)
+
+Administrative project/collection/source lifecycle operations are deliberately **not** added to `BrvinRetrievalApi` or this frozen v2 contract. PR #107 introduces a separate named `BrvinTeachersManagementApi` WorkerEntrypoint on the existing `parmar-ai` Worker. It is consumed through an explicit same-account Service Binding and deployment-controlled `applicationEnvironmentId` props. It validates the active registered `brvin-teachers` application/environment and Worker name before management operations.
+
+Its methods create/list teacher-owned projects and collections; share/revoke collections; list sources; and route PDF upload chunks and lifecycle through the existing private GCS, Vision OCR and Workflow pipeline. Core owns external tenant-reference metadata and hierarchical project/collection/source references. It does not duplicate ingestion or change v2 retrieval authorisation, grants, quota, request/response shapes or the `brvin-service` deployment.
+
+The management entrypoint is not a public REST endpoint. It does not return GCS upload session URIs or provider credentials. BRVIN Teachers does not access Core D1, GCS or AI Search directly. See [ADR-014](BRVIN_2_ARCHITECTURE_DECISIONS.md#adr-014--separate-private-brvin-teachers-management-entrypoint) and [BRVIN Teachers architecture](BRVIN_TEACHERS_ARCHITECTURE.md#16-brvin-teachers-management-entrypoint--separate-from-retrieval-v2).

@@ -414,7 +414,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
   if (!env.DB || !env.FATMAN_SEARCH || !env.FATMAN_IMPORT) {
     return json({ ok: false, error: "The book processing service is not fully configured. Contact the administrator." }, 503);
   }
-  let body: { title?: unknown; filename?: unknown; sha256?: unknown; size?: unknown; pageCount?: unknown; costConfirmed?: unknown };
+  let body: { title?: unknown; filename?: unknown; sha256?: unknown; size?: unknown; pageCount?: unknown; costConfirmed?: unknown; dedupeScope?: unknown };
   try {
     body = await request.json() as typeof body;
   } catch {
@@ -426,6 +426,11 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
   const sha256 = typeof body.sha256 === "string" ? body.sha256.toUpperCase() : "";
   const size = Number(body.size);
   const pageCount = Number(body.pageCount);
+  const dedupeScope = body.dedupeScope === undefined ? "legacy" :
+    typeof body.dedupeScope === "string" ? body.dedupeScope.trim().slice(0, 180) : "";
+  if (!dedupeScope || /[\u0000-\u001f\u007f]/u.test(dedupeScope)) {
+    return json({ ok: false, error: "The source deduplication scope is invalid." }, 400);
+  }
   if (!title) return json({ ok: false, error: "Enter a name for this book." }, 400);
   if (!/^[A-F0-9]{64}$/u.test(sha256)) return json({ ok: false, error: "The PDF fingerprint is invalid. Select the PDF again." }, 400);
   if (!Number.isSafeInteger(size) || size < 8 || size > MAX_PDF_BYTES) {
@@ -446,8 +451,8 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
     const bucketName = bucket(env);
     await ensureAnalyticsSchema(env);
     const latest = await env.DB.prepare(
-      "SELECT * FROM fatman_import_jobs WHERE source_sha256 = ? AND expected_size = ? AND book_id IS NOT NULL ORDER BY created_at DESC LIMIT 1"
-    ).bind(sha256, size).first<FatmanImportJob>();
+      "SELECT * FROM fatman_import_jobs WHERE source_sha256 = ? AND expected_size = ? AND book_id IS NOT NULL AND dedupe_scope = ? ORDER BY created_at DESC LIMIT 1"
+    ).bind(sha256, size, dedupeScope).first<FatmanImportJob>();
 
     if (latest && (latest.status === "uploaded" || latest.status === "processing" || latest.status === "completed")) {
       return json({
@@ -510,9 +515,9 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
     const now = Date.now();
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO fatman_import_jobs (id, source_object, source_sha256, expected_size, uploaded_bytes, upload_session_uri, status, indexed_pages, created_at, updated_at, book_id, book_title, page_count) " +
-        "VALUES (?, ?, ?, ?, 0, ?, 'uploading', 0, ?, ?, ?, ?, ?)"
-      ).bind(id, objectName, sha256, size, sessionUri, now, now, id, title, pageCount),
+        "INSERT INTO fatman_import_jobs (id, source_object, source_sha256, expected_size, uploaded_bytes, upload_session_uri, status, indexed_pages, created_at, updated_at, book_id, book_title, page_count, dedupe_scope) " +
+        "VALUES (?, ?, ?, ?, 0, ?, 'uploading', 0, ?, ?, ?, ?, ?, ?)"
+      ).bind(id, objectName, sha256, size, sessionUri, now, now, id, title, pageCount, dedupeScope),
       env.DB.prepare(
         "INSERT INTO fatman_books (id, title, source_filename, source_sha256, expected_size, page_count, status, indexed_pages, created_at, updated_at) " +
         "VALUES (?, ?, ?, ?, ?, ?, 'uploading', 0, ?, ?)"
