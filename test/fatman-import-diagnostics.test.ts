@@ -13,6 +13,8 @@ vi.mock("../src/auth/google", () => google);
 
 import {
   diagnoseFatmanGcsUpload,
+  fatmanOutputObjectName,
+  fatmanVisionOutputPrefix,
   listFatmanVisionOutputObjects,
   parseFatmanVisionOperationResult,
 } from "../src/fatman/import";
@@ -163,6 +165,29 @@ describe("BRVIN GCS read-only permission diagnostic", () => {
   });
 });
 
+
+describe("Vision output object naming", () => {
+  it("uses the returned temporary destination directly for new BRVIN imports", () => {
+    const id = "import-123";
+    const job = { id, source_object: "brvin/source-pdfs/" + id + "/source.pdf" };
+    const prefix = fatmanVisionOutputPrefix(job as any);
+    expect(prefix).toBe("brvin/temporary-vision-ocr/" + id + "/");
+    expect(fatmanOutputObjectName(id, 1, prefix)).toBe(prefix + "output-1-to-1.json");
+    expect(fatmanOutputObjectName(id, 3, prefix)).toBe(prefix + "output-3-to-3.json");
+  });
+
+  it("keeps the legacy OCR subdirectory inside its destination prefix without adding it twice", () => {
+    const id = "legacy-123";
+    const job = { id, source_object: "fatman/source-pdfs/" + id + "/source.pdf" };
+    const prefix = fatmanVisionOutputPrefix(job as any);
+    expect(prefix).toBe("fatman/source-pdfs/" + id + "/ocr/");
+    expect(fatmanOutputObjectName(id, 1, prefix)).toBe(prefix + "output-1-to-1.json");
+  });
+
+  it("preserves the legacy default prefix for existing direct callers", () => {
+    expect(fatmanOutputObjectName("legacy-456", 2)).toBe("fatman/imports/legacy-456/ocr/output-2-to-2.json");
+  });
+});
 
 describe("Google Vision asynchronous output verification", () => {
   const expectedUri = "gs://brvin-test-bucket/brvin/temporary-vision-ocr/import-123/";
