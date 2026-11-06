@@ -33,7 +33,7 @@ const TENANT_REFERENCE = /^TCH-[0-9]{6,}$/u;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu;
 const MAX_CHUNK_BYTES = 8 * 1024 * 1024;
 
-function failure(code: string, message: string, retryable = false): RpcResult {
+function failure(code: string, message: string, retryable = false): ManagementFailure {
   return { ok: false, code, message, ...(retryable ? { retryable: true } : {}) };
 }
 
@@ -232,7 +232,7 @@ async function listTeacherProjects(
 ): Promise<RpcResult<{ projects: Array<Record<string, unknown>> }>> {
   if (!env.DB) return failure("BRVIN_UNAVAILABLE", "BRVIN database is not configured.", true);
   const result = await env.DB.prepare(
-    "SELECT p.id,p.project_ref,p.name,p.description,p.status,p.updated_at," +
+    "SELECT p.id,p.project_ref,p.name,p.subject,p.description,p.status,p.updated_at," +
     "(SELECT COUNT(*) FROM brvin_project_collections pc JOIN brvin_collections c ON c.id=pc.collection_id " +
     " WHERE pc.project_id=p.id AND c.status='active') AS collection_count," +
     "(SELECT COUNT(DISTINCT b.id) FROM brvin_project_collections pc " +
@@ -242,13 +242,13 @@ async function listTeacherProjects(
     "WHERE p.owner_application_id=? AND p.owner_tenant_ref=? AND p.status='active' " +
     "AND g.application_id=? AND g.status='active' ORDER BY p.created_at DESC,p.id",
   ).bind(caller.applicationId, tenantReference, caller.applicationId).all<{
-    id: string; project_ref: string; name: string; description: string; status: string;
+    id: string; project_ref: string; name: string; subject: string; description: string; status: string;
     updated_at: number; collection_count: number; source_count: number;
   }>();
   return {
     ok: true,
     projects: (result.results ?? []).map(row => ({
-      id: row.id, reference: row.project_ref, name: row.name, description: row.description,
+      id: row.id, reference: row.project_ref, name: row.name, subject: row.subject, description: row.description,
       status: row.status, collectionCount: Number(row.collection_count), sourceCount: Number(row.source_count),
       updatedAt: Number(row.updated_at),
     })),
@@ -305,9 +305,9 @@ async function createTeacherProject(
     return { ok: true, project: { id, reference: projectReference, name, subject, description, slug } };
   } catch {
     const retry = await env.DB.prepare(
-      "SELECT id,project_ref,name,slug,description FROM brvin_projects WHERE owner_application_id=? AND owner_tenant_ref=? AND management_request_id=? LIMIT 1",
-    ).bind(caller.applicationId, tenantReference, requestId).first<{ id: string; project_ref: string; name: string; slug: string; description: string }>();
-    if (retry) return { ok: true, project: { id: retry.id, reference: retry.project_ref, name: retry.name, slug: retry.slug, description: retry.description } };
+      "SELECT id,project_ref,name,slug,description,subject FROM brvin_projects WHERE owner_application_id=? AND owner_tenant_ref=? AND management_request_id=? LIMIT 1",
+    ).bind(caller.applicationId, tenantReference, requestId).first<{ id: string; project_ref: string; name: string; slug: string; description: string; subject: string }>();
+    if (retry) return { ok: true, project: { id: retry.id, reference: retry.project_ref, name: retry.name, subject: retry.subject, slug: retry.slug, description: retry.description } };
     return failure("MANAGEMENT_WRITE_FAILED", "BRVIN could not create the teacher project. The request can be retried safely.", true);
   }
 }
