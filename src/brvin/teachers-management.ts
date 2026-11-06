@@ -51,6 +51,11 @@ export function hierarchicalReference(parent: string, kind: "PRJ" | "COL" | "SRC
   return parent + "-" + kind + "-" + String(sequence).padStart(3, "0");
 }
 
+async function hashRequest(values: string[]): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(values.join("\\n")));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function validRequestId(value: unknown): string {
   if (typeof value !== "string") return "";
   const normalized = value.trim();
@@ -265,13 +270,18 @@ async function createTeacherProject(
   const ownerLabel = cleanText(input.ownerLabel, 120);
   const requestId = validRequestId(input.requestId);
   if (!name || !subject || !requestId) return failure("INVALID_REQUEST", "Enter a project name, subject and stable request ID.");
+  const requestHash = await hashRequest([name, subject, description, ownerLabel]);
   const existing = await env.DB.prepare(
-    "SELECT id,project_ref,name,slug,description FROM brvin_projects " +
+    "SELECT id,project_ref,name,slug,description,subject,management_request_hash FROM brvin_projects " +
     "WHERE owner_application_id=? AND owner_tenant_ref=? AND management_request_id=? LIMIT 1",
   ).bind(caller.applicationId, tenantReference, requestId).first<{
     id: string; project_ref: string; name: string; slug: string; description: string;
+    subject: string; management_request_hash: string | null;
   }>();
-  if (existing) return { ok: true, project: { id: existing.id, reference: existing.project_ref, name: existing.name, slug: existing.slug, description: existing.description } };
+  if (existing) {
+    if (existing.management_request_hash !== requestHash) return failure("IDEMPOTENCY_CONFLICT", "This request ID was already used with different project details.");
+    return { ok: true, project: { id: existing.id, reference: existing.project_ref, name: existing.name, subject: existing.subject, slug: existing.slug, description: existing.description } };
+  }
 
   try {
     const id = crypto.randomUUID().toLowerCase();
@@ -281,9 +291,9 @@ async function createTeacherProject(
     const now = Date.now();
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO brvin_projects(id,name,slug,description,owner_label,status,created_at,updated_at,owner_application_id,owner_tenant_ref,project_ref,management_request_id) " +
-        "VALUES(?,?,?,?,?,'active',?,?,?,?,?,?)",
-      ).bind(id, name, slug, description, ownerLabel, now, now, caller.applicationId, tenantReference, projectReference, requestId),
+        "INSERT INTO brvin_projects(id,name,slug,description,owner_label,status,created_at,updated_at,owner_application_id,owner_tenant_ref,project_ref,management_request_id,management_request_hash,subject) " +
+        "VALUES(?,?,?,?,?,'active',?,?,?,?,?,?,?,?)",
+      ).bind(id, name, slug, description, ownerLabel, now, now, caller.applicationId, tenantReference, projectReference, requestId, requestHash, subject),
       env.DB.prepare(
         "INSERT INTO brvin_application_project_grants(id,application_id,project_id,status,created_at,created_by) VALUES(?,?,?,'active',?,'brvin-teachers-management')",
       ).bind(crypto.randomUUID().toLowerCase(), caller.applicationId, id, now),
@@ -348,12 +358,19 @@ async function createTeacherCollection(
   if (!name || !requestId) return failure("INVALID_REQUEST", "Enter a collection name and stable request ID.");
   const project = await resolveOwnedProject(env, caller, tenantReference, input.projectId);
   if (!project) return failure("PROJECT_NOT_FOUND", "The requested teacher classroom is unavailable.");
+  const requestHash = await hashRequest([project.id, name, description]);
   const existing = await env.DB.prepare(
-    "SELECT id,collection_ref,name,description FROM brvin_collections WHERE owner_application_id=? AND owner_tenant_ref=? AND management_request_id=? LIMIT 1",
+    "SELECT id,collection_ref,name,description,origin_project_id,management_request_hash FROM brvin_collections WHERE owner_application_id=? AND owner_tenant_ref=? AND management_request_id=? LIMIT 1",
   ).bind(caller.applicationId, tenantReference, requestId).first<{
     id: string; collection_ref: string; name: string; description: string;
+    origin_project_id: string; management_request_hash: string | null;
   }>();
-  if (existing) return { ok: true, collection: { id: existing.id, reference: existing.collection_ref, name: existing.name, description: existing.description } };
+  if (existing) {
+    if (existing.management_request_hash !== requestHash || existing.origin_project_id !== project.id) {
+      return failure("IDEMPOTENCY_CONFLICT", "This request ID was already used with different collection details.");
+    }
+    return { ok: true, collection: { id: existing.id, reference: existing.collection_ref, name: existing.name, description: existing.description } };
+  }
   try {
     const id = crypto.randomUUID().toLowerCase();
     const sequence = await nextReferenceSequence(env, "project:" + project.id + ":collections");
@@ -361,9 +378,9 @@ async function createTeacherCollection(
     const now = Date.now();
     await env.DB.batch([
       env.DB.prepare(
-        "INSERT INTO brvin_collections(id,name,description,status,created_at,updated_at,owner_application_id,owner_tenant_ref,origin_project_id,collection_ref,management_request_id) " +
-        "VALUES(?,?,?,'active',?,?,?,?,?,?,?)",
-      ).bind(id, name, description, now, now, caller.applicationId, tenantReference, project.id, collectionReference, requestId),
+        "INSERT INTO brvin_collections(id,name,description,status,created_at,updated_at,owner_application_id,owner_tenant_ref,origin_project_id,collection_ref,management_request_id,management_request_hash) " +
+        "VALUES(?,?,?,'active',?,?,?,?,?,?,?,?)",
+      ).bind(id, name, description, now, now, caller.applicationId, tenantReference, project.id, collectionReference, requestId, requestHash),
       env.DB.prepare(
         "INSERT INTO brvin_project_collections(project_id,collection_id,created_at,created_by) VALUES(?,?,?,'brvin-teachers-management')",
       ).bind(project.id, id, now),
