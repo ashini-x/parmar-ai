@@ -75,7 +75,7 @@ This is the only remaining M11 gate:
 5. Revoke the application-project grant in BRVIN Admin.
 6. Demonstrate that retrieval is denied after revocation.
 
-The user must provide/identify the real teacher's approved material and consumer use case as part of the acceptance workflow. Do not fabricate a production teacher, project, source or grant. Preserve existing Fatman and AskMoina state. M11 must remain IN PROGRESS until the successful retrieval and denied-after-revocation results are recorded.
+The user must provide/identify the real teacher's approved material and consumer use case as part of the acceptance workflow. The planned BRVIN Teachers consumer (`ashini-x/brvin-teachers`) may be used for this only after it exists and is independently registered/deployed; repository creation or a synthetic demo is not acceptance. Do not fabricate a production teacher, project, source or grant. Preserve existing Parmar AI, Fatman and AskMoina state. M11 must remain IN PROGRESS until useful retrieval and denied-after-revocation results are recorded.
 
 ## 6. Deferred future work
 

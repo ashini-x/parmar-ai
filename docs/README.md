@@ -50,11 +50,11 @@ The active architecture is the shared `parmar-ai` admin/ingestion plane plus pri
 
 **Superseded plans:** the autonomous Project Factory proposal and the old M3 connector/reference-client design were removed from the active documentation tree. Do not recreate their milestones or the retired `brvin-test-client`. Past text remains recoverable from Git history, not as active requirements.
 
-## Downstream teacher application platform — planned
+## BRVIN Teachers — planned downstream application platform
 
-The proposed multi-channel, multi-tenant teacher application platform is a **separate downstream consumer workstream**, not a BRVIN subsystem and not a currently deployed capability. Its architecture and phased build direction are recorded in [TEACHER_PLATFORM_ARCHITECTURE.md](TEACHER_PLATFORM_ARCHITECTURE.md).
+**BRVIN Teachers** is the planned multi-channel, multi-tenant application platform for operating teacher-specific AI teaching experiences. It is a **separate downstream consumer**, not BRVIN core, not a BRVIN Worker and not a currently deployed capability. Its approved architecture and phased build direction are recorded in [BRVIN_TEACHERS_ARCHITECTURE.md](BRVIN_TEACHERS_ARCHITECTURE.md).
 
-The implementation repository is proposed as `ashini-x/teacher-platform` (working name; not yet created). Keep the existing `parmar-ai` application, BRVIN admin/ingestion plane and private `brvin-service` stable. This planning document does not change BRVIN scope or close the remaining M11 real-consumer acceptance gate.
+The proposed implementation repository is `ashini-x/brvin-teachers` (not yet created). It will use the existing private BRVIN v2 Service Binding for authorized knowledge retrieval. BRVIN source data, ingestion, grants and retrieval remain in the existing BRVIN system in `ashini-x/parmar-ai`. The existing Parmar AI SSC application also remains standalone for now; there is no initial code or production-data transfer. BRVIN Teachers is intended to have one central Operator Console for all its tenant teachers and channel instances, not one admin panel per Telegram bot. This planning document does not change BRVIN scope or close the remaining M11 real-consumer acceptance gate.
 
 ## Current feature documentation
 

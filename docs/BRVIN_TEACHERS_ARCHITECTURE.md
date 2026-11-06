@@ -1,29 +1,32 @@
-# Teacher Platform — Multi-Tenant Architecture and Build Plan
+# BRVIN Teachers — Multi-Tenant Teacher Application Platform
 
-**Status:** Architecture direction selected; implementation has not started  
+**Product brand:** BRVIN Teachers  
+**Status:** Architecture approved; implementation has not started  
 **Decision date:** 6 November 2026  
 **Planning location:** `ashini-x/parmar-ai/docs`  
-**Proposed implementation repository:** `ashini-x/teacher-platform` (working name; repository not yet created)  
-**Relationship to BRVIN:** Downstream consumer platform; not a BRVIN subsystem or BRVIN milestone
+**Proposed implementation repository:** `ashini-x/brvin-teachers` (not yet created)  
+**Relationship to BRVIN:** Separate downstream consumer product using BRVIN v2; not BRVIN core, a BRVIN Worker, or a BRVIN milestone
 
-> This document records the selected direction for the next product build. It is a forward-looking architecture and build plan, not a description of deployed capabilities. Do not infer that the proposed repository, Workers, schemas, channels or features already exist.
+> This document is the approved architecture and build handoff for BRVIN Teachers. It describes intended future behavior, not deployed capabilities. The repository, application Worker, application D1 database, consoles, schemas and channel integrations do not yet exist. The `BRVIN Teachers` name is a product brand; it does not move BRVIN's existing code, data or production infrastructure into the new repository.
 
 ## 1. Executive decision
 
-Build a **managed, multi-tenant teacher application platform** in a new repository, provisionally named `teacher-platform`.
+Build **BRVIN Teachers**, a managed multi-tenant platform for operating teacher-specific AI teaching experiences, in the separate repository `ashini-x/brvin-teachers`.
 
-The platform will let the operator build and operate teacher-specific AI experiences across channels such as Telegram, WhatsApp, websites, mobile applications and Telegram Mini Apps. Teachers provide their approved knowledge, teaching methods, product requirements and branding. The platform supplies the shared runtime, AI orchestration, channel adapters, feature modules, student/session handling, observability and cost controls.
+The platform will support teacher experiences across channels such as Telegram, WhatsApp, websites, mobile applications and Telegram Mini Apps. Teachers provide or approve their knowledge, teaching methods, product requirements and branding. BRVIN Teachers supplies shared application runtime, AI orchestration, channel adapters, feature modules, student/session handling, administration, observability and cost controls.
 
 The architecture decisions are:
 
-1. **Keep the existing `ashini-x/parmar-ai` repository and its production behavior intact.** It currently contains a Telegram-first SSC application as well as BRVIN administration/ingestion responsibilities. It is not an empty generic platform skeleton. Do not turn it into the new monorepo by broad refactor.
-2. **Create a separate implementation repository** for the downstream teacher platform when implementation is authorized. The proposed name is `ashini-x/teacher-platform`; the name can change without changing the architecture.
-3. **Use one shared codebase with tenant-aware configuration and reusable feature modules.** Do not create a copied codebase, branch, Worker or database for every teacher by default.
-4. **Separate logical modules from deployed infrastructure.** The codebase must allow independent deployment boundaries, but the first release should use the fewest runtime services that meet the pilot's security and reliability requirements.
-5. **Start with one runtime Worker and one application-runtime D1 database**, plus Durable Objects for stateful coordination where justified. Split Workers or shard databases only when isolation requirements, measured workload, provider boundaries or operational needs justify it.
-6. **Keep BRVIN as the sole knowledge governance and retrieval system.** The teacher platform is a BRVIN v2 consumer. It must not create a competing teacher knowledge registry, copy BRVIN source files, query BRVIN D1/AI Search directly, or bypass grants.
-7. **Make tenant and student authorization server-side.** A teacher ID, project ID, URL parameter or custom header supplied by a browser is not proof of permission.
-8. **Make customization configuration-first, module-second and bespoke only by exception.** A teacher-specific folder or conditional branch scattered through shared business logic is not the customization model.
+1. **Preserve `ashini-x/parmar-ai` and its production behavior.** It is an existing Telegram-first SSC application and the current home of BRVIN administration/ingestion and private retrieval code. It is not an empty platform skeleton and must not be broadly refactored into BRVIN Teachers.
+2. **Create a separate repository named `ashini-x/brvin-teachers`** when implementation is authorized. The new repository is a downstream BRVIN v2 consumer; branding does not make it BRVIN core or move BRVIN responsibilities into it.
+3. **Keep the existing Parmar AI product standalone initially.** It is the dedicated application for Parmar SSC Sir. It is not automatically a BRVIN Teachers tenant, and no code/data transfer or migration is part of this build. A future migration may be considered only after deliberate feature-parity, data-continuity, security, operational and rollback review plus separate approval.
+4. **Use one shared codebase with tenant-aware configuration and reusable feature modules.** Do not create copied codebases, branches, Workers or databases for every teacher or bot by default.
+5. **Separate logical modules from deployed infrastructure.** Code boundaries do not automatically require separate Worker deployments.
+6. **Start with one BRVIN Teachers runtime Worker and one application-runtime D1 database**, plus Durable Objects for stateful coordination where justified. Split Workers or shard databases only when measured workload, security isolation, provider boundaries or operational needs justify it.
+7. **Keep BRVIN as the sole knowledge governance and retrieval system.** BRVIN Teachers is a v2 consumer. It must not create a competing teacher knowledge registry, copy BRVIN source files, query BRVIN D1/AI Search directly, or bypass grants.
+8. **Use one central BRVIN Teachers Operator Console** for all tenants and their channel instances. Do not create one admin application per Telegram bot. Teacher-scoped self-service views can be added later with server-side role and tenant authorization.
+9. **Make tenant and student authorization server-side.** A teacher ID, project ID, URL parameter, bot name or custom header supplied by a browser is not proof of permission.
+10. **Make customization configuration-first, module-second and bespoke only by exception.** A teacher-specific code folder or scattered `if (teacherId === ...)` branches are not the customization model.
 
 The target is not "one Worker at all costs." The target is low operational overhead, measured performance, strong isolation and the ability to split a component without rewriting the product.
 
@@ -63,18 +66,56 @@ A dedicated teacher-facing identity is not, by itself, a reason to create a dedi
 
 A genuinely independent customer-owned application can be a separate deployment or repository when contractual ownership, account ownership, security isolation or independently controlled release cadence requires it.
 
+### 2.4 Product, platform and knowledge responsibilities
+
+Keep three responsibilities distinct:
+
+- **Parmar AI** is the existing purpose-built SSC teaching application for Parmar SSC Sir. Its current Telegram experience, `/admin`, student and usage records, Fatman integration and production lifecycle remain in `ashini-x/parmar-ai`. It continues operating independently during BRVIN Teachers development.
+- **BRVIN** is the shared knowledge governance and retrieval system. Its implementation code currently lives in `ashini-x/parmar-ai` (including the protected `parmar-ai` admin/ingestion Worker and private `brvin-service` Worker). Its live knowledge and operational state live in Cloudflare D1, AI Search and private Google Cloud Storage, not in GitHub files alone. BRVIN owns source ingestion, OCR, indexing, projects, collections, grants, readiness, quotas, audit activity, connection verification and private retrieval.
+- **BRVIN Teachers** is the new, separate downstream application platform in `ashini-x/brvin-teachers`. It owns tenant/student/channel identities, teacher configuration, its own application runtime and database, AI orchestration, reusable teaching features and its operator console. It calls BRVIN v2 for authorized evidence; it does not own or duplicate teacher source material.
+
+The word `BRVIN` in the BRVIN Teachers brand is a product-family choice. It does not mean the new repository contains BRVIN core or that BRVIN's existing Workers, D1, AI Search, GCS, OCR or ingestion code are being transferred.
+
+### 2.5 Parmar AI: current standalone status and future option
+
+Parmar SSC Sir is conceptually a teacher in the wider product model, but the existing Parmar AI application is **not currently a tenant of BRVIN Teachers**. Do not route its production traffic through the new runtime, copy its production database, move its bot token, replace its `/admin`, or change its BRVIN identity as part of this project.
+
+A future migration or consolidation is an optional, separate decision—not a target prerequisite. Before considering it, BRVIN Teachers must demonstrate the required Parmar workflows and administration capabilities, with explicit migration mapping, student/data continuity, security and tenant-isolation tests, operational runbooks, staged rollout and rollback. Until then, Parmar AI remains its own application and its current admin remains in place.
+
+### 2.6 Administration surfaces and ownership
+
+There are distinct consoles because they manage different responsibilities:
+
+1. **Existing Parmar AI Admin (`/admin`):** continues to operate Parmar AI while that product remains standalone.
+2. **BRVIN Admin (`/admin/brvin`):** manages knowledge projects, source uploads/ingestion, readiness, source/project grants, registered applications/environments and BRVIN operations. It remains the authority for knowledge governance.
+3. **BRVIN Teachers Operator Console:** a new central console in the downstream platform. It will manage all BRVIN Teachers tenants, their teacher profiles/configuration, student identity and entitlements, channel/bot registrations, feature enablement, tenant usage/cost visibility and platform operations. It will reference BRVIN project IDs and use BRVIN Admin for knowledge-governance actions rather than duplicating its ingestion and grant controls.
+
+The first BRVIN Teachers release is operator-managed. A teacher-facing console with tenant-scoped permissions is a later feature, not a prerequisite. There must not be one separate admin panel per bot: all bots and websites operated by BRVIN Teachers are managed from the same central Operator Console. This does not merge the existing Parmar AI Admin or BRVIN Admin into it.
+
+### 2.7 Reusable teaching and administration capabilities
+
+Detailed capabilities proven useful in Parmar AI—such as student search and profiles, suspension/reactivation, entitlements or unlimited access, quotas, usage/cost analytics, quiz/mock-test administration, activity history and audit—are requirements to evaluate for reusable BRVIN Teachers modules. They are not automatically copied wholesale from Parmar AI, and not all are MVP requirements.
+
+Implement a capability once behind a tenant-scoped service/module contract. The same domain behavior can be used from Telegram, a website, a Mini App or a mobile client; channel adapters render the capability appropriately for each destination. Teacher-specific differences should ordinarily be versioned configuration and feature entitlements, not copied admin applications or per-teacher code branches.
+
+### 2.8 Multiple bots and channels per teacher
+
+A teacher tenant may have multiple Telegram bots, websites, Mini Apps or mobile experiences. Each is a distinct channel/application identity record mapped server-side to the same tenant and the appropriate configuration, feature entitlements and BRVIN project mapping. For example, one teacher could operate separate English- and Hindi-language Telegram bots while sharing the same tenant-level student policy and teaching modules.
+
+The shared runtime resolves the verified channel registration to its tenant. Each Telegram bot has its own credential reference and webhook-secret validation, but it does not need its own Worker, repository, D1 database or admin panel by default. Student identity and conversation/session keys remain tenant- and channel-scoped so the same external Telegram user ID in two teacher contexts cannot collide.
+
 ## 3. Separation from BRVIN and existing Parmar AI
 
 ### 3.1 Existing production boundary
 
-The current BRVIN system remains in `ashini-x/parmar-ai`:
+The existing BRVIN implementation remains in `ashini-x/parmar-ai`:
 
-- `parmar-ai` continues to own the protected BRVIN admin/ingestion plane and its existing Parmar AI application responsibilities.
+- `parmar-ai` continues to own the protected BRVIN admin/ingestion plane and the existing Parmar AI application responsibilities.
 - `brvin-service` remains the private retrieval Worker.
 - Existing BRVIN D1, AI Search, GCS, OCR, source grants, project grants, quotas, activity, connection verification and retention behavior remain under BRVIN ownership.
-- Existing Fatman and AskMoina data, identity, deployment and production behavior must not be changed as a side effect of building the new platform.
+- Existing Parmar AI, Fatman and AskMoina data, identity, deployments and production behavior must not change as a side effect of BRVIN Teachers development.
 
-The new teacher platform is an **independent consumer** of BRVIN. It is not a new BRVIN service and does not move BRVIN's responsibilities into the consumer.
+BRVIN Teachers is an **independent downstream consumer**. It is not a new BRVIN service, does not host BRVIN's core implementation and does not move BRVIN responsibilities into the consumer.
 
 ### 3.2 BRVIN integration contract
 
@@ -109,10 +150,10 @@ The new teacher platform may become that consumer only if it is independently re
 
 ## 4. Proposed monorepo layout
 
-The implementation repository should use a workspace structure (npm or pnpm can be selected during repository bootstrap; do not introduce workspace tooling without a concrete need).
+The `ashini-x/brvin-teachers` implementation repository should use a workspace structure (npm or pnpm can be selected during repository bootstrap; do not introduce workspace tooling without a concrete need).
 
 ~~~text
-teacher-platform/
+brvin-teachers/
 ├── apps/
 │   ├── runtime-worker/          # Initial dynamic API and channel ingress runtime
 │   ├── operator-console/         # Protected internal teacher/application management
@@ -160,7 +201,7 @@ A custom teacher feature should enter through a declared module interface and ca
 
 Start with the smallest useful deployment topology:
 
-- **One runtime Worker** for the first pilot. It contains clearly separated route/adapter modules for the selected channel and the authenticated web/API surface needed by that pilot.
+- **One runtime Worker** for the first pilot. It contains clearly separated route/adapter modules for the selected channel and the authenticated web/API surface needed by that pilot. Multiple teacher bots and channel registrations route through this shared runtime; a new bot does not automatically require a Worker.
 - **One application-runtime D1 database** for tenant configuration and ordinary operational records.
 - **Durable Objects** for conversation/session state or coordination where their single-object ordering and persistence are useful.
 - **Static frontend hosting** only when the selected pilot needs a website or Mini App.
@@ -506,6 +547,19 @@ This architecture is subordinate to the actual BRVIN contract for knowledge acce
 5. Read [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md).
 6. Inspect current source and deployed state before assuming a binding, API, route, credential or capability exists.
 
-When implementation starts, create and maintain the new repository's own README, architecture decision records, runtime data model, threat model, integration contract, operator runbook and release process. Keep this document as the architecture handoff until the new repository has its own canonical source of truth.
+When implementation starts, create and maintain `brvin-teachers`' own README, architecture decision records, runtime data model, threat model, integration contract, operator runbook and release process. Keep this document as the architecture handoff until the new repository has its own canonical source of truth.
 
-**Continuation instruction:** Build the teacher platform as a separate, managed, multi-tenant consumer application. Preserve `parmar-ai` and BRVIN production. Start with one real pilot teacher, one approved BRVIN project and one channel. Use configuration for ordinary teacher differences, reusable modules for repeatable features, and bespoke deployments only when justified. Do not create infrastructure for hypothetical scale; measure the first real workflow and evolve from evidence.
+### 15.1 Review of the supplied multi-tenant monorepo blueprint
+
+The supplied four-page *Architectural Specification Manual — Multi-Tenant Enterprise Monorepo Blueprint* is a design reference, not a replacement for this approved architecture. Retain its useful ideas: separate ingress/channel adapters from channel-neutral AI execution, validated shared contracts, tenant-aware session keys, one shared application database initially and reusable feature packages.
+
+Do **not** adopt the following parts of that proposal:
+
+- Do not create a `brvin_knowledge_registry` table that stores document payloads, copied Markdown/OCR text, or a second searchable knowledge catalog. BRVIN remains the only knowledge registry and retrieval authority. BRVIN Teachers may store a tenant-to-BRVIN-project reference and its own authorized user/tenant mapping, but not a second copy of source content or source grants.
+- Do not store raw channel/provider tokens in a generic `credentials_json` field. Implement the reviewed encrypted credential design, narrow decryption path, rotation/revocation and log redaction before enabling multiple live bots.
+- Do not create a separate Worker for every adapter or teacher merely because the code has separate folders. Start with one runtime Worker; split deployments only for justified security, provider, release or measured scaling boundaries.
+- Do not treat the PDF's 200–500 ms routing figure, zero-cost claim or instant context-cache behavior as verified performance/cost facts. Measure actual end-to-end p50/p95, provider time, retrieval time and spend. Context caching is optional and never replaces BRVIN authorization or per-request source/project checks.
+
+The new platform's application D1 database is separate from BRVIN's existing database. Its tables are for tenant profiles, channel registrations, application identities, students, sessions, entitlements, feature configuration, usage and audit references. A BRVIN project ID is a selector/reference only; every retrieval still goes through the private v2 contract and its grants/readiness/quota checks.
+
+**Continuation instruction:** Build **BRVIN Teachers** as a separate, managed, multi-tenant downstream consumer in `ashini-x/brvin-teachers`. Preserve the existing Parmar AI product and BRVIN production. Do not transfer Parmar AI into the new repository as part of initial implementation. Start with one real pilot teacher, one approved BRVIN project and one channel. Use configuration for ordinary teacher differences, reusable modules for repeatable capabilities, and bespoke deployments only when justified. One Operator Console manages all BRVIN Teachers tenants and channels; do not create one admin panel per bot. Do not duplicate BRVIN knowledge, grants or ingestion. Do not create infrastructure for hypothetical scale; measure the first real workflow and evolve from evidence.
