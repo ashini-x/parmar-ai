@@ -931,7 +931,7 @@ export function parseFatmanVisionOperationResult(
     return { done: true, error: "Google Vision completed without a valid Cloud Storage output destination in every file response." };
   }
   if (expectedOutputUri) {
-    const normalize = (uri: string) => uri.trim().replace(/\\/+$/u, "");
+    const normalize = (uri: string) => uri.trim().replace(/\/+$/u, "");
     if (!outputDestinations.some(uri => normalize(uri) === normalize(expectedOutputUri))) {
       return {
         done: true,
