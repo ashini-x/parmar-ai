@@ -13,9 +13,13 @@ import {
   deleteFatmanGcsObjectPrefix,
   ensureFatmanVisionLifecycleRule,
   fatmanImportObjectPrefix,
+  fatmanOutputObjectName,
+  fatmanVisionOutputPrefix,
+  gcsBucketName,
   getFatmanImportJob,
   getFatmanVisionOperation,
   listFatmanIndexPages,
+  listFatmanVisionOutputObjects,
   markFatmanImportCompleted,
   markFatmanImportFailed,
   readFatmanVisionOutput,
@@ -1061,9 +1065,38 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
       let visionDone = false;
       for (let attempt = 1; attempt <= 120; attempt += 1) {
         await step.sleep("wait for Google Vision " + attempt, "30 seconds");
-        const result = await step.do("check Google Vision " + attempt, async () => getFatmanVisionOperation(this.env, operationName));
+        const expectedOutputUri = "gs://" + gcsBucketName(this.env) + "/" + fatmanVisionOutputPrefix(importJob);
+        const result = await step.do("check Google Vision " + attempt, async =>
+          getFatmanVisionOperation(this.env, operationName, expectedOutputUri));
         if (result.error) throw new Error(result.error);
         if (result.done) {
+          const outputInventory = await step.do("verify Google Vision GCS output files", async =>
+            listFatmanVisionOutputObjects(this.env, importJob));
+          const outputNames = new Set(outputInventory.objects.map(item => item.name));
+          const expectedOutputNames = Array.from({ length: expectedPages }, (_, index) =>
+            fatmanOutputObjectName(importId, index + 1, fatmanVisionOutputPrefix(importJob)));
+          const missingOutputNames = expectedOutputNames.filter(name => !outputNames.has(name));
+          if (missingOutputNames.length) {
+            const observed = outputInventory.objects.map(item => item.name).slice(0, 10);
+            throw new Error(
+              "Google Vision marked OCR complete and reported the expected destination, but " +
+              missingOutputNames.length + " of " + expectedPages +
+              " page JSON output file(s) are missing from Cloud Storage. Missing: " +
+              missingOutputNames.slice(0, 5).join(", ") +
+              (observed.length ? ". Objects found: " + observed.join(", ") : ". No objects were found under " + outputInventory.prefix) +
+              (outputInventory.truncated ? " (object listing truncated)." : ".")
+            );
+          }
+          if (importJob.book_id) await recordBrvinActivity(this.env, {
+            importId, bookId: importJob.book_id, agent: "Vision output verifier",
+            phase: "ocr", eventType: "ocr.output_verified", status: "completed",
+            message: "All expected per-page Google Vision JSON output files are present in the registered temporary GCS prefix.",
+            details: {
+              expectedPages,
+              outputFiles: expectedOutputNames.map(name => name.split("/").pop()),
+              destination: outputInventory.prefix,
+            },
+          }).catch(() => undefined);
           visionDone = true;
           break;
         }
