@@ -190,6 +190,17 @@ describe("Vision output object naming", () => {
 });
 
 describe("Google Vision asynchronous output verification", () => {
+  const env = {
+    FATMAN_GCS_BUCKET: "brvin-test-bucket",
+    GCP_CLIENT_EMAIL: "worker@example.iam.gserviceaccount.com",
+    GCP_PRIVATE_KEY: "test-key",
+    GCP_PROJECT_ID: "test-project",
+  } as any;
+  beforeEach(() => {
+    vi.clearAllMocks();
+    google.getGoogleAccessToken.mockResolvedValue("access-token");
+  });
+  afterEach(() => vi.unstubAllGlobals());
   const expectedUri = "gs://brvin-test-bucket/brvin/temporary-vision-ocr/import-123/";
 
   it("accepts a completed operation only when its response confirms the expected GCS destination", () => {
