@@ -563,3 +563,22 @@ Do **not** adopt the following parts of that proposal:
 The new platform's application D1 database is separate from BRVIN's existing database. Its tables are for tenant profiles, channel registrations, application identities, students, sessions, entitlements, feature configuration, usage and audit references. A BRVIN project ID is a selector/reference only; every retrieval still goes through the private v2 contract and its grants/readiness/quota checks.
 
 **Continuation instruction:** Build **BRVIN Teachers** as a separate, managed, multi-tenant downstream consumer in `ashini-x/brvin-teachers`. Preserve the existing Parmar AI product and BRVIN production. Do not transfer Parmar AI into the new repository as part of initial implementation. Start with one real pilot teacher, one approved BRVIN project and one channel. Use configuration for ordinary teacher differences, reusable modules for repeatable capabilities, and bespoke deployments only when justified. One Operator Console manages all BRVIN Teachers tenants and channels; do not create one admin panel per bot. Do not duplicate BRVIN knowledge, grants or ingestion. Do not create infrastructure for hypothetical scale; measure the first real workflow and evolve from evidence.
+
+## 14. Human-readable reference identifiers for teacher knowledge
+
+**Decision:** BRVIN Teachers uses a hierarchical human-readable reference system for new teacher-managed records. The normative policy is maintained in [brvin-teachers/docs/IDENTIFIER_POLICY.md](https://github.com/ashini-x/brvin-teachers/blob/main/docs/IDENTIFIER_POLICY.md).
+
+The intended formats are:
+
+- Tenant: `TCH-000001` — allocated by the BRVIN Teachers application in its own D1.
+- Project: `TCH-000001-PRJ-001` — project counter scoped to the tenant.
+- Collection: `TCH-000001-PRJ-001-COL-001` — collection counter scoped to its originating project.
+- Source: `TCH-000001-PRJ-001-COL-001-SRC-001` — source counter scoped to its originating collection.
+
+Each child counter restarts at `001` within its parent. Repeated suffixes are intentional; the full hierarchical reference is unique. Widths are minimums and expand beyond 999. Numbers are allocated atomically and are never reused after deletion/archive. Sharing grants do not produce new codes or renumber the original records.
+
+**System identity remains authoritative.** The tenant's internal UUID and BRVIN-generated project, collection and source IDs remain the keys for persistence, relationships, authorization and retrieval. These readable codes are display/reference labels only; they are not credentials, access tokens or replacements for the opaque BRVIN v2 `projectId`.
+
+**Ownership split:** BRVIN Teachers allocates tenant references. BRVIN in this repository allocates and persists project, collection and source references because it owns those knowledge records. BRVIN receives the tenant reference as non-secret external owner metadata. Existing Parmar AI, Fatman, AskMoina and other pre-existing BRVIN records are out of scope for automatic renumbering.
+
+**Implementation status:** Accepted architecture policy only. The current BRVIN Admin schema/UI and BRVIN Teachers app do not yet implement or display these references. Implementation requires coordinated, reviewed D1 migrations, admin changes, external tenant-reference handoff, concurrency-safe counters, uniqueness/lifecycle tests and an explicit migration/rollback plan. It does not require a change to the frozen retrieval v2 RPC contract because retrieval continues to use BRVIN's actual project ID. Do not manually issue production reference codes before implementation.
