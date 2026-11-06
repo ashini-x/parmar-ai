@@ -7,6 +7,20 @@ on:
   push:
     branches:
       - main
+    # Documentation-only and workflow-policy updates must not redeploy
+    # the existing production Workers. PRs still run full validation.
+    paths:
+      - "src/**"
+      - "packages/**"
+      - "scripts/**"
+      - "test/**"
+      - "wrangler*.jsonc"
+      - "package.json"
+      - "tsconfig.json"
+      - "test/tsconfig.json"
+      - "vitest*.config.ts"
+      - "admin-script.js"
+      - "migrations*.sql"
   workflow_dispatch:
 
 permissions:
