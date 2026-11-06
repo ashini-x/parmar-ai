@@ -260,7 +260,9 @@ Fatman-specific import/monitoring routes also exist under `/admin/api/fatman/*`.
 
 The production release workflow is `.github/workflows/release-validation.yml`.
 
-A push to `main` runs validation and then:
+A push to `main` that changes runtime code, tests, build/deployment configuration or release scripts runs validation and then. Documentation-only and workflow-policy-only pushes are excluded by the workflow's `push.paths` filter so they do not redeploy production. Pull requests still run validation for all changed files.
+
+For an eligible production push:
 1. captures the current 100%-traffic deployment versions for both Workers;
 2. deploys `brvin-service`;
 3. deploys `parmar-ai`;
