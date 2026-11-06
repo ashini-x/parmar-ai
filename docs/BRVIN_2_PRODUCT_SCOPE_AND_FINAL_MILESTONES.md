@@ -63,19 +63,22 @@ M0–M5 are earlier implementation stages and are not open tasks in the current 
 - Authenticated Operations walkthrough completed on 6 November 2026. It reviewed Operational summary, Live pipelines, Failures and warnings, and Storage and OCR retention.
 - Summary observed 33 project searches this month, zero active-environment connection failures, 404 failed events in the last seven days, zero OCR cleanup failures and no attention required. The dashboard code defines failed events as the count of seven-day activity rows with status `failed`; it is not an HTTP status or current recoverable-job count.
 - Live pipelines reported no active processing or deletion jobs. The visible older failures repeated the 5 November `storage.buckets.get` permission denial. No retry or delete action was taken during the walkthrough.
+- BRVIN Teachers' central Operator Console, teacher directory/profile D1 and classroom/collection/source UI are deployed in `ashini-x/brvin-teachers` (release [#42171352464](https://github.com/ashini-x/brvin-teachers/actions/runs/42171352464)).
+- The separate `BrvinTeachersManagementApi` WorkerEntrypoint and additive ownership/reference metadata migration are deployed in `parmar-ai` (paired Core release [#42171109140](https://github.com/ashini-x/parmar-ai/actions/runs/42171109140)). The consumer's `BRVIN_MANAGEMENT` binding targets the named entrypoint. This management API is distinct from and does not change frozen retrieval v2.
+- Production D1 confirms the metadata columns, source deduplication-scope column and reference-sequence table exist. The registry still contains no `brvin-teachers` application/environment row; the consumer config deliberately retains a placeholder and fails closed. The app D1 contains zero teacher records and zero Core-project mappings. No sample teacher/project/source/grant was created.
 
 ### Remaining acceptance — real teacher-focused consumer
 
 This is the only remaining M11 gate:
 
-1. Register a distinct independent consumer application and production environment.
-2. Connect it through the generated ChatGPT handoff using the supported private same-account Service Binding and v2 RPC.
-3. Use a real teacher's approved BRVIN project and source material.
+1. Register the `brvin-teachers` application and its active production environment in BRVIN Admin, with Worker name `brvin-teachers` and its deployed Worker URL. Copy the generated environment UUID into the consumer's deployment-controlled `BRVIN_MANAGEMENT` binding config in place of `BRVIN_TEACHERS_ENVIRONMENT_ID_REQUIRED`, then deploy and verify management health.
+2. Configure the separate private `BRVIN_SERVICE` binding to `brvin-service` / `BrvinRetrievalApi` with the same deployment-controlled environment UUID, and verify v2 connection identity.
+3. Create the actual teacher and approved BRVIN project/collection/source via the Operator Console; use the real teacher's approved source material.
 4. Demonstrate useful retrieval with source/page provenance and the correct project boundary.
 5. Revoke the application-project grant in BRVIN Admin.
 6. Demonstrate that retrieval is denied after revocation.
 
-The user must provide/identify the real teacher's approved material and consumer use case as part of the acceptance workflow. The BRVIN Teachers consumer (`ashini-x/brvin-teachers`) now exists and its bootstrap Worker is deployed. It may be used for this only after it is independently registered in BRVIN and completes the real teacher/source retrieval and revocation tests; repository creation or a bootstrap health check is not acceptance. Do not fabricate a production teacher, project, source or grant. Preserve existing Parmar AI, Fatman and AskMoina state. M11 must remain IN PROGRESS until useful retrieval and denied-after-revocation results are recorded.
+The user must provide/identify the real teacher's approved material and consumer use case as part of the acceptance workflow. The BRVIN Teachers consumer (`ashini-x/brvin-teachers`) and its Operator Console/classroom/source flows are deployed, and its Core management entrypoint is deployed. The consumer still needs its BRVIN application/environment registration and separate retrieval v2 binding before useful student retrieval can be tested. Repository creation, successful deployment or an operator-console health check is not acceptance. Do not fabricate a production teacher, project, source or grant. Preserve existing Parmar AI, Fatman and AskMoina state. M11 must remain IN PROGRESS until useful retrieval and denied-after-revocation results are recorded.
 
 ## 6. Deferred future work
 
