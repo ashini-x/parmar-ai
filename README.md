@@ -207,6 +207,7 @@ The current learning system is primarily **per-student**. Accumulated quiz and l
 - [docs/BRVIN_2_RPC_V2_CONTRACT.md](docs/BRVIN_2_RPC_V2_CONTRACT.md): current private v2 contract.
 - [docs/BRVIN_INTEGRATION_GUIDE.md](docs/BRVIN_INTEGRATION_GUIDE.md): consumer Worker integration.
 - [docs/BRVIN_TEACHERS_ARCHITECTURE.md](docs/BRVIN_TEACHERS_ARCHITECTURE.md): approved architecture for the separate downstream `ashini-x/brvin-teachers` platform; not a BRVIN core subsystem.
+- [docs/BRVIN_SYSTEM_REFERENCE.md §10.6](docs/BRVIN_SYSTEM_REFERENCE.md): deployed BRVIN Teachers management entrypoint, consumer Service Binding and remaining environment-registration/retrieval gates.
 - [docs/BRVIN_ADMIN_RUNBOOK.md](docs/BRVIN_ADMIN_RUNBOOK.md): administrator instructions.
 - [docs/BRVIN_OPERATIONS_RUNBOOK.md](docs/BRVIN_OPERATIONS_RUNBOOK.md): engineering/operator troubleshooting.
 - [docs/BRVIN_PRIVATE_RETRIEVAL_API.md](docs/BRVIN_PRIVATE_RETRIEVAL_API.md): legacy v1 compatibility only.
