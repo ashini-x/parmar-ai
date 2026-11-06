@@ -488,7 +488,7 @@ Automated tests cover wrong-environment, inactive, expired, forged and replayed 
 ## ADR-013 — Hierarchical human-readable references for BRVIN Teachers knowledge records
 
 **Decision date:** 6 November 2026  
-**Status:** Accepted architecture policy; management metadata/reference implementation validated in PR #107, deployment pending  
+**Status:** Implemented and deployed in Core release #42171109140; no teacher knowledge records have been created yet  
 **Scope:** New BRVIN Teachers tenants and their BRVIN knowledge projects, collections and sources. Existing BRVIN/Parmar AI records are excluded from automatic renumbering.
 
 ### Context
@@ -522,7 +522,7 @@ Human-readable references are not system IDs. BRVIN's existing opaque project/co
 2. Reference allocation requires coordinated D1 schema/admin changes in both repositories. It must not be partially implemented in only the consumer or only BRVIN.
 3. No existing production records are automatically backfilled or renamed. The legacy Fatman project identifier and all existing project/source/grant/usage records remain unchanged.
 4. No change to the frozen BRVIN v2 retrieval contract is required: v2 continues to receive the actual opaque `projectId`, never the human-readable code.
-5. Until implementation is reviewed, migrated and deployed, operators continue using BRVIN-generated internal IDs and must not manually invent production reference codes.
+5. The metadata/reference implementation is deployed and the production D1 migration is verified. Actual project/collection/source reference allocation starts when the registered BRVIN Teachers operator creates those records. No production teacher/project/source has yet been created; never hand-invent codes or backfill existing legacy records.
 
 **Normative consumer policy:** [BRVIN Teachers Identifier Policy](https://github.com/ashini-x/brvin-teachers/blob/main/docs/IDENTIFIER_POLICY.md).
 
@@ -530,7 +530,7 @@ Human-readable references are not system IDs. BRVIN's existing opaque project/co
 ## ADR-014 — Separate private BRVIN Teachers management entrypoint
 
 **Decision date:** 6 November 2026  
-**Status:** Implemented and validated in PR #107; production merge/deployment pending  
+**Status:** Merged and deployed in Core release #42171109140; BRVIN Teachers environment registration and consumer activation pending  
 **Scope:** BRVIN Teachers management of BRVIN-owned projects, collections and sources.
 
 ### Context
@@ -554,4 +554,4 @@ The management API owns project/collection create/list, explicit collection shar
 
 ### Consequences
 
-Core and consumer releases are coordinated but separate. Register the application and production environment in BRVIN Admin, then set that environment UUID in the consumer's deployment-controlled Service Binding configuration. The placeholder deliberately fails closed. No teacher or knowledge records are seeded by deployment; first real records are created by an operator action.
+Core release #42171109140 and consumer release #42171352464 are deployed. The consumer's `BRVIN_MANAGEMENT` binding points to this named entrypoint. Register the application and production environment in BRVIN Admin, then set that generated environment UUID in the consumer's deployment-controlled Service Binding configuration. Its placeholder deliberately fails closed, and the registry currently has no `brvin-teachers` application/environment record. The consumer's separate `brvin-service` retrieval v2 binding is still pending. No teacher or knowledge records are seeded by deployment; first real records must be created by an operator action.
