@@ -428,7 +428,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
   const pageCount = Number(body.pageCount);
   const dedupeScope = body.dedupeScope === undefined ? "legacy" :
     typeof body.dedupeScope === "string" ? body.dedupeScope.trim().slice(0, 180) : "";
-  if (!dedupeScope || /[\\u0000-\\u001f\\u007f]/u.test(dedupeScope)) {
+  if (!dedupeScope || /[\u0000-\u001f\u007f]/u.test(dedupeScope)) {
     return json({ ok: false, error: "The source deduplication scope is invalid." }, 400);
   }
   if (!title) return json({ ok: false, error: "Enter a name for this book." }, 400);
