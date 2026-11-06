@@ -1066,11 +1066,11 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
       for (let attempt = 1; attempt <= 120; attempt += 1) {
         await step.sleep("wait for Google Vision " + attempt, "30 seconds");
         const expectedOutputUri = "gs://" + gcsBucketName(this.env) + "/" + fatmanVisionOutputPrefix(importJob);
-        const result = await step.do("check Google Vision " + attempt, async =>
+        const result = await step.do("check Google Vision " + attempt, async () =>
           getFatmanVisionOperation(this.env, operationName, expectedOutputUri));
         if (result.error) throw new Error(result.error);
         if (result.done) {
-          const outputInventory = await step.do("verify Google Vision GCS output files", async =>
+          const outputInventory = await step.do("verify Google Vision GCS output files", async () =>
             listFatmanVisionOutputObjects(this.env, importJob, expectedPages));
           const outputNames = new Set(outputInventory.objects.map(item => item.name));
           const expectedOutputNames = Array.from({ length: expectedPages }, (_, index) =>
