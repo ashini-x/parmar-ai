@@ -51,6 +51,7 @@ The completed product baseline includes:
 - Live connection challenge/proof verification.
 - Per-project usage/quota reporting and administrative activity.
 - Operations summary, live pipeline view, specialist activity filters and read-only storage/lifecycle diagnostics.
+- A separate private `BrvinTeachersManagementApi` WorkerEntrypoint on `parmar-ai`, deployed independently from the retrieval-only `brvin-service` contract. It supports tenant-owned project/collection lifecycle, same-tenant collection sharing, source registration, and secure upload/recovery through the existing Core ingestion pipeline.
 
 ## 4. Verified production snapshot
 
@@ -58,10 +59,10 @@ The latest paired production release relevant to BRVIN lifecycle operations is *
 
 | Worker | Production version | Deployment |
 |---|---|---|
-| `brvin-service` | `00ad4201-0380-4f4a-89eb-a40d32d1cd46` | `b498be3f-3dc7-4bab-af95-0c9f8b1efe03` |
-| `parmar-ai` | `28ef219c-7c24-45de-bcad-56fd64d35a06` | `63e2fb68-2091-45e8-ba1f-1c033e3d4118` |
+| `brvin-service` | `72760779-3e3a-4a53-ad15-23b2a621a444` | `2d812a4f-569f-484b-983d-dfaedd8c016f` |
+| `parmar-ai` | `a6febaa0-7b2e-4387-878b-d4a63d16fb8f` | `f1072878-ee8e-4bec-9872-965816358f03` |
 
-The main release passed typecheck, unit tests, Node tests, both Worker dry-runs, paired deployment and live root/health/private BRVIN/Fatman smoke and acceptance. PR [#104](https://github.com/ashini-x/parmar-ai/pull/104) is documentation-only and did not deploy or change production.
+The 6 November paired production release [#42171109140](https://github.com/ashini-x/parmar-ai/actions/runs/42171109140) passed typecheck, unit tests, Node tests, both Worker dry-runs, paired deployment and live root/health/private BRVIN/Fatman smoke and acceptance. It includes the deployed BRVIN Teachers management entrypoint. The frozen retrieval v2 methods and public/private route boundaries were not changed.
 
 Additional verified production facts:
 - D1: `parmar-ai-admin-prod` (the existing shared registry/analytics database).
@@ -72,9 +73,11 @@ Additional verified production facts:
 
 The exact production inventory and trust boundaries are maintained in [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md).
 
+The BRVIN Teachers management metadata migration is now present in the production D1 registry: project/collection/source ownership and reference columns, per-parent sequence storage and the source-import `dedupe_scope` column were verified read-only after release. The app-specific registration has not yet been created; no teacher/project/collection/source rows were seeded.
+
 ## 5. Milestone status
 
-M6–M10 are complete. M11 is **in progress**, with the Operations, retention-safety and administrator-walkthrough portions accepted. The only remaining M11 acceptance gate is a genuine teacher-focused consumer application test:
+M6–M10 are complete. M11 is **in progress**, with the Operations, retention-safety and administrator-walkthrough portions accepted. BRVIN Teachers now has a deployed Operator Console and classroom/collection/source UI, and its private management entrypoint is deployed in `parmar-ai`. The app's Service Binding points to `parmar-ai`/`BrvinTeachersManagementApi`, but the production `brvin-teachers` application/environment is not yet registered in BRVIN Admin; the consumer binding intentionally remains fail-closed until the generated environment UUID replaces its placeholder. The remaining M11 acceptance is still a genuine teacher-focused consumer retrieval/revocation test:
 
 1. Register a distinct independent application and its production environment in BRVIN.
 2. Connect the consumer Worker through the generated ChatGPT handoff and same-account private Service Binding.
@@ -99,13 +102,13 @@ The Operations walkthrough on 6 November 2026 recorded 33 project searches this 
 - Cross-account/non-Cloudflare gateway work is deferred. It is not required to finish M11.
 - Preserve existing Parmar AI, Fatman and AskMoina data, identities, integrations and production behavior. Do not remove historical provider configuration or legacy UI without a separate dependency audit and approved change.
 - Keep Parmar AI as its existing standalone SSC application for now. Do not transfer its code, production data, bot identity or `/admin` into BRVIN Teachers as part of the initial build. Any future migration is a separate decision requiring feature parity, data-continuity, security, operational and rollback acceptance.
-- The **BRVIN Teachers** multi-channel, multi-tenant application platform is a separate downstream consumer workstream, documented in [BRVIN_TEACHERS_ARCHITECTURE.md](BRVIN_TEACHERS_ARCHITECTURE.md) and implemented in the now-created `ashini-x/brvin-teachers` repository. Its initial Worker bootstrap and GitHub Actions deployment pipeline are deployed and verified; its real teacher-facing pilot is not yet defined or implemented. It consumes BRVIN v2; it is not BRVIN core and does not move BRVIN code or knowledge infrastructure. Do not refactor this production repository or expand BRVIN scope to host it. Repository creation and bootstrap deployment do not satisfy the remaining M11 real-consumer acceptance gate.
+- The **BRVIN Teachers** multi-channel, multi-tenant application platform is a separate downstream consumer workstream, documented in [BRVIN_TEACHERS_ARCHITECTURE.md](BRVIN_TEACHERS_ARCHITECTURE.md) and implemented in `ashini-x/brvin-teachers`. Its Operator Console, tenant D1, classroom/collection/source UI and private management binding are deployed. The management entrypoint is in `parmar-ai`; it reuses Core-owned storage/OCR/indexing and is separate from the frozen retrieval v2 Worker contract. The app is not yet registered as an active BRVIN application/environment, its binding still uses the deliberate placeholder, and there are no production teacher/project/source records. It has not yet completed real student retrieval or post-revocation denial, so it does not close M11. Do not refactor or transfer the existing Parmar AI product into the consumer repository.
 
 ## 7. New-chat continuation instruction
 
 Start a new BRVIN chat with this instruction:
 
-> Continue BRVIN 2 in `ashini-x/parmar-ai`. Read `docs/BRVIN_2_MASTER_PLAN.md` first, then `docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md`, `docs/BRVIN_SYSTEM_REFERENCE.md`, and the relevant current contract/runbook. These are the canonical current documents; do not resurrect deleted Project Factory or M3 test-client plans. M6–M10 are complete. M11 is in progress only for the genuine teacher-focused consumer acceptance: register/connect an independent consumer app, retrieve a real teacher's granted knowledge, revoke the grant and prove retrieval is denied. Inspect latest GitHub and production state before acting. Preserve all existing production data and trust boundaries. Use a PR, tests and release validation for code changes, and update the canonical documents as part of each accepted milestone.
+> Continue BRVIN 2 in `ashini-x/parmar-ai`. Read `docs/BRVIN_2_MASTER_PLAN.md` first, then `docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md`, `docs/BRVIN_SYSTEM_REFERENCE.md`, `docs/BRVIN_2_RPC_V2_CONTRACT.md`, `docs/BRVIN_2_ARCHITECTURE_DECISIONS.md` and the relevant runbook. These are the canonical current documents; do not resurrect deleted Project Factory or M3 test-client plans. M6–M10 are complete. The BRVIN Teachers management entrypoint is deployed and retrieval v2 remains frozen. Next, register `brvin-teachers` and its production Worker environment in BRVIN Admin, put the generated environment UUID into the consumer's deployment-controlled Service Binding config, then verify useful retrieval from a real teacher's approved knowledge and denial after grant revocation. M11 remains open until both retrieval and post-revocation denial pass. Inspect current GitHub and production state before acting; preserve existing product/data boundaries and update the canonical documents with every release.
 
 When a future change alters code, D1, bindings, access rules, ingestion, retrieval or production behavior, update the relevant current reference in the same PR. Keep this file concise and current; do not append a second historical milestone ledger.
 
