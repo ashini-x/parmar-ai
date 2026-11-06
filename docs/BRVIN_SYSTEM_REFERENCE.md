@@ -542,7 +542,7 @@ BRVIN cannot authorize OpenAI's GitHub connector or guarantee that a newly creat
 
 AskMoina Voice remains an optional independent consumer and must not be used as a fixed BRVIN test-client host. Its current integration state must be read from the latest repo and production ledger before any work; historical 4 November audit statements are not current deployment evidence.
 
-The first teacher-focused proof consumer may be a separate SSC Mathematics Telegram bot repository, built and deployed by ChatGPT/user. BRVIN's acceptance responsibility is to register and verify its private knowledge connection and prove teacher/project isolation—not to create the bot.
+The planned BRVIN Teachers platform (`ashini-x/brvin-teachers`) is a separate downstream consumer repository, not part of the BRVIN implementation and not yet created or deployed. It may provide the genuine teacher-focused consumer for the remaining M11 acceptance, but only if a real teacher, approved BRVIN project/source, successful useful retrieval and post-revocation denial are demonstrated. Merely creating the repository or a synthetic demo does not satisfy M11. Existing Parmar AI remains a standalone product and is not automatically a BRVIN Teachers tenant. BRVIN's acceptance responsibility is to register and verify the consumer's private knowledge connection and enforce its project/source grants—not to create or operate the consumer application.
 
 ### 10.5 Other Cloudflare accounts or non-Cloudflare applications
 
