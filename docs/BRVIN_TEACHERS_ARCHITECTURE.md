@@ -591,4 +591,19 @@ This is a BRVIN Teachers application surface, not a redesign or replacement of t
 
 Tenant creation belongs to the BRVIN Teachers application D1; project, collection and source creation belongs to BRVIN's registry. Cross-system provisioning must be idempotent and resumable, with explicit partial-failure states. The consumer design does not authorize a one-transaction assumption across the two databases, direct core database writes, or automatic app-project grants without the approved integration/authorization workflow.
 
-The design is approved, but neither the console nor the management interface is implemented. Existing production BRVIN Admin and Parmar AI interfaces/behavior remain unchanged.
+Implementation status on 6 November 2026: the downstream Operator Console and teacher-profile foundation are deployed in BRVIN Teachers PR #1. The separate private management entrypoint, tenant ownership metadata, human-readable project/collection/source reference allocation, project/collection operations and reuse of the existing secure PDF importer are implemented and validated in BRVIN Core PR #107; it is not yet merged/deployed at the time of this documentation update. The consumer classroom/upload UI is implemented in BRVIN Teachers PR #2 and has passed tests/build/dry-run; it is not yet merged/deployed. No production teacher/project/source records have been created. Existing production BRVIN Admin, Parmar AI and retrieval v2 behavior remain unchanged.
+
+
+## 16. BRVIN Teachers management entrypoint — separate from retrieval v2
+
+**Implementation:** PR #107 in `ashini-x/parmar-ai` adds the named `BrvinTeachersManagementApi` WorkerEntrypoint to the existing `parmar-ai` Worker. It is not a public HTTP route and is not part of `brvin-service`. BRVIN Teachers calls it through a same-account Cloudflare Service Binding with the exact deployment-controlled `applicationEnvironmentId` in WorkerEntrypoint props. The management entrypoint accepts no caller-provided environment identity.
+
+The entrypoint resolves the environment and application in the BRVIN registry, and requires an active application with slug `brvin-teachers`, an active environment and registered Worker name `brvin-teachers`. It exposes narrowly scoped operations for teacher-owned project list/create, collection list/create, collection sharing/revocation, source listing, PDF import start/chunk/complete/resume/status. Every operation resolves owning application, tenant reference, project, collection and current grant from BRVIN D1 before it mutates or exposes a resource.
+
+BRVIN Core persists non-secret external tenant ownership metadata and hierarchical project/collection/source display references. Internal BRVIN record IDs remain authoritative. The tenant TCH reference is correlation/ownership metadata, not an access credential. Per-parent counters are allocated in BRVIN's own D1. Existing Parmar/Fatman/AskMoina records are not backfilled or renumbered.
+
+PDF transfer, private GCS storage, Google Vision OCR, Cloudflare Workflow processing, readiness and retrieval indexing remain the existing Core pipeline. The new importer deduplication key is scoped to the originating collection so identical PDF bytes in different teacher collections cannot cause their records or grants to be reassigned. A retry in the same collection can resume its existing source record. BRVIN Teachers does not receive GCS upload session URIs or provider credentials.
+
+Collection shares are explicit and additive. Revoking a collection from a target classroom removes the collection grant and any direct source grants for that same collection from that target. The originating classroom's collection grant cannot be revoked through this management interface. Cross-tenant collection sharing is not exposed in this first version.
+
+The frozen `BrvinRetrievalApi` and v2 methods remain unchanged. The retrieval Worker continues to enforce environment identity, application-project grants, source readiness, quota and per-request authorisation. Management writes are not added to the retrieval API, and no consumer can query the BRVIN database, GCS or AI Search directly.
