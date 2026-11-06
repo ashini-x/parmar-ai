@@ -579,6 +579,7 @@ async function startTeacherSourceUpload(
   });
   const forwarded = await jsonResponse(await startBrvinBookUpload(env, uploadRequest, {
     preserveExistingProjectGrants: true,
+    dedupeScope: "brvin-collection:" + collection.id,
   }));
   if (forwarded.status < 200 || forwarded.status >= 300 || forwarded.body.ok !== true ||
       typeof forwarded.body.importId !== "string") {
