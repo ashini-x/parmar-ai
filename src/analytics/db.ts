@@ -707,6 +707,56 @@ export async function ensureBrvinOwnerMetadataSchema(db: D1Database): Promise<vo
   ).bind(BRVIN_OWNER_METADATA_MIGRATION_KEY, Date.now()).run();
 }
 
+export const BRVIN_TEACHER_MANAGEMENT_METADATA_MIGRATION_KEY = "2026-11-06-brvin-teachers-management-v1";
+
+/**
+ * Add non-authoritative external tenant ownership, origin references and
+ * hierarchical human-readable references for BRVIN Teachers-managed records.
+ * Existing knowledge objects retain their current IDs and remain unrenumbered.
+ */
+export async function ensureBrvinTeacherManagementMetadataSchema(db: D1Database): Promise<void> {
+  const additions: Array<[string, string, string]> = [
+    ["brvin_projects", "owner_application_id", "TEXT"],
+    ["brvin_projects", "owner_tenant_ref", "TEXT"],
+    ["brvin_projects", "project_ref", "TEXT"],
+    ["brvin_projects", "management_request_id", "TEXT"],
+    ["brvin_collections", "owner_application_id", "TEXT"],
+    ["brvin_collections", "owner_tenant_ref", "TEXT"],
+    ["brvin_collections", "origin_project_id", "TEXT"],
+    ["brvin_collections", "collection_ref", "TEXT"],
+    ["brvin_collections", "management_request_id", "TEXT"],
+    ["brvin_books", "owner_application_id", "TEXT"],
+    ["brvin_books", "owner_tenant_ref", "TEXT"],
+    ["brvin_books", "origin_collection_id", "TEXT"],
+    ["brvin_books", "source_ref", "TEXT"],
+  ];
+
+  for (const [table, column, definition] of additions) {
+    const readColumns = async () => db.prepare("PRAGMA table_info(" + table + ")").all<{ name: string }>();
+    const before = await readColumns();
+    if ((before.results ?? []).some(item => item.name === column)) continue;
+    try {
+      await db.prepare("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition).run();
+    } catch (error) {
+      const after = await readColumns();
+      if (!(after.results ?? []).some(item => item.name === column)) throw error;
+    }
+  }
+
+  await db.batch([
+    db.prepare("CREATE TABLE IF NOT EXISTS brvin_reference_sequences (scope_key TEXT PRIMARY KEY,current_value INTEGER NOT NULL DEFAULT 0 CHECK(current_value >= 0),updated_at INTEGER NOT NULL)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_brvin_projects_human_reference ON brvin_projects(project_ref) WHERE project_ref IS NOT NULL"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_brvin_projects_management_request ON brvin_projects(owner_application_id,owner_tenant_ref,management_request_id) WHERE management_request_id IS NOT NULL"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_brvin_projects_teacher_owner ON brvin_projects(owner_application_id,owner_tenant_ref,status)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_brvin_collections_human_reference ON brvin_collections(collection_ref) WHERE collection_ref IS NOT NULL"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_brvin_collections_management_request ON brvin_collections(owner_application_id,owner_tenant_ref,management_request_id) WHERE management_request_id IS NOT NULL"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_brvin_collections_teacher_owner ON brvin_collections(owner_application_id,owner_tenant_ref,status)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_brvin_books_human_reference ON brvin_books(source_ref) WHERE source_ref IS NOT NULL"),
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_brvin_books_teacher_origin ON brvin_books(owner_application_id,owner_tenant_ref,origin_collection_id,status)"),
+    db.prepare("INSERT OR IGNORE INTO brvin_migrations(migration_key,applied_at) VALUES(?,?)").bind(BRVIN_TEACHER_MANAGEMENT_METADATA_MIGRATION_KEY, Date.now()),
+  ]);
+}
+
 export const BRVIN_CONNECTION_METADATA_MIGRATION_KEY = "2026-11-05-brvin-connection-metadata-v1";
 
 /**
@@ -751,6 +801,7 @@ async function ensureFatmanImportJobSchema(env: Env): Promise<void> {
     ["book_id", "TEXT"],
     ["book_title", "TEXT"],
     ["page_count", "INTEGER NOT NULL DEFAULT 538"],
+    ["dedupe_scope", "TEXT NOT NULL DEFAULT 'legacy'"],
   ];
   for (const [name, definition] of additions) {
     if (!names.has(name)) {
@@ -905,6 +956,7 @@ export async function ensureAnalyticsSchema(env: Env): Promise<void> {
       await ensureBrvinCompatibilitySchema(env);
       await ensureBrvinOwnerMetadataSchema(env.DB!);
       await ensureBrvinConnectionMetadataSchema(env.DB!);
+      await ensureBrvinTeacherManagementMetadataSchema(env.DB!);
       await ensureBrvin2ApplicationIdentities(env.DB!);
       await ensureBrvin2AskMoinaIdentities(env.DB!);
     })()
