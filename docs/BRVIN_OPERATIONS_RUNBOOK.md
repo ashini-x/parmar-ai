@@ -138,6 +138,25 @@ For a source in an active/failed state:
 7. Use Resume only when the dashboard offers it and the failed operation is in a resumable state.
 8. Re-run the relevant tests or production acceptance checks after a fix.
 
+### Vision operation completion versus OCR-output availability
+
+For asynchronous PDF OCR, `done = true` on the Google Vision long-running operation is not sufficient evidence that BRVIN can index the source. The operation's successful `response.responses[].outputConfig.gcsDestination.uri` must match the import's registered temporary OCR prefix, and the expected per-page JSON files must exist in that prefix before page indexing starts.
+
+The protected **Inspect processing pipeline** view reports:
+- the expected OCR output prefix;
+- the destination URI returned by Vision;
+- a bounded list of object names, sizes and creation times found under the prefix;
+- any operation-response, destination-mismatch or GCS-listing error.
+
+For a PDF with `batchSize: 1`, the expected file for page N is `ocr/output-N-to-N.json` beneath that prefix. If Vision says complete but the expected object is absent:
+1. Do not upload the PDF again.
+2. Do not manually mark it ready or repeatedly resume indexing against a missing object.
+3. Inspect the actual operation response and the listed output objects. Distinguish a Vision operation error, a destination mismatch, an empty GCS output prefix, and a GCS permission/listing failure.
+4. Correct the underlying output destination/IAM issue first.
+5. Only then schedule a fresh OCR operation. That may incur another Google Cloud Vision charge; obtain approval for the repeat OCR before triggering it.
+
+The importer now validates the operation response and checks for all expected output objects before it starts the indexing child Workflow. This prevents a false OCR-complete state from sending an indexer into repeated 404 retries.
+
 Do not manually mark the source ready as a workaround. The source must pass page coverage and retrieval requirements.
 
 ## 9. Archive, delete and OCR-only cleanup
