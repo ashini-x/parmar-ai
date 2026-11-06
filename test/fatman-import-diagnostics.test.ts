@@ -236,14 +236,17 @@ describe("Google Vision asynchronous output verification", () => {
   });
 
   it("lists only bounded metadata under this import's expected temporary prefix", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
-      items: [
-        { name: "brvin/temporary-vision-ocr/import-123/ocr/output-1-to-1.json", size: "512", timeCreated: "2026-11-06T08:00:00Z" },
-        { name: "brvin/temporary-vision-ocr/import-123/ocr/output-2-to-2.json", size: "640" },
-        { name: "brvin/temporary-vision-ocr/another-import/ocr/output-1-to-1.json", size: "999" }
-      ],
-      nextPageToken: "more"
-    }), { status: 200 }));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        items: [
+          { name: "brvin/temporary-vision-ocr/import-123/ocr/output-1-to-1.json", size: "512", timeCreated: "2026-11-06T08:00:00Z" },
+          { name: "brvin/temporary-vision-ocr/another-import/ocr/output-1-to-1.json", size: "999" }
+        ],
+        nextPageToken: "more"
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        items: [{ name: "brvin/temporary-vision-ocr/import-123/ocr/output-2-to-2.json", size: "640" }]
+      }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await listFatmanVisionOutputObjects(env, {
@@ -257,11 +260,13 @@ describe("Google Vision asynchronous output verification", () => {
       "brvin/temporary-vision-ocr/import-123/ocr/output-1-to-1.json",
       "brvin/temporary-vision-ocr/import-123/ocr/output-2-to-2.json"
     ]);
-    expect(result.truncated).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const url = new URL(String(fetchMock.mock.calls[0][0]));
-    expect(url.searchParams.get("prefix")).toBe("brvin/temporary-vision-ocr/import-123/");
-    expect(url.searchParams.get("maxResults")).toBe("25");
+    expect(result.truncated).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstUrl = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(firstUrl.searchParams.get("prefix")).toBe("brvin/temporary-vision-ocr/import-123/");
+    expect(firstUrl.searchParams.get("maxResults")).toBe("25");
+    const secondUrl = new URL(String(fetchMock.mock.calls[1][0]));
+    expect(secondUrl.searchParams.get("pageToken")).toBe("more");
     expect(fetchMock.mock.calls[0][1]?.method).toBeUndefined();
   });
 });
