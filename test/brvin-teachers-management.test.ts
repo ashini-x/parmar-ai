@@ -6,6 +6,7 @@ import {
 import {
   hierarchicalReference,
   isValidBrvinTeachersTenantReference,
+  resolveBrvinTeachersManagementEnvironment,
 } from "../src/brvin/teachers-management";
 
 class ManagementMetadataStatement {
@@ -89,5 +90,52 @@ describe("BRVIN Teachers ownership/reference schema migration", () => {
     db.alters.length = 0;
     await ensureBrvinTeacherManagementMetadataSchema(db as never);
     expect(db.alters).toHaveLength(0);
+  });
+});
+
+
+describe("BRVIN Teachers management environment authorization", () => {
+  const environmentId = "00000000-0000-4000-8000-000000000201";
+  const applicationId = "00000000-0000-4000-8000-000000000202";
+  const activeIdentity = {
+    environment_id: environmentId,
+    environment_status: "active",
+    worker_name: "brvin-teachers",
+    application_id: applicationId,
+    application_slug: "brvin-teachers",
+    application_status: "active",
+  };
+
+  it("resolves only the active registered BRVIN Teachers Worker environment", async () => {
+    const first = vi.fn(async () => activeIdentity);
+    const bind = vi.fn(() => ({ first }));
+    const prepare = vi.fn(() => ({ bind }));
+    const db = { prepare } as never;
+
+    const result = await resolveBrvinTeachersManagementEnvironment(db, environmentId);
+
+    expect(result).toEqual({ applicationId, environmentId });
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("e.worker_name"));
+    expect(bind).toHaveBeenCalledWith(environmentId);
+  });
+
+  it("rejects malformed, unknown, inactive and mismatched application/Worker identities", async () => {
+    const malformedPrepare = vi.fn();
+    const malformedDb = { prepare: malformedPrepare } as never;
+    expect(await resolveBrvinTeachersManagementEnvironment(malformedDb, "not-an-environment-id")).toBeNull();
+    expect(malformedPrepare).not.toHaveBeenCalled();
+
+    const invalidIdentities = [
+      null,
+      { ...activeIdentity, environment_status: "revoked" },
+      { ...activeIdentity, application_status: "suspended" },
+      { ...activeIdentity, application_slug: "parmar-ai" },
+      { ...activeIdentity, worker_name: "another-worker" },
+    ];
+    for (const identity of invalidIdentities) {
+      const first = vi.fn(async () => identity);
+      const db = { prepare: vi.fn(() => ({ bind: vi.fn(() => ({ first })) })) } as never;
+      expect(await resolveBrvinTeachersManagementEnvironment(db, environmentId)).toBeNull();
+    }
   });
 });
