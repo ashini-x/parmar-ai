@@ -553,6 +553,9 @@ async function startTeacherSourceUpload(
   const project = await resolveOwnedProject(env, caller, input.tenantReference, input.projectId);
   const collection = await resolveOwnedCollection(env, caller, input.tenantReference, input.collectionId);
   if (!project || !collection) return failure("RESOURCE_NOT_FOUND", "The classroom or collection is unavailable.");
+  if (collection.originProjectId !== project.id) {
+    return failure("COLLECTION_OWNER_REQUIRED", "PDF sources can be added only from the collection's originating classroom.");
+  }
   const grant = await env.DB.prepare(
     "SELECT 1 AS allowed FROM brvin_project_collections WHERE project_id=? AND collection_id=? LIMIT 1",
   ).bind(project.id, collection.id).first<{ allowed: number }>();
