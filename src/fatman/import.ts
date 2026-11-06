@@ -752,8 +752,10 @@ export function fatmanVisionOutputPrefix(job: Pick<FatmanImportJob, "id" | "sour
   return sourcePrefix + "ocr/";
 }
 
-export function fatmanOutputObjectName(importId: string, page: number, prefix = "fatman/imports/" + importId + "/"): string {
-  return prefix + "ocr/output-" + page + "-to-" + page + ".json";
+export function fatmanOutputObjectName(importId: string, page: number, prefix = "fatman/imports/" + importId + "/ocr/"): string {
+  // The caller supplies the complete gcsDestination prefix. Vision writes
+  // output-N-to-N.json directly inside it; do not insert another "ocr/" folder.
+  return prefix + "output-" + page + "-to-" + page + ".json";
 }
 
 export async function readFatmanVisionOutput(env: Env, importId: string, page: number): Promise<string> {
