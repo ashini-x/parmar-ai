@@ -72,9 +72,9 @@ describe("BRVIN Teachers ownership/reference schema migration", () => {
   it("adds ownership, origin and human-reference metadata without replacing existing IDs", async () => {
     const db = new ManagementMetadataDb();
     await ensureBrvinTeacherManagementMetadataSchema(db as never);
-    expect(db.columns.get("brvin_projects")).toEqual(expect.objectContaining(new Set([
+    expect([...(db.columns.get("brvin_projects") ?? [])]).toEqual(expect.arrayContaining([
       "owner_application_id", "owner_tenant_ref", "project_ref", "management_request_id", "subject", "management_request_hash",
-    ])));
+    ]));
     expect(db.columns.get("brvin_collections")?.has("origin_project_id")).toBe(true);
     expect(db.columns.get("brvin_collections")?.has("collection_ref")).toBe(true);
     expect(db.columns.get("brvin_books")?.has("origin_collection_id")).toBe(true);
