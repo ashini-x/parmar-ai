@@ -1984,7 +1984,17 @@ function renderJob(job,pipeline){const uploaded=job.uploadedBytes>=job.expectedS
 }
 async function showImport(id){activeImportId=id;try{const d=await api(API+"status?id="+encodeURIComponent(id));const job=d.import;if(!job)throw new Error("Import not found.");
  $("upload-modal").classList.remove("open");renderJob(job,d.pipeline);$("modal-title").textContent=job.bookTitle||"BRVIN operations";
- $("modal-body").innerHTML='<div class="metrics" style="grid-template-columns:repeat(3,1fr)"><div class="metric"><span>State</span><strong style="font-size:17px">'+esc(job.status)+'</strong></div><div class="metric"><span>Indexed</span><strong style="font-size:17px">'+job.indexedPages+'/'+job.expectedPages+'</strong></div><div class="metric"><span>Upload</span><strong style="font-size:17px">'+pct(job.uploadedBytes,job.expectedSize)+'%</strong></div></div><p class="muted">Vision OCR: '+esc(d.pipeline?.vision?.status||"not started")+' · Workflow: '+esc(d.pipeline?.workflow?.status||"not started")+'</p><div class="timeline">'+(d.events||[]).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+'</small></div></div>').join("")+'</div>';
+ const vision=d.pipeline?.vision||{},objects=vision.outputObjects||[],destinations=vision.outputDestinations||[];
+ const outputDiagnostic=vision.expectedOutputUri?'<div class="notice" style="margin:12px 0;white-space:pre-wrap">'+[
+  '<strong>Vision output verification</strong>',
+  'Expected prefix: '+esc(vision.expectedOutputUri),
+  'Vision-reported destination(s): '+esc(destinations.join(", ")||"not returned"),
+  'Objects found: '+esc(String(vision.outputObjectCount??objects.length)),
+  ...(objects.length?['Objects: '+esc(objects.map(item=>item.name+" ("+(item.size||"size unknown")+")").join(", "))]:[]),
+  ...(vision.outputListingTruncated?["Object listing truncated at 25 entries."]:[]),
+  ...(vision.error?["Vision diagnostic: "+esc(vision.error)]:[])
+ ].join(String.fromCharCode(10))+'</div>':"";
+ $("modal-body").innerHTML='<div class="metrics" style="grid-template-columns:repeat(3,1fr)"><div class="metric"><span>State</span><strong style="font-size:17px">'+esc(job.status)+'</strong></div><div class="metric"><span>Indexed</span><strong style="font-size:17px">'+job.indexedPages+'/'+job.expectedPages+'</strong></div><div class="metric"><span>Upload</span><strong style="font-size:17px">'+pct(job.uploadedBytes,job.expectedSize)+'%</strong></div></div><p class="muted">Vision OCR: '+esc(vision.status||"not started")+' · Workflow: '+esc(d.pipeline?.workflow?.status||"not started")+'</p>'+outputDiagnostic+'<div class="timeline">'+(d.events||[]).map(e=>'<div class="event '+esc(e.status)+'"><i class="rail"></i><div><strong>'+esc(e.agent)+' · '+esc(e.phase)+'</strong><p>'+esc(e.message)+'</p>'+(e.details?'<small>'+esc(detailText(e.details))+'</small><br>':"")+'<small>'+esc(time(e.createdAt))+'</small></div></div>').join("")+'</div>';
  $("modal").classList.add("open");
  }catch(e){say(e.message,true);}}
 function manageBook(id){
