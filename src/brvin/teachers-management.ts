@@ -92,10 +92,12 @@ async function nextReferenceSequence(env: Env, scopeKey: string): Promise<number
   return sequence;
 }
 
-async function resolveCaller(env: Env, environmentId: unknown): Promise<ManagementCaller | null> {
-  if (!env.DB || typeof environmentId !== "string" || !UUID.test(environmentId)) return null;
-  await ensureAnalyticsSchema(env);
-  const row = await env.DB.prepare(
+export async function resolveBrvinTeachersManagementEnvironment(
+  db: D1Database,
+  environmentId: unknown,
+): Promise<{ applicationId: string; environmentId: string } | null> {
+  if (typeof environmentId !== "string" || !UUID.test(environmentId)) return null;
+  const row = await db.prepare(
     "SELECT e.id AS environment_id,e.status AS environment_status,e.worker_name," +
     "a.id AS application_id,a.slug AS application_slug,a.status AS application_status " +
     "FROM brvin_application_environments e JOIN brvin_applications a ON a.id=e.application_id " +
@@ -111,6 +113,12 @@ async function resolveCaller(env: Env, environmentId: unknown): Promise<Manageme
   if (!row || row.application_slug !== "brvin-teachers" || row.worker_name !== "brvin-teachers" ||
       row.application_status !== "active" || row.environment_status !== "active") return null;
   return { applicationId: row.application_id, environmentId: row.environment_id };
+}
+
+async function resolveCaller(env: Env, environmentId: unknown): Promise<ManagementCaller | null> {
+  if (!env.DB || typeof environmentId !== "string" || !UUID.test(environmentId)) return null;
+  await ensureAnalyticsSchema(env);
+  return resolveBrvinTeachersManagementEnvironment(env.DB, environmentId);
 }
 
 async function resolveOwnedProject(
