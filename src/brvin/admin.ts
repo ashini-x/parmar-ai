@@ -755,6 +755,8 @@ export async function startBrvinBookUpload(env: Env, request: Request): Promise<
     const uploadPayload = {
       title: body.title, filename: body.filename, sha256: body.sha256, size: body.size,
       pageCount: body.pageCount, costConfirmed: body.costConfirmed,
+      // A matching PDF in a different collection is a separate source record.
+      dedupeScope: "brvin-collection:" + collectionId,
     };
     const forwardedHeaders = new Headers(request.headers);
     forwardedHeaders.set("content-type", "application/json");
