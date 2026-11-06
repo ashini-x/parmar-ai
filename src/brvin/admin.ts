@@ -729,7 +729,7 @@ export async function brvinImportStatus(env: Env, importId: string | null): Prom
 export async function startBrvinBookUpload(
   env: Env,
   request: Request,
-  options: { preserveExistingProjectGrants?: boolean } = {},
+  options: { preserveExistingProjectGrants?: boolean; dedupeScope?: string } = {},
 ): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "The BRVIN database is not configured." }, 503);
   let body: Record<string, unknown>;
@@ -759,8 +759,7 @@ export async function startBrvinBookUpload(
     const uploadPayload = {
       title: body.title, filename: body.filename, sha256: body.sha256, size: body.size,
       pageCount: body.pageCount, costConfirmed: body.costConfirmed,
-      // A matching PDF in a different collection is a separate source record.
-      dedupeScope: "brvin-collection:" + collectionId,
+      dedupeScope: options.dedupeScope ?? "legacy",
     };
     const forwardedHeaders = new Headers(request.headers);
     forwardedHeaders.set("content-type", "application/json");
