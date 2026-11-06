@@ -148,7 +148,7 @@ The protected **Inspect processing pipeline** view reports:
 - a bounded list of object names, sizes and creation times found under the prefix;
 - any operation-response, destination-mismatch or GCS-listing error.
 
-For a PDF with `batchSize: 1`, the expected file for page N is `ocr/output-N-to-N.json` beneath that prefix. If Vision says complete but the expected object is absent:
+For a PDF with `batchSize: 1`, the expected file for page N is `output-N-to-N.json` directly beneath the destination URI's prefix. The importer must not append another `ocr/` segment: the legacy prefix already includes its `ocr/` directory, while new BRVIN imports use their isolated temporary root directly. If Vision says complete but the expected object is absent:
 1. Do not upload the PDF again.
 2. Do not manually mark it ready or repeatedly resume indexing against a missing object.
 3. Inspect the actual operation response and the listed output objects. Distinguish a Vision operation error, a destination mismatch, an empty GCS output prefix, and a GCS permission/listing failure.
