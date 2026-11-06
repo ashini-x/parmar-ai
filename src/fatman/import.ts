@@ -961,32 +961,48 @@ export async function getFatmanVisionOperation(
 export async function listFatmanVisionOutputObjects(
   env: Env,
   job: Pick<FatmanImportJob, "id" | "source_object">,
+  maxObjects = 25,
 ): Promise<{ prefix: string; objects: Array<{ name: string; size?: string; timeCreated?: string }>; truncated: boolean }> {
   const bucketName = bucket(env);
   const prefix = fatmanVisionOutputPrefix(job);
   const token = await getGoogleAccessToken(env);
-  const query = new URLSearchParams({
-    prefix,
-    maxResults: "25",
-    fields: "items(name,size,timeCreated),nextPageToken",
-  });
-  const response = await fetch(
-    GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) + "/o?" + query.toString(),
-    { headers: { authorization: "Bearer " + token } },
-  );
-  if (!response.ok) throw await gcsError(response, "Could not list Vision OCR output objects.");
-  const data = await response.json() as {
-    items?: Array<{ name?: string; size?: string | number; timeCreated?: string }>;
-    nextPageToken?: string;
-  };
-  const objects = (data.items ?? [])
-    .filter(item => typeof item.name === "string" && item.name.startsWith(prefix))
-    .map(item => ({
-      name: String(item.name),
-      ...(item.size !== undefined ? { size: String(item.size) } : {}),
-      ...(item.timeCreated ? { timeCreated: item.timeCreated } : {}),
-    }));
-  return { prefix: "gs://" + bucketName + "/" + prefix, objects, truncated: Boolean(data.nextPageToken) };
+  const limit = Number.isSafeInteger(maxObjects) && maxObjects > 0
+    ? Math.min(maxObjects, 100_000)
+    : 25;
+  const objects: Array<{ name: string; size?: string; timeCreated?: string }> = [];
+  let pageToken = "";
+  let truncated = false;
+
+  do {
+    const query = new URLSearchParams({
+      prefix,
+      maxResults: String(Math.min(1000, limit - objects.length)),
+      fields: "items(name,size,timeCreated),nextPageToken",
+    });
+    if (pageToken) query.set("pageToken", pageToken);
+    const response = await fetch(
+      GCS_API + "/storage/v1/b/" + encodeURIComponent(bucketName) + "/o?" + query.toString(),
+      { headers: { authorization: "Bearer " + token } },
+    );
+    if (!response.ok) throw await gcsError(response, "Could not list Vision OCR output objects.");
+    const data = await response.json() as {
+      items?: Array<{ name?: string; size?: string | number; timeCreated?: string }>;
+      nextPageToken?: string;
+    };
+    for (const item of data.items ?? []) {
+      if (typeof item.name !== "string" || !item.name.startsWith(prefix)) continue;
+      objects.push({
+        name: item.name,
+        ...(item.size !== undefined ? { size: String(item.size) } : {}),
+        ...(item.timeCreated ? { timeCreated: item.timeCreated } : {}),
+      });
+      if (objects.length >= limit) break;
+    }
+    pageToken = data.nextPageToken ?? "";
+    truncated = Boolean(pageToken) && objects.length >= limit;
+  } while (pageToken && objects.length < limit);
+
+  return { prefix: "gs://" + bucketName + "/" + prefix, objects, truncated };
 }
 
 export async function cleanupFatmanGcsObjects(env: Env, importId: string): Promise<string[]> {
