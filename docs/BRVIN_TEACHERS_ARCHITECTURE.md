@@ -1,13 +1,13 @@
 # BRVIN Teachers — Multi-Tenant Teacher Application Platform
 
 **Product brand:** BRVIN Teachers  
-**Status:** Architecture approved; implementation has not started  
+**Status:** Architecture approved; consumer repository and bootstrap Worker deployed; real pilot implementation not started  
 **Decision date:** 6 November 2026  
 **Planning location:** `ashini-x/parmar-ai/docs`  
-**Proposed implementation repository:** `ashini-x/brvin-teachers` (not yet created)  
+**Implementation repository:** `ashini-x/brvin-teachers` (created; bootstrap runtime deployed)  
 **Relationship to BRVIN:** Separate downstream consumer product using BRVIN v2; not BRVIN core, a BRVIN Worker, or a BRVIN milestone
 
-> This document is the approved architecture and build handoff for BRVIN Teachers. It describes intended future behavior, not deployed capabilities. The repository, application Worker, application D1 database, consoles, schemas and channel integrations do not yet exist. The `BRVIN Teachers` name is a product brand; it does not move BRVIN's existing code, data or production infrastructure into the new repository.
+> This document is the approved architecture and original build handoff for BRVIN Teachers. The separate consumer repository and its bootstrap Worker/health endpoint now exist, with automated GitHub Actions deployment verified. The application D1 database, tenant/student model, Operator Console and real channel/retrieval features are not yet implemented. The target architecture below remains the design reference; see the consumer repository's own README, development plan and infrastructure status for current implementation facts. The `BRVIN Teachers` name is a product brand; it does not move BRVIN's existing code, data or production infrastructure into the new repository.
 
 ## 1. Executive decision
 
@@ -547,7 +547,7 @@ This architecture is subordinate to the actual BRVIN contract for knowledge acce
 5. Read [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md).
 6. Inspect current source and deployed state before assuming a binding, API, route, credential or capability exists.
 
-When implementation starts, create and maintain `brvin-teachers`' own README, architecture decision records, runtime data model, threat model, integration contract, operator runbook and release process. Keep this document as the architecture handoff until the new repository has its own canonical source of truth.
+The consumer repository has since been created and now maintains its own canonical README, agent instructions, architecture, security, integration, development, operations and infrastructure-status documents. Keep this file as the original architecture source; update it when an approved cross-repository architecture decision changes, and use the consumer repository's current docs for implementation status.
 
 ### 15.1 Review of the supplied multi-tenant monorepo blueprint
 
