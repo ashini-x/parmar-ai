@@ -1184,6 +1184,26 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
     let updatePartialAnswer: PartialAnswerHandler | undefined;
     try {
       const startedAt = Date.now();
+      const claimFatmanMode = (claim.record.fatmanModeSnapshot ?? job.fatmanModeSnapshot) === true;
+      const fatmanPhotoNoticeOnly =
+        claimFatmanMode &&
+        job.question === DEFAULT_PHOTO_QUESTION &&
+        Boolean(claim.record.photoFileIds?.length);
+      if (
+        !claim.record.answerPacket &&
+        !fatmanPhotoNoticeOnly &&
+        env.GCP_CLIENT_EMAIL?.trim() &&
+        env.GCP_PRIVATE_KEY?.trim()
+      ) {
+        // Start OAuth refresh alongside profile/history reads and any Fatman
+        // retrieval. generateGeminiAnswer reuses this in-flight or cached token.
+        void getGoogleAccessToken(env).catch((error) => {
+          logger.warn("google_access_token_prefetch_failed", {
+            requestId: job.requestId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      }
       updatePartialAnswer = claim.record.statusMessageId
         ? createTelegramPartialAnswerUpdater(env, job, claim.record.statusMessageId)
         : undefined;
