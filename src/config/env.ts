@@ -33,6 +33,10 @@ export interface AiSearchInstance {
     query?: string;
     messages?: Array<{ role: "user"; content: string }>;
     ai_search_options?: {
+      cache?: {
+        enabled?: boolean;
+        cache_threshold?: string;
+      };
       retrieval?: {
         max_num_results?: number;
         match_threshold?: number;
