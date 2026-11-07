@@ -1,3 +1,4 @@
+import { ensureAnalyticsSchema } from "../analytics/db";
 import type { Env } from "../config/env";
 
 export const LEGACY_TELEGRAM_BOT_CONNECTION_ID = "legacy-env";
@@ -283,6 +284,9 @@ export async function markTelegramBotDisconnected(
   ).bind(Date.now(), Date.now(), connectionId).run();
   if (!result.success) throw new Error("Telegram bot disconnect could not be recorded.");
   invalidateTypingCredential(connectionId);
+  // Disconnect auditing belongs to the analytics schema, but it is not part
+  // of the hot-path bot-authentication initializer.
+  await ensureAnalyticsSchema(env);
   await env.DB.prepare(
     `INSERT INTO events (telegram_user_id, chat_id, event_type, event_at, metadata_json)
      VALUES (NULL, NULL, 'telegram_bot_disconnected', ?, ?)`,
