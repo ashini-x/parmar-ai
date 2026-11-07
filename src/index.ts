@@ -522,10 +522,24 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (isStart(text)) {
     queueAnalytics(ctx, "start", () => recordEvent(env, "start", analyticsUser));
-    ctx.waitUntil(bestEffortTelegram("start_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId)));
 
-    // Prefetch only the short-lived Google OAuth access token. No Gemini
-    // generation or persistent model session is created by /start.
+    // The webhook has already authenticated this exact bot and decrypted its
+    // token. Deliver the welcome first with that credential, avoiding another
+    // D1 lookup/decryption before the first visible response.
+    await bestEffortTelegram("start", () =>
+      sendTelegramMessageWithToken(bot.token, chatId, buildStartText()),
+    );
+
+    // These are preparation tasks, not prerequisites for the welcome. Start
+    // them only after the message has been delivered so neither can sit in
+    // front of the student's first visible response.
+    ctx.waitUntil(bestEffortTelegram(
+      "start_menu_sync",
+      () => syncTelegramCommandMenu(env, bot.connectionId),
+    ));
+
+    // Prefetch only the short-lived Google OAuth token for the first study
+    // question. This does not create a Gemini session or delay /start.
     if (env.GCP_CLIENT_EMAIL?.trim() && env.GCP_PRIVATE_KEY?.trim()) {
       ctx.waitUntil(getGoogleAccessToken(env).then(
         () => logger.info("google_access_token_prefetch_ready", { requestId }),
@@ -536,7 +550,6 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       ));
     }
 
-    await bestEffortTelegram("start", () => sendTelegramMessage(env, chatId, buildStartText()));
     return withRequestId(json({ ok: true }), requestId);
   }
 
