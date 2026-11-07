@@ -21,6 +21,21 @@
 └── README.md
 ```
 
+## Telegram runtime source map
+
+Read [TELEGRAM_BOT_ARCHITECTURE.md](TELEGRAM_BOT_ARCHITECTURE.md) before changing or reusing the Telegram runtime. Key modules:
+
+- `src/index.ts`: webhook authentication/routing, fast `/start`, question acknowledgement/admission, Queue publication and consumer.
+- `src/telegram/bot-store.ts`: encrypted bot connections, hashed webhook secret lookup, short-lived cosmetic-token caches and lightweight credential schema.
+- `src/telegram/api.ts`: Telegram Bot API adapter, retry/timeouts, final answer delivery and short-timeout progress edits.
+- `src/telegram/progress.ts`: serialized status/answer updater with transient-failure recovery.
+- `src/telegram/parallel-work.ts`: concurrent independent suspension/mode and profile/history reads.
+- `src/core/job-store.ts`: per-chat Durable Object admission, quotas, dedupe, leases, conversation/profile state, typing and stale-job recovery.
+- `src/core/typing-heartbeat.ts`: oldest-active-job heartbeat selection.
+- `src/analytics/db.ts`: separate credential/runtime/full application schema boundaries.
+- `src/ai/gemini.ts`: Vertex AI structured generation, adaptive thinking, SSE parsing and internal retry policy.
+- `test/telegram-bot-store-schema.test.ts` and `test/telegram-progress.test.ts`: regressions for the fast schema boundary and bounded progress recovery.
+
 ## BRVIN-specific source map
 
 BRVIN is implemented across both generic BRVIN modules and legacy Fatman-named ingestion modules:
