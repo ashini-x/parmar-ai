@@ -147,6 +147,7 @@ export function createTelegramProgressUpdater(
   let answerIdleTimer: ReturnType<typeof setTimeout> | null = null;
   let inFlight: Promise<void> | null = null;
   let disabled = false;
+  let consecutiveFailures = 0;
   let stopped = false;
   let cycleIndex = 0;
   let currentCycle: readonly string[] = [];
@@ -213,17 +214,26 @@ export function createTelegramProgressUpdater(
     const task = (async (): Promise<void> => {
       try {
         await editMessage(text);
+        consecutiveFailures = 0;
         lastSentText = text;
         lastSentAt = Date.now();
         sentRevision = Math.max(sentRevision, revision);
         waiters = resolveWaiters(waiters, sentRevision);
       } catch {
-        disabled = true;
-        clearCycleTimer();
-        clearAnswerIdleTimer();
-        if (drainTimer !== null) clearTimeout(drainTimer);
-        drainTimer = null;
-        resolveAllWaiters();
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= 3) {
+          disabled = true;
+          clearCycleTimer();
+          clearAnswerIdleTimer();
+          if (drainTimer !== null) clearTimeout(drainTimer);
+          drainTimer = null;
+          resolveAllWaiters();
+        } else {
+          // Progress is cosmetic. Retry a transient Telegram/API timeout after
+          // the normal status interval, but never retry forever or block the
+          // answer pipeline; stop() cancels any scheduled retry before delivery.
+          lastSentAt = Date.now();
+        }
       } finally {
         inFlight = null;
         if (!disabled && !stopped && latestRevision > sentRevision) scheduleDrain();
