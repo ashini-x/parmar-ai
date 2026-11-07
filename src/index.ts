@@ -523,16 +523,17 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   if (isStart(text)) {
     queueAnalytics(ctx, "start", () => recordEvent(env, "start", analyticsUser));
 
-    // The webhook has already authenticated this exact bot and decrypted its
-    // token. Deliver the welcome first with that credential, avoiding another
-    // D1 lookup/decryption before the first visible response.
-    await bestEffortTelegram("start", () =>
-      sendTelegramMessageWithToken(bot.token, chatId, buildStartText()),
-    );
+    // Telegram can execute a Bot API method directly from the webhook response.
+    // This removes a second outbound request from the Worker on the first
+    // interaction. Telegram does not expose the sendMessage result to us here;
+    // a repeated /start remains the natural retry path if delivery fails.
+    const welcomeResponse = json({
+      method: "sendMessage",
+      chat_id: chatId,
+      text: buildStartText(),
+    });
 
-    // These are preparation tasks, not prerequisites for the welcome. Start
-    // them only after the message has been delivered so neither can sit in
-    // front of the student's first visible response.
+    // These are preparation tasks, not prerequisites for the welcome.
     ctx.waitUntil(bestEffortTelegram(
       "start_menu_sync",
       () => syncTelegramCommandMenu(env, bot.connectionId),
@@ -550,7 +551,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       ));
     }
 
-    return withRequestId(json({ ok: true }), requestId);
+    return withRequestId(welcomeResponse, requestId);
   }
 
   if (isHelp(text)) {
