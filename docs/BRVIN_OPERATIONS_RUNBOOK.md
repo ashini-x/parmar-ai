@@ -361,7 +361,7 @@ CREATE INDEX IF NOT EXISTS idx_brvin_activity_book_vision_cleanup
   WHERE event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted');
 ```
 
-It targets the correlated `book_id + event_type + latest created_at` lookup. The index is created idempotently by the existing `ensureAnalyticsSchema` schema bootstrap. Before claiming the production index has been applied, verify the schema after the D1 quota resets; do not run repeated EXPLAIN/analytics queries during a free-tier cap incident.
+It targets the correlated `book_id + event_type + latest created_at` lookup. The index is created idempotently by the existing `ensureAnalyticsSchema` schema bootstrap and was verified in production D1 on 7 November 2026 after release #868. Avoid repeated EXPLAIN/analytics queries during a free-tier cap incident.
 
 ### D1 quota incident response
 
@@ -376,7 +376,7 @@ It targets the correlated `book_id + event_type + latest created_at` lookup. The
 
 The old `BRVIN Connect` GitHub App and Cloudflare OAuth vault belong to the historical Project Factory proposal, not to the current teacher knowledge-management or consumer deployment flow. Current BRVIN Teachers uses its own application/environment Service Bindings; GitHub repository changes and Cloudflare deployments use the separately authorized ChatGPT connections.
 
-The protected **Revoke BRVIN Connect and erase stored credentials** action requires the administrator to type `UNINSTALL BRVIN CONNECT`. It:
+The protected **Revoke BRVIN Connect and erase stored credentials** action was deployed in Core release #868. It has not yet been executed; the last read-only provider status still showed GitHub and Cloudflare as `connected` with encrypted credential bundles present. It requires the administrator to open BRVIN Admin and type `UNINSTALL BRVIN CONNECT` exactly. It:
 1. Verifies the stored GitHub App installation ID/account against GitHub's current installation list and uninstalls only the recorded `ashini-x` installation.
 2. Revokes the legacy Cloudflare OAuth refresh/access tokens.
 3. Marks the two provider records revoked and erases their encrypted private key/client secret from Core D1.
