@@ -23,6 +23,10 @@
     "ENVIRONMENT": "production",
     "BRVIN_SEARCH_INSTANCE": "fatman-2026-8b183803",
     "BRVIN_MIN_SCORE": "0.2",
+    "BRVIN_MATCH_THRESHOLD": "0.3",
+    "BRVIN_RERANKING_ENABLED": "true",
+    "BRVIN_RERANKING_MODEL": "@cf/baai/bge-reranker-base",
+    "BRVIN_RERANKING_MIN_SCORE": "0.4",
     "BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT": "800"
   },
   "ai_search_namespaces": [
