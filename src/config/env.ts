@@ -10,6 +10,10 @@ export interface AiSearchChunk {
   };
   scoring_details?: {
     vector_score?: number;
+    keyword_score?: number;
+    vector_rank?: number;
+    keyword_rank?: number;
+    fusion_method?: "rrf" | "max" | string;
     reranking_score?: number;
   };
 }
@@ -31,10 +35,16 @@ export interface AiSearchInstance {
     ai_search_options?: {
       retrieval?: {
         max_num_results?: number;
+        match_threshold?: number;
         retrieval_type?: "vector" | "keyword" | "hybrid";
         filters?: {
           folder?: string | { $in?: string[]; $gte?: string; $lt?: string };
         };
+      };
+      reranking?: {
+        enabled?: boolean;
+        model?: string;
+        match_threshold?: number;
       };
     };
   }): Promise<{ chunks?: AiSearchChunk[] }>;
@@ -256,7 +266,16 @@ export interface Env {
 
   BRVIN_SEARCH?: AiSearchNamespace;
   BRVIN_SEARCH_INSTANCE?: string;
+  /** Local minimum score fallback when AI Search does not return a reranking score. */
   BRVIN_MIN_SCORE?: string;
+  /** Per-request vector similarity threshold (0..1) for candidate retrieval. */
+  BRVIN_MATCH_THRESHOLD?: string;
+  /** Enables Cloudflare AI Search's independent cross-encoder reranker. Defaults to true. */
+  BRVIN_RERANKING_ENABLED?: string;
+  /** Cloudflare reranking model ID; this ranks evidence and does not generate answers. */
+  BRVIN_RERANKING_MODEL?: string;
+  /** Minimum reranking score (0..1) retained in BRVIN evidence. */
+  BRVIN_RERANKING_MIN_SCORE?: string;
   BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT?: string;
   BRVIN_SERVICE?: BrvinServiceBinding;
 }
