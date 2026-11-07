@@ -3,6 +3,76 @@ import type { Env } from "../config/env";
 
 export const LEGACY_TELEGRAM_BOT_CONNECTION_ID = "legacy-env";
 
+// Used only for ephemeral typing feedback. Cache the active bot credential for
+// a short period so Durable Object alarms do not decrypt/read D1 every few sec.
+// This cache is isolate-local and never writes access credentials to DO storage.
+const TYPING_CREDENTIAL_TTL_MS = 15_000;
+const INACTIVE_TYPING_CREDENTIAL_TTL_MS = 2_000;
+const MAX_TYPING_CREDENTIAL_CACHE_ENTRIES = 128;
+interface CachedTypingCredential {
+  token: string | null;
+  expiresAt: number;
+}
+const typingCredentialCache = new Map<string, CachedTypingCredential>();
+
+function invalidateTypingCredential(connectionId: string): void {
+  typingCredentialCache.delete(connectionId);
+}
+
+function rememberTypingCredential(connectionId: string, token: string | null, now: number): string | null {
+  if (typingCredentialCache.size >= MAX_TYPING_CREDENTIAL_CACHE_ENTRIES) {
+    for (const [key, value] of typingCredentialCache) {
+      if (value.expiresAt <= now || typingCredentialCache.size >= MAX_TYPING_CREDENTIAL_CACHE_ENTRIES) {
+        typingCredentialCache.delete(key);
+      }
+    }
+  }
+  typingCredentialCache.set(connectionId, {
+    token,
+    expiresAt: now + (token ? TYPING_CREDENTIAL_TTL_MS : INACTIVE_TYPING_CREDENTIAL_TTL_MS),
+  });
+  return token;
+}
+
+/**
+ * Return the currently active Telegram token for a cosmetic typing action.
+ * This deliberately has a short, isolate-local TTL. Actual job admission and
+ * answer delivery continue to use uncached active-connection checks.
+ */
+export async function getTelegramTypingToken(env: Env, connectionId: string): Promise<string | null> {
+  const normalizedId = connectionId.trim();
+  if (!normalizedId) return null;
+  const now = Date.now();
+  const cached = typingCredentialCache.get(normalizedId);
+  if (cached && cached.expiresAt > now) return cached.token;
+  typingCredentialCache.delete(normalizedId);
+
+  if (normalizedId === LEGACY_TELEGRAM_BOT_CONNECTION_ID) {
+    const active = await getActiveTelegramBot(env);
+    if (active) {
+      return rememberTypingCredential(
+        normalizedId,
+        active.connectionId === normalizedId && active.status === "active" ? active.token : null,
+        now,
+      );
+    }
+    return rememberTypingCredential(
+      normalizedId,
+      env.TELEGRAM_BOT_TOKEN?.trim() && env.TELEGRAM_WEBHOOK_SECRET?.trim()
+        ? env.TELEGRAM_BOT_TOKEN.trim()
+        : null,
+      now,
+    );
+  }
+
+  const connection = await getTelegramBotByConnectionId(env, normalizedId);
+  return rememberTypingCredential(
+    normalizedId,
+    connection?.status === "active" ? connection.token : null,
+    now,
+  );
+}
+
 export interface TelegramBotConnection {
   connectionId: string;
   botId: number;
@@ -100,6 +170,7 @@ export async function saveTelegramBot(
   if (!env.DB) throw new Error("D1 is required for Telegram bot connections.");
   await ensureTelegramBotSchema(env);
 
+  invalidateTypingCredential(input.connectionId);
   const now = Date.now();
   const connectedAt = input.connectedAt ?? now;
   const encryptedToken = await encryptString(env, input.token.trim());
@@ -162,6 +233,8 @@ export async function activateTelegramBot(
     `UPDATE telegram_bots SET status='active', disconnected_at=NULL, last_verified_at=? WHERE bot_connection_id=?`,
   ).bind(Date.now(), connectionId));
   await env.DB.batch(statements);
+  invalidateTypingCredential(connectionId);
+  if (deactivateConnectionId) invalidateTypingCredential(deactivateConnectionId);
 
   const active = await getActiveTelegramBot(env);
   if (!active || active.connectionId !== connectionId) {
@@ -182,6 +255,7 @@ export async function markTelegramBotDisconnected(
      WHERE bot_connection_id=?`,
   ).bind(Date.now(), Date.now(), connectionId).run();
   if (!result.success) throw new Error("Telegram bot disconnect could not be recorded.");
+  invalidateTypingCredential(connectionId);
   await env.DB.prepare(
     `INSERT INTO events (telegram_user_id, chat_id, event_type, event_at, metadata_json)
      VALUES (NULL, NULL, 'telegram_bot_disconnected', ?, ?)`,
