@@ -330,6 +330,7 @@ describe("BRVIN private application retrieval RPC v2", () => {
     });
     expect(search).toHaveBeenCalledWith(expect.objectContaining({
       ai_search_options: {
+        cache: { enabled: false },
         retrieval: {
           max_num_results: 16,
           match_threshold: 0.3,
