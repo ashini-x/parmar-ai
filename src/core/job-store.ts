@@ -2,14 +2,15 @@ import { DurableObject } from "cloudflare:workers";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
 import { selectTypingHeartbeatJob } from "./typing-heartbeat";
 import { MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "../config/env";
-import { sendTelegramChatAction, sendTelegramMessage } from "../telegram/api";
+import { sendTelegramChatActionWithToken, sendTelegramMessage } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
-import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, isTelegramBotConnectionActive } from "../telegram/bot-store";
+import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, getActiveTelegramBot, getTelegramBotByConnectionId, isTelegramBotConnectionActive } from "../telegram/bot-store";
 import { getCaptionedPhotoQuestion, PHOTO_CAPTION_REQUIRED_TEXT } from "../telegram/photo-intent";
 
 const TYPING_HEARTBEAT_MS = 4_000;
 const TYPING_WAIT_HEARTBEAT_MS = 2_500;
 const TYPING_MAX_AGE_MS = 10 * 60 * 1_000;
+const TYPING_BOT_CREDENTIAL_CACHE_MS = 5_000;
 const JOB_RETENTION_MS = 48 * 60 * 60 * 1_000;
 const PENDING_RECOVERY_MS = 45 * 1_000;
 const QUEUED_RECOVERY_MS = 2 * 60 * 1_000;
@@ -27,6 +28,12 @@ const PHOTO_RATE_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho ga
 const PHOTO_BURST_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
 const UNSUPPORTED_VIDEO_NOTICE_KEY = "meta:unsupported-video-notice";
 const UNSUPPORTED_VIDEO_NOTICE_INTERVAL_MS = 10_000;
+
+interface TypingBotCredentialCacheEntry {
+  active: boolean;
+  token: string | null;
+  checkedAt: number;
+}
 
 interface RateMeta {
   burstWindowStart: number;
@@ -145,10 +152,55 @@ const DEFAULT_PROFILE: StudentProfile = {
 
 export class JobDedupe extends DurableObject {
   private readonly runtimeEnv: Env;
+  // This Durable Object owns the persistent typing alarm. Cache the decrypted
+  // bot token briefly so each 2.5–4 second chat-action refresh does not perform
+  // two D1 reads (active-state lookup + token lookup).
+  private readonly typingBotCredentials = new Map<string, TypingBotCredentialCacheEntry>();
 
   constructor(ctx: ConstructorParameters<typeof DurableObject>[0], env: Env) {
     super(ctx, env);
     this.runtimeEnv = env;
+  }
+
+  private async getTypingBotCredentials(botConnectionId: string): Promise<TypingBotCredentialCacheEntry> {
+    const now = Date.now();
+    const cached = this.typingBotCredentials.get(botConnectionId);
+    if (cached && now - cached.checkedAt < TYPING_BOT_CREDENTIAL_CACHE_MS) return cached;
+
+    let active = false;
+    let token: string | null = null;
+    if (botConnectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID) {
+      const connectedBot = await getActiveTelegramBot(this.runtimeEnv);
+      if (connectedBot) {
+        active = connectedBot.connectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID && connectedBot.status === "active";
+        token = active ? connectedBot.token : null;
+      } else {
+        const fallbackToken = this.runtimeEnv.TELEGRAM_BOT_TOKEN?.trim();
+        active = Boolean(fallbackToken && this.runtimeEnv.TELEGRAM_WEBHOOK_SECRET);
+        token = active ? fallbackToken ?? null : null;
+      }
+    } else {
+      const connectedBot = await getTelegramBotByConnectionId(this.runtimeEnv, botConnectionId);
+      active = connectedBot?.status === "active";
+      token = active ? connectedBot?.token ?? null : null;
+    }
+
+    const entry = { active, token, checkedAt: now };
+    this.typingBotCredentials.set(botConnectionId, entry);
+    return entry;
+  }
+
+  private async sendTypingChatAction(chatId: number, botConnectionId: string): Promise<boolean> {
+    const credential = await this.getTypingBotCredentials(botConnectionId);
+    if (!credential.active || !credential.token) return false;
+    try {
+      await sendTelegramChatActionWithToken(credential.token, chatId);
+    } catch {
+      // A rejected token or transient Telegram failure should force an early
+      // D1 refresh on the next alarm. The persistent alarm itself keeps retrying.
+      this.typingBotCredentials.delete(botConnectionId);
+    }
+    return true;
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -459,27 +511,14 @@ export class JobDedupe extends DurableObject {
     // the Queue consumer claims it. This bridges the webhook-to-Queue handoff.
     // The Durable Object alarm survives both short-lived Worker invocations.
     const typingRecord = selectTypingHeartbeatJob(jobs.values(), now, TYPING_MAX_AGE_MS);
-    if (
-      typingRecord &&
-      await isTelegramBotConnectionActive(
-        this.runtimeEnv,
-        typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
-      )
-    ) {
-      try {
-        await sendTelegramChatAction(
-          this.runtimeEnv,
-          typingRecord.chatId,
-          "typing",
-          typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
-        );
-      } catch {
-        // Typing is cosmetic; never allow a failed chat action to affect the job.
+    if (typingRecord) {
+      const botConnectionId = typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID;
+      if (await this.sendTypingChatAction(typingRecord.chatId, botConnectionId)) {
+        const heartbeatMs = typingRecord.state === "processing"
+          ? TYPING_HEARTBEAT_MS
+          : TYPING_WAIT_HEARTBEAT_MS;
+        nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + heartbeatMs);
       }
-      const heartbeatMs = typingRecord.state === "processing"
-        ? TYPING_HEARTBEAT_MS
-        : TYPING_WAIT_HEARTBEAT_MS;
-      nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + heartbeatMs);
     }
 
     if (nextWakeAt !== null && Number.isFinite(nextWakeAt)) {
@@ -576,7 +615,6 @@ export class JobDedupe extends DurableObject {
     };
     await this.runtimeEnv.QUESTION_QUEUE.send(job, { contentType: "json" });
     await this.markQueued({ botConnectionId: album.botConnectionId, updateId });
-    void sendTelegramChatAction(this.runtimeEnv, album.chatId, "typing", album.botConnectionId).catch(() => undefined);
 
     album.state = "queued";
     album.photos = [];
@@ -795,16 +833,10 @@ export class JobDedupe extends DurableObject {
     // Hand off the chat action before the webhook stops its own heartbeat.
     // If Queue delivery is slow, the persistent alarm keeps refreshing it.
     await this.ensureTypingAlarm();
-    try {
-      await sendTelegramChatAction(
-        this.runtimeEnv,
-        record.chatId,
-        "typing",
-        record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
-      );
-    } catch {
-      // This is best-effort UI feedback and must not affect queue admission.
-    }
+    await this.sendTypingChatAction(
+      record.chatId,
+      record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
+    );
     return { ok: true };
   }
 
