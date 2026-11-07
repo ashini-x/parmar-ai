@@ -96,6 +96,7 @@ describe("BRVIN governed retrieval", () => {
     expect(search).toHaveBeenCalledWith({
       messages: [{ role: "user", content: "Article 14 equality" }],
       ai_search_options: {
+        cache: { enabled: false },
         retrieval: {
           max_num_results: 16,
           match_threshold: 0.3,
