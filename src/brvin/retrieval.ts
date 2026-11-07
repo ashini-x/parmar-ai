@@ -490,7 +490,7 @@ export async function retrieveBrvinProjectContextForProject(
         const rerankingScore = finiteScore(chunk.scoring_details?.reranking_score);
         const vectorScore = finiteScore(chunk.scoring_details?.vector_score);
         const fusedScore = finiteScore(chunk.score);
-        const score = rerankingScore ?? fusedScore ?? vectorScore;
+        const score = rerankingScore ?? vectorScore ?? fusedScore;
         if (score === undefined) continue;
         if (rerankingScore !== undefined) {
           if (rerankingScore < rerankingMinScore) continue;
