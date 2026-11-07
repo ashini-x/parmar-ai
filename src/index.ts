@@ -1620,7 +1620,6 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       }
     } finally {
       await updatePartialAnswer?.stop?.();
-      stopTypingHeartbeat();
     }
   }
 }
