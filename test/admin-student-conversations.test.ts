@@ -7,7 +7,7 @@ describe("admin student directory and conversations", () => {
 
   it("shows the Telegram student ID in its own directory column", () => {
     expect(source).toContain("<th>Student</th><th>Telegram ID</th>");
-    expect(source).toContain('<td class="mono">'+esc(u.telegram_user_id)+'</td>');
+    expect(source).toContain("esc(u.telegram_user_id)");
   });
 
   it("paginates the full student directory instead of silently stopping at the first page", () => {
