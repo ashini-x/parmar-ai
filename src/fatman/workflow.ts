@@ -9,6 +9,7 @@ import { getGoogleAccessToken } from "../auth/google";
 import { fatmanExpectedPageCount, fatmanIndexPageKey } from "./library";
 import type { FatmanImportJob } from "./import";
 import { brvinDeletionProgressPercent, brvinDeletionSearchPageRequest } from "./deletion";
+import { chunkFatmanPages, FATMAN_INDEX_PAGE_CONCURRENCY, fatmanIndexMonitorDelayMs } from "./indexing-policy";
 import {
   cleanupFatmanGcsObjects,
   deleteFatmanGcsObjectPrefix,
@@ -800,47 +801,71 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           throw new Error("The Fatman page chunk parameters are invalid.");
         }
         if (importJob.book_id) {
-          await recordBrvinActivity(this.env, {
-            importId, bookId: importJob.book_id, agent: "Index contract validator",
-            phase: "indexing", eventType: "index.metadata_strategy", status: "completed",
-            message: "Page and book provenance will be carried by the BRVIN page key and registry; no undeclared AI Search custom metadata is sent.",
-            details: { strategy: "page_key_and_brvin_registry", metadataFields: 0 },
-          }).catch(() => undefined);
-          await recordBrvinActivity(this.env, {
-            importId, bookId: importJob.book_id, agent: "Page indexing specialist",
-            phase: "indexing", eventType: "index.chunk_started", status: "running",
-            message: "Indexing PDF pages " + startPage + "–" + endPage + ".",
-            details: { startPage, endPage, expectedPages },
-          }).catch(() => undefined);
+          await step.do("record Fatman page index contract", async () => {
+            await recordBrvinActivity(this.env, {
+              importId, bookId: importJob.book_id!, agent: "Index contract validator",
+              phase: "indexing", eventType: "index.metadata_strategy", status: "completed",
+              message: "Page and book provenance will be carried by the BRVIN page key and registry; no undeclared AI Search custom metadata is sent.",
+              details: { strategy: "page_key_and_brvin_registry", metadataFields: 0 },
+            });
+            return true;
+          });
+          await step.do("record Fatman page chunk started", async () => {
+            await recordBrvinActivity(this.env, {
+              importId, bookId: importJob.book_id!, agent: "Page indexing specialist",
+              phase: "indexing", eventType: "index.chunk_started", status: "running",
+              message: "Submitting PDF pages " + startPage + "–" + endPage + " for AI Search indexing (up to " + FATMAN_INDEX_PAGE_CONCURRENCY + " pages concurrently).",
+              details: { startPage, endPage, expectedPages, concurrency: FATMAN_INDEX_PAGE_CONCURRENCY },
+            });
+            return true;
+          });
         }
-        for (let page = startPage!; page <= endPage!; page += 1) {
-          const pageNumber = page;
-          try {
-            await step.do("index Fatman PDF page " + pageNumber, async () =>
-              indexOcrPage(this.env, importJob, pageNumber));
-            if (importJob.book_id) await recordBrvinActivity(this.env, {
-              importId, bookId: importJob.book_id, agent: "Page indexing specialist",
-              phase: "indexing", eventType: "index.page_completed", status: "completed",
-              message: "Page " + pageNumber + " was added to the BRVIN search index.",
-              details: { page: pageNumber, totalPages: expectedPages },
-            }).catch(() => undefined);
-          } catch (error) {
-            if (!isTransientFatmanIndexError(error)) throw error;
-            if (importJob.book_id) await recordBrvinActivity(this.env, {
-              importId, bookId: importJob.book_id, agent: "Recovery specialist",
-              phase: "recovery", eventType: "index.page_retry_scheduled", status: "warning",
-              message: "Page " + pageNumber + " encountered a transient indexing issue; it has been handed to recovery.",
-              details: { page: pageNumber, error: error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240) },
-            }).catch(() => undefined);
-            await step.do("hand Fatman page " + pageNumber + " to the recovery specialist", async () =>
-              this.startChild(importId + "-" + runId + "-retry-page-" + pageNumber + "-1-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
-                task: "retry_page",
-                importId,
-                page: pageNumber,
-                retryAttempt: 1,
-                runId,
-              }));
-            return;
+
+        const pageNumbers = Array.from({ length: endPage! - startPage! + 1 }, (_, index) => startPage! + index);
+        for (const batch of chunkFatmanPages(pageNumbers)) {
+          // Each page has a stable, independent Workflow step. Promise.all is
+          // supported for concurrent Workflow steps; the batch cap protects
+          // the shared AI Search instance from an unbounded upload burst.
+          const outcomes = await Promise.all(batch.map(async pageNumber => {
+            try {
+              await step.do(
+                "index Fatman PDF page " + pageNumber,
+                { retries: { limit: 2, delay: "2 seconds", backoff: "exponential" } },
+                async () => indexOcrPage(this.env, importJob, pageNumber),
+              );
+              if (importJob.book_id) await step.do("record Fatman PDF page submission " + pageNumber, async () => {
+                await recordBrvinActivity(this.env, {
+                  importId, bookId: importJob.book_id!, agent: "Page indexing specialist",
+                  phase: "indexing", eventType: "index.page_completed", status: "completed",
+                  message: "Page " + pageNumber + " was submitted to Cloudflare AI Search; asynchronous indexing status is being monitored.",
+                  details: { page: pageNumber, totalPages: expectedPages, submitted: true },
+                });
+                return true;
+              });
+              return { page: pageNumber, status: "submitted" as const };
+            } catch (error) {
+              if (!isTransientFatmanIndexError(error)) {
+                return {
+                  page: pageNumber,
+                  status: "failed" as const,
+                  error: error instanceof Error ? error.message : String(error),
+                };
+              }
+              if (importJob.book_id) await step.do("record transient index submission issue for page " + pageNumber, async () => {
+                await recordBrvinActivity(this.env, {
+                  importId, bookId: importJob.book_id!, agent: "Recovery specialist",
+                  phase: "recovery", eventType: "index.page_retry_scheduled", status: "warning",
+                  message: "Page " + pageNumber + " encountered a transient submission issue; the source monitor will retry the missing page.",
+                  details: { page: pageNumber, recoveryPath: "source_monitor", error: error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240) },
+                });
+                return true;
+              });
+              return { page: pageNumber, status: "retry" as const };
+            }
+          }));
+          const permanentFailure = outcomes.find(outcome => outcome.status === "failed");
+          if (permanentFailure?.status === "failed") {
+            throw new Error("Could not submit PDF page " + permanentFailure.page + " for indexing: " + permanentFailure.error);
           }
         }
 
@@ -880,20 +905,43 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             !Number.isSafeInteger(repairPass) || repairPass < 1 || repairPass > 12) {
           throw new Error("The Fatman repair task parameters are invalid.");
         }
-        for (const page of [...new Set(pages)]) {
-          try {
-            await step.do("repair Fatman PDF page " + page, async () => indexOcrPage(this.env, importJob, page));
-          } catch (error) {
-            if (!isTransientFatmanIndexError(error)) throw error;
-            await step.do("hand failed repair page " + page + " to the recovery specialist", async () =>
-              this.startChild(importId + "-" + runId + "-retry-page-" + page + "-1-" + crypto.randomUUID().replaceAll("-", "").slice(0, 8), {
-                task: "retry_page",
-                importId,
-                page,
-                retryAttempt: 1,
-                runId,
-              }));
-            return;
+        for (const batch of chunkFatmanPages([...new Set(pages)])) {
+          const outcomes = await Promise.all(batch.map(async page => {
+            try {
+              await step.do(
+                "repair Fatman PDF page " + page,
+                { retries: { limit: 2, delay: "2 seconds", backoff: "exponential" } },
+                async () => indexOcrPage(this.env, importJob, page),
+              );
+              if (importJob.book_id) await step.do("record repaired Fatman PDF page " + page, async () => {
+                await recordBrvinActivity(this.env, {
+                  importId, bookId: importJob.book_id!, agent: "Page indexing specialist",
+                  phase: "indexing", eventType: "index.page_repaired", status: "completed",
+                  message: "Page " + page + " was resubmitted for AI Search indexing after recovery.",
+                  details: { page, totalPages: expectedPages, repairPass },
+                });
+                return true;
+              });
+              return { page, status: "submitted" as const };
+            } catch (error) {
+              if (!isTransientFatmanIndexError(error)) {
+                return { page, status: "failed" as const, error: error instanceof Error ? error.message : String(error) };
+              }
+              if (importJob.book_id) await step.do("record transient repair issue for page " + page, async () => {
+                await recordBrvinActivity(this.env, {
+                  importId, bookId: importJob.book_id!, agent: "Recovery specialist",
+                  phase: "recovery", eventType: "index.page_retry_scheduled", status: "warning",
+                  message: "Page " + page + " remains temporarily unavailable; the next source-monitor pass will retry it.",
+                  details: { page, recoveryPath: "source_monitor", repairPass, error: error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240) },
+                });
+                return true;
+              });
+              return { page, status: "retry" as const };
+            }
+          }));
+          const permanentFailure = outcomes.find(outcome => outcome.status === "failed");
+          if (permanentFailure?.status === "failed") {
+            throw new Error("Could not repair PDF page " + permanentFailure.page + ": " + permanentFailure.error);
           }
         }
         await step.do("continue Fatman index monitoring", async () =>
@@ -921,10 +969,15 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           message: "Page-grounded retrieval QA is checking whether indexed content can be retrieved from its original PDF pages.",
           details: { retryAttempt, expectedPages },
         }).catch(() => undefined);
-        await step.sleep(
-          "wait before Fatman retrieval quality check " + retryAttempt,
-          retryAttempt === 0 ? "1 minute" : fatmanPageRetryDelay(retryAttempt),
-        );
+        // The monitor launches QA only after every expected page is reported
+        // completed. Search visibility is then checked directly; if it is still
+        // temporarily unavailable, the retry supervisor applies bounded backoff.
+        if (retryAttempt > 0) {
+          await step.sleep(
+            "wait before Fatman retrieval quality check " + retryAttempt,
+            fatmanPageRetryDelay(retryAttempt),
+          );
+        }
         let verification: { checkedPages: number[]; queryCount: number };
         try {
           verification = await step.do("verify page-grounded retrieval for this book", async () => {
@@ -955,7 +1008,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
                 queryCount += 1;
                 const result = await instance.search({
                   messages: [{ role: "user", content: probes[index] }],
-                  ai_search_options: { retrieval: { max_num_results: 50, retrieval_type: "hybrid" } },
+                  ai_search_options: { retrieval: { max_num_results: 10, retrieval_type: "hybrid" } },
                 });
                 const matched = (result.chunks ?? []).some((chunk) => chunk.item?.key === expectedKey);
                 if (matched) {
@@ -1100,7 +1153,8 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           throw new Error("The Fatman index monitor parameters are invalid.");
         }
 
-        await step.sleep("wait before Fatman indexing check " + monitorSequence, "1 minute");
+        const monitorDelayMs = fatmanIndexMonitorDelayMs(monitorSequence, expectedPages);
+        await step.sleep("wait before Fatman indexing check " + monitorSequence, monitorDelayMs);
         const pages = await step.do("check Fatman index status " + monitorSequence, async () =>
           listFatmanIndexPages(this.env, importId));
         const byPage = new Map<number, { page: number; status: string; error?: string }>();
@@ -1114,7 +1168,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             importId, bookId: importJob.book_id, agent: "Index monitor specialist",
             phase: "indexing", eventType: "index.monitor_pass", status: failedPages.length ? "warning" : "running",
             message: "Index monitor checked " + completedPages + " of " + expectedPages + " pages; " + failedPages.length + " failed pages need attention.",
-            details: { completedPages, expectedPages, failedPages: failedPages.length, monitorSequence, repairPass },
+            details: { completedPages, expectedPages, failedPages: failedPages.length, monitorSequence, repairPass, nextMonitorDelayMs: fatmanIndexMonitorDelayMs(monitorSequence + 1, expectedPages) },
           });
           return { completedPages, failedPages: failedPages.length };
         });

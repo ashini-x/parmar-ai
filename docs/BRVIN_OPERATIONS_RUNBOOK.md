@@ -421,3 +421,47 @@ If the workflow fails, the source and import rows remain inaccessible with `dele
 
 
 The Core Admin dashboard refreshes the overview every 5 seconds only while at least one book is in `deleting`. It backs off to 15 seconds while the browser tab is hidden, refreshes promptly when the tab becomes visible, and stops polling when all deletions become terminal (`delete_failed` or removed). There is no permanent 5-second polling loop when no deletion is active.
+
+
+## 13. BRVIN ingestion throughput and cost policy
+
+The BRVIN page-indexing workflow uses Cloudflare AI Search's asynchronous Items API. `items.upload()` returns after the item is accepted/queued; completion is confirmed later from the source-scoped item status inventory. Do not equate successful upload submission with indexed/searchable content.
+
+### Page submission
+- Submit a maximum of **3 PDF pages concurrently** using independent, deterministic Cloudflare Workflow steps.
+- Keep Workflow page chunks at the existing maximum of 8 pages and split them into ordered batches of 3. This provides bounded parallel throughput without flooding the shared AI Search instance.
+- Each page remains independently retryable and idempotent by its immutable BRVIN page key. On resume/retry, the existing exact-key lookup is performed before a new item is uploaded.
+- Each page step uses a short bounded automatic retry (2 retries, 2-second exponential delay). If a provider/network error remains transient, the workflow records it and leaves the missing page to the source monitor/recovery path. Permanent input or configuration errors still fail immediately.
+- Repair chunks use the same concurrency limit and idempotency contract.
+
+### Monitoring
+Use one source-scoped status monitor rather than calling `uploadAndPoll()` independently for every page. Cloudflare's per-item `uploadAndPoll()` default is a one-second polling interval. Per-page pollers multiply status requests with PDF page count; the shared monitor scans the source prefix once per pass and can identify missing, queued, running, completed and failed pages together.
+
+The polling cadence is size-aware because an AI Search Items list supports at most 50 results per call:
+- up to 10 pages: first check after 15 seconds, then every 30 seconds;
+- 11–100 pages: first check after 30 seconds, then every 45 seconds;
+- more than 100 pages: first check after 45 seconds, then every 60 seconds.
+
+This reduces idle time for small teacher PDFs without making large-book monitoring issue frequent multi-page inventory scans. The monitor persists exact completed-page counts and does not infer completion from upload submission.
+
+### Retrieval QA
+- Start page-grounded retrieval QA immediately after the monitor confirms every expected item has status `completed` and no item is failed.
+- Do not add a fixed one-minute post-index sleep. The QA queries themselves verify search visibility. If the search result is temporarily not visible, the existing durable QA retry path applies bounded backoff (30 seconds up to 15 minutes).
+- Preserve the current page-grounded verification rules, sampled-page coverage, distinctive OCR probes, provenance checks and READY gate. Do not reduce QA coverage to improve a stopwatch result.
+- Use the production AI Search default top-10 result window for QA rather than requesting 50 chunks. This keeps the QA retrieval envelope aligned with normal consumer search and avoids returning excess chunks; distinctive OCR probes and retry-on-miss preserve page-provenance verification.
+- Keep one Vision OCR operation for the PDF and reuse its stored outputs for page indexing; never perform another OCR operation as an indexing retry.
+
+### Why not use per-item polling?
+Cloudflare documents that `items.uploadAndPoll()` polls the item until indexing completes (default 1-second polling). This is useful when a single document must be searchable immediately. BRVIN is a multi-page asynchronous ingestion workflow; a source-scoped durable monitor is more efficient because it observes all pages together and avoids a separate high-frequency poller for every page.
+
+### Acceptance and measurement
+Benchmark representative small (1–10 page), medium (11–100 page) and large (>100 page) PDFs using:
+- PDF upload completion;
+- Vision operation completion and output verification;
+- page submission completion;
+- first/last page becoming `completed` in AI Search;
+- retrieval-QA start/pass;
+- total time from upload completion to READY;
+- AI Search list calls, page upload attempts, retry counts and QA query count.
+
+A faster result is accepted only if all expected pages reach `completed`, retrieval QA passes with the original PDF-page provenance, no duplicate page keys are created, and READY remains gated on successful QA.

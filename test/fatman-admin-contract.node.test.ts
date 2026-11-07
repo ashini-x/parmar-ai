@@ -90,6 +90,22 @@ describe("BRVIN automatic Vision OCR retention", () => {
     expect(workerSource).toContain("runBrvinVisionRetentionSupervisor(env)");
   });
 
+  it("bounds concurrent page submissions and avoids redundant fixed monitoring waits", () => {
+    const indexingPolicy = readFileSync(new URL("../src/fatman/indexing-policy.ts", import.meta.url), "utf8");
+    expect(workflowSource).toContain("chunkFatmanPages(pageNumbers)");
+    expect(workflowSource).toContain("Promise.all(batch.map(async pageNumber");
+    expect(workflowSource).toContain('retries: { limit: 2, delay: "2 seconds", backoff: "exponential" }');
+    expect(workflowSource).toContain("fatmanIndexMonitorDelayMs(monitorSequence, expectedPages)");
+    expect(workflowSource).not.toContain('wait before Fatman indexing check " + monitorSequence, "1 minute"');
+    expect(workflowSource).not.toContain('retryAttempt === 0 ? "1 minute"');
+    expect(workflowSource).toContain("if (retryAttempt > 0)");
+    expect(workflowSource).toContain('max_num_results: 10, retrieval_type: "hybrid"');
+    expect(workflowSource).not.toContain('max_num_results: 50, retrieval_type: "hybrid"');
+    expect(indexingPolicy).toContain("FATMAN_INDEX_PAGE_CONCURRENCY = 3");
+    expect(indexingPolicy).toContain("pages <= 10");
+    expect(indexingPolicy).toContain("pages <= 100");
+  });
+
   it("keeps full-book purge aware of both separate GCS prefixes", () => {
     expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "", async progress =>');
     expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/", async progress =>');
