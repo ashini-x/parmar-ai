@@ -13,6 +13,7 @@ import { JobDedupe, buildProfileContext, type ClaimResponse, type JobRecord } fr
 import { buildFatmanRetrievalQuery, formatFatmanCitations, isFatmanReady, retrieveFatmanContext, FatmanRetrievalError } from "./fatman/retrieval";
 import { logger } from "./core/logger";
 import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./telegram/progress";
+import { loadQuestionContextInParallel, runSuspensionAndModeLookup } from "./telegram/parallel-work";
 import { buildFatmanHelpFooter, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
 import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
 import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
@@ -793,13 +794,13 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   // permission, entitlement and quota admission in the existing begin action.
   let statusMessageId: number | undefined;
   let acknowledgementAction: "new" | "existing" | null = null;
-  let stopEarlyTyping: (() => void) | undefined;
+  let earlyTypingHeartbeat: ReturnType<typeof startTypingHeartbeatWithToken> | undefined;
   const stopEarlyTypingNow = (): void => {
-    stopEarlyTyping?.();
-    stopEarlyTyping = undefined;
+    earlyTypingHeartbeat?.stop();
+    earlyTypingHeartbeat = undefined;
   };
 
-  stopEarlyTyping = startTypingHeartbeatWithToken(bot.token, chatId, requestId);
+  earlyTypingHeartbeat = startTypingHeartbeatWithToken(bot.token, chatId, requestId);
   try {
     const reservation = await jobStoreRequest<{
       action: "new" | "existing";
@@ -846,6 +847,9 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
           error: error instanceof Error ? error.message : String(error),
         });
       }
+      // Telegram clears its native chat action when sendMessage succeeds.
+      // Refresh typing immediately so it remains visible during admission.
+      earlyTypingHeartbeat?.refresh();
     } else {
       stopEarlyTypingNow();
     }
@@ -878,13 +882,18 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true, preflightFailed: true }), requestId);
   };
 
-  let suspended: boolean;
-  try {
-    suspended = await isUserSuspended(env, analyticsUser.telegramUserId);
-  } catch (error) {
-    return await reportPreflightFailure("student_access_check", error);
+  const admissionState = await runSuspensionAndModeLookup(
+    () => isUserSuspended(env, analyticsUser.telegramUserId),
+    () => jobStoreRequest<{ ok: true; active: boolean }>(
+      env,
+      chatId,
+      { action: "get_fatman_mode", botConnectionId: bot.connectionId },
+    ),
+  );
+  if (admissionState.suspension.status === "rejected") {
+    return await reportPreflightFailure("student_access_check", admissionState.suspension.reason);
   }
-  if (suspended) {
+  if (admissionState.suspension.value) {
     stopEarlyTypingNow();
     queueAnalytics(ctx, "suspended_user", () => recordEvent(env, "suspended_user_blocked", analyticsUser));
     await deliverWebhookStatusWithToken(
@@ -898,17 +907,13 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true, suspended: true }), requestId);
   }
 
-  let fatmanModeSnapshot: boolean;
-  try {
-    const fatmanState = await jobStoreRequest<{ ok: true; active: boolean }>(
-      env,
-      chatId,
-      { action: "get_fatman_mode", botConnectionId: bot.connectionId },
-    );
-    fatmanModeSnapshot = fatmanState.active === true;
-  } catch (error) {
-    return await reportPreflightFailure("fatman_mode_lookup", error);
+  if (admissionState.mode.status === "skipped") {
+    return await reportPreflightFailure("fatman_mode_lookup", new Error("Fatman mode lookup was unexpectedly skipped."));
   }
+  if (admissionState.mode.status === "rejected") {
+    return await reportPreflightFailure("fatman_mode_lookup", admissionState.mode.reason);
+  }
+  const fatmanModeSnapshot = admissionState.mode.value.active === true;
 
   if (mcqRequest) {
     await jobStoreRequest(env, chatId, { action: "clear_pending_quiz" }).catch(() => undefined);
@@ -1169,6 +1174,45 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       );
       const jobTelegramUserId = job.telegramUserId ?? job.chatId;
       ctx.waitUntil(recordUserSeen(env, { telegramUserId: jobTelegramUserId, chatId: job.chatId }));
+
+      // Begin independent context reads before the analytics writes below. This
+      // overlaps D1/DO latency without changing either read's fallback policy.
+      const questionContextPromise = loadQuestionContextInParallel(
+        () => getStudentProfile(env, job.chatId),
+        () => jobStoreRequest<{ ok: true; recentConversation: ConversationTurn[] }>(env, job.chatId, {
+          action: "get_conversation",
+          botConnectionId: job.botConnectionId,
+          updateId: job.updateId,
+          fatmanModeSnapshot: (claim.record.fatmanModeSnapshot ?? job.fatmanModeSnapshot) === true,
+        }).then((result) => Array.isArray(result.recentConversation) ? result.recentConversation : []),
+        (profileReadError) => {
+          logger.error("student_profile_read_failed", {
+            requestId: job.requestId,
+            updateId: job.updateId,
+            error: profileReadError instanceof Error ? profileReadError.message : String(profileReadError),
+          });
+          return {
+            version: 2,
+            targetExam: "SSC (not specified)",
+            recentTopics: [],
+            recentSubjects: [],
+            attentionTopics: [],
+            revisionQueue: [],
+            learningSignals: [],
+            questionCount: 0,
+            lastUpdatedAt: 0,
+          };
+        },
+        (conversationError) => {
+          logger.warn("student_conversation_read_failed", {
+            requestId: job.requestId,
+            updateId: job.updateId,
+            error: conversationError instanceof Error ? conversationError.message : String(conversationError),
+          });
+          return [];
+        },
+      );
+
       await recordQuestionStart(env, {
         updateId: job.updateId,
         botConnectionId: job.botConnectionId,
@@ -1179,44 +1223,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         receivedAt: job.createdAt,
       });
       await recordQuestionResult(env, { updateId: job.updateId, botConnectionId: job.botConnectionId, status: "processing", startedAt });
-      let profile: StudentProfile;
-      try {
-        profile = await getStudentProfile(env, job.chatId);
-      } catch (profileReadError) {
-        logger.error("student_profile_read_failed", {
-          requestId: job.requestId,
-          updateId: job.updateId,
-          error: profileReadError instanceof Error ? profileReadError.message : String(profileReadError),
-        });
-        profile = {
-          version: 2,
-          targetExam: "SSC (not specified)",
-          recentTopics: [],
-          recentSubjects: [],
-          attentionTopics: [],
-          revisionQueue: [],
-          learningSignals: [],
-          questionCount: 0,
-          lastUpdatedAt: 0,
-        };
-      }
-
-      let recentConversation: ConversationTurn[] = [];
-      try {
-        const conversationResult = await jobStoreRequest<{ ok: true; recentConversation: ConversationTurn[] }>(env, job.chatId, {
-          action: "get_conversation",
-          botConnectionId: job.botConnectionId,
-          updateId: job.updateId,
-          fatmanModeSnapshot: (claim.record.fatmanModeSnapshot ?? job.fatmanModeSnapshot) === true,
-        });
-        recentConversation = Array.isArray(conversationResult.recentConversation) ? conversationResult.recentConversation : [];
-      } catch (conversationError) {
-        logger.warn("student_conversation_read_failed", {
-          requestId: job.requestId,
-          updateId: job.updateId,
-          error: conversationError instanceof Error ? conversationError.message : String(conversationError),
-        });
-      }
+      const { profile, recentConversation } = await questionContextPromise;
 
       const fatmanMode = (claim.record.fatmanModeSnapshot ?? job.fatmanModeSnapshot) === true;
       let packet = claim.record.answerPacket;
@@ -1673,7 +1680,11 @@ async function handleTelegramPollAnswer(
   });
 }
 
-function startTypingHeartbeatWithToken(token: string, chatId: number, requestId: string): () => void {
+function startTypingHeartbeatWithToken(
+  token: string,
+  chatId: number,
+  requestId: string,
+): { refresh: () => void; stop: () => void } {
   let stopped = false;
   const sendHeartbeat = (): void => {
     if (stopped) return;
@@ -1689,9 +1700,12 @@ function startTypingHeartbeatWithToken(token: string, chatId: number, requestId:
 
   sendHeartbeat();
   const interval = setInterval(sendHeartbeat, 3_000);
-  return () => {
-    stopped = true;
-    clearInterval(interval);
+  return {
+    refresh: sendHeartbeat,
+    stop: () => {
+      stopped = true;
+      clearInterval(interval);
+    },
   };
 }
 
