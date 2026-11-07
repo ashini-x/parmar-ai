@@ -602,6 +602,17 @@ export async function sendTelegramChatActionWithToken(
   });
 }
 
+export async function deleteTelegramMessageWithToken(
+  token: string,
+  chatId: number,
+  messageId: number,
+): Promise<void> {
+  await telegramApiWithToken(token, "deleteMessage", {
+    chat_id: chatId,
+    message_id: messageId,
+  });
+}
+
 export async function sendTelegramMessageWithToken(
   token: string,
   chatId: number,
