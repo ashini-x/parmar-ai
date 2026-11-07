@@ -20,6 +20,7 @@ import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
   deleteTelegramMessage,
   editTelegramMessage,
+  editTelegramProgressMessage,
   editTelegramMessageReplyMarkup,
   sendTelegramChatAction,
   sendTelegramMessage,
@@ -967,18 +968,31 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       quizCount: begin.quizCount,
       fatmanModeSnapshot: begin.fatmanModeSnapshot === true,
     };
+    let retryQueuePublished = false;
     try {
       await env.QUESTION_QUEUE.send(retryJob, { contentType: "json" });
+      retryQueuePublished = true;
       await jobStoreRequest(env, chatId, { action: "mark_queued", botConnectionId: bot.connectionId, updateId });
       queueAnalytics(ctx, "question_retry_ack", () => recordQuestionStart(env, {
         updateId, botConnectionId: bot.connectionId, requestId, user: analyticsUser, messageId, question: questionText, receivedAt: Date.now(),
       }));
     } catch (error) {
+      stopEarlyTypingNow();
       logger.error("question_queue_retry_enqueue_failed", {
         requestId,
         updateId,
         error: error instanceof Error ? error.message : String(error),
       });
+      if (!retryQueuePublished) {
+        await deliverWebhookStatusWithToken(
+          bot.token,
+          chatId,
+          retryJob.statusMessageId,
+          messageId,
+          PREFLIGHT_FAILURE_TEXT,
+          requestId,
+        );
+      }
       return withRequestId(json({ ok: false }, 500), requestId);
     }
     stopEarlyTypingNow();
@@ -1798,7 +1812,7 @@ function createTelegramPartialAnswerUpdater(
 ): PartialAnswerHandler {
   return createTelegramProgressUpdater(async (text) => {
     try {
-      await editTelegramMessage(env, job.chatId, statusMessageId, text, job.botConnectionId, false);
+      await editTelegramProgressMessage(env, job.chatId, statusMessageId, text, job.botConnectionId);
     } catch (error) {
       logger.warn("telegram_partial_answer_stream_failed", {
         requestId: job.requestId,

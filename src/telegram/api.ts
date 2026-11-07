@@ -106,18 +106,26 @@ export async function telegramApi<T = unknown>(
   return telegramApiWithToken<T>(token, method, payload);
 }
 
+interface TelegramApiRetryOptions {
+  timeoutMs?: number;
+  maxAttempts?: number;
+}
+
 async function telegramApiWithToken<T>(
   token: string,
   method: string,
   payload: Record<string, unknown>,
+  options: TelegramApiRetryOptions = {},
 ): Promise<T> {
   let lastError: TelegramError | null = null;
+  const timeoutMs = Math.max(250, options.timeoutMs ?? TELEGRAM_REQUEST_TIMEOUT_MS);
+  const maxAttempts = Math.max(1, Math.min(TELEGRAM_MAX_ATTEMPTS, options.maxAttempts ?? TELEGRAM_MAX_ATTEMPTS));
 
-  for (let attempt = 1; attempt <= TELEGRAM_MAX_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(
       () => controller.abort(),
-      TELEGRAM_REQUEST_TIMEOUT_MS,
+      timeoutMs,
     );
 
     try {
@@ -156,7 +164,7 @@ async function telegramApiWithToken<T>(
       );
       lastError = error;
 
-      if (!error.retryable || attempt >= TELEGRAM_MAX_ATTEMPTS) {
+      if (!error.retryable || attempt >= maxAttempts) {
         throw error;
       }
 
@@ -171,7 +179,7 @@ async function telegramApiWithToken<T>(
           ? error
           : error instanceof Error && error.name === "AbortError"
             ? new TelegramError(
-                `Telegram API timed out after ${TELEGRAM_REQUEST_TIMEOUT_MS}ms.`,
+                `Telegram API timed out after ${timeoutMs}ms.`,
                 undefined,
                 true,
               )
@@ -183,7 +191,7 @@ async function telegramApiWithToken<T>(
 
       lastError = telegramError;
 
-      if (!telegramError.retryable || attempt >= TELEGRAM_MAX_ATTEMPTS) {
+      if (!telegramError.retryable || attempt >= maxAttempts) {
         throw telegramError;
       }
 
@@ -523,6 +531,32 @@ export async function editTelegramMessageReplyMarkup(
   }
 }
 
+/**
+ * Cosmetic progress edits use one short Telegram attempt. They must never hold
+ * answer generation or final delivery behind the normal multi-attempt API retry.
+ */
+export async function editTelegramProgressMessage(
+  env: Env,
+  chatId: number,
+  messageId: number,
+  text: string,
+  botConnectionId?: string,
+): Promise<void> {
+  const token = await resolveTelegramToken(env, botConnectionId);
+  const message = limitTelegramMessage(text);
+  try {
+    await telegramApiWithToken(token, "editMessageText", {
+      chat_id: chatId,
+      message_id: messageId,
+      text: message.text,
+      link_preview_options: { is_disabled: true },
+    }, { timeoutMs: 1_000, maxAttempts: 1 });
+  } catch (error) {
+    if (error instanceof TelegramError && error.message.toLowerCase().includes("message is not modified")) return;
+    throw error;
+  }
+}
+
 export async function editTelegramMessage(
   env: Env,
   chatId: number,
@@ -549,68 +583,6 @@ export async function editTelegramMessage(
       return;
     }
 
-    throw error;
-  }
-}
-
-/**
- * Token-bound Telegram calls for the short acknowledgement window. The webhook
- * has already authenticated and decrypted this bot connection, so it can reuse
- * that credential rather than performing another D1 lookup before first feedback.
- */
-export async function sendTelegramChatActionWithToken(
-  token: string,
-  chatId: number,
-): Promise<void> {
-  await telegramApiWithToken(token, "sendChatAction", {
-    chat_id: chatId,
-    action: "typing",
-  });
-}
-
-export async function sendTelegramMessageWithToken(
-  token: string,
-  chatId: number,
-  text: string,
-  replyToMessageId?: number,
-  includeCreatorFooter = true,
-): Promise<TelegramMessageResult> {
-  const message = limitTelegramMessage(text);
-  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
-  const payload: Record<string, unknown> = {
-    chat_id: chatId,
-    text: message.text,
-    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
-    link_preview_options: { is_disabled: true },
-  };
-  if (replyToMessageId) {
-    payload.reply_parameters = {
-      message_id: replyToMessageId,
-      allow_sending_without_reply: true,
-    };
-  }
-  return telegramApiWithToken<TelegramMessageResult>(token, "sendMessage", payload);
-}
-
-export async function editTelegramMessageWithToken(
-  token: string,
-  chatId: number,
-  messageId: number,
-  text: string,
-  includeCreatorFooter = true,
-): Promise<void> {
-  const message = limitTelegramMessage(text);
-  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
-  try {
-    await telegramApiWithToken(token, "editMessageText", {
-      chat_id: chatId,
-      message_id: messageId,
-      text: message.text,
-      ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
-      link_preview_options: { is_disabled: true },
-    });
-  } catch (error) {
-    if (error instanceof TelegramError && error.message.toLowerCase().includes("message is not modified")) return;
     throw error;
   }
 }

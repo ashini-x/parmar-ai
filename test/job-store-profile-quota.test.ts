@@ -63,6 +63,7 @@ describe("shared per-student question tracking", () => {
       action: "begin",
       botConnectionId,
       updateId,
+      chatId,
       telegramUserId: chatId,
       question: "Early acknowledgement test question",
       messageId: 1,
