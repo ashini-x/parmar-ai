@@ -106,7 +106,7 @@ describe("BRVIN governed retrieval", () => {
         reranking: {
           enabled: true,
           model: "@cf/baai/bge-reranker-base",
-          match_threshold: 0.4,
+          match_threshold: 0.15,
         },
       },
     });
