@@ -134,7 +134,7 @@ describe("BRVIN governed retrieval", () => {
     expect(html).toContain("Knowledge collections");
     expect(html).toContain("Live operations");
     expect(html).toContain("Specialist activity");
-    expect(html).toContain("5-second refresh");
+    expect(html).toContain("Auto-refresh while a source is deleting");
     expect(html).toContain("Run read-only storage check");
     expect(html).toContain('id="storage-diagnostics"');
     expect(html).toContain("Operational summary");

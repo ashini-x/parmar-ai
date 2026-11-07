@@ -1029,6 +1029,12 @@ export async function cleanupFatmanGcsObjects(env: Env, importId: string): Promi
   return objectNames;
 }
 
+export interface FatmanGcsPrefixDeletionProgress {
+  objectVersionsFound: number;
+  objectVersionsProcessed: number;
+  objectVersionsDeleted: number;
+}
+
 export interface FatmanGcsPrefixDeletionResult {
   prefix: string;
   objectVersionsFound: number;
@@ -1051,6 +1057,7 @@ export async function deleteFatmanGcsObjectPrefix(
   env: Env,
   importId: string,
   relativePrefix: "" | "ocr/" = "",
+  onProgress?: (progress: FatmanGcsPrefixDeletionProgress) => Promise<void>,
 ): Promise<FatmanGcsPrefixDeletionResult> {
   if (!env.DB) throw new Error("D1 is required to resolve the BRVIN source object prefix.");
   const importJob = await getFatmanImportJob(env, importId);
@@ -1120,6 +1127,15 @@ export async function deleteFatmanGcsObjectPrefix(
   } while (pageToken);
 
   let objectVersionsDeleted = 0;
+  let objectVersionsProcessed = 0;
+  const reportProgress = async () => {
+    if (onProgress) await onProgress({
+      objectVersionsFound: objects.length,
+      objectVersionsProcessed,
+      objectVersionsDeleted,
+    });
+  };
+  await reportProgress();
   for (const object of objects) {
     const query = new URLSearchParams();
     // With versioning enabled, delete each exact generation. If versioning is
@@ -1134,9 +1150,15 @@ export async function deleteFatmanGcsObjectPrefix(
       "/o/" + encodeURIComponent(object.name) + suffix,
       { method: "DELETE", headers: { authorization: "Bearer " + token } },
     );
-    if (response.status === 404) continue;
-    if (!response.ok) throw await gcsError(response, "Could not delete a private BRVIN source or Vision OCR object.");
-    objectVersionsDeleted += 1;
+    if (response.status !== 404) {
+      if (!response.ok) throw await gcsError(response, "Could not delete a private BRVIN source or Vision OCR object.");
+      objectVersionsDeleted += 1;
+    }
+    objectVersionsProcessed += 1;
+    // Persist useful, bounded progress rather than writing one event per object.
+    if (objectVersionsProcessed % 10 === 0 || objectVersionsProcessed === objects.length) {
+      await reportProgress();
+    }
   }
 
   let softDeletedObjects = 0;

@@ -4,7 +4,7 @@ import { brvinAdminScript } from "../src/brvin/admin";
 import { readFileSync } from "node:fs";
 
 describe("BRVIN browser script contract", () => {
-  it("uses manual refresh only and includes the targeted D1 activity index", async () => {
+  it("refreshes only active source deletions and includes the targeted D1 activity index", async () => {
     const brvinScript = await brvinAdminScript().text();
     const brvinSource = readFileSync(new URL("../src/brvin/admin.ts", import.meta.url), "utf8");
     const fatmanImporter = readFileSync(new URL("../src/fatman/admin.ts", import.meta.url), "utf8");
@@ -17,6 +17,10 @@ describe("BRVIN browser script contract", () => {
     expect(brvinScript).not.toContain("setInterval(");
     expect(brvinScript).toContain("function refreshManually()");
     expect(brvinScript).toContain("refresh manually to see new events");
+    expect(brvinScript).toContain("function scheduleDeletionRefresh(delay)");
+    expect(brvinScript).toContain('some(job=>job.status==="deleting")');
+    expect(brvinScript).toContain("document.hidden?15000:5000");
+    expect(brvinScript).toContain('document.addEventListener("visibilitychange"');
     expect(fatmanImporter).not.toContain("setInterval(");
     expect(fatmanImporter).not.toContain("refreshTimer");
     expect(fatmanMonitor).not.toContain("setInterval(");
@@ -113,8 +117,20 @@ describe("BRVIN browser script contract", () => {
     expect(analyticsSource).toContain('2026-11-04-brvin-vision-output-deleted-at-v1');
     expect(workflowSource).toContain('params.task === "delete_book"');
     expect(workflowSource).toContain('params.task === "delete_vision_output"');
-    expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/")');
+    expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/", async progress =>');
     expect(workflowSource).toContain("instance.items.delete(item.id)");
+    expect(workflowSource).toContain("brvinDeletionSearchPageRequest(page)");
+    expect(workflowSource).not.toContain("per_page: 100, source: \"builtin\"");
+    expect(workflowSource).toContain('eventType: "book.deletion_progress"');
+    expect(workflowSource).toContain("recordBrvinDeletionProgress");
+    expect(workflowSource).toContain("objectVersionsProcessed");
+    expect(adminSource).toContain("function deletionProgressMarkup(progress,status,message)");
+    expect(adminSource).toContain("deletionProgressMessage");
+    expect(adminSource).toContain(".deletion-progress.failed");
+    expect(adminSource).toContain("Retry deletion");
+    const deletionSource = readFileSync(new URL("../src/fatman/deletion.ts", import.meta.url), "utf8");
+    expect(deletionSource).toContain("BRVIN_DELETION_SEARCH_PAGE_SIZE = 50");
+    expect(deletionSource).toContain("brvinDeletionProgressPercent");
     expect(workflowSource).toContain('eventType: "book.deletion_completed"');
     expect(workflowSource).toContain('eventType: "book.deletion_failed"');
     expect(workflowSource).toContain('eventType: "source.vision_ocr_deleted"');

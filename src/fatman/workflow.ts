@@ -8,6 +8,7 @@ import { retrieveFatmanContext } from "./retrieval";
 import { getGoogleAccessToken } from "../auth/google";
 import { fatmanExpectedPageCount, fatmanIndexPageKey } from "./library";
 import type { FatmanImportJob } from "./import";
+import { brvinDeletionProgressPercent, brvinDeletionSearchPageRequest } from "./deletion";
 import {
   cleanupFatmanGcsObjects,
   deleteFatmanGcsObjectPrefix,
@@ -85,6 +86,36 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
   };
 }
 
+
+async function recordBrvinDeletionProgress(
+  env: Env,
+  importId: string,
+  input: {
+    phase: "inventory" | "search" | "search_verify" | "source_storage" | "ocr_storage" | "registry" | "complete";
+    completed?: number;
+    total?: number;
+    message: string;
+    extra?: Record<string, unknown>;
+  },
+): Promise<void> {
+  const percent = brvinDeletionProgressPercent(input.phase, input.completed ?? 0, input.total ?? 0);
+  await recordBrvinActivity(env, {
+    importId,
+    bookId: importId,
+    agent: "Deletion supervisor",
+    phase: "deletion",
+    eventType: "book.deletion_progress",
+    status: input.phase === "complete" ? "completed" : "running",
+    message: input.message,
+    details: {
+      percent,
+      phase: input.phase,
+      completed: input.completed ?? 0,
+      total: input.total ?? 0,
+      ...input.extra,
+    },
+  });
+}
 
 async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promise<{ page: number; status: string }> {
   const instanceName = env.FATMAN_INSTANCE_NAME?.trim();
@@ -439,21 +470,48 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         }
 
         const instance = this.env.FATMAN_SEARCH!.get(this.env.FATMAN_INSTANCE_NAME!.trim());
+        await step.do("record book deletion started", async () => {
+          await recordBrvinDeletionProgress(this.env, importId, {
+            phase: "inventory",
+            completed: 0,
+            total: 1,
+            message: "Starting a source-scoped inventory of this book's indexed AI Search pages.",
+            extra: { searchPrefix: book.search_prefix },
+          });
+          return true;
+        });
         const indexedItems = await step.do("inventory only this book's AI Search items", async () => {
           const matches: Array<{ id: string; key: string }> = [];
           let page = 1;
           for (;;) {
             if (page > 10_000) throw new Error("AI Search item inventory exceeded the safety page limit.");
-            const response = await instance.items.list({ page, per_page: 100, source: "builtin" });
+            const response = await instance.items.list(brvinDeletionSearchPageRequest(page));
             const rows = response.result ?? [];
             for (const item of rows) {
               if (item.key.startsWith(book.search_prefix)) matches.push({ id: item.id, key: item.key });
             }
             const totalPages = response.result_info?.total_pages;
+            if (page % 5 === 0 || rows.length < 50 || (typeof totalPages === "number" && totalPages > 0 && page >= totalPages)) {
+              const inventoryTotal = typeof totalPages === "number" && totalPages > 0 ? totalPages : Math.max(page, 1);
+              await recordBrvinDeletionProgress(this.env, importId, {
+                phase: "inventory",
+                completed: page,
+                total: inventoryTotal,
+                message: "Scanning AI Search inventory: page " + page + (typeof totalPages === "number" && totalPages > 0 ? " of " + totalPages : "") + ".",
+                extra: { inventoryPage: page, inventoryPages: inventoryTotal, searchItemsFound: matches.length },
+              });
+            }
             if (typeof totalPages === "number" && totalPages > 0 && page >= totalPages) break;
-            if (rows.length < 100) break;
+            if (rows.length < 50) break;
             page += 1;
           }
+          await recordBrvinDeletionProgress(this.env, importId, {
+            phase: "inventory",
+            completed: 1,
+            total: 1,
+            message: "Inventory complete. Found " + matches.length + " indexed AI Search items belonging to this source.",
+            extra: { searchItemsFound: matches.length, searchPrefix: book.search_prefix },
+          });
           return matches;
         });
 
@@ -464,6 +522,13 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           }
           await step.do("delete this book's AI Search page batch " + batch, async () => {
             for (const item of items) await instance.items.delete(item.id);
+            await recordBrvinDeletionProgress(this.env, importId, {
+              phase: "search",
+              completed: offset + items.length,
+              total: indexedItems.length,
+              message: "Removed " + (offset + items.length) + " of " + indexedItems.length + " indexed AI Search items.",
+              extra: { searchItemsDeleted: offset + items.length, searchItemsFound: indexedItems.length, batch, batchSize: items.length },
+            });
             return { deleted: items.length, keys: items.map(item => item.key) };
           });
         }
@@ -473,12 +538,12 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           let page = 1;
           for (;;) {
             if (page > 10_000) throw new Error("AI Search verification exceeded the safety page limit.");
-            const response = await instance.items.list({ page, per_page: 100, source: "builtin" });
+            const response = await instance.items.list(brvinDeletionSearchPageRequest(page));
             const rows = response.result ?? [];
             for (const item of rows) if (item.key.startsWith(book.search_prefix)) matches.push(item.key);
             const totalPages = response.result_info?.total_pages;
             if (typeof totalPages === "number" && totalPages > 0 && page >= totalPages) break;
-            if (rows.length < 100) break;
+            if (rows.length < 50) break;
             page += 1;
           }
           return matches;
@@ -486,11 +551,37 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         if (remainingSearchItems.length) {
           throw new Error("AI Search still lists " + remainingSearchItems.length + " page items for this book.");
         }
+        await step.do("record book search pages removed", async () => {
+          await recordBrvinDeletionProgress(this.env, importId, {
+            phase: "search_verify",
+            completed: 1,
+            total: 1,
+            message: "Verified that no AI Search items remain under this source's isolated page prefix.",
+            extra: { searchItemsDeleted: indexedItems.length, remainingSearchItems: 0 },
+          });
+          return true;
+        });
 
         const sourceStorageDeletion = await step.do("delete the book source-PDF object versions", async () =>
-          deleteFatmanGcsObjectPrefix(this.env, importId, ""));
+          deleteFatmanGcsObjectPrefix(this.env, importId, "", async progress => {
+            await recordBrvinDeletionProgress(this.env, importId, {
+              phase: "source_storage",
+              completed: progress.objectVersionsProcessed,
+              total: progress.objectVersionsFound,
+              message: "Removing private PDF storage generations: " + progress.objectVersionsProcessed + " of " + progress.objectVersionsFound + " processed.",
+              extra: { objectVersionsFound: progress.objectVersionsFound, objectVersionsDeleted: progress.objectVersionsDeleted, objectVersionsProcessed: progress.objectVersionsProcessed },
+            });
+          }));
         const visionStorageDeletion = await step.do("delete the book temporary Vision OCR object versions", async () =>
-          deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/"));
+          deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/", async progress => {
+            await recordBrvinDeletionProgress(this.env, importId, {
+              phase: "ocr_storage",
+              completed: progress.objectVersionsProcessed,
+              total: progress.objectVersionsFound,
+              message: "Removing temporary Vision OCR storage generations: " + progress.objectVersionsProcessed + " of " + progress.objectVersionsFound + " processed.",
+              extra: { objectVersionsFound: progress.objectVersionsFound, objectVersionsDeleted: progress.objectVersionsDeleted, objectVersionsProcessed: progress.objectVersionsProcessed },
+            });
+          }));
         await step.do("record external BRVIN assets removed", async () => {
           await recordBrvinActivity(this.env, {
             importId, bookId: importId, agent: "Deletion supervisor",
@@ -507,6 +598,13 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           return true;
         });
 
+        await recordBrvinDeletionProgress(this.env, importId, {
+          phase: "registry",
+          completed: 0,
+          total: 1,
+          message: "External files and indexed pages are removed. Cleaning up the source's BRVIN registry records and project grants.",
+          extra: { sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion },
+        });
         await this.env.DB!.batch([
           this.env.DB!.prepare("DELETE FROM brvin_project_books WHERE book_id=?").bind(importId),
           this.env.DB!.prepare("DELETE FROM fatman_books WHERE id=?").bind(importId),
@@ -522,6 +620,20 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         if (remainingBook || remainingJob) {
           throw new Error("External assets were deleted but one or more BRVIN/import registry rows remain; retry the deletion to finish database cleanup.");
         }
+        await recordBrvinDeletionProgress(this.env, importId, {
+          phase: "registry",
+          completed: 1,
+          total: 1,
+          message: "The source's BRVIN book and import rows are gone; the final completion record is being written.",
+          extra: { registryRowsRemaining: 0 },
+        });
+        await recordBrvinDeletionProgress(this.env, importId, {
+          phase: "complete",
+          completed: 1,
+          total: 1,
+          message: "Deletion complete. The source PDF, OCR output, AI Search pages, grants and BRVIN/import records are removed.",
+          extra: { searchItemsDeleted: indexedItems.length, sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion },
+        });
         await recordBrvinActivity(this.env, {
           importId, bookId: importId, agent: "Deletion supervisor",
           phase: "deletion", eventType: "book.deletion_completed", status: "completed",
@@ -1148,6 +1260,20 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           this.env.DB.prepare("UPDATE fatman_import_jobs SET status='delete_failed',error_message=?,updated_at=? WHERE id=?")
             .bind(message.slice(0, 400), Date.now(), importId),
         ]).catch(() => undefined);
+        const latestProgress = await this.env.DB?.prepare(
+          "SELECT detail_json FROM brvin_activity_events WHERE import_id=? AND event_type='book.deletion_progress' ORDER BY id DESC LIMIT 1"
+        ).bind(importId).first<{ detail_json: string | null }>().catch(() => null);
+        let priorProgress: Record<string, unknown> = {};
+        try {
+          const parsed = latestProgress?.detail_json ? JSON.parse(latestProgress.detail_json) as unknown : null;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) priorProgress = parsed as Record<string, unknown>;
+        } catch { /* Preserve a failed state even if the last progress payload is unreadable. */ }
+        await recordBrvinActivity(this.env, {
+          importId, bookId: importedBook?.book_id ?? importId, agent: "Deletion supervisor",
+          phase: "deletion", eventType: "book.deletion_progress", status: "failed",
+          message: "Deletion failed at " + String(priorProgress.phase ?? "the current stage") + ": " + message.slice(0, 320),
+          details: { ...priorProgress, failed: true, error: message.slice(0, 400), retryable: true },
+        }).catch(() => undefined);
         await recordBrvinActivity(this.env, {
           importId, bookId: importedBook?.book_id ?? importId, agent: "Deletion supervisor",
           phase: "deletion", eventType: "book.deletion_failed", status: "failed",

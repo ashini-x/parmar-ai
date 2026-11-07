@@ -398,3 +398,26 @@ The Cloudflare OAuth client must be identified by its registered redirect URI `h
 ## 18. BRVIN Teachers pilot OCR-output diagnosis
 
 For the failed BRVIN Teachers Physics source, use the authenticated read-only endpoint `GET /admin/api/brvin/status?id=cbe1dc5d-ac02-4809-ac18-7e00ac305c96`. Its `pipeline.vision` object includes the Vision operation's reported `outputDestinations`, the registered `expectedOutputUri`, and the bounded object list under that prefix. The endpoint requires the same Core Admin session as `/admin/brvin`. Compare those values before any resume or new OCR operation; do not upload the PDF again.
+
+
+## 12. Full imported-PDF deletion: pagination, retries and live progress
+
+Full deletion is a source-scoped Cloudflare Workflow. The operator action is available for imported PDF records in `ready`, `failed`, `completed`, `archived` and `delete_failed` states. It first reserves the source as `deleting`, then removes only the matching book's AI Search page items, private source-PDF object generations, temporary Vision OCR object generations, direct project-book grants, and paired BRVIN/Fatman import registry rows. Project and collection definitions, the application-project grant, teacher metadata and activity/audit history are preserved.
+
+**AI Search pagination must stay at or below 50 items per page.** The provider rejects `per_page=100` with `AiSearchError: Too big: expected number to be <=50`. Both the initial prefix-scoped inventory and the post-delete verification use the shared `BRVIN_DELETION_SEARCH_PAGE_SIZE=50` request helper. Deletion still proceeds in bounded batches of 25, and every candidate key is checked against the exact source-specific `search_prefix` before deletion.
+
+The workflow writes an append-only `book.deletion_progress` activity event as work advances. The Core Admin Books table and Live pipelines view read the latest event and display its server-computed percentage, phase, message and failed state. The weighted progress bands are:
+- inventory 0–5%;
+- indexed AI Search removal 5–60%;
+- zero-remaining verification 60–65%;
+- private source-PDF object generations 65–80%;
+- temporary Vision OCR object generations 80–95%;
+- D1 grant/registry cleanup 95–99%;
+- 100% only after registry rows are verified removed.
+
+GCS progress counts object generations processed and successfully deleted. A 404 means an object generation has already disappeared and counts as processed. The final GCS result still reports soft-delete retention and hard-delete times: 100% means the source is removed from active GCS listings, AI Search and BRVIN registry, not that Google Cloud soft-delete recovery retention has elapsed.
+
+If the workflow fails, the source and import rows remain inaccessible with `delete_failed`, the last completed percentage is retained, and the exact error is displayed in red. The operator can use **Manage → Retry deletion** after correcting the cause. Retries re-inventory the source prefix and remaining GCS object generations; already-removed AI Search items and GCS generations are not treated as fatal missing objects. Do not manually delete D1 rows or issue a broad AI Search/GCS prefix delete.
+
+
+The Core Admin dashboard refreshes the overview every 5 seconds only while at least one book is in `deleting`. It backs off to 15 seconds while the browser tab is hidden, refreshes promptly when the tab becomes visible, and stops polling when all deletions become terminal (`delete_failed` or removed). There is no permanent 5-second polling loop when no deletion is active.
