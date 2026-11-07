@@ -771,7 +771,10 @@ export async function startBrvinBookUpload(
 
     const uploadPayload = {
       title: body.title, filename: body.filename, sha256: body.sha256, size: body.size,
-      pageCount: body.pageCount, costConfirmed: body.costConfirmed,
+      // The collection-scoped BRVIN Teachers flow lets Core detect the page
+      // count from Vision output. Legacy library uploads retain their current contract.
+      pageCount: (options.dedupeScope ?? "legacy").startsWith("brvin-collection:") ? undefined : body.pageCount,
+      costConfirmed: body.costConfirmed,
       dedupeScope: options.dedupeScope ?? "legacy",
     };
     const forwardedHeaders = new Headers(request.headers);
