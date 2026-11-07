@@ -107,7 +107,9 @@ export async function brvinOverview(env: Env): Promise<Response> {
         "b.search_prefix,b.source_type,b.vision_output_deleted_at,b.vision_output_deletion_started_at,b.created_at,b.updated_at,c.name AS collection_name," +
         "(SELECT e.event_type FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS vision_cleanup_last_event_type," +
         "(SELECT e.message FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS vision_cleanup_last_message," +
-        "(SELECT e.created_at FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS vision_cleanup_last_at " +
+        "(SELECT e.created_at FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted') ORDER BY e.created_at DESC,e.id DESC LIMIT 1) AS vision_cleanup_last_at," +
+        "(SELECT e.detail_json FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type='book.deletion_progress' ORDER BY e.id DESC LIMIT 1) AS deletion_progress_json," +
+        "(SELECT e.status FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type='book.deletion_progress' ORDER BY e.id DESC LIMIT 1) AS deletion_progress_status " +
         "FROM brvin_books b LEFT JOIN brvin_collections c ON c.id=b.collection_id " +
         "ORDER BY b.updated_at DESC LIMIT 200"
       ).all<Record<string, unknown>>(),
@@ -121,7 +123,9 @@ export async function brvinOverview(env: Env): Promise<Response> {
       ).all<Record<string, unknown>>(),
       env.DB.prepare(
         "SELECT j.id,j.status,j.uploaded_bytes,j.expected_size,j.indexed_pages,j.error_message,j.workflow_instance_id," +
-        "j.vision_operation,j.created_at,j.updated_at,b.title,b.page_count,b.collection_id " +
+        "j.vision_operation,j.created_at,j.updated_at,b.title,b.page_count,b.collection_id," +
+        "(SELECT e.detail_json FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type='book.deletion_progress' ORDER BY e.id DESC LIMIT 1) AS deletion_progress_json," +
+        "(SELECT e.status FROM brvin_activity_events e WHERE e.book_id=b.id AND e.event_type='book.deletion_progress' ORDER BY e.id DESC LIMIT 1) AS deletion_progress_status " +
         "FROM fatman_import_jobs j JOIN brvin_books b ON b.id=j.id " +
         "WHERE j.status IN ('uploading','uploaded','processing','failed','deleting','delete_failed') " +
         "ORDER BY j.updated_at DESC LIMIT 30"
@@ -360,6 +364,8 @@ export async function brvinOverview(env: Env): Promise<Response> {
         visionOcrCleanupError: row.vision_cleanup_last_event_type === "source.vision_ocr_delete_failed" && row.vision_cleanup_last_message ? String(row.vision_cleanup_last_message) : undefined,
         visionOcrCleanupLastEvent: row.vision_cleanup_last_event_type ? String(row.vision_cleanup_last_event_type) : undefined,
         visionOcrCleanupLastAt: row.vision_cleanup_last_at == null ? null : Number(row.vision_cleanup_last_at),
+        deletionProgress: parseDetails(row.deletion_progress_json),
+        deletionProgressStatus: String(row.deletion_progress_status ?? ""),
         directProjects: directByBook.get(String(row.id)) ?? [],
         collectionProjects: collectionProjectMap.get(String(row.collection_id)) ?? [],
         projects: [...(directByBook.get(String(row.id)) ?? []), ...(collectionProjectMap.get(String(row.collection_id)) ?? []).filter(project =>
@@ -372,7 +378,10 @@ export async function brvinOverview(env: Env): Promise<Response> {
         indexedPages: Number(row.indexed_pages ?? 0), pageCount: Number(row.page_count ?? 0),
         error: row.error_message ? String(row.error_message) : undefined,
         workflowId: row.workflow_instance_id ? String(row.workflow_instance_id) : undefined,
-        hasOcrOperation: Boolean(row.vision_operation), updatedAt: Number(row.updated_at),
+        hasOcrOperation: Boolean(row.vision_operation),
+        deletionProgress: parseDetails(row.deletion_progress_json),
+        deletionProgressStatus: String(row.deletion_progress_status ?? ""),
+        updatedAt: Number(row.updated_at),
       })),
       events: (events.results ?? []).map((row) => ({
         id: Number(row.id), importId: row.import_id ? String(row.import_id) : undefined,
@@ -1870,8 +1879,15 @@ function renderApplications(list){
  }));
 }
 
-function renderBooks(list,projects){$("book-count").textContent=list.length+" sources";$("books").innerHTML=list.length?list.map(b=>{const access=b.projects.map(p=>p.name).join(", ")||"No project access",progress=pct(b.indexedPages,b.pageCount),archived=b.status==="archived",manageLabel=archived?"Manage · archived":"Manage";const inspect=["uploading","uploaded","processing","failed","delete_failed"].includes(b.status)?'<button class="btn" data-inspect="'+esc(b.id)+'" type="button">Inspect</button> ':"";return '<tr><td class="source-name"><strong>'+esc(b.title)+'</strong><div class="muted">'+esc(b.filename)+'</div><div class="bar"><i style="width:'+progress+'%"></i></div></td><td>'+esc(b.collectionName)+'</td><td>'+b.indexedPages+'/'+b.pageCount+'</td><td>'+statusPill(b.status)+(b.error?'<div class="error" style="font-size:10px;margin-top:5px">'+esc(b.error)+'</div>':"")+'</td><td>'+esc(access)+'</td><td class="source-actions">'+inspect+'<button class="btn" data-manage="'+esc(b.id)+'" data-archived="'+archived+'" type="button">'+manageLabel+'</button></td></tr>';}).join(""):'<tr><td class="empty" colspan="6">No knowledge sources yet. Add the first PDF to start your library.</td></tr>';$("books").querySelectorAll("[data-inspect]").forEach(button=>button.addEventListener("click",()=>showImport(button.dataset.inspect)));$("books").querySelectorAll("[data-manage]").forEach(button=>button.addEventListener("click",()=>manageBook(button.dataset.manage)));}
-function renderJobs(list){$("jobs").innerHTML=list.length?list.map(j=>{const deleting=j.status==="deleting"||j.status==="delete_failed",percent=j.status==="uploading"?pct(j.uploadedBytes,j.expectedBytes):pct(j.indexedPages,j.pageCount),label=deleting?"Removing AI Search pages and private PDF/OCR storage":j.status==="uploading"?fmtBytes(j.uploadedBytes)+" / "+fmtBytes(j.expectedBytes):j.indexedPages+" / "+j.pageCount+" pages";return '<div class="job-card"><div class="job-card-head"><strong>'+esc(j.title)+'</strong>'+statusPill(j.status)+'</div><p>'+esc(label)+(deleting?"":" · "+percent+"% · updated "+esc(time(j.updatedAt)))+'</p>'+(deleting?"":'<div class="bar" style="max-width:none"><i style="width:'+percent+'%"></i></div>')+(j.error?'<p class="error">'+esc(j.error)+'</p>':"")+'<div class="job-actions"><button class="btn" data-inspect="'+esc(j.id)+'" type="button">Inspect pipeline</button>'+(j.status==="failed"&&j.hasOcrOperation?'<button class="btn" data-resume="'+esc(j.id)+'" type="button">Resume</button>':"")+'</div></div>';}).join(""):'<div class="empty" style="grid-column:1/-1">No active processing or deletion jobs. New BRVIN operations will appear here.</div>';$("jobs").querySelectorAll("[data-inspect]").forEach(b=>b.addEventListener("click",()=>showImport(b.dataset.inspect)));$("jobs").querySelectorAll("[data-resume]").forEach(b=>b.addEventListener("click",()=>resumeImport(b.dataset.resume)));}
+function renderBooks(list,projects){$("book-count").textContent=list.length+" sources";$("books").innerHTML=list.length?list.map(b=>{const access=b.projects.map(p=>p.name).join(", ")||"No project access",progress=pct(b.indexedPages,b.pageCount),archived=b.status==="archived",deleting=b.status==="deleting"||b.status==="delete_failed",manageLabel=archived?"Manage · archived":"Manage";const inspect=["uploading","uploaded","processing","failed","delete_failed","deleting"].includes(b.status)?'<button class="btn" data-inspect="'+esc(b.id)+'" type="button">Inspect</button> ':"";const deletion=deleting?deletionProgressMarkup(b.deletionProgress,b.deletionProgressStatus):"";return '<tr><td class="source-name"><strong>'+esc(b.title)+'</strong><div class="muted">'+esc(b.filename)+'</div><div class="bar"><i style="width:'+progress+'%"></i></div></td><td>'+esc(b.collectionName)+'</td><td>'+b.indexedPages+'/'+b.pageCount+'</td><td>'+statusPill(b.status)+deletion+(b.error?'<div class="error" style="font-size:10px;margin-top:5px">'+esc(b.error)+'</div>':"")+'</td><td>'+esc(access)+'</td><td class="source-actions">'+inspect+'<button class="btn" data-manage="'+esc(b.id)+'" data-archived="'+archived+'" type="button">'+manageLabel+'</button></td></tr>';}).join(""):'<tr><td class="empty" colspan="6">No knowledge sources yet. Add the first PDF to start your library.</td></tr>'; $("books").querySelectorAll("[data-inspect]").forEach(button=>button.addEventListener("click",()=>showImport(button.dataset.inspect)));$("books").querySelectorAll("[data-manage]").forEach(button=>button.addEventListener("click",()=>manageBook(button.dataset.manage)));}
+function deletionProgressMarkup(progress,status){
+ const percent=Math.max(0,Math.min(100,Number(progress?.percent)||0));
+ const failed=status==="failed"||Boolean(progress?.failed);
+ const label=String(progress?.phase||"starting").replaceAll("_"," ");
+ const message=String(progress?.message||"Deletion is running. Progress is being reported by the background workflow.");
+ return '<div class="deletion-progress '+(failed?"failed":"")+'"><div class="deletion-progress-head"><strong>'+esc(label)+'</strong><span>'+percent+'%</span></div><div class="bar" style="max-width:none"><i style="width:'+percent+'%"></i></div><small>'+esc(message)+'</small></div>';
+}
+function renderJobs(list){$("jobs").innerHTML=list.length?list.map(j=>{const deleting=j.status==="deleting"||j.status==="delete_failed",progress=j.deletionProgress||{},percent=deleting?Math.max(0,Math.min(100,Number(progress.percent)||0)):j.status==="uploading"?pct(j.uploadedBytes,j.expectedBytes):pct(j.indexedPages,j.pageCount),label=deleting?(progress.message||"Removing this source from BRVIN storage and search"):j.status==="uploading"?fmtBytes(j.uploadedBytes)+" / "+fmtBytes(j.expectedBytes):j.indexedPages+" / "+j.pageCount+" pages";return '<div class="job-card"><div class="job-card-head"><strong>'+esc(j.title)+'</strong>'+statusPill(j.status)+'</div><p>'+esc(label)+(deleting?"":" · "+percent+"% · updated "+esc(time(j.updatedAt)))+'</p>'+(deleting?deletionProgressMarkup(progress,j.deletionProgressStatus):'<div class="bar" style="max-width:none"><i style="width:'+percent+'%"></i></div>')+(j.error?'<p class="error">'+esc(j.error)+'</p>':"")+'<div class="job-actions"><button class="btn" data-inspect="'+esc(j.id)+'" type="button">Inspect pipeline</button>'+(j.status==="failed"&&j.hasOcrOperation?'<button class="btn" data-resume="'+esc(j.id)+'" type="button">Resume</button>':"")+'</div></div>';}).join(""):'<div class="empty" style="grid-column:1/-1">No active processing or deletion jobs. New BRVIN operations will appear here.</div>'; $("jobs").querySelectorAll("[data-inspect]").forEach(b=>b.addEventListener("click",()=>showImport(b.dataset.inspect)));$("jobs").querySelectorAll("[data-resume]").forEach(b=>b.addEventListener("click",()=>resumeImport(b.dataset.resume)));}
 function detailText(details){if(!details||typeof details!=="object")return"";return Object.entries(details).map(([key,value])=>key+": "+(typeof value==="object"?JSON.stringify(value):String(value))).join(" · ").slice(0,700);}
 function renderEvents(list){
  const filter=$("event-filter")?.value||"all";
@@ -2022,7 +2038,7 @@ function manageBook(id){
    (canArchive?'<button class="btn" id="manage-archive" data-book-archive type="button">Archive source</button>':"")+
    (canRestore?'<button class="btn" id="manage-restore" data-book-restore type="button">Restore source</button>':"")+
    (canDeleteOcr?'<button class="btn" id="manage-ocr" type="button">'+ocrAction+'</button>':busyOcr?'<span class="muted">Vision OCR cleanup is running…</span>':book.visionOcrDeleted?'<span class="muted">Vision OCR files marked as removed.</span>':"")+
-   (canDelete?'<button class="btn danger" id="manage-delete" type="button">Delete this book permanently</button>':book.sourceType!=="pdf"?'<span class="muted">This built-in source is protected.</span>':"")+
+   (canDelete?'<button class="btn danger" id="manage-delete" type="button">'+(book.status==="delete_failed"?"Retry deletion":"Delete this book permanently")+'</button>':book.sourceType!=="pdf"?'<span class="muted">This built-in source is protected.</span>':"")+
   '</div>'+
   (failedOcr?'<div class="notice error" style="margin-top:12px">Last OCR cleanup failed: '+esc(book.visionOcrCleanupError)+'<br>Automatic retries are paused. Run the read-only storage check in Operations, correct the bucket permissions, then retry here. The original PDF, indexed pages and retrieval-ready status have been retained.</div>':"")+
   '<div class="notice">'+(book.status==="deleting"?"Full book deletion is already in progress. The source will disappear from this library when its background workflow completes.":"Direct project access is managed separately from collection access. Archiving pauses retrieval but retains stored data. Deleting the book is permanent and removes its searchable pages and imported storage.")+'</div>';
