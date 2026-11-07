@@ -49,7 +49,7 @@ describe("Telegram runtime analytics schema initialization", () => {
     ]);
 
     expect(db.batch).toHaveBeenCalledTimes(1);
-    const sql = preparedSql.join("\\n");
+    const sql = preparedSql.join("\n");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS users");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS events");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS questions");
