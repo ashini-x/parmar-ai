@@ -586,6 +586,13 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           return true;
         });
 
+        await recordBrvinDeletionProgress(this.env, importId, {
+          phase: "registry",
+          completed: 0,
+          total: 1,
+          message: "External files and indexed pages are removed. Cleaning up the source's BRVIN registry records and project grants.",
+          extra: { sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion },
+        });
         await this.env.DB!.batch([
           this.env.DB!.prepare("DELETE FROM brvin_project_books WHERE book_id=?").bind(importId),
           this.env.DB!.prepare("DELETE FROM fatman_books WHERE id=?").bind(importId),
@@ -601,6 +608,13 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         if (remainingBook || remainingJob) {
           throw new Error("External assets were deleted but one or more BRVIN/import registry rows remain; retry the deletion to finish database cleanup.");
         }
+        await recordBrvinDeletionProgress(this.env, importId, {
+          phase: "complete",
+          completed: 1,
+          total: 1,
+          message: "Deletion complete. The source PDF, OCR output, AI Search pages, grants and BRVIN/import records are removed.",
+          extra: { searchItemsDeleted: indexedItems.length, sourceStorage, visionOcrStorage },
+        });
         await recordBrvinActivity(this.env, {
           importId, bookId: importId, agent: "Deletion supervisor",
           phase: "deletion", eventType: "book.deletion_completed", status: "completed",
@@ -1227,6 +1241,20 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           this.env.DB.prepare("UPDATE fatman_import_jobs SET status='delete_failed',error_message=?,updated_at=? WHERE id=?")
             .bind(message.slice(0, 400), Date.now(), importId),
         ]).catch(() => undefined);
+        const latestProgress = await this.env.DB?.prepare(
+          "SELECT detail_json FROM brvin_activity_events WHERE import_id=? AND event_type='book.deletion_progress' ORDER BY id DESC LIMIT 1"
+        ).bind(importId).first<{ detail_json: string | null }>().catch(() => null);
+        let priorProgress: Record<string, unknown> = {};
+        try {
+          const parsed = latestProgress?.detail_json ? JSON.parse(latestProgress.detail_json) as unknown : null;
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) priorProgress = parsed as Record<string, unknown>;
+        } catch { /* Preserve a failed state even if the last progress payload is unreadable. */ }
+        await recordBrvinActivity(this.env, {
+          importId, bookId: importedBook?.book_id ?? importId, agent: "Deletion supervisor",
+          phase: "deletion", eventType: "book.deletion_progress", status: "failed",
+          message: "Deletion failed at " + String(priorProgress.phase ?? "the current stage") + ": " + message.slice(0, 320),
+          details: { ...priorProgress, failed: true, error: message.slice(0, 400), retryable: true },
+        }).catch(() => undefined);
         await recordBrvinActivity(this.env, {
           importId, bookId: importedBook?.book_id ?? importId, agent: "Deletion supervisor",
           phase: "deletion", eventType: "book.deletion_failed", status: "failed",
