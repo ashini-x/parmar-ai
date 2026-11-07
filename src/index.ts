@@ -1128,41 +1128,53 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       continue;
     }
 
-    if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
-      ctx.waitUntil(recordQuestionResult(env, {
-        updateId: job.updateId,
-        botConnectionId: job.botConnectionId,
-        status: "cancelled",
-        completedAt: Date.now(),
-        attempts: message.attempts,
-        errorMessage: "telegram_bot_disconnected",
-      }).catch(() => undefined));
-      message.ack();
-      continue;
-    }
-
-    const claim = await jobStoreRequest<ClaimResponse>(env, job.chatId, {
-      action: "claim",
-      botConnectionId: job.botConnectionId,
-      updateId: job.updateId,
-      queueMessageId: message.id,
-    });
-
-    if (!claim.claimed || !claim.record) {
-      if (claim.wait) {
-        message.retry({ delaySeconds: claim.retryAfterSeconds ?? 5 });
-      } else {
-        message.ack();
-      }
-      continue;
-    }
-
-    if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
-      message.ack();
-      continue;
-    }
-
+    // Start the consumer heartbeat as soon as a valid Queue job arrives.
+    // The webhook heartbeat ends after enqueue, and the serial D1/DO admission
+    // checks below can otherwise leave a visible 5–10 second typing gap.
+    // These existing checks still gate whether the job can be claimed or run.
     const stopTypingHeartbeat = startTypingHeartbeat(env, job.chatId, job.requestId, job.botConnectionId);
+    let claim: ClaimResponse;
+    try {
+      if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
+        ctx.waitUntil(recordQuestionResult(env, {
+          updateId: job.updateId,
+          botConnectionId: job.botConnectionId,
+          status: "cancelled",
+          completedAt: Date.now(),
+          attempts: message.attempts,
+          errorMessage: "telegram_bot_disconnected",
+        }).catch(() => undefined));
+        stopTypingHeartbeat();
+        message.ack();
+        continue;
+      }
+
+      claim = await jobStoreRequest<ClaimResponse>(env, job.chatId, {
+        action: "claim",
+        botConnectionId: job.botConnectionId,
+        updateId: job.updateId,
+        queueMessageId: message.id,
+      });
+
+      if (!claim.claimed || !claim.record) {
+        stopTypingHeartbeat();
+        if (claim.wait) {
+          message.retry({ delaySeconds: claim.retryAfterSeconds ?? 5 });
+        } else {
+          message.ack();
+        }
+        continue;
+      }
+
+      if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
+        stopTypingHeartbeat();
+        message.ack();
+        continue;
+      }
+    } catch (error) {
+      stopTypingHeartbeat();
+      throw error;
+    }
     let updatePartialAnswer: PartialAnswerHandler | undefined;
     try {
       const startedAt = Date.now();
