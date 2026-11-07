@@ -613,7 +613,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           completed: 1,
           total: 1,
           message: "Deletion complete. The source PDF, OCR output, AI Search pages, grants and BRVIN/import records are removed.",
-          extra: { searchItemsDeleted: indexedItems.length, sourceStorage, visionOcrStorage },
+          extra: { searchItemsDeleted: indexedItems.length, sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion },
         });
         await recordBrvinActivity(this.env, {
           importId, bookId: importId, agent: "Deletion supervisor",
