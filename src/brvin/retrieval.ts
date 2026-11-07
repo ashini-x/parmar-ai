@@ -499,7 +499,11 @@ export async function retrieveBrvinProjectContextForProject(
         }
 
         const rawText = cleanEvidenceText(chunk.text);
-        if (!rawText || !isBrvinPassageRelevant(searchResult.value.query, rawText)) continue;
+        if (!rawText) continue;
+        // A cross-encoder evaluates semantic relevance, including paraphrases.
+        // Apply the stricter lexical coverage guard only when no reranking score
+        // is available (for disabled/legacy retrieval paths).
+        if (rerankingScore === undefined && !isBrvinPassageRelevant(searchResult.value.query, rawText)) continue;
         const text = extractBrvinEvidenceExcerpt(searchResult.value.query, rawText, MAX_PASSAGE_CHARS);
         if (!text) continue;
 
