@@ -90,6 +90,33 @@ export async function setFatmanImportStatus(
   }
 }
 
+/**
+ * Persist the page count derived from the complete Vision output inventory.
+ * The three registry rows are updated atomically. Replays may write the same
+ * exact count, but a conflicting count is rejected rather than overwritten.
+ */
+export async function setFatmanDetectedPageCount(env: Env, importId: string, pageCount: number): Promise<void> {
+  if (!env.DB || !validId(importId) || !Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > 2_000) {
+    throw new Error("The Vision-derived PDF page count is invalid.");
+  }
+  await ensureAnalyticsSchema(env);
+  const statements = [
+    env.DB.prepare("UPDATE fatman_import_jobs SET page_count=?,updated_at=? WHERE id=? AND book_id=? AND (page_count=0 OR page_count=?)")
+      .bind(pageCount, Date.now(), importId, importId, pageCount),
+    env.DB.prepare("UPDATE fatman_books SET page_count=?,updated_at=? WHERE id=? AND (page_count=0 OR page_count=?)")
+      .bind(pageCount, Date.now(), importId, pageCount),
+    env.DB.prepare("UPDATE brvin_books SET page_count=?,updated_at=? WHERE id=? AND (page_count=0 OR page_count=?)")
+      .bind(pageCount, Date.now(), importId, pageCount),
+  ];
+  const results = await env.DB.batch(statements);
+  if (results.some(result => (result.meta?.changes ?? 0) !== 1)) {
+    const current = await getFatmanImportJob(env, importId);
+    if (!current?.book_id || current.book_id !== importId || fatmanExpectedPageCount(current) !== pageCount) {
+      throw new Error("The Vision-derived page count could not be saved consistently across BRVIN registries.");
+    }
+  }
+}
+
 export async function fatmanUploadStatus(env: Env, id?: string | null, includeLivePipelineStatus = false): Promise<Response> {
   if (!env.DB) return json({ ok: false, error: "D1 is required for Fatman imports." }, 503);
   if (id && !validId(id)) return json({ ok: false, error: "invalid_import_id" }, 400);
@@ -424,7 +451,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
   if (!env.DB || !env.FATMAN_SEARCH || !env.FATMAN_IMPORT) {
     return json({ ok: false, error: "The book processing service is not fully configured. Contact the administrator." }, 503);
   }
-  let body: { title?: unknown; filename?: unknown; sha256?: unknown; size?: unknown; pageCount?: unknown; costConfirmed?: unknown; dedupeScope?: unknown };
+  let body: { title?: unknown; filename?: unknown; sha256?: unknown; size?: unknown; costConfirmed?: unknown; dedupeScope?: unknown };
   try {
     body = await request.json() as typeof body;
   } catch {
@@ -435,7 +462,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
   const filename = filenameRaw.split(/[\\/]/u).pop()?.slice(0, 255) ?? "";
   const sha256 = typeof body.sha256 === "string" ? body.sha256.toUpperCase() : "";
   const size = Number(body.size);
-  const pageCount = Number(body.pageCount);
+  const pageCount = 0; // Exact count is derived server-side from the verified Vision JSON output inventory.
   const dedupeScope = body.dedupeScope === undefined ? "legacy" :
     typeof body.dedupeScope === "string" ? body.dedupeScope.trim().slice(0, 180) : "";
   if (!dedupeScope || /[\u0000-\u001f\u007f]/u.test(dedupeScope)) {
@@ -516,7 +543,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
       },
       body: JSON.stringify({
         name: objectName,
-        metadata: { sha256, bookId: id, bookTitle: title, pageCount: String(pageCount), sourceFilename: filename },
+        metadata: { sha256, bookId: id, bookTitle: title, sourceFilename: filename },
       }),
     });
     if (!response.ok) throw await gcsError(response, "Could not start the secure PDF upload.");
@@ -537,7 +564,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
         "VALUES (?, ?, ?, ?, ?, ?, 'uploading', 0, 'general', ?, 'pdf', ?, ?)"
       ).bind(id, title, filename, sha256, size, pageCount, "brvin/books/" + id + "/pages/", now, now),
     ]);
-    return json({ ok: true, importId: id, status: "uploading", uploadedBytes: 0, expectedSize: size, expectedPages: pageCount, bookTitle: title });
+    return json({ ok: true, importId: id, status: "uploading", uploadedBytes: 0, expectedSize: size, expectedPages: 0, bookTitle: title, pageCountStatus: "pending_vision_ocr" });
   } catch (error) {
     return json({ ok: false, error: safeError(error) }, 502);
   }
