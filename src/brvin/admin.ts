@@ -728,8 +728,36 @@ export async function brvinImportStatus(env: Env, importId: string | null): Prom
       "SELECT id,agent,phase,event_type,status,message,detail_json,created_at FROM brvin_activity_events " +
       "WHERE import_id=? ORDER BY id DESC LIMIT 100"
     ).bind(importId).all<Record<string, unknown>>();
+    const latestIndexSnapshot = (events.results ?? []).find(row => row.event_type === "index.monitor_pass");
+    const snapshotDetails = parseDetails(latestIndexSnapshot?.detail_json);
+    const importSummary = payload.import && typeof payload.import === "object"
+      ? payload.import as Record<string, unknown>
+      : {};
+    const expectedPages = Math.max(0, Math.min(2_000, Number(importSummary.expectedPages) || 0));
+    const codes = typeof snapshotDetails.pageStatusCodes === "string" ? snapshotDetails.pageStatusCodes : "";
+    const errorRows = Array.isArray(snapshotDetails.failedPageErrors)
+      ? snapshotDetails.failedPageErrors.filter(item => item && typeof item === "object") as Array<{ page?: number; error?: string }>
+      : [];
+    const errorsByPage = new Map(errorRows.map(item => [Number(item.page), String(item.error ?? "")]));
+    const statusByCode: Record<string, string> = { c: "completed", r: "running", q: "queued", f: "failed", m: "missing" };
+    const pages = Array.from({ length: expectedPages }, (_, index) => {
+      const code = codes[index] ?? "m";
+      return {
+        page: index + 1,
+        status: statusByCode[code] ?? "missing",
+        ...(code === "f" && errorsByPage.has(index + 1) ? { error: errorsByPage.get(index + 1) } : {}),
+      };
+    });
     return json({
       ...payload,
+      index: {
+        expectedPages,
+        completedPages: Math.max(0, Number(snapshotDetails.completedPages) || 0),
+        failedPages: Math.max(0, Number(snapshotDetails.failedPages) || 0),
+        monitorSequence: Math.max(0, Number(snapshotDetails.monitorSequence) || 0),
+        checkedAt: Number(latestIndexSnapshot?.created_at) || null,
+        pages,
+      },
       events: (events.results ?? []).map((row) => ({
         id: Number(row.id), agent: String(row.agent), phase: String(row.phase),
         type: String(row.event_type), status: String(row.status), message: String(row.message),
