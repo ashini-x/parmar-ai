@@ -19,6 +19,7 @@ import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
   deleteTelegramMessage,
+  deleteTelegramMessageWithToken,
   editTelegramMessage,
   editTelegramProgressMessage,
   editTelegramMessageReplyMarkup,
@@ -1006,17 +1007,25 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       queueAnalytics(ctx, "rate_limit", () =>
         recordEvent(env, isDailyLimit ? "daily_limit_reached" : "burst_limit_reached", analyticsUser, { updateId }),
       );
+      await deliverWebhookStatusWithToken(
+        bot.token,
+        chatId,
+        statusMessageId,
+        messageId,
+        isDailyLimit ? DAILY_LIMIT_TEXT : RATE_LIMIT_TEXT,
+        requestId,
+      );
+    } else if (statusMessageId) {
+      // Preserve the existing rate-notice throttle. Early acknowledgement is
+      // temporary feedback, not permission to emit another rate-limit notice.
+      await deleteTelegramMessageWithToken(bot.token, chatId, statusMessageId).catch((error) => {
+        logger.warn("telegram_suppressed_ack_cleanup_failed", {
+          requestId,
+          statusMessageId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
     }
-    // Every acknowledged request must leave Thinking state, even when the
-    // existing notification throttle suppresses the analytics notice.
-    await deliverWebhookStatusWithToken(
-      bot.token,
-      chatId,
-      statusMessageId,
-      messageId,
-      isDailyLimit ? DAILY_LIMIT_TEXT : RATE_LIMIT_TEXT,
-      requestId,
-    );
     return withRequestId(json({ ok: true, rateLimited: true, rateLimitReason: begin.rateLimitReason }), requestId);
   }
 
