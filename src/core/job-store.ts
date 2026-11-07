@@ -347,7 +347,6 @@ export class JobDedupe extends DurableObject {
 
   private async reconcileAlarm(now = Date.now()): Promise<void> {
     const retentionCutoff = now - JOB_RETENTION_MS;
-    const typingCutoff = now - TYPING_MAX_AGE_MS;
     const stalePendingCutoff = now - PENDING_RECOVERY_MS;
     const staleQueuedCutoff = now - QUEUED_RECOVERY_MS;
     const staleProcessingCutoff = now - PROCESSING_LEASE_MS;
