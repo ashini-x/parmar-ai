@@ -148,8 +148,10 @@ describe("Fatman live monitor", () => {
 
     expect(page.headers.get("cache-control")).toBe("no-store");
     expect(html).toContain("/admin/api/fatman/monitor");
-    expect(html).toContain("setInterval(refresh,10000)");
-    expect(html).toContain("Pause auto-refresh");
+    expect(html).not.toContain("setInterval(");
+    expect(html).not.toContain("Pause auto-refresh");
+    expect(html).toContain("Manual refresh");
+    expect(html).toContain("Refresh now");
     expect(html).toContain("Page-by-page map");
     expect(html).toContain("Not submitted yet");
     expect(html).toContain("Google Vision OCR");

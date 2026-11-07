@@ -432,6 +432,10 @@ CREATE INDEX IF NOT EXISTS idx_brvin_activity_import
 CREATE INDEX IF NOT EXISTS idx_brvin_activity_book
   ON brvin_activity_events(book_id, id DESC);
 
+CREATE INDEX IF NOT EXISTS idx_brvin_activity_book_vision_cleanup
+  ON brvin_activity_events(book_id, created_at DESC, id DESC)
+  WHERE event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted');
+
 CREATE TABLE IF NOT EXISTS telegram_bots (
   bot_connection_id TEXT PRIMARY KEY,
   bot_id INTEGER NOT NULL UNIQUE,

@@ -15,6 +15,10 @@ This is the day-to-day operating guide. The administrator does not need to creat
 
 Never send another person your admin password, browser session, cookies, private key, Cloudflare token, Google service-account key or a connection nonce/proof.
 
+### Manual refresh and D1 usage
+
+BRVIN Admin and the Fatman operations screens are manual-refresh dashboards. Each page loads one initial snapshot; use its **Refresh** / **Refresh now** control when you need current data. There is no five-second or ten-second polling loop. The background Cloudflare Workflow, OCR/indexing, retries and retention supervisors continue independently when the browser is closed. Keep the PDF upload tab open only while the file itself is transferring; after the server has accepted the upload and started its Workflow, the browser is not needed for processing. Avoid leaving old Operations/Admin tabs open and repeatedly refreshing them: the Core overview contains historical activity summaries and should not be polled continuously.
+
 ## 2. Create a teacher knowledge project
 
 A knowledge project is the teacher's permission boundary—the teacher's digital brain.
@@ -94,13 +98,15 @@ When the project allowance is exhausted, BRVIN returns `MONTHLY_LIMIT_REACHED` b
 
 ## 7. Operate the Live operations view
 
-The Operations page refreshes automatically and displays:
+The Operations page loads one snapshot and displays the latest data from that read:
 
 - Project search usage for the current month.
 - Active environment connection failures.
 - Failed and warning activity from the last seven days.
 - Outstanding/running/failed OCR-only cleanup.
 - Current pipeline jobs and the activity timeline.
+
+Use the visible **Refresh** control when you need a new snapshot. BRVIN Admin and the Fatman operations screens do not poll in the background; the server-side Workflows continue independently while the browser is closed.
 
 Use the activity filter to narrow the event list to failures/warnings, storage retention, application connections, ingestion/indexing or governance.
 

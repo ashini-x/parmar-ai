@@ -64,7 +64,7 @@ The production request path separates admission, durable state, model execution,
 
 ## Admin Control Center
 
-The protected /admin application provides operational visibility and controlled mutations, including:
+The protected /admin application provides operational visibility and controlled mutations, including (dashboard data is loaded on page open and refreshed manually; no background polling):
 
 - AI usage and estimated cost visibility.
 - Student search and profile inspection.

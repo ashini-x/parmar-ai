@@ -368,6 +368,160 @@ async function getCloudflareBundle(env: Env): Promise<{ row: ConnectionRow; bund
   return { row, bundle };
 }
 
+async function markLegacyProviderRevoked(
+  env: Env,
+  provider: Provider,
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  if (!env.DB) throw new Error("BRVIN D1 is not configured.");
+  await env.DB.prepare(
+    "UPDATE brvin_provider_connections SET status=?,metadata_json=?,secret_ciphertext='',updated_at=? WHERE provider=?"
+  ).bind("revoked", JSON.stringify({ ...metadata, credentialErased: true, revokedAt: Date.now() }), Date.now(), provider).run();
+}
+
+async function revokeCloudflareOAuthToken(bundle: CloudflareBundle, token: string, hint: "refresh_token" | "access_token"): Promise<void> {
+  const response = await fetch("https://dash.cloudflare.com/oauth2/revoke", {
+    method: "POST",
+    headers: {
+      authorization: "Basic " + btoa(bundle.clientId + ":" + bundle.clientSecret),
+      "content-type": "application/x-www-form-urlencoded",
+      accept: "application/json",
+    },
+    body: new URLSearchParams({ token, token_type_hint: hint }).toString(),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    let detail = "";
+    try {
+      const data = text ? JSON.parse(text) as { error_description?: string; error?: string } : {};
+      detail = clean(data.error_description || data.error, 180);
+    } catch { detail = ""; }
+    throw new Error("Cloudflare OAuth token revocation failed (HTTP " + response.status + ")" + (detail ? ": " + detail : "."));
+  }
+}
+
+/**
+ * Retires only the obsolete Project Factory provider credentials. This does not
+ * touch the application's GitHub repository grants, Actions secrets, Cloudflare
+ * deployment token, BRVIN application/environment identity, or private bindings.
+ */
+export async function decommissionLegacyBrvinConnect(env: Env, request: Request): Promise<Response> {
+  let body: { confirmation?: unknown };
+  try { body = await request.json() as typeof body; }
+  catch { return json({ ok: false, error: "Invalid decommission request." }, 400); }
+  if (body.confirmation !== "UNINSTALL BRVIN CONNECT") {
+    return json({ ok: false, error: "Type exactly UNINSTALL BRVIN CONNECT to confirm." }, 400);
+  }
+
+  const result: {
+    ok: true;
+    partial: boolean;
+    github: { status: string; installationRemoved?: boolean; appDeletionRequired?: boolean; message?: string; error?: string };
+    cloudflare: { status: string; tokensRevoked?: boolean; oauthClientDeletionRequired?: boolean; message?: string; error?: string };
+  } = {
+    ok: true,
+    partial: false,
+    github: { status: "not_configured" },
+    cloudflare: { status: "not_configured" },
+  };
+
+  // GitHub: verify the exact recorded ashini-x installation before uninstalling it.
+  try {
+    const row = await connection(env, "github");
+    if (!row || row.status === "revoked") {
+      result.github = { status: "already_revoked", installationRemoved: true, appDeletionRequired: true };
+    } else {
+      const bundle = await decryptSecret<GitHubBundle>(env, row.secret_ciphertext);
+      if (!bundle.appId || !bundle.privateKey || !bundle.slug) throw new Error("The stored BRVIN GitHub App credentials are incomplete; no GitHub changes were made.");
+      const metadata = JSON.parse(row.metadata_json || "{}") as Record<string, unknown>;
+      const installations = await githubAppRequest<Array<{
+        id?: number;
+        account?: { login?: string };
+      }>>(env, bundle, "/app/installations?per_page=100");
+      const recordedId = Number(metadata.installationId || bundle.installationId || 0) || null;
+      const recordedAccount = clean(metadata.installationAccount || bundle.installationAccount, 100);
+      const expectedAccount = recordedAccount || "ashini-x";
+      const matchesForAccount = installations.filter(item => clean(item.account?.login, 100) === expectedAccount);
+      if (matchesForAccount.length > 1) {
+        throw new Error("More than one BRVIN GitHub installation matches " + expectedAccount + "; refusing an ambiguous uninstall.");
+      }
+      let target = recordedId ? installations.find(item => Number(item.id) === recordedId) || null : null;
+      if (target && recordedAccount && clean(target.account?.login, 100) !== recordedAccount) {
+        throw new Error("The recorded GitHub installation now belongs to a different account; refusing to uninstall it.");
+      }
+      if (!recordedId) target = matchesForAccount[0] || null;
+      if (recordedId && !target && matchesForAccount.length === 1) {
+        throw new Error("The recorded GitHub installation ID is no longer present but a different installation exists for " + expectedAccount + "; refusing an ambiguous uninstall.");
+      }
+      if (target?.id) {
+        const account = clean(target.account?.login, 100);
+        const expectedAccount = recordedAccount || "ashini-x";
+        if (account !== expectedAccount) throw new Error("The BRVIN GitHub installation is not the recorded " + expectedAccount + " account; refusing to uninstall it.");
+        await githubAppRequest<void>(env, bundle, "/app/installations/" + Number(target.id), "DELETE");
+      }
+      const nextMetadata = {
+        ...metadata,
+        appName: clean(metadata.appName || bundle.name, 100),
+        slug: clean(metadata.slug || bundle.slug, 100),
+        installationId: recordedId || Number(target?.id || 0) || null,
+        installationAccount: recordedAccount || clean(target?.account?.login, 100) || "ashini-x",
+        installationRemoved: true,
+      };
+      await markLegacyProviderRevoked(env, "github", nextMetadata);
+      await audit(env, "github", "github.legacy_connect_revoked", "The legacy BRVIN Connect GitHub installation was removed and its encrypted private key erased.", {
+        installationId: Number(target?.id || recordedId || 0) || null,
+        installationAccount: nextMetadata.installationAccount,
+      });
+      result.github = {
+        status: "revoked",
+        installationRemoved: true,
+        appDeletionRequired: true,
+        message: "The ashini-x installation was removed and BRVIN erased the stored App private key. Delete the GitHub App registration in GitHub Developer Settings to remove the App itself.",
+      };
+    }
+  } catch (error) {
+    result.partial = true;
+    result.github = { status: "failed", error: safeError(error) };
+  }
+
+  // Cloudflare: revoke short-lived and refresh tokens before erasing the client bundle.
+  try {
+    const row = await connection(env, "cloudflare");
+    if (!row || row.status === "revoked") {
+      result.cloudflare = { status: "already_revoked", tokensRevoked: true, oauthClientDeletionRequired: true };
+    } else {
+      const bundle = await decryptSecret<CloudflareBundle>(env, row.secret_ciphertext);
+      if (!bundle.clientId || !bundle.clientSecret) throw new Error("The stored Cloudflare OAuth client credentials are incomplete; no Cloudflare changes were made.");
+      if (bundle.refreshToken) await revokeCloudflareOAuthToken(bundle, bundle.refreshToken, "refresh_token");
+      if (bundle.accessToken) await revokeCloudflareOAuthToken(bundle, bundle.accessToken, "access_token");
+      const metadata = JSON.parse(row.metadata_json || "{}") as Record<string, unknown>;
+      await markLegacyProviderRevoked(env, "cloudflare", {
+        ...metadata,
+        accountId: clean(metadata.accountId || bundle.accountId, 32),
+        oauthClientId: bundle.clientId,
+        tokenRevocationCompleted: true,
+      });
+      await audit(env, "cloudflare", "cloudflare.legacy_connect_revoked", "The legacy BRVIN Connect OAuth tokens were revoked and the encrypted OAuth client credentials were erased.", {
+        accountId: clean(metadata.accountId || bundle.accountId, 32),
+        oauthClientId: bundle.clientId,
+        refreshTokenRevoked: Boolean(bundle.refreshToken),
+        accessTokenRevoked: Boolean(bundle.accessToken),
+      });
+      result.cloudflare = {
+        status: "revoked",
+        tokensRevoked: true,
+        oauthClientDeletionRequired: true,
+        message: "The stored legacy OAuth tokens and client secret were erased. Delete the obsolete OAuth client registration from Cloudflare account settings if it is no longer used elsewhere.",
+      };
+    }
+  } catch (error) {
+    result.partial = true;
+    result.cloudflare = { status: "failed", error: safeError(error) };
+  }
+
+  return json(result, 200);
+}
+
 export async function brvinConnectStatus(env: Env): Promise<Response> {
   try {
     const [github, cloudflare] = await Promise.all([connection(env, "github"), connection(env, "cloudflare")]);
@@ -394,8 +548,9 @@ export async function brvinConnectStatus(env: Env): Promise<Response> {
       },
       cloudflare: {
         status: cloudflare?.status || "not_configured",
-        oauthClientConfigured: Boolean(clean(cfMeta.clientIdHint, 40)),
+        oauthClientConfigured: cloudflare?.status !== "revoked" && Boolean(clean(cfMeta.clientIdHint, 40)),
         clientIdHint: clean(cfMeta.clientIdHint, 40) || null,
+        oauthClientId: clean(cfMeta.oauthClientId, 100) || null,
         callbackUrl: clean(cfMeta.redirectUri, 500) || null,
         accountId: clean(cfMeta.accountId, 32) || clean(env.BRVIN_HOME_ACCOUNT_ID, 32) || null,
         brvinServiceVisible: cfMeta.brvinServiceVisible === true,

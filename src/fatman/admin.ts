@@ -527,13 +527,12 @@ async function api(path,options){
   if(!response.ok||!data.ok)throw new Error(data.error||("Request failed: "+response.status));
   return data;
 }
-let refreshTimer=null;
 async function refresh(){
   try{
     const data=await api("status");
     let upload=await api("upload/status");
     if(upload.import?.status==="uploaded"&&upload.import.id){
-      if(!refreshTimer)refreshTimer=setInterval(()=>refresh(),15000);
+
       await api("upload/"+encodeURIComponent(upload.import.id)+"/complete",{method:"POST",headers:{"content-type":"application/json"},body:"{}"}).catch(()=>undefined);
       upload=await api("upload/status?id="+encodeURIComponent(upload.import.id));
     }
@@ -566,11 +565,6 @@ async function refresh(){
       (data.exists?(data.completedPages+" of "+data.expectedPages+" pages indexed; "+data.queuedPages+" processing; "+data.failedPages+" failed."):"Index has not been created.")+
       (jobLine?"\\n"+jobLine:"")+
       (firstError?"\\nFirst indexing error: "+firstError:""));
-    if((job?.status==="uploading"||job?.status==="uploaded"||job?.status==="processing")&&!refreshTimer){
-      refreshTimer=setInterval(()=>refresh(),15000);
-    }else if((!job||job.status==="completed"||job.status==="failed")&&refreshTimer){
-      clearInterval(refreshTimer);refreshTimer=null;
-    }
   }catch(error){setStatus("Could not read import status: "+error.message);}
 }
 const quotaConfirmed=document.getElementById("quota-confirmed");
@@ -677,7 +671,7 @@ async function importBook(){
     }
     if(started.status==="processing"){
       await api("upload/"+encodeURIComponent(importId)+"/complete",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
-      if(!refreshTimer)refreshTimer=setInterval(()=>refresh(),15000);
+
       await refresh();
       return;
     }
@@ -710,7 +704,7 @@ async function importBook(){
     progressEl.value=0;
     setStatus("PDF safely uploaded. Starting background Google Vision OCR and indexing…");
     await api("upload/"+encodeURIComponent(importId)+"/complete",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
-    if(!refreshTimer)refreshTimer=setInterval(()=>refresh(),15000);
+
     await refresh();
   }catch(error){
     setStatus("Import paused: "+error.message+" Choose the same PDF and select Import or resume to continue from the saved upload position.");

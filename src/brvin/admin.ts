@@ -1469,6 +1469,8 @@ const HTML = `<!doctype html>
  <section class="tile" style="margin-bottom:12px">
   <div class="panel-toolbar"><div><h3>Historical provider preflight</h3><p>Optional read-only status for legacy BRVIN provider settings. This does not control or validate the GitHub/Cloudflare connections used by ChatGPT.</p></div><button class="btn" id="provider-capability-check" type="button">Check legacy status</button></div>
   <p id="provider-capability-result" class="muted" aria-live="polite">Not required for teacher knowledge management or application onboarding.</p>
+  <button class="btn" id="legacy-connect-retire" type="button">Revoke BRVIN Connect and erase stored credentials</button>
+  <p id="legacy-connect-retire-result" class="muted" aria-live="polite">This removes the recorded ashini-x GitHub App installation, revokes legacy Cloudflare OAuth tokens and erases their encrypted credentials. The GitHub App and Cloudflare OAuth client registrations still need to be deleted from their respective account settings.</p>
  </section>
  <div class="overview-grid">
   <section class="tile">
@@ -1479,7 +1481,7 @@ const HTML = `<!doctype html>
    <p id="github-access-state" class="muted">Repository access has not been checked yet.</p>
    <p><a id="github-app-settings" href="https://github.com/settings/apps" target="_blank" rel="noreferrer">Open GitHub App permissions</a></p>
    <p><a id="github-installation-settings" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">Open BRVIN installation settings</a></p>
-   <div class="notice">One-time GitHub approval: update the existing App with the requested permissions, approve the permission update, then set its installation repository access to <strong>All repositories</strong>. BRVIN will use short-lived GitHub App installation tokens automatically. No personal access token or per-project App installation is required.</div>
+   <div class="notice">This is a retired integration. Current repositories and deployments are managed through your separately authorized GitHub and Cloudflare connections; teacher knowledge upload and retrieval do not use this GitHub App. Revoke it below, then delete the App registration in GitHub Developer Settings.</div>
   </section>
   <section class="tile">
    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong>Cloudflare OAuth</strong><span class="pill" id="connect-cloudflare-status">Not configured</span></div>
@@ -1501,7 +1503,7 @@ const HTML = `<!doctype html>
  </div>
 </details>
 </section>
-</div></div><p class="footer-note">BRVIN · Administrator-only · Operational data refreshes automatically · Knowledge is never globally exposed by default</p></main>
+</div></div><p class="footer-note">BRVIN · Administrator-only · Refresh manually when you need an updated view · Knowledge is never globally exposed by default</p></main>
 <div class="modal" id="upload-modal" role="dialog" aria-modal="true" aria-labelledby="upload-modal-title"><div class="modalbox wide"><div class="modalhead"><div><div class="eyebrow">Secure ingestion</div><h2 id="upload-modal-title">Add knowledge source</h2></div><button class="btn" id="close-upload" type="button">Close</button></div><p class="modal-subtitle">Upload a private PDF. BRVIN handles OCR, indexing and retrieval verification in the background.</p><div class="formgrid"><div class="field"><label for="book-title">Book / document name</label><input id="book-title" maxlength="160" placeholder="e.g. Indian Polity Reference"></div><div class="field"><label for="collection">Knowledge collection</label><select id="collection"></select></div></div><div class="field"><label>PDF document</label><label class="drop" for="pdf"><span><strong>Choose PDF from this device</strong><small>Private resumable upload · up to 1 GB · 2,000 pages · OCR costs may apply</small><input id="pdf" type="file" accept="application/pdf"></span></label><div class="file" id="file-info">No PDF selected.</div></div><div class="field"><label>Grant project access (optional)</label><div class="checks" id="project-checks"><span class="muted">Loading projects…</span></div></div><label class="check"><input type="checkbox" id="cost"> I understand Google Cloud Vision OCR may incur usage charges.</label><div class="modal-actions"><button class="btn primary" id="upload" disabled type="button">Add to BRVIN</button></div><progress class="progress" id="progress" value="0" max="100"></progress><p class="statusline" id="upload-status" aria-live="polite">Choose a PDF to start. Processing continues on the server after upload completes.</p><div class="steps"><div class="step" id="step-upload"><b>01 · Secure upload</b><small>Private object storage</small></div><div class="step" id="step-ocr"><b>02 · Vision OCR</b><small>Document text detection</small></div><div class="step" id="step-index"><b>03 · Indexing</b><small>Page-level search</small></div><div class="step" id="step-qa"><b>04 · Retrieval QA</b><small>Source-page verification</small></div><div class="step" id="step-ready"><b>05 · Ready</b><small>Project access enabled</small></div></div><div class="notice">BRVIN does not automatically share every book with every project. A book is searchable only after indexing and retrieval QA pass, and only for projects explicitly assigned the book or its collection.</div></div></div>
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div class="modalbox"><div class="modalhead"><h2 id="modal-title">Book operations</h2><button class="btn" id="close-modal" type="button">Close</button></div><div id="modal-body"></div></div></div><script type="module">
 const $=id=>document.getElementById(id),API="/admin/api/brvin/",UPLOAD="/admin/api/brvin/upload/";
@@ -1906,8 +1908,8 @@ function renderOperations(data){
  }
  $("retention-note").textContent=note;
 }
-function renderOverview(data){$("overview-books").textContent=String(data.stats.books);$("overview-pages").textContent=data.stats.indexedPages.toLocaleString()+" of "+data.stats.totalPages.toLocaleString()+" pages indexed";$("overview-ready").textContent=String(data.stats.readyBooks);$("overview-running").textContent=String(data.stats.activeBooks);$("overview-attention").textContent=String(data.stats.failedBooks);$("overview-status-note").textContent=data.stats.failedBooks?data.stats.failedBooks+" source(s) need attention. Open Operations to inspect the affected workflow.":data.stats.activeBooks?data.stats.activeBooks+" pipeline(s) are running. Processing continues automatically in the background.":"All tracked sources are stable. New processing events will appear here automatically.";}
-function render(){if(!model)return;renderMetrics(model.stats);renderApplications(model.applications||[]);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOperations(model);renderOverview(model);$("live-label").textContent="LIVE · refreshed "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
+function renderOverview(data){$("overview-books").textContent=String(data.stats.books);$("overview-pages").textContent=data.stats.indexedPages.toLocaleString()+" of "+data.stats.totalPages.toLocaleString()+" pages indexed";$("overview-ready").textContent=String(data.stats.readyBooks);$("overview-running").textContent=String(data.stats.activeBooks);$("overview-attention").textContent=String(data.stats.failedBooks);$("overview-status-note").textContent=data.stats.failedBooks?data.stats.failedBooks+" source(s) need attention. Open Operations to inspect the affected workflow.":data.stats.activeBooks?data.stats.activeBooks+" pipeline(s) are running. Processing continues automatically in the background.":"All tracked sources are stable. Background processing continues independently; refresh manually to see new events.";}
+function render(){if(!model)return;renderMetrics(model.stats);renderApplications(model.applications||[]);renderCollections(model.collections);renderProjects(model.projects);renderBooks(model.books,model.projects);renderJobs(model.jobs);renderEvents(model.events);renderOperations(model);renderOverview(model);$("live-label").textContent="Last updated · "+new Date(model.generatedAt).toLocaleTimeString();$("event-stamp").textContent="Last event "+(model.events[0]?time(model.events[0].createdAt):"—");}
 let connectState=null;
 async function refreshConnectState(){
  try{connectState=await api(API+"connect/status");renderConnectState();}
@@ -1916,29 +1918,37 @@ async function refreshConnectState(){
 function renderConnectState(){
  if(!connectState)return;
  const github=connectState.github||{},cloudflare=connectState.cloudflare||{};
+ $("provider-capability-check").hidden=true;
+ $("cf-client-credentials").hidden=true;
+ $("cf-save-client").hidden=true;
+ $("cf-authorize").hidden=true;
+ $("cf-discover-workers").hidden=true;
+ $("cf-copy-required-scopes").hidden=true;
+ $("github-register").hidden=!github.appSettingsUrl;
+
  $("connect-github-status").textContent=github.status||"not connected";
  $("connect-cloudflare-status").textContent=cloudflare.status||"not configured";
  $("github-app-meta").textContent=github.appName
   ?github.appName+" · "+(github.appUrl||github.appSlug||"")+(github.installationAccount?" · installed on "+github.installationAccount:"")
   :"No BRVIN GitHub App registered.";
- $("github-app-settings").href=github.appSettingsUrl||"https://github.com/settings/apps";
+ $("github-app-settings").href=github.appSettingsUrl?github.appSettingsUrl.replace(/\\/permissions$/u,""):"https://github.com/settings/apps";
  $("github-installation-settings").href=github.installationUrl||"https://github.com/settings/installations";
- $("github-register").textContent=github.appSettingsUrl?"Open BRVIN App permissions":"Create BRVIN GitHub App";
- $("github-access-state").textContent=github.repositorySelection==="all"
-  ?"All repositories are selected in the stored installation metadata. Run the live capability check to verify current installation permissions."
-  :"One-time action: approve the expanded App permissions and set installation repository access to All repositories.";
+ $("github-installation-settings").parentElement.hidden=github.status==="revoked";
+ $("github-register").textContent=github.appSettingsUrl?"Open legacy GitHub App settings":"No legacy App connected";
+ $("github-access-state").textContent=github.status==="revoked"
+  ?"Legacy installation revoked. Delete the App registration in GitHub Developer Settings to finish retirement."
+  :(github.repositorySelection==="all"?"Legacy installation metadata says All repositories; this provider is not required for current BRVIN operation.":"Legacy App is not connected and is not required for current BRVIN operation.");
  $("cf-required-scopes").value=(cloudflare.requiredScopes||[]).join(" ");
  $("cf-callback-url").value=cloudflare.callbackUrl||window.location.origin+"/admin/brvin/connect/cloudflare/callback";
- $("cf-client-credentials").hidden=cloudflare.oauthClientConfigured===true;
- $("cf-save-client").hidden=cloudflare.oauthClientConfigured===true;
- $("cf-client-state").textContent=cloudflare.oauthClientConfigured
-  ?"Existing OAuth client "+(cloudflare.clientIdHint||"") +" is stored encrypted. Its secret does not need to be entered again."
-  :"No OAuth client has been saved yet. Configure the existing BRVIN Connect client only if the encrypted client record is missing.";
- $("cf-worker-note").textContent=cloudflare.brvinServiceVisible
-  ?"Same-account check passed · private brvin-service is visible in "+(cloudflare.accountId||"the BRVIN home account")+". OAuth currently grants "+(cloudflare.grantedScopes||[]).length+" scopes. "+(cloudflare.workerAdminScopeGranted?"Workers Admin is granted.":"BLOCKER: Workers Editor is not Workers Admin; BRVIN cannot create/delete new Workers until workers-scripts.admin is granted.")
-  :"Authorize the Cloudflare account that hosts private brvin-service. The capability check itself does not create or change Workers.";
+ $("cf-client-credentials").hidden=true;
+ $("cf-save-client").hidden=true;
+ $("cf-client-state").textContent=cloudflare.status==="revoked"
+  ?"Legacy OAuth tokens and encrypted credentials were revoked/erased. OAuth client ID: "+(cloudflare.oauthClientId||"not available")+". Delete that dedicated client from Cloudflare Manage Account → OAuth clients."
+  :"Legacy Cloudflare OAuth is not required for current BRVIN application management. Do not configure or reauthorize it.";
+ undefined
 }
-async function refresh(){try{model=await api(API+"overview");render();if($("connect-wizard-panel")?.open)await refreshConnectState();}catch(e){$("live-label").textContent="LIVE · connection issue";console.error(e);}}
+async function refresh(){try{model=await api(API+"overview");render();if($("connect-wizard-panel")?.open)await refreshConnectState();}catch(e){$("live-label").textContent="Refresh failed · connection issue";console.error(e);}}
+async function refreshManually(){await refresh();if(activeImportId&&$("modal").classList.contains("open"))await showImport(activeImportId).catch(error=>console.error("Could not refresh the selected import",error));}
 async function runStorageDiagnostics(){
  const button=$("storage-diagnostics"),result=$("storage-diagnostic-result");
  button.disabled=true;result.hidden=false;result.textContent="Checking service-account permissions and bucket metadata without changing storage…";
@@ -2173,7 +2183,7 @@ function openUpload(){activateView("books");$("upload-modal").classList.add("ope
 $("open-upload").addEventListener("click",openUpload);$("open-upload-secondary").addEventListener("click",openUpload);$("open-upload-books").addEventListener("click",openUpload);
 $("close-upload").addEventListener("click",()=>$("upload-modal").classList.remove("open"));$("upload-modal").addEventListener("click",event=>{if(event.target===$("upload-modal"))$("upload-modal").classList.remove("open");});
 $("close-upload").addEventListener("click",()=>$("upload-modal").classList.remove("open"));$("upload-modal").addEventListener("click",event=>{if(event.target===$("upload-modal"))$("upload-modal").classList.remove("open");});
-$("clear-brvin").addEventListener("click",clearAllBrvinBooks);$("upload").addEventListener("click",uploadBook);$("refresh").addEventListener("click",()=>refresh());$("logout").addEventListener("click",async()=>{await fetch("/admin/logout",{method:"POST",credentials:"same-origin"});location.assign("/admin/login");});
+$("clear-brvin").addEventListener("click",clearAllBrvinBooks);$("upload").addEventListener("click",uploadBook);$("refresh").addEventListener("click",()=>refreshManually());$("logout").addEventListener("click",async()=>{await fetch("/admin/logout",{method:"POST",credentials:"same-origin"});location.assign("/admin/login");});
 $("create-project").addEventListener("click",async()=>{try{const name=$("project-name").value.trim();if(!name)throw new Error("Enter a knowledge project name.");await post("projects",{name,description:$("project-desc").value,ownerLabel:$("project-owner").value,legacyClient:false});$("project-name").value="";$("project-desc").value="";$("project-owner").value="";await refresh();}catch(e){alert(e.message);}});
 $("create-application").addEventListener("click",async()=>{
  const button=$("create-application");button.disabled=true;
@@ -2260,15 +2270,22 @@ $("cf-copy-required-scopes").addEventListener("click",async()=>{
  try{await navigator.clipboard.writeText($("cf-required-scopes").value);$("cf-worker-note").textContent="Required OAuth scope IDs copied. Add them once to the existing BRVIN Connect OAuth client, then authorize again.";}
  catch(error){$("cf-worker-note").textContent="Clipboard copy unavailable. Select and copy the required scope text.";}
 });
-$("github-register").addEventListener("click",async()=>{
+$("legacy-connect-retire").addEventListener("click",async()=>{
+ const confirmation=window.prompt("This retires only the old BRVIN Connect provider credentials. Type exactly UNINSTALL BRVIN CONNECT to continue.");
+ if(confirmation!=="UNINSTALL BRVIN CONNECT")return;
+ const button=$("legacy-connect-retire"),result=$("legacy-connect-retire-result");
+ button.disabled=true;result.textContent="Verifying the recorded GitHub installation and revoking legacy provider tokens…";
  try{
-  const settingsUrl=connectState?.github?.appSettingsUrl;
-  if(settingsUrl){window.open(settingsUrl,"_blank","noopener,noreferrer");return;}
-  const data=await post("connect/github/manifest",{});
-  const form=document.createElement("form");form.method="POST";form.action=data.action;form.target="_blank";
-  const hidden=document.createElement("input");hidden.type="hidden";hidden.name="manifest";hidden.value=JSON.stringify(data.manifest);
-  form.appendChild(hidden);document.body.appendChild(form);form.submit();form.remove();
- }catch(error){alert(error.message);}
+  const response=await api(API+"connect/revoke",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({confirmation})});
+  const github=response.github||{},cloudflare=response.cloudflare||{};
+  result.textContent="GitHub: "+(github.message||github.error||github.status||"unknown")+" Cloudflare: "+(cloudflare.message||cloudflare.error||cloudflare.status||"unknown")+(response.partial?" One provider still needs attention; review its status above.":"");
+  await refreshConnectState();
+ }catch(error){result.textContent="Legacy provider retirement did not complete: "+error.message;}
+ finally{button.disabled=false;}
+});
+$("github-register").addEventListener("click",()=>{
+ const settingsUrl=connectState?.github?.appSettingsUrl||"https://github.com/settings/apps";
+ window.open(settingsUrl,"_blank","noopener,noreferrer");
 });
 $("cf-save-client").addEventListener("click",async()=>{
  try{
@@ -2294,5 +2311,5 @@ $("cf-discover-workers").addEventListener("click",async()=>{
 });
 $("create-collection").addEventListener("click",async()=>{try{await post("collections",{name:$("collection-name").value,description:$("collection-desc").value});$("collection-name").value="";$("collection-desc").value="";await refresh();}catch(e){alert(e.message);}});
 $("save-project-access").addEventListener("click",async()=>{try{const projectId=$("project-access").value;if(!projectId)throw new Error("Create or choose a project first.");const collectionIds=[...$("collection-checks").querySelectorAll("input:checked")].map(i=>i.value);await post("projects/collections",{projectId,collectionIds});await refresh();}catch(e){alert(e.message);}});
-await refresh();setInterval(async()=>{await refresh();if(activeImportId&&$("modal").classList.contains("open"))await showImport(activeImportId).catch(()=>{});},5000);
+await refresh();
 </script></body></html>`;

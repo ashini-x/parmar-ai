@@ -343,3 +343,47 @@ Do not create a second independent scheduler or manually run duplicate Workflow 
 - [System Reference](BRVIN_SYSTEM_REFERENCE.md)
 - [App Integration Guide](BRVIN_INTEGRATION_GUIDE.md)
 - [Private Retrieval API](BRVIN_PRIVATE_RETRIEVAL_API.md)
+
+
+## 16. D1 query efficiency and manual dashboard refresh
+
+BRVIN Admin, the Main Admin Control Center, Fatman Admin, Fatman Library and the Fatman Monitor use manual refresh only. Each page performs one initial read; administrators use the visible Refresh button when an updated snapshot is needed. No browser polling timer should be reintroduced. Ingestion, OCR, indexing, retries and retention are server-side Workflows and continue independently of browser tabs.
+
+The previous BRVIN Admin overview polled every five seconds. Cloudflare's 6 November D1 query analytics attributed the largest part of the day's `parmar-ai-admin-prod` read volume to two repeated overview queries:
+- The source list's correlated per-book lookups for the latest Vision OCR cleanup event (about 3.69 million rows read across 1,161 executions in the reported window).
+- The seven-day event summary (about 888 thousand rows read across 1,034 executions in the reported window).
+
+These figures are the observed historical analytics snapshot, not a current live counter. The relevant new partial index is:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_brvin_activity_book_vision_cleanup
+  ON brvin_activity_events(book_id, created_at DESC, id DESC)
+  WHERE event_type IN ('source.vision_ocr_delete_failed','source.vision_ocr_deleted');
+```
+
+It targets the correlated `book_id + event_type + latest created_at` lookup. The index is created idempotently by the existing `ensureAnalyticsSchema` schema bootstrap. Before claiming the production index has been applied, verify the schema after the D1 quota resets; do not run repeated EXPLAIN/analytics queries during a free-tier cap incident.
+
+### D1 quota incident response
+
+- Do not delete a database to recover rows_read allowance. Database deletion does not refund rows already read in the UTC day.
+- Stop dashboard polling first and close unused admin/monitor tabs.
+- Avoid repeated manual refreshes while the account is at its daily read cap; D1 can return error 7500 until midnight UTC.
+- Keep active production databases: `parmar-ai-admin-prod`, `brvin-teachers-app`, `askmoina-prod`, `askmoina-preview` and `parmar-ai-admin-preview`.
+- `askmoina-ops` is currently only a candidate orphan: it had no discovered Worker D1 binding or code reference. Do not delete until its tables and data have been inventoried and a verified export/backup is available after the D1 cap resets.
+- The configured Veda production and preview database IDs currently return Cloudflare 404 and are absent from the D1 inventory. Keep this as a resource/configuration discrepancy; do not recreate or repoint either binding without separately reviewing the Veda isolation and migration state.
+
+## 17. Retire the legacy BRVIN Connect provider
+
+The old `BRVIN Connect` GitHub App and Cloudflare OAuth vault belong to the historical Project Factory proposal, not to the current teacher knowledge-management or consumer deployment flow. Current BRVIN Teachers uses its own application/environment Service Bindings; GitHub repository changes and Cloudflare deployments use the separately authorized ChatGPT connections.
+
+The protected **Revoke BRVIN Connect and erase stored credentials** action requires the administrator to type `UNINSTALL BRVIN CONNECT`. It:
+1. Verifies the stored GitHub App installation ID/account against GitHub's current installation list and uninstalls only the recorded `ashini-x` installation.
+2. Revokes the legacy Cloudflare OAuth refresh/access tokens.
+3. Marks the two provider records revoked and erases their encrypted private key/client secret from Core D1.
+4. Retains non-secret audit metadata and reports partial failure instead of claiming success.
+
+It does not delete the GitHub App registration or the Cloudflare OAuth client registration. After successful credential retirement:
+- Delete `BRVIN Connect` (`brvin-connect`) from GitHub Developer Settings → GitHub Apps. Verify no other team or system uses the App before deleting the registration.
+- Delete the obsolete Cloudflare OAuth client from the account's OAuth client settings only if it was created exclusively for BRVIN Connect and is not shared by another integration.
+
+The legacy OAuth client and App-registration deletion steps remain administrator-console actions; do not confuse uninstalling an App installation with deleting the App registration itself.

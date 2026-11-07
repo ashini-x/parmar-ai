@@ -4,6 +4,33 @@ import { brvinAdminScript } from "../src/brvin/admin";
 import { readFileSync } from "node:fs";
 
 describe("BRVIN browser script contract", () => {
+  it("uses manual refresh only and includes the targeted D1 activity index", async () => {
+    const brvinScript = await brvinAdminScript().text();
+    const brvinSource = readFileSync(new URL("../src/brvin/admin.ts", import.meta.url), "utf8");
+    const fatmanImporter = readFileSync(new URL("../src/fatman/admin.ts", import.meta.url), "utf8");
+    const fatmanMonitor = readFileSync(new URL("../src/fatman/monitor.ts", import.meta.url), "utf8");
+    const analytics = readFileSync(new URL("../src/analytics/db.ts", import.meta.url), "utf8");
+    const mainAdmin = readFileSync(new URL("../src/admin/dashboard.ts", import.meta.url), "utf8");
+    const fatmanLibrary = readFileSync(new URL("../src/fatman/library-admin.ts", import.meta.url), "utf8");
+
+    expect(brvinSource).not.toContain("setInterval(");
+    expect(brvinScript).not.toContain("setInterval(");
+    expect(brvinScript).toContain("function refreshManually()");
+    expect(brvinScript).toContain("refresh manually to see new events");
+    expect(fatmanImporter).not.toContain("setInterval(");
+    expect(fatmanImporter).not.toContain("refreshTimer");
+    expect(fatmanMonitor).not.toContain("setInterval(");
+    expect(fatmanMonitor).not.toContain("autoEnabled");
+    expect(fatmanMonitor).toContain("Manual refresh");
+    expect(analytics).toContain("idx_brvin_activity_book_vision_cleanup");
+    expect(analytics).toContain("ON brvin_activity_events(book_id, created_at DESC, id DESC)");
+    expect(mainAdmin).not.toContain("setInterval(");
+    expect(mainAdmin).toContain("refresh manually when needed");
+    expect(fatmanLibrary).not.toContain("setInterval(");
+    expect(fatmanLibrary).not.toContain("refreshTimer");
+    expect(fatmanLibrary).toContain('el("refresh-books").addEventListener("click",refreshBooks)');
+  });
+
   it("exposes an authenticated read-only storage diagnostic without mutating GCS objects", () => {
     const importSource = readFileSync(new URL("../src/fatman/import.ts", import.meta.url), "utf8");
     const workerSource = readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
