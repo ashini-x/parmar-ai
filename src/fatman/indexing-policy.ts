@@ -41,3 +41,27 @@ export function fatmanIndexMonitorDelayMs(
       : [45_000, 60_000];
   return schedule[Math.min(sequence - 1, schedule.length - 1)];
 }
+
+
+/** Compact exact per-page status encoding for the existing source monitor event. */
+export function buildFatmanPageStateMap(
+  expectedPages: number,
+  pages: readonly { page: number; status: string }[],
+): string {
+  if (!Number.isSafeInteger(expectedPages) || expectedPages < 1 || expectedPages > 2_000) {
+    throw new RangeError("The expected PDF page count must be between 1 and 2,000.");
+  }
+  const byPage = new Map<number, string>();
+  for (const item of pages) {
+    if (!Number.isSafeInteger(item.page) || item.page < 1 || item.page > expectedPages) continue;
+    byPage.set(item.page, item.status);
+  }
+  return Array.from({ length: expectedPages }, (_, index) => {
+    const status = byPage.get(index + 1);
+    return status === "completed" ? "c"
+      : status === "running" ? "r"
+        : status === "queued" ? "q"
+          : status === "error" || status === "skipped" || status === "outdated" ? "e"
+            : "m";
+  }).join("");
+}

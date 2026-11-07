@@ -3,6 +3,7 @@ import {
   fatmanExpectedPageCount,
   fatmanIndexPageKey,
   fatmanIndexPagePrefix,
+  inferFatmanPdfPageCountFromVisionOutputs,
   parseFatmanIndexPageKey,
 } from "../src/fatman/library";
 import { fatmanLibraryAdminPage } from "../src/fatman/library-admin";
@@ -10,6 +11,39 @@ import { fatmanVisionOutputPrefix, isUnsafeFatmanVisionLifecycleDeletePrefix } f
 
 describe("Fatman multi-book library", () => {
   const bookId = "11111111-2222-4333-8444-555555555555";
+
+  it("keeps the explicit unknown page-count marker separate from the legacy 538-page default", () => {
+    expect(fatmanExpectedPageCount({ id: bookId, book_id: bookId, page_count: 0 })).toBe(0);
+    expect(fatmanExpectedPageCount({ id: bookId, book_id: bookId, page_count: null })).toBe(538);
+  });
+
+  it("derives the exact page count from a complete, consecutive Vision output inventory", () => {
+    expect(inferFatmanPdfPageCountFromVisionOutputs([
+      { name: "brvin/temporary-vision-ocr/" + bookId + "/output-1-to-1.json" },
+      { name: "brvin/temporary-vision-ocr/" + bookId + "/output-2-to-2.json" },
+      { name: "brvin/temporary-vision-ocr/" + bookId + "/output-3-to-3.json" },
+    ], "brvin/temporary-vision-ocr/" + bookId + "/")).toBe(3);
+    const large = Array.from({ length: 538 }, (_, index) => ({
+      name: "brvin/temporary-vision-ocr/" + bookId + "/output-" + (index + 1) + "-to-" + (index + 1) + ".json",
+    }));
+    expect(inferFatmanPdfPageCountFromVisionOutputs(large, "brvin/temporary-vision-ocr/" + bookId + "/")).toBe(538);
+  });
+
+  it("refuses to infer a count from truncated, incomplete, duplicate or malformed Vision output", () => {
+    const prefix = "brvin/temporary-vision-ocr/" + bookId + "/";
+    expect(() => inferFatmanPdfPageCountFromVisionOutputs([{ name: prefix + "output-1-to-1.json" }], prefix, true)).toThrow(/truncated/i);
+    expect(() => inferFatmanPdfPageCountFromVisionOutputs([
+      { name: prefix + "output-1-to-1.json" }, { name: prefix + "output-3-to-3.json" },
+    ], prefix)).toThrow(/incomplete/i);
+    expect(() => inferFatmanPdfPageCountFromVisionOutputs([
+      { name: prefix + "output-1-to-1.json" }, { name: prefix + "output-1-to-1.json" },
+    ], prefix)).toThrow(/duplicate/i);
+    expect(() => inferFatmanPdfPageCountFromVisionOutputs([{ name: prefix + "unexpected.json" }], prefix)).toThrow(/unexpected/i);
+    expect(() => inferFatmanPdfPageCountFromVisionOutputs([{ name: "another-source/output-1-to-1.json" }], prefix)).toThrow(/outside/i);
+    expect(() => inferFatmanPdfPageCountFromVisionOutputs(
+      Array.from({ length: 2_001 }, (_, index) => ({ name: prefix + "output-" + (index + 1) + "-to-" + (index + 1) + ".json" })), prefix,
+    )).toThrow(/unsupported/i);
+  });
 
   it("creates an isolated search key for every page in an additional book", () => {
     const job = { id: bookId, book_id: bookId, page_count: 125 };

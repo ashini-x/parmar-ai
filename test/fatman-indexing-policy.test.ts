@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildFatmanPageStateMap,
   chunkFatmanPages,
   FATMAN_INDEX_PAGE_CONCURRENCY,
   fatmanIndexMonitorDelayMs,
@@ -48,5 +49,31 @@ describe("BRVIN page-index throughput policy", () => {
   it("normalizes invalid sequence/page inputs to the safest slow schedule", () => {
     expect(fatmanIndexMonitorDelayMs(0, 0)).toBe(15_000);
     expect(fatmanIndexMonitorDelayMs(Number.NaN, Number.NaN)).toBe(15_000);
+  });
+});
+
+
+describe("BRVIN source page map snapshot", () => {
+  it("encodes exact page states and marks absent pages as waiting", () => {
+    expect(buildFatmanPageStateMap(5, [
+      { page: 1, status: "completed" },
+      { page: 2, status: "running" },
+      { page: 3, status: "queued" },
+      { page: 4, status: "error" },
+    ])).toBe("crqem");
+  });
+
+  it("treats skipped and outdated index entries as failed and ignores out-of-range rows", () => {
+    expect(buildFatmanPageStateMap(3, [
+      { page: 1, status: "skipped" },
+      { page: 2, status: "outdated" },
+      { page: 4, status: "completed" },
+      { page: 0, status: "completed" },
+    ])).toBe("eem");
+  });
+
+  it("rejects invalid map lengths rather than producing an ambiguous snapshot", () => {
+    expect(() => buildFatmanPageStateMap(0, [])).toThrow(RangeError);
+    expect(() => buildFatmanPageStateMap(2_001, [])).toThrow(RangeError);
   });
 });
