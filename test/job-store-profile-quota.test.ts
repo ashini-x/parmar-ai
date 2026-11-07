@@ -25,6 +25,64 @@ function createStudentStore() {
 }
 
 describe("shared per-student question tracking", () => {
+  it("reserves the early acknowledgement once without consuming quota", async () => {
+    const { chatId, botConnectionId, call } = createStudentStore();
+    const updateId = 77;
+    const common = {
+      botConnectionId,
+      updateId,
+      chatId,
+      messageId: 1,
+      requestId: `early-ack-${chatId}`,
+    };
+
+    const first = await call<{ action: string; statusMessageId?: number }>({
+      action: "reserve_ack",
+      ...common,
+    });
+    const duplicate = await call<{ action: string; statusMessageId?: number }>({
+      action: "reserve_ack",
+      ...common,
+    });
+    expect(first).toEqual({ action: "new" });
+    expect(duplicate).toEqual({ action: "existing" });
+
+    await call({
+      action: "save_ack",
+      botConnectionId,
+      updateId,
+      statusMessageId: 9876,
+    });
+    const saved = await call<{ action: string; statusMessageId?: number }>({
+      action: "reserve_ack",
+      ...common,
+    });
+    expect(saved).toEqual({ action: "existing", statusMessageId: 9876 });
+
+    const admitted = await call<{ action: string }>({
+      action: "begin",
+      botConnectionId,
+      updateId,
+      telegramUserId: chatId,
+      question: "Early acknowledgement test question",
+      messageId: 1,
+      requestId: `early-ack-${chatId}`,
+      createdAt: Date.now(),
+      statusMessageId: 9876,
+      requestedQuizCount: 1,
+    });
+    expect(admitted.action).toBe("new");
+
+    const claim = await call<{ claimed: boolean; record?: { statusMessageId?: number } }>({
+      action: "claim",
+      botConnectionId,
+      updateId,
+      queueMessageId: `early-ack-queue-${chatId}`,
+    });
+    expect(claim.claimed).toBe(true);
+    expect(claim.record?.statusMessageId).toBe(9876);
+  });
+
   it("preserves the daily question limit after /delete_data clears all study state", async () => {
     const { chatId, botConnectionId, call } = createStudentStore();
 

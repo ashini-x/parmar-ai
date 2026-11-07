@@ -23,6 +23,9 @@ import {
   editTelegramMessageReplyMarkup,
   sendTelegramChatAction,
   sendTelegramMessage,
+  sendTelegramChatActionWithToken,
+  sendTelegramMessageWithToken,
+  editTelegramMessageWithToken,
   sendTelegramBusinessMessage,
   sendTelegramQuiz,
   stopTelegramPoll,
@@ -72,6 +75,7 @@ const BOT_BRAND_NAME = "परमार्थAI";
 const RATE_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
 const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
 const FINAL_FAILURE_TEXT = "Bhai, is waqt answer complete nahi ho paaya. Tumhara sawal retry hua hai; same doubt dobara bhejna. 🙏";
+const PREFLIGHT_FAILURE_TEXT = "I couldn't process your question because a required service is temporarily unavailable. Please try again shortly.";
 const PROFILE_EMPTY_TEXT = "Abhi main tumhare questions se tumhari SSC preparation profile bana raha hoon. Thode aur doubts bhejo, phir main bata paunga ki kis topic par revision priority honi chahiye. 📚";
 
 interface TelegramMessage {
@@ -704,15 +708,19 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true }), requestId);
   }
 
-  if (await isUserSuspended(env, analyticsUser.telegramUserId)) {
-    queueAnalytics(ctx, "suspended_user", () => recordEvent(env, "suspended_user_blocked", analyticsUser));
-    await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo. 🙏`, messageId));
-    return withRequestId(json({ ok: true, suspended: true }), requestId);
-  }
-
-  const fatmanState = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId });
-  const fatmanModeSnapshot = fatmanState.active === true;
   if (photoFileId && message?.media_group_id?.trim()) {
+    // Keep album intake semantics unchanged: album photos are collected and
+    // admitted together by the existing Durable Object alarm path.
+    if (await isUserSuspended(env, analyticsUser.telegramUserId)) {
+      queueAnalytics(ctx, "suspended_user", () => recordEvent(env, "suspended_user_blocked", analyticsUser));
+      await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo. 🙏`, messageId));
+      return withRequestId(json({ ok: true, suspended: true }), requestId);
+    }
+    const albumFatmanState = await jobStoreRequest<{ ok: true; active: boolean }>(
+      env,
+      chatId,
+      { action: "get_fatman_mode", botConnectionId: bot.connectionId },
+    );
     await jobStoreRequest(env, chatId, { action: "clear_pending_quiz" }).catch(() => undefined);
     const staged = await jobStoreRequest<PhotoAlbumStageResponse>(env, chatId, {
       action: "stage_photo_album",
@@ -725,7 +733,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       fileId: photoFileId,
       caption: text,
       requestId,
-      fatmanModeSnapshot,
+      fatmanModeSnapshot: albumFatmanState.active === true,
     });
     if (staged.action === "too_many") {
       await bestEffortTelegram("photo_album_too_many", () => sendTelegramMessage(
@@ -747,6 +755,11 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   // An image without a caption has no defined task. Ask for the student's
   // intent instead of spending a vision request trying to guess it.
   if (photoFileId && !text) {
+    if (await isUserSuspended(env, analyticsUser.telegramUserId)) {
+      queueAnalytics(ctx, "suspended_user", () => recordEvent(env, "suspended_user_blocked", analyticsUser));
+      await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo. 🙏`, messageId));
+      return withRequestId(json({ ok: true, suspended: true }), requestId);
+    }
     await bestEffortTelegram("photo_caption_required", () => sendTelegramMessage(
       env,
       chatId,
@@ -773,6 +786,128 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true, rejected: "quiz_batch_too_large" }), requestId);
   }
 
+  // Show best-effort visual feedback immediately after bot authentication and
+  // lightweight input/command handling. This reservation is separate from
+  // permission, entitlement and quota admission in the existing begin action.
+  let statusMessageId: number | undefined;
+  let acknowledgementAction: "new" | "existing" | null = null;
+  let stopEarlyTyping: (() => void) | undefined;
+  const stopEarlyTypingNow = (): void => {
+    stopEarlyTyping?.();
+    stopEarlyTyping = undefined;
+  };
+
+  stopEarlyTyping = startTypingHeartbeatWithToken(bot.token, chatId, requestId);
+  try {
+    const reservation = await jobStoreRequest<{
+      action: "new" | "existing";
+      statusMessageId?: number;
+    }>(env, chatId, {
+      action: "reserve_ack",
+      botConnectionId: bot.connectionId,
+      updateId,
+      chatId,
+      messageId,
+      requestId,
+    });
+    acknowledgementAction = reservation.action;
+    statusMessageId = reservation.statusMessageId;
+
+    if (reservation.action === "new") {
+      try {
+        const status = await sendTelegramMessageWithToken(
+          bot.token,
+          chatId,
+          STATUS_TEXT,
+          messageId,
+          false,
+        );
+        statusMessageId = status.message_id;
+        await jobStoreRequest(env, chatId, {
+          action: "save_ack",
+          botConnectionId: bot.connectionId,
+          updateId,
+          statusMessageId,
+        }).catch((error) => {
+          logger.warn("telegram_ack_state_save_failed", {
+            requestId,
+            updateId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      } catch (error) {
+        // A cosmetic acknowledgement failure must not prevent the normal
+        // admission and processing pipeline from running.
+        logger.warn("telegram_early_ack_failed", {
+          requestId,
+          updateId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else {
+      stopEarlyTypingNow();
+    }
+  } catch (error) {
+    // If the reservation service itself is unavailable, fall back to the
+    // existing acknowledgement path after normal admission.
+    logger.warn("telegram_ack_reservation_failed", {
+      requestId,
+      updateId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const reportPreflightFailure = async (stage: string, error: unknown): Promise<Response> => {
+    stopEarlyTypingNow();
+    logger.error("question_preflight_failed", {
+      requestId,
+      updateId,
+      stage,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await deliverWebhookStatusWithToken(
+      bot.token,
+      chatId,
+      statusMessageId,
+      messageId,
+      PREFLIGHT_FAILURE_TEXT,
+      requestId,
+    );
+    return withRequestId(json({ ok: true, preflightFailed: true }), requestId);
+  };
+
+  let suspended: boolean;
+  try {
+    suspended = await isUserSuspended(env, analyticsUser.telegramUserId);
+  } catch (error) {
+    return await reportPreflightFailure("student_access_check", error);
+  }
+  if (suspended) {
+    stopEarlyTypingNow();
+    queueAnalytics(ctx, "suspended_user", () => recordEvent(env, "suspended_user_blocked", analyticsUser));
+    await deliverWebhookStatusWithToken(
+      bot.token,
+      chatId,
+      statusMessageId,
+      messageId,
+      `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo. 🙏`,
+      requestId,
+    );
+    return withRequestId(json({ ok: true, suspended: true }), requestId);
+  }
+
+  let fatmanModeSnapshot: boolean;
+  try {
+    const fatmanState = await jobStoreRequest<{ ok: true; active: boolean }>(
+      env,
+      chatId,
+      { action: "get_fatman_mode", botConnectionId: bot.connectionId },
+    );
+    fatmanModeSnapshot = fatmanState.active === true;
+  } catch (error) {
+    return await reportPreflightFailure("fatman_mode_lookup", error);
+  }
+
   if (mcqRequest) {
     await jobStoreRequest(env, chatId, { action: "clear_pending_quiz" }).catch(() => undefined);
   }
@@ -790,23 +925,30 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   }
 
   const effectiveQuizCount = quizContinuationCount || parsedQuizCount;
-  const begin = await jobStoreRequest<BeginJobResponse>(env, chatId, {
-    action: "begin",
-    botConnectionId: bot.connectionId,
-    telegramUserId: analyticsUser.telegramUserId,
-    updateId,
-    chatId,
-    question: questionText,
-    messageId,
-    requestId,
-    createdAt: Date.now(),
-    ...(photoFileId ? { photoFileIds: [photoFileId] } : {}),
-    requestedQuizCount: effectiveQuizCount,
-    quizContinuation: quizContinuationCount > 0,
-    fatmanModeSnapshot,
-  });
+  let begin: BeginJobResponse;
+  try {
+    begin = await jobStoreRequest<BeginJobResponse>(env, chatId, {
+      action: "begin",
+      botConnectionId: bot.connectionId,
+      telegramUserId: analyticsUser.telegramUserId,
+      updateId,
+      chatId,
+      question: questionText,
+      messageId,
+      requestId,
+      createdAt: Date.now(),
+      ...(statusMessageId !== undefined ? { statusMessageId } : {}),
+      ...(photoFileId ? { photoFileIds: [photoFileId] } : {}),
+      requestedQuizCount: effectiveQuizCount,
+      quizContinuation: quizContinuationCount > 0,
+      fatmanModeSnapshot,
+    });
+  } catch (error) {
+    return await reportPreflightFailure("job_admission", error);
+  }
 
   if (begin.action === "duplicate") {
+    stopEarlyTypingNow();
     return withRequestId(json({ ok: true, duplicate: true }), requestId);
   }
 
@@ -820,7 +962,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       messageId,
       requestId,
       createdAt: Date.now(),
-      statusMessageId: begin.statusMessageId,
+      statusMessageId: begin.statusMessageId ?? statusMessageId,
       telegramUserId: analyticsUser.telegramUserId,
       quizCount: begin.quizCount,
       fatmanModeSnapshot: begin.fatmanModeSnapshot === true,
@@ -839,49 +981,55 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       });
       return withRequestId(json({ ok: false }, 500), requestId);
     }
-    void sendTelegramChatAction(env, chatId, "typing", bot.connectionId).catch(() => undefined);
+    stopEarlyTypingNow();
     return withRequestId(json({ ok: true, queued: true, recovered: true }), requestId);
   }
 
   if (begin.action === "rate_limited") {
+    stopEarlyTypingNow();
+    const isDailyLimit = begin.rateLimitReason === "daily";
     if (begin.notify) {
-      const isDailyLimit = begin.rateLimitReason === "daily";
       queueAnalytics(ctx, "rate_limit", () =>
         recordEvent(env, isDailyLimit ? "daily_limit_reached" : "burst_limit_reached", analyticsUser, { updateId }),
       );
-      await bestEffortTelegram(
-        "rate_limit",
-        () => sendTelegramMessage(env, chatId, isDailyLimit ? DAILY_LIMIT_TEXT : RATE_LIMIT_TEXT, messageId),
-      );
     }
+    // Every acknowledged request must leave Thinking state, even when the
+    // existing notification throttle suppresses the analytics notice.
+    await deliverWebhookStatusWithToken(
+      bot.token,
+      chatId,
+      statusMessageId,
+      messageId,
+      isDailyLimit ? DAILY_LIMIT_TEXT : RATE_LIMIT_TEXT,
+      requestId,
+    );
     return withRequestId(json({ ok: true, rateLimited: true, rateLimitReason: begin.rateLimitReason }), requestId);
   }
 
-  let statusMessageId = begin.statusMessageId;
-  if (!statusMessageId) {
+  statusMessageId = begin.statusMessageId ?? statusMessageId;
+  if (!statusMessageId && acknowledgementAction === null) {
     try {
-      const status = await sendTelegramMessage(env, chatId, STATUS_TEXT, messageId, bot.connectionId, false);
+      const status = await sendTelegramMessageWithToken(bot.token, chatId, STATUS_TEXT, messageId, false);
       statusMessageId = status.message_id;
-      await jobStoreRequest(env, chatId, { action: "save_ack", botConnectionId: bot.connectionId, updateId, statusMessageId });
+      await jobStoreRequest(env, chatId, {
+        action: "save_ack",
+        botConnectionId: bot.connectionId,
+        updateId,
+        statusMessageId,
+      }).catch((error) => logger.warn("telegram_ack_state_save_failed", {
+        requestId,
+        updateId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
     } catch (error) {
-      // Do not enqueue a job that the user was not acknowledged for. Telegram will retry
-      // the webhook while this update remains pending, and the Durable Object preserves state.
-      logger.error("telegram_ack_failed", {
+      // Initial feedback is best-effort; never block the durable question pipeline.
+      logger.warn("telegram_ack_fallback_failed", {
         requestId,
         updateId,
         error: error instanceof Error ? error.message : String(error),
       });
-      return withRequestId(json({ ok: false }, 500), requestId);
     }
   }
-
-  void sendTelegramChatAction(env, chatId, "typing", bot.connectionId).catch((error) => {
-    logger.warn("telegram_initial_typing_failed", {
-      requestId,
-      updateId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  });
 
   const job: QuestionJob = {
     version: 2,
@@ -898,9 +1046,12 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     fatmanModeSnapshot,
   };
 
+  let queuePublished = false;
   try {
     await env.QUESTION_QUEUE.send(job, { contentType: "json" });
+    queuePublished = true;
     await jobStoreRequest(env, chatId, { action: "mark_queued", botConnectionId: bot.connectionId, updateId });
+    stopEarlyTypingNow();
     queueAnalytics(ctx, "question_start", () => recordQuestionStart(env, {
       updateId,
       botConnectionId: bot.connectionId,
@@ -911,11 +1062,22 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       receivedAt: Date.now(),
     }));
   } catch (error) {
+    stopEarlyTypingNow();
     logger.error("question_queue_enqueue_failed", {
       requestId,
       updateId,
       error: error instanceof Error ? error.message : String(error),
     });
+    if (!queuePublished) {
+      await deliverWebhookStatusWithToken(
+        bot.token,
+        chatId,
+        statusMessageId,
+        messageId,
+        PREFLIGHT_FAILURE_TEXT,
+        requestId,
+      );
+    }
     return withRequestId(json({ ok: false }, 500), requestId);
   }
 
@@ -1486,6 +1648,59 @@ async function handleTelegramPollAnswer(
   }).catch((error) => {
     logger.warn("quiz_answer_event_failed", { requestId, pollId, error: error instanceof Error ? error.message : String(error) });
   });
+}
+
+function startTypingHeartbeatWithToken(token: string, chatId: number, requestId: string): () => void {
+  let stopped = false;
+  const sendHeartbeat = (): void => {
+    if (stopped) return;
+    void sendTelegramChatActionWithToken(token, chatId).catch((error) => {
+      if (!stopped) {
+        logger.warn("telegram_early_typing_failed", {
+          requestId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+  };
+
+  sendHeartbeat();
+  const interval = setInterval(sendHeartbeat, 3_000);
+  return () => {
+    stopped = true;
+    clearInterval(interval);
+  };
+}
+
+async function deliverWebhookStatusWithToken(
+  token: string,
+  chatId: number,
+  statusMessageId: number | undefined,
+  replyToMessageId: number,
+  text: string,
+  requestId: string,
+): Promise<void> {
+  if (statusMessageId) {
+    try {
+      await editTelegramMessageWithToken(token, chatId, statusMessageId, text);
+      return;
+    } catch (error) {
+      logger.warn("telegram_early_status_edit_failed", {
+        requestId,
+        statusMessageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  try {
+    await sendTelegramMessageWithToken(token, chatId, text, replyToMessageId);
+  } catch (error) {
+    logger.warn("telegram_early_status_delivery_failed", {
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 function startTypingHeartbeat(env: Env, chatId: number, requestId: string, botConnectionId: string): () => void {

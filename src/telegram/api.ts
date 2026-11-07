@@ -553,6 +553,68 @@ export async function editTelegramMessage(
   }
 }
 
+/**
+ * Token-bound Telegram calls for the short acknowledgement window. The webhook
+ * has already authenticated and decrypted this bot connection, so it can reuse
+ * that credential rather than performing another D1 lookup before first feedback.
+ */
+export async function sendTelegramChatActionWithToken(
+  token: string,
+  chatId: number,
+): Promise<void> {
+  await telegramApiWithToken(token, "sendChatAction", {
+    chat_id: chatId,
+    action: "typing",
+  });
+}
+
+export async function sendTelegramMessageWithToken(
+  token: string,
+  chatId: number,
+  text: string,
+  replyToMessageId?: number,
+  includeCreatorFooter = true,
+): Promise<TelegramMessageResult> {
+  const message = limitTelegramMessage(text);
+  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
+  const payload: Record<string, unknown> = {
+    chat_id: chatId,
+    text: message.text,
+    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
+    link_preview_options: { is_disabled: true },
+  };
+  if (replyToMessageId) {
+    payload.reply_parameters = {
+      message_id: replyToMessageId,
+      allow_sending_without_reply: true,
+    };
+  }
+  return telegramApiWithToken<TelegramMessageResult>(token, "sendMessage", payload);
+}
+
+export async function editTelegramMessageWithToken(
+  token: string,
+  chatId: number,
+  messageId: number,
+  text: string,
+  includeCreatorFooter = true,
+): Promise<void> {
+  const message = limitTelegramMessage(text);
+  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
+  try {
+    await telegramApiWithToken(token, "editMessageText", {
+      chat_id: chatId,
+      message_id: messageId,
+      text: message.text,
+      ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
+      link_preview_options: { is_disabled: true },
+    });
+  } catch (error) {
+    if (error instanceof TelegramError && error.message.toLowerCase().includes("message is not modified")) return;
+    throw error;
+  }
+}
+
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

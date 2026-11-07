@@ -285,8 +285,9 @@ export function createTelegramProgressUpdater(
   update.setStatus = async (status: string): Promise<void> => {
     const normalized = String(status).trim().slice(0, 3_900);
     if (!normalized || normalized.length < 4 || disabled || stopped) return;
-    const revision = startStatusCycle(normalized);
-    await waitForRevision(revision);
+    // Phase labels are visual feedback only. Queue the unchanged status and let
+    // the serialized updater deliver it without holding up backend processing.
+    startStatusCycle(normalized);
   };
 
   update.flush = async (): Promise<void> => {
