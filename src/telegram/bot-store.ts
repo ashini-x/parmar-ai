@@ -15,8 +15,35 @@ interface CachedTypingCredential {
 }
 const typingCredentialCache = new Map<string, CachedTypingCredential>();
 
+// Reuse the decrypted credential for outbound Telegram API calls such as
+// progress-message edits. This is a short-lived in-memory cache only.
+const TELEGRAM_API_TOKEN_TTL_MS = 15_000;
+const telegramApiTokenCache = new Map<string, CachedTypingCredential>();
+
+export async function getTelegramBotApiToken(env: Env, connectionId: string): Promise<string | null> {
+  const normalizedId = connectionId.trim();
+  if (!normalizedId) return null;
+  const now = Date.now();
+  const cached = telegramApiTokenCache.get(normalizedId);
+  if (cached && cached.expiresAt > now) return cached.token;
+  telegramApiTokenCache.delete(normalizedId);
+
+  const connection = await getTelegramBotByConnectionId(env, normalizedId);
+  const token = connection?.token ?? null;
+  if (telegramApiTokenCache.size >= MAX_TYPING_CREDENTIAL_CACHE_ENTRIES) {
+    const oldestKey = telegramApiTokenCache.keys().next().value;
+    if (oldestKey !== undefined) telegramApiTokenCache.delete(oldestKey);
+  }
+  telegramApiTokenCache.set(normalizedId, {
+    token,
+    expiresAt: now + (token ? TELEGRAM_API_TOKEN_TTL_MS : INACTIVE_TYPING_CREDENTIAL_TTL_MS),
+  });
+  return token;
+}
+
 function invalidateTypingCredential(connectionId: string): void {
   typingCredentialCache.delete(connectionId);
+  telegramApiTokenCache.delete(connectionId);
 }
 
 function rememberTypingCredential(connectionId: string, token: string | null, now: number): string | null {
