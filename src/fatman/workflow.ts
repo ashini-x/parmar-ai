@@ -1008,7 +1008,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
                 queryCount += 1;
                 const result = await instance.search({
                   messages: [{ role: "user", content: probes[index] }],
-                  ai_search_options: { retrieval: { max_num_results: 50, retrieval_type: "hybrid" } },
+                  ai_search_options: { retrieval: { max_num_results: 10, retrieval_type: "hybrid" } },
                 });
                 const matched = (result.chunks ?? []).some((chunk) => chunk.item?.key === expectedKey);
                 if (matched) {
