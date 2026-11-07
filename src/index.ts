@@ -851,6 +851,14 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   let statusMessageId: number | undefined;
   let acknowledgementAction: "new" | "existing" | null = null;
   let earlyTypingHeartbeat: ReturnType<typeof startTypingHeartbeatWithToken> | undefined;
+  const webhookTimings = {
+    acknowledgementReservationMs: 0,
+    acknowledgementDeliveryMs: 0,
+    suspensionAndModeLookupMs: 0,
+    quizStateMs: 0,
+    jobAdmissionMs: 0,
+    queuePublishMs: 0,
+  };
   const stopEarlyTypingNow = (): void => {
     earlyTypingHeartbeat?.stop();
     earlyTypingHeartbeat = undefined;
@@ -858,6 +866,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   earlyTypingHeartbeat = startTypingHeartbeatWithToken(bot.token, chatId, requestId);
   try {
+    const reserveAckStartedAt = Date.now();
     const reservation = await jobStoreRequest<{
       action: "new" | "existing";
       statusMessageId?: number;
@@ -869,11 +878,13 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       messageId,
       requestId,
     });
+    webhookTimings.acknowledgementReservationMs = Date.now() - reserveAckStartedAt;
     acknowledgementAction = reservation.action;
     statusMessageId = reservation.statusMessageId;
 
     if (reservation.action === "new") {
       try {
+        const acknowledgementStartedAt = Date.now();
         const status = await sendTelegramMessageWithToken(
           bot.token,
           chatId,
@@ -882,6 +893,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
           false,
         );
         statusMessageId = status.message_id;
+        webhookTimings.acknowledgementDeliveryMs = Date.now() - acknowledgementStartedAt;
         await jobStoreRequest(env, chatId, {
           action: "save_ack",
           botConnectionId: bot.connectionId,
@@ -938,6 +950,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true, preflightFailed: true }), requestId);
   };
 
+  const admissionStartedAt = Date.now();
   const admissionState = await runSuspensionAndModeLookup(
     () => isUserSuspended(env, analyticsUser.telegramUserId),
     () => jobStoreRequest<{ ok: true; active: boolean }>(
@@ -969,12 +982,14 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   if (admissionState.mode.status === "rejected") {
     return await reportPreflightFailure("fatman_mode_lookup", admissionState.mode.reason);
   }
+  webhookTimings.suspensionAndModeLookupMs = Date.now() - admissionStartedAt;
   const fatmanModeSnapshot = admissionState.mode.value.active === true;
 
   if (mcqRequest) {
     await jobStoreRequest(env, chatId, { action: "clear_pending_quiz" }).catch(() => undefined);
   }
 
+  const quizStateStartedAt = Date.now();
   let quizContinuationCount = 0;
   if (!mcqRequest && isLikelyMcqTopicReply(text)) {
     const pending = await jobStoreRequest<{ ok: true; count: number }>(
@@ -987,8 +1002,10 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     await jobStoreRequest(env, chatId, { action: "clear_pending_quiz" }).catch(() => undefined);
   }
 
+  webhookTimings.quizStateMs = Date.now() - quizStateStartedAt;
   const effectiveQuizCount = quizContinuationCount || parsedQuizCount;
   let begin: BeginJobResponse;
+  const jobAdmissionStartedAt = Date.now();
   try {
     begin = await jobStoreRequest<BeginJobResponse>(env, chatId, {
       action: "begin",
@@ -1009,6 +1026,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   } catch (error) {
     return await reportPreflightFailure("job_admission", error);
   }
+  webhookTimings.jobAdmissionMs = Date.now() - jobAdmissionStartedAt;
 
   if (begin.action === "duplicate") {
     stopEarlyTypingNow();
@@ -1132,10 +1150,45 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   let queuePublished = false;
   try {
+    const queuePublishStartedAt = Date.now();
     await env.QUESTION_QUEUE.send(job, { contentType: "json" });
+    webhookTimings.queuePublishMs = Date.now() - queuePublishStartedAt;
     queuePublished = true;
-    await jobStoreRequest(env, chatId, { action: "mark_queued", botConnectionId: bot.connectionId, updateId });
+
+    // Queue publication is the durable hand-off. The Queue consumer can claim
+    // a pending job, so the state label and its cosmetic Telegram typing ping
+    // must not delay the webhook acknowledgement.
+    ctx.waitUntil((async () => {
+      const markQueuedStartedAt = Date.now();
+      try {
+        await jobStoreRequest(env, chatId, {
+          action: "mark_queued",
+          botConnectionId: bot.connectionId,
+          updateId,
+        });
+        logger.info("telegram_question_marked_queued", {
+          requestId,
+          updateId,
+          durationMs: Date.now() - markQueuedStartedAt,
+        });
+      } catch (error) {
+        logger.warn("telegram_question_mark_queued_failed", {
+          requestId,
+          updateId,
+          durationMs: Date.now() - markQueuedStartedAt,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })());
+
     stopEarlyTypingNow();
+    logger.info("telegram_question_queued", {
+      requestId,
+      updateId,
+      totalWebhookMs: Date.now() - webhookStartedAt,
+      durableQueueMarkScheduled: true,
+      ...webhookTimings,
+    });
     queueAnalytics(ctx, "question_start", () => recordQuestionStart(env, {
       updateId,
       botConnectionId: bot.connectionId,
@@ -1223,6 +1276,12 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
     let updatePartialAnswer: PartialAnswerHandler | undefined;
     try {
       const startedAt = Date.now();
+      logger.info("question_processing_started", {
+        requestId: job.requestId,
+        updateId: job.updateId,
+        queueWaitMs: Math.max(0, startedAt - job.createdAt),
+        attempts: message.attempts,
+      });
       const claimFatmanMode = (claim.record.fatmanModeSnapshot ?? job.fatmanModeSnapshot) === true;
       const fatmanPhotoNoticeOnly =
         claimFatmanMode &&
@@ -1266,6 +1325,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         questionCount: 0,
         lastUpdatedAt: 0,
       };
+      const contextReadStartedAt = Date.now();
       const questionContextPromise = loadQuestionContextInParallel(
         () => getStudentProfile(env, job.chatId),
         () => jobStoreRequest<{ ok: true; recentConversation: ConversationTurn[] }>(env, job.chatId, {
@@ -1303,9 +1363,15 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       });
       await recordQuestionResult(env, { updateId: job.updateId, botConnectionId: job.botConnectionId, status: "processing", startedAt });
       const { profile, recentConversation } = await questionContextPromise;
+      logger.info("question_context_loaded", {
+        requestId: job.requestId,
+        updateId: job.updateId,
+        contextReadMs: Date.now() - contextReadStartedAt,
+      });
 
       const fatmanMode = (claim.record.fatmanModeSnapshot ?? job.fatmanModeSnapshot) === true;
       let packet = claim.record.answerPacket;
+      const answerPipelineStartedAt = Date.now();
 
       if (!packet) {
         if (claim.record.photoFileIds?.length) {
@@ -1373,6 +1439,15 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
         if (!packet) {
           throw new GeminiError("Question generation did not produce an answer packet.", undefined, true);
         }
+        logger.info("question_answer_generated", {
+          requestId: job.requestId,
+          updateId: job.updateId,
+          answerPipelineMs: Date.now() - answerPipelineStartedAt,
+          model: env.GEMINI_MODEL?.trim() || "default",
+          thinkingLevel: packet.thinkingLevelUsed,
+          grounded: packet.grounded,
+          fatmanMode,
+        });
         if (!fatmanMode && packet.questionMode === "mcq" && packet.responseMode === "text" && !(packet.quizItems?.length)) {
           await jobStoreRequest(env, job.chatId, {
             action: "set_pending_quiz",
