@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 8 November 2026 (Core PR #133 and Teachers PR #10 merged; both Core Workers and the downstream app deployed at 100% traffic; full CI/build/smoke gates passed; automatic Vision-derived page counting and the in-dialog page-state map verified in code; teacher source indexing/retrieval/revocation acceptance remains open)  
+**Last verified against source and production infrastructure:** 8 November 2026 (automatic Vision-derived page counting and in-dialog page map deployed; 3-page Physics pilot verified READY at 3/3; model-independent retrieval precision work is in the current Core change set; real consumer retrieval and post-revocation denial remain M11 acceptance gates)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/brvin-teachers` (separate downstream app); `ashini-x/askmoina-voice` remains an optional consumer
 
@@ -97,8 +97,9 @@ The two planes share the existing D1 registry and AI Search namespace. They do n
 - The post-deployment storage diagnostic previously verified lifecycle configuration permissions **READY** and the exact 30-day OCR lifecycle rule **INSTALLED**. The rule is limited to the dedicated temporary Vision OCR prefix; source PDF paths are protected.
 - The authenticated Operations walkthrough on 6 November showed 33 project searches that month, zero active-environment connection failures, 404 failed activity events in the previous seven days and zero OCR cleanup failures. The 404 value is a count of activity rows with status `failed`, not an HTTP status or count of currently recoverable jobs.
 - BRVIN Teachers (`ashini-x/brvin-teachers`) is a separate downstream consumer. Its Production application and environment are registered and active in the BRVIN registry. The deployment-controlled Production environment identity is `515e7752-20ff-42f9-b393-7c8130a64bf8`; both private consumer bindings target `BrvinTeachersManagementApi` on `parmar-ai` and `BrvinRetrievalApi` on private `brvin-service`. BRVIN Admin accepted the one-time private retrieval proof on 6 November 2026. The registry's latest proof snapshot is `connected`, with zero ready sources at the time of proof; the check preceded project/source creation.
-- The live pilot now has one teacher profile (`TCH-000001`), one active Physics project (`TCH-000001-PRJ-001`), one teacher-notes collection (`TCH-000001-PRJ-001-COL-001`) and one 3-page PDF source (`TCH-000001-PRJ-001-COL-001-SRC-001`). The upload completed and the Vision operation reports completion, but indexing failed because the expected first-page OCR output object `output-1-to-1.json` was not found under the registered temporary prefix. The source remains `failed`, with 0/3 pages indexed. Do not re-upload or resume against the absent object until the saved operation's reported destination and the GCS object inventory have been inspected.
-- M6–M10 remain complete. M11 remains **IN PROGRESS**: the remaining genuine teacher-consumer acceptance is to recover/finish source indexing, demonstrate useful scoped retrieval with source/page provenance, revoke the application-project grant and prove subsequent retrieval is denied. No student/channel/model runtime is implemented or authorized.
+- The live pilot has one teacher profile (`TCH-000001`), one active Physics project (`TCH-000001-PRJ-001`), one teacher-notes collection (`TCH-000001-PRJ-001-COL-001`) and a 3-page PDF source. Production D1 confirms the source is `ready`, with `page_count=3` and `indexed_pages=3`; the deployed Teachers progress map shows all three page tiles indexed. No PDF re-upload or OCR retry was required to reach readiness.
+- The first production retrieval diagnostic exposed a precision issue: the three PDF page items each had `chunks_count=1` under the shared AI Search instance's prior 1,024-token chunk setting, so semantic results could be returned as near-whole pages. Core retrieval is being hardened with 256-token recursive chunks, hybrid candidate retrieval, request-level cross-encoder reranking, stricter local relevance, bounded evidence excerpts and physical-page validation. The Core remains model-agnostic: it returns evidence and provenance; connected applications still own their answer-generation model.
+- M6–M10 remain complete. M11 remains **IN PROGRESS**: reach useful v2 semantic retrieval with correct source/page provenance through the real consumer, revoke the application-project grant, and prove subsequent retrieval is denied. No student/channel/model runtime is implemented or authorized.
 - The legacy BRVIN Connect retirement code and protected UI are deployed, but retirement is **not yet executed**. The latest read-only Core D1 check on 7 November still showed both GitHub and Cloudflare provider rows as `connected`. The protected button is on `/admin/brvin` under **Legacy provider settings**; it requires an authenticated Core Admin session and the exact confirmation `UNINSTALL BRVIN CONNECT`. The current Cloudflare connector is OAuth-based and the OAuth Clients API returned HTTP 403 because this connection has no `OAuth Client Read`/`OAuth Client Write` API-token permissions. No provider credential, installation or OAuth registration was altered. After the protected action succeeds, delete the GitHub App registration and the dedicated Cloudflare OAuth client registration separately.
 - AskMoina Voice remains an optional independent consumer and must not be treated as a fixed BRVIN test-client host. The retired `brvin-test-client` scaffold must not be recreated.
 
@@ -302,19 +303,21 @@ Unknown callers, inactive projects, empty grants, invalid prefixes and failures 
 
 ### 6.1 Search behavior and result bounds
 
-Current code bounds retrieval to:
+The production precision path is deliberately two-stage and remains evidence-only:
 
-- Up to 3 unique query variants.
-- Up to 2,000 characters per query after normalization.
-- Up to 3 explicit PDF page numbers per request.
-- Hybrid retrieval, up to 50 candidate chunks per query.
-- A bounded response of up to 8 passages and bounded excerpt text.
-- A configurable minimum relevance score, currently 0.2.
-- Exact page lookup before semantic fallback when page numbers are supplied.
+- Up to 3 unique query variants, each normalized and bounded to 2,000 characters.
+- Up to 3 explicit physical PDF page numbers per request.
+- Hybrid vector + BM25 candidate retrieval, with RRF fusion and the exact D1-authorised folder prefixes.
+- Up to 16 candidate chunks per query, with a request-level vector threshold of 0.3.
+- Cloudflare's independent `@cf/baai/bge-reranker-base` cross-encoder is enabled per semantic request; its default score threshold is 0.4. The model ID and thresholds are environment-configurable. It ranks evidence; it does not generate a natural-language answer.
+- BRVIN bypasses AI Search similarity cache for each request so current index contents are evaluated rather than a cached response for a similar prompt.
+- Local meaningful-term coverage remains a second relevance guard. Ordinals such as `second` are meaningful terms, not stop words.
+- A bounded semantic response contains at most 6 passages across at most 4 physical PDF pages, at most 2 passages per page, and at most 1,800 characters per semantic passage. The score is the reranking score when available, otherwise the vector/fused score used by the fallback path.
+- Exact-page lookup remains a distinct path: up to 3 explicitly requested pages are resolved by exact authorised item key before semantic fallback, with exact-page text separately bounded to 4,500 characters and scanned-page images subject to the existing byte cap.
 
-An exact page request is resolved under authorised source prefixes and the exact returned key/page is checked. Where supported and available, the exact-page path can return a bounded page image as well as text. If no exact page item is available and a textual query was also supplied, the service can fall back to semantic retrieval over the authorised sources.
+The shared AI Search index is configured for 256-token recursive chunks with 10% overlap. These settings apply during indexing; an existing item must be synchronised again to receive the new chunking. This is an AI Search re-index operation over the already stored OCR page text, not a Google Vision/OCR rerun. Existing source records remain scoped by their original D1-authorised page prefix and physical PDF page keys.
 
-These limits protect Worker memory, response size and search cost. Raise them only with tests and explicit capacity review.
+The v1/v2 RPC response shape, source grants, per-project quota accounting and physical `pdfPage` provenance are unchanged. The connected application still chooses Gemini or another answer model and is responsible for the final answer. Raise retrieval limits or thresholds only through a measured evaluation and explicit capacity review.
 
 ### 6.2 Usage allowance
 
