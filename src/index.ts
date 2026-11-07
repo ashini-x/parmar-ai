@@ -412,7 +412,12 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: false, error: "UNAUTHORIZED" }, 401), requestId);
   }
 
-  if (bot.status !== "active" || !(await isTelegramBotConnectionActive(env, bot.connectionId))) {
+  // findTelegramBotByWebhookSecret already returned the current bot row,
+  // including its status. Use that authenticated snapshot instead of issuing
+  // a second D1 query for the same connection on every webhook update.
+  // Queue execution still rechecks connection state before processing and
+  // before delivery, so disconnects during question work remain enforced.
+  if (bot.status !== "active") {
     logger.info("telegram_webhook_from_inactive_bot_ignored", {
       requestId,
       botConnectionId: bot.connectionId,
