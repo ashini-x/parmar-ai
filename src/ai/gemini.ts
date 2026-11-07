@@ -1,6 +1,6 @@
 import type { AiUsageRecord, AnswerPacket, ConversationTurn, Env, GeminiGenerationResult, GeminiImageInput, ProfileContext } from "../config/env";
 import type { FatmanBookContext } from "../fatman/retrieval";
-import { GoogleAuthError, getGoogleAccessToken } from "../auth/google";
+import { GoogleAuthError, getGoogleAccessToken, invalidateGoogleAccessToken } from "../auth/google";
 import { getConfig, MAX_QUIZ_BATCH_SIZE, type QuizItem } from "../config/env";
 import { TELEGRAM_PROGRESS_LABELS } from "../telegram/progress";
 
@@ -459,10 +459,17 @@ async function requestVertexGemini(
 
     if (!response.ok) {
       const message = data.error?.message ?? `Vertex AI request failed with HTTP ${response.status}.`;
+      if (response.status === 401) {
+        // A cached OAuth token can be revoked or rejected before its advertised
+        // expiry. Refresh it once, then surface a persistent auth failure.
+        invalidateGoogleAccessToken(accessToken);
+      }
       throw new GeminiError(
         message,
         response.status,
-        isRetryableGeminiError(response.status, data.error),
+        response.status === 401
+          ? attempt === 1
+          : isRetryableGeminiError(response.status, data.error),
       );
     }
 
