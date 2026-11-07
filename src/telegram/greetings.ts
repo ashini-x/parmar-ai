@@ -1,4 +1,4 @@
-const SIMPLE_GREETING_PATTERN = /^(?:hi+|hello+|he+y+|namaste|namaskar|good (?:morning|afternoon|evening))(?:\\s+there)?[.!?\\s🙏👋🙂😊]*$/iu;
+const SIMPLE_GREETING_PATTERN = /^(?:hi+|hello+|he+y+|namaste|namaskar|good (?:morning|afternoon|evening))(?:\s+there)?[.!?\s🙏👋🙂😊]*$/iu;
 
 /**
  * Match only a standalone greeting. Messages that contain an actual question
