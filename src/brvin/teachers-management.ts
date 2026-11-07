@@ -552,7 +552,7 @@ async function listTeacherSources(
 async function startTeacherSourceUpload(
   env: Env,
   caller: ManagementCaller,
-  input: CollectionInput & { title?: unknown; filename?: unknown; sha256?: unknown; size?: unknown; pageCount?: unknown; costConfirmed?: unknown },
+  input: CollectionInput & { title?: unknown; filename?: unknown; sha256?: unknown; size?: unknown; costConfirmed?: unknown },
 ): Promise<RpcResult<{ source: Record<string, unknown>; upload: Record<string, unknown> }>> {
   if (!env.DB || !isValidBrvinTeachersTenantReference(input.tenantReference) ||
       typeof input.projectId !== "string" || typeof input.collectionId !== "string") {
@@ -574,7 +574,7 @@ async function startTeacherSourceUpload(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       collectionId: collection.id, projectIds: [], title: input.title, filename: input.filename,
-      sha256: input.sha256, size: input.size, pageCount: input.pageCount, costConfirmed: input.costConfirmed,
+      sha256: input.sha256, size: input.size, costConfirmed: input.costConfirmed,
     }),
   });
   const forwarded = await jsonResponse(await startBrvinBookUpload(env, uploadRequest, {
