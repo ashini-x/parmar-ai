@@ -91,8 +91,8 @@ describe("BRVIN automatic Vision OCR retention", () => {
   });
 
   it("keeps full-book purge aware of both separate GCS prefixes", () => {
-    expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "")');
-    expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/")');
+    expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "", async progress =>');
+    expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/", async progress =>');
     expect(workflowSource).toContain("sourceStorageDeletion");
     expect(workflowSource).toContain("visionOcrStorage");
   });
