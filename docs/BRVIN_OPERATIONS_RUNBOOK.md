@@ -279,7 +279,9 @@ Fatman-specific import/monitoring routes also exist under `/admin/api/fatman/*`.
 
 The production release workflow is `.github/workflows/release-validation.yml`.
 
-A push to `main` that changes runtime code, tests, build/deployment configuration or release scripts runs validation and then. Documentation-only and workflow-policy-only pushes are excluded by the workflow's `push.paths` filter so they do not redeploy production. Pull requests still run validation for all changed files.
+A push to `main` that changes runtime code, tests, build/deployment configuration or release scripts runs validation and then the paired production deployment. Documentation-only and workflow-policy-only pushes are excluded by the workflow's `push.paths` filter, so they do not redeploy production. Pull requests still run validation for all changed files.
+
+Cloudflare Workers Builds remains connected to `ashini-x/parmar-ai` for optional build/version artifacts, but it is **not** a production deployment authority. On 7 November 2026 its production command was changed from `npx wrangler deploy` to `npx wrangler versions upload`, which uploads a Worker version without promoting it to live traffic. Its main-branch trigger also excludes `*.md` and `docs/**`. Do not restore `npx wrangler deploy` in that independent build configuration or add another auto-deploy path. Only `.github/workflows/release-validation.yml` may promote production, because it deploys both `brvin-service` and `parmar-ai` with paired rollback and acceptance.
 
 For an eligible production push:
 1. captures the current 100%-traffic deployment versions for both Workers;
