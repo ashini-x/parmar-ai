@@ -6,6 +6,7 @@ import type {
 } from "@cloudflare/workers-types";
 
 import { generateGeminiAnswer, GeminiError, isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount, type PartialAnswerHandler } from "./ai/gemini";
+import { getGoogleAccessToken } from "./auth/google";
 import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, ConversationTurn, QuizItem } from "./config/env";
 import { DEFAULT_PHOTO_QUESTION, MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "./config/env";
 import { getConfig } from "./config/env";
@@ -17,6 +18,7 @@ import { loadQuestionContextInParallel, runSuspensionAndModeLookup } from "./tel
 import { buildFatmanHelpFooter, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
 import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
 import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
+import { buildSimpleGreetingReply, isSimpleGreeting } from "./telegram/greetings";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
   deleteTelegramMessage,
@@ -519,8 +521,58 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   if (isStart(text)) {
     queueAnalytics(ctx, "start", () => recordEvent(env, "start", analyticsUser));
     ctx.waitUntil(bestEffortTelegram("start_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId)));
+
+    // Prefetch only the short-lived Google OAuth access token. No Gemini
+    // generation or persistent model session is created by /start.
+    if (env.GCP_CLIENT_EMAIL?.trim() && env.GCP_PRIVATE_KEY?.trim()) {
+      ctx.waitUntil(getGoogleAccessToken(env).then(
+        () => logger.info("google_access_token_prefetch_ready", { requestId }),
+        (error) => logger.warn("google_access_token_prefetch_failed", {
+          requestId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      ));
+    }
+
     await bestEffortTelegram("start", () => sendTelegramMessage(env, chatId, buildStartText()));
     return withRequestId(json({ ok: true }), requestId);
+  }
+
+  // A plain greeting is not a study question. Answer it directly rather than
+  // starting profile reads, quota admission and a Gemini generation call.
+  if (isSimpleGreeting(text)) {
+    let suspended: boolean;
+    try {
+      suspended = await isUserSuspended(env, analyticsUser.telegramUserId);
+    } catch (error) {
+      logger.error("greeting_access_check_failed", {
+        requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await bestEffortTelegram("greeting_access_check_failed", () =>
+        sendTelegramMessage(env, chatId, PREFLIGHT_FAILURE_TEXT, messageId, bot.connectionId),
+      );
+      return withRequestId(json({ ok: true, preflightFailed: true }), requestId);
+    }
+
+    if (suspended) {
+      await bestEffortTelegram("suspended_greeting", () =>
+        sendTelegramMessage(
+          env,
+          chatId,
+          `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo. 🙏`,
+          messageId,
+          bot.connectionId,
+        ),
+      );
+      return withRequestId(json({ ok: true, suspended: true }), requestId);
+    }
+
+    queueAnalytics(ctx, "greeting", () => recordEvent(env, "greeting", analyticsUser));
+    await bestEffortTelegram("greeting", () =>
+      sendTelegramMessage(env, chatId, buildSimpleGreetingReply(text), messageId, bot.connectionId),
+    );
+    return withRequestId(json({ ok: true, greeting: true }), requestId);
   }
 
   if (isHelp(text)) {
