@@ -100,8 +100,8 @@ describe("BRVIN automatic Vision OCR retention", () => {
     expect(workflowSource).not.toContain('retryAttempt === 0 ? "1 minute"');
     expect(workflowSource).toContain("if (retryAttempt > 0)");
     expect(indexingPolicy).toContain("FATMAN_INDEX_PAGE_CONCURRENCY = 3");
-    expect(indexingPolicy).toContain("expectedPages <= 10");
-    expect(indexingPolicy).toContain("expectedPages <= 100");
+    expect(indexingPolicy).toContain("pages <= 10");
+    expect(indexingPolicy).toContain("pages <= 100");
   });
 
   it("keeps full-book purge aware of both separate GCS prefixes", () => {
