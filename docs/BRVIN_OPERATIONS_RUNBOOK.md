@@ -215,14 +215,14 @@ For the semantic path, verify the production Core settings in this order:
 1. The AI Search instance is using hybrid retrieval (vector + BM25) with RRF fusion, and the query filter contains only D1-authorised source prefixes.
 2. The request asks for a bounded candidate set (currently 16) and supplies `retrieval.match_threshold`; it does not request all chunks.
 3. Request-level reranking is enabled with `@cf/baai/bge-reranker-base`. Review the returned `scoring_details.reranking_score`, not only the fused `chunk.score`.
-4. The reranker threshold is applied before output; BRVIN also checks meaningful query-term coverage and validates the item key/page against the same authorised source set.
+4. The reranker threshold is applied before output. When a reranking score is unavailable (for example, a legacy/disabled reranking path), BRVIN applies its meaningful-query-term coverage fallback. Every returned item key and parsed page is validated against the same authorised source set.
 5. Semantic passages are bounded excerpts, not the whole OCR page. Compare the returned `pdfPage` with the original physical PDF page.
 
 Current defaults are set in `wrangler.brvin.jsonc`: `BRVIN_MATCH_THRESHOLD=0.3`, `BRVIN_RERANKING_ENABLED=true`, and `BRVIN_RERANKING_MIN_SCORE=0.4`. The model ID can be changed to a Cloudflare-supported reranker without changing any consumer's answer-generation provider. BRVIN itself does not call Gemini or generate the final answer.
 
-### Existing indexed pages still contain one large chunk
+### Existing indexed items after a chunk-size change
 
-Chunk size is an indexing-time setting, not a query-time option. The shared AI Search instance is configured for 256-token chunks with 10% overlap. Existing built-in items must be re-indexed after the configuration change before their `chunks_count` reflects the new chunking.
+Chunk size is an indexing-time setting, not a query-time option. The shared AI Search instance is configured for 256-token chunks with 10% overlap. Existing built-in items must be synchronised after a configuration change before their chunk inventory reflects the new setting.
 
 Use the Cloudflare AI Search **Sync Item** API on the exact existing item ID (or the dashboard's per-item sync action):
 
@@ -233,7 +233,11 @@ Content-Type: application/json
 {"next_action":"INDEX","wait_for_completion":true}
 ```
 
-This reprocesses the already stored AI Search item. It does not upload the source PDF or run Google Vision OCR again. It can consume Cloudflare AI Search ingestion usage, so re-index a small source first, verify `chunks_count` and retrieval quality, then plan the remaining corpus in measured batches. Never bulk-sync the whole corpus before the pilot passes acceptance.
+This reprocesses the already stored AI Search item. It does not upload the source PDF or run Google Vision OCR again. It can consume Cloudflare AI Search ingestion usage, so re-index a small source first and verify both item logs and the actual `/chunks` inventory. A request can time out while the backend later completes; do not submit concurrent duplicate syncs while the item is `queued` or `running`. Retry an item only after checking its current status, item logs and chunks. Never bulk-sync the whole corpus before a pilot passes acceptance.
+
+**8 November 2026 pilot result:** the existing three Physics page items completed item-scoped re-indexing under the new setting, with page 1 = 3 chunks, page 2 = 4 chunks and page 3 = 4 chunks. Page 2 initially logged a Workers AI timeout; the single item-scoped retry completed successfully with 4 chunks. The original PDF, Vision OCR files, page count and D1 source readiness were unchanged.
+
+The direct AI Search engine smoke check used the exact Physics folder filter, hybrid retrieval, BGE reranking and cache disabled. It ranked the Newton second-law evidence on PDF page 2 first (0.993), the worked example on page 3 first (0.9995), and the bus-braking answer-key evidence on page 3 first (0.9994). This verifies the search engine's page-key ranking, not the complete consumer authorisation boundary. Finish the protected BRVIN Teachers v2 test under [RETRIEVAL_TEST_RUNBOOK.md](https://github.com/ashini-x/brvin-teachers/blob/main/docs/RETRIEVAL_TEST_RUNBOOK.md); do not substitute a direct AI Search API call for the consumer Service Binding test.
 
 ### Project shows connected but no passages
 
