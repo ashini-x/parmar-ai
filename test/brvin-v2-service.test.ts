@@ -336,6 +336,11 @@ describe("BRVIN private application retrieval RPC v2", () => {
           retrieval_type: "hybrid",
           filters: { folder: { $in: ["fatman/pages/"] } },
         },
+        reranking: {
+          enabled: true,
+          model: "@cf/baai/bge-reranker-base",
+          match_threshold: 0.4,
+        },
       },
     }));
   });
