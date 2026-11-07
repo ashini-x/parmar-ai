@@ -427,6 +427,13 @@ The Core Admin dashboard refreshes the overview every 5 seconds only while at le
 
 The BRVIN page-indexing workflow uses Cloudflare AI Search's asynchronous Items API. `items.upload()` returns after the item is accepted/queued; completion is confirmed later from the source-scoped item status inventory. Do not equate successful upload submission with indexed/searchable content.
 
+### BRVIN Teachers page-count detection and page map
+
+- Collection-scoped `brvin-collection:` PDF registrations store page count `0` as an explicit not-yet-detected sentinel. The consumer does not submit a page count.
+- After Google Vision reports completion, Core inventories the isolated per-page JSON output prefix. The Vision request uses `batchSize=1`, so the inventory must contain exactly one `output-N-to-N.json` file for every consecutive page from 1 through N.
+- Core rejects a truncated inventory, duplicates, unexpected filenames, gaps, out-of-prefix objects, zero pages and counts above 2,000. It then persists the verified count to the paired import, library and BRVIN book rows and confirms all three records agree before page indexing begins.
+- Legacy non-collection imports keep their existing page-count behavior, including the historical 538-page Fatman path. The frozen retrieval RPC v2 contract is unchanged.
+- Each existing source-monitor pass also stores a compact `pageStateMap` in its normal activity event (`c/r/q/e/m` = completed/running/queued/error/missing). The consumer popup renders this saved snapshot and does not issue extra AI Search status scans on its own refresh timer.
 ### Page submission
 - Submit a maximum of **3 PDF pages concurrently** using independent, deterministic Cloudflare Workflow steps.
 - Keep Workflow page chunks at the existing maximum of 8 pages and split them into ordered batches of 3. This provides bounded parallel throughput without flooding the shared AI Search instance.
@@ -443,6 +450,8 @@ The polling cadence is size-aware because an AI Search Items list supports at mo
 - more than 100 pages: first check after 45 seconds, then every 60 seconds.
 
 This reduces idle time for small teacher PDFs without making large-book monitoring issue frequent multi-page inventory scans. The monitor persists exact completed-page counts and does not infer completion from upload submission.
+
+Concurrency remains fixed at 3. No representative, provider-backed comparison against 4, 6 or 8 is recorded for the shared production AI Search instance. Do not raise the limit based on synthetic timing alone. The existing pilot source stopped before indexing because its expected Vision output was missing, so it cannot be reused as a valid indexing benchmark without another OCR operation. Run any higher-concurrency comparison on a separate staging AI Search instance with representative small, medium and large PDFs; record end-to-end READY time, page submit attempts, throttles, retries, AI Search inventory calls, and retrieval QA/provenance results. Increase the production limit only if 4/6/8 is measurably faster without extra throttling, retry amplification, duplicate keys or any QA regression.
 
 ### Retrieval QA
 - Start page-grounded retrieval QA immediately after the monitor confirms every expected item has status `completed` and no item is failed.
