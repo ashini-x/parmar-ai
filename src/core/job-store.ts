@@ -463,20 +463,18 @@ export class JobDedupe extends DurableObject {
       const heartbeatMs = typingRecord.state === "processing"
         ? TYPING_HEARTBEAT_MS
         : TYPING_WAIT_HEARTBEAT_MS;
-      // Keep the alarm scheduled even when a short-lived credential lookup or
-      // Telegram request fails. These retries are cosmetic and must not block
-      // queue recovery or change job ownership.
-      nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + heartbeatMs);
       try {
         const typingToken = await getTelegramTypingToken(
           this.runtimeEnv,
           typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
         );
         if (typingToken) {
+          nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + heartbeatMs);
           await sendTelegramChatActionWithToken(typingToken, typingRecord.chatId);
         }
       } catch {
-        // Typing is cosmetic; never allow a failed lookup/action to affect the job.
+        // Retry a transient D1/token lookup failure without blocking job recovery.
+        nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + 5_000);
       }
     }
 
