@@ -189,6 +189,36 @@ describe("BRVIN governed retrieval", () => {
     expect(context.passages[0].text).toContain("a larger mass produces a smaller acceleration");
   });
 
+  it("allows a strong cross-encoder match when the evidence uses semantically related wording", async () => {
+    grants.push({
+      id: bookId,
+      title: "Newton's Laws",
+      search_prefix: "brvin/books/" + bookId + "/pages/",
+    });
+    search.mockResolvedValue({
+      chunks: [{
+        id: "paraphrased-second-law",
+        text: "The resultant force on a body equals its inertia multiplied by the rate of change in velocity.",
+        score: 0.72,
+        scoring_details: { vector_score: 0.67, reranking_score: 0.91 },
+        item: { key: "brvin/books/" + bookId + "/pages/page-000002.txt" },
+      }],
+    });
+
+    const context = await retrieveBrvinProjectContext(
+      env,
+      "project-a",
+      "How does Newton's second law relate force, mass and acceleration?",
+    );
+
+    expect(context.passages).toHaveLength(1);
+    expect(context.passages[0]).toEqual(expect.objectContaining({
+      id: "paraphrased-second-law",
+      pdfPage: 2,
+      score: 0.91,
+    }));
+  });
+
   it("does not expose content for an inactive or unknown project", async () => {
     db.prepare.mockImplementationOnce((sql: string) => ({
       bind: () => ({ first: async () => null, all: async () => ({ results: [] }) }),
