@@ -610,3 +610,10 @@ The frozen `BrvinRetrievalApi` and v2 methods remain unchanged. The retrieval Wo
 
 
 **Current production activation state:** Core and consumer code are deployed, but no BRVIN Teachers application record, production environment record, teacher, project, collection, source or grant exists yet. The app's separate retrieval `BRVIN_SERVICE` binding to `brvin-service` is not yet configured. Complete the one-time application/environment registration in [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md) before creating teacher knowledge records or enabling students.
+
+
+## 17. Core-owned PDF page-count detection and source page-state snapshots
+
+Collection-scoped BRVIN Teachers source registration does not accept a page count from the consumer. Core marks the count as pending, runs the existing private upload and Google Vision OCR pipeline, and derives the exact number of physical PDF pages from the source-isolated Vision output inventory. With Vision configured for one page per output batch, Core requires exactly one consecutive output-N-to-N.json object for every page, rejects incomplete or ambiguous inventories and page counts above 2,000, and persists the same verified count to the import job, Fatman library row and BRVIN source row before indexing starts. Legacy import behavior, including the historical 538-page default, remains unchanged.
+
+The existing source index monitor now records a compact per-page state string alongside its normal activity event. BRVIN Teachers renders this snapshot in its source-progress modal and does not issue direct AI Search or storage requests. This remains a management/status integration and does not alter the frozen retrieval v2 contract or transfer ownership of ingestion from Core.
