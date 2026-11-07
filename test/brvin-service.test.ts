@@ -121,6 +121,11 @@ describe("BRVIN private application retrieval", () => {
           retrieval_type: "hybrid",
           filters: { folder: { $in: [sources[0].search_prefix] } },
         },
+        reranking: {
+          enabled: true,
+          model: "@cf/baai/bge-reranker-base",
+          match_threshold: 0.4,
+        },
       },
     }));
   });
