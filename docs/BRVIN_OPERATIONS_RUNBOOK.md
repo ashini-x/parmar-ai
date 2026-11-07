@@ -465,3 +465,13 @@ Benchmark representative small (1–10 page), medium (11–100 page) and large (
 - AI Search list calls, page upload attempts, retry counts and QA query count.
 
 A faster result is accepted only if all expected pages reach `completed`, retrieval QA passes with the original PDF-page provenance, no duplicate page keys are created, and READY remains gated on successful QA.
+
+
+## 14. Verified production rollout of indexing optimization
+
+- Core performance PR: [#131](https://github.com/ashini-x/parmar-ai/pull/131), merge SHA `920f94749f3174420160942670f4b81b583ae3c2`.
+- Paired release: [GitHub Actions #42411000687](https://github.com/ashini-x/parmar-ai/actions/runs/42411000687); typecheck/tests/build, deployment, first-attempt health smoke and production release acceptance all passed.
+- `parmar-ai`: version `fa5f5fd4-eb77-4d0c-ad07-cd8255b214f2`, deployment `70c15041-c41a-4ed4-9986-673653b6bb0e`, 100% traffic.
+- `brvin-service`: version `0abbe7e6-3a7d-4e34-8f46-321f12796d58`, deployment `4cc87836-634e-4b61-9ee8-4d3859df838d`, 100% traffic.
+- The optimization applies to future ingestion runs. Do not re-upload or re-index existing READY sources just to activate it.
+- Benchmark the next representative uploads against the prior Newton pilot baseline (about 6m45s from PDF source registration to READY in the previous production run). Record stage timings, page counts, list calls, page submission retries and QA query counts. This is a baseline, not a guaranteed target; AI Search's service-side indexing latency remains external to BRVIN.
