@@ -9,7 +9,7 @@ import { getGoogleAccessToken } from "../auth/google";
 import { fatmanExpectedPageCount, fatmanIndexPageKey, inferFatmanPdfPageCountFromVisionOutputs } from "./library";
 import type { FatmanImportJob } from "./import";
 import { brvinDeletionProgressPercent, brvinDeletionSearchPageRequest } from "./deletion";
-import { chunkFatmanPages, FATMAN_INDEX_PAGE_CONCURRENCY, fatmanIndexMonitorDelayMs } from "./indexing-policy";
+import { buildFatmanPageStateMap, chunkFatmanPages, FATMAN_INDEX_PAGE_CONCURRENCY, fatmanIndexMonitorDelayMs } from "./indexing-policy";
 import {
   cleanupFatmanGcsObjects,
   deleteFatmanGcsObjectPrefix,
@@ -1229,14 +1229,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         // c/r/q/e/m = completed/running/queued/error/missing. The snapshot is
         // persisted with the monitor event so consumer UIs never need to make
         // an additional AI Search list request for every popup refresh.
-        const pageStateMap = Array.from({ length: expectedPages }, (_, index) => {
-          const state = byPage.get(index + 1)?.status;
-          return state === "completed" ? "c"
-            : state === "running" ? "r"
-              : state === "queued" ? "q"
-                : state === "error" || state === "skipped" || state === "outdated" ? "e"
-                  : "m";
-        }).join("");
+        const pageStateMap = buildFatmanPageStateMap(expectedPages, pages);
         await step.do("save Fatman indexing progress " + monitorSequence, async () => {
           await updateFatmanImportProgress(this.env, completedPages, importId);
           if (importJob.book_id) await recordBrvinActivity(this.env, {
