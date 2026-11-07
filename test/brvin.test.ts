@@ -88,7 +88,8 @@ describe("BRVIN governed retrieval", () => {
       messages: [{ role: "user", content: "Article 14 equality" }],
       ai_search_options: {
         retrieval: {
-          max_num_results: 50,
+          max_num_results: 16,
+          match_threshold: 0.3,
           retrieval_type: "hybrid",
           filters: { folder: { $in: ["brvin/books/" + bookId + "/pages/"] } },
         },
