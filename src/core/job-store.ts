@@ -460,20 +460,23 @@ export class JobDedupe extends DurableObject {
     // credential cache so each alarm does not perform repeated D1 reads.
     const typingRecord = selectTypingHeartbeatJob(jobs.values(), now, TYPING_MAX_AGE_MS);
     if (typingRecord) {
-      const typingToken = await getTelegramTypingToken(
-        this.runtimeEnv,
-        typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
-      );
-      if (typingToken) {
-        try {
+      const heartbeatMs = typingRecord.state === "processing"
+        ? TYPING_HEARTBEAT_MS
+        : TYPING_WAIT_HEARTBEAT_MS;
+      // Keep the alarm scheduled even when a short-lived credential lookup or
+      // Telegram request fails. These retries are cosmetic and must not block
+      // queue recovery or change job ownership.
+      nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + heartbeatMs);
+      try {
+        const typingToken = await getTelegramTypingToken(
+          this.runtimeEnv,
+          typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
+        );
+        if (typingToken) {
           await sendTelegramChatActionWithToken(typingToken, typingRecord.chatId);
-        } catch {
-          // Typing is cosmetic; never allow a failed chat action to affect the job.
         }
-        const heartbeatMs = typingRecord.state === "processing"
-          ? TYPING_HEARTBEAT_MS
-          : TYPING_WAIT_HEARTBEAT_MS;
-        nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + heartbeatMs);
+      } catch {
+        // Typing is cosmetic; never allow a failed lookup/action to affect the job.
       }
     }
 
@@ -790,16 +793,14 @@ export class JobDedupe extends DurableObject {
     // stops its own timer. The token is cached only in Worker memory, never in
     // Durable Object storage, and the alarm refreshes it for queued/processing.
     await this.ensureTypingAlarm();
-    const typingToken = await getTelegramTypingToken(
-      this.runtimeEnv,
-      record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
-    );
-    if (typingToken) {
-      try {
-        await sendTelegramChatActionWithToken(typingToken, record.chatId);
-      } catch {
-        // Best-effort UI feedback must not affect queue admission.
-      }
+    try {
+      const typingToken = await getTelegramTypingToken(
+        this.runtimeEnv,
+        record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
+      );
+      if (typingToken) await sendTelegramChatActionWithToken(typingToken, record.chatId);
+    } catch {
+      // Best-effort UI feedback must not affect queue admission.
     }
     return { ok: true };
   }
