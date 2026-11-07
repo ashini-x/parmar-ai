@@ -35,6 +35,16 @@ export class GoogleAuthError extends Error {
   }
 }
 
+/**
+ * Discard a token only when the provider rejected the exact cached credential.
+ * A concurrent request may already have installed a newer token.
+ */
+export function invalidateGoogleAccessToken(rejectedToken: string): void {
+  if (cachedToken?.accessToken === rejectedToken) {
+    cachedToken = null;
+  }
+}
+
 export async function getGoogleAccessToken(env: Env): Promise<string> {
   const now = Date.now();
 

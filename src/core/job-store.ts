@@ -2,9 +2,9 @@ import { DurableObject } from "cloudflare:workers";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
 import { selectTypingHeartbeatJob } from "./typing-heartbeat";
 import { MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "../config/env";
-import { sendTelegramChatAction, sendTelegramMessage } from "../telegram/api";
+import { sendTelegramChatActionWithToken, sendTelegramMessage } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
-import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, isTelegramBotConnectionActive } from "../telegram/bot-store";
+import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, getTelegramTypingToken, isTelegramBotConnectionActive } from "../telegram/bot-store";
 import { getCaptionedPhotoQuestion, PHOTO_CAPTION_REQUIRED_TEXT } from "../telegram/photo-intent";
 
 const TYPING_HEARTBEAT_MS = 4_000;
@@ -455,31 +455,27 @@ export class JobDedupe extends DurableObject {
       }
     }
 
-    // Keep typing alive while a question is pending or queued, not only after
-    // the Queue consumer claims it. This bridges the webhook-to-Queue handoff.
-    // The Durable Object alarm survives both short-lived Worker invocations.
+    // The Durable Object is the single owner of typing feedback across
+    // pending, queued and processing states. Use a short-lived in-memory bot
+    // credential cache so each alarm does not perform repeated D1 reads.
     const typingRecord = selectTypingHeartbeatJob(jobs.values(), now, TYPING_MAX_AGE_MS);
-    if (
-      typingRecord &&
-      await isTelegramBotConnectionActive(
-        this.runtimeEnv,
-        typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
-      )
-    ) {
-      try {
-        await sendTelegramChatAction(
-          this.runtimeEnv,
-          typingRecord.chatId,
-          "typing",
-          typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
-        );
-      } catch {
-        // Typing is cosmetic; never allow a failed chat action to affect the job.
-      }
+    if (typingRecord) {
       const heartbeatMs = typingRecord.state === "processing"
         ? TYPING_HEARTBEAT_MS
         : TYPING_WAIT_HEARTBEAT_MS;
-      nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + heartbeatMs);
+      try {
+        const typingToken = await getTelegramTypingToken(
+          this.runtimeEnv,
+          typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
+        );
+        if (typingToken) {
+          nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + heartbeatMs);
+          await sendTelegramChatActionWithToken(typingToken, typingRecord.chatId);
+        }
+      } catch {
+        // Retry a transient D1/token lookup failure without blocking job recovery.
+        nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + 5_000);
+      }
     }
 
     if (nextWakeAt !== null && Number.isFinite(nextWakeAt)) {
@@ -576,7 +572,6 @@ export class JobDedupe extends DurableObject {
     };
     await this.runtimeEnv.QUESTION_QUEUE.send(job, { contentType: "json" });
     await this.markQueued({ botConnectionId: album.botConnectionId, updateId });
-    void sendTelegramChatAction(this.runtimeEnv, album.chatId, "typing", album.botConnectionId).catch(() => undefined);
 
     album.state = "queued";
     album.photos = [];
@@ -792,18 +787,18 @@ export class JobDedupe extends DurableObject {
     }
     await this.ctx.storage.put(key, record);
 
-    // Hand off the chat action before the webhook stops its own heartbeat.
-    // If Queue delivery is slow, the persistent alarm keeps refreshing it.
+    // Hand off to the Durable Object-owned heartbeat before the webhook
+    // stops its own timer. The token is cached only in Worker memory, never in
+    // Durable Object storage, and the alarm refreshes it for queued/processing.
     await this.ensureTypingAlarm();
     try {
-      await sendTelegramChatAction(
+      const typingToken = await getTelegramTypingToken(
         this.runtimeEnv,
-        record.chatId,
-        "typing",
         record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
       );
+      if (typingToken) await sendTelegramChatActionWithToken(typingToken, record.chatId);
     } catch {
-      // This is best-effort UI feedback and must not affect queue admission.
+      // Best-effort UI feedback must not affect queue admission.
     }
     return { ok: true };
   }
