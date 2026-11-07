@@ -74,6 +74,34 @@ describe("Telegram live progress updater", () => {
     await update.stop();
   });
 
+  it("does not wait for Telegram to finish a cosmetic phase edit", async () => {
+    vi.useFakeTimers();
+    let resolveFirstEdit: (() => void) | undefined;
+    const edits: string[] = [];
+    const update = createTelegramProgressUpdater((text) => {
+      edits.push(text);
+      if (edits.length === 1) {
+        return new Promise<void>((resolve) => { resolveFirstEdit = resolve; });
+      }
+      return Promise.resolve();
+    });
+
+    await expect(update.setStatus(TELEGRAM_PROGRESS_LABELS.checkingSources)).resolves.toBeUndefined();
+    expect(edits).toEqual([TELEGRAM_PROGRESS_LABELS.checkingSources]);
+
+    // A later phase can be queued while the previous Telegram edit is still
+    // in flight; the caller does not wait for either cosmetic edit.
+    await expect(update.setStatus(TELEGRAM_PROGRESS_LABELS.preparingAnswer)).resolves.toBeUndefined();
+    expect(edits).toHaveLength(1);
+
+    resolveFirstEdit?.();
+    await vi.advanceTimersByTimeAsync(500);
+    await update.flush();
+    expect(edits.at(-1)).toBe(TELEGRAM_PROGRESS_LABELS.preparingAnswer);
+
+    await update.stop();
+  });
+
   it("coalesces rapid answer chunks and shows a writing cycle after an idle pause", async () => {
     vi.useFakeTimers();
     const edits: string[] = [];

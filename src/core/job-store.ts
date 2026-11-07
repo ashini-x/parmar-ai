@@ -60,6 +60,17 @@ export interface JobRecord {
   fatmanModeSnapshot?: boolean;
 }
 
+interface AckReservation {
+  version: 1;
+  botConnectionId: string;
+  updateId: number;
+  chatId: number;
+  messageId: number;
+  requestId: string;
+  createdAt: number;
+  statusMessageId?: number;
+}
+
 interface PendingAlbumPhoto {
   updateId: number;
   messageId: number;
@@ -146,6 +157,7 @@ export class JobDedupe extends DurableObject {
 
     switch (action) {
       case "begin": return this.json(await this.beginJob(body));
+      case "reserve_ack": return this.json(await this.reserveAck(body));
       case "stage_photo_album": return this.json(await this.stagePhotoAlbum(body));
       case "reject_telegram_video": return this.json(await this.rejectTelegramVideo(body));
       case "save_ack": return this.json(await this.saveAck(body));
@@ -340,8 +352,18 @@ export class JobDedupe extends DurableObject {
     const terminalCutoff = now - JOB_MAX_ACTIVE_AGE_MS;
     const quizResults = await this.ctx.storage.list<StoredQuizResultContext>({ prefix: "quiz-result:" });
     const albums = await this.ctx.storage.list<PendingPhotoAlbum>({ prefix: "photo-album:" });
+    const acknowledgements = await this.ctx.storage.list<AckReservation>({ prefix: "ack:" });
     let hasProcessingRecentJob = false;
     let nextWakeAt: number | null = null;
+
+    for (const [key, acknowledgement] of acknowledgements) {
+      const expiresAt = acknowledgement.createdAt + JOB_RETENTION_MS;
+      if (expiresAt <= now) {
+        await this.ctx.storage.delete(key);
+      } else {
+        nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, expiresAt);
+      }
+    }
 
     for (const [key, result] of quizResults) {
       if (result.createdAt < retentionCutoff) await this.ctx.storage.delete(key);
@@ -572,6 +594,10 @@ export class JobDedupe extends DurableObject {
       }
 
       if (existing) {
+        if (!existing.statusMessageId && job.statusMessageId) {
+          existing.statusMessageId = job.statusMessageId;
+          await transaction.put(key, existing);
+        }
         if (existing.state === "done" || existing.state === "queued" || existing.state === "processing") {
           return { action: "duplicate", statusMessageId: existing.statusMessageId, quizCount: existing.quizCount, fatmanModeSnapshot: existing.fatmanModeSnapshot };
         }
@@ -640,6 +666,7 @@ export class JobDedupe extends DurableObject {
         createdAt: job.createdAt,
         state: "pending",
         leaseVersion: 0,
+        ...(job.statusMessageId !== undefined ? { statusMessageId: job.statusMessageId } : {}),
         quizCount: requestedQuizCount,
         ...(job.photoFileIds?.length ? { photoFileIds: job.photoFileIds } : {}),
         ...(job.fatmanModeSnapshot !== undefined ? { fatmanModeSnapshot: job.fatmanModeSnapshot } : {}),
@@ -660,16 +687,80 @@ export class JobDedupe extends DurableObject {
     return result;
   }
 
+  private async reserveAck(body: Record<string, unknown>): Promise<{
+    action: "new" | "existing";
+    statusMessageId?: number;
+  }> {
+    const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID).trim();
+    const updateId = positiveNumber(body.updateId);
+    const chatId = positiveOrNegativeNumber(body.chatId);
+    const messageId = positiveNumber(body.messageId);
+    const requestId = String(body.requestId ?? "").trim();
+    if (!botConnectionId || botConnectionId.length > 128 || !requestId || requestId.length > 128) {
+      throw new Error("Invalid acknowledgement reservation.");
+    }
+
+    const now = Date.now();
+    const key = acknowledgementKey(botConnectionId, updateId);
+    const result = await this.ctx.storage.transaction(async (transaction) => {
+      const existing = await transaction.get<AckReservation>(key);
+      if (existing && now - existing.createdAt < JOB_RETENTION_MS) {
+        return {
+          action: "existing" as const,
+          ...(existing.statusMessageId ? { statusMessageId: existing.statusMessageId } : {}),
+        };
+      }
+
+      // Do not create a second acknowledgement for a job written by an older
+      // webhook version before acknowledgement reservations were introduced.
+      let existingJob = await transaction.get<JobRecord>(jobKey(botConnectionId, updateId));
+      if (!existingJob && botConnectionId === LEGACY_TELEGRAM_BOT_CONNECTION_ID) {
+        existingJob = await transaction.get<JobRecord>(legacyJobKey(updateId));
+      }
+      if (existingJob) {
+        return {
+          action: "existing" as const,
+          ...(existingJob.statusMessageId ? { statusMessageId: existingJob.statusMessageId } : {}),
+        };
+      }
+
+      const reservation: AckReservation = {
+        version: 1,
+        botConnectionId,
+        updateId,
+        chatId,
+        messageId,
+        requestId,
+        createdAt: now,
+      };
+      await transaction.put(key, reservation);
+      return { action: "new" as const };
+    });
+
+    const alarm = await this.ctx.storage.getAlarm();
+    if (alarm === null || alarm > now + JOB_RETENTION_MS) {
+      await this.ctx.storage.setAlarm(now + JOB_RETENTION_MS);
+    }
+    return result;
+  }
+
   private async saveAck(body: Record<string, unknown>): Promise<GenericResponse> {
     const updateId = positiveNumber(body.updateId);
     const statusMessageId = positiveNumber(body.statusMessageId);
     const botConnectionId = String(body.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID);
     const key = await this.resolveJobKey(botConnectionId, updateId);
     const record = await this.ctx.storage.get<JobRecord>(key);
-    if (!record) return { ok: true };
+    if (record) {
+      record.statusMessageId = statusMessageId;
+      await this.ctx.storage.put(key, record);
+    }
 
-    record.statusMessageId = statusMessageId;
-    await this.ctx.storage.put(key, record);
+    const acknowledgementId = acknowledgementKey(botConnectionId, updateId);
+    const acknowledgement = await this.ctx.storage.get<AckReservation>(acknowledgementId);
+    if (acknowledgement) {
+      acknowledgement.statusMessageId = statusMessageId;
+      await this.ctx.storage.put(acknowledgementId, acknowledgement);
+    }
     return { ok: true };
   }
 
@@ -1310,6 +1401,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function profileAppliedKey(botConnectionId: string, updateId: number): string { return `profile:applied:${encodeURIComponent(botConnectionId)}:${updateId}`; }
 function photoAlbumKey(botConnectionId: string, mediaGroupId: string): string { return `photo-album:${encodeURIComponent(botConnectionId)}:${encodeURIComponent(mediaGroupId)}`; }
 function jobKey(botConnectionId: string, updateId: number): string { return `job:${botConnectionId}:${updateId}`; }
+function acknowledgementKey(botConnectionId: string, updateId: number): string { return `ack:${botConnectionId}:${updateId}`; }
 function legacyJobKey(updateId: number): string { return `job:${updateId}`; }
 function positiveNumber(value: unknown): number {
   const parsed = Number(value);
