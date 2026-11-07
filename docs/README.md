@@ -10,6 +10,7 @@ The current source baseline is **v2.8.0**.
 |---|---|
 | [REPOSITORY_MAP.md](REPOSITORY_MAP.md) | Where major source, config, tests, prompts, and operational assets live. |
 | [../ARCHITECTURE.md](../ARCHITECTURE.md) | High-level system architecture and failure boundaries. |
+| [TELEGRAM_BOT_ARCHITECTURE.md](TELEGRAM_BOT_ARCHITECTURE.md) | Locked as-built Telegram runtime, latency boundaries, operational invariants and reusable blueprint for the next bot. |
 | [AI_PIPELINE.md](AI_PIPELINE.md) | Gemini/Vertex execution, response contracts, quiz semantics, and usage accounting. |
 | [TEST_PLAN.md](TEST_PLAN.md) | Production-oriented automated and manual verification matrix. |
 | [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) | Diagnosis and recovery procedures. |
@@ -29,6 +30,12 @@ The current source baseline is **v2.8.0**.
 - [API.md](API.md): supported HTTP/webhook/admin surface and request expectations.
 - [SOURCE_INVENTORY.md](SOURCE_INVENTORY.md): tracked source/assets and their roles.
 - [DOCUMENTATION_POLICY.md](DOCUMENTATION_POLICY.md): documentation maintenance requirements.
+
+## Telegram bot runtime — locked source of truth
+
+**For any future Telegram bot built from this codebase, start with [TELEGRAM_BOT_ARCHITECTURE.md](TELEGRAM_BOT_ARCHITECTURE.md).** It records the production webhook/`/start` fast path, Durable Object admission and recovery, Queue hand-off, runtime D1 schema boundary, Gemini stream, progress retry policy, observability and the reuse checklist. [../ARCHITECTURE.md](../ARCHITECTURE.md) is the short overview only.
+
+The generic Telegram runtime should be copied independently from Parmar's SSC/Fatman/BRVIN business logic. Every new bot gets isolated Cloudflare resources, secrets and application data.
 
 ## BRVIN — current source of truth
 

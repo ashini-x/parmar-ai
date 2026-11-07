@@ -2,7 +2,7 @@
 
 **Owner:** Parmar AI project maintainer  
 **Status:** Controlled project documentation  
-**Production line:** 2.6.x
+**Production line:** 2.8.x
 
 ## Purpose
 

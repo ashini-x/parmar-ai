@@ -19,6 +19,27 @@ The text question and optional caption are passed to the Queue as a versioned `Q
 
 Photo file IDs are stored in the per-chat Durable Object job record for retries and are not included in Queue messages. At processing time, the consumer retrieves the photos from Telegram, validates JPEG/PNG/WebP type and size, then sends them to Gemini as inline image parts in message order. Downloads are capped at 7 MB per image and 12 MB total. The application does not persist the image bytes.
 
+## Telegram runtime and latency boundary
+
+The webhook and answer pipeline are separate stages:
+
+- Webhook authentication uses the hashed secret in the dedicated `telegram_bots` table. Its schema initializer creates only that table and the active-connection index.
+- `/start` sends the existing welcome directly before first-seen analytics, start-event analytics, command-menu synchronization or Google OAuth prefetch. The latter tasks run after the welcome through `ctx.waitUntil`.
+- A normal question receives an early acknowledgement/typing action, then passes suspension and mode checks, idempotent acknowledgement reservation, and Durable Object admission.
+- The Durable Object transaction owns duplicate checks, daily/burst counters and pending-job creation. The Worker awaits `QUESTION_QUEUE.send` before returning a queued response.
+- Once the Queue accepts the job, the normal path schedules the Durable Object's `mark_queued`/typing hand-off in the background. A Queue consumer is allowed to claim the job while its Durable Object state is still `pending`.
+- D1 runtime analytics and access checks use `ensureRuntimeAnalyticsSchema`, which creates only `users`, `events`, `questions`, `ai_access_overrides`, `ai_usage_attempts`, `admin_user_controls` and their runtime indexes. It is cached per D1 binding and does not run BRVIN migrations. Admin/BRVIN operations retain the full `ensureAnalyticsSchema` initializer.
+
+The per-chat Durable Object remains authoritative for job state, quota, burst protection, leases, profile, recent conversation and recovery. D1 is a projection/access layer, not the primary operational job store.
+
+## Queue-to-model processing
+
+The Queue consumer confirms the bot connection is still active, claims a lease through the per-chat Durable Object, then loads the student profile and recent conversation concurrently. Each read has its own safe fallback. Google OAuth prefetch is started alongside those independent reads.
+
+A validated answer packet is written back to the Durable Object under the active lease before final delivery. This allows a Queue retry to reuse already-generated content rather than needlessly regenerate it. Profile updates are lease-fenced and idempotent, but profile failure must not prevent a valid answer from reaching Telegram.
+
+The Queue consumer is configured with batch size 1, 1-second batch timeout, up to 10 retries, 15-second retry delay, concurrency up to 50, and a dead-letter queue. The Durable Object serializes active jobs for each chat, even while different chats are processed concurrently.
+
 ## Context assembly
 
 Before Gemini execution, the consumer builds a `ProfileContext` containing:
@@ -87,6 +108,14 @@ The runtime chooses among:
 ## Grounding policy
 
 Google Search grounding can be enabled for questions that the classifier considers time-sensitive/current. Static historical and conceptual questions should not be grounded merely because grounding is available.
+
+## Streaming and Telegram progress resilience
+
+When a partial-answer handler is available, Vertex AI is called through `streamGenerateContent?alt=sse`. The stream reader incrementally extracts the JSON `answer` field only after `responseMode` is identified as text. The complete response is still validated against the structured `AnswerPacket` contract; partial text is not treated as a final answer.
+
+The same Telegram status message carries contextual phase labels and then cumulative answer chunks. Status edits have a 500 ms minimum interval; answer chunks are coalesced at 850 ms. Phase variants rotate every 2.5 seconds, and a writing state appears after a 2.3-second idle pause.
+
+A cosmetic progress edit uses one Telegram API attempt with a 1-second timeout. The progress updater retries transient failures on the normal cadence; after three consecutive failures it disables only progress updates and resolves its waiters. It never disables Gemini generation or final answer delivery. The updater is stopped and any in-flight edit settled before the final answer/quiz replaces the status message.
 
 ## Answer post-processing
 

@@ -7,6 +7,31 @@
 - Use `telegram_webhook_authenticated.authenticationMs` and `telegram_start_welcome_delivery.deliveryMs` in Worker logs to separate authentication/D1 latency from Telegram's outbound message latency.
 - Do not move full analytics migrations, BRVIN readiness checks, Gemini generation, or command-menu sync back in front of the welcome.
 
+## Question latency diagnosis
+
+Use the same `requestId` / `updateId` across Worker, Queue and completion logs. Do not diagnose latency from generic invocation wall time alone.
+
+| Log | Inspect | Meaning |
+|---|---|---|
+| `telegram_question_queued` | `totalWebhookMs`, `acknowledgementReservationMs`, `acknowledgementDeliveryMs`, `suspensionAndModeLookupMs`, `quizStateMs`, `jobAdmissionMs`, `queuePublishMs` | Webhook admission through durable Queue publication |
+| `telegram_question_marked_queued` | `durationMs` | Background Durable Object state/typing hand-off |
+| `question_processing_started` | `queueWaitMs`, `attempts` | Delay between enqueue and Queue consumer processing |
+| `question_context_loaded` | `contextReadMs` | Parallel profile and conversation reads |
+| `question_answer_generated` | `answerPipelineMs`, `model`, `thinkingLevel`, `grounded` | Retrieval/model answer-generation pipeline |
+| `question_completed` | `attempts`, `answerLength` | Final processing and delivery completed |
+| `telegram_partial_answer_stream_failed` | `error` | Cosmetic Telegram progress edit failure |
+
+Interpret the stages in order:
+1. High `totalWebhookMs`: inspect acknowledgement reservation/delivery, suspension/mode lookup, quiz state, job admission and Queue publish separately.
+2. Low webhook time but high `queueWaitMs`: inspect Queue consumer health, concurrency, backlog, retries and Durable Object ordering/recovery.
+3. High `contextReadMs`: inspect D1/profile and Durable Object conversation reads.
+4. High `answerPipelineMs`: inspect Gemini/Vertex latency, thinking level, grounding, prompt size, images or optional retrieval.
+5. A progress-edit warning is not proof that Gemini failed. The progress editor retries transient failures and disables only cosmetic progress after three consecutive failures; final answer delivery has its own Telegram retry path.
+
+The normal question path awaits `QUESTION_QUEUE.send`; after that succeeds, `mark_queued` and the Durable Object-owned typing hand-off run through `ctx.waitUntil`. Generic Worker `wallTimeMs` may include this background work after the user-facing webhook response path has returned. Use the explicit stage timings above.
+
+For `/start`, compare `telegram_webhook_authenticated.authenticationMs` with `telegram_start_welcome_delivery.deliveryMs` and `delivered`. The original welcome is sent before first-seen analytics, `/start` event logging, command-menu sync and Google OAuth prefetch. Do not interpret full Worker wall time as welcome-delivery latency.
+
 ## First checks
 1. Confirm Worker configuration.
 2. Confirm Queue consumer and Durable Object.

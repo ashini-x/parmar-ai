@@ -1,3 +1,13 @@
+## Unreleased: Locked reusable Telegram runtime architecture
+
+- Lock the as-built production Telegram runtime as the reusable baseline for future bots, with code-level documentation for webhook authentication, the immediate `/start` path, per-chat Durable Object admission/recovery, Queue hand-off, Gemini streaming, progress recovery, D1 schema separation and latency telemetry.
+- Replace the superseded v2.5.2 architecture summary with the current production system map and publish `docs/TELEGRAM_BOT_ARCHITECTURE.md` as the canonical copy-forward reference.
+- Keep webhook credential setup isolated to `telegram_bots`; use a cached runtime-only D1 schema for Telegram access/analytics paths while retaining full migrations for admin/BRVIN.
+- Await successful Queue publication, then move the normal post-queue state/typing hand-off into `ctx.waitUntil` so cosmetic work does not hold the webhook response.
+- Add stage-level timing diagnostics for acknowledgement, admission, Queue publish/wait, context reads and answer generation.
+- Recover from transient Telegram progress-edit timeouts with bounded retries; after three consecutive failures only cosmetic progress is disabled.
+- Update the AI pipeline, operations runbook, repository map and engineering documentation index to match the implementation and provide a safe reuse checklist for the next bot.
+
 ## Unreleased: Faster first-contact Telegram /start
 - Keep Telegram webhook credential lookup independent from the full analytics/BRVIN schema initializer; only the small `telegram_bots` table and active-connection index are ensured on the authentication path.
 - Deliver the existing welcome before starting first-seen and `/start` analytics writes, preventing cold-isolate analytics initialization from competing with the first visible response.
