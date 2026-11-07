@@ -20,7 +20,6 @@ import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
   deleteTelegramMessage,
   editTelegramMessage,
-  editTelegramProgressMessage,
   editTelegramMessageReplyMarkup,
   sendTelegramChatAction,
   sendTelegramMessage,
@@ -1812,7 +1811,7 @@ function createTelegramPartialAnswerUpdater(
 ): PartialAnswerHandler {
   return createTelegramProgressUpdater(async (text) => {
     try {
-      await editTelegramProgressMessage(env, job.chatId, statusMessageId, text, job.botConnectionId);
+      await editTelegramMessage(env, job.chatId, statusMessageId, text, job.botConnectionId, false);
     } catch (error) {
       logger.warn("telegram_partial_answer_stream_failed", {
         requestId: job.requestId,
