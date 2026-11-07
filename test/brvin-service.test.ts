@@ -116,7 +116,8 @@ describe("BRVIN private application retrieval", () => {
     expect(search).toHaveBeenCalledWith(expect.objectContaining({
       ai_search_options: {
         retrieval: {
-          max_num_results: 50,
+          max_num_results: 16,
+          match_threshold: 0.3,
           retrieval_type: "hybrid",
           filters: { folder: { $in: [sources[0].search_prefix] } },
         },
