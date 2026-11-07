@@ -1,3 +1,9 @@
+## Unreleased: Faster first-contact Telegram /start
+- Keep Telegram webhook credential lookup independent from the full analytics/BRVIN schema initializer; only the small `telegram_bots` table and active-connection index are ensured on the authentication path.
+- Deliver the existing welcome before starting first-seen and `/start` analytics writes, preventing cold-isolate analytics initialization from competing with the first visible response.
+- Add webhook-authentication and welcome-delivery timing logs to distinguish D1/authentication latency from Telegram API delivery latency.
+- Add regression coverage that Telegram bot schema setup does not invoke the full application schema initializer.
+
 ## Unreleased: Phase 4 live production release acceptance
 - Add a read-only production acceptance gate that verifies the newest Cloudflare deployment for both Workers is a single version at 100% traffic.
 - Probe the public root and BRVIN-backed health response for connected retrieval, ready Fatman status, and at least one authorised source.

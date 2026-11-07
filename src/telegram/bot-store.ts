@@ -1,4 +1,3 @@
-import { ensureAnalyticsSchema } from "../analytics/db";
 import type { Env } from "../config/env";
 
 export const LEGACY_TELEGRAM_BOT_CONNECTION_ID = "legacy-env";
@@ -339,8 +338,45 @@ export async function getTelegramEncryptionStatus(env: Env): Promise<{
   return { configured: false, source: "missing" };
 }
 
+// Telegram webhook authentication must not trigger the full analytics/BRVIN
+// schema migration on a cold Worker isolate. The bot connection table is a
+// self-contained prerequisite and is provisioned independently; full app
+// schema initialization remains owned by analytics/admin operations.
+const telegramBotSchemaPromises = new WeakMap<object, Promise<void>>();
+
 export async function ensureTelegramBotSchema(env: Env): Promise<void> {
-  await ensureAnalyticsSchema(env);
+  const db = env.DB;
+  if (!db) return;
+
+  let schemaPromise = telegramBotSchemaPromises.get(db);
+  if (!schemaPromise) {
+    const statements = [
+      `CREATE TABLE IF NOT EXISTS telegram_bots (
+        bot_connection_id TEXT PRIMARY KEY,
+        bot_id INTEGER NOT NULL UNIQUE,
+        username TEXT,
+        first_name TEXT,
+        token_ciphertext TEXT NOT NULL,
+        webhook_secret_ciphertext TEXT NOT NULL,
+        webhook_secret_hash TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL CHECK (status IN ('active','disconnected')),
+        connected_at INTEGER NOT NULL,
+        last_verified_at INTEGER,
+        disconnected_at INTEGER
+      )`,
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_bots_one_active
+        ON telegram_bots(status) WHERE status='active'`,
+    ];
+    schemaPromise = db.batch(statements.map((sql) => db.prepare(sql)))
+      .then(() => undefined)
+      .catch((error) => {
+        telegramBotSchemaPromises.delete(db);
+        throw error;
+      });
+    telegramBotSchemaPromises.set(db, schemaPromise);
+  }
+
+  await schemaPromise;
 }
 
 function encryptionSecret(env: Env): string {

@@ -1,5 +1,12 @@
 # Operations Runbook
 
+## First-contact `/start` latency
+- The `/start` welcome text is intentionally unchanged.
+- Webhook authentication provisions only the dedicated `telegram_bots` table/index; it must not trigger the full analytics/BRVIN schema initializer.
+- First-seen and `/start` analytics writes run after the welcome has been delivered. Command-menu sync and Google OAuth token prefetch remain background preparation.
+- Use `telegram_webhook_authenticated.authenticationMs` and `telegram_start_welcome_delivery.deliveryMs` in Worker logs to separate authentication/D1 latency from Telegram's outbound message latency.
+- Do not move full analytics migrations, BRVIN readiness checks, Gemini generation, or command-menu sync back in front of the welcome.
+
 ## First checks
 1. Confirm Worker configuration.
 2. Confirm Queue consumer and Durable Object.

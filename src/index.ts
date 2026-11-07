@@ -382,6 +382,7 @@ async function handleFatmanModeCallback(
 }
 
 async function handleTelegramWebhook(request: Request, env: Env, requestId: string, ctx: ExecutionContext): Promise<Response> {
+  const webhookStartedAt = Date.now();
   const receivedSecret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")?.trim() ?? "";
   if (!receivedSecret) {
     logger.warn("telegram_webhook_unauthorized", { requestId });
@@ -411,6 +412,12 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     logger.warn("telegram_webhook_unauthorized", { requestId });
     return withRequestId(json({ ok: false, error: "UNAUTHORIZED" }, 401), requestId);
   }
+
+  logger.info("telegram_webhook_authenticated", {
+    requestId,
+    botConnectionId: bot.connectionId,
+    authenticationMs: Date.now() - webhookStartedAt,
+  });
 
   // findTelegramBotByWebhookSecret already authenticated this exact webhook
   // secret and returned the current persisted bot status. Do not issue a second
@@ -472,7 +479,11 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   }
 
   const analyticsUser = buildAnalyticsUser(message!, chatId);
-  queueAnalytics(ctx, "user_seen", () => recordUserSeen(env, analyticsUser));
+  // Do not start first-contact analytics/schema work before /start delivers its
+  // welcome. Other updates retain the same first-seen tracking behavior.
+  if (!isStart(text)) {
+    queueAnalytics(ctx, "user_seen", () => recordUserSeen(env, analyticsUser));
+  }
 
   if (isTelegramVideoMessage(message)) {
     const notice = await jobStoreRequest<{ notify: boolean }>(env, chatId, {
@@ -521,14 +532,29 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   }
 
   if (isStart(text)) {
-    queueAnalytics(ctx, "start", () => recordEvent(env, "start", analyticsUser));
+    logger.info("telegram_start_received", {
+      requestId,
+      botConnectionId: bot.connectionId,
+      webhookAuthenticationMs: Date.now() - webhookStartedAt,
+    });
 
-    // The webhook has already authenticated this exact bot and decrypted its
-    // token. Deliver the welcome first with that credential, avoiding another
-    // D1 lookup/decryption before the first visible response.
-    await bestEffortTelegram("start", () =>
+    // Send the original welcome before starting first-seen/event writes. A
+    // first request in a fresh isolate must not wait behind analytics schema
+    // setup or other non-essential initialization.
+    const welcomeStartedAt = Date.now();
+    const welcomeDelivery = await bestEffortTelegram("start", () =>
       sendTelegramMessageWithToken(bot.token, chatId, buildStartText()),
     );
+    logger.info("telegram_start_welcome_delivery", {
+      requestId,
+      botConnectionId: bot.connectionId,
+      deliveryMs: Date.now() - welcomeStartedAt,
+      delivered: Boolean(welcomeDelivery),
+    });
+
+    // Analytics are still recorded, but only after the welcome has been sent.
+    queueAnalytics(ctx, "user_seen", () => recordUserSeen(env, analyticsUser));
+    queueAnalytics(ctx, "start", () => recordEvent(env, "start", analyticsUser));
 
     // These are preparation tasks, not prerequisites for the welcome. Start
     // them only after the message has been delivered so neither can sit in
