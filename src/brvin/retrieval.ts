@@ -100,7 +100,7 @@ const QUERY_STOP_WORDS = new Set([
   "for", "from", "had", "has", "have", "how", "in", "into", "is", "it", "its", "of",
   "on", "or", "our", "please", "should", "that", "the", "their", "them", "there", "these",
   "this", "those", "to", "was", "were", "what", "when", "where", "which", "who", "why",
-  "will", "with", "would", "you", "your", "pdf", "page", "fatman", "edition", "second",
+  "will", "with", "would", "you", "your", "pdf", "page", "fatman", "edition",
   "2026", "book", "chapter", "explain", "describe", "tell", "me", "about",
 ]);
 
@@ -127,7 +127,7 @@ export function isBrvinPassageRelevant(query: string, passage: string): boolean 
   const queryTerms = meaningfulBrvinTerms(query);
   if (queryTerms.size === 0) return false;
   const coverage = brvinTermCoverage(query, passage);
-  const minimumCoverage = queryTerms.size <= 2 ? 0.5 : 0.6;
+  const minimumCoverage = queryTerms.size <= 2 ? 0.5 : 0.75;
   const minimumMatches = queryTerms.size <= 2 ? 1 : Math.max(2, Math.ceil(queryTerms.size * minimumCoverage));
   return coverage >= minimumCoverage && queryTerms.size * coverage >= minimumMatches;
 }
@@ -426,6 +426,9 @@ export async function retrieveBrvinProjectContextForProject(
       }
     }
 
+    const rerankingEnabled = env.BRVIN_RERANKING_ENABLED?.trim().toLowerCase() !== "false";
+    const rerankingMinScore = boundedThreshold(env.BRVIN_RERANKING_MIN_SCORE, 0.4);
+
     const settled = await Promise.allSettled(normalizedQueries.map(async (query) => {
       const result = await instance.search({
         messages: [{ role: "user", content: query }],
@@ -464,8 +467,6 @@ export async function retrieveBrvinProjectContextForProject(
     const minScore = Number.isFinite(minScoreValue)
       ? Math.min(1, Math.max(0, minScoreValue))
       : 0.2;
-    const rerankingEnabled = env.BRVIN_RERANKING_ENABLED?.trim().toLowerCase() !== "false";
-    const rerankingMinScore = boundedThreshold(env.BRVIN_RERANKING_MIN_SCORE, 0.4);
     const bestById = new Map<string, BrvinPassage>();
     const fingerprints = new Set<string>();
     const pageCounts = new Map<string, number>();
