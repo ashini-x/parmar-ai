@@ -6,7 +6,7 @@ import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexEr
 import { buildFatmanBookVerificationPages, buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
 import { retrieveFatmanContext } from "./retrieval";
 import { getGoogleAccessToken } from "../auth/google";
-import { fatmanExpectedPageCount, fatmanIndexPageKey } from "./library";
+import { fatmanExpectedPageCount, fatmanIndexPageKey, inferFatmanPdfPageCountFromVisionOutputs } from "./library";
 import type { FatmanImportJob } from "./import";
 import { brvinDeletionProgressPercent, brvinDeletionSearchPageRequest } from "./deletion";
 import { chunkFatmanPages, FATMAN_INDEX_PAGE_CONCURRENCY, fatmanIndexMonitorDelayMs } from "./indexing-policy";
@@ -85,6 +85,69 @@ function fatmanParamsFromPayload(payload: unknown): FatmanImportParams {
     page: typeof record.page === "number" ? record.page : undefined,
     retryAttempt: typeof record.retryAttempt === "number" ? record.retryAttempt : undefined,
   };
+}
+
+
+/**
+ * Resolve and persist the exact PDF page count for a new BRVIN Teachers
+ * source. Vision OCR emits one output JSON object per page (batchSize=1).
+ * The zero sentinel is replaced only when every page 1..N is present.
+ */
+async function detectAndPersistBrvinPdfPageCount(
+  env: Env,
+  step: WorkflowStep,
+  job: FatmanImportJob,
+): Promise<number> {
+  const known = fatmanExpectedPageCount(job);
+  if (known > 0) return known;
+  if (!job.book_id || job.book_id !== job.id || !env.DB) {
+    throw new Error("The PDF page count is unknown and this import is not a valid BRVIN library source.");
+  }
+
+  const inventory = await step.do("inventory Google Vision output to detect the exact PDF page count", async () =>
+    listFatmanVisionOutputObjects(env, job, 2_001));
+  const pageCount = inferFatmanPdfPageCountFromVisionOutputs(
+    inventory.objects,
+    fatmanVisionOutputPrefix(job),
+    inventory.truncated,
+  );
+
+  await step.do("persist the Vision-derived PDF page count in BRVIN", async () => {
+    const now = Date.now();
+    await env.DB!.batch([
+      env.DB!.prepare(
+        "UPDATE fatman_import_jobs SET page_count=?,updated_at=? WHERE id=? AND (page_count=0 OR page_count=?)",
+      ).bind(pageCount, now, job.id, pageCount),
+      env.DB!.prepare(
+        "UPDATE fatman_books SET page_count=?,updated_at=? WHERE id=? AND (page_count=0 OR page_count=?)",
+      ).bind(pageCount, now, job.id, pageCount),
+      env.DB!.prepare(
+        "UPDATE brvin_books SET page_count=?,updated_at=? WHERE id=? AND (page_count=0 OR page_count=?)",
+      ).bind(pageCount, now, job.id, pageCount),
+    ]);
+    const [importRow, fatmanRow, brvinRow] = await Promise.all([
+      env.DB!.prepare("SELECT page_count FROM fatman_import_jobs WHERE id=? LIMIT 1").bind(job.id).first<{ page_count: number }>(),
+      env.DB!.prepare("SELECT page_count FROM fatman_books WHERE id=? LIMIT 1").bind(job.id).first<{ page_count: number }>(),
+      env.DB!.prepare("SELECT page_count FROM brvin_books WHERE id=? LIMIT 1").bind(job.id).first<{ page_count: number }>(),
+    ]);
+    if ([importRow, fatmanRow, brvinRow].some((row) => !row || Number(row.page_count) !== pageCount)) {
+      throw new Error("The exact PDF page count could not be persisted consistently across the BRVIN source records.");
+    }
+    await recordBrvinActivity(env, {
+      importId: job.id,
+      bookId: job.book_id,
+      agent: "PDF page-count detector",
+      phase: "ocr",
+      eventType: "source.page_count_detected",
+      status: "completed",
+      message: "BRVIN derived the exact PDF page count from the complete, consecutive Google Vision page-output inventory.",
+      details: { pageCount, method: "vision_output_inventory", outputPrefix: inventory.prefix },
+    });
+    return { pageCount, recordsVerified: 3 };
+  });
+
+  job.page_count = pageCount;
+  return pageCount;
 }
 
 
@@ -717,6 +780,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
       }
 
       if (params.task === "resume_index") {
+        expectedPages = await detectAndPersistBrvinPdfPageCount(this.env, step, importJob);
         const runId = params.runId;
         if (typeof runId !== "string" || !/^[a-f0-9]{8}$/u.test(runId)) {
           throw new Error("The Fatman index recovery parameters are invalid.");
@@ -1162,13 +1226,28 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         const completedPages = pages.filter((item) => item.status === "completed").length;
         const failedPages = pages.filter((item) =>
           item.status === "error" || item.status === "skipped" || item.status === "outdated");
+        // c/r/q/e/m = completed/running/queued/error/missing. The snapshot is
+        // persisted with the monitor event so consumer UIs never need to make
+        // an additional AI Search list request for every popup refresh.
+        const pageStateMap = Array.from({ length: expectedPages }, (_, index) => {
+          const state = byPage.get(index + 1)?.status;
+          return state === "completed" ? "c"
+            : state === "running" ? "r"
+              : state === "queued" ? "q"
+                : state === "error" || state === "skipped" || state === "outdated" ? "e"
+                  : "m";
+        }).join("");
         await step.do("save Fatman indexing progress " + monitorSequence, async () => {
           await updateFatmanImportProgress(this.env, completedPages, importId);
           if (importJob.book_id) await recordBrvinActivity(this.env, {
             importId, bookId: importJob.book_id, agent: "Index monitor specialist",
             phase: "indexing", eventType: "index.monitor_pass", status: failedPages.length ? "warning" : "running",
             message: "Index monitor checked " + completedPages + " of " + expectedPages + " pages; " + failedPages.length + " failed pages need attention.",
-            details: { completedPages, expectedPages, failedPages: failedPages.length, monitorSequence, repairPass, nextMonitorDelayMs: fatmanIndexMonitorDelayMs(monitorSequence + 1, expectedPages) },
+            details: {
+              completedPages, expectedPages, failedPages: failedPages.length, monitorSequence, repairPass,
+              nextMonitorDelayMs: fatmanIndexMonitorDelayMs(monitorSequence + 1, expectedPages),
+              pageStateMap,
+            },
           });
           return { completedPages, failedPages: failedPages.length };
         });
@@ -1236,6 +1315,9 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           getFatmanVisionOperation(this.env, operationName, expectedOutputUri));
         if (result.error) throw new Error(result.error);
         if (result.done) {
+          if (expectedPages === 0) {
+            expectedPages = await detectAndPersistBrvinPdfPageCount(this.env, step, importJob);
+          }
           const outputInventory = await step.do("verify Google Vision GCS output files", async () =>
             listFatmanVisionOutputObjects(this.env, importJob, expectedPages));
           const outputNames = new Set(outputInventory.objects.map(item => item.name));
