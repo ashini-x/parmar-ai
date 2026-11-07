@@ -1177,13 +1177,25 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
 
       // Begin independent context reads before the analytics writes below. This
       // overlaps D1/DO latency without changing either read's fallback policy.
+      const contextFatmanModeSnapshot = (claim.record.fatmanModeSnapshot ?? job.fatmanModeSnapshot) === true;
+      const fallbackProfile: StudentProfile = {
+        version: 2,
+        targetExam: "SSC (not specified)",
+        recentTopics: [],
+        recentSubjects: [],
+        attentionTopics: [],
+        revisionQueue: [],
+        learningSignals: [],
+        questionCount: 0,
+        lastUpdatedAt: 0,
+      };
       const questionContextPromise = loadQuestionContextInParallel(
         () => getStudentProfile(env, job.chatId),
         () => jobStoreRequest<{ ok: true; recentConversation: ConversationTurn[] }>(env, job.chatId, {
           action: "get_conversation",
           botConnectionId: job.botConnectionId,
           updateId: job.updateId,
-          fatmanModeSnapshot: (claim.record.fatmanModeSnapshot ?? job.fatmanModeSnapshot) === true,
+          fatmanModeSnapshot: contextFatmanModeSnapshot,
         }).then((result) => Array.isArray(result.recentConversation) ? result.recentConversation : []),
         (profileReadError) => {
           logger.error("student_profile_read_failed", {
@@ -1191,17 +1203,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             updateId: job.updateId,
             error: profileReadError instanceof Error ? profileReadError.message : String(profileReadError),
           });
-          return {
-            version: 2,
-            targetExam: "SSC (not specified)",
-            recentTopics: [],
-            recentSubjects: [],
-            attentionTopics: [],
-            revisionQueue: [],
-            learningSignals: [],
-            questionCount: 0,
-            lastUpdatedAt: 0,
-          };
+          return fallbackProfile;
         },
         (conversationError) => {
           logger.warn("student_conversation_read_failed", {
