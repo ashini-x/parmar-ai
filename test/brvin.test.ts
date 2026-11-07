@@ -59,8 +59,16 @@ describe("BRVIN governed retrieval", () => {
         {
           id: "allowed-page-14",
           text: "Article 14 guarantees equality before the law and equal protection of the laws.",
-          score: 0.91,
+          score: 0.99,
+          scoring_details: { vector_score: 0.88, keyword_score: 3.1, reranking_score: 0.91 },
           item: { key: "brvin/books/" + bookId + "/pages/page-000014.txt" },
+        },
+        {
+          id: "weak-rerank-page-15",
+          text: "Article 14 guarantees equality before the law and equal protection of the laws.",
+          score: 0.99,
+          scoring_details: { vector_score: 0.96, keyword_score: 8.4, reranking_score: 0.38 },
+          item: { key: "brvin/books/" + bookId + "/pages/page-000015.txt" },
         },
         {
           id: "unauthorized-page",
@@ -82,6 +90,7 @@ describe("BRVIN governed retrieval", () => {
     expect(context.passages).toEqual([
       expect.objectContaining({
         id: "allowed-page-14", bookId, bookTitle: "Constitution of India", pdfPage: 14,
+        score: 0.91,
       }),
     ]);
     expect(search).toHaveBeenCalledWith({
@@ -92,6 +101,11 @@ describe("BRVIN governed retrieval", () => {
           match_threshold: 0.3,
           retrieval_type: "hybrid",
           filters: { folder: { $in: ["brvin/books/" + bookId + "/pages/"] } },
+        },
+        reranking: {
+          enabled: true,
+          model: "@cf/baai/bge-reranker-base",
+          match_threshold: 0.4,
         },
       },
     });
@@ -105,8 +119,29 @@ describe("BRVIN governed retrieval", () => {
     const excerpt = extractBrvinEvidenceExcerpt(query, longPage);
     expect(excerpt).toContain("Drainage");
     expect(excerpt).toContain("drawdown");
-    expect(excerpt.length).toBeLessThanOrEqual(4_500);
+    expect(excerpt.length).toBeLessThanOrEqual(1_800);
     expect(isBrvinPassageRelevant(query, "Unrelated historical introduction without those details.")).toBe(false);
+  });
+
+  it("keeps ordinal law terms and rejects a neighbouring-law mismatch", () => {
+    expect(isBrvinPassageRelevant(
+      "Newton's second law",
+      "Newton's second law states that net force equals mass multiplied by acceleration.",
+    )).toBe(true);
+    expect(isBrvinPassageRelevant(
+      "Newton's second law",
+      "Newton's first law explains inertia and an object's resistance to changes in motion.",
+    )).toBe(false);
+  });
+
+  it("selects a focused evidence window and bounds even a short-page excerpt", () => {
+    const query = "force mass acceleration";
+    const content = ("Unrelated background text with no matching scientific terms. ").repeat(42) +
+      "For a constant mass, net force equals mass multiplied by acceleration.";
+    const excerpt = extractBrvinEvidenceExcerpt(query, content);
+    expect(excerpt).toContain("net force equals mass");
+    expect(excerpt.length).toBeLessThanOrEqual(1_800);
+    expect(excerpt.length).toBeLessThan(content.length);
   });
 
   it("does not expose content for an inactive or unknown project", async () => {
