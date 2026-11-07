@@ -1,6 +1,6 @@
 import type { Env, GeminiImageInput } from "../config/env";
 import { MAX_PHOTO_COUNT, MAX_SINGLE_PHOTO_BYTES, MAX_TOTAL_PHOTO_BYTES } from "../config/env";
-import { getActiveTelegramBot, getTelegramBotByConnectionId, hasTelegramBotRecords } from "./bot-store";
+import { getActiveTelegramBot, getTelegramBotApiToken, hasTelegramBotRecords } from "./bot-store";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
@@ -208,7 +208,7 @@ async function telegramApiWithToken<T>(
 async function resolveTelegramToken(env: Env, botConnectionId?: string): Promise<string> {
   let token: string | undefined;
   if (botConnectionId) {
-    token = (await getTelegramBotByConnectionId(env, botConnectionId))?.token;
+    token = (await getTelegramBotApiToken(env, botConnectionId)) ?? undefined;
   } else {
     const active = await getActiveTelegramBot(env);
     if (active) {
