@@ -371,21 +371,30 @@ It targets the correlated `book_id + event_type + latest created_at` lookup. The
 - Stop dashboard polling first and close unused admin/monitor tabs.
 - Avoid repeated manual refreshes while the account is at its daily read cap; D1 can return error 7500 until midnight UTC.
 - Keep active production databases: `parmar-ai-admin-prod`, `brvin-teachers-app`, `askmoina-prod`, `askmoina-preview` and `parmar-ai-admin-preview`.
-- `askmoina-ops` is currently only a candidate orphan: it had no discovered Worker D1 binding or code reference. Do not delete until its tables and data have been inventoried and a verified export/backup is available after the D1 cap resets.
+- `askmoina-ops` has no current binding among the eight deployed Workers and no repository code reference was found, but it is **not empty**. A read-only inventory on 7 November found six user tables and 12 user rows: `admin_oauth_states` 0, `admin_sessions` 0, `provider_events` 8, `provider_health` 2, `request_sessions` 2; D1 also maintains `_cf_KV`. Size: 81,920 bytes. A Cloudflare SQL export completed and generated a temporary signed URL, but the dump could not be retrieved into durable backup storage in this session. Do not delete this database until a durable export has been downloaded/stored, the historical provider telemetry is reviewed, and deletion is separately approved.
 - The configured Veda production and preview database IDs currently return Cloudflare 404 and are absent from the D1 inventory. Keep this as a resource/configuration discrepancy; do not recreate or repoint either binding without separately reviewing the Veda isolation and migration state.
 
 ## 17. Retire the legacy BRVIN Connect provider
 
 The old `BRVIN Connect` GitHub App and Cloudflare OAuth vault belong to the historical Project Factory proposal, not to the current teacher knowledge-management or consumer deployment flow. Current BRVIN Teachers uses its own application/environment Service Bindings; GitHub repository changes and Cloudflare deployments use the separately authorized ChatGPT connections.
 
-The protected **Revoke BRVIN Connect and erase stored credentials** action was deployed in Core release #868. It has not yet been executed; the last read-only provider status still showed GitHub and Cloudflare as `connected` with encrypted credential bundles present. It requires the administrator to open BRVIN Admin and type `UNINSTALL BRVIN CONNECT` exactly. It:
+The protected **Revoke BRVIN Connect and erase stored credentials** action was deployed in Core release #868. It has not yet been executed; the latest read-only D1 check on 7 November still showed both GitHub and Cloudflare as `connected` with encrypted credential bundles present. It is exposed in **BRVIN Admin → Legacy provider settings** and requires the authenticated administrator to type `UNINSTALL BRVIN CONNECT` exactly. The endpoint also checks same-origin protection. The current remote session did not have the Core Admin session cookie, so it could not invoke this protected action. The connected Cloudflare OAuth integration also lacks the API-token-only `OAuth Client Read` and `OAuth Client Write` permissions; attempting to list the OAuth clients returned HTTP 403. Do not bypass the admin route or manually erase the encrypted credentials before provider-side revocation. When the authorized admin session is available, the action:
 1. Verifies the stored GitHub App installation ID/account against GitHub's current installation list and uninstalls only the recorded `ashini-x` installation.
 2. Revokes the legacy Cloudflare OAuth refresh/access tokens.
 3. Marks the two provider records revoked and erases their encrypted private key/client secret from Core D1.
 4. Retains non-secret audit metadata and reports partial failure instead of claiming success.
 
-It does not delete the GitHub App registration or the Cloudflare OAuth client registration. After successful credential retirement:
+It does not delete the GitHub App registration or the Cloudflare OAuth client registration. After the protected action reports both providers revoked, finish the account registrations:
 - Delete `BRVIN Connect` (`brvin-connect`) from GitHub Developer Settings → GitHub Apps. Verify no other team or system uses the App before deleting the registration.
 - Delete the obsolete Cloudflare OAuth client from the account's OAuth client settings only if it was created exclusively for BRVIN Connect and is not shared by another integration.
 
 The legacy OAuth client and App-registration deletion steps remain administrator-console actions; do not confuse uninstalling an App installation with deleting the App registration itself.
+
+The GitHub App registration is owned by the `ashini-x` personal account (`BRVIN Connect`, slug `brvin-connect`, recorded installation `178850001`). GitHub's documented deletion path is **Settings → Developer settings → GitHub Apps → BRVIN Connect → Advanced → Delete GitHub App**; deleting the registration also uninstalls any remaining installations. Confirm the exact app name before accepting GitHub's final deletion prompt. See [GitHub's deletion guide](https://docs.github.com/en/apps/maintaining-github-apps/deleting-a-github-app).
+
+The Cloudflare OAuth client must be identified by its registered redirect URI `https://parmar-ai.thenewtongs.workers.dev/admin/brvin/connect/cloudflare/callback` and the BRVIN Connect name before deletion. The account's Manage Account → OAuth clients page is the UI route. API deletion requires a Cloudflare API token with `OAuth Client Write`; enumeration requires `OAuth Client Read`. The current OAuth connector does not satisfy either requirement. See [Cloudflare OAuth Clients API](https://developers.cloudflare.com/api/resources/iam/subresources/oauth_clients/) and [OAuth client setup](https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/).
+
+
+## 18. BRVIN Teachers pilot OCR-output diagnosis
+
+For the failed BRVIN Teachers Physics source, use the authenticated read-only endpoint `GET /admin/api/brvin/status?id=cbe1dc5d-ac02-4809-ac18-7e00ac305c96`. Its `pipeline.vision` object includes the Vision operation's reported `outputDestinations`, the registered `expectedOutputUri`, and the bounded object list under that prefix. The endpoint requires the same Core Admin session as `/admin/brvin`. Compare those values before any resume or new OCR operation; do not upload the PDF again.
