@@ -771,7 +771,7 @@ export async function startBrvinBookUpload(
 
     const uploadPayload = {
       title: body.title, filename: body.filename, sha256: body.sha256, size: body.size,
-      pageCount: body.pageCount, costConfirmed: body.costConfirmed,
+      costConfirmed: body.costConfirmed,
       dedupeScope: options.dedupeScope ?? "legacy",
     };
     const forwardedHeaders = new Headers(request.headers);
