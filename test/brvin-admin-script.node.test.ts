@@ -4,7 +4,7 @@ import { brvinAdminScript } from "../src/brvin/admin";
 import { readFileSync } from "node:fs";
 
 describe("BRVIN browser script contract", () => {
-  it("uses manual refresh only and includes the targeted D1 activity index", async () => {
+  it("refreshes only active source deletions and includes the targeted D1 activity index", async () => {
     const brvinScript = await brvinAdminScript().text();
     const brvinSource = readFileSync(new URL("../src/brvin/admin.ts", import.meta.url), "utf8");
     const fatmanImporter = readFileSync(new URL("../src/fatman/admin.ts", import.meta.url), "utf8");
@@ -17,6 +17,10 @@ describe("BRVIN browser script contract", () => {
     expect(brvinScript).not.toContain("setInterval(");
     expect(brvinScript).toContain("function refreshManually()");
     expect(brvinScript).toContain("refresh manually to see new events");
+    expect(brvinScript).toContain("function scheduleDeletionRefresh(delay)");
+    expect(brvinScript).toContain('some(job=>job.status==="deleting")');
+    expect(brvinScript).toContain("document.hidden?15000:5000");
+    expect(brvinScript).toContain('document.addEventListener("visibilitychange"');
     expect(fatmanImporter).not.toContain("setInterval(");
     expect(fatmanImporter).not.toContain("refreshTimer");
     expect(fatmanMonitor).not.toContain("setInterval(");
