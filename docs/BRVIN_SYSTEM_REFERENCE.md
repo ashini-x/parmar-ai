@@ -715,3 +715,22 @@ Also update:
 - [Operations Runbook](BRVIN_OPERATIONS_RUNBOOK.md) for admin or operational changes.
 
 The canonical principle: **code and deployed configuration define the implementation; this document explains the current design and where to verify it.** Never use this guide as a reason to skip tests, release manifests, or a targeted check after a material code/infrastructure change.
+
+
+### 9.7 D1 usage optimization and legacy provider retirement — implementation in review
+
+The 6 November 2026 free-tier D1 usage incident was primarily driven by repeated administrative dashboard queries, not by the teacher knowledge ingestion pipeline. Historical Cloudflare analytics attributed approximately 3.69 million rows read to the per-book latest Vision-cleanup event lookup (1,161 executions) and approximately 888 thousand to the seven-day activity summary (1,034 executions) in the reported daily window.
+
+The maintenance branch `fix/d1-manual-admin-refresh-and-legacy-connect-retirement`:
+- Removes automatic browser polling from BRVIN Admin, the Main Admin Control Center, Fatman Admin, Fatman Library and Fatman Monitor. Each screen loads one snapshot on entry and uses its existing manual Refresh control.
+- Keeps all server-side Cloudflare Workflows (OCR, indexing, retries, QA, cleanup and retention) independent of browser sessions.
+- Adds a partial index for per-book Vision cleanup-event lookups:
+  `idx_brvin_activity_book_vision_cleanup(book_id, created_at DESC, id DESC)`, restricted to the two Vision cleanup event types.
+- Adds a protected, typed-confirmation action to uninstall the recorded `ashini-x` installation of the legacy BRVIN Connect GitHub App, revoke legacy Cloudflare OAuth tokens and erase both encrypted credential bundles from `brvin_provider_connections`.
+- Deliberately does not remove active consumer Service Bindings, BRVIN application/environment identities, GitHub repository access used by the current engineering connection, or production D1 records.
+
+The GitHub App registration and Cloudflare OAuth client registration are separate account-owned objects. The retirement action removes the GitHub installation and provider tokens, but the administrator must still delete the GitHub App registration in GitHub Developer Settings and delete the Cloudflare OAuth client in **Manage Account → OAuth clients** only after confirming it is dedicated to the old BRVIN Connect integration. The [GitHub REST API documentation](https://docs.github.com/en/rest/apps/apps) documents deleting an installation separately from managing the App registration. Cloudflare documents its [OAuth token revocation endpoint](https://developers.cloudflare.com/fundamentals/oauth/integrate-with-cloudflare/) and [OAuth client registry](https://developers.cloudflare.com/api/resources/iam/) separately.
+
+The D1 quota incident also identified `askmoina-ops` as a possible orphan (no Worker D1 binding or repository reference was found). It is not deleted here: its data inventory/export could not be completed while the account was at the daily D1 cap. Back it up and inspect it after the quota resets before considering deletion. The Veda production/preview IDs recorded in AskMoina configuration currently return 404 from D1; treat this as a separate resource/configuration discrepancy, not a cleanup target.
+
+Do not interpret this branch as production-complete until PR checks, merge and the existing main release workflow have passed. The previous Core release for PR #109 rolled back after the live smoke runner timed out on the public `parmar-ai` root and `/health` endpoints; this known release-gate issue must be accounted for before another Core production rollout.

@@ -16,6 +16,7 @@ import {
   completeBrvinGitHubManifest,
   completeBrvinCloudflareOAuth,
   configureBrvinCloudflareOAuth,
+  decommissionLegacyBrvinConnect,
   startBrvinGitHubManifest,
   startBrvinCloudflareOAuth,
 } from "../src/brvin/connect-wizard";
@@ -88,6 +89,12 @@ class MemoryD1 {
       this.connections.set(String(values[0]), {
         provider: values[0], status: values[1], metadata_json: values[2],
         secret_ciphertext: values[3], created_at: values[4], updated_at: values[5],
+      });
+    } else if (sql.includes("UPDATE brvin_provider_connections")) {
+      const provider = String(values[3]);
+      const row = this.connections.get(provider);
+      if (row) this.connections.set(provider, {
+        ...row, status: values[0], metadata_json: values[1], secret_ciphertext: "", updated_at: values[2],
       });
     } else if (sql.includes("INSERT INTO brvin_oauth_states")) {
       this.states.set(String(values[0]), {
@@ -346,5 +353,187 @@ describe("BRVIN Connect Application wizard", () => {
     expect(JSON.stringify(body)).not.toContain("encrypted-private-key");
     expect(JSON.stringify(body)).not.toContain("privateKey");
     expect(JSON.stringify(body)).toContain("brvin-connect");
+  });
+});
+
+describe("Legacy BRVIN Connect retirement", () => {
+  beforeEach(() => {
+    ensure.mockClear();
+    activity.mockClear();
+    vi.unstubAllGlobals();
+  });
+
+  it("requires the exact typed confirmation and makes no provider calls otherwise", async () => {
+    const db = new MemoryD1();
+    db.connections.set("github", {
+      provider: "github", status: "connected", metadata_json: "{}",
+      secret_ciphertext: "preserved", updated_at: Date.now(),
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await decommissionLegacyBrvinConnect(
+      env(db),
+      request("https://parmar.example/admin/api/brvin/connect/revoke", { confirmation: "DELETE APP" }),
+    );
+    expect(response.status).toBe(400);
+    const errorBody = await response.json() as { error?: string };
+    expect(errorBody.error).toContain("UNINSTALL BRVIN CONNECT");
+    expect(db.connections.get("github")?.status).toBe("connected");
+    expect(db.connections.get("github")?.secret_ciphertext).toBe("preserved");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("uninstalls only the recorded ashini-x GitHub installation, revokes Cloudflare tokens, and erases both stored bundles", async () => {
+    const db = new MemoryD1();
+    const keyPair = await crypto.subtle.generateKey(
+      { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const der = new Uint8Array(await crypto.subtle.exportKey("pkcs8", keyPair.privateKey));
+    let binary = "";
+    for (const byte of der) binary += String.fromCharCode(byte);
+    const privateKey = "-----BEGIN PRIVATE KEY-----\n" + btoa(binary) + "\n-----END PRIVATE KEY-----";
+
+    const githubStart = await startBrvinGitHubManifest(
+      env(db),
+      request("https://parmar.example/admin/api/brvin/connect/github/manifest", {}),
+    );
+    const githubStartBody = await githubStart.json() as { action: string };
+    const githubState = new URL(githubStartBody.action).searchParams.get("state")!;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      id: 123, slug: "brvin-connect", name: "BRVIN Connect",
+      html_url: "https://github.com/apps/brvin-connect", pem: privateKey,
+      permissions: { ...BRVIN_GITHUB_REQUIRED_PERMISSIONS },
+    }), { status: 201, headers: { "content-type": "application/json" } })));
+    const githubCallback = await completeBrvinGitHubManifest(
+      env(db),
+      request("https://parmar.example/admin/brvin/connect/github/callback?code=manifest-code&state=" + encodeURIComponent(githubState)),
+    );
+    expect(githubCallback.status).toBe(200);
+    const githubRow = db.connections.get("github")!;
+    const metadata = JSON.parse(String(githubRow.metadata_json));
+    db.connections.set("github", {
+      ...githubRow,
+      status: "connected",
+      metadata_json: JSON.stringify({ ...metadata, installationId: 178850001, installationAccount: "ashini-x" }),
+    });
+
+    const cfConfigured = await configureBrvinCloudflareOAuth(
+      env(db),
+      request("https://parmar.example/admin/api/brvin/connect/cloudflare/configure", {
+        clientId: "BRVIN.Cloudflare.OAuth123",
+        clientSecret: "legacy-cloudflare-client-secret-123456",
+      }),
+    );
+    expect(cfConfigured.status).toBe(200);
+    const cfStarted = await startBrvinCloudflareOAuth(
+      env(db),
+      request("https://parmar.example/admin/api/brvin/connect/cloudflare/start", {}),
+    );
+    const cfStartBody = await cfStarted.json() as { authorizationUrl: string };
+    const cfState = new URL(cfStartBody.authorizationUrl).searchParams.get("state")!;
+    const connectFetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        access_token: "legacy-access-token",
+        refresh_token: "legacy-refresh-token",
+        expires_in: 900,
+        scope: BRVIN_CLOUDFLARE_REQUIRED_SCOPES.join(" "),
+      }), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        success: true, result: [{ id: "brvin-service" }], errors: [],
+      }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", connectFetch);
+    const cfCallback = await completeBrvinCloudflareOAuth(
+      env(db),
+      request("https://parmar.example/admin/brvin/connect/cloudflare/callback?code=oauth-code&state=" + encodeURIComponent(cfState)),
+    );
+    expect(cfCallback.status).toBe(200);
+    expect(db.connections.get("cloudflare")?.status).toBe("connected");
+
+    const retireFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/app/installations?per_page=100")) {
+        return new Response(JSON.stringify([{ id: 178850001, account: { login: "ashini-x" } }]), { status: 200 });
+      }
+      if (url.endsWith("/app/installations/178850001") && init?.method === "DELETE") {
+        return new Response(null, { status: 204 });
+      }
+      if (url === "https://dash.cloudflare.com/oauth2/revoke" && init?.method === "POST") {
+        return new Response("", { status: 200 });
+      }
+      return new Response(JSON.stringify({ message: "unexpected request" }), { status: 500 });
+    });
+    vi.stubGlobal("fetch", retireFetch);
+
+    const response = await decommissionLegacyBrvinConnect(
+      env(db),
+      request("https://parmar.example/admin/api/brvin/connect/revoke", { confirmation: "UNINSTALL BRVIN CONNECT" }),
+    );
+    const body = await response.json() as {
+      ok: boolean; partial: boolean;
+      github: { status: string; installationRemoved: boolean; appDeletionRequired: boolean };
+      cloudflare: { status: string; tokensRevoked: boolean; oauthClientDeletionRequired: boolean };
+    };
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.partial).toBe(false);
+    expect(body.github).toMatchObject({ status: "revoked", installationRemoved: true, appDeletionRequired: true });
+    expect(body.cloudflare).toMatchObject({ status: "revoked", tokensRevoked: true, oauthClientDeletionRequired: true });
+    expect(retireFetch).toHaveBeenCalledTimes(4);
+    const githubDelete = retireFetch.mock.calls.find(call => String(call[0]).endsWith("/app/installations/178850001"));
+    expect(githubDelete?.[1]?.method).toBe("DELETE");
+    const revokeCalls = retireFetch.mock.calls.filter(call => String(call[0]) === "https://dash.cloudflare.com/oauth2/revoke");
+    expect(revokeCalls).toHaveLength(2);
+    expect(String(revokeCalls[0][1]?.body)).toContain("token=legacy-refresh-token");
+    expect(String(revokeCalls[1][1]?.body)).toContain("token=legacy-access-token");
+    for (const provider of ["github", "cloudflare"]) {
+      expect(db.connections.get(provider)?.status).toBe("revoked");
+      expect(db.connections.get(provider)?.secret_ciphertext).toBe("");
+      expect(db.connections.get(provider)?.metadata_json).not.toContain("legacy-access-token");
+      expect(db.connections.get(provider)?.metadata_json).not.toContain("legacy-refresh-token");
+    }
+  });
+
+  it("refuses an ambiguous GitHub installation and preserves the encrypted key for manual review", async () => {
+    const db = new MemoryD1();
+    const keyPair = await crypto.subtle.generateKey(
+      { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const der = new Uint8Array(await crypto.subtle.exportKey("pkcs8", keyPair.privateKey));
+    let binary = "";
+    for (const byte of der) binary += String.fromCharCode(byte);
+    const privateKey = "-----BEGIN PRIVATE KEY-----\n" + btoa(binary) + "\n-----END PRIVATE KEY-----";
+    const start = await startBrvinGitHubManifest(env(db), request("https://parmar.example/admin/api/brvin/connect/github/manifest", {}));
+    const startBody = await start.json() as { action: string };
+    const state = new URL(startBody.action).searchParams.get("state")!;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      id: 123, slug: "brvin-connect", name: "BRVIN Connect", pem: privateKey,
+      permissions: { ...BRVIN_GITHUB_REQUIRED_PERMISSIONS },
+    }), { status: 201, headers: { "content-type": "application/json" } })));
+    await completeBrvinGitHubManifest(env(db), request("https://parmar.example/admin/brvin/connect/github/callback?code=manifest-code&state=" + encodeURIComponent(state)));
+    const row = db.connections.get("github")!;
+    const metadata = JSON.parse(String(row.metadata_json));
+    db.connections.set("github", { ...row, status: "connected", metadata_json: JSON.stringify({ ...metadata, installationId: 178850001, installationAccount: "ashini-x" }) });
+
+    const retireFetch = vi.fn(async () => new Response(JSON.stringify([
+      { id: 178850001, account: { login: "ashini-x" } },
+      { id: 178850002, account: { login: "ashini-x" } },
+    ]), { status: 200 }));
+    vi.stubGlobal("fetch", retireFetch);
+    const response = await decommissionLegacyBrvinConnect(
+      env(db),
+      request("https://parmar.example/admin/api/brvin/connect/revoke", { confirmation: "UNINSTALL BRVIN CONNECT" }),
+    );
+    const body = await response.json() as { partial: boolean; github: { status: string; error: string } };
+    expect(response.status).toBe(200);
+    expect(body.partial).toBe(true);
+    expect(body.github.status).toBe("failed");
+    expect(body.github.error).toContain("More than one BRVIN GitHub installation matches");
+    expect(db.connections.get("github")?.status).toBe("connected");
+    expect(db.connections.get("github")?.secret_ciphertext).not.toBe("");
+    expect(retireFetch).toHaveBeenCalledTimes(1);
   });
 });

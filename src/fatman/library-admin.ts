@@ -116,7 +116,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/p
 const ROOT="/admin/api/fatman/", LIB=ROOT+"library/";
 const el=id=>document.getElementById(id);
 const fileInput=el("book-pdf"),titleInput=el("book-title"),uploadButton=el("upload"),statusEl=el("status"),progress=el("progress");
-let activeImportId=null,selectedFile=null,refreshTimer=null,uploading=false,lastStatus=null;
+let activeImportId=null,selectedFile=null,uploading=false,lastStatus=null;
 function say(message,isError=false){statusEl.textContent=message;statusEl.classList.toggle("error",isError);}
 async function api(path,options={}){const response=await fetch(path,{...options,credentials:"same-origin"});let data={};try{data=await response.json();}catch{}if(!response.ok||data.ok!==true)throw new Error(data.error||"The request could not be completed (HTTP "+response.status+").");return data;}
 function humanStatus(status){return ({ready:"Ready",processing:"Processing",uploading:"Uploading",uploaded:"Upload complete",failed:"Needs attention",needs_review:"Needs review"})[status]||String(status||"Waiting").replaceAll("_"," ");}
@@ -153,9 +153,6 @@ async function refreshCurrent(){
  }
  else if(job.status==="completed")say("This book has been processed and verified. It is now ready for questions in Fatman.");
  else if(job.status==="failed")say("This book needs attention: "+(job.error||"The processing step stopped.")+(job.canResume?" You can resume indexing without uploading the PDF again.":" Select the same PDF again to retry the upload."),true);
- if(job.status==="uploading"||job.status==="uploaded"||job.status==="processing"){
-  if(!refreshTimer)refreshTimer=setInterval(()=>refreshCurrent().then(refreshBooks).catch(e=>say("Could not refresh: "+e.message,true)),10000);
- }else if(refreshTimer){clearInterval(refreshTimer);refreshTimer=null;}
  await refreshBooks();
 }
 async function refreshBooks(){
@@ -226,7 +223,7 @@ async function uploadBook(){
    if(!response.ok||data.ok!==true)throw new Error(data.error||"The PDF transfer was interrupted.");
    offset=Number(data.uploadedBytes);progress.value=offset;
   }
-  say("Upload complete. Starting automatic OCR and search indexing…");
+  say("Upload complete. Server-side OCR and search indexing are starting…");
   await api(ROOT+"upload/"+encodeURIComponent(activeImportId)+"/complete",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
   await refreshCurrent();
  }catch(error){say("The process paused: "+error.message+" You can select this same PDF again to resume safely.",true);}
@@ -237,5 +234,5 @@ el("refresh").addEventListener("click",()=>refreshCurrent().catch(e=>say(e.messa
 el("resume-index").addEventListener("click",async()=>{if(!activeImportId)return;try{await api(ROOT+"upload/"+encodeURIComponent(activeImportId)+"/resume",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});await refreshCurrent();}catch(error){say("Could not resume: "+error.message,true);}});
 el("refresh-books").addEventListener("click",refreshBooks);
 refreshBooks();
-setInterval(()=>refreshBooks(),15000);
+
 </script></body></html>`;

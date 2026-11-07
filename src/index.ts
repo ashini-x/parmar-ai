@@ -61,6 +61,7 @@ import {
   completeBrvinGitHubManifest,
   configureBrvinCloudflareOAuth,
   discoverBrvinCloudflareWorkers,
+  decommissionLegacyBrvinConnect,
   listBrvinGitHubInstallations,
   listBrvinGitHubRepositories,
   selectBrvinGitHubInstallation,
@@ -2660,6 +2661,7 @@ const worker = {
           if (!isSameOriginAdminRequest(request, url.origin)) return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
           if (adminApiPath === "/admin/api/brvin/connections/challenge") return startBrvinConnectionVerification(env, request);
           if (adminApiPath === "/admin/api/brvin/connections/complete") return completeBrvinConnectionVerification(env, request);
+          if (adminApiPath === "/admin/api/brvin/connect/revoke") return decommissionLegacyBrvinConnect(env, request);
           if (adminApiPath === "/admin/api/brvin/connect/github/manifest") return startBrvinGitHubManifest(env, request);
           if (adminApiPath === "/admin/api/brvin/connect/github/installation") return selectBrvinGitHubInstallation(env, request);
           if (adminApiPath === "/admin/api/brvin/connect/cloudflare/configure") return configureBrvinCloudflareOAuth(env, request);
