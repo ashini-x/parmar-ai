@@ -233,6 +233,7 @@ export async function saveTelegramBot(
     input.lastVerifiedAt ?? now,
     input.disconnectedAt ?? (input.status === "disconnected" ? now : null),
   ).run();
+  invalidateTypingCredential(input.connectionId);
 
   const saved = await getTelegramBotByConnectionId(env, input.connectionId);
   if (!saved) throw new Error("Telegram bot connection could not be verified after saving.");
