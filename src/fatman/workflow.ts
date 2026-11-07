@@ -621,6 +621,13 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           throw new Error("External assets were deleted but one or more BRVIN/import registry rows remain; retry the deletion to finish database cleanup.");
         }
         await recordBrvinDeletionProgress(this.env, importId, {
+          phase: "registry",
+          completed: 1,
+          total: 1,
+          message: "The source's BRVIN book and import rows are gone; the final completion record is being written.",
+          extra: { registryRowsRemaining: 0 },
+        });
+        await recordBrvinDeletionProgress(this.env, importId, {
           phase: "complete",
           completed: 1,
           total: 1,
