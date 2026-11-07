@@ -13,7 +13,13 @@ describe("Parmar AI production worker", () => {
     const ctx = createExecutionContext();
 
     const healthEnv = Object.assign(Object.create(testEnv), {
-      DB: undefined,
+      // The health route verifies D1 through the BRVIN status RPCs. It must
+      // not run the application's schema migrations as part of a health probe.
+      DB: {
+        prepare: () => {
+          throw new Error("Health checks must not execute schema migrations.");
+        },
+      },
       BRVIN_SERVICE: {
         getProjectStatus: async () => ({ ok: true, ready: true, authorizedSourceCount: 1 }),
         getProjectStatusV2: async () => ({ ok: true, data: { projectId: "fatman", ready: true, authorizedSourceCount: 1 } }),

@@ -2068,6 +2068,22 @@ async function telegramSetupMethod(env: Env, method: string, payload: Record<str
   return data.result;
 }
 
+const HEALTH_SERVICE_PROBE_TIMEOUT_MS = 4_500;
+
+async function withHealthProbeTimeout<T>(probe: string, operation: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${probe}_timeout`)), HEALTH_SERVICE_PROBE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 async function buildHealth(env: Env) {
   if (!env.BRVIN_SERVICE) {
     const production = env.ENVIRONMENT === "production";
@@ -2084,13 +2100,13 @@ async function buildHealth(env: Env) {
   }
 
   try {
-    await ensureAnalyticsSchema(env);
-    // Keep the v1 check in place for current retrieval traffic while also
-    // exercising the new environment-bound v2 identity and project grant.
-    // Status probes do not reserve the project's monthly retrieval quota.
+    // Health must be read-only and bounded. Do not run the full application
+    // schema/migration chain here: the two BRVIN RPCs below already perform
+    // real D1-backed identity, grant and source-readiness checks.
+    // Keep both legacy and v2 checks because production retrieval uses both.
     const [status, v2Status] = await Promise.all([
-      env.BRVIN_SERVICE.getProjectStatus(),
-      env.BRVIN_SERVICE.getProjectStatusV2({ projectId: "fatman" }),
+      withHealthProbeTimeout("brvin_v1", env.BRVIN_SERVICE.getProjectStatus()),
+      withHealthProbeTimeout("brvin_v2", env.BRVIN_SERVICE.getProjectStatusV2({ projectId: "fatman" })),
     ]);
     const connected = status.ok === true;
     const authorizedSources = connected && Number.isSafeInteger(status.authorizedSourceCount)
@@ -2113,7 +2129,10 @@ async function buildHealth(env: Env) {
       brvinV2Ready: v2Ready,
       brvinV2AuthorizedSources: v2AuthorizedSources,
     };
-  } catch {
+  } catch (error) {
+    logger.error("health_dependency_probe_failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     return {
       ok: false,
       status: "degraded",
