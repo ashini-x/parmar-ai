@@ -80,57 +80,53 @@ Administrative mutations are server-validated; the dashboard is not treated as a
 
 ## Architecture
 
+The current production architecture is a **locked Telegram-first runtime** that separates webhook admission, per-chat operational state, durable Queue processing, model execution, Telegram delivery and D1 analytics.
+
+For the exact as-built lifecycle, latency boundaries, recovery constants, observability fields, and the copy-forward checklist for the next bot, see **[docs/TELEGRAM_BOT_ARCHITECTURE.md](docs/TELEGRAM_BOT_ARCHITECTURE.md)**. The high-level summary is in [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ~~~text
-                         +----------------------+
-                         |   Telegram Bot API   |
-                         +----------+-----------+
-                                    |
-                                    v
-                         +----------------------+
-                         |   Cloudflare Worker  |
-                         |  webhook / commands  |
-                         +----------+-----------+
-                                    |
-                                    v
-                         +----------------------+
-                         |   Durable Object     |
-                         | admission + state    |
-                         | conversation + jobs  |
-                         +-----+-----------+----+
-                               |           |
-                    +----------+           +----------------+
-                    v                                       v
-            +---------------+                       +---------------+
-            | Cloudflare    |                       | D1 analytics  |
-            | Queue         |                       | + quiz store  |
-            +-------+-------+                       +---------------+
-                    |
-                    v
-            +---------------+
-            | Vertex AI /   |
-            | Gemini        |
-            +-------+-------+
-                    |
-                    v
-            +----------------------+
-            | validated response   |
-            | / native Telegram   |
-            | quiz delivery        |
-            +----------------------+
+Telegram Bot API
+      |
+      v
+Cloudflare Worker
+(auth / commands / fast /start / question admission)
+      |
+      +---- /start -> send welcome first -> background analytics/menu/OAuth
+      |
+      +---- question -> per-chat Durable Object
+                         (dedupe / quota / leases / profile / recovery)
+                                      |
+                                      v
+                                Cloudflare Queue
+                                      |
+                                      v
+                                Queue consumer
+                                      |
+                                      v
+                                Vertex AI / Gemini
+                                (structured AnswerPacket)
+                                      |
+                                      v
+                                Telegram final delivery
+                                      |
+                                      +---- Durable Object operational state
+                                      +---- D1 analytics projection
 
 Protected /admin -> Worker -> D1 + verified access/audit mutations
-Telegram poll_answer -> Worker -> quiz session result + Durable Object context
+Telegram poll_answer -> Worker -> quiz-session state + Durable Object context
 ~~~
 
 ### Primary responsibility split
 
-**Durable Objects** hold per-private-chat operational state such as admission, quota counters, duplicate protection, active jobs, short conversation history, profile context, and quiz-result context.
+**Worker ingress** authenticates Telegram updates, routes commands, sends the original `/start` welcome before ancillary work, and publishes new question jobs to the Queue before returning a queued response.
 
-**Queues** isolate Telegram acknowledgement from model latency and provide retry/DLQ behavior.
+**Durable Objects** are the per-private-chat operational authority for atomic admission, daily/burst limits, duplicate protection, active-job leases, conversation/profile state and recovery.
 
-**Vertex AI / Gemini** generates structured answers and quiz packets; the application validates the returned contract before anything is delivered.
+**Queues** isolate webhook response time from model latency and provide retries and a dead-letter path. A post-publication typing/state hand-off runs in the background; it does not hold the normal webhook response open.
 
-**D1** is the centralized analytics/admin projection, including question/event records, access/audit data, AI usage accounting, and quiz-session persistence.
+**Vertex AI / Gemini** returns a structured answer packet that the application validates before final Telegram delivery. Progress updates are cosmetic and have bounded failure recovery.
+
+**D1** stores bot credentials, access overrides, analytics, AI usage and quiz-session projections. It is not the primary job/quota/conversation store.
 
 ## Data and privacy boundary
 
@@ -179,6 +175,7 @@ The current learning system is primarily **per-student**. Accumulated quiz and l
 ### Product, engineering, and operations
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): system design and failure boundaries.
+- [docs/TELEGRAM_BOT_ARCHITECTURE.md](docs/TELEGRAM_BOT_ARCHITECTURE.md): locked production Telegram runtime and reusable blueprint for future bots.
 - [PROJECT_STATUS.md](PROJECT_STATUS.md): shipped versus planned scope.
 - [CHANGELOG.md](CHANGELOG.md): release history.
 - [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md): release readiness.
