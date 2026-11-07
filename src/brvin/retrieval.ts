@@ -8,6 +8,7 @@ const MAX_PASSAGES = 6;
 const MAX_PAGES = 4;
 const MAX_PASSAGES_PER_PAGE = 2;
 const MAX_PASSAGE_CHARS = 1_800;
+const MAX_EXACT_PAGE_PASSAGE_CHARS = 4_500;
 const MAX_RAW_PASSAGE_CHARS = 60_000;
 const EXCERPT_WINDOW_CHARS = 900;
 const EXCERPT_WINDOW_STEP = 450;
@@ -127,8 +128,8 @@ export function isBrvinPassageRelevant(query: string, passage: string): boolean 
   const queryTerms = meaningfulBrvinTerms(query);
   if (queryTerms.size === 0) return false;
   const coverage = brvinTermCoverage(query, passage);
-  const minimumCoverage = queryTerms.size <= 2 ? 0.5 : 0.75;
-  const minimumMatches = queryTerms.size <= 2 ? 1 : Math.max(2, Math.ceil(queryTerms.size * minimumCoverage));
+  const minimumCoverage = queryTerms.size <= 2 ? 1 : 0.7;
+  const minimumMatches = queryTerms.size <= 2 ? queryTerms.size : Math.max(2, Math.ceil(queryTerms.size * minimumCoverage));
   return coverage >= minimumCoverage && queryTerms.size * coverage >= minimumMatches;
 }
 
@@ -343,7 +344,7 @@ async function retrieveExplicitBookPages(
           pageImages.push({ mimeType, data: bytesToBase64(bytes), byteLength: bytes.byteLength });
           text = "[Full scanned PDF page attached for visual reading.]";
         } else {
-          text = cleanEvidenceText(new TextDecoder().decode(bytes)).slice(0, MAX_PASSAGE_CHARS);
+          text = cleanEvidenceText(new TextDecoder().decode(bytes)).slice(0, MAX_EXACT_PAGE_PASSAGE_CHARS);
           if (!text) continue;
         }
 
@@ -433,19 +434,20 @@ export async function retrieveBrvinProjectContextForProject(
       const result = await instance.search({
         messages: [{ role: "user", content: query }],
         ai_search_options: {
+          cache: { enabled: false },
           retrieval: {
             max_num_results: MAX_RESULTS_PER_QUERY,
             retrieval_type: "hybrid",
             match_threshold: boundedThreshold(env.BRVIN_MATCH_THRESHOLD, 0.3),
             filters: { folder: { $in: prefixes } },
           },
-          ...(rerankingEnabled ? {
-            reranking: {
-              enabled: true,
+          reranking: {
+            enabled: rerankingEnabled,
+            ...(rerankingEnabled ? {
               model: env.BRVIN_RERANKING_MODEL?.trim() || "@cf/baai/bge-reranker-base",
               match_threshold: rerankingMinScore,
-            },
-          } : {}),
+            } : {}),
+          },
         },
       });
       return { query, chunks: result.chunks ?? [] };
