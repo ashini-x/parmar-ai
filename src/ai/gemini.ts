@@ -1,6 +1,6 @@
 import type { AiUsageRecord, AnswerPacket, ConversationTurn, Env, GeminiGenerationResult, GeminiImageInput, ProfileContext } from "../config/env";
 import type { FatmanBookContext } from "../fatman/retrieval";
-import { GoogleAuthError, getGoogleAccessToken } from "../auth/google";
+import { GoogleAuthError, getGoogleAccessToken, invalidateGoogleAccessToken } from "../auth/google";
 import { getConfig, MAX_QUIZ_BATCH_SIZE, type QuizItem } from "../config/env";
 import { TELEGRAM_PROGRESS_LABELS } from "../telegram/progress";
 
@@ -415,15 +415,34 @@ async function requestVertexGemini(
     const requestEndpoint = onPartialAnswer
       ? endpoint.replace(":generateContent", ":streamGenerateContent?alt=sse")
       : endpoint;
-    const response = await fetch(requestEndpoint, {
+    const requestBody = JSON.stringify(body);
+    const sendGenerationRequest = (token: string): Promise<Response> => fetch(requestEndpoint, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${accessToken}`,
+        authorization: `Bearer ${token}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: requestBody,
       signal: controller.signal,
     });
+
+    let response = await sendGenerationRequest(accessToken);
+    if (response.status === 401) {
+      // A cached access token can be revoked or rejected before its advertised
+      // expiry. Refresh it once and retry the same generation request. A second
+      // 401 is surfaced normally rather than entering an endless auth loop.
+      await response.body?.cancel().catch(() => undefined);
+      invalidateGoogleAccessToken(accessToken);
+      try {
+        accessToken = await getGoogleAccessToken(env);
+      } catch (error) {
+        if (error instanceof GoogleAuthError) {
+          throw new GeminiError(error.message, error.status, error.retryable);
+        }
+        throw error;
+      }
+      response = await sendGenerationRequest(accessToken);
+    }
 
     let data: GeminiApiResponse;
     if (response.ok && onPartialAnswer) {
