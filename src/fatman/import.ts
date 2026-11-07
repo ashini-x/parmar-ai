@@ -474,9 +474,6 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
     return json({ ok: false, error: "Choose a PDF between 8 bytes and 1 GB." }, 413);
   }
   if (!filename || filename.length > 255) return json({ ok: false, error: "The PDF file name is invalid." }, 400);
-  if (!Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > 2_000) {
-    return json({ ok: false, error: "This PDF must contain between 1 and 2,000 pages." }, 400);
-  }
   if (body.costConfirmed !== true) {
     return json({ ok: false, error: "Confirm that you understand Google Cloud OCR may incur usage charges." }, 400);
   }
