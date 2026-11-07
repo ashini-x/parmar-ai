@@ -25,7 +25,6 @@ import {
   editTelegramMessage,
   editTelegramProgressMessage,
   editTelegramMessageReplyMarkup,
-  sendTelegramChatAction,
   sendTelegramMessage,
   sendTelegramChatActionWithToken,
   sendTelegramMessageWithToken,
@@ -413,7 +412,11 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: false, error: "UNAUTHORIZED" }, 401), requestId);
   }
 
-  if (bot.status !== "active" || !(await isTelegramBotConnectionActive(env, bot.connectionId))) {
+  // findTelegramBotByWebhookSecret already authenticated this exact webhook
+  // secret and returned the current persisted bot status. Do not issue a second
+  // D1 query for the same status. Queue admission and delivery still re-check
+  // connection state at their security boundaries.
+  if (bot.status !== "active") {
     logger.info("telegram_webhook_from_inactive_bot_ignored", {
       requestId,
       botConnectionId: bot.connectionId,
@@ -1142,52 +1145,41 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
       continue;
     }
 
-    // Start the consumer heartbeat as soon as a valid Queue job arrives.
-    // The webhook heartbeat ends after enqueue, and the serial D1/DO admission
-    // checks below can otherwise leave a visible 5–10 second typing gap.
-    // These existing checks still gate whether the job can be claimed or run.
-    const stopTypingHeartbeat = startTypingHeartbeat(env, job.chatId, job.requestId, job.botConnectionId);
-    let claim: ClaimResponse;
-    try {
-      if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
-        ctx.waitUntil(recordQuestionResult(env, {
-          updateId: job.updateId,
-          botConnectionId: job.botConnectionId,
-          status: "cancelled",
-          completedAt: Date.now(),
-          attempts: message.attempts,
-          errorMessage: "telegram_bot_disconnected",
-        }).catch(() => undefined));
-        stopTypingHeartbeat();
-        message.ack();
-        continue;
-      }
-
-      claim = await jobStoreRequest<ClaimResponse>(env, job.chatId, {
-        action: "claim",
-        botConnectionId: job.botConnectionId,
+    // The per-chat Durable Object owns typing feedback from pending through
+    // queued and processing states. The consumer does not start a second
+    // timer or duplicate the same Telegram chat action.
+    if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
+      ctx.waitUntil(recordQuestionResult(env, {
         updateId: job.updateId,
-        queueMessageId: message.id,
-      });
+        botConnectionId: job.botConnectionId,
+        status: "cancelled",
+        completedAt: Date.now(),
+        attempts: message.attempts,
+        errorMessage: "telegram_bot_disconnected",
+      }).catch(() => undefined));
+      message.ack();
+      continue;
+    }
 
-      if (!claim.claimed || !claim.record) {
-        stopTypingHeartbeat();
-        if (claim.wait) {
-          message.retry({ delaySeconds: claim.retryAfterSeconds ?? 5 });
-        } else {
-          message.ack();
-        }
-        continue;
-      }
+    const claim = await jobStoreRequest<ClaimResponse>(env, job.chatId, {
+      action: "claim",
+      botConnectionId: job.botConnectionId,
+      updateId: job.updateId,
+      queueMessageId: message.id,
+    });
 
-      if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
-        stopTypingHeartbeat();
+    if (!claim.claimed || !claim.record) {
+      if (claim.wait) {
+        message.retry({ delaySeconds: claim.retryAfterSeconds ?? 5 });
+      } else {
         message.ack();
-        continue;
       }
-    } catch (error) {
-      stopTypingHeartbeat();
-      throw error;
+      continue;
+    }
+
+    if (!(await isTelegramBotConnectionActive(env, job.botConnectionId))) {
+      message.ack();
+      continue;
     }
     let updatePartialAnswer: PartialAnswerHandler | undefined;
     try {
@@ -1766,32 +1758,6 @@ async function deliverWebhookStatusWithToken(
       error: error instanceof Error ? error.message : String(error),
     });
   }
-}
-
-function startTypingHeartbeat(env: Env, chatId: number, requestId: string, botConnectionId: string): () => void {
-  let stopped = false;
-
-  const sendHeartbeat = (): void => {
-    if (stopped) return;
-    void sendTelegramChatAction(env, chatId, "typing", botConnectionId).catch((error) => {
-      if (!stopped) {
-        logger.warn("telegram_typing_heartbeat_failed", {
-          requestId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    });
-  };
-
-  // Telegram expires a chat action after 5 seconds or less, so refresh it
-  // well before expiry while the Queue job remains actively owned.
-  sendHeartbeat();
-  const interval = setInterval(sendHeartbeat, 3_000);
-
-  return () => {
-    stopped = true;
-    clearInterval(interval);
-  };
 }
 
 async function completeCancelledJob(
