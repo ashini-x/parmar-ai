@@ -99,6 +99,8 @@ describe("BRVIN automatic Vision OCR retention", () => {
     expect(workflowSource).not.toContain('wait before Fatman indexing check " + monitorSequence, "1 minute"');
     expect(workflowSource).not.toContain('retryAttempt === 0 ? "1 minute"');
     expect(workflowSource).toContain("if (retryAttempt > 0)");
+    expect(workflowSource).toContain('max_num_results: 10, retrieval_type: "hybrid"');
+    expect(workflowSource).not.toContain('max_num_results: 50, retrieval_type: "hybrid"');
     expect(indexingPolicy).toContain("FATMAN_INDEX_PAGE_CONCURRENCY = 3");
     expect(indexingPolicy).toContain("pages <= 10");
     expect(indexingPolicy).toContain("pages <= 100");
