@@ -125,7 +125,31 @@ describe("Telegram live progress updater", () => {
     await update.stop();
   });
 
-  it("keeps answer generation independent when a Telegram edit fails", async () => {
+  it("recovers progress after one transient Telegram edit failure", async () => {
+    vi.useFakeTimers();
+    const edit = vi.fn()
+      .mockRejectedValueOnce(new Error("Telegram edit timed out"))
+      .mockResolvedValue(undefined);
+    const update = createTelegramProgressUpdater(edit);
+
+    await update.setStatus(TELEGRAM_PROGRESS_LABELS.checkingSources);
+    expect(edit).toHaveBeenCalledTimes(1);
+
+    // One transient failure is retried after the normal status interval.
+    await vi.advanceTimersByTimeAsync(500);
+    expect(edit).toHaveBeenCalledTimes(2);
+    expect(edit).toHaveBeenLastCalledWith(TELEGRAM_PROGRESS_LABELS.checkingSources);
+
+    update("A later answer chunk");
+    await vi.advanceTimersByTimeAsync(850);
+    await update.flush();
+    expect(edit).toHaveBeenCalledTimes(3);
+    expect(edit).toHaveBeenLastCalledWith("A later answer chunk");
+
+    await update.stop();
+  });
+
+  it("disables only progress after three consecutive Telegram edit failures", async () => {
     vi.useFakeTimers();
     const edit = vi.fn(async () => {
       throw new Error("Telegram edit rejected");
@@ -133,12 +157,18 @@ describe("Telegram live progress updater", () => {
     const update = createTelegramProgressUpdater(edit);
 
     await update.setStatus(TELEGRAM_PROGRESS_LABELS.checkingSources);
-    await expect(update.flush()).resolves.toBeUndefined();
-    update("A later answer chunk");
-    await update.flush();
-    await vi.advanceTimersByTimeAsync(5_000);
-
     expect(edit).toHaveBeenCalledTimes(1);
+
+    // First and second retries; the third consecutive failure disables
+    // cosmetic edits and resolves any waiters so answer delivery can continue.
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(edit).toHaveBeenCalledTimes(3);
+    await expect(update.flush()).resolves.toBeUndefined();
+
+    update("A later answer chunk");
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(edit).toHaveBeenCalledTimes(3);
+
     await update.stop();
   });
 });
