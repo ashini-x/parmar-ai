@@ -144,6 +144,50 @@ describe("BRVIN governed retrieval", () => {
     expect(excerpt.length).toBeLessThan(content.length);
   });
 
+  it("returns the strongest concept-matching PDF page after reranking, not every page with overlapping terms", async () => {
+    const prefix = "brvin/books/" + bookId + "/pages/";
+    grants.push({ id: bookId, title: "Newton's Laws", search_prefix: prefix });
+    search.mockResolvedValue({
+      chunks: [
+        {
+          id: "page-1-inertia",
+          text: "Newton's first law explains inertia. A force can change an object's speed or direction. A 1 N force gives a 1 kg object acceleration.",
+          score: 0.98,
+          scoring_details: { vector_score: 0.92, reranking_score: 0.31 },
+          item: { key: prefix + "page-000001.txt" },
+        },
+        {
+          id: "page-2-second-law",
+          text: "Newton's second law relates net force, mass and acceleration. For an object of constant mass, acceleration is in the direction of the net force. A larger net force produces a larger acceleration; for the same net force, a larger mass produces a smaller acceleration. Fnet = m x a.",
+          score: 0.86,
+          scoring_details: { vector_score: 0.78, keyword_score: 4.2, reranking_score: 0.93 },
+          item: { key: prefix + "page-000002.txt" },
+        },
+        {
+          id: "page-3-worked-example",
+          text: "Worked example: a box is pulled horizontally. Find the net force and calculate acceleration using the second law. The final result is 3 metres per second squared.",
+          score: 0.97,
+          scoring_details: { vector_score: 0.90, reranking_score: 0.38 },
+          item: { key: prefix + "page-000003.txt" },
+        },
+      ],
+    });
+
+    const context = await retrieveBrvinProjectContext(
+      env,
+      "project-a",
+      "How does Newton's second law relate force, mass and acceleration?",
+    );
+
+    expect(context.passages).toHaveLength(1);
+    expect(context.passages[0]).toEqual(expect.objectContaining({
+      id: "page-2-second-law",
+      pdfPage: 2,
+      score: 0.93,
+    }));
+    expect(context.passages[0].text).toContain("a larger mass produces a smaller acceleration");
+  });
+
   it("does not expose content for an inactive or unknown project", async () => {
     db.prepare.mockImplementationOnce((sql: string) => ({
       bind: () => ({ first: async () => null, all: async () => ({ results: [] }) }),
