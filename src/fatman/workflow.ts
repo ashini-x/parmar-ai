@@ -6,7 +6,7 @@ import { FATMAN_PAGE_RETRY_LIMIT, fatmanPageRetryDelay, isTransientFatmanIndexEr
 import { buildFatmanBookVerificationPages, buildFatmanRetrievalProbes, FATMAN_VERIFICATION_PAGES, isRetryableFatmanQualityFailure } from "./quality";
 import { retrieveFatmanContext } from "./retrieval";
 import { getGoogleAccessToken } from "../auth/google";
-import { fatmanExpectedPageCount, fatmanIndexPageKey } from "./library";
+import { deriveFatmanPageCountFromVisionOutputObjects, fatmanExpectedPageCount, fatmanIndexPageKey } from "./library";
 import type { FatmanImportJob } from "./import";
 import { brvinDeletionProgressPercent, brvinDeletionSearchPageRequest } from "./deletion";
 import { chunkFatmanPages, FATMAN_INDEX_PAGE_CONCURRENCY, fatmanIndexMonitorDelayMs } from "./indexing-policy";
@@ -1236,29 +1236,49 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           getFatmanVisionOperation(this.env, operationName, expectedOutputUri));
         if (result.error) throw new Error(result.error);
         if (result.done) {
-          const outputInventory = await step.do("verify Google Vision GCS output files", async () =>
-            listFatmanVisionOutputObjects(this.env, importJob, expectedPages));
+          // Vision uses batchSize=1, so each physical PDF page has one canonical
+          // output-N-to-N.json object. Count and validate the complete sequence
+          // server-side; the browser never supplies a page count.
+          const outputInventory = await step.do("inventory every Vision output page", async () =>
+            listFatmanVisionOutputObjects(this.env, importJob, 2_001));
+          if (outputInventory.truncated) {
+            throw new Error("The uploaded PDF exceeds the 2,000-page BRVIN limit or its Vision output inventory is incomplete. No page indexing was started.");
+          }
+          const detectedPageCount = deriveFatmanPageCountFromVisionOutputObjects(
+            outputInventory.objects.map(item => item.name),
+            2_000,
+          );
+          if (expectedPages > 0 && detectedPageCount !== expectedPages) {
+            throw new Error("The Vision output contains " + detectedPageCount +
+              " PDF pages, but the registered source expects " + expectedPages +
+              ". Refusing to index an inconsistent page count.");
+          }
+          expectedPages = detectedPageCount;
+          if (importJob.book_id) {
+            await step.do("persist exact Vision-derived PDF page count", async () => {
+              await setFatmanDetectedPageCount(this.env, importId, detectedPageCount);
+              return { pageCount: detectedPageCount };
+            });
+            await recordBrvinActivity(this.env, {
+              importId, bookId: importJob.book_id, agent: "PDF page-count verifier",
+              phase: "ocr", eventType: "ocr.page_count_detected", status: "completed",
+              message: "The exact PDF page count was derived from the contiguous Google Vision output files and saved to all BRVIN source registries.",
+              details: { pageCount: detectedPageCount, source: "vision_output_object_inventory", outputFileCount: outputInventory.objects.length },
+            }).catch(() => undefined);
+          }
           const outputNames = new Set(outputInventory.objects.map(item => item.name));
-          const expectedOutputNames = Array.from({ length: expectedPages }, (_, index) =>
+          const expectedOutputNames = Array.from({ length: detectedPageCount }, (_, index) =>
             fatmanOutputObjectName(importId, index + 1, fatmanVisionOutputPrefix(importJob)));
           const missingOutputNames = expectedOutputNames.filter(name => !outputNames.has(name));
           if (missingOutputNames.length) {
-            const observed = outputInventory.objects.map(item => item.name).slice(0, 10);
-            throw new Error(
-              "Google Vision marked OCR complete and reported the expected destination, but " +
-              missingOutputNames.length + " of " + expectedPages +
-              " page JSON output file(s) are missing from Cloud Storage. Missing: " +
-              missingOutputNames.slice(0, 5).join(", ") +
-              (observed.length ? ". Objects found: " + observed.join(", ") : ". No objects were found under " + outputInventory.prefix) +
-              (outputInventory.truncated ? " (object listing truncated)." : ".")
-            );
+            throw new Error("Vision output inventory is missing page JSON file(s): " + missingOutputNames.slice(0, 5).join(", "));
           }
           if (importJob.book_id) await recordBrvinActivity(this.env, {
             importId, bookId: importJob.book_id, agent: "Vision output verifier",
             phase: "ocr", eventType: "ocr.output_verified", status: "completed",
-            message: "All expected per-page Google Vision JSON output files are present in the registered temporary GCS prefix.",
+            message: "Every expected per-page Google Vision JSON output file is present in the registered temporary GCS prefix.",
             details: {
-              expectedPages,
+              expectedPages: detectedPageCount,
               outputFiles: expectedOutputNames.map(name => name.split("/").pop()),
               destination: outputInventory.prefix,
             },
