@@ -435,9 +435,12 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
   const filename = filenameRaw.split(/[\\/]/u).pop()?.slice(0, 255) ?? "";
   const sha256 = typeof body.sha256 === "string" ? body.sha256.toUpperCase() : "";
   const size = Number(body.size);
-  const pageCount = Number(body.pageCount);
   const dedupeScope = body.dedupeScope === undefined ? "legacy" :
     typeof body.dedupeScope === "string" ? body.dedupeScope.trim().slice(0, 180) : "";
+  // BRVIN Teachers sources are counted from the complete Vision output
+  // inventory. Do not trust or require a browser-supplied page count.
+  const isTeacherCollectionUpload = dedupeScope.startsWith("brvin-collection:");
+  const pageCount = isTeacherCollectionUpload ? 0 : Number(body.pageCount);
   if (!dedupeScope || /[\u0000-\u001f\u007f]/u.test(dedupeScope)) {
     return json({ ok: false, error: "The source deduplication scope is invalid." }, 400);
   }
@@ -447,7 +450,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
     return json({ ok: false, error: "Choose a PDF between 8 bytes and 1 GB." }, 413);
   }
   if (!filename || filename.length > 255) return json({ ok: false, error: "The PDF file name is invalid." }, 400);
-  if (!Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > 2_000) {
+  if (!isTeacherCollectionUpload && (!Number.isSafeInteger(pageCount) || pageCount < 1 || pageCount > 2_000)) {
     return json({ ok: false, error: "This PDF must contain between 1 and 2,000 pages." }, 400);
   }
   if (body.costConfirmed !== true) {
@@ -516,7 +519,7 @@ export async function startFatmanLibraryUpload(env: Env, request: Request): Prom
       },
       body: JSON.stringify({
         name: objectName,
-        metadata: { sha256, bookId: id, bookTitle: title, pageCount: String(pageCount), sourceFilename: filename },
+        metadata: { sha256, bookId: id, bookTitle: title, ...(pageCount > 0 ? { pageCount: String(pageCount) } : {}), sourceFilename: filename },
       }),
     });
     if (!response.ok) throw await gcsError(response, "Could not start the secure PDF upload.");
