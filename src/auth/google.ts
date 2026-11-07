@@ -35,6 +35,15 @@ export class GoogleAuthError extends Error {
   }
 }
 
+/**
+ * Forget a rejected OAuth token so the next generation attempt obtains a
+ * fresh one. The equality guard prevents a late 401 from invalidating a newer
+ * token refreshed by another concurrent request in the same Worker isolate.
+ */
+export function invalidateGoogleAccessToken(rejectedToken: string): void {
+  if (cachedToken?.accessToken === rejectedToken) cachedToken = null;
+}
+
 export async function getGoogleAccessToken(env: Env): Promise<string> {
   const now = Date.now();
 
