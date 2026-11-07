@@ -3,14 +3,15 @@ import { ensureAnalyticsSchema } from "../analytics/db";
 import { parseFatmanIndexPageKey } from "../fatman/library";
 
 const MAX_QUERIES = 3;
-const MAX_RESULTS_PER_QUERY = 50;
-const MAX_PASSAGES = 8;
-const MAX_PAGES = 6;
+const MAX_RESULTS_PER_QUERY = 16;
+const MAX_PASSAGES = 6;
+const MAX_PAGES = 4;
 const MAX_PASSAGES_PER_PAGE = 2;
-const MAX_PASSAGE_CHARS = 4_500;
+const MAX_PASSAGE_CHARS = 1_800;
+const MAX_EXACT_PAGE_PASSAGE_CHARS = 4_500;
 const MAX_RAW_PASSAGE_CHARS = 60_000;
-const EXCERPT_WINDOW_CHARS = 1_100;
-const EXCERPT_WINDOW_STEP = 550;
+const EXCERPT_WINDOW_CHARS = 900;
+const EXCERPT_WINDOW_STEP = 450;
 const MAX_EXACT_PAGE_NUMBERS = 3;
 const MAX_EXACT_PAGE_TEXT_BYTES = 60_000;
 const MAX_EXACT_PAGE_IMAGE_BYTES = 2_000_000;
@@ -22,6 +23,10 @@ export type BrvinRetrievalEnv = Pick<Env, "DB"> &
     | "BRVIN_SEARCH"
     | "BRVIN_SEARCH_INSTANCE"
     | "BRVIN_MIN_SCORE"
+    | "BRVIN_MATCH_THRESHOLD"
+    | "BRVIN_RERANKING_ENABLED"
+    | "BRVIN_RERANKING_MODEL"
+    | "BRVIN_RERANKING_MIN_SCORE"
     | "FATMAN_SEARCH"
     | "FATMAN_INSTANCE_NAME"
     | "FATMAN_MIN_SCORE"
@@ -79,6 +84,11 @@ function finiteScore(value: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function boundedThreshold(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : fallback;
+}
+
 function cleanMetadataText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== "string") return undefined;
   const cleaned = value.replace(/[\r\n]+/gu, " ").replace(/\s+/gu, " ").trim().slice(0, maxLength);
@@ -91,8 +101,8 @@ const QUERY_STOP_WORDS = new Set([
   "for", "from", "had", "has", "have", "how", "in", "into", "is", "it", "its", "of",
   "on", "or", "our", "please", "should", "that", "the", "their", "them", "there", "these",
   "this", "those", "to", "was", "were", "what", "when", "where", "which", "who", "why",
-  "will", "with", "would", "you", "your", "pdf", "page", "fatman", "edition", "second",
-  "2nd", "2026", "book", "chapter", "explain", "describe", "tell", "me", "about",
+  "will", "with", "would", "you", "your", "pdf", "page", "fatman", "edition",
+  "2026", "book", "chapter", "explain", "describe", "tell", "me", "about",
 ]);
 
 function meaningfulBrvinTerms(value: string): Set<string> {
@@ -105,13 +115,22 @@ function meaningfulBrvinTerms(value: string): Set<string> {
   );
 }
 
-export function isBrvinPassageRelevant(query: string, passage: string): boolean {
+export function brvinTermCoverage(query: string, passage: string): number {
   const queryTerms = meaningfulBrvinTerms(query);
-  if (queryTerms.size === 0) return false;
+  if (queryTerms.size === 0) return 0;
   const passageTerms = meaningfulBrvinTerms(passage);
   let overlap = 0;
   for (const term of queryTerms) if (passageTerms.has(term)) overlap += 1;
-  return overlap >= (queryTerms.size <= 2 ? 1 : 2);
+  return overlap / queryTerms.size;
+}
+
+export function isBrvinPassageRelevant(query: string, passage: string): boolean {
+  const queryTerms = meaningfulBrvinTerms(query);
+  if (queryTerms.size === 0) return false;
+  const coverage = brvinTermCoverage(query, passage);
+  const minimumCoverage = queryTerms.size <= 2 ? 1 : 0.7;
+  const minimumMatches = queryTerms.size <= 2 ? queryTerms.size : Math.max(2, Math.ceil(queryTerms.size * minimumCoverage));
+  return coverage >= minimumCoverage && queryTerms.size * coverage >= minimumMatches;
 }
 
 function cleanEvidenceText(value: unknown): string {
@@ -325,7 +344,7 @@ async function retrieveExplicitBookPages(
           pageImages.push({ mimeType, data: bytesToBase64(bytes), byteLength: bytes.byteLength });
           text = "[Full scanned PDF page attached for visual reading.]";
         } else {
-          text = cleanEvidenceText(new TextDecoder().decode(bytes)).slice(0, MAX_PASSAGE_CHARS);
+          text = cleanEvidenceText(new TextDecoder().decode(bytes)).slice(0, MAX_EXACT_PAGE_PASSAGE_CHARS);
           if (!text) continue;
         }
 
@@ -408,14 +427,26 @@ export async function retrieveBrvinProjectContextForProject(
       }
     }
 
+    const rerankingEnabled = env.BRVIN_RERANKING_ENABLED?.trim().toLowerCase() !== "false";
+    const rerankingMinScore = boundedThreshold(env.BRVIN_RERANKING_MIN_SCORE, 0.4);
+
     const settled = await Promise.allSettled(normalizedQueries.map(async (query) => {
       const result = await instance.search({
         messages: [{ role: "user", content: query }],
         ai_search_options: {
+          cache: { enabled: false },
           retrieval: {
             max_num_results: MAX_RESULTS_PER_QUERY,
             retrieval_type: "hybrid",
+            match_threshold: boundedThreshold(env.BRVIN_MATCH_THRESHOLD, 0.3),
             filters: { folder: { $in: prefixes } },
+          },
+          reranking: {
+            enabled: rerankingEnabled,
+            ...(rerankingEnabled ? {
+              model: env.BRVIN_RERANKING_MODEL?.trim() || "@cf/baai/bge-reranker-base",
+              match_threshold: rerankingMinScore,
+            } : {}),
           },
         },
       });
@@ -456,13 +487,23 @@ export async function retrieveBrvinProjectContextForProject(
           continue;
         }
 
-        const score = finiteScore(chunk.score) ??
-          finiteScore(chunk.scoring_details?.reranking_score) ??
-          finiteScore(chunk.scoring_details?.vector_score);
-        if (score === undefined || score < minScore) continue;
+        const rerankingScore = finiteScore(chunk.scoring_details?.reranking_score);
+        const vectorScore = finiteScore(chunk.scoring_details?.vector_score);
+        const fusedScore = finiteScore(chunk.score);
+        const score = rerankingScore ?? vectorScore ?? fusedScore;
+        if (score === undefined) continue;
+        if (rerankingScore !== undefined) {
+          if (rerankingScore < rerankingMinScore) continue;
+        } else if ((vectorScore ?? fusedScore ?? 0) < minScore) {
+          continue;
+        }
 
         const rawText = cleanEvidenceText(chunk.text);
-        if (!rawText || !isBrvinPassageRelevant(searchResult.value.query, rawText)) continue;
+        if (!rawText) continue;
+        // A cross-encoder evaluates semantic relevance, including paraphrases.
+        // Apply the stricter lexical coverage guard only when no reranking score
+        // is available (for disabled/legacy retrieval paths).
+        if (rerankingScore === undefined && !isBrvinPassageRelevant(searchResult.value.query, rawText)) continue;
         const text = extractBrvinEvidenceExcerpt(searchResult.value.query, rawText, MAX_PASSAGE_CHARS);
         if (!text) continue;
 

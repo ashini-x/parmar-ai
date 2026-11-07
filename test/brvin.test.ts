@@ -59,8 +59,16 @@ describe("BRVIN governed retrieval", () => {
         {
           id: "allowed-page-14",
           text: "Article 14 guarantees equality before the law and equal protection of the laws.",
-          score: 0.91,
+          score: 0.99,
+          scoring_details: { vector_score: 0.88, keyword_score: 3.1, reranking_score: 0.91 },
           item: { key: "brvin/books/" + bookId + "/pages/page-000014.txt" },
+        },
+        {
+          id: "weak-rerank-page-15",
+          text: "Article 14 guarantees equality before the law and equal protection of the laws.",
+          score: 0.99,
+          scoring_details: { vector_score: 0.96, keyword_score: 8.4, reranking_score: 0.38 },
+          item: { key: "brvin/books/" + bookId + "/pages/page-000015.txt" },
         },
         {
           id: "unauthorized-page",
@@ -82,15 +90,23 @@ describe("BRVIN governed retrieval", () => {
     expect(context.passages).toEqual([
       expect.objectContaining({
         id: "allowed-page-14", bookId, bookTitle: "Constitution of India", pdfPage: 14,
+        score: 0.91,
       }),
     ]);
     expect(search).toHaveBeenCalledWith({
       messages: [{ role: "user", content: "Article 14 equality" }],
       ai_search_options: {
+        cache: { enabled: false },
         retrieval: {
-          max_num_results: 50,
+          max_num_results: 16,
+          match_threshold: 0.3,
           retrieval_type: "hybrid",
           filters: { folder: { $in: ["brvin/books/" + bookId + "/pages/"] } },
+        },
+        reranking: {
+          enabled: true,
+          model: "@cf/baai/bge-reranker-base",
+          match_threshold: 0.4,
         },
       },
     });
@@ -104,8 +120,103 @@ describe("BRVIN governed retrieval", () => {
     const excerpt = extractBrvinEvidenceExcerpt(query, longPage);
     expect(excerpt).toContain("Drainage");
     expect(excerpt).toContain("drawdown");
-    expect(excerpt.length).toBeLessThanOrEqual(4_500);
+    expect(excerpt.length).toBeLessThanOrEqual(1_800);
     expect(isBrvinPassageRelevant(query, "Unrelated historical introduction without those details.")).toBe(false);
+  });
+
+  it("keeps ordinal law terms and rejects a neighbouring-law mismatch", () => {
+    expect(isBrvinPassageRelevant(
+      "Newton's second law",
+      "Newton's second law states that net force equals mass multiplied by acceleration.",
+    )).toBe(true);
+    expect(isBrvinPassageRelevant(
+      "Newton's second law",
+      "Newton's first law explains inertia and an object's resistance to changes in motion.",
+    )).toBe(false);
+  });
+
+  it("selects a focused evidence window and bounds even a short-page excerpt", () => {
+    const query = "force mass acceleration";
+    const content = ("Unrelated background text with no matching scientific terms. ").repeat(42) +
+      "For a constant mass, net force equals mass multiplied by acceleration.";
+    const excerpt = extractBrvinEvidenceExcerpt(query, content);
+    expect(excerpt).toContain("net force equals mass");
+    expect(excerpt.length).toBeLessThanOrEqual(1_800);
+    expect(excerpt.length).toBeLessThan(content.length);
+  });
+
+  it("returns the strongest concept-matching PDF page after reranking, not every page with overlapping terms", async () => {
+    const prefix = "brvin/books/" + bookId + "/pages/";
+    grants.push({ id: bookId, title: "Newton's Laws", search_prefix: prefix });
+    search.mockResolvedValue({
+      chunks: [
+        {
+          id: "page-1-inertia",
+          text: "Newton's first law explains inertia. A force can change an object's speed or direction. A 1 N force gives a 1 kg object acceleration.",
+          score: 0.98,
+          scoring_details: { vector_score: 0.92, reranking_score: 0.31 },
+          item: { key: prefix + "page-000001.txt" },
+        },
+        {
+          id: "page-2-second-law",
+          text: "Newton's second law relates net force, mass and acceleration. For an object of constant mass, acceleration is in the direction of the net force. A larger net force produces a larger acceleration; for the same net force, a larger mass produces a smaller acceleration. Fnet = m x a.",
+          score: 0.86,
+          scoring_details: { vector_score: 0.78, keyword_score: 4.2, reranking_score: 0.93 },
+          item: { key: prefix + "page-000002.txt" },
+        },
+        {
+          id: "page-3-worked-example",
+          text: "Worked example: a box is pulled horizontally. Find the net force and calculate acceleration using the second law. The final result is 3 metres per second squared.",
+          score: 0.97,
+          scoring_details: { vector_score: 0.90, reranking_score: 0.38 },
+          item: { key: prefix + "page-000003.txt" },
+        },
+      ],
+    });
+
+    const context = await retrieveBrvinProjectContext(
+      env,
+      "project-a",
+      "How does Newton's second law relate force, mass and acceleration?",
+    );
+
+    expect(context.passages).toHaveLength(1);
+    expect(context.passages[0]).toEqual(expect.objectContaining({
+      id: "page-2-second-law",
+      pdfPage: 2,
+      score: 0.93,
+    }));
+    expect(context.passages[0].text).toContain("a larger mass produces a smaller acceleration");
+  });
+
+  it("allows a strong cross-encoder match when the evidence uses semantically related wording", async () => {
+    grants.push({
+      id: bookId,
+      title: "Newton's Laws",
+      search_prefix: "brvin/books/" + bookId + "/pages/",
+    });
+    search.mockResolvedValue({
+      chunks: [{
+        id: "paraphrased-second-law",
+        text: "The resultant force on a body equals its inertia multiplied by the rate of change in velocity.",
+        score: 0.72,
+        scoring_details: { vector_score: 0.67, reranking_score: 0.91 },
+        item: { key: "brvin/books/" + bookId + "/pages/page-000002.txt" },
+      }],
+    });
+
+    const context = await retrieveBrvinProjectContext(
+      env,
+      "project-a",
+      "How does Newton's second law relate force, mass and acceleration?",
+    );
+
+    expect(context.passages).toHaveLength(1);
+    expect(context.passages[0]).toEqual(expect.objectContaining({
+      id: "paraphrased-second-law",
+      pdfPage: 2,
+      score: 0.91,
+    }));
   });
 
   it("does not expose content for an inactive or unknown project", async () => {

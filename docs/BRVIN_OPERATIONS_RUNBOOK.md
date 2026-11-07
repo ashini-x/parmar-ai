@@ -203,6 +203,38 @@ The deletion is tracked with D1 start/completion timestamps and an activity even
 
 ## 10. Troubleshooting by symptom
 
+### Semantic search returns whole pages or unrelated pages
+
+First distinguish the two retrieval modes:
+
+- A request with `pageNumbers` is an exact-page lookup. When exact items are found, BRVIN returns the requested page text directly and skips semantic AI Search.
+- A semantic request has a query and **no** `pageNumbers`. It returns reranked candidate excerpts with their original physical PDF page provenance.
+
+For the semantic path, verify the production Core settings in this order:
+
+1. The AI Search instance is using hybrid retrieval (vector + BM25) with RRF fusion, and the query filter contains only D1-authorised source prefixes.
+2. The request asks for a bounded candidate set (currently 16) and supplies `retrieval.match_threshold`; it does not request all chunks.
+3. Request-level reranking is enabled with `@cf/baai/bge-reranker-base`. Review the returned `scoring_details.reranking_score`, not only the fused `chunk.score`.
+4. The reranker threshold is applied before output; BRVIN also checks meaningful query-term coverage and validates the item key/page against the same authorised source set.
+5. Semantic passages are bounded excerpts, not the whole OCR page. Compare the returned `pdfPage` with the original physical PDF page.
+
+Current defaults are set in `wrangler.brvin.jsonc`: `BRVIN_MATCH_THRESHOLD=0.3`, `BRVIN_RERANKING_ENABLED=true`, and `BRVIN_RERANKING_MIN_SCORE=0.4`. The model ID can be changed to a Cloudflare-supported reranker without changing any consumer's answer-generation provider. BRVIN itself does not call Gemini or generate the final answer.
+
+### Existing indexed pages still contain one large chunk
+
+Chunk size is an indexing-time setting, not a query-time option. The shared AI Search instance is configured for 256-token chunks with 10% overlap. Existing built-in items must be re-indexed after the configuration change before their `chunks_count` reflects the new chunking.
+
+Use the Cloudflare AI Search **Sync Item** API on the exact existing item ID (or the dashboard's per-item sync action):
+
+```http
+PATCH /accounts/{account_id}/ai-search/namespaces/default/instances/{instance_id}/items/{item_id}
+Content-Type: application/json
+
+{"next_action":"INDEX","wait_for_completion":true}
+```
+
+This reprocesses the already stored AI Search item. It does not upload the source PDF or run Google Vision OCR again. It can consume Cloudflare AI Search ingestion usage, so re-index a small source first, verify `chunks_count` and retrieval quality, then plan the remaining corpus in measured batches. Never bulk-sync the whole corpus before the pilot passes acceptance.
+
 ### Project shows connected but no passages
 
 Check in this order:

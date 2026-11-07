@@ -330,10 +330,17 @@ describe("BRVIN private application retrieval RPC v2", () => {
     });
     expect(search).toHaveBeenCalledWith(expect.objectContaining({
       ai_search_options: {
+        cache: { enabled: false },
         retrieval: {
-          max_num_results: 50,
+          max_num_results: 16,
+          match_threshold: 0.3,
           retrieval_type: "hybrid",
           filters: { folder: { $in: ["fatman/pages/"] } },
+        },
+        reranking: {
+          enabled: true,
+          model: "@cf/baai/bge-reranker-base",
+          match_threshold: 0.4,
         },
       },
     }));

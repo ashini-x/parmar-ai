@@ -200,7 +200,10 @@ Validation and bounds:
 - At least one usable query or valid page number is required.
 - Accept at most 3 unique query variants, each normalized and bounded to 2,000 characters.
 - Accept at most 3 unique positive integer page numbers.
-- Keep current bounded result count, passage length and image byte limits; do not loosen them during the RPC identity change.
+- Semantic retrieval asks AI Search for at most 16 hybrid vector/BM25 candidate chunks per query; the vector match threshold defaults to 0.3.
+- Semantic requests use request-level Cloudflare cross-encoder reranking (`@cf/baai/bge-reranker-base` by default) with a 0.4 reranking score threshold. The model and thresholds are Worker configuration, not consumer-supplied input. Reranking scores take precedence over fused/vector scores when available.
+- Semantic search bypasses AI Search similarity cache for freshness, validates meaningful query-term coverage, and returns at most 6 passages across at most 4 physical pages, at most 2 passages per page and at most 1,800 characters per passage.
+- Exact-page retrieval remains separate and can return up to 3 requested pages, with exact-page text bounded to 4,500 characters and scanned-page images subject to the existing byte limit.
 - Reject malformed input rather than interpreting it as an empty query or unrestricted search.
 - Keep PDF page as the stable physical PDF page reference. Preserve optional printed page and section separately.
 
@@ -215,8 +218,9 @@ Processing order is mandatory:
 7. Reserve the existing project-level quota. Fatman continues to use `fatman_search_usage`; other projects use `brvin_project_search_usage`.
 8. Validate D1-derived search prefixes.
 9. Apply only those prefixes to AI Search folder filters.
-10. Validate every returned result key and parsed page against the same authorised source list.
-11. Return bounded evidence with book and PDF page provenance.
+10. For semantic queries, run bounded hybrid retrieval with the configured vector threshold, then cross-encoder reranking and local relevance filtering; bypass similarity cache for a fresh index read.
+11. Validate every returned result key and parsed page against the same authorised source list.
+12. Return bounded evidence with book and physical PDF page provenance.
 
 Do not reserve quota for an unknown application, inactive environment, denied project or empty source set. A valid authorised retrieval attempt continues to consume quota under the existing policy, including a valid exact-page request that returns no item, consistent with current v1 semantics.
 
@@ -227,8 +231,8 @@ Exact-page retrieval remains part of `retrieveProjectContextV2` through `pageNum
 - Resolve only the project's current ready source list.
 - Construct candidate item keys only beneath D1-authorised source prefixes.
 - Validate the exact returned key, source, page number, item state and bounded download size.
-- Preserve `pdfPage`, book ID/title, and optional printed-page/section metadata.
-- If the exact page is absent and a textual query exists, semantic retrieval may run within the same already-authorised source set.
+- Preserve `pdfPage`, book ID/title, and optional printed-page/section metadata; exact-page text is bounded to 4,500 characters.
+- When exact page items are found, return those exact items and skip semantic AI Search for that request. If exact items are absent and a textual query exists, semantic retrieval may run within the same already-authorised source set.
 - A page-only request with no exact indexed item returns successful empty results.
 - Never search arbitrary keys or folders based on request input.
 
