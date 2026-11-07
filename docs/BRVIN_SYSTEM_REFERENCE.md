@@ -758,3 +758,6 @@ The workflow writes an append-only `book.deletion_progress` activity event as wo
 GCS progress counts object generations processed and successfully deleted. A 404 means an object generation has already disappeared and counts as processed. The final GCS result still reports soft-delete retention and hard-delete times: 100% means the source is removed from active GCS listings, AI Search and BRVIN registry, not that Google Cloud soft-delete recovery retention has elapsed.
 
 If the workflow fails, the source and import rows remain inaccessible with `delete_failed`, the last completed percentage is retained, and the exact error is displayed in red. The operator can use **Manage → Retry deletion** after correcting the cause. Retries re-inventory the source prefix and remaining GCS object generations; already-removed AI Search items and GCS generations are not treated as fatal missing objects. Do not manually delete D1 rows or issue a broad AI Search/GCS prefix delete.
+
+
+The Core Admin dashboard refreshes the overview every 5 seconds only while at least one book is in `deleting`. It backs off to 15 seconds while the browser tab is hidden, refreshes promptly when the tab becomes visible, and stops polling when all deletions become terminal (`delete_failed` or removed). There is no permanent 5-second polling loop when no deletion is active.
