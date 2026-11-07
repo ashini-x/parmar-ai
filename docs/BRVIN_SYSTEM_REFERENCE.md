@@ -805,3 +805,10 @@ Benchmark representative small (1–10 page), medium (11–100 page) and large (
 - AI Search list calls, page upload attempts, retry counts and QA query count.
 
 A faster result is accepted only if all expected pages reach `completed`, retrieval QA passes with the original PDF-page provenance, no duplicate page keys are created, and READY remains gated on successful QA.
+
+
+## 14. Production release: cost-aware indexing optimization
+
+Core optimization PR [#131](https://github.com/ashini-x/parmar-ai/pull/131) merged as `920f94749f3174420160942670f4b81b583ae3c2`. Paired production workflow [#42411000687](https://github.com/ashini-x/parmar-ai/actions/runs/42411000687) passed typecheck/tests/build, deployed both Core Workers, passed root + BRVIN-backed health smoke on the first attempt and passed production release acceptance. Live traffic is 100% on `parmar-ai` version `fa5f5fd4-eb77-4d0c-ad07-cd8255b214f2` (deployment `70c15041-c41a-4ed4-9986-673653b6bb0e`) and private `brvin-service` version `0abbe7e6-3a7d-4e34-8f46-321f12796d58` (deployment `4cc87836-634e-4b61-9ee8-4d3859df838d`). Both deployed 7 November 2026. Acceptance artifact is attached to workflow run #42411000687.
+
+This release changes future page submission throughput, status-monitor cadence and QA result-window cost. It does not retroactively reprocess existing ready sources. The fresh Newton pilot completed successfully before this optimization was deployed; use subsequent uploads as the benchmark cohort and compare time-to-READY and AI Search list/upload/QA counts against the prior baseline. No numeric speedup is claimed until representative small, medium and large PDFs have been measured.
