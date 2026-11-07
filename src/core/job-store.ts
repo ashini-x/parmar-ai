@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import type { AnswerPacket, ConversationTurn, Env, LearningSignal, ProfileContext, QuestionJob, StudentProfile } from "../config/env";
+import { selectTypingHeartbeatJob } from "./typing-heartbeat";
 import { MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "../config/env";
 import { sendTelegramChatAction, sendTelegramMessage } from "../telegram/api";
 import { hasUnlimitedAiAccess } from "../analytics/db";
@@ -7,6 +8,7 @@ import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, isTelegramBotConnectionActive } from
 import { getCaptionedPhotoQuestion, PHOTO_CAPTION_REQUIRED_TEXT } from "../telegram/photo-intent";
 
 const TYPING_HEARTBEAT_MS = 4_000;
+const TYPING_WAIT_HEARTBEAT_MS = 2_500;
 const TYPING_MAX_AGE_MS = 10 * 60 * 1_000;
 const JOB_RETENTION_MS = 48 * 60 * 60 * 1_000;
 const PENDING_RECOVERY_MS = 45 * 1_000;
@@ -338,14 +340,13 @@ export class JobDedupe extends DurableObject {
 
   private async ensureTypingAlarm(now = Date.now()): Promise<void> {
     const alarm = await this.ctx.storage.getAlarm();
-    if (alarm === null || alarm > now + TYPING_HEARTBEAT_MS) {
-      await this.ctx.storage.setAlarm(now + TYPING_HEARTBEAT_MS);
+    if (alarm === null || alarm > now + TYPING_WAIT_HEARTBEAT_MS) {
+      await this.ctx.storage.setAlarm(now + TYPING_WAIT_HEARTBEAT_MS);
     }
   }
 
   private async reconcileAlarm(now = Date.now()): Promise<void> {
     const retentionCutoff = now - JOB_RETENTION_MS;
-    const typingCutoff = now - TYPING_MAX_AGE_MS;
     const stalePendingCutoff = now - PENDING_RECOVERY_MS;
     const staleQueuedCutoff = now - QUEUED_RECOVERY_MS;
     const staleProcessingCutoff = now - PROCESSING_LEASE_MS;
@@ -353,7 +354,6 @@ export class JobDedupe extends DurableObject {
     const quizResults = await this.ctx.storage.list<StoredQuizResultContext>({ prefix: "quiz-result:" });
     const albums = await this.ctx.storage.list<PendingPhotoAlbum>({ prefix: "photo-album:" });
     const acknowledgements = await this.ctx.storage.list<AckReservation>({ prefix: "ack:" });
-    let hasProcessingRecentJob = false;
     let nextWakeAt: number | null = null;
 
     for (const [key, acknowledgement] of acknowledgements) {
@@ -431,7 +431,6 @@ export class JobDedupe extends DurableObject {
             await this.ctx.storage.put(key, record);
           } catch { nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + 5_000); }
         } else {
-          if (record.createdAt >= typingCutoff && await isTelegramBotConnectionActive(this.runtimeEnv, record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID)) hasProcessingRecentJob = true;
           if (record.processingAt) nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, record.processingAt + PROCESSING_LEASE_MS);
         }
         continue;
@@ -456,14 +455,31 @@ export class JobDedupe extends DurableObject {
       }
     }
 
-    if (hasProcessingRecentJob) {
-      const processing = [...jobs.values()]
-        .filter((record) => record.state === "processing" && record.createdAt >= typingCutoff)
-        .sort((a, b) => b.createdAt - a.createdAt)[0];
-      if (processing) {
-        try { await sendTelegramChatAction(this.runtimeEnv, processing.chatId, "typing", processing.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID); } catch {}
+    // Keep typing alive while a question is pending or queued, not only after
+    // the Queue consumer claims it. This bridges the webhook-to-Queue handoff.
+    // The Durable Object alarm survives both short-lived Worker invocations.
+    const typingRecord = selectTypingHeartbeatJob(jobs.values(), now, TYPING_MAX_AGE_MS);
+    if (
+      typingRecord &&
+      await isTelegramBotConnectionActive(
+        this.runtimeEnv,
+        typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
+      )
+    ) {
+      try {
+        await sendTelegramChatAction(
+          this.runtimeEnv,
+          typingRecord.chatId,
+          "typing",
+          typingRecord.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
+        );
+      } catch {
+        // Typing is cosmetic; never allow a failed chat action to affect the job.
       }
-      nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + TYPING_HEARTBEAT_MS);
+      const heartbeatMs = typingRecord.state === "processing"
+        ? TYPING_HEARTBEAT_MS
+        : TYPING_WAIT_HEARTBEAT_MS;
+      nextWakeAt = Math.min(nextWakeAt ?? Number.POSITIVE_INFINITY, now + heartbeatMs);
     }
 
     if (nextWakeAt !== null && Number.isFinite(nextWakeAt)) {
@@ -775,6 +791,20 @@ export class JobDedupe extends DurableObject {
       record.queuedAt = Date.now();
     }
     await this.ctx.storage.put(key, record);
+
+    // Hand off the chat action before the webhook stops its own heartbeat.
+    // If Queue delivery is slow, the persistent alarm keeps refreshing it.
+    await this.ensureTypingAlarm();
+    try {
+      await sendTelegramChatAction(
+        this.runtimeEnv,
+        record.chatId,
+        "typing",
+        record.botConnectionId ?? LEGACY_TELEGRAM_BOT_CONNECTION_ID,
+      );
+    } catch {
+      // This is best-effort UI feedback and must not affect queue admission.
+    }
     return { ok: true };
   }
 
