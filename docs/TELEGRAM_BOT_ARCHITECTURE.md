@@ -91,7 +91,7 @@ The normal question path in `handleTelegramWebhook` follows this order:
 3. Start an early Telegram typing heartbeat immediately. The Worker sends a chat action and refreshes it every three seconds while preflight/admission is running.
 4. Reserve the acknowledgement through the per-chat Durable Object using `reserve_ack`. This prevents duplicate status messages for repeated Telegram updates.
 5. For a new reservation, send the short status message and save its message ID in Durable Object state. A cosmetic acknowledgement failure is logged but must not prevent admission.
-6. Run the user-suspension check and bot-specific mode lookup concurrently through `runSuspensionAndModeLookup`. If suspension fails or the user is suspended, the mode lookup is skipped.
+6. Start the user-suspension check and bot-specific mode lookup concurrently through `runSuspensionAndModeLookup`. If suspension fails or the user is suspended, the admission path exits without waiting for or using the mode result; that lookup may already be in flight.
 7. Resolve any pending quiz continuation state.
 8. Call the Durable Object `begin` action. The entitlement check is performed through D1, then duplicate handling, daily allowance, burst allowance and pending-job creation are serialized inside one Durable Object storage transaction.
 9. Publish the versioned question job to `QUESTION_QUEUE` and await the Queue send.
