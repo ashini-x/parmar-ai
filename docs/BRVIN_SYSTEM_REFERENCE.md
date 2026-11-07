@@ -788,6 +788,7 @@ This reduces idle time for small teacher PDFs without making large-book monitori
 - Start page-grounded retrieval QA immediately after the monitor confirms every expected item has status `completed` and no item is failed.
 - Do not add a fixed one-minute post-index sleep. The QA queries themselves verify search visibility. If the search result is temporarily not visible, the existing durable QA retry path applies bounded backoff (30 seconds up to 15 minutes).
 - Preserve the current page-grounded verification rules, sampled-page coverage, distinctive OCR probes, provenance checks and READY gate. Do not reduce QA coverage to improve a stopwatch result.
+- Use the production AI Search default top-10 result window for QA rather than requesting 50 chunks. This keeps the QA retrieval envelope aligned with normal consumer search and avoids returning excess chunks; distinctive OCR probes and retry-on-miss preserve page-provenance verification.
 - Keep one Vision OCR operation for the PDF and reuse its stored outputs for page indexing; never perform another OCR operation as an indexing retry.
 
 ### Why not use per-item polling?
