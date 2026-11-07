@@ -858,7 +858,6 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     quizStateMs: 0,
     jobAdmissionMs: 0,
     queuePublishMs: 0,
-    durableQueueMarkMs: 0,
   };
   const stopEarlyTypingNow = (): void => {
     earlyTypingHeartbeat?.stop();
@@ -1155,14 +1154,39 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     await env.QUESTION_QUEUE.send(job, { contentType: "json" });
     webhookTimings.queuePublishMs = Date.now() - queuePublishStartedAt;
     queuePublished = true;
-    const durableQueueMarkStartedAt = Date.now();
-    await jobStoreRequest(env, chatId, { action: "mark_queued", botConnectionId: bot.connectionId, updateId });
-    webhookTimings.durableQueueMarkMs = Date.now() - durableQueueMarkStartedAt;
+
+    // Queue publication is the durable hand-off. The Queue consumer can claim
+    // a pending job, so the state label and its cosmetic Telegram typing ping
+    // must not delay the webhook acknowledgement.
+    ctx.waitUntil((async () => {
+      const markQueuedStartedAt = Date.now();
+      try {
+        await jobStoreRequest(env, chatId, {
+          action: "mark_queued",
+          botConnectionId: bot.connectionId,
+          updateId,
+        });
+        logger.info("telegram_question_marked_queued", {
+          requestId,
+          updateId,
+          durationMs: Date.now() - markQueuedStartedAt,
+        });
+      } catch (error) {
+        logger.warn("telegram_question_mark_queued_failed", {
+          requestId,
+          updateId,
+          durationMs: Date.now() - markQueuedStartedAt,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })());
+
     stopEarlyTypingNow();
     logger.info("telegram_question_queued", {
       requestId,
       updateId,
       totalWebhookMs: Date.now() - webhookStartedAt,
+      durableQueueMarkScheduled: true,
       ...webhookTimings,
     });
     queueAnalytics(ctx, "question_start", () => recordQuestionStart(env, {
