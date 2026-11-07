@@ -170,6 +170,18 @@ The following remain future product work and must not be presented as existing c
 
 The current learning system is primarily **per-student**. Accumulated quiz and learning data provides a foundation for future aggregate intelligence, but no cross-student intelligence layer is claimed by v2.8.0.
 
+## VRAIN Knowledge Platform
+
+The repository now contains the source foundation for a separately deployable VRAIN Worker under [workers/vrain](workers/vrain/). It is intended to extract the Fatman-proven PDF ingestion pattern into a private, owner-operated knowledge service while leaving the current Parmar AI Worker untouched.
+
+The standalone design uses Google Cloud Vision asynchronous PDF OCR, private resumable GCS uploads, server-side SHA-256 verification, page-level indexing, independent retrieval QA, a final publish gate, checkpoint-based automatic recovery, and project-scoped read-only API keys.
+
+**Deployment status:** source and documentation are being added in this branch. The standalone Worker is not yet deployed; it requires a dedicated D1 database, private GCS bucket, Google Cloud IAM/secrets, and a verified end-to-end ingestion test. The currently deployed Parmar VRAIN compatibility path remains in place until a controlled migration and rollback window are complete.
+
+- [VRAIN Platform Specification](docs/VRAIN_PLATFORM_SPEC.md)
+- [VRAIN Owner Operations Runbook](docs/VRAIN_OPERATIONS_RUNBOOK.md)
+- [Standalone Worker README](workers/vrain/README.md)
+
 ## Repository documentation
 
 ### Product, engineering, and operations

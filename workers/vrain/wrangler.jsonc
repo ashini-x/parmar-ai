@@ -1,0 +1,49 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "vrain-engine",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-03",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true
+    }
+  },
+  "vars": {
+    "ENVIRONMENT": "development",
+    "VRAIN_SEARCH_INSTANCE": "vrain-knowledge-v1",
+    "VRAIN_GCS_BUCKET": "REPLACE_WITH_PRIVATE_VRAIN_GCS_BUCKET",
+    "VRAIN_MAX_PDF_BYTES": "1073741824",
+    "VRAIN_MAX_PDF_PAGES": "2000",
+    "VRAIN_MIN_RETRIEVAL_SCORE": "0.2"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "vrain-control-plane",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "ai_search_namespaces": [
+    {
+      "binding": "VRAIN_SEARCH",
+      "namespace": "vrain",
+      "remote": true
+    }
+  ],
+  "workflows": [
+    {
+      "name": "vrain-document-ingestion",
+      "binding": "INGEST_WORKFLOW",
+      "class_name": "VrainIngestWorkflow"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  }
+}

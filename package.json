@@ -12,7 +12,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:node": "vitest run --config vitest.node.config.ts",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "dev:vrain": "wrangler dev --config workers/vrain/wrangler.jsonc",
+    "deploy:vrain": "wrangler deploy --config workers/vrain/wrangler.jsonc",
+    "types:vrain": "wrangler types --config workers/vrain/wrangler.jsonc",
+    "check:vrain": "tsc --noEmit -p workers/vrain/tsconfig.json",
+    "test:vrain": "vitest run --config workers/vrain/vitest.node.config.ts",
+    "dry-run:vrain": "wrangler deploy --dry-run --config workers/vrain/wrangler.jsonc",
+    "migrate:vrain:local": "wrangler d1 migrations apply DB --local --config workers/vrain/wrangler.jsonc",
+    "migrate:vrain:remote": "wrangler d1 migrations apply DB --remote --config workers/vrain/wrangler.jsonc"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.1.10",
