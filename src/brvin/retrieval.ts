@@ -428,7 +428,7 @@ export async function retrieveBrvinProjectContextForProject(
     }
 
     const rerankingEnabled = env.BRVIN_RERANKING_ENABLED?.trim().toLowerCase() !== "false";
-    const rerankingMinScore = boundedThreshold(env.BRVIN_RERANKING_MIN_SCORE, 0.4);
+    const rerankingMinScore = boundedThreshold(env.BRVIN_RERANKING_MIN_SCORE, 0.15);
 
     const settled = await Promise.allSettled(normalizedQueries.map(async (query) => {
       const result = await instance.search({
