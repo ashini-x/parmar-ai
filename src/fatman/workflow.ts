@@ -1168,7 +1168,27 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             importId, bookId: importJob.book_id, agent: "Index monitor specialist",
             phase: "indexing", eventType: "index.monitor_pass", status: failedPages.length ? "warning" : "running",
             message: "Index monitor checked " + completedPages + " of " + expectedPages + " pages; " + failedPages.length + " failed pages need attention.",
-            details: { completedPages, expectedPages, failedPages: failedPages.length, monitorSequence, repairPass, nextMonitorDelayMs: fatmanIndexMonitorDelayMs(monitorSequence + 1, expectedPages) },
+            details: {
+              completedPages,
+              expectedPages,
+              failedPages: failedPages.length,
+              monitorSequence,
+              repairPass,
+              nextMonitorDelayMs: fatmanIndexMonitorDelayMs(monitorSequence + 1, expectedPages),
+              // Compact per-page snapshot for the consumer progress map. This
+              // avoids a live AI Search scan on every browser poll.
+              pageStatusCodes: Array.from({ length: expectedPages }, (_, index) => {
+                const status = byPage.get(index + 1)?.status;
+                return status === "completed" ? "c" :
+                  status === "running" ? "r" :
+                  status === "queued" ? "q" :
+                  status === "error" || status === "skipped" || status === "outdated" ? "f" : "m";
+              }).join(""),
+              failedPageErrors: failedPages.slice(0, 100).map(item => ({
+                page: item.page,
+                error: String(item.error ?? "").slice(0, 240),
+              })),
+            },
           });
           return { completedPages, failedPages: failedPages.length };
         });
