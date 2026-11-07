@@ -113,7 +113,7 @@ describe("BRVIN browser script contract", () => {
     expect(analyticsSource).toContain('2026-11-04-brvin-vision-output-deleted-at-v1');
     expect(workflowSource).toContain('params.task === "delete_book"');
     expect(workflowSource).toContain('params.task === "delete_vision_output"');
-    expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/")');
+    expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/", async progress =>');
     expect(workflowSource).toContain("instance.items.delete(item.id)");
     expect(workflowSource).toContain("brvinDeletionSearchPageRequest(page)");
     expect(workflowSource).not.toContain("per_page: 100, source: \"builtin\"");
@@ -122,6 +122,7 @@ describe("BRVIN browser script contract", () => {
     expect(workflowSource).toContain("objectVersionsProcessed");
     expect(adminSource).toContain("function deletionProgressMarkup(progress,status,message)");
     expect(adminSource).toContain("deletionProgressMessage");
+    expect(adminSource).toContain(".deletion-progress.failed");
     expect(adminSource).toContain("Retry deletion");
     const deletionSource = readFileSync(new URL("../src/fatman/deletion.ts", import.meta.url), "utf8");
     expect(deletionSource).toContain("BRVIN_DELETION_SEARCH_PAGE_SIZE = 50");
