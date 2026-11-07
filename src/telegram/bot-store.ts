@@ -15,8 +15,32 @@ interface CachedTypingCredential {
 }
 const typingCredentialCache = new Map<string, CachedTypingCredential>();
 
+// Outbound API calls frequently edit the same Telegram status message. Reuse
+// the decrypted bot token briefly instead of querying/decrypting D1 for every
+// progress edit. This cache contains only the bot token and is isolate-local.
+const TELEGRAM_API_TOKEN_TTL_MS = 15_000;
+const telegramApiTokenCache = new Map<string, CachedTypingCredential>();
+
+export async function getTelegramBotApiToken(env: Env, connectionId: string): Promise<string | null> {
+  const normalizedId = connectionId.trim();
+  if (!normalizedId) return null;
+  const now = Date.now();
+  const cached = telegramApiTokenCache.get(normalizedId);
+  if (cached && cached.expiresAt > now) return cached.token;
+  telegramApiTokenCache.delete(normalizedId);
+
+  const connection = await getTelegramBotByConnectionId(env, normalizedId);
+  const token = connection?.token ?? null;
+  telegramApiTokenCache.set(normalizedId, {
+    token,
+    expiresAt: now + (token ? TELEGRAM_API_TOKEN_TTL_MS : INACTIVE_TYPING_CREDENTIAL_TTL_MS),
+  });
+  return token;
+}
+
 function invalidateTypingCredential(connectionId: string): void {
   typingCredentialCache.delete(connectionId);
+  telegramApiTokenCache.delete(connectionId);
 }
 
 function rememberTypingCredential(connectionId: string, token: string | null, now: number): string | null {
@@ -206,6 +230,7 @@ export async function saveTelegramBot(
     input.lastVerifiedAt ?? now,
     input.disconnectedAt ?? (input.status === "disconnected" ? now : null),
   ).run();
+  invalidateTypingCredential(input.connectionId);
 
   const saved = await getTelegramBotByConnectionId(env, input.connectionId);
   if (!saved) throw new Error("Telegram bot connection could not be verified after saving.");
