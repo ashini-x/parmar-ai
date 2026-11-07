@@ -473,6 +473,8 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         await step.do("record book deletion started", async () => {
           await recordBrvinDeletionProgress(this.env, importId, {
             phase: "inventory",
+            completed: 0,
+            total: 1,
             message: "Starting a source-scoped inventory of this book's indexed AI Search pages.",
             extra: { searchPrefix: book.search_prefix },
           });
@@ -489,6 +491,16 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
               if (item.key.startsWith(book.search_prefix)) matches.push({ id: item.id, key: item.key });
             }
             const totalPages = response.result_info?.total_pages;
+            if (page % 5 === 0 || rows.length < 50 || (typeof totalPages === "number" && totalPages > 0 && page >= totalPages)) {
+              const inventoryTotal = typeof totalPages === "number" && totalPages > 0 ? totalPages : Math.max(page, 1);
+              await recordBrvinDeletionProgress(this.env, importId, {
+                phase: "inventory",
+                completed: page,
+                total: inventoryTotal,
+                message: "Scanning AI Search inventory: page " + page + (typeof totalPages === "number" && totalPages > 0 ? " of " + totalPages : "") + ".",
+                extra: { inventoryPage: page, inventoryPages: inventoryTotal, searchItemsFound: matches.length },
+              });
+            }
             if (typeof totalPages === "number" && totalPages > 0 && page >= totalPages) break;
             if (rows.length < 50) break;
             page += 1;
