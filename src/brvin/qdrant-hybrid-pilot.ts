@@ -31,8 +31,9 @@ export interface BrvinM14QueryResult extends RetrievalCandidate {
 /** Case- and symbol-preserving sparse terms: F != f, x != ×, and - != −. */
 export async function buildBrvinSparseVector(text: string): Promise<BrvinSparseVector> {
   const frequencies = new Map<string, number>();
+  const normalizedText = text.normalize("NFC");
   TOKEN_PATTERN.lastIndex = 0;
-  for (let match = TOKEN_PATTERN.exec(text.normalize("NFC")); match; match = TOKEN_PATTERN.exec(text.normalize("NFC"))) {
+  for (let match = TOKEN_PATTERN.exec(normalizedText); match; match = TOKEN_PATTERN.exec(normalizedText)) {
     const term = match[0];
     frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
   }
@@ -185,6 +186,7 @@ export class BrvinQdrantHybridPilot {
       this.assertCollectionCompatibility(afterRace);
     }
     const created = await this.requestJson<QdrantCollectionInfo>(path, "GET");
+    if (!created) throw new Error("The newly created Qdrant M14 collection could not be read back.");
     this.assertCollectionCompatibility(created);
   }
 
@@ -341,6 +343,7 @@ export class BrvinQdrantHybridPilot {
       "/collections/" + encodeURIComponent(this.collection),
       "GET",
     );
+    if (!info) throw new Error("The Qdrant M14 collection health response is empty.");
     this.assertCollectionCompatibility(info);
     return { providerId: this.providerId, ok: true, version: "collection-schema-v1" };
   }
