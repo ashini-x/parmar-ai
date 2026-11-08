@@ -51,14 +51,15 @@ function readerEnv(): Env {
 describe("BRVIN immutable corpus replay reader", () => {
   it("rebuilds every physical page from stored manifests without another OCR request", async () => {
     const data = await fixture();
-    const request = vi.fn(async (input: RequestInfo | URL) => {
+    const requestMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = input instanceof Request ? new URL(input.url) : new URL(String(input));
       const objectName = decodeURIComponent(url.pathname.split("/o/")[1] ?? "");
       const value = data.objects.get(objectName);
       return value === undefined
         ? new Response("missing", { status: 404 })
         : new Response(JSON.stringify(value), { status: 200 });
-    }) as typeof fetch;
+    });
+    const request = requestMock as typeof fetch;
 
     const replay = await readBrvinCorpusGeneration(readerEnv(), SOURCE_ID, data.source.generationId, {
       request,
@@ -70,7 +71,7 @@ describe("BRVIN immutable corpus replay reader", () => {
     expect(replay.pageManifests[0].rawOcrText).toBe("Net force changes motion.\nF = ma");
     expect(replay.chunkCount).toBe(data.page1.chunks.length + data.page2.chunks.length);
     expect(request).toHaveBeenCalledTimes(3);
-    for (const [url, init] of request.mock.calls) {
+    for (const [url, init] of requestMock.mock.calls) {
       expect(String(url)).toContain("storage.googleapis.com/storage/v1");
       expect(init?.method).toBe("GET");
       expect(init?.headers).toMatchObject({ authorization: "Bearer test-token" });
