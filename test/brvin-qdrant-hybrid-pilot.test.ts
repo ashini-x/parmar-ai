@@ -203,7 +203,7 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
       contentTypes: ["formula", "explanatory_text"],
     });
     const queryCall = calls.find((call) => call.url.endsWith("/points/query"));
-    expect(queryCall?.body.query).toEqual({ rrf: {} });
+    expect(queryCall?.body.query).toEqual({ fusion: "rrf" });
     expect(queryCall?.body.prefetch).toHaveLength(2);
     expect(queryCall?.body.prefetch.map((item: any) => item.using)).toEqual(["dense", "sparse"]);
     for (const prefetch of queryCall?.body.prefetch ?? []) {
