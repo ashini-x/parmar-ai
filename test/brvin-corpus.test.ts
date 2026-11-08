@@ -34,8 +34,10 @@ describe("BRVIN deterministic durable corpus", () => {
       sourceId: source.sourceId,
       sourcePdfSha256: source.sourcePdfSha256,
       generationId: manifest.generationId,
+      stableItemKey: "brvin/books/source-401/pages/page-000002.txt",
       pdfPage: 2,
       rawOcrText,
+      pageConfidence: 0.91,
     };
 
     const first = await buildBrvinPageManifest(input);
@@ -75,11 +77,19 @@ describe("BRVIN deterministic durable corpus", () => {
       sourceId: "00000000-0000-4000-8000-000000000402",
       sourcePdfSha256: "b".repeat(64),
       generationId: "c".repeat(32),
+      stableItemKey: "brvin/books/source-402/pages/page-000007.txt",
       pdfPage: 7,
       rawOcrText,
+      pageConfidence: 0.88,
     });
 
     expect(manifest.pdfPage).toBe(7);
+    expect(manifest.stableItemKey).toBe("brvin/books/source-402/pages/page-000007.txt");
+    expect(manifest.ocrEvidence).toMatchObject({
+      confidenceState: "page-confidence-available",
+      pageConfidence: 0.88,
+      interpretation: "source-signal-only-not-a-correctness-guarantee",
+    });
     expect(manifest.contentTypes).toEqual(expect.arrayContaining([
       "definition", "formula", "worked_example", "numerical_problem", "explanatory_text",
     ]));
