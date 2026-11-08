@@ -42,6 +42,34 @@ export interface M14StagingWorkerEnv extends Env {
   BRVIN_M14_ADMIN_TOKEN?: string;
 }
 
+interface M14VisionRecoveryRecord {
+  source_id: string;
+  status: "submitting" | "running" | "completed" | "failed" | "submission_uncertain";
+  vision_operation: string | null;
+  output_bucket: string;
+  output_prefix: string;
+  source_pdf_generation: string;
+  expected_page_count: number;
+  error_message: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface M14VisionRecoveryStatus {
+  sourceId: string;
+  status: M14VisionRecoveryRecord["status"] | "not_started" | "waiting_for_output_files";
+  operationDone: boolean;
+  operationHasError: boolean;
+  destinationMatches: boolean;
+  expectedPageCount: number;
+  outputBucket?: string;
+  outputPrefix?: string;
+  expectedFileNames: string[];
+  actualFileNames: string[];
+  missingFileNames: string[];
+  error?: string;
+}
+
 export interface M14VisionOutputDiagnostics {
   sourceId: string;
   pageCount: number;
