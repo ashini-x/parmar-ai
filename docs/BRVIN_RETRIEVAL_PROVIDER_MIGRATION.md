@@ -85,7 +85,7 @@ A provider retry must be safe to repeat. It must never re-run Vision OCR merely 
 3. Core checks the application-to-project grant, project state, source grants, source readiness and quota in D1.
 4. Core resolves the server-authorized source/item-key allowlist. The caller and browser do not supply trusted Qdrant collection names or arbitrary filters.
 5. Core obtains the question embedding from Vertex AI using the same embedding-model/version family used for the indexed corpus.
-6. Core queries Qdrant with dense + BM25/sparse retrieval and RRF, constrained by server-built project/source filters.
+6. Core runs one unified hybrid retrieval path across the authorised corpus: dense + BM25/sparse retrieval with RRF, constrained by server-built project/source filters. It does not route theory, formula, worked-example and numerical questions into separate subject bots or isolated indexes. Content-type metadata may support scoring, filtering within the already authorised scope and diagnostics, but must not create brittle hard-routing modes.
 7. Core validates returned point IDs, source keys, item keys and physical PDF page metadata against the D1-authorized allowlist before returning evidence.
 8. Core returns the same bounded evidence and provenance response shape currently expected by v2 consumers.
 9. The consumer continues using its own Gemini/model, prompts, conversation state and response delivery.
@@ -116,13 +116,33 @@ Each indexed point should carry enough non-secret payload to validate provenance
 - chunker version and overlap/size configuration;
 - content hash;
 - embedding model/version and vector generation;
-- source/index generation identifier.
+- source/index generation identifier;
+- original OCR text, preserved without destructive normalization;
+- normalized searchable text, stored as a separate versioned representation;
+- formula/LaTeX text and a normalized formula-search representation when reliably extractable;
+- content-type tags where confidently classified (explanatory text, definition, formula, worked example, numerical problem, answer key);
+- OCR/extraction confidence or uncertainty signals when available, with physical-page provenance.
 
 Use deterministic IDs derived from the immutable source/page/chunk identity plus the chunker and embedding generation. Re-indexing the same generation must upsert rather than duplicate. New embedding dimensions or incompatible embedding versions must use a separate collection/generation and a controlled rebuild.
 
 The canonical original PDF and OCR outputs remain in private GCS. The chunk text/manifest must also be durable, versioned and recoverable independently of Qdrant. Define a dedicated retention policy for derived chunk artifacts; do not accidentally subject the only rebuildable corpus copy to the OCR cleanup rule.
 
-### 4.5 Authorization, isolation and deletion
+### 4.5 Unified math-aware retrieval policy
+
+BRVIN must retrieve mixed educational content through one unified retrieval system—not separate theory, maths, numerical or subject-specific bots. A single student question may need explanatory prose, a definition, an equation, a worked example and a numerical setup; the candidate-generation and evidence-return path must be able to retrieve all of these together.
+
+- Preserve the raw OCR text as the immutable source-derived representation. Never overwrite it with cleaned or normalized text.
+- Store normalized searchable text separately and version its normalization rules.
+- Where the OCR/source extraction actually provides it, retain formula text/LaTeX and a separate normalized formula-search representation. Preserve the original expression alongside any normalized form; normalization must not erase sign, exponent, subscript, fraction, vector, unit or operator distinctions.
+- Attach content-type metadata such as `explanatory_text`, `definition`, `formula`, `worked_example`, `numerical_problem` and `answer_key` only as descriptive signals. Use it for optional ranking/diagnostics, not as a mandatory route that can hide useful evidence from another content type.
+- Dense retrieval contributes semantic matching; BM25/sparse retrieval contributes lexical and symbol-token matching; RRF combines ranked candidate lists. Do not claim that BM25 over raw LaTeX guarantees exact mathematical equivalence or exact symbol discrimination. Tokenization, OCR quality and notation variation must be tested.
+- A mixed query should be able to return both conceptual explanation and the relevant formula/numerical passage, with the physical PDF page and source identity attached to every result.
+- Where formula extraction or OCR is uncertain, preserve the uncertainty and source-page reference. Do not silently present a corrupted OCR equation as a verified formula; the original PDF remains the audit reference.
+- Formula-aware extraction/normalization must be versioned and rebuildable like chunking and embeddings. It must not make Qdrant the sole copy of the source-derived content.
+
+This migration is a retrieval/indexing project, not a new symbolic algebra engine or an answer-generation service. Final explanation remains consumer-owned. Exact calculation tooling, where needed by a consumer, is a separate consumer-level decision and must not be simulated by silently altering retrieved source values.
+
+### 4.6 Authorization, isolation and deletion
 
 - D1 remains authoritative for ownership, readiness, grants, quotas and revocation.
 - Build Qdrant filters only from the current server-side D1 authorization result.
@@ -156,9 +176,9 @@ The numbering extends the completed M6–M11 baseline. M12–M17 are the next BR
 | Milestone | Owner(s) | Scope | Acceptance gate | Initial status | Tracking |
 |---|---|---|---|---|
 | **M12 — Architecture and UX contract freeze** | Core + Teachers | Record provider decision, trust boundaries, compatibility rules, target flow, milestone sequence and UI preservation. | Canonical docs in both repos link to one plan; current production path and no-migration guardrail are explicit. | **COMPLETE — documentation**  | [Core #141](https://github.com/ashini-x/parmar-ai/issues/141) |
-| **M13 — Core provider boundary and rebuildable corpus** | Core | Define provider/embedding interfaces; version chunker and manifests; durable private chunk artefacts; deterministic IDs; provider configuration; tests. No production provider switch. | Existing AI Search behavior remains green; replaying a source from GCS/OCR + manifest is deterministic; idempotent upsert/delete; v2 contract unchanged; D1 remains authorization authority. | PLANNED  | [Core #142](https://github.com/ashini-x/parmar-ai/issues/142) |
-| **M14 — Vertex AI + Qdrant Physics pilot** | Core | Provision non-production Qdrant; select/verify Vertex embedding model and region; index the existing three-page Physics pilot from stored OCR (no PDF re-upload or Vision OCR); implement hybrid retrieval. | Canonical Physics queries return relevant evidence, correct source IDs and physical PDF pages; re-index is repeatable; no production traffic moved; cost and latency recorded. | PLANNED  | [Core #143](https://github.com/ashini-x/parmar-ai/issues/143) |
-| **M15 — Shadow retrieval, quality, load and cost benchmark** | Core | Run identical queries against AI Search and Qdrant; shadow new-provider requests without changing user answers; benchmark 1, 50, 100, 500 and 1,000 concurrent requests; test recovery, quota, throttling and failure modes. | No authorization/provenance regression; quality meets or exceeds baseline; p50/p95/p99, error rate and cost per 1,000 retrievals documented; 500-concurrency behavior is stable; rollout and rollback rehearsal pass. | PLANNED  | [Core #144](https://github.com/ashini-x/parmar-ai/issues/144) |
+| **M13 — Core provider boundary and rebuildable, math-aware corpus** | Core | Define provider/embedding interfaces; deterministic chunker and durable manifests; preserve raw OCR plus versioned normalized text and optional formula/LaTeX representations; content-type metadata; deterministic IDs and replay tests. No production provider switch. | Existing AI Search remains green; replay is deterministic; formula metadata never replaces raw OCR; mixed-content chunks preserve source/page identity; v2 contract unchanged; D1 remains authorization authority. | PLANNED  | [Core #142](https://github.com/ashini-x/parmar-ai/issues/142) |
+| **M14 — Vertex AI + Qdrant unified hybrid Physics pilot** | Core | Provision non-production Qdrant; verify the Vertex embedding model/region; reuse the existing Physics OCR and add only approved representative formula/numerical fixtures or corpus samples; index unified dense + sparse/BM25 representations with RRF. | Conceptual, exact-formula, paraphrase, equivalent-notation, worked-example, numerical and mixed theory+math queries return relevant evidence with exact source/page provenance; OCR uncertainty is visible; re-index is deterministic; production stays on AI Search. | PLANNED  | [Core #143](https://github.com/ashini-x/parmar-ai/issues/143) |
+| **M15 — Shadow benchmark for relevance, math fidelity, security, load and cost** | Core | Compare AI Search and Qdrant on the same versioned corpus and unified mixed-content query suite; shadow without changing answers; measure p50/p95/p99, quality, formula/symbol fidelity, provenance, cost, concurrency 1/50/100/500/1,000, throttling and recovery. | No authorization/provenance regression; overall and math-specific quality meet the agreed baseline; exact formula/symbol cases and mixed queries pass; failures/OCR uncertainty are reported; 500-concurrency behavior, rollback and cost gates pass. | PLANNED  | [Core #144](https://github.com/ashini-x/parmar-ai/issues/144) |
 | **M16 — Consumer and admin experience parity** | Core + Teachers | Connect the same v2 contract to the provider flag; preserve both admin UIs, five stages, page map, source CRUD, retry and READY gating; update only provider-specific wording/advanced diagnostics; test the real consumer. | User can perform the same upload/manage/retrieval journey without retraining; consumer code has no direct Vertex/Qdrant access; existing response/citation UI works; grant revoke/re-grant still passes. | PLANNED  | [Core #145](https://github.com/ashini-x/parmar-ai/issues/145) · [Teachers #18](https://github.com/ashini-x/brvin-teachers/issues/18) |
 | **M17 — Controlled production cutover and legacy retirement** | Core + Teachers | Stage rollout using a provider flag; canary/shadow, gradual traffic, monitor and roll back; retain AI Search during the soak; retire Workers AI/AI Search only after acceptance and explicit review. | Production quality, access, page provenance, load, failure, cost and UI tests pass; rollback is demonstrated; at least 14 days of stable full-production soak completed before legacy deletion; docs/runbooks reflect actual deployed state. | PLANNED  | [Core #146](https://github.com/ashini-x/parmar-ai/issues/146) |
 
@@ -183,7 +203,7 @@ Measure separately:
 
 Initial engineering goals for the **retrieval component only** are p50 below 250 ms and p95 below 700 ms, with stable operation at 500 concurrent requests. These are aspirational acceptance targets, not measured results or service guarantees. The decision must also consider quality and cost; do not accept a faster provider if evidence relevance, citation accuracy or authorization is worse. If these targets prove unrealistic for the selected Vertex endpoint/region, record the measured baseline and approve a reasoned target change rather than hiding the result.
 
-Run the same Physics pilot queries used by the current retrieval test. Add representative multi-page PDFs and paraphrased, lexical, cross-page and no-answer questions before any production decision. Test source revocation while vectors remain physically present to prove D1 authorization and post-query validation work independently of vector cleanup.
+Run the same Physics pilot queries used by the current retrieval test. The fixed suite must include conceptual/theory, exact formula and symbol-sensitive retrieval, paraphrase, equivalent notation, worked example, numerical setup, unit-bearing query, mixed theory+math, cross-page reasoning, lexical lookup and no-answer cases. Include controlled OCR-noise/uncertainty cases and hard negatives where a one-character or operator difference changes meaning (for example, minus vs hyphen, `x` vs `×`, subscript vs ordinary digit, or exponent changes). Add representative multi-page PDFs or approved test fixtures before any production decision. Report results by query class as well as overall; a strong aggregate score must not conceal weak formula retrieval. Test source revocation while vectors remain physically present to prove D1 authorization and post-query validation work independently of vector cleanup.
 
 ## 8. Rollout and rollback policy
 
@@ -231,5 +251,5 @@ Any change to the v2 response contract, management RPC lifecycle, readiness sema
 
 ## 11. New-chat continuation
 
-For a new chat, read this file first after the Core master plan. Inspect current GitHub, code, issues and production state in both repositories before continuing. Treat M12–M17 as a planned workstream with M12 documentation complete and M13 the next implementation milestone. Do not assume that Vertex, Qdrant, a new embedding model or a new production index has been provisioned. Start with M13, preserve current AI Search production and the identical user workflow, and keep Core and Teachers documentation synchronized.
+For a new chat, read this file after the Core master plan and inspect the latest commits, issues, implementation and production state in both repositories. M12 documentation is complete; M13 is the next implementation milestone. Current production remains on Cloudflare AI Search; do not assume Vertex, Qdrant or a new index has been provisioned. Implement one unified math-aware hybrid retrieval path for theory, formulas, worked examples and numerical problems—never separate subject bots—and preserve raw OCR, formula/source uncertainty and physical page provenance. Keep D1 as authorization authority, v2 unchanged, both admin experiences familiar, and Core/Teachers docs synchronized.
 
