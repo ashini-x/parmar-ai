@@ -42,6 +42,12 @@ function makeEnv(overrides: Partial<Env> = {}): M14StagingWorkerEnv {
     GCP_PRIVATE_KEY: "test-only-private-key",
     FATMAN_GCS_BUCKET: "parmar-fatman-ocr-90db7be4",
     BRVIN_M14_CORPUS_BUCKET: "brvin-m14-physics-90db7be4-a8ca999e",
+    BRVIN_M14_VERTEX_LOCATION: "asia-south1",
+    BRVIN_M14_VERTEX_MODEL: "gemini-embedding-001",
+    BRVIN_M14_EMBEDDING_DIMENSIONS: "768",
+    BRVIN_M14_QDRANT_URL: "https://qdrant-test.example:6333",
+    BRVIN_M14_QDRANT_API_KEY: "test-only-qdrant-api-key",
+    BRVIN_M14_QDRANT_COLLECTION: "brvin_m14_physics_pilot_v1",
     DB: db as never,
     ...overrides,
   } as M14StagingWorkerEnv;
@@ -116,11 +122,162 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(html).toContain('/admin/m14/vision/status');
     expect(html).toContain('/admin/m14/corpus/verify');
     expect(html).toContain("Verify stored M14 manifests (read only)");
+    expect(html).toContain('/admin/m14/qdrant/index');
+    expect(html).toContain('/admin/m14/qdrant/evaluate');
+    expect(html).toContain("Embed and index the 7 Physics chunks in Qdrant");
     expect(html).toContain("Recreate OCR output from retained PDF");
     expect(html).toContain("credentials: \"omit\"");
     expect(html).not.toContain(TOKEN);
     expect(html).not.toContain("test-only-private-key");
     expect(html).not.toContain("https://");
+  });
+
+  it("requires the exact Physics source and bearer authentication before Qdrant indexing", async () => {
+    const index = vi.fn(async () => ({
+      sourceId: SOURCE_ID,
+      generationId: "57129957231e548064e5594d8fb9f501",
+      projectId: "448249b4-fed9-45f5-9137-6014f242ddbe",
+      collection: "brvin_m14_physics_pilot_v1",
+      pageCount: 3,
+      chunkCount: 7,
+      pointCount: 7,
+      embeddingModelIds: ["gemini-embedding-001"],
+      embeddingModelVersions: ["test-model-version"],
+      dimensions: 768,
+      deterministicRetrySafe: true as const,
+    }));
+    const denied = await handleM14StagingRequest(
+      makeRequest("/admin/m14/qdrant/index", { body: { confirmSourceId: SOURCE_ID } }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      index as never,
+    );
+    expect(denied.status).toBe(401);
+    expect(index).not.toHaveBeenCalled();
+
+    const wrongSource = await handleM14StagingRequest(
+      makeRequest("/admin/m14/qdrant/index", {
+        token: TOKEN,
+        body: { confirmSourceId: "00000000-0000-4000-8000-000000000000" },
+      }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      index as never,
+    );
+    expect(wrongSource.status).toBe(400);
+    expect(index).not.toHaveBeenCalled();
+
+    const allowed = await handleM14StagingRequest(
+      makeRequest("/admin/m14/qdrant/index", {
+        token: TOKEN,
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      index as never,
+    );
+    expect(allowed.status).toBe(200);
+    await expect(allowed.json()).resolves.toMatchObject({
+      ok: true,
+      index: { pointCount: 7, chunkCount: 7, deterministicRetrySafe: true },
+    });
+    expect(index).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires Vertex and Qdrant configuration before enabling indexing or query evaluation", async () => {
+    const index = vi.fn(async () => ({ pointCount: 7 }));
+    const evaluate = vi.fn(async () => ({ queryCount: 3 }));
+    const response = await handleM14StagingRequest(
+      makeRequest("/admin/m14/qdrant/index", {
+        token: TOKEN,
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv({ BRVIN_M14_QDRANT_API_KEY: undefined }),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      index as never,
+      evaluate as never,
+    );
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "m14_vertex_qdrant_configuration_incomplete",
+    });
+    expect(index).not.toHaveBeenCalled();
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
+  it("runs only the three prior-evidence Physics retrieval checks through the authenticated staging route", async () => {
+    const evaluation = {
+      projectId: "448249b4-fed9-45f5-9137-6014f242ddbe",
+      sourceId: SOURCE_ID,
+      collection: "brvin_m14_physics_pilot_v1",
+      embeddingModel: "gemini-embedding-001",
+      dimensions: 768,
+      queryCount: 3,
+      checks: [
+        { id: "newtons-second-law-concept", category: "conceptual", expectedPages: [2], retrievedPages: [2], expectedPageCoverage: [2], resultCount: 1, topScore: 0.92, verification: "prior-source-evidence" as const },
+        { id: "four-kilogram-worked-example", category: "worked_example", expectedPages: [3], retrievedPages: [3], expectedPageCoverage: [3], resultCount: 1, topScore: 0.91, verification: "prior-source-evidence" as const },
+        { id: "bus-braking-answer", category: "bus_braking", expectedPages: [3, 1], retrievedPages: [3, 1], expectedPageCoverage: [3, 1], resultCount: 2, topScore: 0.89, verification: "prior-source-evidence" as const },
+      ],
+      note: "Smoke only.",
+    };
+    const evaluate = vi.fn(async () => evaluation);
+    const denied = await handleM14StagingRequest(
+      makeRequest("/admin/m14/qdrant/evaluate", {
+        method: "POST",
+        token: "wrong-token",
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      evaluate as never,
+    );
+    expect(denied.status).toBe(401);
+    expect(evaluate).not.toHaveBeenCalled();
+
+    const allowed = await handleM14StagingRequest(
+      makeRequest("/admin/m14/qdrant/evaluate", {
+        method: "POST",
+        token: TOKEN,
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      evaluate as never,
+    );
+    expect(allowed.status).toBe(200);
+    await expect(allowed.json()).resolves.toMatchObject({
+      ok: true,
+      evaluation: { queryCount: 3, checks: expect.arrayContaining([
+        expect.objectContaining({ id: "newtons-second-law-concept" }),
+      ]) },
+    });
+    expect(evaluate).toHaveBeenCalledTimes(1);
   });
 
   it("provides authenticated read-only manifest verification without returning OCR text", async () => {
