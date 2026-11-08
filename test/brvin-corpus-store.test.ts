@@ -72,6 +72,8 @@ describe("BRVIN private derived-corpus GCS store", () => {
       job,
       2,
       rawOcrText,
+      "brvin/books/" + SOURCE_ID + "/pages/page-000002.txt",
+      0.93,
     );
 
     expect(first.sourceManifestCreated).toBe(true);
@@ -85,7 +87,13 @@ describe("BRVIN private derived-corpus GCS store", () => {
 
     const pageObject = [...storedObjects.entries()].find(([name]) => name.includes("/pages/page-000002-"));
     expect(pageObject).toBeDefined();
-    expect(JSON.parse(pageObject![1]).rawOcrText).toBe(rawOcrText);
+    const persistedPage = JSON.parse(pageObject![1]);
+    expect(persistedPage.rawOcrText).toBe(rawOcrText);
+    expect(persistedPage.stableItemKey).toBe("brvin/books/" + SOURCE_ID + "/pages/page-000002.txt");
+    expect(persistedPage.ocrEvidence).toMatchObject({
+      confidenceState: "page-confidence-available",
+      pageConfidence: 0.93,
+    });
 
     const replay = await persistBrvinPageCorpus(
       { FATMAN_GCS_BUCKET: "private-test-bucket" } as any,
