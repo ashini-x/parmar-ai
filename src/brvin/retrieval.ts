@@ -523,8 +523,8 @@ export async function retrieveBrvinProjectContextForProject(
         const pageCount = pageCounts.get(pageKey) ?? 0;
         if (pageCount >= MAX_PASSAGES_PER_PAGE) continue;
 
-        const printedPage = cleanMetadataText(chunk.item?.metadata?.printedPage, 20);
-        const section = cleanMetadataText(chunk.item?.metadata?.section, 120);
+        const printedPage = cleanMetadataText(chunk.metadata?.printedPage, 20);
+        const section = cleanMetadataText(chunk.metadata?.section, 120);
         bestById.set(id, {
           id,
           bookId: source.id,
