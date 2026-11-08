@@ -4,6 +4,11 @@ export const BRVIN_NORMALIZER_VERSION = "unicode-nfc-whitespace-v1";
 export const BRVIN_CHUNK_MAX_TOKENS = 256;
 export const BRVIN_CHUNK_OVERLAP_TOKENS = 26;
 
+/** Explicit opt-in; absence and every non-true value keep production writes off. */
+export function brvinCorpusManifestEnabled(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() === "true";
+}
+
 export interface BrvinFormulaCandidate {
   lineNumber: number;
   startChar: number;
@@ -152,6 +157,7 @@ export async function buildBrvinSourceManifest(input: {
   const generationSeed = JSON.stringify({
     sourceId: input.sourceId,
     sourcePdfSha256,
+    pageCount: input.pageCount,
     ocrEngine: "google-cloud-vision-document-text-detection",
     schemaVersion: BRVIN_CORPUS_SCHEMA_VERSION,
     chunkerVersion: BRVIN_CHUNKER_VERSION,
