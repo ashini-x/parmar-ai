@@ -50,26 +50,75 @@ The non-secret settings, including the source bucket, separate M14 bucket, stagi
 
 The original BRVIN ingest completed successfully, passed page-grounded retrieval QA, and marked the Physics source ready. As part of the existing retention policy, the original PDF and searchable AI Search page text were retained while the three temporary Google Vision JSON files were deliberately removed. M14 therefore starts one new Google Vision OCR operation from the retained original PDF; it does not ask the operator to upload the PDF again.
 
-1. Open the staging health page:
-   ` + "`" + `https://parmar-ai-m14-staging.thenewtongs.workers.dev/health` + "`" + `
-2. Confirm ` + "`" + `environment: "staging"` + "`" + `, ` + "`" + `pilotEnabled: true` + "`" + `, ` + "`" + `sourceRegistryBound: true` + "`" + `, and all required secret-presence checks are true.
-3. Open the browser operator:
-   ` + "`" + `https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m14` + "`" + `
-4. Enter the ` + "`" + `BRVIN_M14_ADMIN_TOKEN` + "`" + ` in the password field.
+1. Open the staging health page: `https://parmar-ai-m14-staging.thenewtongs.workers.dev/health`.
+2. Confirm `environment: "staging"`, `pilotEnabled: true`, `sourceRegistryBound: true`, and all required secret-presence checks are true.
+3. Open the browser operator: `https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m14`.
+4. Enter the `BRVIN_M14_ADMIN_TOKEN` in the password field.
 5. Tick the separate confirmation stating that a new Google Vision OCR request will be submitted. It can incur Google Cloud usage charges.
-6. Click **Recreate OCR output from retained PDF (one time)**. The Worker verifies the exact retained source PDF object and size, reserves a one-time recovery record in the isolated staging D1 database, then submits one Vision PDF OCR request. The source PDF is read from the original bucket; the new OCR JSON is written only to the M14 destination bucket under ` + "`" + `brvin/m14-staging/vision-output/<source-id>/attempt-001/` + "`" + `. The page does not upload the PDF.
-7. Re-enter the operator token and click **Check OCR recovery status (read only)** periodically. Wait until the response says ` + "`" + `status: "completed"` + "`" + ` and shows all three files: ` + "`" + `output-1-to-1.json` + "`" + `, ` + "`" + `output-2-to-2.json` + "`" + `, and ` + "`" + `output-3-to-3.json` + "`" + `.
+6. Click **Recreate OCR output from retained PDF (one time)**. The Worker verifies the exact retained source PDF object and size, reserves a one-time recovery record in the isolated staging D1 database, then submits one Vision PDF OCR request. The source PDF is read from the original bucket; the new OCR JSON is written only to the M14 destination bucket under `brvin/m14-staging/vision-output/<source-id>/attempt-001/`. The page does not upload the PDF.
+7. Re-enter the operator token and click **Check OCR recovery status (read only)** periodically. Wait until the response says `status: "completed"` and shows all three files: `output-1-to-1.json`, `output-2-to-2.json`, and `output-3-to-3.json`.
 8. Tick the separate manifest confirmation, re-enter the operator token, and click **Run Physics backfill**. The Worker will read the verified recovered OCR files and create immutable source/page manifests and chunks in the M14 destination bucket.
-9. A successful backfill receipt contains ` + "`" + `ok: true` + "`" + `, ` + "`" + `pageCount: 3` + "`" + `, a generation ID, and results for physical pages 1, 2 and 3. It does not include OCR text or credentials; the receipt can be shared for verification.
+9. A successful backfill receipt contains `ok: true`, `pageCount: 3`, a generation ID, and results for physical pages 1, 2 and 3. It does not include OCR text or credentials.
 
-After the backfill succeeds, use **Verify stored M14 manifests (read only)** on the browser operator. This calls the production corpus reader against the separate M14 bucket and recomputes the source generation ID, all physical page manifests, raw OCR hashes, normalized-text hashes, deterministic chunk identities and formula metadata. For the pinned Physics pilot it must return `verified: true`, 3 pages and 7 chunks, with page chunk counts 2/2/3. The endpoint returns only page keys, counts and SHA-256 values; it never returns OCR text.
+After the backfill succeeds, use **Verify stored M14 manifests (read only)**. It recomputes the source generation ID, raw OCR hashes, normalized-text hashes, deterministic chunks and formula metadata. The Physics pilot must return `verified: true`, 3 pages and 7 chunks, with page chunk counts 2/2/3. The endpoint never returns OCR text.
 
-The one-time recovery table reserves the source ID before calling Google Vision. Repeated clicks return the existing operation rather than submitting duplicate OCR jobs. If the network connection ends after submission but before an operation ID is saved, the record enters ` + "`" + `submission_uncertain` + "`" + ` and automatic resubmission is blocked so a duplicate OCR job is not accidentally billed. A failed API response is retained in the staging record for diagnosis rather than silently retried.
+The one-time recovery table prevents duplicate OCR submissions. If the connection ends after submission but before an operation ID is saved, the record enters `submission_uncertain` and automatic resubmission is blocked. Do not click the recovery button again in that state; inspect the record first.
 
-The page also provides **Inspect original OCR folder (read only)** for the deleted original prefix. It returns only filenames and sizes, never OCR text. The recovery-status endpoint similarly returns only operation state and filenames; it does not return OCR content.
+The source bucket has **Storage Object Viewer**. The M14 destination bucket has **Storage Object Creator** and **Storage Object Viewer**. Google documents PDF/TIFF async OCR output as JSON files in the configured GCS destination; `batchSize: 1` requests one response proto per output JSON file. References: [Vision PDF/TIFF OCR](https://docs.cloud.google.com/vision/docs/pdf), [Vision async file annotation](https://docs.cloud.google.com/vision/docs/reference/rest/v1/files/asyncBatchAnnotate), [Vision authentication](https://docs.cloud.google.com/vision/docs/authentication).
 
-The service account already has the required bucket permissions: source bucket **Storage Object Viewer** and M14 destination bucket **Storage Object Creator** plus **Storage Object Viewer**. Google documents PDF/TIFF async OCR output as JSON files in the configured GCS destination; ` + "`" + `batchSize: 1` + "`" + ` requests one response proto per output JSON file. References: [Vision PDF/TIFF OCR](https://docs.cloud.google.com/vision/docs/pdf), [Vision async file annotation](https://docs.cloud.google.com/vision/docs/reference/rest/v1/files/asyncBatchAnnotate), [Vision authentication](https://docs.cloud.google.com/vision/docs/authentication).
+## Provision the non-production Qdrant cluster
 
-## What happens after the backfill
+Create a dedicated staging-only cluster. Do not connect a production Qdrant cluster or reuse a production API key.
 
-I can handle the remaining code, tests, PRs, merges and staging integration. The next infrastructure step is a non-production Qdrant cluster and live Vertex embedding verification. I will guide you again only when a resource/credential choice is required. Production remains on Cloudflare AI Search throughout M14.
+1. Open [Qdrant Cloud](https://cloud.qdrant.io/) and sign in.
+2. Open **Clusters** and select **Create** or **Create a Free Cluster**.
+3. Select the **Free** plan for this small pilot. Current Qdrant Free clusters have one node, 1 GB RAM, 0.5 vCPU and 4 GB disk; they are intended for prototyping. They do not require a credit card. Free clusters can be suspended after one week of inactivity and deleted after four weeks of inactivity, so reactivate the cluster if the pilot is paused for a long period. See [Qdrant Free cluster details](https://qdrant.tech/documentation/cloud/create-cluster/).
+4. For the cluster name, enter `brvin-m14-physics-pilot`.
+5. For cloud provider and region, choose the nearest Asia region offered by the Free plan. Prefer Mumbai/India if it is listed; otherwise choose the closest available Asia region, such as Singapore. The Free plan's region list is limited.
+6. Keep the Free plan's default resource settings and one node. Do not choose Standard, high availability, multiple nodes or paid add-ons for this experiment.
+7. Review the price summary and confirm it says Free before selecting **Create**.
+8. Wait for the cluster status to become ready. Open its details page and copy the **Cluster endpoint**. Use the HTTPS REST endpoint, with port `6333` (or `443` if that is the endpoint Qdrant shows). Keep only the endpoint origin: no extra path, username, password, query string or trailing API route. Qdrant documents REST access on ports 6333 and 443: [Connect to a cluster](https://qdrant.tech/documentation/cloud/cluster-access/).
+
+## Create the Qdrant database API key
+
+On the new cluster's details page:
+
+1. Open **API Keys** and click **Create**.
+2. Name the key `brvin-m14-staging-write`.
+3. Choose the **Write** or **Manage/Write** permission, not Read-only. The staging Worker must create one collection and upsert points. If the screen offers collection scoping, leave it cluster-wide initially because the code creates the collection automatically.
+4. Choose a 90-day expiry if the UI asks for one. This is only a staging credential and can be rotated later.
+5. Click **Create** and copy the database API key once. Qdrant displays a new key only once; store it temporarily in your password manager. Do not share it in chat or paste it into GitHub. It is a database API key, not a Qdrant Cloud Management Key. See [Qdrant database authentication](https://qdrant.tech/documentation/cloud/authentication/).
+
+## Configure the M14 staging Worker for Vertex and Qdrant
+
+Open Cloudflare Dashboard → **Workers & Pages** → **parmar-ai-m14-staging** → **Settings** → **Variables and Secrets**. Do not select the production `parmar-ai` Worker or `brvin-service`.
+
+Add these as **Text** variables:
+
+| Variable name | Exact value |
+|---|---|
+| `BRVIN_M14_VERTEX_LOCATION` | `asia-south1` |
+| `BRVIN_M14_VERTEX_MODEL` | `gemini-embedding-001` |
+| `BRVIN_M14_EMBEDDING_DIMENSIONS` | `768` |
+| `BRVIN_M14_QDRANT_COLLECTION` | `brvin_m14_physics_pilot_v1` |
+| `BRVIN_M14_QDRANT_URL` | Paste your new cluster's HTTPS REST endpoint, including port `6333` (or `443`) |
+
+Add this as a **Secret**:
+
+| Secret name | Value |
+|---|---|
+| `BRVIN_M14_QDRANT_API_KEY` | Paste the database API key you just created |
+
+Do not change the existing GCP credentials, admin token, D1 binding, environment or pilot-enabled flag. Click **Save** and **Deploy** after adding all five text variables and the one secret.
+
+Why these Vertex settings: `gemini-embedding-001` supports output dimensions up to 3072, and Google documents that smaller dimensions save storage and processing cost with little loss in quality. The M14 starter uses 768 dimensions to fit a small pilot/free Qdrant cluster. Vertex AI's Mumbai region is `asia-south1`. See [Google embedding dimensions](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/embeddings/get-text-embeddings) and [Google regional endpoints](https://docs.cloud.google.com/gemini-enterprise-agent-platform/resources/locations). The service account already has the Vertex AI User project role from the earlier setup; no new Google key or role is required.
+
+## Index and test the Physics pilot
+
+1. Open `https://parmar-ai-m14-staging.thenewtongs.workers.dev/health` and confirm `m14ProviderConfigured.ready: true` and `secretsConfigured.qdrantApiKey: true`. These fields confirm configuration presence only, not a successful API connection.
+2. Open `https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m14`, enter the `BRVIN_M14_ADMIN_TOKEN` and click **Embed and index the 7 Physics chunks in Qdrant**.
+3. This creates or validates the collection `brvin_m14_physics_pilot_v1` with a 768-dimensional cosine dense vector and an IDF sparse vector, then embeds and upserts seven deterministic points. A repeat index is idempotent because point IDs are deterministic. Google Vertex embedding requests may incur usage charges.
+4. After indexing succeeds, re-enter the operator token and click **Run 3 known-evidence Physics retrieval checks**. This runs only the three cases whose expected source pages have prior evidence: Newton's second law (page 2), the 4 kg worked example (page 3), and bus braking (pages 3 and 1). It returns page numbers and scores, not OCR text.
+5. These are initial live smoke checks, not final M14 acceptance. Formula/symbol-sensitive, mixed theory+math, friction, numerical and no-answer cases remain pending exact OCR-ground-truth review. We will expand the evaluation suite after inspecting the verified OCR corpus.
+
+Production continues to use Cloudflare AI Search. The Qdrant/Vertex settings and routes are only on the dedicated staging Worker.
