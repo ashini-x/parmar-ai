@@ -549,6 +549,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         }
 
         const instance = this.env.FATMAN_SEARCH!.get(this.env.FATMAN_INSTANCE_NAME!.trim());
+        const provider = createBrvinRetrievalProvider(this.env.BRVIN_RETRIEVAL_PROVIDER, instance);
         await step.do("record book deletion started", async () => {
           await recordBrvinDeletionProgress(this.env, importId, {
             phase: "inventory",
@@ -600,7 +601,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             throw new Error("An AI Search deletion batch contained an item outside this book's prefix.");
           }
           await step.do("delete this book's AI Search page batch " + batch, async () => {
-            for (const item of items) await instance.items.delete(item.id);
+            await provider.deleteSource(items.map((item) => item.key));
             await recordBrvinDeletionProgress(this.env, importId, {
               phase: "search",
               completed: offset + items.length,
