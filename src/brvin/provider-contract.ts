@@ -50,6 +50,8 @@ export interface RetrievalProviderHealth {
  */
 export interface RetrievalProvider {
   readonly providerId: string;
+  /** Return the same completed/queued/running state the legacy indexer uses to skip OCR reads. */
+  findExisting(key: string): Promise<{ status: string } | null>;
   upsert(document: RetrievalDocument): Promise<{ status: string }>;
   query(input: RetrievalQuery): Promise<RetrievalCandidate[]>;
   deleteByKey(key: string): Promise<void>;
@@ -95,13 +97,13 @@ class CloudflareAiSearchRetrievalProvider implements RetrievalProvider {
 
   constructor(private readonly instance: AiSearchInstance) {}
 
-  async upsert(document: RetrievalDocument): Promise<{ status: string }> {
+  async findExisting(key: string): Promise<{ status: string } | null> {
     const found = await this.instance.items.list({
-      search: document.key,
+      search: key,
       per_page: 50,
       source: "builtin",
     });
-    const exact = (found.result ?? []).filter((item) => item.key === document.key);
+    const exact = (found.result ?? []).filter((item) => item.key === key);
     const keep = exact.find((item) => item.status === "completed") ??
       exact.find((item) => item.status === "queued" || item.status === "running");
 
@@ -109,7 +111,12 @@ class CloudflareAiSearchRetrievalProvider implements RetrievalProvider {
       if (item.id === keep?.id) continue;
       await this.instance.items.delete(item.id);
     }
-    if (keep) return { status: keep.status };
+    return keep ? { status: keep.status } : null;
+  }
+
+  async upsert(document: RetrievalDocument): Promise<{ status: string }> {
+    const existing = await this.findExisting(document.key);
+    if (existing) return existing;
 
     const indexed = await this.instance.items.upload(document.key, document.text);
     if (indexed.status === "error" || indexed.status === "skipped" || indexed.status === "outdated") {
@@ -144,7 +151,7 @@ class CloudflareAiSearchRetrievalProvider implements RetrievalProvider {
       const text = typeof chunk.text === "string" ? chunk.text : "";
       if (!itemKey || !text) return [];
       return [{
-        id: typeof chunk.id === "string" ? chunk.id : itemKey,
+        id: typeof chunk.id === "string" ? chunk.id : itemKey + ":" + text.slice(0, 80),
         itemKey,
         text,
         ...(typeof chunk.score === "number" ? { score: chunk.score } : {}),
