@@ -1,6 +1,9 @@
 # BRVIN M14 isolated staging setup and Physics backfill
 
-**Status:** Operator PR #152 is merged and the isolated Worker is deployed. The real GCS backfill is waiting only on the Google Cloud setup and secrets below. This document is for the non-production pilot only.
+> **Live checkpoint — 9 November 2026:** The separate M14 GCS corpus bucket, GCP service-account secrets, staging admin token, Vertex settings and isolated Qdrant endpoint/API key are configured. The recovered corpus is verified (3 pages/7 chunks, 2/2/3). The M14 operator's seven-point Qdrant indexing action completed with deterministic point read-back/provenance checks. The three known-evidence hybrid query checks returned HTTP 400. Core PR #169 fixed nested Qdrant `status.error` extraction and staging workflow #30 deployed the fix to Worker version `f6850b66-6299-426f-b533-df52f9e35e66`. **Next: rerun the three known-evidence retrieval checks and capture the now-visible Qdrant validation detail.** Do not repeat OCR or indexing to diagnose the query-only failure. Production remains on Cloudflare AI Search.
+
+
+**Status:** Non-production staging setup and OCR backfill are complete; this guide retains the original setup instructions for audit and future environment recreation. The remaining M14 task is to rerun the three known-evidence hybrid retrieval checks after the nested Qdrant error-parser fix and diagnose the actual server validation response. This is an isolated pilot only.
 
 ## What is already provisioned
 
@@ -12,11 +15,11 @@
 - Staging Worker config: `wrangler.m14-staging.jsonc`
 - Production D1, Workers, provider selector and corpus flag are not used by this isolated operator
 
-The Worker is deployed by `.github/workflows/m14-staging-deploy.yml`: `https://parmar-ai-m14-staging.thenewtongs.workers.dev` (version `74ab2c8a-b2e4-443d-ba57-d7ef68e98d53`, 100% traffic). It exposes only `GET /health` and the authenticated `POST /admin/m14/backfill` action. The backfill is pinned to the registered Physics source and requires both `ENVIRONMENT=staging` and `BRVIN_M14_PILOT_ENABLED=true`. At last check, the Worker secret list was empty and the corpus bucket was not yet created.
+The Worker is deployed by `.github/workflows/m14-staging-deploy.yml`: `https://parmar-ai-m14-staging.thenewtongs.workers.dev` (current version `f6850b66-6299-426f-b533-df52f9e35e66`, 100% traffic; deployment `b4582dab-26f1-4443-8f84-0c3ffe158d33`). The authenticated browser operator supports health/diagnostics, one-time retained-PDF OCR recovery and status, immutable manifest backfill and read-back verification, seven-point Qdrant indexing and the three known-evidence retrieval checks. Every mutation is staging-only, source-pinned and protected by `BRVIN_M14_ADMIN_TOKEN`; the isolated Worker binds only the dedicated M14 D1 and the required private GCS/Vertex/Qdrant settings. Its secret bindings and separate corpus bucket are configured; no credential values belong in this document.
 
-## One-time Google Cloud setup required
+## Completed one-time Google Cloud setup (reproducibility reference)
 
-This is the only part that needs your Google Cloud account. Do not paste a service-account JSON key or private key into this chat or commit it to GitHub.
+The steps below document the completed one-time setup and are retained for audit/recreation only; do not repeat them for the current staging pilot. Never paste a service-account JSON key or private key into chat or commit it to GitHub.
 
 Project: `project-90db7be4-619f-4ed7-89b`
 
@@ -66,9 +69,9 @@ The one-time recovery table prevents duplicate OCR submissions. If the connectio
 
 The source bucket has **Storage Object Viewer**. The M14 destination bucket has **Storage Object Creator** and **Storage Object Viewer**. Google documents PDF/TIFF async OCR output as JSON files in the configured GCS destination; `batchSize: 1` requests one response proto per output JSON file. References: [Vision PDF/TIFF OCR](https://docs.cloud.google.com/vision/docs/pdf), [Vision async file annotation](https://docs.cloud.google.com/vision/docs/reference/rest/v1/files/asyncBatchAnnotate), [Vision authentication](https://docs.cloud.google.com/vision/docs/authentication).
 
-## Provision the non-production Qdrant cluster
+## Completed non-production Qdrant provisioning (reproducibility reference)
 
-Create a dedicated staging-only cluster. Do not connect a production Qdrant cluster or reuse a production API key.
+The current staging-only Qdrant cluster and key have already been provisioned and configured. The steps below are retained only to reproduce or replace that isolated environment. Never connect a production cluster or reuse a production key.
 
 1. Open [Qdrant Cloud](https://cloud.qdrant.io/) and sign in.
 2. Open **Clusters** and select **Create** or **Create a Free Cluster**.
