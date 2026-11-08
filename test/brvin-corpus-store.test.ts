@@ -100,10 +100,12 @@ describe("BRVIN private derived-corpus GCS store", () => {
       job,
       2,
       rawOcrText,
+      "brvin/books/" + SOURCE_ID + "/pages/page-000002.txt",
+      0.93,
     );
     expect(replay.sourceManifestCreated).toBe(false);
     expect(replay.pageManifestCreated).toBe(false);
     expect(replay.pageManifestObject).toBe(first.pageManifestObject);
-    expect(storedObjects).toHaveProperty("size", 2);
+    expect(storedObjects.size).toBe(2);
   });
 });
