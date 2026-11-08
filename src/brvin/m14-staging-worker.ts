@@ -1,5 +1,9 @@
 import type { Env } from "../config/env";
 import { readBrvinCorpusGeneration } from "./corpus-reader";
+import { indexBrvinCorpusGeneration } from "./m14-pilot-runner";
+import { BRVIN_M14_PHYSICS_PILOT, BRVIN_M14_PHYSICS_QUERY_SUITE } from "./m14-physics-evaluation";
+import { BrvinQdrantHybridPilot } from "./qdrant-hybrid-pilot";
+import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
 import { getGoogleAccessToken } from "../auth/google";
 import type {
   FatmanImportJob,
@@ -163,6 +167,12 @@ function m14AdminPage(): Response {
     <button id="inspect" class="secondary" type="button" disabled>Inspect original OCR folder (read only)</button>
     <button id="run" type="button" disabled>Run Physics backfill</button>
     <button id="verifyCorpus" class="secondary" type="button" disabled>Verify stored M14 manifests (read only)</button>
+    <div class="notice">
+      <strong>Vertex AI + Qdrant pilot</strong>
+      <p class="small">After adding the isolated Qdrant URL/API key and Vertex model settings in this staging Worker, index the seven verified chunks. Deterministic point IDs make a retry safe. The first retrieval check runs only the three Physics questions with prior page evidence.</p>
+    </div>
+    <button id="indexQdrant" type="button" disabled>Embed and index the 7 Physics chunks in Qdrant</button>
+    <button id="evaluateQdrant" class="secondary" type="button" disabled>Run 3 known-evidence Physics retrieval checks</button>
     <div id="result" class="status muted" role="status" aria-live="polite">No recovery or backfill action has been started.</div>
     <details>
       <summary>Security and retry information</summary>
@@ -180,6 +190,8 @@ function m14AdminPage(): Response {
   const rebuildButton = document.getElementById("rebuildVision");
   const checkRecoveryButton = document.getElementById("checkRecovery");
   const verifyCorpusButton = document.getElementById("verifyCorpus");
+  const indexQdrantButton = document.getElementById("indexQdrant");
+  const evaluateQdrantButton = document.getElementById("evaluateQdrant");
   const healthBox = document.getElementById("health");
   const resultBox = document.getElementById("result");
 
@@ -191,6 +203,9 @@ function m14AdminPage(): Response {
     inspectButton.disabled = !canAuthenticate || !ready;
     checkRecoveryButton.disabled = !canAuthenticate || !ready;
     verifyCorpusButton.disabled = !canAuthenticate || !ready;
+    const providerReady = runButton.dataset.providerReady === "true";
+    indexQdrantButton.disabled = !canAuthenticate || !ready || !providerReady;
+    evaluateQdrantButton.disabled = !canAuthenticate || !ready || !providerReady;
     rebuildButton.disabled = !canAuthenticate || !confirmOcrInput.checked || !ready ||
       ["submitting", "running", "completed", "failed", "submission_uncertain"].includes(ocrStatus);
     runButton.disabled = !confirmInput.checked || !canAuthenticate || !ready || !ocrReady;
@@ -219,6 +234,7 @@ function m14AdminPage(): Response {
         ? "Staging checks passed: staging mode, pilot enabled, isolated registry and required secrets are present."
         : "Staging is not ready. Check the Worker health response and complete any missing configuration before continuing.\n" + JSON.stringify(data, null, 2);
       runButton.dataset.ready = ready ? "true" : "false";
+      runButton.dataset.providerReady = data.m14ProviderConfigured?.ready === true ? "true" : "false";
       refreshButton();
     } catch {
       healthBox.className = "status bad";
@@ -336,6 +352,44 @@ function m14AdminPage(): Response {
       "Reading the persisted source/page manifests from GCS and recomputing every OCR, normalized-text and deterministic-chunk integrity check. This is read-only."
     );
     verifyCorpusButton.textContent = "Verify stored M14 manifests (read only)";
+    refreshButton();
+  });
+
+  indexQdrantButton.addEventListener("click", async () => {
+    refreshButton();
+    if (indexQdrantButton.disabled) return;
+    indexQdrantButton.disabled = true;
+    indexQdrantButton.textContent = "Embedding and indexing…";
+    const result = await authenticatedRequest(
+      "/admin/m14/qdrant/index",
+      "POST",
+      { confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" },
+      "Verifying the immutable corpus, checking the Vertex embedding configuration, creating/validating the isolated Qdrant collection, and indexing seven deterministic chunks. Keep this page open."
+    );
+    if (result?.response.ok && result.data.ok === true) {
+      indexQdrantButton.textContent = "Qdrant indexing completed";
+    } else {
+      indexQdrantButton.textContent = "Embed and index the 7 Physics chunks in Qdrant";
+    }
+    refreshButton();
+  });
+
+  evaluateQdrantButton.addEventListener("click", async () => {
+    refreshButton();
+    if (evaluateQdrantButton.disabled) return;
+    evaluateQdrantButton.disabled = true;
+    evaluateQdrantButton.textContent = "Running retrieval checks…";
+    const result = await authenticatedRequest(
+      "/admin/m14/qdrant/evaluate",
+      "POST",
+      { confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" },
+      "Running the three known-evidence Physics queries through Vertex embeddings and Qdrant hybrid dense+sparse RRF. This is a staging-only retrieval test."
+    );
+    if (result?.response.ok && result.data.ok === true) {
+      evaluateQdrantButton.textContent = "Known-evidence retrieval checks completed";
+    } else {
+      evaluateQdrantButton.textContent = "Run 3 known-evidence Physics retrieval checks";
+    }
     refreshButton();
   });
 
@@ -881,7 +935,185 @@ async function getM14VisionRecoveryStatus(env: Env): Promise<M14VisionRecoverySt
   };
 }
 
+async function readVerifiedM14CorpusGeneration(env: Env) {
+  const recovery = await getM14VisionRecoveryRecord(env);
+  if (!recovery || recovery.status !== "completed" ||
+      recovery.vision_operation !== PILOT_RECOVERED_VISION_OPERATION ||
+      recovery.output_bucket !== env.BRVIN_M14_CORPUS_BUCKET?.trim() ||
+      recovery.expected_page_count !== PILOT_PAGE_COUNT) {
+    throw new Error("The one-time recovered Physics OCR operation is not verified as completed in the isolated staging registry.");
+  }
+  const corpus = await readBrvinCorpusGeneration(env, PILOT_SOURCE_ID, PILOT_GENERATION_ID);
+  const source = corpus.sourceManifest;
+  if (source.sourcePdfSha256.toLowerCase() !== PILOT_SOURCE_SHA256 ||
+      source.ocrOperationId !== PILOT_RECOVERED_VISION_OPERATION ||
+      source.pageCount !== PILOT_PAGE_COUNT ||
+      corpus.pageManifests.length !== PILOT_PAGE_COUNT ||
+      corpus.chunkCount !== 7) {
+    throw new Error("The persisted M14 source manifest does not match the exact Physics source, recovered Vision operation and expected 3-page/7-chunk generation.");
+  }
+  const pages = corpus.pageManifests.map((page) => ({
+    pdfPage: page.pdfPage,
+    stableItemKey: page.stableItemKey,
+    chunkCount: page.chunks.length,
+    rawOcrSha256: page.rawOcrSha256,
+    normalizedSearchTextSha256: page.normalizedSearchTextSha256,
+  }));
+  if (pages.map((page) => page.pdfPage).join(",") !== "1,2,3" ||
+      pages.map((page) => page.chunkCount).join(",") !== "2,2,3") {
+    throw new Error("The persisted M14 corpus has unexpected page coverage or chunk counts.");
+  }
+  return corpus;
+}
+
+function createM14QdrantPilot(env: Env): BrvinQdrantHybridPilot {
+  const dimensions = Number(env.BRVIN_M14_EMBEDDING_DIMENSIONS);
+  if (!Number.isSafeInteger(dimensions) || dimensions < 1 || dimensions > 3072) {
+    throw new Error("Set BRVIN_M14_EMBEDDING_DIMENSIONS to the same supported dimension configured for the isolated Qdrant collection.");
+  }
+  if (!env.BRVIN_M14_VERTEX_LOCATION?.trim() ||
+      !env.BRVIN_M14_VERTEX_MODEL?.trim() ||
+      !env.BRVIN_M14_QDRANT_URL?.trim() ||
+      !env.BRVIN_M14_QDRANT_API_KEY?.trim() ||
+      !env.BRVIN_M14_QDRANT_COLLECTION?.trim()) {
+    throw new Error("M14 Vertex/Qdrant settings are incomplete. Configure the staging-only model, location, dimension, cluster URL, API key and collection name.");
+  }
+  const embeddings = new BrvinVertexEmbeddingProvider(env);
+  return new BrvinQdrantHybridPilot({
+    url: env.BRVIN_M14_QDRANT_URL,
+    apiKey: env.BRVIN_M14_QDRANT_API_KEY,
+    collection: env.BRVIN_M14_QDRANT_COLLECTION,
+    dimensions,
+  }, embeddings);
+}
+
+export interface M14QdrantIndexReceipt {
+  sourceId: string;
+  generationId: string;
+  projectId: string;
+  collection: string;
+  pageCount: number;
+  chunkCount: number;
+  pointCount: number;
+  embeddingModelIds: string[];
+  embeddingModelVersions: string[];
+  dimensions: number;
+  deterministicRetrySafe: true;
+}
+
+async function indexM14PhysicsCorpusInQdrant(env: Env): Promise<M14QdrantIndexReceipt> {
+  const corpus = await readVerifiedM14CorpusGeneration(env);
+  const pilot = createM14QdrantPilot(env);
+  const result = await indexBrvinCorpusGeneration(
+    pilot,
+    BRVIN_M14_PHYSICS_PILOT.projectId,
+    corpus,
+  );
+  if (result.sourceId !== PILOT_SOURCE_ID ||
+      result.generationId !== PILOT_GENERATION_ID ||
+      result.pageCount !== PILOT_PAGE_COUNT ||
+      result.chunkCount !== 7 ||
+      result.pointCount !== 7 ||
+      result.pointIds.length !== 7 ||
+      new Set(result.pointIds).size !== 7) {
+    throw new Error("Qdrant did not confirm the complete seven-point Physics generation.");
+  }
+  return {
+    sourceId: result.sourceId,
+    generationId: result.generationId,
+    projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
+    collection: env.BRVIN_M14_QDRANT_COLLECTION!.trim(),
+    pageCount: result.pageCount,
+    chunkCount: result.chunkCount,
+    pointCount: result.pointCount,
+    embeddingModelIds: result.embeddingModelIds,
+    embeddingModelVersions: result.embeddingModelVersions,
+    dimensions: Number(env.BRVIN_M14_EMBEDDING_DIMENSIONS),
+    deterministicRetrySafe: true,
+  };
+}
+
+export interface M14QdrantEvaluationReceipt {
+  projectId: string;
+  sourceId: string;
+  collection: string;
+  embeddingModel: string;
+  dimensions: number;
+  queryCount: number;
+  checks: Array<{
+    id: string;
+    category: string;
+    expectedPages: number[];
+    retrievedPages: number[];
+    expectedPageCoverage: number[];
+    resultCount: number;
+    topScore: number | null;
+    verification: "prior-source-evidence";
+  }>;
+  note: string;
+}
+
+async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvaluationReceipt> {
+  const pilot = createM14QdrantPilot(env);
+  const cases = BRVIN_M14_PHYSICS_QUERY_SUITE.filter(
+    (item) => item.verification === "prior-source-evidence",
+  );
+  const checks: M14QdrantEvaluationReceipt["checks"] = [];
+  for (const item of cases) {
+    const results = await pilot.query({
+      projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
+      authorizedSourceIds: [PILOT_SOURCE_ID],
+      query: item.query,
+      limit: 5,
+      prefetchLimit: 15,
+    });
+    const retrievedPages = results.map((result) => result.pdfPage);
+    checks.push({
+      id: item.id,
+      category: item.category,
+      expectedPages: [...item.expectedPdfPages],
+      retrievedPages,
+      expectedPageCoverage: item.expectedPdfPages.filter((page) => retrievedPages.includes(page)),
+      resultCount: results.length,
+      topScore: results[0]?.score ?? null,
+      verification: "prior-source-evidence",
+    });
+  }
+  return {
+    projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
+    sourceId: PILOT_SOURCE_ID,
+    collection: env.BRVIN_M14_QDRANT_COLLECTION!.trim(),
+    embeddingModel: env.BRVIN_M14_VERTEX_MODEL!.trim(),
+    dimensions: Number(env.BRVIN_M14_EMBEDDING_DIMENSIONS),
+    queryCount: checks.length,
+    checks,
+    note: "These three queries have prior source-page evidence. This smoke test is not the full M14 acceptance suite; formula, symbol-sensitive, mixed-content and no-answer cases remain pending OCR-ground-truth review.",
+  };
+}
+
 async function verifyM14CorpusReadback(env: Env): Promise<M14CorpusReadbackSummary> {
+  const corpus = await readVerifiedM14CorpusGeneration(env);
+  const source = corpus.sourceManifest;
+  const pages = corpus.pageManifests.map((page) => ({
+    pdfPage: page.pdfPage,
+    stableItemKey: page.stableItemKey,
+    chunkCount: page.chunks.length,
+    rawOcrSha256: page.rawOcrSha256,
+    normalizedSearchTextSha256: page.normalizedSearchTextSha256,
+  }));
+  return {
+    sourceId: PILOT_SOURCE_ID,
+    generationId: PILOT_GENERATION_ID,
+    sourcePdfSha256: source.sourcePdfSha256,
+    visionOperationId: source.ocrOperationId,
+    pageCount: source.pageCount,
+    chunkCount: corpus.chunkCount,
+    pages,
+    verified: true,
+  };
+}
+
+
   const recovery = await getM14VisionRecoveryRecord(env);
   if (!recovery || recovery.status !== "completed" ||
       recovery.vision_operation !== PILOT_RECOVERED_VISION_OPERATION ||
@@ -988,6 +1220,8 @@ export async function handleM14StagingRequest(
   startRecovery: typeof startM14VisionRecovery = startM14VisionRecovery,
   readRecoveryStatus: typeof getM14VisionRecoveryStatus = getM14VisionRecoveryStatus,
   verifyCorpus: typeof verifyM14CorpusReadback = verifyM14CorpusReadback,
+  indexQdrant: typeof indexM14PhysicsCorpusInQdrant = indexM14PhysicsCorpusInQdrant,
+  evaluateQdrant: typeof evaluateM14KnownPhysicsQueries = evaluateM14KnownPhysicsQueries,
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
@@ -1001,6 +1235,17 @@ export async function handleM14StagingRequest(
         gcpClientEmail: Boolean(env.GCP_CLIENT_EMAIL),
         gcpPrivateKey: Boolean(env.GCP_PRIVATE_KEY),
         m14AdminToken: Boolean(env.BRVIN_M14_ADMIN_TOKEN),
+        qdrantApiKey: Boolean(env.BRVIN_M14_QDRANT_API_KEY),
+      },
+      m14ProviderConfigured: {
+        vertexLocation: Boolean(env.BRVIN_M14_VERTEX_LOCATION),
+        vertexModel: Boolean(env.BRVIN_M14_VERTEX_MODEL),
+        embeddingDimensions: Boolean(env.BRVIN_M14_EMBEDDING_DIMENSIONS),
+        qdrantUrl: Boolean(env.BRVIN_M14_QDRANT_URL),
+        qdrantCollection: Boolean(env.BRVIN_M14_QDRANT_COLLECTION),
+        ready: Boolean(env.BRVIN_M14_VERTEX_LOCATION && env.BRVIN_M14_VERTEX_MODEL &&
+          env.BRVIN_M14_EMBEDDING_DIMENSIONS && env.BRVIN_M14_QDRANT_URL &&
+          env.BRVIN_M14_QDRANT_API_KEY && env.BRVIN_M14_QDRANT_COLLECTION),
       },
       // Do not expose credential values, bucket names or source-document content.
     });
@@ -1019,14 +1264,19 @@ export async function handleM14StagingRequest(
   const isVisionRebuild = url.pathname === "/admin/m14/vision/rebuild";
   const isVisionStatus = url.pathname === "/admin/m14/vision/status";
   const isCorpusVerify = url.pathname === "/admin/m14/corpus/verify";
+  const isQdrantIndex = url.pathname === "/admin/m14/qdrant/index";
+  const isQdrantEvaluate = url.pathname === "/admin/m14/qdrant/evaluate";
   const isBackfill = url.pathname === "/admin/m14/backfill";
-  if (!isDiagnostics && !isVisionRebuild && !isVisionStatus && !isCorpusVerify && !isBackfill) {
+  if (!isDiagnostics && !isVisionRebuild && !isVisionStatus && !isCorpusVerify &&
+      !isQdrantIndex && !isQdrantEvaluate && !isBackfill) {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if ((isDiagnostics && request.method !== "GET") ||
       (isVisionRebuild && request.method !== "POST") ||
       (isVisionStatus && request.method !== "GET") ||
       (isCorpusVerify && request.method !== "GET") ||
+      (isQdrantIndex && request.method !== "POST") ||
+      (isQdrantEvaluate && request.method !== "POST") ||
       (isBackfill && request.method !== "POST")) {
     return json({ ok: false, error: "method_not_allowed" }, 405);
   }
@@ -1075,6 +1325,34 @@ export async function handleM14StagingRequest(
       !env.GCP_PROJECT_ID || !env.FATMAN_GCS_BUCKET ||
       !env.BRVIN_M14_CORPUS_BUCKET || !env.DB) {
     return json({ ok: false, error: "staging_google_cloud_configuration_incomplete" }, 503);
+  }
+
+  if (isQdrantIndex || isQdrantEvaluate) {
+    let providerPayload: unknown;
+    try {
+      providerPayload = await request.json();
+    } catch {
+      return json({ ok: false, error: "invalid_json" }, 400);
+    }
+    if (!providerPayload || typeof providerPayload !== "object" ||
+        (providerPayload as { confirmSourceId?: unknown }).confirmSourceId !== PILOT_SOURCE_ID) {
+      return json({ ok: false, error: "source_confirmation_mismatch" }, 400);
+    }
+    if (!env.BRVIN_M14_VERTEX_LOCATION || !env.BRVIN_M14_VERTEX_MODEL ||
+        !env.BRVIN_M14_EMBEDDING_DIMENSIONS || !env.BRVIN_M14_QDRANT_URL ||
+        !env.BRVIN_M14_QDRANT_API_KEY || !env.BRVIN_M14_QDRANT_COLLECTION) {
+      return json({ ok: false, error: "m14_vertex_qdrant_configuration_incomplete" }, 503);
+    }
+    try {
+      if (isQdrantIndex) {
+        const receipt = await indexQdrant(env);
+        return json({ ok: true, index: receipt });
+      }
+      const receipt = await evaluateQdrant(env);
+      return json({ ok: true, evaluation: receipt });
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
   }
 
   if (isVisionRebuild) {
