@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BRVIN_CHUNK_MAX_TOKENS,
   BRVIN_CHUNK_OVERLAP_TOKENS,
+  brvinCorpusManifestEnabled,
   buildBrvinPageManifest,
   buildBrvinSourceManifest,
   extractBrvinFormulaCandidates,
@@ -9,6 +10,12 @@ import {
 } from "../src/brvin/corpus";
 
 describe("BRVIN deterministic durable corpus", () => {
+  it("keeps durable corpus writes opt-in and disabled for unset production configuration", () => {
+    expect(brvinCorpusManifestEnabled(undefined)).toBe(false);
+    expect(brvinCorpusManifestEnabled("false")).toBe(false);
+    expect(brvinCorpusManifestEnabled(" TRUE ")).toBe(true);
+  });
+
   it("uses the approved 256-token window and 26-token overlap", () => {
     expect(BRVIN_CHUNK_MAX_TOKENS).toBe(256);
     expect(BRVIN_CHUNK_OVERLAP_TOKENS).toBe(26);
