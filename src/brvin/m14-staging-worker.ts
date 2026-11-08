@@ -1113,46 +1113,6 @@ async function verifyM14CorpusReadback(env: Env): Promise<M14CorpusReadbackSumma
   };
 }
 
-
-  const recovery = await getM14VisionRecoveryRecord(env);
-  if (!recovery || recovery.status !== "completed" ||
-      recovery.vision_operation !== PILOT_RECOVERED_VISION_OPERATION ||
-      recovery.output_bucket !== env.BRVIN_M14_CORPUS_BUCKET?.trim() ||
-      recovery.expected_page_count !== PILOT_PAGE_COUNT) {
-    throw new Error("The one-time recovered Physics OCR operation is not verified as completed in the isolated staging registry.");
-  }
-  const corpus = await readBrvinCorpusGeneration(env, PILOT_SOURCE_ID, PILOT_GENERATION_ID);
-  const source = corpus.sourceManifest;
-  if (source.sourcePdfSha256.toLowerCase() !== PILOT_SOURCE_SHA256 ||
-      source.ocrOperationId !== PILOT_RECOVERED_VISION_OPERATION ||
-      source.pageCount !== PILOT_PAGE_COUNT ||
-      corpus.pageManifests.length !== PILOT_PAGE_COUNT ||
-      corpus.chunkCount !== 7) {
-    throw new Error("The persisted M14 source manifest does not match the exact Physics source, recovered Vision operation and expected 3-page/7-chunk generation.");
-  }
-  const pages = corpus.pageManifests.map((page) => ({
-    pdfPage: page.pdfPage,
-    stableItemKey: page.stableItemKey,
-    chunkCount: page.chunks.length,
-    rawOcrSha256: page.rawOcrSha256,
-    normalizedSearchTextSha256: page.normalizedSearchTextSha256,
-  }));
-  if (pages.map((page) => page.pdfPage).join(",") !== "1,2,3" ||
-      pages.map((page) => page.chunkCount).join(",") !== "2,2,3") {
-    throw new Error("The persisted M14 corpus has unexpected page coverage or chunk counts.");
-  }
-  return {
-    sourceId: PILOT_SOURCE_ID,
-    generationId: PILOT_GENERATION_ID,
-    sourcePdfSha256: source.sourcePdfSha256,
-    visionOperationId: source.ocrOperationId,
-    pageCount: source.pageCount,
-    chunkCount: corpus.chunkCount,
-    pages,
-    verified: true,
-  };
-}
-
 async function inspectM14VisionOutputs(env: Env): Promise<M14VisionOutputDiagnostics> {
   const sourceBucket = env.FATMAN_GCS_BUCKET?.trim() ?? "";
   if (!env.GCP_CLIENT_EMAIL || !env.GCP_PRIVATE_KEY ||
