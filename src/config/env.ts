@@ -270,6 +270,10 @@ export interface Env {
 
   BRVIN_SEARCH?: AiSearchNamespace;
   BRVIN_SEARCH_INSTANCE?: string;
+  /** Server-side provider selector; M13 supports only cloudflare-ai-search. */
+  BRVIN_RETRIEVAL_PROVIDER?: string;
+  /** Enables M13 durable corpus writes only in an explicitly configured pilot. */
+  BRVIN_CORPUS_MANIFEST_ENABLED?: string;
   /** Local minimum score fallback when AI Search does not return a reranking score. */
   BRVIN_MIN_SCORE?: string;
   /** Per-request vector similarity threshold (0..1) for candidate retrieval. */

@@ -12,6 +12,7 @@ const GCS_API = "https://storage.googleapis.com";
 const VISION_API = "https://vision.googleapis.com/v1";
 const BRVIN_SOURCE_PDF_ROOT = "brvin/source-pdfs/";
 const BRVIN_TEMP_VISION_OCR_ROOT = "brvin/temporary-vision-ocr/";
+const BRVIN_DERIVED_CORPUS_ROOT = "brvin/derived-corpus/";
 const BRVIN_TEMP_VISION_OCR_RETENTION_DAYS = 30;
 
 export interface FatmanImportJob {
@@ -761,7 +762,13 @@ export function fatmanOutputObjectName(importId: string, page: number, prefix = 
   return prefix + "output-" + page + "-to-" + page + ".json";
 }
 
-export async function readFatmanVisionOutput(env: Env, importId: string, page: number): Promise<string> {
+export interface FatmanVisionOcrPage {
+  rawText: string;
+  /** Vision's page-level confidence when present; never synthesize a missing value. */
+  pageConfidence?: number;
+}
+
+export async function readFatmanVisionOutputPage(env: Env, importId: string, page: number): Promise<FatmanVisionOcrPage> {
   const job = await getFatmanImportJob(env, importId);
   if (!job) throw new Error("Fatman import job disappeared.");
   const objectName = fatmanOutputObjectName(importId, page, fatmanVisionOutputPrefix(job));
@@ -770,17 +777,52 @@ export async function readFatmanVisionOutput(env: Env, importId: string, page: n
     headers: { authorization: "Bearer " + token },
   });
   if (!response.ok) throw await gcsError(response, "Could not read Vision OCR output for page " + page + ".");
-  const payload = await response.json() as { responses?: Array<{ fullTextAnnotation?: { text?: string }; error?: { message?: string } }>; context?: { pageNumber?: number } };
+  const payload = await response.json() as {
+    responses?: Array<{
+      fullTextAnnotation?: {
+        text?: string;
+        pages?: Array<{ confidence?: number }>;
+      };
+      error?: { message?: string };
+    }>;
+    context?: { pageNumber?: number };
+  };
   if (payload.context?.pageNumber && Number(payload.context.pageNumber) !== page) {
     throw new Error("Google Vision returned OCR for an unexpected PDF page.");
   }
   const annotation = payload.responses?.[0];
   if (annotation?.error?.message) throw new Error("Vision OCR failed on PDF page " + page + ": " + annotation.error.message);
-  const text = annotation?.fullTextAnnotation?.text?.replace(/\u0000/g, "").trim();
+  const rawText = annotation?.fullTextAnnotation?.text;
+  if (typeof rawText !== "string" || !rawText.trim()) {
+    throw new Error("Google Vision returned no readable text for PDF page " + page + ".");
+  }
+  // Never truncate or normalize the durable source-derived OCR representation.
+  // Oversized pages fail explicitly rather than being silently made incomplete.
+  if (rawText.length > 1_000_000) {
+    throw new Error("Vision OCR text for PDF page " + page + " exceeds the safe one-million-character manifest limit.");
+  }
+  const confidence = annotation?.fullTextAnnotation?.pages?.[0]?.confidence;
+  return {
+    rawText,
+    ...(typeof confidence === "number" && Number.isFinite(confidence) && confidence >= 0 && confidence <= 1
+      ? { pageConfidence: confidence }
+      : {}),
+  };
+}
+
+export async function readFatmanVisionOutputRaw(env: Env, importId: string, page: number): Promise<string> {
+  return (await readFatmanVisionOutputPage(env, importId, page)).rawText;
+}
+export function cleanFatmanVisionOcrText(rawText: string, page: number): string {
+  const text = rawText.replace(/\u0000/g, "").trim();
   if (!text) throw new Error("Google Vision returned no readable text for PDF page " + page + ".");
   return text.slice(0, 120_000);
 }
 
+export async function readFatmanVisionOutput(env: Env, importId: string, page: number): Promise<string> {
+  const rawText = await readFatmanVisionOutputRaw(env, importId, page);
+  return cleanFatmanVisionOcrText(rawText, page);
+}
 /**
  * Keep OCR JSON under one global temporary prefix so Cloud Storage expiry can
  * never match the separately stored source PDF tree. Existing unrelated
@@ -1059,7 +1101,7 @@ export interface FatmanGcsPrefixDeletionResult {
 export async function deleteFatmanGcsObjectPrefix(
   env: Env,
   importId: string,
-  relativePrefix: "" | "ocr/" = "",
+  relativePrefix: "" | "ocr/" | "derived/" = "",
   onProgress?: (progress: FatmanGcsPrefixDeletionProgress) => Promise<void>,
 ): Promise<FatmanGcsPrefixDeletionResult> {
   if (!env.DB) throw new Error("D1 is required to resolve the BRVIN source object prefix.");
@@ -1072,7 +1114,7 @@ export async function deleteFatmanGcsObjectPrefix(
   if (!allowedRoots.includes(rootPrefix)) {
     throw new Error("Refusing to delete a GCS prefix outside this book's private import directory.");
   }
-  if (relativePrefix !== "" && relativePrefix !== "ocr/") {
+  if (relativePrefix !== "" && relativePrefix !== "ocr/" && relativePrefix !== "derived/") {
     throw new Error("The requested GCS deletion prefix is not allowed.");
   }
 
@@ -1093,10 +1135,17 @@ export async function deleteFatmanGcsObjectPrefix(
   const softDeleteRetentionSeconds = Math.max(0, Number(bucketInfo.softDeletePolicy?.retentionDurationSeconds ?? 0) || 0);
   const retentionPolicySeconds = Math.max(0, Number(bucketInfo.retentionPolicy?.retentionPeriod ?? 0) || 0);
   const retentionPolicyLocked = bucketInfo.retentionPolicy?.isLocked === true;
-  const objectPrefix = relativePrefix === "ocr/" ? fatmanVisionOutputPrefix(importJob) : rootPrefix;
+  const objectPrefix = relativePrefix === "ocr/"
+    ? fatmanVisionOutputPrefix(importJob)
+    : relativePrefix === "derived/"
+      ? BRVIN_DERIVED_CORPUS_ROOT + importId + "/"
+      : rootPrefix;
   const allowedVisionPrefixes = [rootPrefix + "ocr/", BRVIN_TEMP_VISION_OCR_ROOT + importId + "/"];
   if (relativePrefix === "ocr/" && !allowedVisionPrefixes.includes(objectPrefix)) {
     throw new Error("The Vision OCR prefix does not match this book's isolated temporary directory.");
+  }
+  if (relativePrefix === "derived/" && objectPrefix !== BRVIN_DERIVED_CORPUS_ROOT + importId + "/") {
+    throw new Error("The derived-corpus prefix does not match this book's isolated private directory.");
   }
 
   const objects: Array<{ name: string; generation: string; noncurrent: boolean }> = [];

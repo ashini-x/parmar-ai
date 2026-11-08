@@ -49,6 +49,8 @@
     "AI_OUTPUT_USD_PER_MILLION": "3.75",
     "ADMIN_DASHBOARD_USER": "admin",
     "BRVIN_HOME_ACCOUNT_ID": "b34a6c0b7221454c5db977fe61ddf759",
+    "BRVIN_RETRIEVAL_PROVIDER": "cloudflare-ai-search",
+    "BRVIN_CORPUS_MANIFEST_ENABLED": "false",
     "UNLIMITED_AI_TELEGRAM_USER_IDS": ""
   },
   "ai_search_namespaces": [

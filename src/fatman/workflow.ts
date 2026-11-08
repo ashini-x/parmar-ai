@@ -8,6 +8,9 @@ import { retrieveFatmanContext } from "./retrieval";
 import { getGoogleAccessToken } from "../auth/google";
 import { fatmanExpectedPageCount, fatmanIndexPageKey, inferFatmanPdfPageCountFromVisionOutputs } from "./library";
 import type { FatmanImportJob } from "./import";
+import { createBrvinRetrievalProvider } from "../brvin/provider-contract";
+import { persistBrvinPageCorpus } from "../brvin/corpus-store";
+import { brvinCorpusManifestEnabled } from "../brvin/corpus";
 import { brvinDeletionProgressPercent, brvinDeletionSearchPageRequest } from "./deletion";
 import { buildFatmanPageStateMap, chunkFatmanPages, FATMAN_INDEX_PAGE_CONCURRENCY, fatmanIndexMonitorDelayMs } from "./indexing-policy";
 import {
@@ -24,7 +27,9 @@ import {
   listFatmanVisionOutputObjects,
   markFatmanImportCompleted,
   markFatmanImportFailed,
+  cleanFatmanVisionOcrText,
   readFatmanVisionOutput,
+  readFatmanVisionOutputPage,
   resumeFatmanImport,
   setFatmanImportStatus,
   submitFatmanVision,
@@ -186,30 +191,50 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   if (!instanceName || !env.FATMAN_SEARCH) throw new Error("Fatman AI Search is not configured.");
   const instance = env.FATMAN_SEARCH.get(instanceName);
   const key = fatmanIndexPageKey(job, page);
-  const found = await instance.items.list({ search: key, per_page: 50, source: "builtin" });
-  const exact = (found.result ?? []).filter((item) => item.key === key);
-  const keep = exact.find((item) => item.status === "completed") ??
-    exact.find((item) => item.status === "queued" || item.status === "running");
-  for (const item of exact) {
-    if (item.id === keep?.id) continue;
-    await instance.items.delete(item.id);
+  const provider = createBrvinRetrievalProvider(env.BRVIN_RETRIEVAL_PROVIDER, instance);
+  // Keep the legacy short-circuit ahead of OCR/GCS reads: already indexed pages
+  // must remain recoverable even after temporary Vision output has expired.
+  const existing = await provider.findExisting(key);
+  if (existing) return { page, status: existing.status };
+  let text: string;
+
+  if (job.book_id && brvinCorpusManifestEnabled(env.BRVIN_CORPUS_MANIFEST_ENABLED)) {
+    const ocrPage = await readFatmanVisionOutputPage(env, job.id, page);
+    const corpus = await persistBrvinPageCorpus(
+      env, job, page, ocrPage.rawText, key, ocrPage.pageConfidence,
+    );
+    await recordBrvinActivity(env, {
+      importId: job.id,
+      bookId: job.book_id,
+      agent: "Durable corpus builder",
+      phase: "indexing",
+      eventType: "corpus.page_manifest_persisted",
+      status: "completed",
+      message: "The immutable page manifest and deterministic OCR-derived chunks were stored in private derived-corpus storage.",
+      details: {
+        pdfPage: page,
+        chunkCount: corpus.chunkCount,
+        generationId: corpus.generationId,
+        sourceManifestCreated: corpus.sourceManifestCreated,
+        pageManifestCreated: corpus.pageManifestCreated,
+        chunkerVersion: "lexical-window-v1",
+        normalizerVersion: "unicode-nfc-whitespace-v1",
+      },
+    });
+    text = cleanFatmanVisionOcrText(ocrPage.rawText, page);
+  } else {
+    // The default-off M13 flag preserves the exact existing production OCR
+    // reader, sanitizer and 120,000-character indexing limit.
+    text = await readFatmanVisionOutput(env, job.id, page);
   }
-  if (keep) return { page, status: keep.status };
-  const text = await readFatmanVisionOutput(env, job.id, page);
+
+  // The existing page key, title/page preamble and AI Search document payload
+  // stay unchanged while provider-specific SDK operations sit behind Core.
   const title = job.book_title?.trim() || "Fatman 2nd Edition 2026";
   const content = title + " | PDF page " + page + "\n\n" + text;
-  // The shared AI Search instance has no custom_metadata schema. Cloudflare
-  // rejects undeclared metadata fields with invalid_metadata_format. Provenance
-  // is already losslessly carried by the page key (book UUID + PDF page), while
-  // the BRVIN registry (D1) owns title and access-control metadata.
-  const indexed = await instance.items.upload(key, content);
-  if (indexed.status === "error" || indexed.status === "skipped" || indexed.status === "outdated") {
-    throw new Error(indexed.error ? String(indexed.error) : "AI Search rejected PDF page " + page + " with status " + indexed.status + ".");
-  }
+  const indexed = await provider.upsert({ key, text: content });
   return { page, status: indexed.status };
-}
-
-/**
+}/**
  * Autonomous BRVIN recovery supervisor.
  *
  * A deployment can remediate a known permanent indexing defect while a saved
@@ -534,6 +559,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
         }
 
         const instance = this.env.FATMAN_SEARCH!.get(this.env.FATMAN_INSTANCE_NAME!.trim());
+        const provider = createBrvinRetrievalProvider(this.env.BRVIN_RETRIEVAL_PROVIDER, instance);
         await step.do("record book deletion started", async () => {
           await recordBrvinDeletionProgress(this.env, importId, {
             phase: "inventory",
@@ -585,7 +611,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
             throw new Error("An AI Search deletion batch contained an item outside this book's prefix.");
           }
           await step.do("delete this book's AI Search page batch " + batch, async () => {
-            for (const item of items) await instance.items.delete(item.id);
+            await provider.deleteSource(items.map((item) => item.key));
             await recordBrvinDeletionProgress(this.env, importId, {
               phase: "search",
               completed: offset + items.length,
@@ -646,17 +672,28 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
               extra: { objectVersionsFound: progress.objectVersionsFound, objectVersionsDeleted: progress.objectVersionsDeleted, objectVersionsProcessed: progress.objectVersionsProcessed },
             });
           }));
+        const derivedCorpusDeletion = await step.do("delete the book's rebuildable derived-corpus artifacts", async () =>
+          deleteFatmanGcsObjectPrefix(this.env, importId, "derived/", async progress => {
+            await recordBrvinDeletionProgress(this.env, importId, {
+              phase: "ocr_storage",
+              completed: progress.objectVersionsProcessed,
+              total: progress.objectVersionsFound,
+              message: "Removing private derived-corpus manifests and chunk artifacts: " + progress.objectVersionsProcessed + " of " + progress.objectVersionsFound + " processed.",
+              extra: { artifactClass: "derived_corpus", objectVersionsFound: progress.objectVersionsFound, objectVersionsDeleted: progress.objectVersionsDeleted, objectVersionsProcessed: progress.objectVersionsProcessed },
+            });
+          }));
         await step.do("record external BRVIN assets removed", async () => {
           await recordBrvinActivity(this.env, {
             importId, bookId: importId, agent: "Deletion supervisor",
             phase: "deletion", eventType: "book.external_assets_deleted", status: "completed",
-            message: "The source PDF, temporary Vision OCR output and page-level AI Search items were removed. The BRVIN registry and access-grant cleanup is now running.",
+            message: "The source PDF, temporary Vision OCR output, rebuildable corpus artifacts and page-level AI Search items were removed. The BRVIN registry and access-grant cleanup is now running.",
             details: {
               title: book.title,
               searchItemsDeleted: indexedItems.length,
               searchPrefix: book.search_prefix,
               sourceStorage: sourceStorageDeletion,
               visionOcrStorage: visionStorageDeletion,
+              derivedCorpusStorage: derivedCorpusDeletion,
             },
           });
           return true;
@@ -667,7 +704,7 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           completed: 0,
           total: 1,
           message: "External files and indexed pages are removed. Cleaning up the source's BRVIN registry records and project grants.",
-          extra: { sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion },
+          extra: { sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion, derivedCorpusStorage: derivedCorpusDeletion },
         });
         await this.env.DB!.batch([
           this.env.DB!.prepare("DELETE FROM brvin_project_books WHERE book_id=?").bind(importId),
@@ -695,14 +732,14 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           phase: "complete",
           completed: 1,
           total: 1,
-          message: "Deletion complete. The source PDF, OCR output, AI Search pages, grants and BRVIN/import records are removed.",
-          extra: { searchItemsDeleted: indexedItems.length, sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion },
+          message: "Deletion complete. The source PDF, OCR output, derived-corpus manifests/chunks, AI Search pages, grants and BRVIN/import records are removed.",
+          extra: { searchItemsDeleted: indexedItems.length, sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion, derivedCorpusStorage: derivedCorpusDeletion },
         });
         await recordBrvinActivity(this.env, {
           importId, bookId: importId, agent: "Deletion supervisor",
           phase: "deletion", eventType: "book.deletion_completed", status: "completed",
-          message: "The PDF, Vision OCR output, AI Search pages, project grants, BRVIN book row and import records are deleted. The audit trail and project/collection definitions remain.",
-          details: { title: book.title, searchItemsDeleted: indexedItems.length, sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion },
+          message: "The PDF, Vision OCR output, derived-corpus manifests/chunks, AI Search pages, project grants, BRVIN book row and import records are deleted. The audit trail and project/collection definitions remain.",
+          details: { title: book.title, searchItemsDeleted: indexedItems.length, sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion, derivedCorpusStorage: derivedCorpusDeletion },
         });
         return;
       }

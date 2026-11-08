@@ -86,7 +86,10 @@ describe("BRVIN browser script contract", () => {
     const envSource = readFileSync(new URL("../src/config/env.ts", import.meta.url), "utf8");
     const adminSource = readFileSync(new URL("../src/brvin/admin.ts", import.meta.url), "utf8");
     const analyticsSource = readFileSync(new URL("../src/analytics/db.ts", import.meta.url), "utf8");
-    expect(workflowSource).toContain("const indexed = await instance.items.upload(key, content);");
+    expect(workflowSource).toContain("const provider = createBrvinRetrievalProvider(env.BRVIN_RETRIEVAL_PROVIDER, instance);");
+    expect(workflowSource).toContain("const existing = await provider.findExisting(key);");
+    expect(workflowSource).toContain("const indexed = await provider.upsert({ key, text: content });");
+    expect(workflowSource).toContain("brvinCorpusManifestEnabled(env.BRVIN_CORPUS_MANIFEST_ENABLED)");
     expect(workflowSource).not.toContain("metadata: { bookId: job.book_id, bookTitle: title, pdfPage: page }");
     expect(workflowSource).toContain("export async function runBrvinRecoverySupervisor");
     expect(workflowSource).toContain('task !== "parmarbot_test"');
@@ -118,7 +121,10 @@ describe("BRVIN browser script contract", () => {
     expect(workflowSource).toContain('params.task === "delete_book"');
     expect(workflowSource).toContain('params.task === "delete_vision_output"');
     expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/", async progress =>');
-    expect(workflowSource).toContain("instance.items.delete(item.id)");
+    expect(workflowSource).toContain("await provider.deleteSource(items.map((item) => item.key));");
+    const providerSource = readFileSync(new URL("../src/brvin/provider-contract.ts", import.meta.url), "utf8");
+    expect(providerSource).toContain("await this.instance.items.delete(itemId);");
+    expect(providerSource).toContain("wanted.has(item.key)");
     expect(workflowSource).toContain("brvinDeletionSearchPageRequest(page)");
     expect(workflowSource).not.toContain("per_page: 100, source: \"builtin\"");
     expect(workflowSource).toContain('eventType: "book.deletion_progress"');
