@@ -56,7 +56,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 function m14AdminPage(): Response {
-  const html = String.raw\`<!doctype html>
+  const html = String.raw`<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -204,7 +204,7 @@ function m14AdminPage(): Response {
 })();
 </script>
 </body>
-</html>\`;
+</html>`;
   return new Response(html, {
     status: 200,
     headers: {
