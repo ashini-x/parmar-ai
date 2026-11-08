@@ -22,6 +22,7 @@ export type BrvinServiceEnv = Pick<
   | "DB"
   | "BRVIN_SEARCH"
   | "BRVIN_SEARCH_INSTANCE"
+  | "BRVIN_RETRIEVAL_PROVIDER"
   | "BRVIN_MIN_SCORE"
   | "BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT"
 >;
