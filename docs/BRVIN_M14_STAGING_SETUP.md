@@ -1,6 +1,6 @@
 # BRVIN M14 isolated staging setup and Physics backfill
 
-**Status:** Operator Worker code is under review. This document records the non-production setup only. It is not permission to change the production provider.
+**Status:** Operator PR #152 is merged and the isolated Worker is deployed. The real GCS backfill is waiting only on the Google Cloud setup and secrets below. This document is for the non-production pilot only.
 
 ## What is already provisioned
 
@@ -12,7 +12,7 @@
 - Staging Worker config: `wrangler.m14-staging.jsonc`
 - Production D1, Workers, provider selector and corpus flag are not used by this isolated operator
 
-The Worker is intended to be deployed automatically by `.github/workflows/m14-staging-deploy.yml` after its PR merges. It exposes only `GET /health` and the authenticated `POST /admin/m14/backfill` action. The backfill is pinned to the registered Physics source and requires both `ENVIRONMENT=staging` and `BRVIN_M14_PILOT_ENABLED=true`.
+The Worker is deployed by `.github/workflows/m14-staging-deploy.yml`: `https://parmar-ai-m14-staging.thenewtongs.workers.dev` (version `74ab2c8a-b2e4-443d-ba57-d7ef68e98d53`, 100% traffic). It exposes only `GET /health` and the authenticated `POST /admin/m14/backfill` action. The backfill is pinned to the registered Physics source and requires both `ENVIRONMENT=staging` and `BRVIN_M14_PILOT_ENABLED=true`. At last check, the Worker secret list was empty and the corpus bucket was not yet created.
 
 ## One-time Google Cloud setup required
 
@@ -33,7 +33,7 @@ Google's IAM reference confirms Object Viewer includes object get/list and Objec
 
 ## Add the secrets to the staging Worker
 
-After the staging Worker is deployed:
+The staging Worker is already deployed. Open:
 
 1. Open **Cloudflare Dashboard → Workers & Pages → parmar-ai-m14-staging → Settings → Variables and Secrets**.
 2. Add these as **Secrets**, not plain-text variables:
@@ -49,7 +49,7 @@ The non-secret settings, including the source bucket, separate M14 bucket, stagi
 
 The Worker health endpoint reports only whether required secrets are present; it never returns credential values. Once deployed, open:
 
-`https://parmar-ai-m14-staging.<your-workers-dev-subdomain>.workers.dev/health`
+`https://parmar-ai-m14-staging.thenewtongs.workers.dev/health`
 
 It should report `environment: staging`, `pilotEnabled: true`, and `true` for `gcpClientEmail`, `gcpPrivateKey`, and `m14AdminToken`.
 
@@ -57,7 +57,7 @@ Then run this command on your own terminal, replacing the URL and token with you
 
 ```bash
 curl --fail-with-body --silent --show-error \
-  -X POST "https://parmar-ai-m14-staging.<your-workers-dev-subdomain>.workers.dev/admin/m14/backfill" \
+  -X POST "https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m14/backfill" \
   -H "Authorization: Bearer <YOUR_M14_ADMIN_TOKEN>" \
   -H "Content-Type: application/json" \
   --data '{"confirmSourceId":"01238b3a-9902-4a42-90b4-574048ee4f00"}'
