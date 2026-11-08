@@ -2,6 +2,7 @@ import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { brvinAdminScript } from "../src/brvin/admin";
 import { readFileSync } from "node:fs";
+import { handleM14StagingRequest } from "../src/brvin/m14-staging-worker";
 
 describe("BRVIN browser script contract", () => {
   it("refreshes only active source deletions and includes the targeted D1 activity index", async () => {
@@ -228,4 +229,38 @@ describe("BRVIN browser script contract", () => {
     expect(workerSource).toContain("/admin/api/brvin/applications/handoff");
     expect(workerSource).toContain("getBrvinApplicationHandoff");
   });
+
+  it("serves an M14 operator script that parses as JavaScript before browser execution", async () => {
+    const response = await handleM14StagingRequest(
+      new Request("https://m14-staging.example.workers.dev/admin/m14"),
+      { ENVIRONMENT: "staging", BRVIN_M14_PILOT_ENABLED: "true" } as any,
+    );
+    const html = await response.text();
+    const scriptStart = html.indexOf("<script>");
+    const scriptEnd = html.indexOf("</script>", scriptStart + 8);
+    const script = scriptStart >= 0 && scriptEnd >= 0
+      ? html.slice(scriptStart + 8, scriptEnd)
+      : "";
+    expect(response.status).toBe(200);
+    expect(script).toContain("checkHealth();");
+
+    const parsed = ts.createSourceFile(
+      "m14-staging-operator.js",
+      script,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.JS,
+    ) as ts.SourceFile & { parseDiagnostics: readonly ts.Diagnostic[] };
+    if (parsed.parseDiagnostics.length > 0) {
+      const diagnostic = parsed.parseDiagnostics[0];
+      const position = parsed.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
+      throw new Error(
+        "M14 staging browser script contains invalid JavaScript at " +
+        (position.line + 1) + ":" + (position.character + 1) + ": " +
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, " "),
+      );
+    }
+    expect(parsed.parseDiagnostics).toHaveLength(0);
+  });
+
 });
