@@ -1,4 +1,4 @@
-import type { AiSearchChunk, BrvinRemotePageImage, Env } from "../config/env";
+import type { BrvinRemotePageImage, Env } from "../config/env";
 import { ensureAnalyticsSchema } from "../analytics/db";
 import { parseFatmanIndexPageKey } from "../fatman/library";
 import { createBrvinRetrievalProvider } from "./provider-contract";
@@ -23,6 +23,7 @@ export type BrvinRetrievalEnv = Pick<Env, "DB"> &
   Partial<Pick<Env,
     | "BRVIN_SEARCH"
     | "BRVIN_SEARCH_INSTANCE"
+    | "BRVIN_RETRIEVAL_PROVIDER"
     | "BRVIN_MIN_SCORE"
     | "BRVIN_MATCH_THRESHOLD"
     | "BRVIN_RERANKING_ENABLED"
