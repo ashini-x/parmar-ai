@@ -59,3 +59,19 @@ ON CONFLICT(source_id) DO UPDATE SET
   page_count = excluded.page_count,
   created_at = excluded.created_at,
   updated_at = excluded.updated_at;
+
+
+-- Exactly-once recovery record for the source PDF's post-READY OCR cleanup.
+-- A unique row reserves one recovery attempt before calling Google Vision.
+CREATE TABLE IF NOT EXISTS m14_vision_recovery (
+  source_id TEXT PRIMARY KEY REFERENCES m14_source_registry(source_id),
+  status TEXT NOT NULL CHECK (status IN ('submitting', 'running', 'completed', 'failed', 'submission_uncertain')),
+  vision_operation TEXT,
+  output_bucket TEXT NOT NULL,
+  output_prefix TEXT NOT NULL,
+  source_pdf_generation TEXT NOT NULL,
+  expected_page_count INTEGER NOT NULL,
+  error_message TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);

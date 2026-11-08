@@ -142,6 +142,61 @@ describe("BRVIN M14 original Vision OCR backfill", () => {
     expect(result.pages[1].sourceManifestCreated).toBe(false);
   });
 
+  it("replays recovered OCR from the isolated M14 bucket and records the new Vision operation", async () => {
+    const recoveredOperation = "projects/test-gcp-project/operations/recovered-physics-ocr";
+    const outputBucket = "brvin-m14-private-corpus";
+    const outputPrefix = "brvin/m14-staging/vision-output/" + SOURCE_ID + "/attempt-001/";
+    const recoveredUri = "gs://" + outputBucket + "/" + outputPrefix;
+    const { job, dependencies } = makeDependencies({
+      getJob: vi.fn(async () => ({ ...makeJob(), vision_operation: recoveredOperation })),
+      getVisionOperation: vi.fn(async (_env: Env, operationId: string, expectedUri: string) => {
+        expect(operationId).toBe(recoveredOperation);
+        expect(expectedUri).toBe(recoveredUri);
+        return { done: true, outputDestinations: [recoveredUri] };
+      }),
+      listVisionObjects: vi.fn(async () => ({
+        prefix: recoveredUri,
+        objects: Array.from({ length: PAGE_COUNT }, (_, index) => ({
+          name: outputPrefix + "output-" + (index + 1) + "-to-" + (index + 1) + ".json",
+          size: "500",
+        })),
+        truncated: false,
+      })),
+      readVisionPage: vi.fn(async (_env: Env, _sourceId: string, page: number) => ({
+        rawText: "Recovered OCR page " + page + " F = ma",
+      })),
+    });
+
+    const result = await backfillBrvinM14CorpusFromStoredVision(
+      makeEnv(),
+      {
+        ...makeSpec(),
+        visionOperationId: recoveredOperation,
+        visionOutputBucket: outputBucket,
+        visionOutputPrefix: outputPrefix,
+      },
+      dependencies as never,
+    );
+
+    expect(result.visionOperationId).toBe(recoveredOperation);
+    expect(result.corpusBucket).toBe(outputBucket);
+    expect(result.pages.map((page) => page.pdfPage)).toEqual([1, 2, 3]);
+    expect(dependencies.getVisionOperation).toHaveBeenCalledWith(
+      expect.anything(), recoveredOperation, recoveredUri,
+    );
+    expect(dependencies.persistPage).toHaveBeenCalledTimes(3);
+    expect(dependencies.persistPage).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({ vision_operation: recoveredOperation }),
+      1,
+      "Recovered OCR page 1 F = ma",
+      expect.any(String),
+      undefined,
+      { storageBucket: outputBucket },
+    );
+  });
+
   it("fails closed outside staging or without explicit pilot enablement", async () => {
     const { dependencies } = makeDependencies();
     await expect(backfillBrvinM14CorpusFromStoredVision(

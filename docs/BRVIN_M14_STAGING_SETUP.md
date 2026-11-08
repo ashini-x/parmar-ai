@@ -46,22 +46,27 @@ The staging Worker is already deployed. Open:
 
 The non-secret settings, including the source bucket, separate M14 bucket, staging flag and D1 binding, are already in `wrangler.m14-staging.jsonc`.
 
-## Verify and run the one-time backfill (no terminal needed)
+## Recover OCR and run the M14 backfill (no terminal needed)
 
-1. After saving and deploying all four Cloudflare secrets, open the staging health page in your browser:
-   `https://parmar-ai-m14-staging.thenewtongs.workers.dev/health`.
-2. Confirm the JSON reports `environment: "staging"`, `pilotEnabled: true`, `sourceRegistryBound: true`, and `true` for `gcpClientEmail`, `gcpPrivateKey`, and `m14AdminToken`. These are presence checks only; the endpoint never returns credential values.
-3. Open the browser operator page:
-   `https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m14`.
-4. Paste the value you saved as the Cloudflare `BRVIN_M14_ADMIN_TOKEN` secret into the password field. Do not paste a Google private key into this page.
-5. Tick the confirmation checkbox and select **Run Physics backfill** once. Keep the page open while it validates the source and writes the three manifests.
-6. A successful result contains `ok: true`, `pageCount: 3`, a deterministic `generationId`, and page results for physical pages 1, 2 and 3. The receipt does not include OCR text and is safe to share here after checking it contains no credentials.
+The original BRVIN ingest completed successfully, passed page-grounded retrieval QA, and marked the Physics source ready. As part of the existing retention policy, the original PDF and searchable AI Search page text were retained while the three temporary Google Vision JSON files were deliberately removed. M14 therefore starts one new Google Vision OCR operation from the retained original PDF; it does not ask the operator to upload the PDF again.
 
-The browser operator is served by the same staging Worker. It sends the token only to that same origin, does not store it in browser storage, clears the password field after submission, and cannot select another source. It is available only when the Worker is in staging and the M14 pilot flag is enabled. It uses the same authenticated POST handler as the API path; no terminal or command-line utility is required.
+1. Open the staging health page:
+   ` + "`" + `https://parmar-ai-m14-staging.thenewtongs.workers.dev/health` + "`" + `
+2. Confirm ` + "`" + `environment: "staging"` + "`" + `, ` + "`" + `pilotEnabled: true` + "`" + `, ` + "`" + `sourceRegistryBound: true` + "`" + `, and all required secret-presence checks are true.
+3. Open the browser operator:
+   ` + "`" + `https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m14` + "`" + `
+4. Enter the ` + "`" + `BRVIN_M14_ADMIN_TOKEN` + "`" + ` in the password field.
+5. Tick the separate confirmation stating that a new Google Vision OCR request will be submitted. It can incur Google Cloud usage charges.
+6. Click **Recreate OCR output from retained PDF (one time)**. The Worker verifies the exact retained source PDF object and size, reserves a one-time recovery record in the isolated staging D1 database, then submits one Vision PDF OCR request. The source PDF is read from the original bucket; the new OCR JSON is written only to the M14 destination bucket under ` + "`" + `brvin/m14-staging/vision-output/<source-id>/attempt-001/` + "`" + `. The page does not upload the PDF.
+7. Re-enter the operator token and click **Check OCR recovery status (read only)** periodically. Wait until the response says ` + "`" + `status: "completed"` + "`" + ` and shows all three files: ` + "`" + `output-1-to-1.json` + "`" + `, ` + "`" + `output-2-to-2.json` + "`" + `, and ` + "`" + `output-3-to-3.json` + "`" + `.
+8. Tick the separate manifest confirmation, re-enter the operator token, and click **Run Physics backfill**. The Worker will read the verified recovered OCR files and create immutable source/page manifests and chunks in the M14 destination bucket.
+9. A successful backfill receipt contains ` + "`" + `ok: true` + "`" + `, ` + "`" + `pageCount: 3` + "`" + `, a generation ID, and results for physical pages 1, 2 and 3. It does not include OCR text or credentials; the receipt can be shared for verification.
 
-Before running the backfill, you may use **Inspect saved OCR files (read only)** on the browser operator. Enter the same `BRVIN_M14_ADMIN_TOKEN` and click the diagnostic button. It returns only the saved Vision operation state and object filenames/sizes; it does not return OCR text or modify GCS. Share that diagnostic result if the backfill reports an output-object mismatch. Do not repeatedly retry the backfill while the file layout is being investigated.
+The one-time recovery table reserves the source ID before calling Google Vision. Repeated clicks return the existing operation rather than submitting duplicate OCR jobs. If the network connection ends after submission but before an operation ID is saved, the record enters ` + "`" + `submission_uncertain` + "`" + ` and automatic resubmission is blocked so a duplicate OCR job is not accidentally billed. A failed API response is retained in the staging record for diagnosis rather than silently retried.
 
-The handler verifies the D1 source record, the exact saved Vision operation, its output prefix and exactly one `output-N-to-N.json` object per physical page before persisting any manifest. It does not upload the PDF or submit another OCR request. Create-only GCS writes make identical retries safe; a changed pre-existing manifest is rejected.
+The page also provides **Inspect original OCR folder (read only)** for the deleted original prefix. It returns only filenames and sizes, never OCR text. The recovery-status endpoint similarly returns only operation state and filenames; it does not return OCR content.
+
+The service account already has the required bucket permissions: source bucket **Storage Object Viewer** and M14 destination bucket **Storage Object Creator** plus **Storage Object Viewer**. Google documents PDF/TIFF async OCR output as JSON files in the configured GCS destination; ` + "`" + `batchSize: 1` + "`" + ` requests one response proto per output JSON file. References: [Vision PDF/TIFF OCR](https://docs.cloud.google.com/vision/docs/pdf), [Vision async file annotation](https://docs.cloud.google.com/vision/docs/reference/rest/v1/files/asyncBatchAnnotate), [Vision authentication](https://docs.cloud.google.com/vision/docs/authentication).
 
 ## What happens after the backfill
 
