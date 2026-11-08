@@ -56,14 +56,14 @@ The completed product baseline includes:
 
 ## 4. Verified production snapshot
 
-The latest verified paired Core production deployment is **Release validation #990** on 9 November 2026, from source revision [`26a2e01`](https://github.com/ashini-x/parmar-ai/commit/26a2e0128e4259c0811bdaa66d73ec6e3ab83107). The release acceptance run [#42535365195](https://github.com/ashini-x/parmar-ai/actions/runs/42535365195) passed typecheck, Vitest, Node tests, both Worker dry-runs, paired production deployment, root/BRVIN connectivity and Fatman source-readiness smoke checks. Cloudflare deployment metadata confirms both Workers are healthy at 100% traffic.
+The latest verified paired Core production deployment is **Release validation #1000** on 9 November 2026, from source revision [`957e02f`](https://github.com/ashini-x/parmar-ai/commit/957e02f1fc2fdd8bf89b3216773a86e0189da187). The release acceptance run [#42537138028](https://github.com/ashini-x/parmar-ai/actions/runs/42537138028) passed typecheck, Vitest, Node tests, both Worker dry-runs, paired production deployment, root/BRVIN connectivity and Fatman source-readiness smoke checks. Cloudflare deployment metadata confirms both Workers are healthy at 100% traffic.
 
 | Worker | Production version | Deployment |
 |---|---|---|
-| `brvin-service` | `ec386c3a-f87b-42c0-a830-c7e68f9eddaf` | `81f97bea-3ba9-409a-bf75-4996982f1a45` |
-| `parmar-ai` | `91cd86b2-4f3e-4fe8-9186-f33fe8fbdeed` | `1102a6b5-c837-41bf-ad8a-158cfb984ba1` |
+| `brvin-service` | `66f05fd7-46c9-482a-bab5-f0f196a81aba` | `a4112ca5-643b-45b5-988b-f893bf94c6fb` |
+| `parmar-ai` | `03b49f4a-2ad4-481b-ba56-97a2903f0df9` | `4247b29c-de2e-4614-9720-d5d8c1d9a204` |
 
-This was a routine paired Core release after the M14 staging-diagnostics merge, not a retrieval-provider migration. Both production Workers still explicitly use `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`; Core Admin still has `BRVIN_CORPUS_MANIFEST_ENABLED=false`. No production Vertex/Qdrant provider routing or corpus write was enabled.
+This was the normal paired Core release triggered by merging the isolated M14 payload-index repair, not a retrieval-provider migration. Both production Workers still explicitly use `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`; Core Admin still has `BRVIN_CORPUS_MANIFEST_ENABLED=false`. The Qdrant adapter remains isolated to the dedicated M14 staging entrypoint; no production Vertex/Qdrant provider routing or corpus write was enabled.
 
 Additional verified production facts:
 - D1: `parmar-ai-admin-prod` (the existing shared registry/analytics database).
