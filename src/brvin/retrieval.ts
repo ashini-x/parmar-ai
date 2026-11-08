@@ -1,6 +1,7 @@
 import type { AiSearchChunk, BrvinRemotePageImage, Env } from "../config/env";
 import { ensureAnalyticsSchema } from "../analytics/db";
 import { parseFatmanIndexPageKey } from "../fatman/library";
+import { createBrvinRetrievalProvider } from "./provider-contract";
 
 const MAX_QUERIES = 3;
 const MAX_RESULTS_PER_QUERY = 16;
@@ -410,6 +411,7 @@ export async function retrieveBrvinProjectContextForProject(
     }
     const prefixSources = [...sources].sort((a, b) => b.search_prefix.length - a.search_prefix.length);
     const instance = searchNamespace.get(searchInstanceName.trim());
+    const provider = createBrvinRetrievalProvider(env.BRVIN_RETRIEVAL_PROVIDER, instance);
 
     if (pageNumbers.length) {
       const exact = await retrieveExplicitBookPages(instance, prefixSources, pageNumbers);
@@ -431,30 +433,24 @@ export async function retrieveBrvinProjectContextForProject(
     const rerankingMinScore = boundedThreshold(env.BRVIN_RERANKING_MIN_SCORE, 0.4);
 
     const settled = await Promise.allSettled(normalizedQueries.map(async (query) => {
-      const result = await instance.search({
-        messages: [{ role: "user", content: query }],
-        ai_search_options: {
-          cache: { enabled: false },
-          retrieval: {
-            max_num_results: MAX_RESULTS_PER_QUERY,
-            retrieval_type: "hybrid",
-            match_threshold: boundedThreshold(env.BRVIN_MATCH_THRESHOLD, 0.3),
-            filters: { folder: { $in: prefixes } },
-          },
-          reranking: {
-            enabled: rerankingEnabled,
-            ...(rerankingEnabled ? {
-              model: env.BRVIN_RERANKING_MODEL?.trim() || "@cf/baai/bge-reranker-base",
-              match_threshold: rerankingMinScore,
-            } : {}),
-          },
+      const chunks = await provider.query({
+        query,
+        sourcePrefixes: prefixes,
+        maxResults: MAX_RESULTS_PER_QUERY,
+        matchThreshold: boundedThreshold(env.BRVIN_MATCH_THRESHOLD, 0.3),
+        reranking: {
+          enabled: rerankingEnabled,
+          ...(rerankingEnabled ? {
+            model: env.BRVIN_RERANKING_MODEL?.trim() || "@cf/baai/bge-reranker-base",
+            minimumScore: rerankingMinScore,
+          } : {}),
         },
       });
-      return { query, chunks: result.chunks ?? [] };
+      return { query, chunks };
     }));
 
     const successful = settled.filter(
-      (item): item is PromiseFulfilledResult<{ query: string; chunks: AiSearchChunk[] }> =>
+      (item): item is PromiseFulfilledResult<{ query: string; chunks: import("./provider-contract").RetrievalCandidate[] }> =>
         item.status === "fulfilled",
     );
     if (!successful.length) {
@@ -476,7 +472,7 @@ export async function retrieveBrvinProjectContextForProject(
 
     for (const searchResult of successful) {
       for (const chunk of searchResult.value.chunks) {
-        const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
+        const key = chunk.itemKey;
         const source = prefixSources.find((item) => key.startsWith(item.search_prefix));
         if (!source) continue;
 
@@ -487,8 +483,8 @@ export async function retrieveBrvinProjectContextForProject(
           continue;
         }
 
-        const rerankingScore = finiteScore(chunk.scoring_details?.reranking_score);
-        const vectorScore = finiteScore(chunk.scoring_details?.vector_score);
+        const rerankingScore = finiteScore(chunk.scoringDetails?.rerankingScore);
+        const vectorScore = finiteScore(chunk.scoringDetails?.vectorScore);
         const fusedScore = finiteScore(chunk.score);
         const score = rerankingScore ?? vectorScore ?? fusedScore;
         if (score === undefined) continue;
