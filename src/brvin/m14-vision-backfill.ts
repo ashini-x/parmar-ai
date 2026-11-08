@@ -48,7 +48,7 @@ interface VisionOutputListing {
   truncated: boolean;
 }
 
-interface BackfillDependencies {
+export interface BrvinM14VisionBackfillDependencies {
   getJob(env: Env, sourceId: string): Promise<FatmanImportJob | null>;
   getVisionOperation(env: Env, operationId: string, expectedOutputUri: string): Promise<FatmanVisionOperationResult>;
   listVisionObjects(env: Env, job: FatmanImportJob, maxObjects: number): Promise<VisionOutputListing>;
@@ -64,7 +64,7 @@ interface BackfillDependencies {
   ): ReturnType<typeof persistBrvinPageCorpus>;
 }
 
-const defaultDependencies: BackfillDependencies = {
+const defaultDependencies: BrvinM14VisionBackfillDependencies = {
   getJob: getFatmanImportJob,
   getVisionOperation: getFatmanVisionOperation,
   listVisionObjects: listFatmanVisionOutputObjects,
@@ -85,7 +85,7 @@ function validBucketName(value: string): boolean {
 export async function backfillBrvinM14CorpusFromStoredVision(
   env: Env,
   spec: BrvinM14VisionBackfillSpec,
-  dependencies: Partial<BackfillDependencies> = {},
+  dependencies: Partial<BrvinM14VisionBackfillDependencies> = {},
 ): Promise<BrvinM14VisionBackfillResult> {
   const deps: BackfillDependencies = { ...defaultDependencies, ...dependencies };
   if (env.ENVIRONMENT !== "staging") {
