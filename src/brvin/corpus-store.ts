@@ -86,6 +86,7 @@ export async function persistBrvinPageCorpus(
   rawOcrText: string,
   stableItemKey: string,
   pageConfidence?: number,
+  options: { storageBucket?: string } = {},
 ): Promise<{
   generationId: string;
   chunkCount: number;
@@ -133,7 +134,10 @@ export async function persistBrvinPageCorpus(
   // One immutable page object per OCR/chunker generation. A later OCR run has
   // a new Vision operation ID and therefore a new generation directory.
   const pageManifestObject = prefix + "pages/page-" + pageNumber + ".json";
-  const bucket = bucketName(env);
+  const bucket = options.storageBucket?.trim() || bucketName(env);
+  if (!/^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$/u.test(bucket)) {
+    throw new Error("The BRVIN derived-corpus storage bucket name is invalid.");
+  }
   const token = await getGoogleAccessToken(env);
 
   const sourceWrite = await putImmutableJson(bucket, token, sourceManifestObject, sourceManifest);

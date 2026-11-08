@@ -838,3 +838,14 @@ M14's non-production implementation branch is `brvin/m14-vertex-qdrant-physics-p
 The existing Physics pilot is source `01238b3a-9902-4a42-90b4-574048ee4f00`, project `448249b4-fed9-45f5-9137-6014f242ddbe`, title `Force and Laws of Motion - Class IX pilot handout`, SHA-256 `062c7d111c987b3a75c6f9acb44696e38b64bfeaf203417156b21f7fe9de7f8c`, 3 physical pages, READY at 3/3. Its saved Vision operation is `projects/project-90db7be4-619f-4ed7-89b/operations/342f72f46451ffd2`. Reuse this original OCR output; do not upload or OCR the PDF again. No production derived manifest for it is assumed because the production manifest feature is off.
 
 M14 remains **in progress**. The repository branch contains mocked tests, not live provider proof. A non-production Qdrant cluster/API key and non-production Vertex project/service-account/location/dimension/quota verification are outstanding. No M14 pilot secrets are set in production Wrangler configuration, no public endpoint was introduced, and no user-facing provider routing has changed. Do not mark M14 accepted until live indexing/replay, mixed-content and exact-symbol retrieval, physical page provenance, grant-isolation, deterministic re-index, latency, throughput and cost tests have all passed.
+
+
+## 16. M14 source backfill checkpoint — 8 November 2026
+
+M14 pilot foundation PR [#148](https://github.com/ashini-x/parmar-ai/pull/148) is merged as `8d665b48f08cc7197ca306cb0b00417d2321fc72`. Its final Release validation passed TypeScript, 50 Vitest files / 277 tests, 8 Node files / 54 tests and both Worker dry-runs.
+
+The next branch, `brvin/m14-physics-vision-backfill`, adds a fail-closed one-time path for the existing Physics source. It reuses the completed Vision operation already recorded in D1 and verifies exact source ID, source SHA-256, operation ID, completed import state, operation output prefix and the complete `output-N-to-N.json` object set before reading pages. It then calls the existing raw Vision page reader and the same deterministic page-key function used by the current indexer, writing immutable manifests into a separate M14 corpus bucket.
+
+Backfill is allowed only on `ENVIRONMENT=staging` with `BRVIN_M14_PILOT_ENABLED=true`. `BRVIN_M14_CORPUS_BUCKET` must be valid and distinct from `FATMAN_GCS_BUCKET`; the corpus reader uses this separate bucket. Production Wrangler files remain unchanged and do not enable the M14 flag. The code never uploads the PDF or submits another OCR job.
+
+This branch is a backfill orchestrator with mocked unit tests; it has not yet read the real GCS Vision files or written a real M14 manifest. The source bucket must be readable by the staging GCP service account and the separate M14 bucket must be provisioned with narrowly scoped write access. Live Vertex model, region, dimensions, quota, Qdrant collection, indexing, query, source-page, project-isolation, latency and cost acceptance remain outstanding.
