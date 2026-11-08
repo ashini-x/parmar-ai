@@ -12,6 +12,27 @@ const OPERATION = "projects/project-90db7be4-619f-4ed7-89b/operations/342f72f464
 const TOKEN = "m14-test-operator-token-0123456789abcdef0123456789abcdef";
 
 function makeEnv(overrides: Partial<Env> = {}): M14StagingWorkerEnv {
+  const db = {
+    prepare: () => ({
+      bind: () => ({
+        first: async () => ({
+          source_id: SOURCE_ID,
+          source_object: "brvin/source-pdfs/" + SOURCE_ID + "/source.pdf",
+          source_sha256: SOURCE_SHA,
+          expected_size: 77384,
+          uploaded_bytes: 77384,
+          status: "completed",
+          vision_operation: OPERATION,
+          indexed_pages: 3,
+          book_id: SOURCE_ID,
+          book_title: "Physics pilot",
+          page_count: 3,
+          created_at: 1,
+          updated_at: 2,
+        }),
+      }),
+    }),
+  };
   return {
     ENVIRONMENT: "staging",
     BRVIN_M14_PILOT_ENABLED: "true",
@@ -21,6 +42,7 @@ function makeEnv(overrides: Partial<Env> = {}): M14StagingWorkerEnv {
     GCP_PRIVATE_KEY: "test-only-private-key",
     FATMAN_GCS_BUCKET: "parmar-fatman-ocr-90db7be4",
     BRVIN_M14_CORPUS_BUCKET: "brvin-m14-physics-90db7be4-a8ca999e",
+    DB: db as never,
     ...overrides,
   } as M14StagingWorkerEnv;
 }
