@@ -47,7 +47,7 @@ M0–M5 are earlier implementation stages and are not open tasks in the current 
 | M8 | ChatGPT integration handoff | **COMPLETE** | Versioned, dated, non-secret repository/environment-specific integration handoff shipped. |
 | M9 | Live connection verification | **COMPLETE** | Private challenge/proof flow accepted in production; Parmar AI Production is connected with one ready authorized source. |
 | M10 | Teacher knowledge grants and isolation | **COMPLETE** | Grant/revoke controls, source-access shortcuts and two-application/project-isolation tests deployed and accepted. |
-| M11 | Operations, usage and administrator handover plus real consumer acceptance | **IN PROGRESS** | Operations, lifecycle rule verification and authenticated admin walkthrough are complete. The real teacher-focused app retrieval/revocation acceptance remains. |
+| M11 | Operations, usage and administrator handover plus real consumer acceptance | **IN PROGRESS** | Operations, lifecycle rule verification, authenticated admin walkthrough and useful BRVIN Teachers v2 semantic retrieval are complete. Only application-project grant revocation and post-revocation denial remain. |
 
 ## 5. M11 acceptance detail
 
@@ -65,20 +65,20 @@ M0–M5 are earlier implementation stages and are not open tasks in the current 
 - Live pipelines reported no active processing or deletion jobs. The visible older failures repeated the 5 November `storage.buckets.get` permission denial. No retry or delete action was taken during the walkthrough.
 - BRVIN Teachers' central Operator Console, teacher directory/profile D1 and classroom/collection/source UI are deployed in `ashini-x/brvin-teachers` (release [#42171352464](https://github.com/ashini-x/brvin-teachers/actions/runs/42171352464)).
 - The separate `BrvinTeachersManagementApi` WorkerEntrypoint and additive ownership/reference metadata migration are deployed in `parmar-ai` (paired Core release [#42171109140](https://github.com/ashini-x/parmar-ai/actions/runs/42171109140)). The consumer's `BRVIN_MANAGEMENT` binding targets the named entrypoint. This management API is distinct from and does not change frozen retrieval v2.
-- Production D1 confirms the metadata columns, source deduplication-scope column and reference-sequence table exist. The BRVIN Teachers Production application/environment is active, both private bindings use the generated identity, and the one-time proof was accepted. The app D1 contains one real teacher and one active project mapping; Core contains one Physics project, one collection and one 3-page PDF source. The source is currently failed with 0/3 pages indexed because the expected first Vision OCR output object was not found.
+- Production D1 confirms the metadata columns, source deduplication-scope column and reference-sequence table exist. The BRVIN Teachers Production application/environment is active, both private bindings use the generated identity, and the one-time proof was accepted. The app D1 contains one real teacher and one active project mapping; Core contains one Physics project, one collection and one 3-page PDF source. The source is now `READY` with 3/3 pages indexed. The existing Physics items were re-indexed as 3/4/4 chunks without another PDF upload or Vision OCR run.
 
 ### Remaining acceptance — real teacher-focused consumer
 
-M11 remains **IN PROGRESS**. Registration, trusted bindings, one-time connection proof and real teacher/project/collection/source creation are complete. The remaining acceptance is:
+M11 remains **IN PROGRESS**. Registration, trusted bindings, one-time connection proof, real teacher/project/collection/source creation, source readiness and useful consumer retrieval are complete.
 
-1. Inspect the existing Vision operation response and actual GCS destination/object inventory for the 3-page Physics source. The expected first-page `output-1-to-1.json` object was not found; do not upload the PDF again or resume indexing against a missing object.
-2. Recover the existing source through the supported resumable workflow if output is present. If a fresh Vision operation is required, obtain approval for the potential repeat OCR charge first.
-3. Demonstrate source status `READY` with all 3 pages indexed.
-4. Demonstrate useful BRVIN v2 retrieval from the real consumer, with correct project boundary and physical PDF page/source provenance.
-5. Revoke the application-project grant in BRVIN Admin.
-6. Demonstrate subsequent retrieval is denied.
+On 8 November 2026, the operator supplied a screenshot from the Access-protected BRVIN Teachers retrieval-test route showing two relevant Newton second-law passages from `Force and Laws of Motion - Class IX pilot handout`, both citing physical PDF page 2, with displayed relevance scores 0.993 and 0.960. The excerpts support the relationship between net force, mass and acceleration. The source is `READY` at 3/3 pages; the index uses 256-token chunks with 10% overlap and page chunk counts 3/4/4.
 
-The one-time proof record is `connected` but its readiness snapshot reported zero sources because it preceded the pilot project/source creation. Connection proof is not source readiness or end-to-end consumer acceptance. The separate Operator Console management-health indicator still needs an authenticated visual check. Do not fabricate production teacher/project/source/grant records. Preserve existing Parmar AI, Fatman and AskMoina state. M11 must remain IN PROGRESS until useful retrieval and denied-after-revocation results are recorded.
+The only remaining acceptance is:
+
+1. Revoke the BRVIN Teachers Production application's grant to the Physics knowledge project in BRVIN Admin.
+2. Through the real consumer path, attempt the same retrieval after revocation and capture evidence that Core denies access. Do not use direct AI Search, Core D1 or another service to bypass the private Service Binding.
+
+The one-time proof record is `connected`; that proof snapshot predated creation of the project/source and is not itself the retrieval evidence. Preserve existing Parmar AI, Fatman and AskMoina state. M11 must remain IN PROGRESS until post-revocation denial is recorded.
 
 ## 6. Deferred future work
 

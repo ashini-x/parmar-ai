@@ -1,6 +1,6 @@
 # BRVIN 2 — Current State and Continuation Plan
 
-**Status date:** 6 November 2026  
+**Status date:** 8 November 2026  
 **Repository:** `ashini-x/parmar-ai`  
 **Production workspace:** [BRVIN Admin](https://parmar-ai.thenewtongs.workers.dev/admin/brvin)
 
@@ -73,17 +73,18 @@ Additional verified production facts:
 
 The exact production inventory and trust boundaries are maintained in [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md).
 
-The BRVIN Teachers management metadata migration is present in production. Its Production application/environment is registered and active, both private bindings use the generated environment identity, and BRVIN Admin accepted the one-time retrieval connection proof on 6 November 2026. The application D1 contains one real teacher and one active Physics project mapping. Core contains the matching project, one teacher-notes collection and one 3-page PDF source. Production D1 confirms the source is `ready`, with `page_count=3` and `indexed_pages=3`; the deployed Teachers page map shows all three pages indexed. The pilot's three page items have now been re-indexed under the 256-token / 10%-overlap setting (3, 4 and 4 chunks respectively), and direct AI Search smoke queries rank correct Physics page evidence first. The remaining acceptance is to run the authenticated BRVIN Teachers v2 consumer diagnostic through its private Service Binding, verify the returned excerpts against the original PDF, then revoke the application-project grant and prove subsequent retrieval is denied.
+The BRVIN Teachers management metadata migration is present in production. Its Production application/environment is registered and active, both private bindings use the generated environment identity, and BRVIN Admin accepted the one-time retrieval connection proof on 6 November 2026. The application D1 contains one real teacher and one active Physics project mapping. Core contains the matching project, one teacher-notes collection and one 3-page PDF source. Production D1 confirms the source is `ready`, with `page_count=3` and `indexed_pages=3`; the deployed Teachers page map shows all three pages indexed. The pilot's three page items have been re-indexed under the 256-token / 10%-overlap setting (3, 4 and 4 chunks respectively). On 8 November 2026, the operator supplied a screenshot from the Access-protected BRVIN Teachers retrieval-test route showing two relevant Newton second-law passages from physical PDF page 2, with displayed relevance scores 0.993 and 0.960. This verifies useful consumer retrieval and source-page provenance. The only remaining M11 acceptance is to revoke the BRVIN Teachers application-project grant and prove that a subsequent retrieval attempt is denied.
 
 ## 5. Milestone status
 
 M6–M10 are complete. M11 is **in progress**, with the Operations, retention-safety and administrator-walkthrough portions accepted. BRVIN Teachers has a deployed Operator Console, active Production application/environment, both private bindings and an accepted one-time private retrieval proof. A real teacher, Physics project, teacher-notes collection and 3-page PDF source exist; production D1 confirms the source is `READY` at 3/3 indexed pages.
 
-The remaining M11 acceptance is:
+The protected BRVIN Teachers v2 consumer semantic-retrieval test has passed. On 8 November 2026, the operator supplied a screenshot from `/operator/retrieval-test` showing two relevant passages from `Force and Laws of Motion - Class IX pilot handout`, both citing physical PDF page 2. The displayed relevance scores were 0.993 and 0.960, and the excerpts support the Newton second-law relationship between net force, mass and acceleration. The screenshot records the returned evidence, not a separate query transcript.
 
-1. Run the protected BRVIN Teachers retrieval test with the exact semantic test questions in `brvin-teachers/docs/RETRIEVAL_TEST_RUNBOOK.md`. Leave the exact-page override blank, verify the response says **Semantic search**, inspect the passage text and physical PDF page provenance against the source. The pilot index is already re-indexed under the 256-token / 10%-overlap setting; direct engine smoke tests pass but do not replace this v2 consumer test.
-2. Revoke the application-project grant in BRVIN Admin.
-3. Verify that subsequent retrieval is denied.
+The only remaining M11 acceptance is:
+
+1. Revoke the BRVIN Teachers Production application's grant to the Physics knowledge project in BRVIN Admin.
+2. Through the real consumer path, attempt the same retrieval after revocation and capture evidence that Core denies access. If the diagnostic hides the now-unauthorised project rather than submitting a request, record that project-list denial separately and use the supported app-side diagnostic path for explicit retrieval denial; do not bypass the private Service Binding or query Core D1 directly.
 
 The proof snapshot recorded zero ready sources because it predated the project/source creation; connection proof alone does not satisfy source readiness or M11.
 
@@ -109,7 +110,7 @@ The Operations walkthrough on 6 November 2026 recorded 33 project searches this 
 
 Start a new BRVIN chat with this instruction:
 
-> Continue BRVIN 2 in `ashini-x/parmar-ai`. Read `docs/BRVIN_2_MASTER_PLAN.md` first, then `docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md`, `docs/BRVIN_SYSTEM_REFERENCE.md`, `docs/BRVIN_2_RPC_V2_CONTRACT.md`, `docs/BRVIN_2_ARCHITECTURE_DECISIONS.md` and the relevant runbook. These are the canonical current documents; do not resurrect deleted Project Factory or M3 test-client plans. M6–M10 are complete. BRVIN Teachers is registered as an active Production application/environment; both private bindings and the one-time retrieval proof are in place. The real Physics project/collection/source are READY at 3/3 indexed pages. Its shared AI Search items have been re-indexed under 256-token chunks with 10% overlap (page chunk counts 3/4/4), and direct engine smoke queries rank the expected physical pages first. The remaining M11 gates are the authenticated BRVIN Teachers v2 semantic retrieval test through its private Service Binding, followed by grant revocation and proof of denial. Core retrieval uses hybrid RRF, configurable cross-encoder reranking, bounded excerpts and page-key validation; BRVIN does not own the consumer's generation model. Inspect current GitHub and production state before acting; preserve existing product/data boundaries and update both repositories' canonical docs with each material change.
+> Continue BRVIN 2 in `ashini-x/parmar-ai`. Read `docs/BRVIN_2_MASTER_PLAN.md` first, then `docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md`, `docs/BRVIN_SYSTEM_REFERENCE.md`, `docs/BRVIN_2_RPC_V2_CONTRACT.md`, `docs/BRVIN_2_ARCHITECTURE_DECISIONS.md` and the relevant runbook. These are the canonical current documents; do not resurrect deleted Project Factory or M3 test-client plans. M6–M10 are complete. BRVIN Teachers is registered as an active Production application/environment; both private bindings and the one-time retrieval proof are in place. The real Physics project/collection/source are READY at 3/3 indexed pages. Its shared AI Search items have been re-indexed under 256-token chunks with 10% overlap (page chunk counts 3/4/4), and direct engine smoke queries rank the expected physical pages first. The BRVIN Teachers v2 semantic retrieval test through its private Service Binding has passed with relevant page-2 passages; only grant revocation and proof of denial remain. Core retrieval uses hybrid RRF, configurable cross-encoder reranking, bounded excerpts and page-key validation; BRVIN does not own the consumer's generation model. Inspect current GitHub and production state before acting; preserve existing product/data boundaries and update both repositories' canonical docs with each material change.
 
 When a future change alters code, D1, bindings, access rules, ingestion, retrieval or production behavior, update the relevant current reference in the same PR. Keep this file concise and current; do not append a second historical milestone ledger.
 
