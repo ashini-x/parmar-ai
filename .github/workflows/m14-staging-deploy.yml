@@ -56,8 +56,6 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment:
-      name: m14-staging
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
