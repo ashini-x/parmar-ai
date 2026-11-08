@@ -102,6 +102,7 @@ describe("BRVIN deterministic durable corpus", () => {
       sourceId: "source",
       sourcePdfSha256: "d".repeat(64),
       generationId: "e".repeat(32),
+      stableItemKey: "source/page-000001.txt",
       pdfPage: 1,
       rawOcrText: "  \n ",
     })).rejects.toThrow("empty OCR text");
@@ -110,6 +111,7 @@ describe("BRVIN deterministic durable corpus", () => {
       sourceId: "source",
       sourcePdfSha256: "d".repeat(64),
       generationId: "e".repeat(32),
+      stableItemKey: "source/page-000000.txt",
       pdfPage: 0,
       rawOcrText: "some text",
     })).rejects.toThrow("positive physical PDF page number");
