@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "parmar-ai-m14-staging",
+  "main": "src/brvin/m14-staging-worker.ts",
+  "compatibility_date": "2026-10-05",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "vars": {
+    "ENVIRONMENT": "staging",
+    "APP_VERSION": "m14-staging-1",
+    "GCP_PROJECT_ID": "project-90db7be4-619f-4ed7-89b",
+    "FATMAN_GCS_BUCKET": "parmar-fatman-ocr-90db7be4",
+    "BRVIN_M14_PILOT_ENABLED": "true",
+    "BRVIN_M14_CORPUS_BUCKET": "brvin-m14-physics-90db7be4-a8ca999e"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "parmar-ai-m14-staging",
+      "database_id": "a8ca999e-4107-4f2f-800e-a1abce3a4cac"
+    }
+  ]
+}
