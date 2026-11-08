@@ -183,7 +183,7 @@ The corpus writer is gated by `BRVIN_CORPUS_MANIFEST_ENABLED` and defaults off. 
 
 ## 6. Milestones and acceptance gates
 
-The numbering extends the completed M6–M11 baseline. M12–M17 are the next BRVIN retrieval modernization sequence. Statuses below describe the plan at approval; only M12 documentation is complete once these references and tracking issues have been committed. No provider migration is currently implemented or deployed.
+The numbering extends the completed M6–M11 baseline. M12–M17 are the BRVIN retrieval modernization sequence. M12 is complete as documentation; M13's Core provider-boundary and corpus implementation is now present on a review branch only. No replacement provider, Vertex embedding call, Qdrant collection or production cutover is implemented or deployed.
 
 | Milestone | Owner(s) | Scope | Acceptance gate | Initial status | Tracking |
 |---|---|---|---|---|
