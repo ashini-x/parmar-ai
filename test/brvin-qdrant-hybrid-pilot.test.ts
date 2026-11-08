@@ -326,6 +326,25 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
     );
   });
 
+  it("repairs an existing collection missing authorization indexes before filtered queries", async () => {
+    const { request, calls } = makeQdrant({ collectionMissing: false });
+    const pilot = makePilot(request);
+
+    await pilot.query({
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "Newton's second law",
+    });
+
+    const createdFields = calls
+      .filter((call) => call.url.endsWith("/index?wait=true") && call.method === "PUT")
+      .map((call) => call.body.field_name);
+    expect(createdFields).toEqual(["project_id", "source_id"]);
+    expect(calls.findIndex((call) => call.url.endsWith("/index?wait=true"))).toBeLessThan(
+      calls.findIndex((call) => call.url.endsWith("/points/query")),
+    );
+  });
+
   it("reuses existing keyword and UUID authorization indexes without recreating them", async () => {
     const { request, calls } = makeQdrant({
       collectionMissing: false,
@@ -405,6 +424,8 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
       { key: "project_id", match: { value: "project-a" } },
       { key: "source_id", match: { value: "source-a" } },
     ]);
+    expect(calls.filter((call) => call.url.endsWith("/index?wait=true")).map((call) => call.body.field_name))
+      .toEqual(["project_id", "source_id"]);
   });
 
   it("rejects non-HTTPS clusters and incompatible existing collection dimensions", async () => {
