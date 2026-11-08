@@ -46,7 +46,7 @@ The generic Telegram runtime should be copied independently from Parmar's SSC/Fa
 | [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md) | Single current-state and new-chat continuation entry point. |
 | [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md) | Approved product boundary and active M6–M11 acceptance ledger. |
 | [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) | Current as-built architecture, infrastructure, D1 model, trust boundary and production state. |
-| [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) | Accepted architecture decisions; historical evidence is labelled and is not a task list. |
+| [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) | Accepted architecture decisions; historical evidence is labelled and is not a task list. |\n| [BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md](BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md) | Approved M12–M17 provider modernization plan, same-UI compatibility, benchmark gates and rollback policy; not yet implemented. |
 | [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md) | Current private v2 retrieval and connection-proof contract. |
 | [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md) | One-time integration of a same-account consumer Worker. |
 | [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md) | Day-to-day administrator instructions. |
@@ -57,11 +57,11 @@ The active architecture is the shared `parmar-ai` admin/ingestion plane plus pri
 
 **Superseded plans:** the autonomous Project Factory proposal and the old M3 connector/reference-client design were removed from the active documentation tree. Do not recreate their milestones or the retired `brvin-test-client`. Past text remains recoverable from Git history, not as active requirements.
 
-## BRVIN Teachers — planned downstream application platform
+## BRVIN Teachers — downstream application platform
 
-**BRVIN Teachers** is the planned multi-channel, multi-tenant application platform for operating teacher-specific AI teaching experiences. It is a **separate downstream consumer**, not BRVIN core, not a BRVIN Worker and not a currently deployed capability. Its approved architecture and phased build direction are recorded in [BRVIN_TEACHERS_ARCHITECTURE.md](BRVIN_TEACHERS_ARCHITECTURE.md).
+**BRVIN Teachers** is the separate downstream multi-tenant application platform in `ashini-x/brvin-teachers`, not BRVIN core and not a replacement for Parmar AI. Its protected Operator Console, Core management binding and private v2 retrieval binding are deployed; the real Physics source has passed useful retrieval, page provenance, grant-revocation denial and retrieval restoration acceptance. Student-facing channel/model runtime remains a separate workstream. Its application architecture and UI are maintained in that repository.
 
-The proposed implementation repository is `ashini-x/brvin-teachers` (not yet created). It will use the existing private BRVIN v2 Service Binding for authorized knowledge retrieval. BRVIN source data, ingestion, grants and retrieval remain in the existing BRVIN system in `ashini-x/parmar-ai`. The existing Parmar AI SSC application also remains standalone for now; there is no initial code or production-data transfer. BRVIN Teachers is intended to have one central Operator Console for all its tenant teachers and channel instances, not one admin panel per Telegram bot. This planning document does not change BRVIN scope or close the remaining M11 real-consumer acceptance gate.
+The BRVIN retrieval-provider modernization is coordinated across both repositories: Core owns Vertex AI/Qdrant ingestion and retrieval; Teachers preserves the same Operator Console and student-facing contract without direct provider access. See [BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md](BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md) and the consumer's [provider compatibility plan](https://github.com/ashini-x/brvin-teachers/blob/main/docs/BRVIN_RETRIEVAL_PROVIDER_COMPATIBILITY.md). The existing Parmar AI SSC application remains standalone; no code or production-data transfer is part of this project.
 
 ## Current feature documentation
 
