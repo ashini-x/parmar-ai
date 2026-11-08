@@ -37,6 +37,7 @@ export interface BrvinCorpusSourceManifest {
   schemaVersion: number;
   sourceId: string;
   sourcePdfSha256: string;
+  ocrOperationId: string;
   generationId: string;
   pageCount: number;
   ocrEngine: "google-cloud-vision-document-text-detection";
@@ -65,6 +66,7 @@ export interface BrvinCorpusPageManifest {
   sourceId: string;
   sourcePdfSha256: string;
   generationId: string;
+  ocrOperationId: string;
   stableItemKey: string;
   pdfPage: number;
   ocrEvidence: {
@@ -164,6 +166,7 @@ export async function buildBrvinSourceManifest(input: {
   const generationSeed = JSON.stringify({
     sourceId: input.sourceId,
     sourcePdfSha256,
+    ocrOperationId: input.ocrOperationId,
     pageCount: input.pageCount,
     ocrEngine: "google-cloud-vision-document-text-detection",
     schemaVersion: BRVIN_CORPUS_SCHEMA_VERSION,
