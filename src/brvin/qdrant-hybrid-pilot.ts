@@ -141,6 +141,7 @@ export class BrvinQdrantHybridPilot {
   private readonly apiKey: string;
   private readonly collection: string;
   private readonly dimensions: number;
+  private readonly request: typeof fetch;
 
   constructor(
     config: {
@@ -150,8 +151,12 @@ export class BrvinQdrantHybridPilot {
       dimensions: number;
     },
     private readonly embeddings: EmbeddingProvider,
-    private readonly request: typeof fetch = fetch,
+    request: typeof fetch = fetch,
   ) {
+    // Cloudflare's native fetch checks its receiver. Once stored on a class,
+    // calling this.request(...) would otherwise pass the class instance as
+    // this and fail with an Illegal invocation error in Workers.
+    this.request = request.bind(globalThis);
     this.baseUrl = configuredUrl(config.url);
     this.apiKey = config.apiKey?.trim() ?? "";
     if (!this.apiKey) throw new Error("BRVIN M14 Qdrant API key is not configured.");
