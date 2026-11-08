@@ -10,6 +10,7 @@ import { fatmanExpectedPageCount, fatmanIndexPageKey, inferFatmanPdfPageCountFro
 import type { FatmanImportJob } from "./import";
 import { createBrvinRetrievalProvider } from "../brvin/provider-contract";
 import { persistBrvinPageCorpus } from "../brvin/corpus-store";
+import { brvinCorpusManifestEnabled } from "../brvin/corpus";
 import { brvinDeletionProgressPercent, brvinDeletionSearchPageRequest } from "./deletion";
 import { buildFatmanPageStateMap, chunkFatmanPages, FATMAN_INDEX_PAGE_CONCURRENCY, fatmanIndexMonitorDelayMs } from "./indexing-policy";
 import {
@@ -194,7 +195,7 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
 
   if (
     job.book_id &&
-    env.BRVIN_CORPUS_MANIFEST_ENABLED?.trim().toLowerCase() === "true"
+    brvinCorpusManifestEnabled(env.BRVIN_CORPUS_MANIFEST_ENABLED)
   ) {
     const corpus = await persistBrvinPageCorpus(env, job, page, rawOcrText);
     await recordBrvinActivity(env, {
