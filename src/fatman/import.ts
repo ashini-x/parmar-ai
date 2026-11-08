@@ -790,7 +790,7 @@ export async function readFatmanVisionOutputRaw(env: Env, importId: string, page
 }
 
 export function cleanFatmanVisionOcrText(rawText: string, page: number): string {
-  const text = rawText.replace(/\\u0000/g, "").trim();
+  const text = rawText.replace(/\u0000/g, "").trim();
   if (!text) throw new Error("Google Vision returned no readable text for PDF page " + page + ".");
   return text.slice(0, 120_000);
 }
