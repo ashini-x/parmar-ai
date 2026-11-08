@@ -35,6 +35,7 @@ const collectionInfo = {
 function makeQdrant() {
   const calls: Array<{ url: string; method: string; body?: any }> = [];
   let firstCollectionRead = true;
+  const storedPoints = new Map<string, any>();
   const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -52,7 +53,14 @@ function makeQdrant() {
       return new Response(JSON.stringify({ result: true, status: "ok" }), { status: 200 });
     }
     if (url.includes("/points?wait=true") && method === "PUT") {
+      for (const point of body.points) storedPoints.set(point.id, point);
       return new Response(JSON.stringify({ result: { operation_id: 1, status: "completed" }, status: "ok" }), { status: 200 });
+    }
+    if (url.endsWith("/collections/brvin_m14_physics_pilot_v1/points") && method === "POST") {
+      return new Response(JSON.stringify({
+        result: body.ids.flatMap((id: string) => storedPoints.has(id) ? [storedPoints.get(id)] : []),
+        status: "ok",
+      }), { status: 200 });
     }
     if (url.endsWith("/points/query") && method === "POST") {
       return new Response(JSON.stringify({
@@ -182,6 +190,15 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
     });
     const upserts = calls.filter((call) => call.method === "PUT" && call.url.includes("/points?wait=true"));
     expect(upserts).toHaveLength(2);
+    const readbacks = calls.filter((call) =>
+      call.method === "POST" && call.url.endsWith("/collections/brvin_m14_physics_pilot_v1/points")
+    );
+    expect(readbacks).toHaveLength(2);
+    expect(readbacks[0].body).toMatchObject({
+      ids: [first.ids[0]],
+      with_payload: true,
+      with_vector: false,
+    });
     expect(upserts[0].body.points[0]).toMatchObject({
       vector: {
         dense: [0.1, 0.2, 0.3],
@@ -195,6 +212,60 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
         chunk_text: "Newton's second law: F = ma",
       },
     });
+  });
+
+  it("fails closed when Qdrant acknowledges an upsert but does not confirm completion", async () => {
+    const base = makeQdrant().request;
+    const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/points?wait=true") && init?.method === "PUT") {
+        return new Response(JSON.stringify({ result: { operation_id: 1, status: "acknowledged" }, status: "ok" }), { status: 200 });
+      }
+      return base(input, init);
+    }) as typeof fetch;
+    const pilot = makePilot(request);
+    await expect(pilot.upsertPageChunks({
+      projectId: "project-a",
+      sourceId: "source-a",
+      itemKey: "page-2",
+      pdfPage: 2,
+      generationId: "generation-a",
+      chunks: [{
+        id: "brvchunk_" + "a".repeat(64),
+        chunkIndex: 0,
+        normalizedText: "F = ma",
+        contentSha256: "b".repeat(64),
+        contentTypes: ["formula"],
+        formulaCandidates: [],
+      }],
+    })).rejects.toThrow("did not confirm the page upsert as completed");
+  });
+
+  it("fails closed when an upsert cannot be read back with exact provenance", async () => {
+    const base = makeQdrant().request;
+    const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/collections/brvin_m14_physics_pilot_v1/points") && init?.method === "POST") {
+        return new Response(JSON.stringify({ result: [], status: "ok" }), { status: 200 });
+      }
+      return base(input, init);
+    }) as typeof fetch;
+    const pilot = makePilot(request);
+    await expect(pilot.upsertPageChunks({
+      projectId: "project-a",
+      sourceId: "source-a",
+      itemKey: "page-2",
+      pdfPage: 2,
+      generationId: "generation-a",
+      chunks: [{
+        id: "brvchunk_" + "a".repeat(64),
+        chunkIndex: 0,
+        normalizedText: "F = ma",
+        contentSha256: "b".repeat(64),
+        contentTypes: ["formula"],
+        formulaCandidates: [],
+      }],
+    })).rejects.toThrow("read-back did not return every expected deterministic point ID");
   });
 
   it("uses one dense+sparse RRF path with server-authorized project/source filters and post-validates every point", async () => {
