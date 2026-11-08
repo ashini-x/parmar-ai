@@ -1,4 +1,5 @@
 import type { Env } from "../config/env";
+import { readBrvinCorpusGeneration } from "./corpus-reader";
 import { getGoogleAccessToken } from "../auth/google";
 import type {
   FatmanImportJob,
@@ -20,6 +21,8 @@ const PILOT_SOURCE_ID = "01238b3a-9902-4a42-90b4-574048ee4f00";
 const PILOT_SOURCE_SHA256 = "062c7d111c987b3a75c6f9acb44696e38b64bfeaf203417156b21f7fe9de7f8c";
 const PILOT_VISION_OPERATION = "projects/project-90db7be4-619f-4ed7-89b/operations/342f72f46451ffd2";
 const PILOT_PAGE_COUNT = 3;
+const PILOT_GENERATION_ID = "57129957231e548064e5594d8fb9f501";
+const PILOT_RECOVERED_VISION_OPERATION = "projects/project-90db7be4-619f-4ed7-89b/operations/5f6743870ee1aeff";
 const MAX_VISION_PAGE_TEXT_CHARS = 1_000_000;
 
 interface M14RegistryRecord {
@@ -53,6 +56,17 @@ interface M14VisionRecoveryRecord {
   error_message: string | null;
   created_at: number;
   updated_at: number;
+}
+
+export interface M14CorpusReadbackSummary {
+  sourceId: string;
+  generationId: string;
+  sourcePdfSha256: string;
+  visionOperationId: string;
+  pageCount: number;
+  chunkCount: number;
+  pages: Array<{ pdfPage: number; stableItemKey: string; chunkCount: number; rawOcrSha256: string; normalizedSearchTextSha256: string }>;
+  verified: true;
 }
 
 export interface M14VisionRecoveryStatus {
@@ -148,6 +162,7 @@ function m14AdminPage(): Response {
     <label class="confirm"><input id="confirm" type="checkbox"> <span>I understand this writes the fixed three-page Physics manifests into the isolated M14 staging bucket.</span></label>
     <button id="inspect" class="secondary" type="button" disabled>Inspect original OCR folder (read only)</button>
     <button id="run" type="button" disabled>Run Physics backfill</button>
+    <button id="verifyCorpus" class="secondary" type="button" disabled>Verify stored M14 manifests (read only)</button>
     <div id="result" class="status muted" role="status" aria-live="polite">No recovery or backfill action has been started.</div>
     <details>
       <summary>Security and retry information</summary>
@@ -164,6 +179,7 @@ function m14AdminPage(): Response {
   const inspectButton = document.getElementById("inspect");
   const rebuildButton = document.getElementById("rebuildVision");
   const checkRecoveryButton = document.getElementById("checkRecovery");
+  const verifyCorpusButton = document.getElementById("verifyCorpus");
   const healthBox = document.getElementById("health");
   const resultBox = document.getElementById("result");
 
@@ -174,6 +190,7 @@ function m14AdminPage(): Response {
     const ocrStatus = runButton.dataset.ocrStatus || "not_started";
     inspectButton.disabled = !canAuthenticate || !ready;
     checkRecoveryButton.disabled = !canAuthenticate || !ready;
+    verifyCorpusButton.disabled = !canAuthenticate || !ready;
     rebuildButton.disabled = !canAuthenticate || !confirmOcrInput.checked || !ready ||
       ["submitting", "running", "completed", "failed", "submission_uncertain"].includes(ocrStatus);
     runButton.disabled = !confirmInput.checked || !canAuthenticate || !ready || !ocrReady;
@@ -304,6 +321,21 @@ function m14AdminPage(): Response {
       "Reading the original Vision operation and its original output folder. No files will be changed."
     );
     inspectButton.textContent = "Inspect original OCR folder (read only)";
+    refreshButton();
+  });
+
+  verifyCorpusButton.addEventListener("click", async () => {
+    refreshButton();
+    if (verifyCorpusButton.disabled) return;
+    verifyCorpusButton.disabled = true;
+    verifyCorpusButton.textContent = "Verifying manifests…";
+    await authenticatedRequest(
+      "/admin/m14/corpus/verify",
+      "GET",
+      undefined,
+      "Reading the persisted source/page manifests from GCS and recomputing every OCR, normalized-text and deterministic-chunk integrity check. This is read-only."
+    );
+    verifyCorpusButton.textContent = "Verify stored M14 manifests (read only)";
     refreshButton();
   });
 
@@ -849,6 +881,46 @@ async function getM14VisionRecoveryStatus(env: Env): Promise<M14VisionRecoverySt
   };
 }
 
+async function verifyM14CorpusReadback(env: Env): Promise<M14CorpusReadbackSummary> {
+  const recovery = await getM14VisionRecoveryRecord(env);
+  if (!recovery || recovery.status !== "completed" ||
+      recovery.vision_operation !== PILOT_RECOVERED_VISION_OPERATION ||
+      recovery.output_bucket !== env.BRVIN_M14_CORPUS_BUCKET?.trim() ||
+      recovery.expected_page_count !== PILOT_PAGE_COUNT) {
+    throw new Error("The one-time recovered Physics OCR operation is not verified as completed in the isolated staging registry.");
+  }
+  const corpus = await readBrvinCorpusGeneration(env, PILOT_SOURCE_ID, PILOT_GENERATION_ID);
+  const source = corpus.sourceManifest;
+  if (source.sourcePdfSha256.toLowerCase() !== PILOT_SOURCE_SHA256 ||
+      source.ocrOperationId !== PILOT_RECOVERED_VISION_OPERATION ||
+      source.pageCount !== PILOT_PAGE_COUNT ||
+      corpus.pageManifests.length !== PILOT_PAGE_COUNT ||
+      corpus.chunkCount !== 7) {
+    throw new Error("The persisted M14 source manifest does not match the exact Physics source, recovered Vision operation and expected 3-page/7-chunk generation.");
+  }
+  const pages = corpus.pageManifests.map((page) => ({
+    pdfPage: page.pdfPage,
+    stableItemKey: page.stableItemKey,
+    chunkCount: page.chunks.length,
+    rawOcrSha256: page.rawOcrSha256,
+    normalizedSearchTextSha256: page.normalizedSearchTextSha256,
+  }));
+  if (pages.map((page) => page.pdfPage).join(",") !== "1,2,3" ||
+      pages.map((page) => page.chunkCount).join(",") !== "2,2,3") {
+    throw new Error("The persisted M14 corpus has unexpected page coverage or chunk counts.");
+  }
+  return {
+    sourceId: PILOT_SOURCE_ID,
+    generationId: PILOT_GENERATION_ID,
+    sourcePdfSha256: source.sourcePdfSha256,
+    visionOperationId: source.ocrOperationId,
+    pageCount: source.pageCount,
+    chunkCount: corpus.chunkCount,
+    pages,
+    verified: true,
+  };
+}
+
 async function inspectM14VisionOutputs(env: Env): Promise<M14VisionOutputDiagnostics> {
   const sourceBucket = env.FATMAN_GCS_BUCKET?.trim() ?? "";
   if (!env.GCP_CLIENT_EMAIL || !env.GCP_PRIVATE_KEY ||
@@ -915,6 +987,7 @@ export async function handleM14StagingRequest(
   inspectOutputs: typeof inspectM14VisionOutputs = inspectM14VisionOutputs,
   startRecovery: typeof startM14VisionRecovery = startM14VisionRecovery,
   readRecoveryStatus: typeof getM14VisionRecoveryStatus = getM14VisionRecoveryStatus,
+  verifyCorpus: typeof verifyM14CorpusReadback = verifyM14CorpusReadback,
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
@@ -945,13 +1018,15 @@ export async function handleM14StagingRequest(
   const isDiagnostics = url.pathname === "/admin/m14/diagnostics";
   const isVisionRebuild = url.pathname === "/admin/m14/vision/rebuild";
   const isVisionStatus = url.pathname === "/admin/m14/vision/status";
+  const isCorpusVerify = url.pathname === "/admin/m14/corpus/verify";
   const isBackfill = url.pathname === "/admin/m14/backfill";
-  if (!isDiagnostics && !isVisionRebuild && !isVisionStatus && !isBackfill) {
+  if (!isDiagnostics && !isVisionRebuild && !isVisionStatus && !isCorpusVerify && !isBackfill) {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if ((isDiagnostics && request.method !== "GET") ||
       (isVisionRebuild && request.method !== "POST") ||
       (isVisionStatus && request.method !== "GET") ||
+      (isCorpusVerify && request.method !== "GET") ||
       (isBackfill && request.method !== "POST")) {
     return json({ ok: false, error: "method_not_allowed" }, 405);
   }
@@ -982,6 +1057,15 @@ export async function handleM14StagingRequest(
     try {
       const recovery = await readRecoveryStatus(env);
       return json({ ok: true, recovery });
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
+  }
+
+  if (isCorpusVerify) {
+    try {
+      const verification = await verifyCorpus(env);
+      return json({ ok: true, verification });
     } catch (error) {
       return json({ ok: false, error: safeError(error) }, 502);
     }

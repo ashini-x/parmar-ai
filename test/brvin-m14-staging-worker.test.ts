@@ -114,11 +114,56 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(html).toContain('/admin/m14/backfill');
     expect(html).toContain('/admin/m14/vision/rebuild');
     expect(html).toContain('/admin/m14/vision/status');
+    expect(html).toContain('/admin/m14/corpus/verify');
+    expect(html).toContain("Verify stored M14 manifests (read only)");
     expect(html).toContain("Recreate OCR output from retained PDF");
     expect(html).toContain("credentials: \"omit\"");
     expect(html).not.toContain(TOKEN);
     expect(html).not.toContain("test-only-private-key");
     expect(html).not.toContain("https://");
+  });
+
+  it("provides authenticated read-only manifest verification without returning OCR text", async () => {
+    const verification = {
+      sourceId: SOURCE_ID,
+      generationId: "57129957231e548064e5594d8fb9f501",
+      sourcePdfSha256: SOURCE_SHA,
+      visionOperationId: "projects/project-90db7be4-619f-4ed7-89b/operations/5f6743870ee1aeff",
+      pageCount: 3,
+      chunkCount: 7,
+      pages: [
+        { pdfPage: 1, stableItemKey: "page-1", chunkCount: 2, rawOcrSha256: "a".repeat(64), normalizedSearchTextSha256: "b".repeat(64) },
+        { pdfPage: 2, stableItemKey: "page-2", chunkCount: 2, rawOcrSha256: "c".repeat(64), normalizedSearchTextSha256: "d".repeat(64) },
+        { pdfPage: 3, stableItemKey: "page-3", chunkCount: 3, rawOcrSha256: "e".repeat(64), normalizedSearchTextSha256: "f".repeat(64) },
+      ],
+      verified: true as const,
+    };
+    const verify = vi.fn(async () => verification);
+    const denied = await handleM14StagingRequest(
+      makeRequest("/admin/m14/corpus/verify", { method: "GET", token: "wrong-token" }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      verify as never,
+    );
+    expect(denied.status).toBe(401);
+    expect(verify).not.toHaveBeenCalled();
+
+    const allowed = await handleM14StagingRequest(
+      makeRequest("/admin/m14/corpus/verify", { method: "GET", token: TOKEN }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      verify as never,
+    );
+    expect(allowed.status).toBe(200);
+    await expect(allowed.json()).resolves.toEqual({ ok: true, verification });
+    expect(JSON.stringify(verification)).not.toContain("rawOcrText");
+    expect(verify).toHaveBeenCalledTimes(1);
   });
 
   it("requires bearer authentication and the exact Physics source confirmation before starting one-time OCR recovery", async () => {
