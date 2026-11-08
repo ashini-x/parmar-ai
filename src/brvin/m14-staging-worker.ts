@@ -134,40 +134,53 @@ function m14AdminPage(): Response {
   <main>
     <div class="eyebrow">Isolated staging environment</div>
     <h1>BRVIN M14 · Physics pilot</h1>
-    <p>This operator runs one controlled backfill for the already-registered three-page Physics source. It cannot select another PDF, change a source ID, or access production data.</p>
+    <p>This operator handles one fixed three-page Physics source. It cannot select another PDF or access production retrieval data.</p>
     <div class="notice">
-      <strong>Before you continue</strong>
-      <p class="small">Complete the Google Cloud bucket, service-account permissions, and Cloudflare secret setup first. The action writes derived manifests to the separate M14 staging bucket. It does not upload the PDF again or start another OCR job.</p>
+      <strong>Why OCR recovery is needed</strong>
+      <p class="small">BRVIN already indexed this PDF and retained the original PDF, but its normal retention workflow removed the temporary OCR JSON after quality checks passed. This page can submit one new OCR request from the retained PDF and store the new output only in the separate M14 staging bucket.</p>
     </div>
     <div id="health" class="status muted" role="status" aria-live="polite">Checking staging configuration…</div>
     <label for="token">M14 staging operator token</label>
     <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste the BRVIN_M14_ADMIN_TOKEN secret" minlength="32">
-    <label class="confirm"><input id="confirm" type="checkbox"> <span>I understand this will run the fixed three-page Physics backfill in the isolated staging environment.</span></label>
-    <button id="inspect" class="secondary" type="button" disabled>Inspect saved OCR files (read only)</button>
+    <label class="confirm"><input id="confirmOcr" type="checkbox"> <span>I understand this submits one new Google Vision OCR request for the retained Physics PDF. Google Cloud may charge for this request.</span></label>
+    <button id="rebuildVision" type="button" disabled>Recreate OCR output from retained PDF (one time)</button>
+    <button id="checkRecovery" class="secondary" type="button" disabled>Check OCR recovery status (read only)</button>
+    <label class="confirm"><input id="confirm" type="checkbox"> <span>I understand this writes the fixed three-page Physics manifests into the isolated M14 staging bucket.</span></label>
+    <button id="inspect" class="secondary" type="button" disabled>Inspect original OCR folder (read only)</button>
     <button id="run" type="button" disabled>Run Physics backfill</button>
-    <div id="result" class="status muted" role="status" aria-live="polite">No backfill has been started.</div>
+    <div id="result" class="status muted" role="status" aria-live="polite">No recovery or backfill action has been started.</div>
     <details>
       <summary>Security and retry information</summary>
-      <p class="small">The token is used only for this request, is cleared from the input after submission, and is not saved in browser storage. The browser sends it only to this same staging website. Re-running an identical backfill is designed to verify existing immutable manifests rather than overwrite changed data.</p>
-      <p class="small">Never paste a Google private key here. This page needs only the separate M14 operator token.</p>
+      <p class="small">The OCR action is fixed to the registered Physics source. Its source PDF is read from the existing private source bucket, while OCR results and derived manifests are written to the separate M14 staging bucket. A saved operation record prevents duplicate OCR submissions.</p>
+      <p class="small">The token is used only for requests to this same staging website, is not saved in browser storage, and is cleared after each action. Never paste a Google private key here.</p>
     </details>
   </main>
 <script>
 (() => {
   const tokenInput = document.getElementById("token");
   const confirmInput = document.getElementById("confirm");
+  const confirmOcrInput = document.getElementById("confirmOcr");
   const runButton = document.getElementById("run");
   const inspectButton = document.getElementById("inspect");
+  const rebuildButton = document.getElementById("rebuildVision");
+  const checkRecoveryButton = document.getElementById("checkRecovery");
   const healthBox = document.getElementById("health");
   const resultBox = document.getElementById("result");
 
   function refreshButton() {
     const canAuthenticate = tokenInput.value.trim().length >= 32;
-    inspectButton.disabled = !canAuthenticate || runButton.dataset.ready !== "true";
-    runButton.disabled = !confirmInput.checked || !canAuthenticate || runButton.dataset.ready !== "true";
+    const ready = runButton.dataset.ready === "true";
+    const ocrReady = runButton.dataset.ocrReady === "true";
+    const ocrStatus = runButton.dataset.ocrStatus || "not_started";
+    inspectButton.disabled = !canAuthenticate || !ready;
+    checkRecoveryButton.disabled = !canAuthenticate || !ready;
+    rebuildButton.disabled = !canAuthenticate || !confirmOcrInput.checked || !ready ||
+      ["submitting", "running", "completed", "submission_uncertain"].includes(ocrStatus);
+    runButton.disabled = !confirmInput.checked || !canAuthenticate || !ready || !ocrReady;
   }
   tokenInput.addEventListener("input", refreshButton);
   confirmInput.addEventListener("change", refreshButton);
+  confirmOcrInput.addEventListener("change", refreshButton);
 
   async function checkHealth() {
     try {
@@ -187,7 +200,7 @@ function m14AdminPage(): Response {
       healthBox.className = "status " + (ready ? "good" : "bad");
       healthBox.textContent = ready
         ? "Staging checks passed: staging mode, pilot enabled, isolated registry and required secrets are present."
-        : "Staging is not ready. Check the Worker health response and complete any missing configuration before running the backfill.\\n" + JSON.stringify(data, null, 2);
+        : "Staging is not ready. Check the Worker health response and complete any missing configuration before continuing.\n" + JSON.stringify(data, null, 2);
       runButton.dataset.ready = ready ? "true" : "false";
       refreshButton();
     } catch {
@@ -198,20 +211,20 @@ function m14AdminPage(): Response {
     }
   }
 
-  inspectButton.addEventListener("click", async () => {
-    refreshButton();
-    if (inspectButton.disabled) return;
+  async function authenticatedRequest(path, method, body, busyText) {
     let token = tokenInput.value.trim();
     tokenInput.value = "";
     refreshButton();
-    inspectButton.disabled = true;
-    inspectButton.textContent = "Inspecting…";
     resultBox.className = "status muted";
-    resultBox.textContent = "Reading only the saved Vision operation status and OCR object filenames. No files will be changed.";
+    resultBox.textContent = busyText;
     try {
-      const response = await fetch("/admin/m14/diagnostics", {
-        method: "GET",
-        headers: { "authorization": "Bearer " + token },
+      const response = await fetch(path, {
+        method,
+        headers: {
+          "authorization": "Bearer " + token,
+          ...(body !== undefined ? { "content-type": "application/json" } : {})
+        },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         cache: "no-store",
         credentials: "omit",
         referrerPolicy: "no-referrer"
@@ -219,65 +232,103 @@ function m14AdminPage(): Response {
       const data = await response.json();
       resultBox.className = "status " + (response.ok && data.ok === true ? "good" : "bad");
       resultBox.textContent = JSON.stringify(data, null, 2);
+      return { response, data };
     } catch {
       resultBox.className = "status bad";
-      resultBox.textContent = "Could not inspect the saved OCR files. Check your connection and try again.";
+      resultBox.textContent = "The request could not be completed. Check your connection and then use the read-only status button before retrying an operation.";
+      return null;
     } finally {
       token = "";
       tokenInput.value = "";
-      inspectButton.textContent = "Inspect saved OCR files (read only)";
       refreshButton();
     }
+  }
+
+  rebuildButton.addEventListener("click", async () => {
+    refreshButton();
+    if (rebuildButton.disabled || !confirmOcrInput.checked) return;
+    rebuildButton.disabled = true;
+    rebuildButton.textContent = "Submitting OCR request…";
+    const result = await authenticatedRequest(
+      "/admin/m14/vision/rebuild",
+      "POST",
+      { confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" },
+      "Verifying the retained PDF and submitting one Vision OCR job into the M14 staging bucket. Do not refresh repeatedly."
+    );
+    if (result?.response.ok && result.data.ok === true) {
+      runButton.dataset.ocrStatus = result.data.recovery?.status || "running";
+      rebuildButton.textContent = "OCR request recorded";
+      confirmOcrInput.disabled = true;
+    } else {
+      rebuildButton.textContent = "Recreate OCR output from retained PDF (one time)";
+    }
+    refreshButton();
+  });
+
+  checkRecoveryButton.addEventListener("click", async () => {
+    refreshButton();
+    if (checkRecoveryButton.disabled) return;
+    checkRecoveryButton.disabled = true;
+    checkRecoveryButton.textContent = "Checking…";
+    const result = await authenticatedRequest(
+      "/admin/m14/vision/status",
+      "GET",
+      undefined,
+      "Checking the saved Vision operation and the three expected output files. This is read-only."
+    );
+    if (result?.response.ok && result.data.ok === true) {
+      const recovery = result.data.recovery;
+      runButton.dataset.ocrStatus = recovery.status;
+      runButton.dataset.ocrReady = recovery.status === "completed" ? "true" : "false";
+      checkRecoveryButton.textContent = recovery.status === "completed"
+        ? "OCR output verified"
+        : "Check OCR recovery status (read only)";
+      if (recovery.status === "completed") {
+        resultBox.className = "status good";
+      }
+    } else {
+      checkRecoveryButton.textContent = "Check OCR recovery status (read only)";
+    }
+    refreshButton();
+  });
+
+  inspectButton.addEventListener("click", async () => {
+    refreshButton();
+    if (inspectButton.disabled) return;
+    inspectButton.disabled = true;
+    inspectButton.textContent = "Inspecting…";
+    await authenticatedRequest(
+      "/admin/m14/diagnostics",
+      "GET",
+      undefined,
+      "Reading the original Vision operation and its original output folder. No files will be changed."
+    );
+    inspectButton.textContent = "Inspect original OCR folder (read only)";
+    refreshButton();
   });
 
   runButton.addEventListener("click", async () => {
     refreshButton();
-    if (runButton.disabled || runButton.dataset.ready !== "true") {
+    if (runButton.disabled || runButton.dataset.ready !== "true" || runButton.dataset.ocrReady !== "true") {
       resultBox.className = "status bad";
-      resultBox.textContent = "The required staging checks have not passed. Do not run the backfill yet.";
+      resultBox.textContent = "The new Vision OCR output has not yet been verified. Check OCR recovery status before running the backfill.";
       return;
     }
-
-    let token = tokenInput.value.trim();
-    tokenInput.value = "";
-    refreshButton();
-    confirmInput.disabled = true;
     runButton.disabled = true;
     runButton.textContent = "Running…";
-    resultBox.className = "status muted";
-    resultBox.textContent = "The Worker is validating the saved OCR source and writing the three page manifests. Keep this page open until a result appears.";
-
-    try {
-      const response = await fetch("/admin/m14/backfill", {
-        method: "POST",
-        headers: {
-          "authorization": "Bearer " + token,
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({ confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" }),
-        cache: "no-store",
-        credentials: "omit",
-        referrerPolicy: "no-referrer"
-      });
-      const data = await response.json();
-      resultBox.className = "status " + (response.ok && data.ok === true ? "good" : "bad");
-      resultBox.textContent = JSON.stringify(data, null, 2);
-      if (response.ok && data.ok === true) {
-        runButton.textContent = "Backfill completed";
-      } else {
-        runButton.textContent = "Retry Physics backfill";
-        confirmInput.disabled = false;
-      }
-    } catch {
-      resultBox.className = "status bad";
-      resultBox.textContent = "The request could not be completed or the connection was interrupted. Check the health page before retrying. Identical successful writes are replay-safe.";
-      runButton.textContent = "Retry Physics backfill";
-      confirmInput.disabled = false;
-    } finally {
-      token = "";
-      tokenInput.value = "";
-      refreshButton();
+    const result = await authenticatedRequest(
+      "/admin/m14/backfill",
+      "POST",
+      { confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" },
+      "The Worker is validating the recovered OCR output and writing the three immutable page manifests. Keep this page open."
+    );
+    if (result?.response.ok && result.data.ok === true) {
+      runButton.textContent = "Backfill completed";
+      confirmInput.disabled = true;
+    } else {
+      runButton.textContent = "Run Physics backfill";
     }
+    refreshButton();
   });
 
   checkHealth();
