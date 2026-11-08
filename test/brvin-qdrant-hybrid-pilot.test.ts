@@ -32,9 +32,13 @@ const collectionInfo = {
   status: "ok",
 };
 
-function makeQdrant() {
+function makeQdrant(options: {
+  collectionMissing?: boolean;
+  payloadSchema?: Record<string, { data_type: string }>;
+} = {}) {
   const calls: Array<{ url: string; method: string; body?: any }> = [];
-  let firstCollectionRead = true;
+  let firstCollectionRead = options.collectionMissing ?? true;
+  const payloadSchema: Record<string, { data_type: string }> = { ...(options.payloadSchema ?? {}) };
   const storedPoints = new Map<string, any>();
   const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -47,10 +51,20 @@ function makeQdrant() {
       return new Response(JSON.stringify({ status: "error", error: "not found" }), { status: 404 });
     }
     if (url.endsWith("/collections/brvin_m14_physics_pilot_v1") && method === "GET") {
-      return new Response(JSON.stringify(collectionInfo), { status: 200 });
+      return new Response(JSON.stringify({
+        ...collectionInfo,
+        result: { ...collectionInfo.result, payload_schema: { ...payloadSchema } },
+      }), { status: 200 });
     }
     if (url.endsWith("/collections/brvin_m14_physics_pilot_v1") && method === "PUT") {
       return new Response(JSON.stringify({ result: true, status: "ok" }), { status: 200 });
+    }
+    if (url.endsWith("/collections/brvin_m14_physics_pilot_v1/index?wait=true") && method === "PUT") {
+      payloadSchema[body.field_name] = { data_type: body.field_schema };
+      return new Response(JSON.stringify({
+        result: { operation_id: 10, status: "completed" },
+        status: "ok",
+      }), { status: 200 });
     }
     if (url.includes("/points?wait=true") && method === "PUT") {
       for (const point of body.points) storedPoints.set(point.id, point);
@@ -299,6 +313,55 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
       ]);
     }
     expect(queryCall?.body.filter).toEqual(queryCall?.body.prefetch[0].filter);
+
+    const payloadIndexCalls = calls.filter((call) =>
+      call.url.endsWith("/collections/brvin_m14_physics_pilot_v1/index?wait=true") && call.method === "PUT",
+    );
+    expect(payloadIndexCalls.map((call) => call.body)).toEqual([
+      { field_name: "project_id", field_schema: "keyword" },
+      { field_name: "source_id", field_schema: "keyword" },
+    ]);
+    expect(calls.findIndex((call) => call.url.endsWith("/index?wait=true"))).toBeLessThan(
+      calls.findIndex((call) => call.url.endsWith("/points/query")),
+    );
+  });
+
+  it("reuses existing keyword and UUID authorization indexes without recreating them", async () => {
+    const { request, calls } = makeQdrant({
+      collectionMissing: false,
+      payloadSchema: {
+        project_id: { data_type: "keyword" },
+        source_id: { data_type: "uuid" },
+      },
+    });
+    const pilot = makePilot(request);
+
+    await pilot.query({
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "Newton's second law",
+    });
+
+    expect(calls.some((call) => call.url.endsWith("/index?wait=true"))).toBe(false);
+    expect(calls.some((call) => call.url.endsWith("/points/query"))).toBe(true);
+  });
+
+  it("fails closed when an authorization payload index has an unsupported schema", async () => {
+    const { request, calls } = makeQdrant({
+      collectionMissing: false,
+      payloadSchema: {
+        project_id: { data_type: "text" },
+      },
+    });
+    const pilot = makePilot(request);
+
+    await expect(pilot.query({
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "Newton's second law",
+    })).rejects.toThrow("The Qdrant project_id payload index must be keyword or uuid");
+    expect(calls.some((call) => call.url.endsWith("/index?wait=true"))).toBe(false);
+    expect(calls.some((call) => call.url.endsWith("/points/query"))).toBe(false);
   });
 
   it("surfaces Qdrant's nested status.error for rejected hybrid queries", async () => {
