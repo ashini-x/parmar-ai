@@ -12,6 +12,7 @@ import {
 } from "../fatman/import";
 import {
   backfillBrvinM14CorpusFromStoredVision,
+  type BrvinM14VisionBackfillDependencies,
   type BrvinM14VisionBackfillResult,
 } from "./m14-vision-backfill";
 
@@ -40,17 +41,6 @@ interface M14RegistryRecord {
 export interface M14StagingWorkerEnv extends Env {
   BRVIN_M14_ADMIN_TOKEN?: string;
 }
-
-type BackfillFunction = (
-  env: Env,
-  spec: {
-    sourceId: string;
-    sourcePdfSha256: string;
-    visionOperationId: string;
-    pageCount: number;
-  },
-  dependencies?: never,
-) => Promise<BrvinM14VisionBackfillResult>;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -219,17 +209,18 @@ export async function handleM14StagingRequest(
   }
 
   try {
+    const dependencies: Partial<BrvinM14VisionBackfillDependencies> = {
+      getJob: getRegisteredPhysicsJob,
+      getVisionOperation: getFatmanVisionOperation,
+      listVisionObjects: listFatmanVisionOutputObjects,
+      readVisionPage: readStoredVisionPage,
+    };
     const result = await runBackfill(env, {
       sourceId: PILOT_SOURCE_ID,
       sourcePdfSha256: PILOT_SOURCE_SHA256,
       visionOperationId: PILOT_VISION_OPERATION,
       pageCount: PILOT_PAGE_COUNT,
-    }, {
-      getJob: getRegisteredPhysicsJob,
-      getVisionOperation: getFatmanVisionOperation,
-      listVisionObjects: listFatmanVisionOutputObjects,
-      readVisionPage: readStoredVisionPage,
-    } as never);
+    }, dependencies);
     return json({ ok: true, result });
   } catch (error) {
     return json({ ok: false, error: safeError(error) }, 502);
