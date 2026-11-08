@@ -398,6 +398,7 @@ async function inspectM14VisionOutputs(env: Env): Promise<M14VisionOutputDiagnos
     name.startsWith(prefix) ? name.slice(prefix.length) : name
   ).sort();
   const actualSet = new Set(actualFullNames);
+  const expectedSet = new Set(expectedFullNames);
   const missingFileNames = expectedFullNames
     .filter((name) => !actualSet.has(name))
     .map((name) => name.slice(prefix.length))
