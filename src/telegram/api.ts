@@ -65,7 +65,23 @@ function creatorContactMarkup(chatId: number, includeCreatorFooter = true): Crea
 
 const TELEGRAM_REQUEST_TIMEOUT_MS = 5_000;
 const TELEGRAM_MAX_ATTEMPTS = 4;
-const TELEGRAM_MAX_RETRY_AFTER_SECONDS = 5;
+
+/**
+ * Telegram's retry_after value is authoritative. Do not cap it to a short
+ * local delay: retrying before Telegram's requested time can produce another
+ * 429 and consume the remaining attempt budget.
+ */
+export function getTelegramRetryDelayMs(retryAfterSeconds?: number): number {
+  if (
+    typeof retryAfterSeconds !== "number" ||
+    !Number.isFinite(retryAfterSeconds) ||
+    retryAfterSeconds <= 0
+  ) {
+    return 1_000;
+  }
+
+  return Math.max(250, Math.ceil(retryAfterSeconds * 1_000));
+}
 
 export interface TelegramMessageResult {
   message_id: number;
@@ -168,11 +184,7 @@ async function telegramApiWithToken<T>(
         throw error;
       }
 
-      const retryAfter = Math.min(
-        data.parameters?.retry_after ?? 1,
-        TELEGRAM_MAX_RETRY_AFTER_SECONDS,
-      );
-      await sleep(Math.max(250, retryAfter * 1_000));
+      await sleep(getTelegramRetryDelayMs(data.parameters?.retry_after));
     } catch (error) {
       const telegramError =
         error instanceof TelegramError
