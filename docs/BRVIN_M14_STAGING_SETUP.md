@@ -1,20 +1,19 @@
 # BRVIN M14 isolated staging setup and Physics backfill
 
-**Status:** Operator PR #152 is merged and the isolated Worker is deployed. The real GCS backfill is waiting only on the Google Cloud setup and secrets below. This document is for the non-production pilot only.
+**Status (9 November 2026):** The dedicated M14 Worker and corpus recovery/backfill are deployed and verified. The live Worker configuration now contains the required Vertex and Qdrant settings and secret binding names. This runbook's provisioning steps are retained for audit/recovery and for a future clean environment; **do not create a second Qdrant cluster, duplicate bucket, service account or API key for the current pilot**. The remaining action is to run authenticated Vertex/Qdrant indexing and the known-evidence retrieval checks, then capture the result for M14 acceptance. Production remains on Cloudflare AI Search.
 
-## What is already provisioned
+**Current verified staging snapshot**
+- Staging Worker: `parmar-ai-m14-staging`, version `92a84e1e-ae17-4e8e-988f-d5e599aa1118`, 100% staging traffic; staging workflow run [#20](https://github.com/ashini-x/parmar-ai/actions/runs/42525594684) passed validation, dry-run and deployment.
+- Isolated staging D1: `parmar-ai-m14-staging` (`a8ca999e-4107-4f2f-800e-a1abce3a4cac`). Its registered Physics source and OCR recovery rows both report `completed`, with 3 expected/finished physical pages. This is OCR-recovery state, not a Qdrant index status.
+- Corpus generation `57129957231e548064e5594d8fb9f501` was independently read back and verified: 3 pages, 7 chunks (2/2/3).
+- Worker text settings are present: Vertex `asia-south1` / `gemini-embedding-001` / 768 dimensions; Qdrant collection `brvin_m14_physics_pilot_v1`; Qdrant endpoint region `australia-southeast1`; staging pilot flag enabled.
+- Secret binding names are present for `GCP_CLIENT_EMAIL`, `GCP_PRIVATE_KEY`, `GCP_PRIVATE_KEY_ID`, `BRVIN_M14_ADMIN_TOKEN` and `BRVIN_M14_QDRANT_API_KEY`. Secret values were not read; binding presence does not prove validity or provider connectivity.
+- No successful live Vertex embedding, Qdrant collection operation, point upsert or hybrid retrieval query has yet been evidenced. The first Vertex call must verify API enablement, IAM, quota and region/model access. Record cross-region latency and cost; do not silently re-provision the pilot cluster.
+## Google Cloud setup — historical checklist; base GCS/Vision path exercised
 
-- Cloudflare D1 database: `parmar-ai-m14-staging`
-- D1 ID: `a8ca999e-4107-4f2f-800e-a1abce3a4cac`
-- Primary location: APAC; read replicas disabled
-- Only one row is seeded in `m14_source_registry`: the existing three-page Physics pilot
-- Reproducible seed: `scripts/m14-staging-registry.sql`
-- Staging Worker config: `wrangler.m14-staging.jsonc`
-- Production D1, Workers, provider selector and corpus flag are not used by this isolated operator
+**For the current pilot, do not create duplicate resources.** The retained source PDF was read, one new Vision OCR recovery was submitted, and the private destination output was verified. This demonstrates the GCS/Vision path used by this recovery. It does not yet prove Vertex AI model access, IAM, quota or successful embedding; the first live embedding operation must verify those.
 
-The Worker is deployed by `.github/workflows/m14-staging-deploy.yml`: `https://parmar-ai-m14-staging.thenewtongs.workers.dev` (version `74ab2c8a-b2e4-443d-ba57-d7ef68e98d53`, 100% traffic). It exposes only `GET /health` and the authenticated `POST /admin/m14/backfill` action. The backfill is pinned to the registered Physics source and requires both `ENVIRONMENT=staging` and `BRVIN_M14_PILOT_ENABLED=true`. At last check, the Worker secret list was empty and the corpus bucket was not yet created.
-
-## One-time Google Cloud setup required
+The numbered steps below are retained as a reproducible checklist for a future clean environment.
 
 This is the only part that needs your Google Cloud account. Do not paste a service-account JSON key or private key into this chat or commit it to GitHub.
 
@@ -68,7 +67,7 @@ The source bucket has **Storage Object Viewer**. The M14 destination bucket has 
 
 ## Provision the non-production Qdrant cluster
 
-Create a dedicated staging-only cluster. Do not connect a production Qdrant cluster or reuse a production API key.
+**Current pilot status:** A dedicated staging cluster is already configured on the M14 Worker. Its endpoint identifies region `australia-southeast1`. Skip cluster creation and key generation below for this pilot; these instructions remain for reproducibility or a future deliberate replacement. Do not connect a production Qdrant cluster or reuse a production API key.
 
 1. Open [Qdrant Cloud](https://cloud.qdrant.io/) and sign in.
 2. Open **Clusters** and select **Create** or **Create a Free Cluster**.
@@ -81,6 +80,8 @@ Create a dedicated staging-only cluster. Do not connect a production Qdrant clus
 
 ## Create the Qdrant database API key
 
+**Current pilot status:** The `BRVIN_M14_QDRANT_API_KEY` Worker secret binding name is present. Do not create a second key unless an explicit rotation/replacement is planned. Secret values are intentionally not read back.
+
 On the new cluster's details page:
 
 1. Open **API Keys** and click **Create**.
@@ -90,6 +91,8 @@ On the new cluster's details page:
 5. Click **Create** and copy the database API key once. Qdrant displays a new key only once; store it temporarily in your password manager. Do not share it in chat or paste it into GitHub. It is a database API key, not a Qdrant Cloud Management Key. See [Qdrant database authentication](https://qdrant.tech/documentation/cloud/authentication/).
 
 ## Configure the M14 staging Worker for Vertex and Qdrant
+
+**Current pilot status:** All five required text settings and the Qdrant API-key secret binding name are present in the live staging Worker settings. Vertex is configured for `asia-south1`; the Qdrant endpoint maps to `australia-southeast1`. This cross-region configuration must be measured for latency/cost before acceptance. Do not redeploy or duplicate settings unless a required binding is found missing.
 
 Open Cloudflare Dashboard → **Workers & Pages** → **parmar-ai-m14-staging** → **Settings** → **Variables and Secrets**. Do not select the production `parmar-ai` Worker or `brvin-service`.
 
@@ -101,7 +104,7 @@ Add these as **Text** variables:
 | `BRVIN_M14_VERTEX_MODEL` | `gemini-embedding-001` |
 | `BRVIN_M14_EMBEDDING_DIMENSIONS` | `768` |
 | `BRVIN_M14_QDRANT_COLLECTION` | `brvin_m14_physics_pilot_v1` |
-| `BRVIN_M14_QDRANT_URL` | Paste your new cluster's HTTPS REST endpoint, including port `6333` (or `443`) |
+| `BRVIN_M14_QDRANT_URL` | Existing HTTPS endpoint for the dedicated staging cluster (see the staging Worker setting; do not put endpoint credentials in docs) |
 
 Add this as a **Secret**:
 
