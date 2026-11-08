@@ -82,7 +82,7 @@ describe("BRVIN private derived-corpus GCS store", () => {
     expect(brvinDerivedCorpusPrefix(SOURCE_ID)).toBe("brvin/derived-corpus/" + SOURCE_ID + "/");
     expect([...storedObjects.keys()]).toEqual(expect.arrayContaining([
       expect.stringMatching(new RegExp("brvin/derived-corpus/" + SOURCE_ID + "/.+/manifest\\.json$")),
-      expect.stringMatching(new RegExp("brvin/derived-corpus/" + SOURCE_ID + "/.+/pages/page-000002-[a-f0-9]{64}\\.json$")),
+      expect.stringMatching(new RegExp("brvin/derived-corpus/" + SOURCE_ID + "/.+/pages/page-000002\\.json$")),
     ]));
 
     const pageObject = [...storedObjects.entries()].find(([name]) => name.includes("/pages/page-000002-"));
