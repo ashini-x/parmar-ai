@@ -36,21 +36,43 @@ export async function indexBrvinCorpusGeneration(
     throw new Error("M14 corpus replay requires one complete source manifest and every physical page manifest.");
   }
 
+  const sortedPages = [...corpus.pageManifests].sort((left, right) => left.pdfPage - right.pdfPage);
   const seenPages = new Set<number>();
+  const seenChunkIds = new Set<string>();
+  let verifiedChunkCount = 0;
+
+  // Validate the complete generation before the first external write. This
+  // prevents an incomplete/duplicated manifest set from leaving partial data
+  // in Qdrant if a later page fails provenance checks.
+  for (let index = 0; index < sortedPages.length; index += 1) {
+    const page = sortedPages[index];
+    const expectedPage = index + 1;
+    if (page.sourceId !== source.sourceId || page.generationId !== source.generationId ||
+        page.sourcePdfSha256 !== source.sourcePdfSha256 || page.ocrOperationId !== source.ocrOperationId ||
+        page.pdfPage !== expectedPage || seenPages.has(page.pdfPage) ||
+        !page.stableItemKey?.trim() || !Array.isArray(page.chunks) || page.chunks.length < 1) {
+      throw new Error("M14 corpus replay rejected a page with mismatched source, incomplete/duplicate physical-page provenance.");
+    }
+    seenPages.add(page.pdfPage);
+    verifiedChunkCount += page.chunks.length;
+    for (const chunk of page.chunks) {
+      if (!chunk.id || seenChunkIds.has(chunk.id) || !chunk.normalizedText?.trim() ||
+          !/^[a-f0-9]{64}$/iu.test(chunk.contentSha256)) {
+        throw new Error("M14 corpus replay rejected a duplicate or invalid deterministic chunk identity.");
+      }
+      seenChunkIds.add(chunk.id);
+    }
+  }
+  if (seenPages.size !== source.pageCount || verifiedChunkCount !== corpus.chunkCount) {
+    throw new Error("M14 corpus replay did not contain the complete, contiguous page/chunk set.");
+  }
+
   const pointIds: string[] = [];
   const modelIds = new Set<string>();
   const modelVersions = new Set<string>();
   let pointCount = 0;
 
-  for (const page of [...corpus.pageManifests].sort((left, right) => left.pdfPage - right.pdfPage)) {
-    if (page.sourceId !== source.sourceId || page.generationId !== source.generationId ||
-        page.sourcePdfSha256 !== source.sourcePdfSha256 || page.ocrOperationId !== source.ocrOperationId ||
-        !Number.isSafeInteger(page.pdfPage) || page.pdfPage < 1 || page.pdfPage > source.pageCount ||
-        seenPages.has(page.pdfPage)) {
-      throw new Error("M14 corpus replay rejected a page with mismatched source, generation or duplicate page provenance.");
-    }
-    seenPages.add(page.pdfPage);
-
+  for (const page of sortedPages) {
     const result = await pilot.upsertPageChunks({
       projectId,
       sourceId: source.sourceId,
