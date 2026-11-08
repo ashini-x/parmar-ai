@@ -289,6 +289,7 @@ export class BrvinQdrantHybridPilot {
       },
     );
 
+    if (!result) throw new Error("Qdrant returned an empty hybrid query response.");
     const allowed = new Set(input.authorizedSourceIds);
     return (result.points ?? []).flatMap((point) => {
       const payload = point.payload ?? {};
