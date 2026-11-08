@@ -1,6 +1,7 @@
 import type { Env } from "../config/env";
 import { getGoogleAccessToken } from "../auth/google";
 import {
+  buildBrvinSourceManifest,
   normalizeBrvinSearchText,
   sha256Hex,
   type BrvinCorpusPageManifest,
@@ -125,14 +126,12 @@ export async function readBrvinCorpusGeneration(
     bucket, prefix + "manifest.json", token, request,
   );
   validateSourceManifest(sourceManifest, sourceId, generationId);
-  const deterministicSourceManifest = await import("./corpus").then(({ buildBrvinSourceManifest }) =>
-    buildBrvinSourceManifest({
-      sourceId,
-      sourcePdfSha256: sourceManifest.sourcePdfSha256,
-      ocrOperationId: sourceManifest.ocrOperationId,
-      pageCount: sourceManifest.pageCount,
-    })
-  );
+  const deterministicSourceManifest = await buildBrvinSourceManifest({
+    sourceId,
+    sourcePdfSha256: sourceManifest.sourcePdfSha256,
+    ocrOperationId: sourceManifest.ocrOperationId,
+    pageCount: sourceManifest.pageCount,
+  });
   if (deterministicSourceManifest.generationId !== generationId) {
     throw new Error("The BRVIN source manifest generation ID does not match its deterministic source inputs.");
   }
