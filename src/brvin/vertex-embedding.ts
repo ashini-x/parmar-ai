@@ -164,7 +164,7 @@ export class BrvinVertexEmbeddingProvider implements EmbeddingProvider {
       }
       return {
         vector,
-        modelVersion: payload.modelVersion?.trim() || this.modelId,
+        modelVersion: payload.modelVersion?.trim() || "not-returned",
       };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
