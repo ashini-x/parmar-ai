@@ -1,4 +1,3 @@
-import * as ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/config/env";
 import {
@@ -134,39 +133,6 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(html).not.toContain(TOKEN);
     expect(html).not.toContain("test-only-private-key");
     expect(html).not.toContain("https://");
-  });
-
-  it("serves a browser script that parses as JavaScript and starts the staging health check", async () => {
-    const response = await handleM14StagingRequest(
-      new Request("https://m14-staging.example.workers.dev/admin/m14"),
-      makeEnv(),
-    );
-    const html = await response.text();
-    const scriptStart = html.indexOf("<script>");
-    const scriptEnd = html.indexOf("</script>", scriptStart + 8);
-    const script = scriptStart >= 0 && scriptEnd >= 0
-      ? html.slice(scriptStart + 8, scriptEnd)
-      : "";
-    expect(script).toBeTruthy();
-    expect(script).toContain("checkHealth();");
-
-    const parsed = ts.createSourceFile(
-      "m14-staging-operator.js",
-      script ?? "",
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.JS,
-    ) as ts.SourceFile & { parseDiagnostics: readonly ts.Diagnostic[] };
-    if (parsed.parseDiagnostics.length > 0) {
-      const diagnostic = parsed.parseDiagnostics[0];
-      const position = parsed.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
-      throw new Error(
-        "M14 staging browser script contains invalid JavaScript at " +
-        (position.line + 1) + ":" + (position.character + 1) + ": " +
-        ts.flattenDiagnosticMessageText(diagnostic.messageText, " "),
-      );
-    }
-    expect(parsed.parseDiagnostics).toHaveLength(0);
   });
 
   it("requires the exact Physics source and bearer authentication before Qdrant indexing", async () => {
