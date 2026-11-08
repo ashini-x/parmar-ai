@@ -78,7 +78,40 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(JSON.stringify(body)).not.toContain(TOKEN);
   });
 
-  it("does not expose any route other than health and the single backfill action", async () => {
+  it("serves a same-origin browser operator page without exposing secrets", async () => {
+    const response = await handleM14StagingRequest(
+      new Request("https://m14-staging.example.workers.dev/admin/m14"),
+      makeEnv(),
+    );
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("content-security-policy")).toContain("connect-src 'self'");
+    expect(html).toContain("BRVIN M14");
+    expect(html).toContain('/admin/m14/backfill');
+    expect(html).toContain("credentials: \"omit\"");
+    expect(html).not.toContain(TOKEN);
+    expect(html).not.toContain("test-only-private-key");
+    expect(html).not.toContain("https://");
+  });
+
+  it("does not expose the browser operator when staging is disabled or production is selected", async () => {
+    const request = new Request("https://m14-staging.example.workers.dev/admin/m14");
+    const production = await handleM14StagingRequest(
+      request,
+      makeEnv({ ENVIRONMENT: "production" }),
+    );
+    expect(production.status).toBe(404);
+
+    const disabled = await handleM14StagingRequest(
+      request,
+      makeEnv({ BRVIN_M14_PILOT_ENABLED: "false" }),
+    );
+    expect(disabled.status).toBe(404);
+  });
+
+  it("keeps unknown routes unavailable", async () => {
     const response = await handleM14StagingRequest(
       new Request("https://m14-staging.example.workers.dev/other"),
       makeEnv(),
