@@ -449,6 +449,387 @@ async function readStoredVisionPage(
   };
 }
 
+const M14_GCS_API = "https://storage.googleapis.com";
+const M14_VISION_API = "https://vision.googleapis.com/v1";
+const M14_RECOVERY_PREFIX = "brvin/m14-staging/vision-output/";
+
+interface M14GcsObject {
+  name: string;
+  size?: string;
+  generation?: string;
+}
+
+async function getM14VisionRecoveryRecord(env: Env): Promise<M14VisionRecoveryRecord | null> {
+  if (!env.DB) throw new Error("The isolated M14 staging D1 registry is not bound.");
+  return env.DB.prepare(
+    "SELECT source_id, status, vision_operation, output_bucket, output_prefix, source_pdf_generation, " +
+    "expected_page_count, error_message, created_at, updated_at " +
+    "FROM m14_vision_recovery WHERE source_id = ? LIMIT 1",
+  ).bind(PILOT_SOURCE_ID).first<M14VisionRecoveryRecord>();
+}
+
+async function listM14GcsObjects(
+  env: Env,
+  bucket: string,
+  prefix: string,
+  maxObjects = PILOT_PAGE_COUNT + 1,
+): Promise<{ objects: M14GcsObject[]; truncated: boolean }> {
+  const token = await getGoogleAccessToken(env);
+  const limit = Math.max(1, Math.min(100, maxObjects));
+  const objects: M14GcsObject[] = [];
+  let pageToken = "";
+  let truncated = false;
+  do {
+    const query = new URLSearchParams({
+      prefix,
+      maxResults: String(Math.min(1000, limit - objects.length)),
+      fields: "items(name,size,generation),nextPageToken",
+    });
+    if (pageToken) query.set("pageToken", pageToken);
+    const response = await fetch(
+      M14_GCS_API + "/storage/v1/b/" + encodeURIComponent(bucket) + "/o?" + query.toString(),
+      { headers: { authorization: "Bearer " + token } },
+    );
+    if (!response.ok) {
+      throw new Error("Could not list the M14 staging Vision output objects (HTTP " + response.status + ").");
+    }
+    const data = await response.json() as {
+      items?: Array<{ name?: string; size?: string | number; generation?: string | number }>;
+      nextPageToken?: string;
+    };
+    for (const item of data.items ?? []) {
+      if (typeof item.name !== "string" || !item.name.startsWith(prefix)) continue;
+      objects.push({
+        name: item.name,
+        ...(item.size !== undefined ? { size: String(item.size) } : {}),
+        ...(item.generation !== undefined ? { generation: String(item.generation) } : {}),
+      });
+      if (objects.length >= limit) break;
+    }
+    pageToken = data.nextPageToken ?? "";
+    truncated = Boolean(pageToken) && objects.length >= limit;
+  } while (pageToken && objects.length < limit);
+  return { objects, truncated };
+}
+
+async function getM14GcsObjectMetadata(
+  env: Env,
+  bucket: string,
+  objectName: string,
+): Promise<{ generation: string; size: number }> {
+  const token = await getGoogleAccessToken(env);
+  const url = M14_GCS_API + "/storage/v1/b/" + encodeURIComponent(bucket) +
+    "/o/" + encodeURIComponent(objectName) + "?fields=name,generation,size";
+  const response = await fetch(url, { headers: { authorization: "Bearer " + token } });
+  if (!response.ok) {
+    throw new Error("The retained original Physics PDF could not be verified in the source bucket (HTTP " + response.status + ").");
+  }
+  const metadata = await response.json() as { name?: string; generation?: string | number; size?: string | number };
+  const size = Number(metadata.size);
+  if (metadata.name !== objectName || metadata.generation === undefined ||
+      !Number.isSafeInteger(size) || size < 1) {
+    throw new Error("The retained Physics PDF metadata is incomplete or does not match the registered object.");
+  }
+  return { generation: String(metadata.generation), size };
+}
+
+async function startM14VisionRecovery(env: Env): Promise<{
+  sourceId: string;
+  status: M14VisionRecoveryRecord["status"];
+  visionOperation?: string;
+  outputBucket: string;
+  outputPrefix: string;
+  alreadySubmitted: boolean;
+  message: string;
+}> {
+  if (!env.DB) throw new Error("The isolated M14 staging D1 registry is not bound.");
+  const sourceBucket = env.FATMAN_GCS_BUCKET?.trim() ?? "";
+  const outputBucket = env.BRVIN_M14_CORPUS_BUCKET?.trim() ?? "";
+  const projectId = env.GCP_PROJECT_ID?.trim() ?? "";
+  if (!sourceBucket || !outputBucket || !projectId ||
+      !env.GCP_CLIENT_EMAIL || !env.GCP_PRIVATE_KEY) {
+    throw new Error("Google Cloud source bucket, M14 destination bucket, project or service-account secrets are missing.");
+  }
+  if (sourceBucket === outputBucket) {
+    throw new Error("M14 Vision recovery requires a destination bucket separate from the original source bucket.");
+  }
+
+  const job = await getRegisteredPhysicsJob(env, PILOT_SOURCE_ID);
+  if (!job || job.id !== PILOT_SOURCE_ID || job.book_id !== PILOT_SOURCE_ID ||
+      job.status !== "completed" || Number(job.page_count) !== PILOT_PAGE_COUNT ||
+      Number(job.indexed_pages) !== PILOT_PAGE_COUNT ||
+      job.source_sha256?.toLowerCase() !== PILOT_SOURCE_SHA256 ||
+      job.source_object !== "brvin/source-pdfs/" + PILOT_SOURCE_ID + "/source.pdf" ||
+      Number(job.expected_size) !== 77384 || Number(job.uploaded_bytes) !== 77384) {
+    throw new Error("The registered Physics source does not match the fixed retained PDF expected by M14 recovery.");
+  }
+
+  const existing = await getM14VisionRecoveryRecord(env);
+  if (existing) {
+    return {
+      sourceId: existing.source_id,
+      status: existing.status,
+      ...(existing.vision_operation ? { visionOperation: existing.vision_operation } : {}),
+      outputBucket: existing.output_bucket,
+      outputPrefix: existing.output_prefix,
+      alreadySubmitted: true,
+      message: existing.status === "submitting" || existing.status === "submission_uncertain"
+        ? "A previous submission may already have reached Google Vision. It will not be submitted again automatically; inspect status before taking further action."
+        : "A Vision recovery record already exists. No duplicate OCR request was submitted.",
+    };
+  }
+
+  const sourceMetadata = await getM14GcsObjectMetadata(env, sourceBucket, job.source_object);
+  if (sourceMetadata.size !== Number(job.expected_size)) {
+    throw new Error("The retained Physics PDF size no longer matches the registered upload. No OCR request was submitted.");
+  }
+
+  const outputPrefix = M14_RECOVERY_PREFIX + PILOT_SOURCE_ID + "/attempt-001/";
+  const existingOutputs = await listM14GcsObjects(env, outputBucket, outputPrefix, PILOT_PAGE_COUNT + 1);
+  if (existingOutputs.truncated || existingOutputs.objects.length > 0) {
+    throw new Error("The M14 recovery output prefix is not empty. No OCR request was submitted.");
+  }
+
+  const now = Date.now();
+  const inserted = await env.DB.prepare(
+    "INSERT OR IGNORE INTO m14_vision_recovery " +
+    "(source_id, status, vision_operation, output_bucket, output_prefix, source_pdf_generation, expected_page_count, error_message, created_at, updated_at) " +
+    "VALUES (?, 'submitting', NULL, ?, ?, ?, ?, NULL, ?, ?)",
+  ).bind(
+    PILOT_SOURCE_ID,
+    outputBucket,
+    outputPrefix,
+    sourceMetadata.generation,
+    PILOT_PAGE_COUNT,
+    now,
+    now,
+  ).run();
+
+  if ((inserted.meta?.changes ?? 0) !== 1) {
+    const raced = await getM14VisionRecoveryRecord(env);
+    if (!raced) throw new Error("The M14 OCR recovery submission lock could not be verified.");
+    return {
+      sourceId: raced.source_id,
+      status: raced.status,
+      ...(raced.vision_operation ? { visionOperation: raced.vision_operation } : {}),
+      outputBucket: raced.output_bucket,
+      outputPrefix: raced.output_prefix,
+      alreadySubmitted: true,
+      message: "Another operator request already claimed this one-time OCR recovery. No duplicate request was submitted.",
+    };
+  }
+
+  const token = await getGoogleAccessToken(env);
+  const outputUri = "gs://" + outputBucket + "/" + outputPrefix;
+  let response: Response;
+  try {
+    response = await fetch(M14_VISION_API + "/files:asyncBatchAnnotate", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer " + token,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        requests: [{
+          inputConfig: {
+            gcsSource: { uri: "gs://" + sourceBucket + "/" + job.source_object },
+            mimeType: "application/pdf",
+          },
+          features: [{ type: "DOCUMENT_TEXT_DETECTION" }],
+          outputConfig: {
+            gcsDestination: { uri: outputUri },
+            batchSize: 1,
+          },
+        }],
+      }),
+    });
+  } catch (error) {
+    await env.DB.prepare(
+      "UPDATE m14_vision_recovery SET status='submission_uncertain', error_message=?, updated_at=? WHERE source_id=? AND status='submitting'",
+    ).bind(safeError(error), Date.now(), PILOT_SOURCE_ID).run();
+    throw new Error("The Vision request connection ended before an operation ID was received. To prevent duplicate billing, automatic resubmission is blocked; inspect the recovery record.");
+  }
+
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).replace(/\s+/gu, " ").slice(0, 240);
+    const message = "Google Vision rejected the new OCR request (HTTP " + response.status + "). " + detail;
+    await env.DB.prepare(
+      "UPDATE m14_vision_recovery SET status='failed', error_message=?, updated_at=? WHERE source_id=? AND status='submitting'",
+    ).bind(message.slice(0, 500), Date.now(), PILOT_SOURCE_ID).run();
+    throw new Error(message);
+  }
+
+  const operation = await response.json() as { name?: string };
+  if (!operation.name || !operation.name.startsWith("projects/" + projectId + "/operations/")) {
+    await env.DB.prepare(
+      "UPDATE m14_vision_recovery SET status='submission_uncertain', error_message=?, updated_at=? WHERE source_id=? AND status='submitting'",
+    ).bind("Google Vision accepted the request but returned an invalid operation identifier.", Date.now(), PILOT_SOURCE_ID).run();
+    throw new Error("Google Vision did not return a valid operation ID. Automatic resubmission is blocked to avoid duplicate OCR jobs.");
+  }
+
+  await env.DB.prepare(
+    "UPDATE m14_vision_recovery SET status='running', vision_operation=?, error_message=NULL, updated_at=? WHERE source_id=? AND status='submitting'",
+  ).bind(operation.name, Date.now(), PILOT_SOURCE_ID).run();
+
+  return {
+    sourceId: PILOT_SOURCE_ID,
+    status: "running",
+    visionOperation: operation.name,
+    outputBucket,
+    outputPrefix,
+    alreadySubmitted: false,
+    message: "One Google Vision OCR request was accepted. Use the read-only status button until all three output files are verified.",
+  };
+}
+
+async function readM14RecoveryVisionPage(
+  env: Env,
+  recovery: Pick<M14VisionRecoveryRecord, "output_bucket" | "output_prefix" | "status" | "expected_page_count">,
+  page: number,
+): Promise<FatmanVisionOcrPage> {
+  if (recovery.status !== "completed" || !Number.isSafeInteger(page) ||
+      page < 1 || page > recovery.expected_page_count) {
+    throw new Error("Recovered M14 Vision output is not complete for the requested physical PDF page.");
+  }
+  const objectName = recovery.output_prefix + "output-" + page + "-to-" + page + ".json";
+  const token = await getGoogleAccessToken(env);
+  const response = await fetch(
+    M14_GCS_API + "/storage/v1/b/" + encodeURIComponent(recovery.output_bucket) +
+    "/o/" + encodeURIComponent(objectName) + "?alt=media",
+    { headers: { authorization: "Bearer " + token } },
+  );
+  if (!response.ok) {
+    throw new Error("Could not read recovered Vision OCR for physical PDF page " + page + " (HTTP " + response.status + ").");
+  }
+  const payload = await response.json() as {
+    responses?: Array<{
+      fullTextAnnotation?: { text?: string; pages?: Array<{ confidence?: number }> };
+      error?: { message?: string };
+    }>;
+    context?: { pageNumber?: number };
+  };
+  if (payload.context?.pageNumber && Number(payload.context.pageNumber) !== page) {
+    throw new Error("Recovered Vision OCR object does not match requested physical PDF page " + page + ".");
+  }
+  const annotation = payload.responses?.[0];
+  if (annotation?.error?.message) {
+    throw new Error("Recovered Google Vision OCR reports an error on physical PDF page " + page + ".");
+  }
+  const rawText = annotation?.fullTextAnnotation?.text;
+  if (!annotation || typeof rawText !== "string" || !rawText.trim()) {
+    throw new Error("Recovered Google Vision OCR contains no readable text for physical PDF page " + page + ".");
+  }
+  if (rawText.length > MAX_VISION_PAGE_TEXT_CHARS) {
+    throw new Error("Recovered Vision OCR page " + page + " exceeds the one-million-character manifest limit.");
+  }
+  const confidence = annotation.fullTextAnnotation?.pages?.[0]?.confidence;
+  return {
+    rawText,
+    ...(typeof confidence === "number" && Number.isFinite(confidence) &&
+      confidence >= 0 && confidence <= 1 ? { pageConfidence: confidence } : {}),
+  };
+}
+
+async function getM14VisionRecoveryStatus(env: Env): Promise<M14VisionRecoveryStatus & {
+  visionOperation?: string;
+  outputBucket?: string;
+  outputPrefix?: string;
+}> {
+  const record = await getM14VisionRecoveryRecord(env);
+  const expectedFileNames = Array.from({ length: PILOT_PAGE_COUNT }, (_, index) =>
+    "output-" + (index + 1) + "-to-" + (index + 1) + ".json"
+  );
+  if (!record) {
+    return {
+      sourceId: PILOT_SOURCE_ID,
+      status: "not_started",
+      operationDone: false,
+      operationHasError: false,
+      destinationMatches: false,
+      expectedPageCount: PILOT_PAGE_COUNT,
+      expectedFileNames,
+      actualFileNames: [],
+      missingFileNames: expectedFileNames,
+    };
+  }
+
+  if (!record.vision_operation) {
+    return {
+      sourceId: record.source_id,
+      status: record.status,
+      operationDone: false,
+      operationHasError: false,
+      destinationMatches: false,
+      expectedPageCount: record.expected_page_count,
+      outputBucket: record.output_bucket,
+      outputPrefix: record.output_prefix,
+      expectedFileNames,
+      actualFileNames: [],
+      missingFileNames: expectedFileNames,
+      ...(record.error_message ? { error: record.error_message } : {}),
+    };
+  }
+
+  const expectedUri = "gs://" + record.output_bucket + "/" + record.output_prefix;
+  const operation = await getFatmanVisionOperation(env, record.vision_operation, expectedUri);
+  const listing = await listM14GcsObjects(
+    env,
+    record.output_bucket,
+    record.output_prefix,
+    record.expected_page_count + 1,
+  );
+  const expectedFullNames = expectedFileNames.map((name) => record.output_prefix + name);
+  const actualNames = listing.objects.map((object) => object.name);
+  const actualSet = new Set(actualNames);
+  const missingFileNames = expectedFullNames
+    .filter((name) => !actualSet.has(name))
+    .map((name) => name.slice(record.output_prefix.length));
+  const unexpectedFileNames = actualNames
+    .filter((name) => !expectedFullNames.includes(name))
+    .map((name) => name.startsWith(record.output_prefix) ? name.slice(record.output_prefix.length) : name);
+  const destinationMatches = Boolean(operation.outputDestinations?.some(
+    (uri) => uri.replace(/\/+$/u, "") === expectedUri.replace(/\/+$/u, "")
+  ));
+  const operationHasError = Boolean(operation.error);
+
+  let status: M14VisionRecoveryStatus["status"] = record.status;
+  let error = record.error_message ?? undefined;
+  if (operationHasError) {
+    status = "failed";
+    error = operation.error;
+    await env.DB!.prepare(
+      "UPDATE m14_vision_recovery SET status='failed', error_message=?, updated_at=? WHERE source_id=?",
+    ).bind((error ?? "Google Vision reported an OCR operation error.").slice(0, 500), Date.now(), PILOT_SOURCE_ID).run();
+  } else if (operation.done && destinationMatches && !listing.truncated &&
+      missingFileNames.length === 0 && unexpectedFileNames.length === 0) {
+    status = "completed";
+    error = undefined;
+    await env.DB!.prepare(
+      "UPDATE m14_vision_recovery SET status='completed', error_message=NULL, updated_at=? WHERE source_id=?",
+    ).bind(Date.now(), PILOT_SOURCE_ID).run();
+  } else if (operation.done) {
+    status = "waiting_for_output_files";
+  }
+
+  return {
+    sourceId: record.source_id,
+    status,
+    operationDone: operation.done,
+    operationHasError,
+    destinationMatches,
+    expectedPageCount: record.expected_page_count,
+    outputBucket: record.output_bucket,
+    outputPrefix: record.output_prefix,
+    visionOperation: record.vision_operation,
+    expectedFileNames,
+    actualFileNames: actualNames.map((name) =>
+      name.startsWith(record.output_prefix) ? name.slice(record.output_prefix.length) : name
+    ),
+    missingFileNames,
+    ...(error ? { error } : {}),
+  };
+}
+
 async function inspectM14VisionOutputs(env: Env): Promise<M14VisionOutputDiagnostics> {
   const sourceBucket = env.FATMAN_GCS_BUCKET?.trim() ?? "";
   if (!env.GCP_CLIENT_EMAIL || !env.GCP_PRIVATE_KEY ||
