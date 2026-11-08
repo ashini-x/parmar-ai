@@ -51,7 +51,7 @@ export async function indexBrvinCorpusGeneration(
         page.sourcePdfSha256 !== source.sourcePdfSha256 || page.ocrOperationId !== source.ocrOperationId ||
         page.pdfPage !== expectedPage || seenPages.has(page.pdfPage) ||
         !page.stableItemKey?.trim() || !Array.isArray(page.chunks) || page.chunks.length < 1) {
-      throw new Error("M14 corpus replay rejected a page with mismatched source, incomplete/duplicate physical-page provenance.");
+      throw new Error("M14 corpus replay rejected mismatched source, incomplete page coverage, or duplicate page provenance.");
     }
     seenPages.add(page.pdfPage);
     verifiedChunkCount += page.chunks.length;
