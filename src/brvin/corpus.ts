@@ -6,6 +6,8 @@ export const BRVIN_CHUNK_OVERLAP_TOKENS = 26;
 
 export interface BrvinFormulaCandidate {
   lineNumber: number;
+  startChar: number;
+  endChar: number;
   originalExpression: string;
   normalizedSearchExpression: string;
   extractionMethod: "conservative-ocr-line-heuristic";
@@ -32,6 +34,7 @@ export interface BrvinCorpusSourceManifest {
   sourcePdfSha256: string;
   generationId: string;
   pageCount: number;
+  ocrEngine: "google-cloud-vision-document-text-detection";
   chunker: {
     version: string;
     tokenizer: "unicode-lexical-and-symbol";
@@ -98,19 +101,29 @@ export function classifyBrvinContent(value: string, formulas: readonly BrvinForm
 }
 
 export function extractBrvinFormulaCandidates(value: string): BrvinFormulaCandidate[] {
-  const lines = value.split(/\r?\n/u);
+  const lines = value.split(/\r\n|\r|\n/u);
   const candidates: BrvinFormulaCandidate[] = [];
+  let lineStart = 0;
 
   for (let index = 0; index < lines.length; index += 1) {
     const originalExpression = lines[index];
-    if (!originalExpression.trim() || originalExpression.length > 400 || !FORMULA_LINE_PATTERN.test(originalExpression)) continue;
+    const lineEnd = lineStart + originalExpression.length;
+    if (!originalExpression.trim() || originalExpression.length > 400 || !FORMULA_LINE_PATTERN.test(originalExpression)) {
+      const terminatorLength = value.startsWith("\r\n", lineEnd) ? 2 : (lineEnd < value.length ? 1 : 0);
+      lineStart = lineEnd + terminatorLength;
+      continue;
+    }
     candidates.push({
       lineNumber: index + 1,
+      startChar: lineStart,
+      endChar: lineEnd,
       originalExpression,
       normalizedSearchExpression: normalizeBrvinSearchText(originalExpression),
       extractionMethod: "conservative-ocr-line-heuristic",
       confidence: "candidate-unverified",
     });
+    const terminatorLength = value.startsWith("\r\n", lineEnd) ? 2 : (lineEnd < value.length ? 1 : 0);
+    lineStart = lineEnd + terminatorLength;
   }
 
   return candidates;
@@ -139,6 +152,7 @@ export async function buildBrvinSourceManifest(input: {
   const generationSeed = JSON.stringify({
     sourceId: input.sourceId,
     sourcePdfSha256,
+    ocrEngine: "google-cloud-vision-document-text-detection",
     schemaVersion: BRVIN_CORPUS_SCHEMA_VERSION,
     chunkerVersion: BRVIN_CHUNKER_VERSION,
     normalizerVersion: BRVIN_NORMALIZER_VERSION,
@@ -153,6 +167,7 @@ export async function buildBrvinSourceManifest(input: {
     sourcePdfSha256,
     generationId,
     pageCount: input.pageCount,
+    ocrEngine: "google-cloud-vision-document-text-detection",
     chunker: {
       version: BRVIN_CHUNKER_VERSION,
       tokenizer: "unicode-lexical-and-symbol",
@@ -203,12 +218,9 @@ export async function buildBrvinPageManifest(input: {
     const rawText = input.rawOcrText.slice(startChar, endChar);
     const normalizedText = normalizeBrvinSearchText(rawText);
     const contentSha256 = await sha256Hex(rawText);
-    const formulaCandidates = pageFormulas.filter((candidate) => {
-      const line = input.rawOcrText.split(/\r?\n/u)[candidate.lineNumber - 1] ?? "";
-      const lineStart = input.rawOcrText.split(/\r?\n/u).slice(0, candidate.lineNumber - 1).reduce((total, part) => total + part.length + 1, 0);
-      const lineEnd = lineStart + line.length;
-      return lineStart < endChar && lineEnd > startChar;
-    });
+    const formulaCandidates = pageFormulas.filter((candidate) =>
+      candidate.startChar < endChar && candidate.endChar > startChar
+    );
     chunks.push({
       id: "brvchunk_" + (await sha256Hex([
         input.sourceId, input.pdfPage, BRVIN_CHUNKER_VERSION, BRVIN_NORMALIZER_VERSION,
