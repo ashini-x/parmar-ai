@@ -191,12 +191,10 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   if (!instanceName || !env.FATMAN_SEARCH) throw new Error("Fatman AI Search is not configured.");
   const instance = env.FATMAN_SEARCH.get(instanceName);
   const key = fatmanIndexPageKey(job, page);
-  const rawOcrText = await readFatmanVisionOutputRaw(env, job.id, page);
+  let text: string;
 
-  if (
-    job.book_id &&
-    brvinCorpusManifestEnabled(env.BRVIN_CORPUS_MANIFEST_ENABLED)
-  ) {
+  if (job.book_id && brvinCorpusManifestEnabled(env.BRVIN_CORPUS_MANIFEST_ENABLED)) {
+    const rawOcrText = await readFatmanVisionOutputRaw(env, job.id, page);
     const corpus = await persistBrvinPageCorpus(env, job, page, rawOcrText);
     await recordBrvinActivity(env, {
       importId: job.id,
@@ -216,19 +214,21 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
         normalizerVersion: "unicode-nfc-whitespace-v1",
       },
     });
+    text = cleanFatmanVisionOcrText(rawOcrText, page);
+  } else {
+    // The default-off M13 flag preserves the exact existing production OCR
+    // reader, sanitizer and 120,000-character indexing limit.
+    text = await readFatmanVisionOutput(env, job.id, page);
   }
 
-  // Preserve the exact production AI Search payload semantics for the current
-  // rollback provider; only its provider-specific SDK operations sit behind
-  // the Core-owned adapter.
-  const text = cleanFatmanVisionOcrText(rawOcrText, page);
+  // The existing page key, title/page preamble and AI Search document payload
+  // stay unchanged while provider-specific SDK operations sit behind Core.
   const title = job.book_title?.trim() || "Fatman 2nd Edition 2026";
   const content = title + " | PDF page " + page + "\n\n" + text;
   const provider = createBrvinRetrievalProvider(env.BRVIN_RETRIEVAL_PROVIDER, instance);
   const indexed = await provider.upsert({ key, text: content });
   return { page, status: indexed.status };
-}
-/**
+}/**
  * Autonomous BRVIN recovery supervisor.
  *
  * A deployment can remediate a known permanent indexing defect while a saved
