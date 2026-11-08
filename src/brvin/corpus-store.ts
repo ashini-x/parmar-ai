@@ -84,6 +84,8 @@ export async function persistBrvinPageCorpus(
   job: FatmanImportJob,
   pdfPage: number,
   rawOcrText: string,
+  stableItemKey: string,
+  pageConfidence?: number,
 ): Promise<{
   generationId: string;
   chunkCount: number;
@@ -113,8 +115,10 @@ export async function persistBrvinPageCorpus(
     sourceId,
     sourcePdfSha256: job.source_sha256,
     generationId: sourceManifest.generationId,
+    stableItemKey,
     pdfPage,
     rawOcrText,
+    ...(pageConfidence !== undefined ? { pageConfidence } : {}),
   });
 
   const prefix = objectPrefix(sourceId) + sourceManifest.generationId + "/";
