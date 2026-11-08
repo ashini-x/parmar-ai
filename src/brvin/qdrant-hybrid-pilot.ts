@@ -353,11 +353,10 @@ export class BrvinQdrantHybridPilot {
     const dense = vectors && typeof vectors === "object"
       ? (vectors as Record<string, unknown>).dense
       : undefined;
-    const sparse = info.config?.params?.sparse_vectors;
+    const sparse = info.config?.params?.sparse_vectors as Record<string, { modifier?: string }> | undefined;
     const denseConfig = dense as { size?: number; distance?: string } | undefined;
     if (!denseConfig || Number(denseConfig.size) !== this.dimensions ||
-        denseConfig.distance !== "Cosine" || !sparse ||
-        !Object.prototype.hasOwnProperty.call(sparse, "sparse")) {
+        denseConfig.distance !== "Cosine" || sparse?.sparse?.modifier !== "idf") {
       throw new Error("The existing Qdrant collection does not match the M14 dense/sparse schema; refusing to mutate it.");
     }
   }
