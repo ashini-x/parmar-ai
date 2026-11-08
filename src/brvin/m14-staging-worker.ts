@@ -398,7 +398,6 @@ async function inspectM14VisionOutputs(env: Env): Promise<M14VisionOutputDiagnos
     name.startsWith(prefix) ? name.slice(prefix.length) : name
   ).sort();
   const actualSet = new Set(actualFullNames);
-  const expectedSet = new Set(expectedFullNames);
   const missingFileNames = expectedFullNames
     .filter((name) => !actualSet.has(name))
     .map((name) => name.slice(prefix.length))
@@ -415,7 +414,7 @@ async function inspectM14VisionOutputs(env: Env): Promise<M14VisionOutputDiagnos
     operationDone: operation.done,
     operationHasError: Boolean(operation.error),
     operationDestinationMatches: Boolean(operation.outputDestinations?.some(
-      (uri) => uri.replace(/\\/+$/u, "") === expectedOutputUri.replace(/\\/+$/u, "")
+      (uri) => uri.replace(/\/+$/u, "") === expectedOutputUri.replace(/\/+$/u, "")
     )),
     truncated: listing.truncated,
     expectedFileNames,
