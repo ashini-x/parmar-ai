@@ -229,12 +229,27 @@ function m14AdminPage(): Response {
         data.secretsConfigured?.gcpClientEmail === true &&
         data.secretsConfigured?.gcpPrivateKey === true &&
         data.secretsConfigured?.m14AdminToken === true;
-      healthBox.className = "status " + (ready ? "good" : "bad");
-      healthBox.textContent = ready
-        ? "Staging checks passed: staging mode, pilot enabled, isolated registry and required secrets are present."
-        : "Staging is not ready. Check the Worker health response and complete any missing configuration before continuing.\n" + JSON.stringify(data, null, 2);
+      const providerChecks: Array<[boolean, string]> = [
+        [data.m14ProviderConfigured?.vertexLocation === true, "BRVIN_M14_VERTEX_LOCATION"],
+        [data.m14ProviderConfigured?.vertexModel === true, "BRVIN_M14_VERTEX_MODEL"],
+        [data.m14ProviderConfigured?.embeddingDimensions === true, "BRVIN_M14_EMBEDDING_DIMENSIONS"],
+        [data.m14ProviderConfigured?.qdrantUrl === true, "BRVIN_M14_QDRANT_URL"],
+        [data.secretsConfigured?.qdrantApiKey === true, "BRVIN_M14_QDRANT_API_KEY (Secret)"],
+        [data.m14ProviderConfigured?.qdrantCollection === true, "BRVIN_M14_QDRANT_COLLECTION"],
+      ];
+      const missingProviderSettings = providerChecks
+        .filter(([configured]) => !configured)
+        .map(([, name]) => name);
+      const providerReady = ready && data.m14ProviderConfigured?.ready === true;
+      healthBox.className = "status " + (!ready ? "bad" : providerReady ? "good" : "muted");
+      healthBox.textContent = !ready
+        ? "Staging is not ready. Check the Worker health response and complete any missing base configuration before continuing.\n" + JSON.stringify(data, null, 2)
+        : providerReady
+          ? "Staging and Vertex/Qdrant settings are present. The indexing and evaluation buttons are enabled when you enter the M14 operator token."
+          : "Base staging checks passed, but Vertex/Qdrant settings are incomplete. The two Qdrant buttons are intentionally disabled. Add these missing settings under Cloudflare Workers & Pages → parmar-ai-m14-staging → Settings → Variables and Secrets:\n" +
+            missingProviderSettings.map((name) => "• " + name).join("\n");
       runButton.dataset.ready = ready ? "true" : "false";
-      runButton.dataset.providerReady = data.m14ProviderConfigured?.ready === true ? "true" : "false";
+      runButton.dataset.providerReady = providerReady ? "true" : "false";
       refreshButton();
     } catch {
       healthBox.className = "status bad";

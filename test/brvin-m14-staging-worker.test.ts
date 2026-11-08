@@ -125,6 +125,9 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(html).toContain('/admin/m14/qdrant/index');
     expect(html).toContain('/admin/m14/qdrant/evaluate');
     expect(html).toContain("Embed and index the 7 Physics chunks in Qdrant");
+    expect(html).toContain("Base staging checks passed, but Vertex/Qdrant settings are incomplete");
+    expect(html).toContain("BRVIN_M14_QDRANT_URL");
+    expect(html).toContain("BRVIN_M14_VERTEX_LOCATION");
     expect(html).toContain("Recreate OCR output from retained PDF");
     expect(html).toContain("credentials: \"omit\"");
     expect(html).not.toContain(TOKEN);
