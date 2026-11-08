@@ -130,6 +130,11 @@ interface QdrantPoint {
   payload?: Record<string, unknown>;
 }
 
+interface QdrantOperationResult {
+  operation_id?: number;
+  status?: string;
+}
+
 interface QdrantQueryResponse {
   points?: QdrantPoint[];
 }
@@ -244,11 +249,58 @@ export class BrvinQdrantHybridPilot {
       };
     }));
 
-    await this.requestJson(
-      "/collections/" + encodeURIComponent(this.collection) + "/points?wait=true",
+    const collectionPath = "/collections/" + encodeURIComponent(this.collection);
+    const upsert = await this.requestJson<QdrantOperationResult>(
+      collectionPath + "/points?wait=true",
       "PUT",
       { points },
     );
+    if (upsert?.status !== "completed") {
+      throw new Error("Qdrant did not confirm the page upsert as completed; no index success is reported.");
+    }
+
+    // A completed write is not enough for the pilot receipt: retrieve every
+    // deterministic ID and verify its exact source/page/generation identity.
+    // This prevents a successful HTTP response with missing or mismatched
+    // stored payload from being counted as an indexed page.
+    const readback = await this.requestJson<QdrantPoint[]>(
+      collectionPath + "/points",
+      "POST",
+      {
+        ids: points.map((point) => point.id),
+        with_payload: true,
+        with_vector: false,
+      },
+    );
+    if (!Array.isArray(readback) || readback.length !== points.length) {
+      throw new Error("Qdrant point read-back did not return every expected deterministic point ID.");
+    }
+
+    const byId = new Map<string, QdrantPoint>();
+    for (const point of readback) {
+      const id = typeof point.id === "string" || typeof point.id === "number" ? String(point.id) : "";
+      if (!id || byId.has(id)) {
+        throw new Error("Qdrant point read-back returned a missing or duplicate point ID.");
+      }
+      byId.set(id, point);
+    }
+
+    for (const expected of points) {
+      const stored = byId.get(expected.id);
+      const payload = stored?.payload;
+      if (!stored || String(stored.id) !== expected.id ||
+          payload?.project_id !== input.projectId ||
+          payload?.source_id !== input.sourceId ||
+          payload?.item_key !== input.itemKey ||
+          Number(payload?.pdf_page) !== input.pdfPage ||
+          payload?.generation_id !== input.generationId ||
+          payload?.chunk_id !== expected.payload.chunk_id ||
+          payload?.chunk_index !== expected.payload.chunk_index ||
+          payload?.content_sha256 !== expected.payload.content_sha256) {
+        throw new Error("Qdrant point read-back failed exact source, page, generation or chunk provenance validation.");
+      }
+    }
+
     return {
       pointCount: points.length,
       ids: points.map((point) => point.id),
