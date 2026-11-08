@@ -849,3 +849,21 @@ The backfill implementation is in `src/brvin/m14-vision-backfill.ts`. It reuses 
 The backfill can execute only when `ENVIRONMENT=staging` and `BRVIN_M14_PILOT_ENABLED=true`. `BRVIN_M14_CORPUS_BUCKET` must be valid and distinct from `FATMAN_GCS_BUCKET`; the M14 corpus reader reads only from this separate bucket. Production Wrangler files remain unchanged and do not enable the M14 flag.
 
 The code is merged, but the real backfill has **not** been run: no separate M14 corpus bucket or staging Worker credential set has been provisioned. The source bucket must be readable by the staging GCP service account and the M14 bucket writable with narrowly scoped access. Live Vertex model, region, dimensions, quota, Qdrant collection, indexing, query, source-page, project-isolation, latency and cost acceptance remain outstanding.
+
+
+## 17. M14 staging operator deployment — 8 November 2026
+
+PR [#152](https://github.com/ashini-x/parmar-ai/pull/152) is merged and the dedicated Worker is deployed:
+
+- Worker: `parmar-ai-m14-staging`
+- URL: `https://parmar-ai-m14-staging.thenewtongs.workers.dev`
+- Version: `74ab2c8a-b2e4-443d-ba57-d7ef68e98d53`, 100% traffic
+- Environment: `staging`; explicit pilot flag `BRVIN_M14_PILOT_ENABLED=true`
+- D1: `parmar-ai-m14-staging`, ID `a8ca999e-4107-4f2f-800e-a1abce3a4cac`, APAC primary, read replicas disabled
+- D1 contains only one row in `m14_source_registry` for the existing three-page Physics source.
+
+The Worker binds no production AI Search, BRVIN service, Queue or Durable Object. The only routes are `GET /health` and an authenticated, source-pinned `POST /admin/m14/backfill`. The secret list is currently empty; the separate M14 GCS corpus bucket is not yet created. Therefore the real saved-Vision backfill has not been run.
+
+User setup is documented in `docs/BRVIN_M14_STAGING_SETUP.md`: create the separate private GCS bucket in the source bucket's location, create a dedicated service account with bucket-scoped permissions, and add GCP credentials plus a separate admin bearer token as Cloudflare Worker secrets. Do not send credentials to ChatGPT or add them to Git.
+
+Production remains on Cloudflare AI Search, with `BRVIN_CORPUS_MANIFEST_ENABLED=false` and no M14 configuration in either production Wrangler file.
