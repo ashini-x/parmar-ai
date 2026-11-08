@@ -90,10 +90,134 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(response.headers.get("content-security-policy")).toContain("connect-src 'self'");
     expect(html).toContain("BRVIN M14");
     expect(html).toContain('/admin/m14/backfill');
+    expect(html).toContain('/admin/m14/vision/rebuild');
+    expect(html).toContain('/admin/m14/vision/status');
+    expect(html).toContain("Recreate OCR output from retained PDF");
     expect(html).toContain("credentials: \"omit\"");
     expect(html).not.toContain(TOKEN);
     expect(html).not.toContain("test-only-private-key");
     expect(html).not.toContain("https://");
+  });
+
+  it("requires bearer authentication and the exact Physics source confirmation before starting one-time OCR recovery", async () => {
+    const start = vi.fn(async () => ({
+      sourceId: SOURCE_ID,
+      status: "running" as const,
+      visionOperation: "projects/project-90db7be4-619f-4ed7-89b/operations/recovered-ocr",
+      outputBucket: "brvin-m14-physics-90db7be4-a8ca999e",
+      outputPrefix: "brvin/m14-staging/vision-output/" + SOURCE_ID + "/attempt-001/",
+      alreadySubmitted: false,
+      message: "accepted",
+    }));
+    const unauthenticated = await handleM14StagingRequest(
+      makeRequest("/admin/m14/vision/rebuild", { body: { confirmSourceId: SOURCE_ID } }),
+      makeEnv(),
+      undefined,
+      undefined,
+      start as never,
+    );
+    expect(unauthenticated.status).toBe(401);
+
+    const wrongSource = await handleM14StagingRequest(
+      makeRequest("/admin/m14/vision/rebuild", {
+        token: TOKEN,
+        body: { confirmSourceId: "00000000-0000-4000-8000-000000000000" },
+      }),
+      makeEnv(),
+      undefined,
+      undefined,
+      start as never,
+    );
+    expect(wrongSource.status).toBe(400);
+    expect(start).not.toHaveBeenCalled();
+
+    const accepted = await handleM14StagingRequest(
+      makeRequest("/admin/m14/vision/rebuild", {
+        token: TOKEN,
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv(),
+      undefined,
+      undefined,
+      start as never,
+    );
+    expect(accepted.status).toBe(200);
+    await expect(accepted.json()).resolves.toMatchObject({
+      ok: true,
+      recovery: { sourceId: SOURCE_ID, status: "running", alreadySubmitted: false },
+    });
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires authentication to inspect the recovered OCR operation", async () => {
+    const status = vi.fn(async () => ({
+      sourceId: SOURCE_ID,
+      status: "completed" as const,
+      operationDone: true,
+      operationHasError: false,
+      destinationMatches: true,
+      expectedPageCount: 3,
+      expectedFileNames: ["output-1-to-1.json", "output-2-to-2.json", "output-3-to-3.json"],
+      actualFileNames: ["output-1-to-1.json", "output-2-to-2.json", "output-3-to-3.json"],
+      missingFileNames: [],
+      visionOperation: "projects/project-90db7be4-619f-4ed7-89b/operations/recovered-ocr",
+      outputBucket: "m14-bucket",
+      outputPrefix: "brvin/m14-staging/vision-output/" + SOURCE_ID + "/attempt-001/",
+    }));
+    const denied = await handleM14StagingRequest(
+      makeRequest("/admin/m14/vision/status", { method: "GET", token: "wrong-token" }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      status as never,
+    );
+    expect(denied.status).toBe(401);
+    expect(status).not.toHaveBeenCalled();
+
+    const allowed = await handleM14StagingRequest(
+      makeRequest("/admin/m14/vision/status", { method: "GET", token: TOKEN }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      status as never,
+    );
+    expect(allowed.status).toBe(200);
+    await expect(allowed.json()).resolves.toMatchObject({
+      ok: true,
+      recovery: { status: "completed", missingFileNames: [] },
+    });
+    expect(status).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses to backfill until all recovered OCR output files are verified", async () => {
+    const run = vi.fn(async () => result);
+    const status = vi.fn(async () => ({
+      sourceId: SOURCE_ID,
+      status: "running" as const,
+      operationDone: false,
+      operationHasError: false,
+      destinationMatches: false,
+      expectedPageCount: 3,
+      expectedFileNames: ["output-1-to-1.json", "output-2-to-2.json", "output-3-to-3.json"],
+      actualFileNames: [],
+      missingFileNames: ["output-1-to-1.json", "output-2-to-2.json", "output-3-to-3.json"],
+    }));
+    const response = await handleM14StagingRequest(
+      makeRequest("/admin/m14/backfill", {
+        token: TOKEN,
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv(),
+      run as never,
+      undefined,
+      undefined,
+      status as never,
+    );
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: "m14_vision_recovery_not_ready" });
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("provides authenticated read-only diagnostics for saved Vision OCR filenames", async () => {
@@ -234,6 +358,22 @@ describe("BRVIN M14 isolated staging operator", () => {
       }),
       makeEnv(),
       run as never,
+      undefined,
+      undefined,
+      (async () => ({
+        sourceId: SOURCE_ID,
+        status: "completed" as const,
+        operationDone: true,
+        operationHasError: false,
+        destinationMatches: true,
+        expectedPageCount: 3,
+        visionOperation: "projects/project-90db7be4-619f-4ed7-89b/operations/recovered-ocr",
+        outputBucket: "brvin-m14-physics-90db7be4-a8ca999e",
+        outputPrefix: "brvin/m14-staging/vision-output/" + SOURCE_ID + "/attempt-001/",
+        expectedFileNames: ["output-1-to-1.json", "output-2-to-2.json", "output-3-to-3.json"],
+        actualFileNames: ["output-1-to-1.json", "output-2-to-2.json", "output-3-to-3.json"],
+        missingFileNames: [],
+      })) as never,
     );
     const body = await response.json() as { ok: boolean; result: BrvinM14VisionBackfillResult };
     expect(response.status).toBe(200);
@@ -245,8 +385,10 @@ describe("BRVIN M14 isolated staging operator", () => {
       {
         sourceId: SOURCE_ID,
         sourcePdfSha256: SOURCE_SHA,
-        visionOperationId: OPERATION,
+        visionOperationId: "projects/project-90db7be4-619f-4ed7-89b/operations/recovered-ocr",
         pageCount: 3,
+        visionOutputBucket: "brvin-m14-physics-90db7be4-a8ca999e",
+        visionOutputPrefix: "brvin/m14-staging/vision-output/" + SOURCE_ID + "/attempt-001/",
       },
       expect.any(Object),
     );
