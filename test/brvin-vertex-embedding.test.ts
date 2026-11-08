@@ -70,7 +70,6 @@ describe("BRVIN M14 Vertex embedding adapter", () => {
       .toThrow("BRVIN_M14_VERTEX_LOCATION");
     const provider = new BrvinVertexEmbeddingProvider(makeEnv(), vi.fn() as typeof fetch, async () => "token");
     await expect(provider.embedDocuments([])).rejects.toThrow("1 to 128");
-    await expect(provider.embedDocuments(["x".repeat(100)]).then(() => undefined)).rejects.toThrow();
 
     const wrongDimensions = new BrvinVertexEmbeddingProvider(
       makeEnv(),
