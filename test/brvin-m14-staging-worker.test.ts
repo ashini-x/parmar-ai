@@ -142,7 +142,11 @@ describe("BRVIN M14 isolated staging operator", () => {
       makeEnv(),
     );
     const html = await response.text();
-    const script = html.match(/<script>([\\s\\S]*?)<\\/script>/u)?.[1];
+    const scriptStart = html.indexOf("<script>");
+    const scriptEnd = html.indexOf("</script>", scriptStart + 8);
+    const script = scriptStart >= 0 && scriptEnd >= 0
+      ? html.slice(scriptStart + 8, scriptEnd)
+      : "";
     expect(script).toBeTruthy();
     expect(script).toContain("checkHealth();");
 
