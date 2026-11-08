@@ -51,7 +51,7 @@ function readerEnv(): Env {
 describe("BRVIN immutable corpus replay reader", () => {
   it("rebuilds every physical page from stored manifests without another OCR request", async () => {
     const data = await fixture();
-    const requestMock = vi.fn(async (input: RequestInfo | URL) => {
+    const requestMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input instanceof Request ? new URL(input.url) : new URL(String(input));
       const objectName = decodeURIComponent(url.pathname.split("/o/")[1] ?? "");
       const value = data.objects.get(objectName);
