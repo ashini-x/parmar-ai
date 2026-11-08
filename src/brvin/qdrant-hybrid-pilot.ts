@@ -281,7 +281,7 @@ export class BrvinQdrantHybridPilot {
           { query: dense, using: "dense", filter, limit: prefetchLimit },
           { query: sparse, using: "sparse", filter, limit: prefetchLimit },
         ],
-        query: { rrf: {} },
+        query: { fusion: "rrf" },
         filter,
         limit,
         with_payload: true,
