@@ -762,7 +762,13 @@ export function fatmanOutputObjectName(importId: string, page: number, prefix = 
   return prefix + "output-" + page + "-to-" + page + ".json";
 }
 
-export async function readFatmanVisionOutputRaw(env: Env, importId: string, page: number): Promise<string> {
+export interface FatmanVisionOcrPage {
+  rawText: string;
+  /** Vision's page-level confidence when present; never synthesize a missing value. */
+  pageConfidence?: number;
+}
+
+export async function readFatmanVisionOutputPage(env: Env, importId: string, page: number): Promise<FatmanVisionOcrPage> {
   const job = await getFatmanImportJob(env, importId);
   if (!job) throw new Error("Fatman import job disappeared.");
   const objectName = fatmanOutputObjectName(importId, page, fatmanVisionOutputPrefix(job));
@@ -771,7 +777,16 @@ export async function readFatmanVisionOutputRaw(env: Env, importId: string, page
     headers: { authorization: "Bearer " + token },
   });
   if (!response.ok) throw await gcsError(response, "Could not read Vision OCR output for page " + page + ".");
-  const payload = await response.json() as { responses?: Array<{ fullTextAnnotation?: { text?: string }; error?: { message?: string } }>; context?: { pageNumber?: number } };
+  const payload = await response.json() as {
+    responses?: Array<{
+      fullTextAnnotation?: {
+        text?: string;
+        pages?: Array<{ confidence?: number }>;
+      };
+      error?: { message?: string };
+    }>;
+    context?: { pageNumber?: number };
+  };
   if (payload.context?.pageNumber && Number(payload.context.pageNumber) !== page) {
     throw new Error("Google Vision returned OCR for an unexpected PDF page.");
   }
@@ -786,9 +801,18 @@ export async function readFatmanVisionOutputRaw(env: Env, importId: string, page
   if (rawText.length > 1_000_000) {
     throw new Error("Vision OCR text for PDF page " + page + " exceeds the safe one-million-character manifest limit.");
   }
-  return rawText;
+  const confidence = annotation.fullTextAnnotation.pages?.[0]?.confidence;
+  return {
+    rawText,
+    ...(typeof confidence === "number" && Number.isFinite(confidence) && confidence >= 0 && confidence <= 1
+      ? { pageConfidence: confidence }
+      : {}),
+  };
 }
 
+export async function readFatmanVisionOutputRaw(env: Env, importId: string, page: number): Promise<string> {
+  return (await readFatmanVisionOutputPage(env, importId, page)).rawText;
+}
 export function cleanFatmanVisionOcrText(rawText: string, page: number): string {
   const text = rawText.replace(/\u0000/g, "").trim();
   if (!text) throw new Error("Google Vision returned no readable text for PDF page " + page + ".");
