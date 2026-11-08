@@ -109,7 +109,7 @@ function payloadFilter(projectId: string, sourceIds: readonly string[]): Record<
 
 interface QdrantEnvelope<T> {
   result?: T;
-  status?: string;
+  status?: string | { error?: string };
   time?: number;
   error?: string;
 }
@@ -445,11 +445,17 @@ export class BrvinQdrantHybridPilot {
       } catch {
         throw new Error("Qdrant returned invalid JSON (HTTP " + response.status + ").");
       }
-      if (!response.ok || envelope.status === "error") {
-        const detail = typeof envelope.error === "string"
-          ? envelope.error.replace(/\s+/gu, " ").slice(0, 240)
-          : "";
-        throw new Error("Qdrant request failed (HTTP " + response.status + ")." + (detail ? " " + detail : ""));
+      const nestedStatusError = typeof envelope.status === "object" && envelope.status !== null &&
+        typeof envelope.status.error === "string"
+        ? envelope.status.error
+        : "";
+      if (!response.ok || envelope.status === "error" || nestedStatusError) {
+        const rawDetail = typeof envelope.error === "string" ? envelope.error : nestedStatusError;
+        const detail = rawDetail.replace(/\s+/gu, " ").slice(0, 320);
+        throw new Error(
+          "Qdrant " + method + " " + path + " failed (HTTP " + response.status + ")." +
+          (detail ? " " + detail : "")
+        );
       }
       return envelope.result as T;
     } catch (error) {
