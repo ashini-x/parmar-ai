@@ -6,6 +6,12 @@ on:
       - main
     paths:
       - "src/brvin/m14-staging-worker.ts"
+      - "src/brvin/m14-pilot-runner.ts"
+      - "src/brvin/vertex-embedding.ts"
+      - "src/brvin/qdrant-hybrid-pilot.ts"
+      - "src/brvin/provider-contract.ts"
+      - "test/brvin-vertex-embedding.test.ts"
+      - "test/brvin-qdrant-hybrid-pilot.test.ts"
       - "src/brvin/m14-vision-backfill.ts"
       - "src/brvin/corpus-store.ts"
       - "src/brvin/corpus.ts"
@@ -19,6 +25,12 @@ on:
       - main
     paths:
       - "src/brvin/m14-staging-worker.ts"
+      - "src/brvin/m14-pilot-runner.ts"
+      - "src/brvin/vertex-embedding.ts"
+      - "src/brvin/qdrant-hybrid-pilot.ts"
+      - "src/brvin/provider-contract.ts"
+      - "test/brvin-vertex-embedding.test.ts"
+      - "test/brvin-qdrant-hybrid-pilot.test.ts"
       - "src/brvin/m14-vision-backfill.ts"
       - "src/brvin/corpus-store.ts"
       - "src/brvin/corpus.ts"
