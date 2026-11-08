@@ -237,14 +237,14 @@ export class BrvinQdrantHybridPilot {
         // now exists with a supported exact-match type.
         const afterRace = await this.requestJson<QdrantCollectionInfo>(collectionPath, "GET");
         const racedType = afterRace?.payload_schema?.[fieldName]?.data_type;
-        if (racedType !== "keyword" && racedType !== "uuid") throw error;
+        if (!afterRace || (racedType !== "keyword" && racedType !== "uuid")) throw error;
         info = afterRace;
         continue;
       }
 
       const updated = await this.requestJson<QdrantCollectionInfo>(collectionPath, "GET");
       const updatedType = updated?.payload_schema?.[fieldName]?.data_type;
-      if (updatedType !== "keyword" && updatedType !== "uuid") {
+      if (!updated || (updatedType !== "keyword" && updatedType !== "uuid")) {
         throw new Error("Qdrant did not confirm the " + fieldName + " payload index after creation.");
       }
       info = updated;
@@ -433,6 +433,7 @@ export class BrvinQdrantHybridPilot {
     if (!projectId.trim() || !sourceId.trim()) {
       throw new Error("Qdrant source deletion requires exact project and source identifiers.");
     }
+    await this.ensureCollection();
     await this.requestJson(
       "/collections/" + encodeURIComponent(this.collection) + "/points/delete?wait=true",
       "POST",
