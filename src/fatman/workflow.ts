@@ -191,6 +191,11 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   if (!instanceName || !env.FATMAN_SEARCH) throw new Error("Fatman AI Search is not configured.");
   const instance = env.FATMAN_SEARCH.get(instanceName);
   const key = fatmanIndexPageKey(job, page);
+  const provider = createBrvinRetrievalProvider(env.BRVIN_RETRIEVAL_PROVIDER, instance);
+  // Keep the legacy short-circuit ahead of OCR/GCS reads: already indexed pages
+  // must remain recoverable even after temporary Vision output has expired.
+  const existing = await provider.findExisting(key);
+  if (existing) return { page, status: existing.status };
   let text: string;
 
   if (job.book_id && brvinCorpusManifestEnabled(env.BRVIN_CORPUS_MANIFEST_ENABLED)) {
@@ -225,7 +230,6 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   // stay unchanged while provider-specific SDK operations sit behind Core.
   const title = job.book_title?.trim() || "Fatman 2nd Edition 2026";
   const content = title + " | PDF page " + page + "\n\n" + text;
-  const provider = createBrvinRetrievalProvider(env.BRVIN_RETRIEVAL_PROVIDER, instance);
   const indexed = await provider.upsert({ key, text: content });
   return { page, status: indexed.status };
 }/**
