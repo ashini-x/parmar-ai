@@ -801,7 +801,7 @@ export async function readFatmanVisionOutputPage(env: Env, importId: string, pag
   if (rawText.length > 1_000_000) {
     throw new Error("Vision OCR text for PDF page " + page + " exceeds the safe one-million-character manifest limit.");
   }
-  const confidence = annotation.fullTextAnnotation.pages?.[0]?.confidence;
+  const confidence = annotation?.fullTextAnnotation?.pages?.[0]?.confidence;
   return {
     rawText,
     ...(typeof confidence === "number" && Number.isFinite(confidence) && confidence >= 0 && confidence <= 1
