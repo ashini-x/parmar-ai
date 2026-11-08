@@ -29,7 +29,7 @@ import {
   markFatmanImportFailed,
   cleanFatmanVisionOcrText,
   readFatmanVisionOutput,
-  readFatmanVisionOutputRaw,
+  readFatmanVisionOutputPage,
   resumeFatmanImport,
   setFatmanImportStatus,
   submitFatmanVision,
@@ -199,8 +199,10 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   let text: string;
 
   if (job.book_id && brvinCorpusManifestEnabled(env.BRVIN_CORPUS_MANIFEST_ENABLED)) {
-    const rawOcrText = await readFatmanVisionOutputRaw(env, job.id, page);
-    const corpus = await persistBrvinPageCorpus(env, job, page, rawOcrText);
+    const ocrPage = await readFatmanVisionOutputPage(env, job.id, page);
+    const corpus = await persistBrvinPageCorpus(
+      env, job, page, ocrPage.rawText, key, ocrPage.pageConfidence,
+    );
     await recordBrvinActivity(env, {
       importId: job.id,
       bookId: job.book_id,
@@ -219,7 +221,7 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
         normalizerVersion: "unicode-nfc-whitespace-v1",
       },
     });
-    text = cleanFatmanVisionOcrText(rawOcrText, page);
+    text = cleanFatmanVisionOcrText(ocrPage.rawText, page);
   } else {
     // The default-off M13 flag preserves the exact existing production OCR
     // reader, sanitizer and 120,000-character indexing limit.
