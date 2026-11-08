@@ -3,8 +3,8 @@ import type { AiSearchInstance } from "../src/config/env";
 import { createBrvinRetrievalProvider } from "../src/brvin/provider-contract";
 
 function makeInstance() {
-  const list = vi.fn(async () => ({ result: [] }));
-  const upload = vi.fn(async () => ({ id: "item-1", key: "source/page-000002.txt", status: "queued" as const }));
+  const list = vi.fn(async (): Promise<{ result: Array<{ id: string; key: string; status: string }> }> => ({ result: [] }));
+  const upload = vi.fn(async (): Promise<{ id: string; key: string; status: string }> => ({ id: "item-1", key: "source/page-000002.txt", status: "queued" }));
   const remove = vi.fn(async () => undefined);
   const search = vi.fn(async () => ({
     chunks: [{
