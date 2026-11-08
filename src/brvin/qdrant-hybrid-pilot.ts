@@ -121,6 +121,7 @@ interface QdrantCollectionInfo {
       sparse_vectors?: Record<string, unknown>;
     };
   };
+  payload_schema?: Record<string, { data_type?: string }>;
   status?: string;
 }
 
@@ -174,6 +175,7 @@ export class BrvinQdrantHybridPilot {
     const existing = await this.requestJson<QdrantCollectionInfo>(path, "GET", undefined, true);
     if (existing) {
       this.assertCollectionCompatibility(existing);
+      await this.ensureFilterPayloadIndexes(path, existing);
       return;
     }
     try {
@@ -198,6 +200,55 @@ export class BrvinQdrantHybridPilot {
     const created = await this.requestJson<QdrantCollectionInfo>(path, "GET");
     if (!created) throw new Error("The newly created Qdrant M14 collection could not be read back.");
     this.assertCollectionCompatibility(created);
+    await this.ensureFilterPayloadIndexes(path, created);
+  }
+
+  /**
+   * Every collection filter must use indexed payload keys. Create the two
+   * server-owned authorization filter indexes before the first upsert/query,
+   * and repair older pilot collections that were populated before the indexes
+   * were introduced. The schema read-back makes this safe to retry.
+   */
+  private async ensureFilterPayloadIndexes(
+    collectionPath: string,
+    initialInfo: QdrantCollectionInfo,
+  ): Promise<void> {
+    let info = initialInfo;
+    for (const fieldName of ["project_id", "source_id"] as const) {
+      const dataType = info.payload_schema?.[fieldName]?.data_type;
+      if (dataType) {
+        if (dataType !== "keyword" && dataType !== "uuid") {
+          throw new Error(
+            "The Qdrant " + fieldName + " payload index must be keyword or uuid; refusing to change its existing schema.",
+          );
+        }
+        continue;
+      }
+
+      try {
+        await this.requestJson(
+          collectionPath + "/index?wait=true",
+          "PUT",
+          { field_name: fieldName, field_schema: "keyword" },
+        );
+      } catch (error) {
+        // Two staging requests may initialize the same collection at once.
+        // Accept the race only when a fresh read proves the required index
+        // now exists with a supported exact-match type.
+        const afterRace = await this.requestJson<QdrantCollectionInfo>(collectionPath, "GET");
+        const racedType = afterRace?.payload_schema?.[fieldName]?.data_type;
+        if (!afterRace || (racedType !== "keyword" && racedType !== "uuid")) throw error;
+        info = afterRace;
+        continue;
+      }
+
+      const updated = await this.requestJson<QdrantCollectionInfo>(collectionPath, "GET");
+      const updatedType = updated?.payload_schema?.[fieldName]?.data_type;
+      if (!updated || (updatedType !== "keyword" && updatedType !== "uuid")) {
+        throw new Error("Qdrant did not confirm the " + fieldName + " payload index after creation.");
+      }
+      info = updated;
+    }
   }
 
   async upsertPageChunks(input: {
@@ -382,6 +433,7 @@ export class BrvinQdrantHybridPilot {
     if (!projectId.trim() || !sourceId.trim()) {
       throw new Error("Qdrant source deletion requires exact project and source identifiers.");
     }
+    await this.ensureCollection();
     await this.requestJson(
       "/collections/" + encodeURIComponent(this.collection) + "/points/delete?wait=true",
       "POST",
