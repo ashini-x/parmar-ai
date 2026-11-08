@@ -156,7 +156,7 @@ describe("BRVIN M14 isolated staging operator", () => {
       ts.ScriptTarget.Latest,
       true,
       ts.ScriptKind.JS,
-    );
+    ) as ts.SourceFile & { parseDiagnostics: readonly ts.Diagnostic[] };
     if (parsed.parseDiagnostics.length > 0) {
       const diagnostic = parsed.parseDiagnostics[0];
       const position = parsed.getLineAndCharacterOfPosition(diagnostic.start ?? 0);
