@@ -105,21 +105,22 @@ export async function persistBrvinPageCorpus(
   if (!/^[a-f0-9]{64}$/iu.test(job.source_sha256)) {
     throw new Error("The BRVIN source PDF SHA-256 is missing or invalid.");
   }
-  if (!job.vision_operation?.trim()) {
+  const visionOperationId = typeof job.vision_operation === "string" ? job.vision_operation : "";
+  if (!visionOperationId.trim()) {
     throw new Error("A persisted Google Vision operation ID is required for a rebuildable corpus generation.");
   }
 
   const sourceManifest = await buildBrvinSourceManifest({
     sourceId,
     sourcePdfSha256: job.source_sha256,
-    ocrOperationId: job.vision_operation,
+    ocrOperationId: visionOperationId,
     pageCount,
   });
   const pageManifest = await buildBrvinPageManifest({
     sourceId,
     sourcePdfSha256: job.source_sha256,
     generationId: sourceManifest.generationId,
-    ocrOperationId: job.vision_operation,
+    ocrOperationId: visionOperationId,
     stableItemKey,
     pdfPage,
     rawOcrText,
