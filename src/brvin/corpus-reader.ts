@@ -14,9 +14,9 @@ const MAX_PAGE_COUNT = 2_000;
 const PAGE_READ_CONCURRENCY = 4;
 
 function bucketName(env: Env): string {
-  const value = env.FATMAN_GCS_BUCKET?.trim();
+  const value = env.BRVIN_M14_CORPUS_BUCKET?.trim();
   if (!value || !/^[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]$/u.test(value)) {
-    throw new Error("BRVIN durable corpus storage is not configured.");
+    throw new Error("The isolated M14 derived-corpus bucket is not configured.");
   }
   return value;
 }
