@@ -87,7 +87,7 @@ export async function backfillBrvinM14CorpusFromStoredVision(
   spec: BrvinM14VisionBackfillSpec,
   dependencies: Partial<BrvinM14VisionBackfillDependencies> = {},
 ): Promise<BrvinM14VisionBackfillResult> {
-  const deps: BackfillDependencies = { ...defaultDependencies, ...dependencies };
+  const deps: BrvinM14VisionBackfillDependencies = { ...defaultDependencies, ...dependencies };
   if (env.ENVIRONMENT !== "staging") {
     throw new Error("M14 Vision backfill is allowed only from the staging Worker environment.");
   }
