@@ -160,9 +160,13 @@ export async function sha256Hex(value: string): Promise<string> {
 export async function buildBrvinSourceManifest(input: {
   sourceId: string;
   sourcePdfSha256: string;
+  ocrOperationId: string;
   pageCount: number;
 }): Promise<BrvinCorpusSourceManifest> {
   const sourcePdfSha256 = input.sourcePdfSha256.toLowerCase();
+  if (!input.ocrOperationId.trim() || input.ocrOperationId.length > 1_024) {
+    throw new Error("A persisted Google Vision operation ID is required to identify an OCR corpus generation.");
+  }
   const generationSeed = JSON.stringify({
     sourceId: input.sourceId,
     sourcePdfSha256,
@@ -181,6 +185,7 @@ export async function buildBrvinSourceManifest(input: {
     schemaVersion: BRVIN_CORPUS_SCHEMA_VERSION,
     sourceId: input.sourceId,
     sourcePdfSha256,
+    ocrOperationId: input.ocrOperationId,
     generationId,
     pageCount: input.pageCount,
     ocrEngine: "google-cloud-vision-document-text-detection",
@@ -201,7 +206,7 @@ export async function buildBrvinSourceManifest(input: {
       confidence: "candidate-unverified",
       preservesOriginalExpression: true,
     },
-    pageManifestPattern: "pages/page-{pdfPage}-{rawOcrSha256}.json",
+    pageManifestPattern: "pages/page-{pdfPage}.json",
   };
 }
 
@@ -209,6 +214,7 @@ export async function buildBrvinPageManifest(input: {
   sourceId: string;
   sourcePdfSha256: string;
   generationId: string;
+  ocrOperationId: string;
   stableItemKey: string;
   pdfPage: number;
   rawOcrText: string;
@@ -219,6 +225,9 @@ export async function buildBrvinPageManifest(input: {
   }
   if (!input.rawOcrText.trim()) {
     throw new Error("BRVIN cannot create a page manifest from empty OCR text.");
+  }
+  if (!input.ocrOperationId.trim() || input.ocrOperationId.length > 1_024) {
+    throw new Error("A Vision operation ID is required in each BRVIN page manifest.");
   }
   if (
     typeof input.stableItemKey !== "string" ||
@@ -277,6 +286,7 @@ export async function buildBrvinPageManifest(input: {
     sourceId: input.sourceId,
     sourcePdfSha256: input.sourcePdfSha256.toLowerCase(),
     generationId: input.generationId,
+    ocrOperationId: input.ocrOperationId,
     stableItemKey: input.stableItemKey,
     pdfPage: input.pdfPage,
     ocrEvidence: {
