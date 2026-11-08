@@ -1,6 +1,7 @@
 import type { Env } from "../config/env";
 import { getGoogleAccessToken } from "../auth/google";
 import {
+  buildBrvinPageManifest,
   buildBrvinSourceManifest,
   normalizeBrvinSearchText,
   sha256Hex,
@@ -84,6 +85,22 @@ async function validatePageManifest(
       normalizeBrvinSearchText(page.rawOcrText) !== page.normalizedSearchText ||
       normalizedHash !== page.normalizedSearchTextSha256) {
     throw new Error("A BRVIN page manifest failed its raw OCR or normalized-text integrity check.");
+  }
+  const rebuilt = await buildBrvinPageManifest({
+    sourceId: page.sourceId,
+    sourcePdfSha256: page.sourcePdfSha256,
+    generationId: page.generationId,
+    ocrOperationId: page.ocrOperationId,
+    stableItemKey: page.stableItemKey,
+    pdfPage: page.pdfPage,
+    rawOcrText: page.rawOcrText,
+    pageConfidence: page.ocrEvidence.pageConfidence,
+  });
+  if (JSON.stringify(rebuilt.chunks) !== JSON.stringify(page.chunks) ||
+      JSON.stringify(rebuilt.contentTypes) !== JSON.stringify(page.contentTypes) ||
+      JSON.stringify(rebuilt.formulaCandidates) !== JSON.stringify(page.formulaCandidates) ||
+      rebuilt.normalizedSearchText !== page.normalizedSearchText) {
+    throw new Error("A BRVIN page manifest failed deterministic chunk identity or formula-metadata replay.");
   }
   const seenChunkIds = new Set<string>();
   for (const chunk of page.chunks) {
