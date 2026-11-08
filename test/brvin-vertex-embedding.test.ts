@@ -20,6 +20,21 @@ function okEmbedding(vector: number[], modelVersion = "gemini-embedding-001@2026
 }
 
 describe("BRVIN M14 Vertex embedding adapter", () => {
+  it("invokes stored fetch implementations with the Worker global receiver", async () => {
+    let receiver: unknown;
+    const request = function (
+      this: unknown,
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ): Promise<Response> {
+      receiver = this;
+      return Promise.resolve(okEmbedding([0.1, 0.2, 0.3]));
+    };
+    const provider = new BrvinVertexEmbeddingProvider(makeEnv(), request as typeof fetch, async () => "token");
+    await provider.embedQuery("Newton's second law");
+    expect(receiver).toBe(globalThis);
+  });
+
   it("uses separate document/query task types and validates exact output dimensions", async () => {
     const request = vi.fn()
       .mockResolvedValueOnce(okEmbedding([0.1, 0.2, 0.3]))
