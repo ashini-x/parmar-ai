@@ -229,7 +229,7 @@ function m14AdminPage(): Response {
         data.secretsConfigured?.gcpClientEmail === true &&
         data.secretsConfigured?.gcpPrivateKey === true &&
         data.secretsConfigured?.m14AdminToken === true;
-      const providerChecks: Array<[boolean, string]> = [
+      const providerChecks = [
         [data.m14ProviderConfigured?.vertexLocation === true, "BRVIN_M14_VERTEX_LOCATION"],
         [data.m14ProviderConfigured?.vertexModel === true, "BRVIN_M14_VERTEX_MODEL"],
         [data.m14ProviderConfigured?.embeddingDimensions === true, "BRVIN_M14_EMBEDDING_DIMENSIONS"],
