@@ -65,7 +65,14 @@ export interface BrvinCorpusPageManifest {
   sourceId: string;
   sourcePdfSha256: string;
   generationId: string;
+  stableItemKey: string;
   pdfPage: number;
+  ocrEvidence: {
+    engine: "google-cloud-vision-document-text-detection";
+    confidenceState: "page-confidence-available" | "page-confidence-not-returned";
+    pageConfidence?: number;
+    interpretation: "source-signal-only-not-a-correctness-guarantee";
+  };
   rawOcrText: string;
   rawOcrSha256: string;
   normalizedSearchText: string;
@@ -199,14 +206,30 @@ export async function buildBrvinPageManifest(input: {
   sourceId: string;
   sourcePdfSha256: string;
   generationId: string;
+  stableItemKey: string;
   pdfPage: number;
   rawOcrText: string;
+  pageConfidence?: number;
 }): Promise<BrvinCorpusPageManifest> {
   if (!Number.isSafeInteger(input.pdfPage) || input.pdfPage < 1) {
     throw new RangeError("A BRVIN corpus page must be a positive physical PDF page number.");
   }
   if (!input.rawOcrText.trim()) {
     throw new Error("BRVIN cannot create a page manifest from empty OCR text.");
+  }
+  if (
+    typeof input.stableItemKey !== "string" ||
+    !input.stableItemKey.trim() ||
+    input.stableItemKey.length > 512 ||
+    input.stableItemKey.includes("\u0000")
+  ) {
+    throw new Error("BRVIN page manifest requires a valid stable provider-neutral item key.");
+  }
+  if (
+    input.pageConfidence !== undefined &&
+    (!Number.isFinite(input.pageConfidence) || input.pageConfidence < 0 || input.pageConfidence > 1)
+  ) {
+    throw new RangeError("Vision page confidence must be between zero and one when supplied.");
   }
 
   const rawOcrSha256 = await sha256Hex(input.rawOcrText);
@@ -251,7 +274,14 @@ export async function buildBrvinPageManifest(input: {
     sourceId: input.sourceId,
     sourcePdfSha256: input.sourcePdfSha256.toLowerCase(),
     generationId: input.generationId,
+    stableItemKey: input.stableItemKey,
     pdfPage: input.pdfPage,
+    ocrEvidence: {
+      engine: "google-cloud-vision-document-text-detection",
+      confidenceState: input.pageConfidence === undefined ? "page-confidence-not-returned" : "page-confidence-available",
+      ...(input.pageConfidence !== undefined ? { pageConfidence: input.pageConfidence } : {}),
+      interpretation: "source-signal-only-not-a-correctness-guarantee",
+    },
     rawOcrText: input.rawOcrText,
     rawOcrSha256,
     normalizedSearchText,
