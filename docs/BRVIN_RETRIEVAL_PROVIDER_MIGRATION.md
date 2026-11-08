@@ -1,7 +1,7 @@
 # BRVIN Retrieval Provider Modernization — Approved Architecture and Migration Plan
 
 **Decision date:** 8 November 2026  
-**Status:** APPROVED DESIGN / NOT YET IMPLEMENTED  
+**Status:** APPROVED DESIGN / M13 IMPLEMENTATION IN REVIEW / NO PROVIDER CUTOVER  
 **Owning repository:** ashini-x/parmar-ai  
 **Coordinating consumer:** ashini-x/brvin-teachers  
 **Scope:** Replace the retrieval/indexing providers behind the existing BRVIN product without redesigning the admin or consumer workflows.
@@ -169,6 +169,18 @@ This migration is a retrieval/indexing project, not a new symbolic algebra engin
 
 This work does **not** replace all Cloudflare infrastructure and does not require migrating D1, Workflows, the upload gateway, admin hosting or consumer Workers.
 
+## 5.1 M13 Core implementation state — review branch only
+
+The current M13 implementation is being developed on Core branch `brvin/m13-provider-boundary-corpus`. It is not deployed. The implementation currently includes:
+
+- `src/brvin/provider-contract.ts`: a narrow `RetrievalProvider` port for upsert, query, item/source deletion and health, plus a separate `EmbeddingProvider` port. The concrete adapter available in M13 is Cloudflare AI Search only; an unknown provider selection fails closed.
+- `src/brvin/retrieval.ts` and `src/fatman/workflow.ts`: existing semantic query, page upsert and source deletion are routed through the Core adapter. The v2 request/response shape, D1 permission/readiness/quota checks, source-prefix constraints, page-key validation and bounded evidence remain unchanged.
+- `src/brvin/corpus.ts`: deterministic Unicode lexical/symbol chunking (256 lexical tokens, 26-token overlap), SHA-256 chunk identities/content hashes, NFC + whitespace-only normalized text, descriptive content tags and conservative formula-line candidates. Original formula text is stored beside a clearly marked `candidate-unverified` normalized representation; the heuristic does not claim mathematical correctness or repair OCR.
+- `src/brvin/corpus-store.ts`: immutable source-generation and per-physical-page manifests in private GCS under `brvin/derived-corpus/{sourceId}/{generationId}/`, outside the temporary Vision OCR prefix. Create-only writes accept only byte-identical retries; changed content requires a new generation. Full source deletion includes the derived-corpus prefix; the 30-day Vision-only lifecycle rule does not.
+- The raw Vision OCR string is preserved unchanged in page manifests. The existing legacy AI Search payload continues using its previous bounded/sanitized representation.
+
+The corpus writer is gated by `BRVIN_CORPUS_MANIFEST_ENABLED` and defaults off. The Core production Worker configuration pins `BRVIN_CORPUS_MANIFEST_ENABLED=false` and `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`. No Qdrant/Vertex SDK, key, collection, connection or deployment was added. The pilot flag may only be enabled in an isolated non-production environment after M14 resources/quotas are verified. M13 remains **in review** until automated validation and the replay, authorization, retry, deletion and contract-parity tests pass. This implementation branch does not authorize a production provider cutover.
+
 ## 6. Milestones and acceptance gates
 
 The numbering extends the completed M6–M11 baseline. M12–M17 are the next BRVIN retrieval modernization sequence. Statuses below describe the plan at approval; only M12 documentation is complete once these references and tracking issues have been committed. No provider migration is currently implemented or deployed.
@@ -176,13 +188,13 @@ The numbering extends the completed M6–M11 baseline. M12–M17 are the next BR
 | Milestone | Owner(s) | Scope | Acceptance gate | Initial status | Tracking |
 |---|---|---|---|---|
 | **M12 — Architecture and UX contract freeze** | Core + Teachers | Record provider decision, trust boundaries, compatibility rules, target flow, milestone sequence and UI preservation. | Canonical docs in both repos link to one plan; current production path and no-migration guardrail are explicit. | **COMPLETE — documentation**  | [Core #141](https://github.com/ashini-x/parmar-ai/issues/141) |
-| **M13 — Core provider boundary and rebuildable, math-aware corpus** | Core | Define provider/embedding interfaces; deterministic chunker and durable manifests; preserve raw OCR plus versioned normalized text and optional formula/LaTeX representations; content-type metadata; deterministic IDs and replay tests. No production provider switch. | Existing AI Search remains green; replay is deterministic; formula metadata never replaces raw OCR; mixed-content chunks preserve source/page identity; v2 contract unchanged; D1 remains authorization authority. | PLANNED  | [Core #142](https://github.com/ashini-x/parmar-ai/issues/142) |
+| **M13 — Core provider boundary and rebuildable, math-aware corpus** | Core | Define provider/embedding interfaces; deterministic chunker and durable manifests; preserve raw OCR plus versioned normalized text and optional formula/LaTeX representations; content-type metadata; deterministic IDs and replay tests. No production provider switch. | Existing AI Search remains green; replay is deterministic; formula metadata never replaces raw OCR; mixed-content chunks preserve source/page identity; v2 contract unchanged; D1 remains authorization authority. | IMPLEMENTATION IN REVIEW — branch only; production corpus flag remains false  | [Core #142](https://github.com/ashini-x/parmar-ai/issues/142) |
 | **M14 — Vertex AI + Qdrant unified hybrid Physics pilot** | Core | Provision non-production Qdrant; verify the Vertex embedding model/region; reuse the existing Physics OCR and add only approved representative formula/numerical fixtures or corpus samples; index unified dense + sparse/BM25 representations with RRF. | Conceptual, exact-formula, paraphrase, equivalent-notation, worked-example, numerical and mixed theory+math queries return relevant evidence with exact source/page provenance; OCR uncertainty is visible; re-index is deterministic; production stays on AI Search. | PLANNED  | [Core #143](https://github.com/ashini-x/parmar-ai/issues/143) |
 | **M15 — Shadow benchmark for relevance, math fidelity, security, load and cost** | Core | Compare AI Search and Qdrant on the same versioned corpus and unified mixed-content query suite; shadow without changing answers; measure p50/p95/p99, quality, formula/symbol fidelity, provenance, cost, concurrency 1/50/100/500/1,000, throttling and recovery. | No authorization/provenance regression; overall and math-specific quality meet the agreed baseline; exact formula/symbol cases and mixed queries pass; failures/OCR uncertainty are reported; 500-concurrency behavior, rollback and cost gates pass. | PLANNED  | [Core #144](https://github.com/ashini-x/parmar-ai/issues/144) |
 | **M16 — Consumer and admin experience parity** | Core + Teachers | Connect the same v2 contract to the provider flag; preserve both admin UIs, five stages, page map, source CRUD, retry and READY gating; update only provider-specific wording/advanced diagnostics; test the real consumer. | User can perform the same upload/manage/retrieval journey without retraining; consumer code has no direct Vertex/Qdrant access; existing response/citation UI works; grant revoke/re-grant still passes. | PLANNED  | [Core #145](https://github.com/ashini-x/parmar-ai/issues/145) · [Teachers #18](https://github.com/ashini-x/brvin-teachers/issues/18) |
 | **M17 — Controlled production cutover and legacy retirement** | Core + Teachers | Stage rollout using a provider flag; canary/shadow, gradual traffic, monitor and roll back; retain AI Search during the soak; retire Workers AI/AI Search only after acceptance and explicit review. | Production quality, access, page provenance, load, failure, cost and UI tests pass; rollback is demonstrated; at least 14 days of stable full-production soak completed before legacy deletion; docs/runbooks reflect actual deployed state. | PLANNED  | [Core #146](https://github.com/ashini-x/parmar-ai/issues/146) |
 
-M12 is documentation work only. M13–M17 are not authorized as production deployment steps merely by being listed. Each milestone must be implemented, tested, reviewed and deployed through the repositories' normal PR/release controls.
+M12 is documentation work only. M13 is in review and its durable-corpus writer is default-off in production; a green PR does not authorize a provider cutover. M14–M17 are not authorized as production deployment steps merely by being listed. Each milestone must be implemented, tested, reviewed and deployed through the repositories' normal PR/release controls.
 
 ## 7. Benchmark protocol and performance goals
 
