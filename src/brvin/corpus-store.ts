@@ -105,16 +105,21 @@ export async function persistBrvinPageCorpus(
   if (!/^[a-f0-9]{64}$/iu.test(job.source_sha256)) {
     throw new Error("The BRVIN source PDF SHA-256 is missing or invalid.");
   }
+  if (!job.vision_operation?.trim()) {
+    throw new Error("A persisted Google Vision operation ID is required for a rebuildable corpus generation.");
+  }
 
   const sourceManifest = await buildBrvinSourceManifest({
     sourceId,
     sourcePdfSha256: job.source_sha256,
+    ocrOperationId: job.vision_operation,
     pageCount,
   });
   const pageManifest = await buildBrvinPageManifest({
     sourceId,
     sourcePdfSha256: job.source_sha256,
     generationId: sourceManifest.generationId,
+    ocrOperationId: job.vision_operation,
     stableItemKey,
     pdfPage,
     rawOcrText,
@@ -124,7 +129,9 @@ export async function persistBrvinPageCorpus(
   const prefix = objectPrefix(sourceId) + sourceManifest.generationId + "/";
   const sourceManifestObject = prefix + "manifest.json";
   const pageNumber = String(pdfPage).padStart(6, "0");
-  const pageManifestObject = prefix + "pages/page-" + pageNumber + "-" + pageManifest.rawOcrSha256 + ".json";
+  // One immutable page object per OCR/chunker generation. A later OCR run has
+  // a new Vision operation ID and therefore a new generation directory.
+  const pageManifestObject = prefix + "pages/page-" + pageNumber + ".json";
   const bucket = bucketName(env);
   const token = await getGoogleAccessToken(env);
 
