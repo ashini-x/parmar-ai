@@ -1,5 +1,8 @@
 # BRVIN M14 isolated staging setup and Physics backfill
 
+> **Live checkpoint — 9 November 2026:** The separate M14 GCS corpus bucket, GCP service-account secrets, staging admin token, Vertex settings and isolated Qdrant endpoint/API key are configured. The recovered corpus is verified (3 pages/7 chunks, 2/2/3). The M14 operator's seven-point Qdrant indexing action completed with deterministic point read-back/provenance checks. The three known-evidence hybrid query checks returned HTTP 400. Core PR #169 fixed nested Qdrant `status.error` extraction and staging workflow #30 deployed the fix to Worker version `f6850b66-6299-426f-b533-df52f9e35e66`. **Next: rerun the three known-evidence retrieval checks and capture the now-visible Qdrant validation detail.** Do not repeat OCR or indexing to diagnose the query-only failure. Production remains on Cloudflare AI Search.
+
+
 **Status:** Operator PR #152 is merged and the isolated Worker is deployed. The real GCS backfill is waiting only on the Google Cloud setup and secrets below. This document is for the non-production pilot only.
 
 ## What is already provisioned
