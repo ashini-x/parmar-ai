@@ -87,13 +87,13 @@ Use [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md) for continuation instructio
 
 M6–M11 remain complete and unchanged. The next planned sequence is defined in [BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md](BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md), which is the detailed acceptance and implementation authority for this workstream.
 
-| Milestone | Scope | Status |
+| Milestone | Scope | Status | Tracking |
 |---|---|---|
-| M12 | Architecture, trust boundaries, same-UI contract and migration gates documented in both repositories. | **COMPLETE — documentation only** |
-| M13 | Core provider abstraction, deterministic chunking, durable rebuildable chunk manifest and tests. | PLANNED |
-| M14 | Non-production Vertex AI embedding + Qdrant hybrid retrieval pilot using existing Physics OCR output. | PLANNED |
-| M15 | AI Search vs Qdrant shadow tests, quality/provenance/security/load/latency/cost benchmark and rollback rehearsal. | PLANNED |
-| M16 | Coordinated Core Admin and Teachers UI/consumer compatibility; preserve current workflows and v2 response contract. | PLANNED |
-| M17 | Controlled canary/production cutover, monitoring, rollback, 14-day soak and only then explicit legacy retirement review. | PLANNED |
+| M12 | Architecture, trust boundaries, same-UI contract and migration gates documented in both repositories. | **COMPLETE — documentation only**  | [Core #141](https://github.com/ashini-x/parmar-ai/issues/141) |
+| M13 | Core provider abstraction, deterministic chunking, durable rebuildable chunk manifest and tests. | PLANNED  | [Core #142](https://github.com/ashini-x/parmar-ai/issues/142) |
+| M14 | Non-production Vertex AI embedding + Qdrant hybrid retrieval pilot using existing Physics OCR output. | PLANNED  | [Core #143](https://github.com/ashini-x/parmar-ai/issues/143) |
+| M15 | AI Search vs Qdrant shadow tests, quality/provenance/security/load/latency/cost benchmark and rollback rehearsal. | PLANNED  | [Core #144](https://github.com/ashini-x/parmar-ai/issues/144) |
+| M16 | Coordinated Core Admin and Teachers UI/consumer compatibility; preserve current workflows and v2 response contract. | PLANNED  | [Core #145](https://github.com/ashini-x/parmar-ai/issues/145) · [Teachers #18](https://github.com/ashini-x/brvin-teachers/issues/18) |
+| M17 | Controlled canary/production cutover, monitoring, rollback, 14-day soak and only then explicit legacy retirement review. | PLANNED  | [Core #146](https://github.com/ashini-x/parmar-ai/issues/146) |
 
 **No backend provider migration has been implemented or deployed by this plan.** Cloudflare AI Search remains the active production provider. The current v2 API, D1 authorization, GCS, Vision OCR, Workflows and consumer-owned final answer generation remain in place until the applicable acceptance gates are passed.
