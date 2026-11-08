@@ -730,13 +730,13 @@ export class FatmanImportWorkflow extends WorkflowEntrypoint<Env, FatmanImportPa
           phase: "complete",
           completed: 1,
           total: 1,
-          message: "Deletion complete. The source PDF, OCR output, AI Search pages, grants and BRVIN/import records are removed.",
+          message: "Deletion complete. The source PDF, OCR output, derived-corpus manifests/chunks, AI Search pages, grants and BRVIN/import records are removed.",
           extra: { searchItemsDeleted: indexedItems.length, sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion, derivedCorpusStorage: derivedCorpusDeletion },
         });
         await recordBrvinActivity(this.env, {
           importId, bookId: importId, agent: "Deletion supervisor",
           phase: "deletion", eventType: "book.deletion_completed", status: "completed",
-          message: "The PDF, Vision OCR output, AI Search pages, project grants, BRVIN book row and import records are deleted. The audit trail and project/collection definitions remain.",
+          message: "The PDF, Vision OCR output, derived-corpus manifests/chunks, AI Search pages, project grants, BRVIN book row and import records are deleted. The audit trail and project/collection definitions remain.",
           details: { title: book.title, searchItemsDeleted: indexedItems.length, sourceStorage: sourceStorageDeletion, visionOcrStorage: visionStorageDeletion, derivedCorpusStorage: derivedCorpusDeletion },
         });
         return;
