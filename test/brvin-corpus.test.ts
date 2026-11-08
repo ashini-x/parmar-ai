@@ -27,6 +27,7 @@ describe("BRVIN deterministic durable corpus", () => {
     const source = {
       sourceId: "00000000-0000-4000-8000-000000000401",
       sourcePdfSha256: "A".repeat(64),
+      ocrOperationId: "vision-operation-401",
       pageCount: 3,
     };
     const manifest = await buildBrvinSourceManifest(source);
@@ -34,6 +35,7 @@ describe("BRVIN deterministic durable corpus", () => {
       sourceId: source.sourceId,
       sourcePdfSha256: source.sourcePdfSha256,
       generationId: manifest.generationId,
+      ocrOperationId: source.ocrOperationId,
       stableItemKey: "brvin/books/source-401/pages/page-000002.txt",
       pdfPage: 2,
       rawOcrText,
@@ -77,6 +79,7 @@ describe("BRVIN deterministic durable corpus", () => {
       sourceId: "00000000-0000-4000-8000-000000000402",
       sourcePdfSha256: "b".repeat(64),
       generationId: "c".repeat(32),
+      ocrOperationId: "vision-operation-402",
       stableItemKey: "brvin/books/source-402/pages/page-000007.txt",
       pdfPage: 7,
       rawOcrText,
@@ -102,6 +105,7 @@ describe("BRVIN deterministic durable corpus", () => {
       sourceId: "source",
       sourcePdfSha256: "d".repeat(64),
       generationId: "e".repeat(32),
+      ocrOperationId: "vision-operation-empty",
       stableItemKey: "source/page-000001.txt",
       pdfPage: 1,
       rawOcrText: "  \n ",
@@ -111,6 +115,7 @@ describe("BRVIN deterministic durable corpus", () => {
       sourceId: "source",
       sourcePdfSha256: "d".repeat(64),
       generationId: "e".repeat(32),
+      ocrOperationId: "vision-operation-page",
       stableItemKey: "source/page-000000.txt",
       pdfPage: 0,
       rawOcrText: "some text",
