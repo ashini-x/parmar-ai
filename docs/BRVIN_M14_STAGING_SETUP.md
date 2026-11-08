@@ -46,25 +46,18 @@ The staging Worker is already deployed. Open:
 
 The non-secret settings, including the source bucket, separate M14 bucket, staging flag and D1 binding, are already in `wrangler.m14-staging.jsonc`.
 
-## Verify and run the one-time backfill
+## Verify and run the one-time backfill (no terminal needed)
 
-The Worker health endpoint reports only whether required secrets are present; it never returns credential values. Once deployed, open:
+1. After saving and deploying all four Cloudflare secrets, open the staging health page in your browser:
+   `https://parmar-ai-m14-staging.thenewtongs.workers.dev/health`.
+2. Confirm the JSON reports `environment: "staging"`, `pilotEnabled: true`, `sourceRegistryBound: true`, and `true` for `gcpClientEmail`, `gcpPrivateKey`, and `m14AdminToken`. These are presence checks only; the endpoint never returns credential values.
+3. Open the browser operator page:
+   `https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m14`.
+4. Paste the value you saved as the Cloudflare `BRVIN_M14_ADMIN_TOKEN` secret into the password field. Do not paste a Google private key into this page.
+5. Tick the confirmation checkbox and select **Run Physics backfill** once. Keep the page open while it validates the source and writes the three manifests.
+6. A successful result contains `ok: true`, `pageCount: 3`, a deterministic `generationId`, and page results for physical pages 1, 2 and 3. The receipt does not include OCR text and is safe to share here after checking it contains no credentials.
 
-`https://parmar-ai-m14-staging.thenewtongs.workers.dev/health`
-
-It should report `environment: staging`, `pilotEnabled: true`, and `true` for `gcpClientEmail`, `gcpPrivateKey`, and `m14AdminToken`.
-
-Then run this command on your own terminal, replacing the URL and token with your staging values:
-
-```bash
-curl --fail-with-body --silent --show-error \
-  -X POST "https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m14/backfill" \
-  -H "Authorization: Bearer <YOUR_M14_ADMIN_TOKEN>" \
-  -H "Content-Type: application/json" \
-  --data '{"confirmSourceId":"01238b3a-9902-4a42-90b4-574048ee4f00"}'
-```
-
-Expected successful receipt: `ok: true`, `pageCount: 3`, a deterministic `generationId`, and page results for physical pages 1, 2 and 3. The bucket names and generation may appear in the receipt. Do not send any private key or admin token back here; the receipt itself is safe to share after checking it contains no OCR text.
+The browser operator is served by the same staging Worker. It sends the token only to that same origin, does not store it in browser storage, clears the password field after submission, and cannot select another source. It is available only when the Worker is in staging and the M14 pilot flag is enabled. It uses the same authenticated POST handler as the API path; no terminal or command-line utility is required.
 
 The handler verifies the D1 source record, the exact saved Vision operation, its output prefix and exactly one `output-N-to-N.json` object per physical page before persisting any manifest. It does not upload the PDF or submit another OCR request. Create-only GCS writes make identical retries safe; a changed pre-existing manifest is rejected.
 

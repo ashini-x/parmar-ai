@@ -55,6 +55,168 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+function m14AdminPage(): Response {
+  const html = String.raw`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>BRVIN M14 Staging Operator</title>
+  <style>
+    :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; min-height: 100vh; background: #0b1220; color: #eef3fb; display: grid; place-items: center; padding: 24px; box-sizing: border-box; }
+    main { width: min(100%, 680px); background: #111c2e; border: 1px solid #293951; border-radius: 18px; padding: clamp(20px, 5vw, 34px); box-sizing: border-box; box-shadow: 0 24px 80px #0005; }
+    .eyebrow { color: #9fb4d1; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { font-size: clamp(25px, 5vw, 34px); margin: 10px 0 8px; letter-spacing: -.03em; }
+    p { color: #b8c7da; line-height: 1.6; }
+    .notice { border: 1px solid #49617e; border-radius: 12px; padding: 13px 15px; background: #17263b; margin: 20px 0; }
+    .notice strong { color: #eaf2ff; }
+    label { display: block; margin: 18px 0 8px; font-weight: 650; }
+    input[type=password] { width: 100%; box-sizing: border-box; padding: 13px 14px; border-radius: 10px; border: 1px solid #526782; background: #080f1b; color: #fff; font: inherit; }
+    .confirm { display: flex; align-items: flex-start; gap: 10px; font-weight: 400; line-height: 1.5; color: #d5e0ef; }
+    .confirm input { margin-top: 5px; }
+    button { width: 100%; border: 0; border-radius: 10px; padding: 14px 16px; margin-top: 20px; color: white; background: #245fca; font: inherit; font-weight: 750; cursor: pointer; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .status { border-radius: 10px; padding: 12px 14px; background: #0a1423; border: 1px solid #293951; margin-top: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .good { color: #9ae6b4; } .bad { color: #ffaaa6; } .muted { color: #9fb4d1; }
+    details { margin-top: 18px; color: #b8c7da; }
+    summary { cursor: pointer; font-weight: 650; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+    .small { font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">Isolated staging environment</div>
+    <h1>BRVIN M14 · Physics pilot</h1>
+    <p>This operator runs one controlled backfill for the already-registered three-page Physics source. It cannot select another PDF, change a source ID, or access production data.</p>
+    <div class="notice">
+      <strong>Before you continue</strong>
+      <p class="small">Complete the Google Cloud bucket, service-account permissions, and Cloudflare secret setup first. The action writes derived manifests to the separate M14 staging bucket. It does not upload the PDF again or start another OCR job.</p>
+    </div>
+    <div id="health" class="status muted" role="status" aria-live="polite">Checking staging configuration…</div>
+    <label for="token">M14 staging operator token</label>
+    <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste the BRVIN_M14_ADMIN_TOKEN secret" minlength="32">
+    <label class="confirm"><input id="confirm" type="checkbox"> <span>I understand this will run the fixed three-page Physics backfill in the isolated staging environment.</span></label>
+    <button id="run" type="button" disabled>Run Physics backfill</button>
+    <div id="result" class="status muted" role="status" aria-live="polite">No backfill has been started.</div>
+    <details>
+      <summary>Security and retry information</summary>
+      <p class="small">The token is used only for this request, is cleared from the input after submission, and is not saved in browser storage. The browser sends it only to this same staging website. Re-running an identical backfill is designed to verify existing immutable manifests rather than overwrite changed data.</p>
+      <p class="small">Never paste a Google private key here. This page needs only the separate M14 operator token.</p>
+    </details>
+  </main>
+<script>
+(() => {
+  const tokenInput = document.getElementById("token");
+  const confirmInput = document.getElementById("confirm");
+  const runButton = document.getElementById("run");
+  const healthBox = document.getElementById("health");
+  const resultBox = document.getElementById("result");
+
+  function refreshButton() {
+    runButton.disabled = !confirmInput.checked || tokenInput.value.trim().length < 32;
+  }
+  tokenInput.addEventListener("input", refreshButton);
+  confirmInput.addEventListener("change", refreshButton);
+
+  async function checkHealth() {
+    try {
+      const response = await fetch("/health", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "omit",
+        referrerPolicy: "no-referrer"
+      });
+      const data = await response.json();
+      const ready = response.ok && data.ok === true &&
+        data.environment === "staging" && data.pilotEnabled === true &&
+        data.sourceRegistryBound === true &&
+        data.secretsConfigured?.gcpClientEmail === true &&
+        data.secretsConfigured?.gcpPrivateKey === true &&
+        data.secretsConfigured?.m14AdminToken === true;
+      healthBox.className = "status " + (ready ? "good" : "bad");
+      healthBox.textContent = ready
+        ? "Staging checks passed: staging mode, pilot enabled, isolated registry and required secrets are present."
+        : "Staging is not ready. Check the Worker health response and complete any missing configuration before running the backfill.\\n" + JSON.stringify(data, null, 2);
+      runButton.dataset.ready = ready ? "true" : "false";
+      refreshButton();
+    } catch {
+      healthBox.className = "status bad";
+      healthBox.textContent = "Could not read the staging health endpoint. Refresh this page and try again.";
+      runButton.dataset.ready = "false";
+      refreshButton();
+    }
+  }
+
+  runButton.addEventListener("click", async () => {
+    refreshButton();
+    if (runButton.disabled || runButton.dataset.ready !== "true") {
+      resultBox.className = "status bad";
+      resultBox.textContent = "The required staging checks have not passed. Do not run the backfill yet.";
+      return;
+    }
+
+    let token = tokenInput.value.trim();
+    tokenInput.value = "";
+    refreshButton();
+    confirmInput.disabled = true;
+    runButton.disabled = true;
+    runButton.textContent = "Running…";
+    resultBox.className = "status muted";
+    resultBox.textContent = "The Worker is validating the saved OCR source and writing the three page manifests. Keep this page open until a result appears.";
+
+    try {
+      const response = await fetch("/admin/m14/backfill", {
+        method: "POST",
+        headers: {
+          "authorization": "Bearer " + token,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" }),
+        cache: "no-store",
+        credentials: "omit",
+        referrerPolicy: "no-referrer"
+      });
+      const data = await response.json();
+      resultBox.className = "status " + (response.ok && data.ok === true ? "good" : "bad");
+      resultBox.textContent = JSON.stringify(data, null, 2);
+      if (response.ok && data.ok === true) {
+        runButton.textContent = "Backfill completed";
+      } else {
+        runButton.textContent = "Retry Physics backfill";
+        confirmInput.disabled = false;
+      }
+    } catch {
+      resultBox.className = "status bad";
+      resultBox.textContent = "The request could not be completed or the connection was interrupted. Check the health page before retrying. Identical successful writes are replay-safe.";
+      runButton.textContent = "Retry Physics backfill";
+      confirmInput.disabled = false;
+    } finally {
+      token = "";
+      tokenInput.value = "";
+      refreshButton();
+    }
+  });
+
+  checkHealth();
+})();
+</script>
+</body>
+</html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, private",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'",
+    },
+  });
+}
+
 function equalSecret(left: string, right: string): boolean {
   let difference = left.length ^ right.length;
   const length = Math.max(left.length, right.length);
@@ -176,6 +338,15 @@ export async function handleM14StagingRequest(
       },
       // Do not expose credential values, bucket names or source-document content.
     });
+  }
+
+  if (url.pathname === "/admin/m14") {
+    if (request.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405);
+    if (env.ENVIRONMENT !== "staging" ||
+        env.BRVIN_M14_PILOT_ENABLED?.trim().toLowerCase() !== "true") {
+      return json({ ok: false, error: "m14_staging_pilot_disabled" }, 404);
+    }
+    return m14AdminPage();
   }
 
   if (url.pathname !== "/admin/m14/backfill") return json({ ok: false, error: "not_found" }, 404);
