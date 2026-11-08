@@ -175,7 +175,7 @@ function m14AdminPage(): Response {
     inspectButton.disabled = !canAuthenticate || !ready;
     checkRecoveryButton.disabled = !canAuthenticate || !ready;
     rebuildButton.disabled = !canAuthenticate || !confirmOcrInput.checked || !ready ||
-      ["submitting", "running", "completed", "submission_uncertain"].includes(ocrStatus);
+      ["submitting", "running", "completed", "failed", "submission_uncertain"].includes(ocrStatus);
     runButton.disabled = !confirmInput.checked || !canAuthenticate || !ready || !ocrReady;
   }
   tokenInput.addEventListener("input", refreshButton);
@@ -792,7 +792,7 @@ async function getM14VisionRecoveryStatus(env: Env): Promise<M14VisionRecoverySt
   ));
   const operationHasError = Boolean(operation.error);
 
-  let status: M14VisionRecoveryStatus["status"] = record.status;
+  let status: M14VisionRecoveryStatus["status"] = operation.done ? record.status : "running";
   let error = record.error_message ?? undefined;
   if (operationHasError) {
     status = "failed";
