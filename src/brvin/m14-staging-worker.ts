@@ -138,7 +138,10 @@ async function readStoredVisionPage(
   if (annotation?.error?.message) {
     throw new Error("Saved Vision OCR reports an error on physical PDF page " + page + ".");
   }
-  const rawText = annotation?.fullTextAnnotation?.text;
+  if (!annotation) {
+    throw new Error("Saved Vision OCR contains no response for physical PDF page " + page + ".");
+  }
+  const rawText = annotation.fullTextAnnotation?.text;
   if (typeof rawText !== "string" || !rawText.trim()) {
     throw new Error("Saved Vision OCR contains no readable text for physical PDF page " + page + ".");
   }
