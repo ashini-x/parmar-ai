@@ -192,7 +192,10 @@ async function indexOcrPage(env: Env, job: FatmanImportJob, page: number): Promi
   const key = fatmanIndexPageKey(job, page);
   const rawOcrText = await readFatmanVisionOutputRaw(env, job.id, page);
 
-  if (job.book_id) {
+  if (
+    job.book_id &&
+    env.BRVIN_CORPUS_MANIFEST_ENABLED?.trim().toLowerCase() === "true"
+  ) {
     const corpus = await persistBrvinPageCorpus(env, job, page, rawOcrText);
     await recordBrvinActivity(env, {
       importId: job.id,
