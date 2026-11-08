@@ -196,7 +196,7 @@ The current learning system is primarily **per-student**. Accumulated quiz and l
 
 ### BRVIN — current source of truth
 
-**Continuing BRVIN in a new chat? Start with [docs/BRVIN_2_MASTER_PLAN.md](docs/BRVIN_2_MASTER_PLAN.md).** It is the current handover and identifies the only active roadmap and technical references. M6–M10 are complete; M11 has one remaining real teacher-focused consumer retrieval/revocation acceptance test.
+**Continuing BRVIN in a new chat? Start with [docs/BRVIN_2_MASTER_PLAN.md](docs/BRVIN_2_MASTER_PLAN.md).** It is the current handover and identifies the only active roadmap and technical references. M6–M11 are complete. The next planned workstream is M12–M17 retrieval-provider modernization; current production remains on Cloudflare AI Search. See [docs/BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md](docs/BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md).
 
 - [docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md): approved scope and active milestone acceptance.
 - [docs/BRVIN_SYSTEM_REFERENCE.md](docs/BRVIN_SYSTEM_REFERENCE.md): as-built architecture and production state.
