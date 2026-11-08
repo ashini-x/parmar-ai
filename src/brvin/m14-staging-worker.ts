@@ -583,6 +583,26 @@ async function startM14VisionRecovery(env: Env): Promise<{
   if (sourceMetadata.size !== Number(job.expected_size)) {
     throw new Error("The retained Physics PDF size no longer matches the registered upload. No OCR request was submitted.");
   }
+  const token = await getGoogleAccessToken(env);
+  const sourceUrl = new URL(
+    M14_GCS_API + "/storage/v1/b/" + encodeURIComponent(sourceBucket) +
+      "/o/" + encodeURIComponent(job.source_object),
+  );
+  sourceUrl.searchParams.set("alt", "media");
+  sourceUrl.searchParams.set("generation", sourceMetadata.generation);
+  const sourceResponse = await fetch(sourceUrl, {
+    headers: { authorization: "Bearer " + token },
+  });
+  if (!sourceResponse.ok) {
+    throw new Error("The retained Physics PDF could not be read for SHA-256 verification (HTTP " + sourceResponse.status + ").");
+  }
+  const sourceBytes = new Uint8Array(await sourceResponse.arrayBuffer());
+  const sourceDigest = new Uint8Array(await crypto.subtle.digest("SHA-256", sourceBytes));
+  const sourceSha256 = Array.from(sourceDigest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  if (sourceBytes.byteLength !== Number(job.expected_size) ||
+      sourceSha256 !== PILOT_SOURCE_SHA256) {
+    throw new Error("The retained PDF bytes do not match the registered Physics source SHA-256. No OCR request was submitted.");
+  }
 
   const outputPrefix = M14_RECOVERY_PREFIX + PILOT_SOURCE_ID + "/attempt-001/";
   const existingOutputs = await listM14GcsObjects(env, outputBucket, outputPrefix, PILOT_PAGE_COUNT + 1);
@@ -619,7 +639,6 @@ async function startM14VisionRecovery(env: Env): Promise<{
     };
   }
 
-  const token = await getGoogleAccessToken(env);
   const outputUri = "gs://" + outputBucket + "/" + outputPrefix;
   let response: Response;
   try {
