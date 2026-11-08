@@ -301,6 +301,29 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
     expect(queryCall?.body.filter).toEqual(queryCall?.body.prefetch[0].filter);
   });
 
+  it("surfaces Qdrant's nested status.error for rejected hybrid queries", async () => {
+    const base = makeQdrant().request;
+    const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/points/query")) {
+        return new Response(JSON.stringify({
+          status: { error: "Wrong input: sparse vector 'sparse' is not configured" },
+          time: 0.0001,
+        }), { status: 400 });
+      }
+      return base(input, init);
+    }) as typeof fetch;
+    const pilot = makePilot(request);
+
+    await expect(pilot.query({
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "How does net force relate to acceleration?",
+    })).rejects.toThrow(
+      "Qdrant POST /collections/brvin_m14_physics_pilot_v1/points/query failed (HTTP 400). " +
+      "Wrong input: sparse vector 'sparse' is not configured",
+    );
+  });
+
   it("fails closed without an authorized source and deletes only the exact project/source pair", async () => {
     const { request, calls } = makeQdrant();
     const embeddings = makeEmbeddings();
