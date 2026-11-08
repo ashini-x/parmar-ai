@@ -1,0 +1,78 @@
+name: M14 staging operator
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/brvin/m14-staging-worker.ts"
+      - "src/brvin/m14-vision-backfill.ts"
+      - "src/brvin/corpus-store.ts"
+      - "src/brvin/corpus.ts"
+      - "src/fatman/import.ts"
+      - "src/config/env.ts"
+      - "test/brvin-m14-staging-worker.test.ts"
+      - "wrangler.m14-staging.jsonc"
+      - ".github/workflows/m14-staging-deploy.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/brvin/m14-staging-worker.ts"
+      - "src/brvin/m14-vision-backfill.ts"
+      - "src/brvin/corpus-store.ts"
+      - "src/brvin/corpus.ts"
+      - "src/fatman/import.ts"
+      - "src/config/env.ts"
+      - "test/brvin-m14-staging-worker.test.ts"
+      - "wrangler.m14-staging.jsonc"
+      - ".github/workflows/m14-staging-deploy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: brvin-m14-staging-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate:
+    name: Validate isolated M14 staging Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund --legacy-peer-deps
+      - run: npm run check
+      - run: npx vitest run test/brvin-m14-staging-worker.test.ts
+      - run: npx wrangler deploy --config wrangler.m14-staging.jsonc --dry-run
+
+  deploy-staging:
+    name: Deploy isolated M14 staging Worker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Verify deployment credentials
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "::error::Missing CLOUDFLARE_API_TOKEN."; exit 1; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "::error::Missing CLOUDFLARE_ACCOUNT_ID."; exit 1; }
+      - name: Deploy the isolated staging operator only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config wrangler.m14-staging.jsonc

@@ -286,6 +286,8 @@ export interface Env {
   BRVIN_M14_QDRANT_API_KEY?: string;
   /** Isolated M14 collection name. */
   BRVIN_M14_QDRANT_COLLECTION?: string;
+  /** Bearer secret required by the isolated M14 staging operator Worker. */
+  BRVIN_M14_ADMIN_TOKEN?: string;
   /** Must be explicitly enabled on a staging Worker for the Physics pilot. */
   BRVIN_M14_PILOT_ENABLED?: string;
   /** Separate private GCS bucket for M14 manifests; must not equal the source/OCR bucket. */
