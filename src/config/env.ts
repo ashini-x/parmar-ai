@@ -274,6 +274,18 @@ export interface Env {
   BRVIN_RETRIEVAL_PROVIDER?: string;
   /** Enables M13 durable corpus writes only in an explicitly configured pilot. */
   BRVIN_CORPUS_MANIFEST_ENABLED?: string;
+  /** M14 non-production Vertex embedding region; never set on production Workers. */
+  BRVIN_M14_VERTEX_LOCATION?: string;
+  /** M14 pilot embedding model ID; defaults in code to gemini-embedding-001. */
+  BRVIN_M14_VERTEX_MODEL?: string;
+  /** Must match the non-production Qdrant dense vector size. */
+  BRVIN_M14_EMBEDDING_DIMENSIONS?: string;
+  /** Non-production Qdrant cluster origin; HTTPS only. */
+  BRVIN_M14_QDRANT_URL?: string;
+  /** Non-production Qdrant API key; keep as a Worker secret. */
+  BRVIN_M14_QDRANT_API_KEY?: string;
+  /** Isolated M14 collection name. */
+  BRVIN_M14_QDRANT_COLLECTION?: string;
   /** Local minimum score fallback when AI Search does not return a reranking score. */
   BRVIN_MIN_SCORE?: string;
   /** Per-request vector similarity threshold (0..1) for candidate retrieval. */
