@@ -204,6 +204,13 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
     });
     const upserts = calls.filter((call) => call.method === "PUT" && call.url.includes("/points?wait=true"));
     expect(upserts).toHaveLength(2);
+    const payloadIndexCalls = calls.filter((call) =>
+      call.method === "PUT" && call.url.endsWith("/collections/brvin_m14_physics_pilot_v1/index?wait=true"),
+    );
+    expect(payloadIndexCalls.map((call) => call.body.field_name)).toEqual(["project_id", "source_id"]);
+    expect(calls.findIndex((call) => call.url.endsWith("/index?wait=true"))).toBeLessThan(
+      calls.findIndex((call) => call.url.includes("/points?wait=true")),
+    );
     const readbacks = calls.filter((call) =>
       call.method === "POST" && call.url.endsWith("/collections/brvin_m14_physics_pilot_v1/points")
     );
