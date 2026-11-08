@@ -894,6 +894,8 @@ export async function handleM14StagingRequest(
   env: M14StagingWorkerEnv,
   runBackfill: typeof backfillBrvinM14CorpusFromStoredVision = backfillBrvinM14CorpusFromStoredVision,
   inspectOutputs: typeof inspectM14VisionOutputs = inspectM14VisionOutputs,
+  startRecovery: typeof startM14VisionRecovery = startM14VisionRecovery,
+  readRecoveryStatus: typeof getM14VisionRecoveryStatus = getM14VisionRecoveryStatus,
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
@@ -922,9 +924,16 @@ export async function handleM14StagingRequest(
   }
 
   const isDiagnostics = url.pathname === "/admin/m14/diagnostics";
+  const isVisionRebuild = url.pathname === "/admin/m14/vision/rebuild";
+  const isVisionStatus = url.pathname === "/admin/m14/vision/status";
   const isBackfill = url.pathname === "/admin/m14/backfill";
-  if (!isDiagnostics && !isBackfill) return json({ ok: false, error: "not_found" }, 404);
-  if ((isDiagnostics && request.method !== "GET") || (isBackfill && request.method !== "POST")) {
+  if (!isDiagnostics && !isVisionRebuild && !isVisionStatus && !isBackfill) {
+    return json({ ok: false, error: "not_found" }, 404);
+  }
+  if ((isDiagnostics && request.method !== "GET") ||
+      (isVisionRebuild && request.method !== "POST") ||
+      (isVisionStatus && request.method !== "GET") ||
+      (isBackfill && request.method !== "POST")) {
     return json({ ok: false, error: "method_not_allowed" }, 405);
   }
   if (env.ENVIRONMENT !== "staging" ||
@@ -950,6 +959,40 @@ export async function handleM14StagingRequest(
     }
   }
 
+  if (isVisionStatus) {
+    try {
+      const recovery = await readRecoveryStatus(env);
+      return json({ ok: true, recovery });
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
+  }
+
+  if (!env.GCP_CLIENT_EMAIL || !env.GCP_PRIVATE_KEY ||
+      !env.GCP_PROJECT_ID || !env.FATMAN_GCS_BUCKET ||
+      !env.BRVIN_M14_CORPUS_BUCKET || !env.DB) {
+    return json({ ok: false, error: "staging_google_cloud_configuration_incomplete" }, 503);
+  }
+
+  if (isVisionRebuild) {
+    let recoveryPayload: unknown;
+    try {
+      recoveryPayload = await request.json();
+    } catch {
+      return json({ ok: false, error: "invalid_json" }, 400);
+    }
+    if (!recoveryPayload || typeof recoveryPayload !== "object" ||
+        (recoveryPayload as { confirmSourceId?: unknown }).confirmSourceId !== PILOT_SOURCE_ID) {
+      return json({ ok: false, error: "source_confirmation_mismatch" }, 400);
+    }
+    try {
+      const recovery = await startRecovery(env);
+      return json({ ok: true, recovery });
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
+  }
+
   let payload: unknown;
   try {
     payload = await request.json();
@@ -961,24 +1004,58 @@ export async function handleM14StagingRequest(
     return json({ ok: false, error: "source_confirmation_mismatch" }, 400);
   }
 
-  if (!env.GCP_CLIENT_EMAIL || !env.GCP_PRIVATE_KEY ||
-      !env.GCP_PROJECT_ID || !env.FATMAN_GCS_BUCKET ||
-      !env.BRVIN_M14_CORPUS_BUCKET) {
-    return json({ ok: false, error: "staging_google_cloud_configuration_incomplete" }, 503);
-  }
-
   try {
+    const recovery = await readRecoveryStatus(env);
+    if (recovery.status !== "completed" || !recovery.visionOperation ||
+        !recovery.outputBucket || !recovery.outputPrefix) {
+      return json({
+        ok: false,
+        error: "m14_vision_recovery_not_ready",
+        recovery,
+        message: "The new OCR operation must complete and all three page files must be verified before the backfill can run.",
+      }, 409);
+    }
+    const registeredJob = await getRegisteredPhysicsJob(env, PILOT_SOURCE_ID);
+    if (!registeredJob) throw new Error("The registered Physics source is missing from the isolated M14 staging registry.");
+    const recoveredJob: FatmanImportJob = {
+      ...registeredJob,
+      vision_operation: recovery.visionOperation,
+    };
+    const recoveryRecord: Pick<M14VisionRecoveryRecord, "output_bucket" | "output_prefix" | "status" | "expected_page_count"> = {
+      output_bucket: recovery.outputBucket,
+      output_prefix: recovery.outputPrefix,
+      status: "completed",
+      expected_page_count: recovery.expectedPageCount,
+    };
     const dependencies: Partial<BrvinM14VisionBackfillDependencies> = {
-      getJob: getRegisteredPhysicsJob,
+      getJob: async () => recoveredJob,
       getVisionOperation: getFatmanVisionOperation,
-      listVisionObjects: listFatmanVisionOutputObjects,
-      readVisionPage: readStoredVisionPage,
+      listVisionObjects: async (_env, _job, maxObjects) => {
+        const listing = await listM14GcsObjects(
+          env,
+          recovery.outputBucket!,
+          recovery.outputPrefix!,
+          maxObjects,
+        );
+        return {
+          prefix: "gs://" + recovery.outputBucket + "/" + recovery.outputPrefix,
+          objects: listing.objects.map((object) => ({
+            name: object.name,
+            ...(object.size !== undefined ? { size: object.size } : {}),
+          })),
+          truncated: listing.truncated,
+        };
+      },
+      readVisionPage: async (_env, _sourceId, page) =>
+        readM14RecoveryVisionPage(env, recoveryRecord, page),
     };
     const result = await runBackfill(env, {
       sourceId: PILOT_SOURCE_ID,
       sourcePdfSha256: PILOT_SOURCE_SHA256,
-      visionOperationId: PILOT_VISION_OPERATION,
+      visionOperationId: recovery.visionOperation,
       pageCount: PILOT_PAGE_COUNT,
+      visionOutputBucket: recovery.outputBucket,
+      visionOutputPrefix: recovery.outputPrefix,
     }, dependencies);
     return json({ ok: true, result });
   } catch (error) {
