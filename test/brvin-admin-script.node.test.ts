@@ -121,7 +121,10 @@ describe("BRVIN browser script contract", () => {
     expect(workflowSource).toContain('params.task === "delete_book"');
     expect(workflowSource).toContain('params.task === "delete_vision_output"');
     expect(workflowSource).toContain('deleteFatmanGcsObjectPrefix(this.env, importId, "ocr/", async progress =>');
-    expect(workflowSource).toContain("instance.items.delete(item.id)");
+    expect(workflowSource).toContain("await provider.deleteSource(items.map((item) => item.key));");
+    const providerSource = readFileSync(new URL("../src/brvin/provider-contract.ts", import.meta.url), "utf8");
+    expect(providerSource).toContain("await this.instance.items.delete(itemId);");
+    expect(providerSource).toContain("wanted.has(item.key)");
     expect(workflowSource).toContain("brvinDeletionSearchPageRequest(page)");
     expect(workflowSource).not.toContain("per_page: 100, source: \"builtin\"");
     expect(workflowSource).toContain('eventType: "book.deletion_progress"');
