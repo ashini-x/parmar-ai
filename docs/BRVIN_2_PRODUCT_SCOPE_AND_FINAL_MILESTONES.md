@@ -81,3 +81,19 @@ A separately authenticated gateway for consumers outside the same Cloudflare acc
 A milestone is complete only when the feature is implemented, automated checks pass, the production deployment/acceptance is verified where required, and the relevant current documents are updated. A documentation-only status update does not substitute for functional acceptance.
 
 Use [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md) for continuation instructions, [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) for current implementation facts, and [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md) for administrator steps.
+
+
+## 6. Planned retrieval-provider modernization (M12–M17)
+
+M6–M11 remain complete and unchanged. The next planned sequence is defined in [BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md](BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md), which is the detailed acceptance and implementation authority for this workstream.
+
+| Milestone | Scope | Status |
+|---|---|---|
+| M12 | Architecture, trust boundaries, same-UI contract and migration gates documented in both repositories. | **COMPLETE — documentation only** |
+| M13 | Core provider abstraction, deterministic chunking, durable rebuildable chunk manifest and tests. | PLANNED |
+| M14 | Non-production Vertex AI embedding + Qdrant hybrid retrieval pilot using existing Physics OCR output. | PLANNED |
+| M15 | AI Search vs Qdrant shadow tests, quality/provenance/security/load/latency/cost benchmark and rollback rehearsal. | PLANNED |
+| M16 | Coordinated Core Admin and Teachers UI/consumer compatibility; preserve current workflows and v2 response contract. | PLANNED |
+| M17 | Controlled canary/production cutover, monitoring, rollback, 14-day soak and only then explicit legacy retirement review. | PLANNED |
+
+**No backend provider migration has been implemented or deployed by this plan.** Cloudflare AI Search remains the active production provider. The current v2 API, D1 authorization, GCS, Vision OCR, Workflows and consumer-owned final answer generation remain in place until the applicable acceptance gates are passed.
