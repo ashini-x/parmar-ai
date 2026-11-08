@@ -118,6 +118,21 @@ function makePilot(request = makeQdrant().request, embeddings = makeEmbeddings()
 }
 
 describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
+  it("invokes stored fetch implementations with the Worker global receiver", async () => {
+    let receiver: unknown;
+    const request = function (
+      this: unknown,
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ): Promise<Response> {
+      receiver = this;
+      return Promise.resolve(new Response(JSON.stringify(collectionInfo), { status: 200 }));
+    };
+    const pilot = makePilot(request as typeof fetch);
+    await pilot.health();
+    expect(receiver).toBe(globalThis);
+  });
+
   it("preserves case and mathematical operator distinctions in sparse-token identities", async () => {
     const terms = ["F", "f", "x", "×", "-", "−"];
     const indexes = await Promise.all(terms.map(async (term) =>

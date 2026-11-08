@@ -79,12 +79,16 @@ export class BrvinVertexEmbeddingProvider implements EmbeddingProvider {
   private readonly location: string;
   private readonly modelId: string;
   private readonly dimensions: number;
+  private readonly request: typeof fetch;
 
   constructor(
     private readonly env: Env,
-    private readonly request: typeof fetch = fetch,
+    request: typeof fetch = fetch,
     private readonly accessToken: (env: Env) => Promise<string> = getGoogleAccessToken,
   ) {
+    // Preserve the platform receiver when native fetch is stored as a field.
+    // Cloudflare Workers rejects a detached/incorrect-this fetch invocation.
+    this.request = request.bind(globalThis);
     this.projectId = requiredString(env.GCP_PROJECT_ID, "GCP_PROJECT_ID");
     this.location = validateLocation(requiredString(env.BRVIN_M14_VERTEX_LOCATION, "BRVIN_M14_VERTEX_LOCATION"));
     this.modelId = validateModelId(env.BRVIN_M14_VERTEX_MODEL?.trim() || DEFAULT_MODEL_ID);
