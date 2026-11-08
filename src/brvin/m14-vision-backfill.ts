@@ -23,6 +23,9 @@ export interface BrvinM14VisionBackfillSpec {
   sourcePdfSha256: string;
   visionOperationId: string;
   pageCount: number;
+  /** Optional private staging bucket/prefix for a separately recovered OCR operation. */
+  visionOutputBucket?: string;
+  visionOutputPrefix?: string;
 }
 
 export interface BrvinM14VisionBackfillResult {
@@ -120,8 +123,17 @@ export async function backfillBrvinM14CorpusFromStoredVision(
     throw new Error("The registered Physics source is not the exact completed import expected by the M14 backfill.");
   }
 
-  const visionPrefix = fatmanVisionOutputPrefix(job);
-  const expectedOutputUri = "gs://" + sourceBucket + "/" + visionPrefix;
+  const defaultVisionPrefix = fatmanVisionOutputPrefix(job);
+  const visionPrefix = spec.visionOutputPrefix?.trim() || defaultVisionPrefix;
+  const visionBucket = spec.visionOutputBucket?.trim() || sourceBucket;
+  if (spec.visionOutputBucket || spec.visionOutputPrefix) {
+    const requiredPrefix = "brvin/m14-staging/vision-output/" + spec.sourceId + "/";
+    if (visionBucket !== corpusBucket || !visionPrefix.startsWith(requiredPrefix) ||
+        !visionPrefix.endsWith("/") || visionPrefix.includes("..")) {
+      throw new Error("Recovered M14 OCR must remain in its pinned, isolated staging bucket and source-specific prefix.");
+    }
+  }
+  const expectedOutputUri = "gs://" + visionBucket + "/" + visionPrefix;
   const operation = await deps.getVisionOperation(env, spec.visionOperationId, expectedOutputUri);
   if (!operation.done || operation.error) {
     throw new Error(operation.error || "The original Google Vision operation is not complete; M14 will not submit another OCR job.");
