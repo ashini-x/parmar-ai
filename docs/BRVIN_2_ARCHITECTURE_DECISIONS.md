@@ -555,3 +555,27 @@ The management API owns project/collection create/list/update, explicit same-ten
 ### Consequences
 
 Core release #42171109140 and consumer release #42171352464 are deployed. The consumer's `BRVIN_MANAGEMENT` binding points to this named entrypoint. Register the application and production environment in BRVIN Admin, then set that generated environment UUID in the consumer's deployment-controlled Service Binding configuration. Its placeholder deliberately fails closed, and the registry currently has no `brvin-teachers` application/environment record. The consumer's separate `brvin-service` retrieval v2 binding is still pending. No teacher or knowledge records are seeded by deployment; first real records must be created by an operator action.
+
+
+## ADR-012 — Provider-independent retrieval modernization with UI and contract preservation
+
+**Status:** Accepted architecture direction; implementation is gated and not started  
+**Decision date:** 8 November 2026  
+**Owners:** BRVIN Core in parmar-ai; consumer compatibility in brvin-teachers
+
+**Context:** The current Cloudflare AI Search / Workers AI retrieval path has passed useful retrieval, source-page provenance and grant-revocation acceptance. Future scale and control requirements justify evaluating a dedicated vector service and paid embedding provider. A backend upgrade must not force a new product workflow or a breaking consumer integration.
+
+**Decision:**
+
+1. Preserve the existing admin and consumer experience: teacher/project/collection/source management, secure PDF upload, five-stage source progress, page map, retry/resume, READY gating and source/page citations.
+2. Preserve Cloudflare Workers, D1, Workflows, private GCS and Google Vision OCR initially. Workers runtime is not the same thing as Workers AI.
+3. Introduce a Core-owned retrieval provider boundary. Retain Cloudflare AI Search as the baseline/rollback provider and add Qdrant behind the boundary only after a non-production pilot.
+4. Use a benchmark-selected Vertex AI embedding model for both document and question embeddings. Use dense + BM25 hybrid retrieval with RRF in Qdrant. Add a dedicated reranker only if quality gains justify latency and cost.
+5. Keep D1 authoritative for caller identity, project/source grants, readiness, quotas and revocation. Qdrant is a derived, rebuildable index, never an authorization authority.
+6. Persist OCR-derived chunks and a versioned manifest durably outside Qdrant so an index can be rebuilt without another PDF upload or Vision OCR run.
+7. Keep the private v2 request/response contract unchanged for this migration. Consumer applications continue to own final answer generation and end-user state.
+8. Do not cut over production until quality, physical page provenance, authorization, latency, load, cost, failure recovery, UI parity and rollback gates in BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md pass. Retain AI Search through a 14-day full-production soak before considering retirement.
+
+**Consequences:** The provider migration is a Core concern. The consumer does not receive Qdrant/Vertex credentials or SDKs. The normal UI remains provider-neutral; only advanced operator diagnostics may display provider/model details. M12–M17 and detailed acceptance are recorded in [BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md](BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md).
+
+**Explicit non-decision:** This ADR does not assert a measured speed improvement, provision infrastructure, authorize a production switch, or declare Qdrant/Vertex implemented.
