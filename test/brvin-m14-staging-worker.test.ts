@@ -96,6 +96,44 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(html).not.toContain("https://");
   });
 
+  it("provides authenticated read-only diagnostics for saved Vision OCR filenames", async () => {
+    const diagnostics = {
+      sourceId: SOURCE_ID,
+      pageCount: 3,
+      expectedPrefix: "brvin/temporary-vision-ocr/" + SOURCE_ID + "/",
+      operationDone: true,
+      operationHasError: false,
+      operationDestinationMatches: true,
+      truncated: false,
+      expectedFileNames: ["output-1-to-1.json", "output-2-to-2.json", "output-3-to-3.json"],
+      actualFileNames: ["output-1-to-3.json"],
+      missingFileNames: ["output-1-to-1.json", "output-2-to-2.json", "output-3-to-3.json"],
+      unexpectedFileNames: ["output-1-to-3.json"],
+      objects: [{ fileName: "output-1-to-3.json", size: "1234" }],
+    };
+    const inspect = vi.fn(async () => diagnostics);
+    const response = await handleM14StagingRequest(
+      makeRequest("/admin/m14/diagnostics", { method: "GET", token: TOKEN }),
+      makeEnv(),
+      undefined,
+      inspect as never,
+    );
+    const body = await response.json() as { ok: boolean; diagnostics: typeof diagnostics };
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ ok: true, diagnostics });
+    expect(JSON.stringify(body)).not.toContain("rawText");
+    expect(inspect).toHaveBeenCalledTimes(1);
+
+    const unauthorized = await handleM14StagingRequest(
+      makeRequest("/admin/m14/diagnostics", { method: "GET", token: "wrong-token" }),
+      makeEnv(),
+      undefined,
+      inspect as never,
+    );
+    expect(unauthorized.status).toBe(401);
+    expect(inspect).toHaveBeenCalledTimes(1);
+  });
+
   it("does not expose the browser operator when staging is disabled or production is selected", async () => {
     const request = new Request("https://m14-staging.example.workers.dev/admin/m14");
     const production = await handleM14StagingRequest(

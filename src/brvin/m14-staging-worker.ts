@@ -42,6 +42,21 @@ export interface M14StagingWorkerEnv extends Env {
   BRVIN_M14_ADMIN_TOKEN?: string;
 }
 
+export interface M14VisionOutputDiagnostics {
+  sourceId: string;
+  pageCount: number;
+  expectedPrefix: string;
+  operationDone: boolean;
+  operationHasError: boolean;
+  operationDestinationMatches: boolean;
+  truncated: boolean;
+  expectedFileNames: string[];
+  actualFileNames: string[];
+  missingFileNames: string[];
+  unexpectedFileNames: string[];
+  objects: Array<{ fileName: string; size?: string }>;
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -84,6 +99,7 @@ function m14AdminPage(): Response {
     summary { cursor: pointer; font-weight: 650; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
     .small { font-size: 13px; }
+    button.secondary { background: #293951; border: 1px solid #526782; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -99,6 +115,7 @@ function m14AdminPage(): Response {
     <label for="token">M14 staging operator token</label>
     <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste the BRVIN_M14_ADMIN_TOKEN secret" minlength="32">
     <label class="confirm"><input id="confirm" type="checkbox"> <span>I understand this will run the fixed three-page Physics backfill in the isolated staging environment.</span></label>
+    <button id="inspect" class="secondary" type="button" disabled>Inspect saved OCR files (read only)</button>
     <button id="run" type="button" disabled>Run Physics backfill</button>
     <div id="result" class="status muted" role="status" aria-live="polite">No backfill has been started.</div>
     <details>
@@ -112,11 +129,14 @@ function m14AdminPage(): Response {
   const tokenInput = document.getElementById("token");
   const confirmInput = document.getElementById("confirm");
   const runButton = document.getElementById("run");
+  const inspectButton = document.getElementById("inspect");
   const healthBox = document.getElementById("health");
   const resultBox = document.getElementById("result");
 
   function refreshButton() {
-    runButton.disabled = !confirmInput.checked || tokenInput.value.trim().length < 32;
+    const canAuthenticate = tokenInput.value.trim().length >= 32;
+    inspectButton.disabled = !canAuthenticate || runButton.dataset.ready !== "true";
+    runButton.disabled = !confirmInput.checked || !canAuthenticate || runButton.dataset.ready !== "true";
   }
   tokenInput.addEventListener("input", refreshButton);
   confirmInput.addEventListener("change", refreshButton);
@@ -149,6 +169,38 @@ function m14AdminPage(): Response {
       refreshButton();
     }
   }
+
+  inspectButton.addEventListener("click", async () => {
+    refreshButton();
+    if (inspectButton.disabled) return;
+    let token = tokenInput.value.trim();
+    tokenInput.value = "";
+    refreshButton();
+    inspectButton.disabled = true;
+    inspectButton.textContent = "Inspecting…";
+    resultBox.className = "status muted";
+    resultBox.textContent = "Reading only the saved Vision operation status and OCR object filenames. No files will be changed.";
+    try {
+      const response = await fetch("/admin/m14/diagnostics", {
+        method: "GET",
+        headers: { "authorization": "Bearer " + token },
+        cache: "no-store",
+        credentials: "omit",
+        referrerPolicy: "no-referrer"
+      });
+      const data = await response.json();
+      resultBox.className = "status " + (response.ok && data.ok === true ? "good" : "bad");
+      resultBox.textContent = JSON.stringify(data, null, 2);
+    } catch {
+      resultBox.className = "status bad";
+      resultBox.textContent = "Could not inspect the saved OCR files. Check your connection and try again.";
+    } finally {
+      token = "";
+      tokenInput.value = "";
+      inspectButton.textContent = "Inspect saved OCR files (read only)";
+      refreshButton();
+    }
+  });
 
   runButton.addEventListener("click", async () => {
     refreshButton();
@@ -318,10 +370,70 @@ async function readStoredVisionPage(
   };
 }
 
+async function inspectM14VisionOutputs(env: Env): Promise<M14VisionOutputDiagnostics> {
+  const sourceBucket = env.FATMAN_GCS_BUCKET?.trim() ?? "";
+  if (!env.GCP_CLIENT_EMAIL || !env.GCP_PRIVATE_KEY ||
+      !env.GCP_PROJECT_ID || !sourceBucket || !env.BRVIN_M14_CORPUS_BUCKET) {
+    throw new Error("Staging Google Cloud configuration is incomplete.");
+  }
+  const job = await getRegisteredPhysicsJob(env, PILOT_SOURCE_ID);
+  if (!job || job.id !== PILOT_SOURCE_ID || job.book_id !== PILOT_SOURCE_ID ||
+      job.status !== "completed" || Number(job.page_count) !== PILOT_PAGE_COUNT ||
+      Number(job.indexed_pages) !== PILOT_PAGE_COUNT ||
+      job.source_sha256?.toLowerCase() !== PILOT_SOURCE_SHA256 ||
+      job.vision_operation !== PILOT_VISION_OPERATION) {
+    throw new Error("The registered Physics source is not the exact completed import expected by the M14 diagnostic.");
+  }
+
+  const prefix = fatmanVisionOutputPrefix(job);
+  const expectedOutputUri = "gs://" + sourceBucket + "/" + prefix;
+  const operation = await getFatmanVisionOperation(env, PILOT_VISION_OPERATION, expectedOutputUri);
+  const listing = await listFatmanVisionOutputObjects(env, job, PILOT_PAGE_COUNT + 1);
+  const expectedFullNames = Array.from({ length: PILOT_PAGE_COUNT }, (_, index) =>
+    fatmanOutputObjectName(job.id, index + 1, prefix)
+  );
+  const actualFullNames = listing.objects.map((object) => object.name);
+  const expectedFileNames = expectedFullNames.map((name) => name.slice(prefix.length)).sort();
+  const actualFileNames = actualFullNames.map((name) =>
+    name.startsWith(prefix) ? name.slice(prefix.length) : name
+  ).sort();
+  const actualSet = new Set(actualFullNames);
+  const expectedSet = new Set(expectedFullNames);
+  const missingFileNames = expectedFullNames
+    .filter((name) => !actualSet.has(name))
+    .map((name) => name.slice(prefix.length))
+    .sort();
+  const unexpectedFileNames = actualFullNames
+    .filter((name) => !expectedSet.has(name))
+    .map((name) => name.startsWith(prefix) ? name.slice(prefix.length) : name)
+    .sort();
+
+  return {
+    sourceId: PILOT_SOURCE_ID,
+    pageCount: PILOT_PAGE_COUNT,
+    expectedPrefix: prefix,
+    operationDone: operation.done,
+    operationHasError: Boolean(operation.error),
+    operationDestinationMatches: Boolean(operation.outputDestinations?.some(
+      (uri) => uri.replace(/\/+$/u, "") === expectedOutputUri.replace(/\/+$/u, "")
+    )),
+    truncated: listing.truncated,
+    expectedFileNames,
+    actualFileNames,
+    missingFileNames,
+    unexpectedFileNames,
+    objects: listing.objects.map((object) => ({
+      fileName: object.name.startsWith(prefix) ? object.name.slice(prefix.length) : object.name,
+      ...(object.size !== undefined ? { size: object.size } : {}),
+    })),
+  };
+}
+
 export async function handleM14StagingRequest(
   request: Request,
   env: M14StagingWorkerEnv,
   runBackfill: typeof backfillBrvinM14CorpusFromStoredVision = backfillBrvinM14CorpusFromStoredVision,
+  inspectOutputs: typeof inspectM14VisionOutputs = inspectM14VisionOutputs,
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
@@ -349,8 +461,12 @@ export async function handleM14StagingRequest(
     return m14AdminPage();
   }
 
-  if (url.pathname !== "/admin/m14/backfill") return json({ ok: false, error: "not_found" }, 404);
-  if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
+  const isDiagnostics = url.pathname === "/admin/m14/diagnostics";
+  const isBackfill = url.pathname === "/admin/m14/backfill";
+  if (!isDiagnostics && !isBackfill) return json({ ok: false, error: "not_found" }, 404);
+  if ((isDiagnostics && request.method !== "GET") || (isBackfill && request.method !== "POST")) {
+    return json({ ok: false, error: "method_not_allowed" }, 405);
+  }
   if (env.ENVIRONMENT !== "staging" ||
       env.BRVIN_M14_PILOT_ENABLED?.trim().toLowerCase() !== "true") {
     return json({ ok: false, error: "m14_staging_pilot_disabled" }, 404);
@@ -363,6 +479,15 @@ export async function handleM14StagingRequest(
   const suppliedToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
   if (!equalSecret(suppliedToken, configuredToken)) {
     return json({ ok: false, error: "unauthorized" }, 401);
+  }
+
+  if (isDiagnostics) {
+    try {
+      const diagnostics = await inspectOutputs(env);
+      return json({ ok: true, diagnostics });
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
   }
 
   let payload: unknown;

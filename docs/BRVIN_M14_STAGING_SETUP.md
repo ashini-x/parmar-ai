@@ -59,6 +59,8 @@ The non-secret settings, including the source bucket, separate M14 bucket, stagi
 
 The browser operator is served by the same staging Worker. It sends the token only to that same origin, does not store it in browser storage, clears the password field after submission, and cannot select another source. It is available only when the Worker is in staging and the M14 pilot flag is enabled. It uses the same authenticated POST handler as the API path; no terminal or command-line utility is required.
 
+Before running the backfill, you may use **Inspect saved OCR files (read only)** on the browser operator. Enter the same `BRVIN_M14_ADMIN_TOKEN` and click the diagnostic button. It returns only the saved Vision operation state and object filenames/sizes; it does not return OCR text or modify GCS. Share that diagnostic result if the backfill reports an output-object mismatch. Do not repeatedly retry the backfill while the file layout is being investigated.
+
 The handler verifies the D1 source record, the exact saved Vision operation, its output prefix and exactly one `output-N-to-N.json` object per physical page before persisting any manifest. It does not upload the PDF or submit another OCR request. Create-only GCS writes make identical retries safe; a changed pre-existing manifest is rejected.
 
 ## What happens after the backfill
