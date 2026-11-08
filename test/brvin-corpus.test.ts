@@ -31,6 +31,11 @@ describe("BRVIN deterministic durable corpus", () => {
       pageCount: 3,
     };
     const manifest = await buildBrvinSourceManifest(source);
+    const nextOcrRun = await buildBrvinSourceManifest({
+      ...source,
+      ocrOperationId: "vision-operation-401-retry",
+    });
+    expect(nextOcrRun.generationId).not.toBe(manifest.generationId);
     const input = {
       sourceId: source.sourceId,
       sourcePdfSha256: source.sourcePdfSha256,
