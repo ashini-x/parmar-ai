@@ -45,7 +45,7 @@ async function fixture() {
 }
 
 function readerEnv(): Env {
-  return { FATMAN_GCS_BUCKET: "private-test-bucket" } as Env;
+  return { BRVIN_M14_CORPUS_BUCKET: "private-m14-test-bucket" } as Env;
 }
 
 describe("BRVIN immutable corpus replay reader", () => {
