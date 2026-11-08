@@ -177,7 +177,25 @@ class CloudflareAiSearchRetrievalProvider implements RetrievalProvider {
   }
 
   async deleteSource(itemKeys: readonly string[]): Promise<void> {
-    for (const key of [...new Set(itemKeys)]) await this.deleteByKey(key);
+    const wanted = new Set(itemKeys);
+    if (!wanted.size) return;
+
+    // Scan the provider catalog once, then delete exact source keys. The Core
+    // deletion workflow already authorizes/validates the source prefix; this
+    // second exact-key check prevents a provider-side broad delete.
+    const matches: string[] = [];
+    for (let page = 1; page <= 10_000; page += 1) {
+      const response = await this.instance.items.list({ page, per_page: 50, source: "builtin" });
+      const rows = response.result ?? [];
+      for (const item of rows) {
+        if (wanted.has(item.key)) matches.push(item.id);
+      }
+      const totalPages = response.result_info?.total_pages;
+      if (typeof totalPages === "number" && totalPages > 0 && page >= totalPages) break;
+      if (rows.length < 50) break;
+      if (page === 10_000) throw new Error("Retrieval provider deletion inventory exceeded the safety page limit.");
+    }
+    for (const itemId of matches) await this.instance.items.delete(itemId);
   }
 
   async health(): Promise<RetrievalProviderHealth> {
