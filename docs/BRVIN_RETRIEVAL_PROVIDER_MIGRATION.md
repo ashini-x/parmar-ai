@@ -210,7 +210,7 @@ The Teachers production Worker remains on its existing deployment/version; no co
  
 ## 6. Milestones and acceptance gates
 
-The numbering extends the completed M6–M11 baseline. M12–M17 are the BRVIN retrieval modernization sequence. M12 is complete; M13 provider-boundary and corpus-writer code is merged; M14 adapter, OCR recovery, manifest backfill/read-back and Vertex/Qdrant operator code are merged and deployed. The M14 corpus is verified, but live Vertex/Qdrant indexing and retrieval acceptance remain outstanding. No replacement provider is active for production.
+The numbering extends the completed M6–M11 baseline. M12–M17 are the BRVIN retrieval modernization sequence. M12 is complete; M13 provider-boundary and corpus-writer code is merged. M14 adapter, OCR recovery, manifest backfill/read-back and Vertex/Qdrant operator code are merged and deployed. The M14 corpus is verified and the seven-point Vertex/Qdrant indexing action passed deterministic read-back/provenance validation; the live three-query retrieval evaluation returned HTTP 400, and the next step is to rerun it with the deployed nested-error diagnostics fix. No replacement provider is active for production.
 
 | Milestone | Owner(s) | Scope | Acceptance gate | Initial status | Tracking |
 |---|---|---|---|---|
