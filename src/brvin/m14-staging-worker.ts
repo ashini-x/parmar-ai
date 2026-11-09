@@ -1178,6 +1178,20 @@ export interface M14QdrantRetrievalDiagnosticsReceipt {
   collection: string;
   embeddingModel: string;
   dimensions: number;
+  candidateEvidence: Array<{
+    pointId: string;
+    chunkId?: string;
+    pdfPage: number;
+    contentTypes: string[];
+    fullText: string;
+    retrievedBy: Array<{
+      queryId: string;
+      queryType: "negative" | "friction_repeat";
+      repeat?: number;
+      rank: number;
+      rrfScore: number;
+    }>;
+  }>;
   negativeCaseDiagnostics: Array<{
     id: string;
     category: string;
@@ -1236,6 +1250,48 @@ async function runM14QdrantRetrievalDiagnostics(
     (item) => item.expectedNoMatch === true,
   );
   const negativeCaseDiagnostics: M14QdrantRetrievalDiagnosticsReceipt["negativeCaseDiagnostics"] = [];
+  const uniqueCandidateEvidence = new Map<
+    string,
+    M14QdrantRetrievalDiagnosticsReceipt["candidateEvidence"][number]
+  >();
+  const recordCandidateEvidence = (
+    results: Awaited<ReturnType<typeof pilot.query>>,
+    queryId: string,
+    queryType: "negative" | "friction_repeat",
+    repeat?: number,
+  ): void => {
+    results.forEach((result, index) => {
+      const chunkId = typeof result.metadata?.chunkId === "string"
+        ? result.metadata.chunkId
+        : undefined;
+      const retrievedBy = {
+        queryId,
+        queryType,
+        ...(repeat !== undefined ? { repeat } : {}),
+        rank: index + 1,
+        rrfScore: result.score ?? 0,
+      };
+      const existing = uniqueCandidateEvidence.get(result.id);
+      if (existing) {
+        if (existing.fullText !== result.text || existing.pdfPage !== result.pdfPage) {
+          throw new Error("Qdrant returned conflicting full-text evidence for one deterministic M14 point.");
+        }
+        existing.retrievedBy.push(retrievedBy);
+        return;
+      }
+      if (uniqueCandidateEvidence.size >= 7) {
+        throw new Error("The M14 diagnostic returned more unique points than the verified seven-chunk corpus.");
+      }
+      uniqueCandidateEvidence.set(result.id, {
+        pointId: result.id,
+        ...(chunkId ? { chunkId } : {}),
+        pdfPage: result.pdfPage,
+        contentTypes: [...result.contentTypes],
+        fullText: result.text,
+        retrievedBy: [retrievedBy],
+      });
+    });
+  };
 
   for (const item of negativeCases) {
     const results = await pilot.query({
@@ -1245,6 +1301,7 @@ async function runM14QdrantRetrievalDiagnostics(
       limit: 5,
       prefetchLimit: 15,
     });
+    recordCandidateEvidence(results, item.id, "negative");
     negativeCaseDiagnostics.push({
       id: item.id,
       category: item.category,
@@ -1287,6 +1344,7 @@ async function runM14QdrantRetrievalDiagnostics(
       limit: 5,
       prefetchLimit: 15,
     });
+    recordCandidateEvidence(results, frictionCase.id, "friction_repeat", repeat);
     const retrievedPages = results.map((result) => result.pdfPage);
     const expectedPageRanks = frictionCase.expectedPdfPages.map((page) => {
       const index = retrievedPages.indexOf(page);
@@ -1331,6 +1389,7 @@ async function runM14QdrantRetrievalDiagnostics(
     collection: env.BRVIN_M14_QDRANT_COLLECTION!.trim(),
     embeddingModel: env.BRVIN_M14_VERTEX_MODEL!.trim(),
     dimensions: Number(env.BRVIN_M14_EMBEDDING_DIMENSIONS),
+    candidateEvidence: [...uniqueCandidateEvidence.values()],
     negativeCaseDiagnostics,
     frictionRepeatability: {
       queryId: frictionCase.id,
@@ -1344,7 +1403,7 @@ async function runM14QdrantRetrievalDiagnostics(
       rankStableAcrossRepeats: new Set(observedFirstExpectedPageRanks).size <= 1,
       note: "Three identical query calls against the same staging project/source. Compare point IDs, chunk IDs, RRF scores and page ranks. This is a diagnostic sample, not a ranking acceptance threshold.",
     },
-    note: "Non-gating retrieval diagnostics only. Negative-case results are displayed for human inspection; no retrieval abstention or answer correctness is asserted. Qdrant RRF scores are not calibrated confidence probabilities. The friction query is repeated three times to expose within-run ordering and candidate variation. The separate BRVIN Teachers consumer-owned Gemini answer/abstention path is not invoked by this action.",
+    note: "Non-gating retrieval diagnostics only. Complete chunk text for each unique returned point is included once in candidateEvidence for authenticated staging-operator human review; it is sourced from the fixed M14 corpus payload and is not a generated answer. No retrieval abstention or answer correctness is asserted. Qdrant RRF scores are not calibrated confidence probabilities. The friction query is repeated three times to expose within-run ordering and candidate variation. The separate BRVIN Teachers consumer-owned Gemini answer/abstention path is not invoked by this action.",
   };
 }
 
