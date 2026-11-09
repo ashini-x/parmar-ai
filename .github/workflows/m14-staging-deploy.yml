@@ -39,6 +39,7 @@ on:
       - "test/brvin-m14-staging-worker.test.ts"
       - "wrangler.m14-staging.jsonc"
       - ".github/workflows/m14-staging-deploy.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -64,7 +65,7 @@ jobs:
 
   deploy-staging:
     name: Deploy isolated M14 staging Worker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
