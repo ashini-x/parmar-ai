@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/config/env";
 import {
+  BRVIN_M14_PHYSICS_QUERY_SUITE,
+  summarizeBrvinM14PageCoverage,
+} from "../src/brvin/m14-physics-evaluation";
+import {
   handleM14StagingRequest,
   type M14StagingWorkerEnv,
 } from "../src/brvin/m14-staging-worker";
@@ -224,20 +228,37 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(evaluate).not.toHaveBeenCalled();
   });
 
-  it("runs only the three prior-evidence Physics retrieval checks through the authenticated staging route", async () => {
+  it("runs the ten positive source-grounded Physics checks through the authenticated staging route", async () => {
+    const positiveCases = BRVIN_M14_PHYSICS_QUERY_SUITE.filter(
+      (item) => !item.expectedNoMatch && item.expectedPdfPages.length > 0 &&
+        (item.verification === "prior-source-evidence" || item.verification === "ocr-ground-truth-verified"),
+    );
+    const checks = positiveCases.map((item) => ({
+      id: item.id,
+      category: item.category,
+      expectedPages: [...item.expectedPdfPages],
+      retrievedPages: [...item.expectedPdfPages],
+      expectedPageCoverage: [...item.expectedPdfPages],
+      expectedPageRanks: item.expectedPdfPages.map(() => 1),
+      pageCoveragePassed: true,
+      resultCount: item.expectedPdfPages.length,
+      topScore: 0.9,
+      verification: item.verification,
+    }));
+    const pageCoverage = summarizeBrvinM14PageCoverage(checks);
     const evaluation = {
       projectId: "448249b4-fed9-45f5-9137-6014f242ddbe",
       sourceId: SOURCE_ID,
       collection: "brvin_m14_physics_pilot_v1",
       embeddingModel: "gemini-embedding-001",
       dimensions: 768,
-      queryCount: 3,
-      checks: [
-        { id: "newtons-second-law-concept", category: "conceptual", expectedPages: [2], retrievedPages: [2], expectedPageCoverage: [2], resultCount: 1, topScore: 0.92, verification: "prior-source-evidence" as const },
-        { id: "four-kilogram-worked-example", category: "worked_example", expectedPages: [3], retrievedPages: [3], expectedPageCoverage: [3], resultCount: 1, topScore: 0.91, verification: "prior-source-evidence" as const },
-        { id: "bus-braking-answer", category: "bus_braking", expectedPages: [3, 1], retrievedPages: [3, 1], expectedPageCoverage: [3, 1], resultCount: 2, topScore: 0.89, verification: "prior-source-evidence" as const },
-      ],
-      note: "Smoke only.",
+      queryCount: checks.length,
+      ...pageCoverage,
+      negativeCasesDeferred: BRVIN_M14_PHYSICS_QUERY_SUITE
+        .filter((item) => item.expectedNoMatch === true)
+        .map((item) => item.id),
+      checks,
+      note: "Ten positive source-grounded cases. Two negative/no-answer cases deferred.",
     };
     const evaluate = vi.fn(async () => evaluation);
     const denied = await handleM14StagingRequest(
@@ -276,9 +297,22 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(allowed.status).toBe(200);
     await expect(allowed.json()).resolves.toMatchObject({
       ok: true,
-      evaluation: { queryCount: 3, checks: expect.arrayContaining([
-        expect.objectContaining({ id: "newtons-second-law-concept" }),
-      ]) },
+      evaluation: {
+        queryCount: 10,
+        expectedPageCount: 11,
+        coveredExpectedPageCount: 11,
+        expectedPageCoverageRate: 1,
+        allExpectedPagesCovered: true,
+        negativeCasesDeferred: [
+          "lowercase-force-symbol-hard-negative",
+          "out-of-corpus-constant",
+        ],
+        checks: expect.arrayContaining([
+          expect.objectContaining({ id: "newtons-second-law-exact-formula" }),
+          expect.objectContaining({ id: "friction-and-net-force" }),
+          expect.objectContaining({ id: "bus-braking-answer" }),
+        ]),
+      },
     });
     expect(evaluate).toHaveBeenCalledTimes(1);
   });
