@@ -327,6 +327,124 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(evaluate).toHaveBeenCalledTimes(1);
   });
 
+  it("runs authenticated non-gating negative and retrieval-repeatability diagnostics", async () => {
+    const diagnostics = {
+      projectId: "448249b4-fed9-45f5-9137-6014f242ddbe",
+      sourceId: SOURCE_ID,
+      collection: "brvin_m14_physics_pilot_v1",
+      embeddingModel: "gemini-embedding-001",
+      dimensions: 768,
+      negativeCaseDiagnostics: [
+        {
+          id: "lowercase-force-symbol-hard-negative",
+          category: "symbol_sensitive",
+          query: "Find a source expression containing lowercase f = ma, not uppercase F = ma.",
+          expectedNoMatch: true as const,
+          resultCount: 1,
+          topRrfScore: 0.5,
+          results: [{
+            rank: 1,
+            pointId: "point-a",
+            chunkId: "chunk-a",
+            pdfPage: 2,
+            rrfScore: 0.5,
+            contentTypes: ["formula"],
+            textPreview: "Fnet = m × a",
+          }],
+          interpretation: "Retrieval-only evidence; no abstention pass/fail.",
+        },
+        {
+          id: "out-of-corpus-constant",
+          category: "no_answer",
+          query: "Give the exact SI value of the Planck constant to nine significant figures.",
+          expectedNoMatch: true as const,
+          resultCount: 1,
+          topRrfScore: 0.4,
+          results: [{
+            rank: 1,
+            pointId: "point-b",
+            pdfPage: 3,
+            rrfScore: 0.4,
+            contentTypes: ["worked_example"],
+            textPreview: "4 kg worked example",
+          }],
+          interpretation: "Retrieval-only evidence; no abstention pass/fail.",
+        },
+      ],
+      frictionRepeatability: {
+        queryId: "friction-and-net-force",
+        query: "How does friction affect the net force and motion of an object?",
+        expectedPages: [3],
+        repeatCount: 3,
+        samples: [
+          { repeat: 1, firstExpectedPageRank: 1, expectedPageResultCount: 1, orderedResults: [{ rank: 1, pointId: "point-a", pdfPage: 3, rrfScore: 0.5 }] },
+          { repeat: 2, firstExpectedPageRank: 2, expectedPageResultCount: 1, orderedResults: [{ rank: 1, pointId: "point-b", pdfPage: 2, rrfScore: 0.5 }, { rank: 2, pointId: "point-a", pdfPage: 3, rrfScore: 0.5 }] },
+          { repeat: 3, firstExpectedPageRank: 1, expectedPageResultCount: 1, orderedResults: [{ rank: 1, pointId: "point-a", pdfPage: 3, rrfScore: 0.5 }] },
+        ],
+        distinctOrderedSequences: 2,
+        distinctTopFiveSets: 2,
+        observedFirstExpectedPageRanks: [1, 2, 1],
+        rankStableAcrossRepeats: false,
+        note: "Diagnostic sample only.",
+      },
+      note: "Non-gating diagnostics only. RRF scores are not calibrated confidence probabilities and this does not test consumer answer abstention.",
+    };
+    const diagnose = vi.fn(async () => diagnostics);
+    const denied = await handleM14StagingRequest(
+      makeRequest("/admin/m14/qdrant/diagnostics", {
+        method: "POST",
+        token: "wrong-token",
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      diagnose as never,
+    );
+    expect(denied.status).toBe(401);
+    expect(diagnose).not.toHaveBeenCalled();
+
+    const allowed = await handleM14StagingRequest(
+      makeRequest("/admin/m14/qdrant/diagnostics", {
+        method: "POST",
+        token: TOKEN,
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      diagnose as never,
+    );
+    expect(allowed.status).toBe(200);
+    await expect(allowed.json()).resolves.toMatchObject({
+      ok: true,
+      diagnostics: {
+        negativeCaseDiagnostics: expect.arrayContaining([
+          expect.objectContaining({ id: "lowercase-force-symbol-hard-negative", expectedNoMatch: true }),
+          expect.objectContaining({ id: "out-of-corpus-constant", expectedNoMatch: true }),
+        ]),
+        frictionRepeatability: {
+          queryId: "friction-and-net-force",
+          repeatCount: 3,
+          distinctOrderedSequences: 2,
+          observedFirstExpectedPageRanks: [1, 2, 1],
+          rankStableAcrossRepeats: false,
+        },
+      },
+    });
+    expect(diagnose).toHaveBeenCalledTimes(1);
+  });
+
   it("provides authenticated read-only manifest verification without returning OCR text", async () => {
     const verification = {
       sourceId: SOURCE_ID,
