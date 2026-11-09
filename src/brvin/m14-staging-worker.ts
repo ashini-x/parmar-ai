@@ -1,7 +1,11 @@
 import type { Env } from "../config/env";
 import { readBrvinCorpusGeneration } from "./corpus-reader";
 import { indexBrvinCorpusGeneration } from "./m14-pilot-runner";
-import { BRVIN_M14_PHYSICS_PILOT, BRVIN_M14_PHYSICS_QUERY_SUITE } from "./m14-physics-evaluation";
+import {
+  BRVIN_M14_PHYSICS_PILOT,
+  BRVIN_M14_PHYSICS_QUERY_SUITE,
+  summarizeBrvinM14PageCoverage,
+} from "./m14-physics-evaluation";
 import { BrvinQdrantHybridPilot } from "./qdrant-hybrid-pilot";
 import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
 import { getGoogleAccessToken } from "../auth/google";
@@ -169,10 +173,10 @@ function m14AdminPage(): Response {
     <button id="verifyCorpus" class="secondary" type="button" disabled>Verify stored M14 manifests (read only)</button>
     <div class="notice">
       <strong>Vertex AI + Qdrant pilot</strong>
-      <p class="small">After adding the isolated Qdrant URL/API key and Vertex model settings in this staging Worker, index the seven verified chunks. Deterministic point IDs make a retry safe. The first retrieval check runs only the three Physics questions with prior page evidence.</p>
+      <p class="small">After configuring the isolated staging Vertex/Qdrant settings, index the seven verified chunks once. The retrieval evaluation runs ten positive Physics queries whose expected pages were checked against the immutable source PDF. Two reviewed negative/no-answer cases remain deferred until an explicit abstention policy is defined.</p>
     </div>
     <button id="indexQdrant" type="button" disabled>Embed and index the 7 Physics chunks in Qdrant</button>
-    <button id="evaluateQdrant" class="secondary" type="button" disabled>Run 3 known-evidence Physics retrieval checks</button>
+    <button id="evaluateQdrant" class="secondary" type="button" disabled>Run 10 source-grounded Physics retrieval checks</button>
     <div id="result" class="status muted" role="status" aria-live="polite">No recovery or backfill action has been started.</div>
     <details>
       <summary>Security and retry information</summary>
@@ -398,12 +402,12 @@ function m14AdminPage(): Response {
       "/admin/m14/qdrant/evaluate",
       "POST",
       { confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" },
-      "Running the three known-evidence Physics queries through Vertex embeddings and Qdrant hybrid dense+sparse RRF. This is a staging-only retrieval test."
+      "Running ten positive source-grounded Physics queries through Vertex embeddings and Qdrant hybrid dense+sparse RRF. The receipt reports expected physical-page coverage; reviewed negative/no-answer cases are deferred. This is staging-only."
     );
     if (result?.response.ok && result.data.ok === true) {
-      evaluateQdrantButton.textContent = "Known-evidence retrieval checks completed";
+      evaluateQdrantButton.textContent = "Source-grounded retrieval checks completed";
     } else {
-      evaluateQdrantButton.textContent = "Run 3 known-evidence Physics retrieval checks";
+      evaluateQdrantButton.textContent = "Run 10 source-grounded Physics retrieval checks";
     }
     refreshButton();
   });
@@ -1055,15 +1059,22 @@ export interface M14QdrantEvaluationReceipt {
   embeddingModel: string;
   dimensions: number;
   queryCount: number;
+  expectedPageCount: number;
+  coveredExpectedPageCount: number;
+  expectedPageCoverageRate: number;
+  allExpectedPagesCovered: boolean;
+  negativeCasesDeferred: string[];
   checks: Array<{
     id: string;
     category: string;
     expectedPages: number[];
     retrievedPages: number[];
     expectedPageCoverage: number[];
+    expectedPageRanks: Array<number | null>;
+    pageCoveragePassed: boolean;
     resultCount: number;
     topScore: number | null;
-    verification: "prior-source-evidence";
+    verification: "prior-source-evidence" | "ocr-ground-truth-verified";
   }>;
   note: string;
 }
@@ -1071,8 +1082,12 @@ export interface M14QdrantEvaluationReceipt {
 async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvaluationReceipt> {
   const pilot = createM14QdrantPilot(env);
   const cases = BRVIN_M14_PHYSICS_QUERY_SUITE.filter(
-    (item) => item.verification === "prior-source-evidence",
+    (item) => !item.expectedNoMatch && item.expectedPdfPages.length > 0 &&
+      (item.verification === "prior-source-evidence" || item.verification === "ocr-ground-truth-verified"),
   );
+  const negativeCasesDeferred = BRVIN_M14_PHYSICS_QUERY_SUITE
+    .filter((item) => item.expectedNoMatch === true)
+    .map((item) => item.id);
   const checks: M14QdrantEvaluationReceipt["checks"] = [];
   for (const item of cases) {
     const results = await pilot.query({
@@ -1083,17 +1098,25 @@ async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvalua
       prefetchLimit: 15,
     });
     const retrievedPages = results.map((result) => result.pdfPage);
+    const expectedPageCoverage = item.expectedPdfPages.filter((page) => retrievedPages.includes(page));
+    const expectedPageRanks = item.expectedPdfPages.map((page) => {
+      const index = retrievedPages.indexOf(page);
+      return index >= 0 ? index + 1 : null;
+    });
     checks.push({
       id: item.id,
       category: item.category,
       expectedPages: [...item.expectedPdfPages],
       retrievedPages,
-      expectedPageCoverage: item.expectedPdfPages.filter((page) => retrievedPages.includes(page)),
+      expectedPageCoverage,
+      expectedPageRanks,
+      pageCoveragePassed: expectedPageCoverage.length === item.expectedPdfPages.length,
       resultCount: results.length,
       topScore: results[0]?.score ?? null,
-      verification: "prior-source-evidence",
+      verification: item.verification as "prior-source-evidence" | "ocr-ground-truth-verified",
     });
   }
+  const pageCoverage = summarizeBrvinM14PageCoverage(checks);
   return {
     projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
     sourceId: PILOT_SOURCE_ID,
@@ -1101,8 +1124,10 @@ async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvalua
     embeddingModel: env.BRVIN_M14_VERTEX_MODEL!.trim(),
     dimensions: Number(env.BRVIN_M14_EMBEDDING_DIMENSIONS),
     queryCount: checks.length,
+    ...pageCoverage,
+    negativeCasesDeferred,
     checks,
-    note: "These three queries have prior source-page evidence. This smoke test is not the full M14 acceptance suite; formula, symbol-sensitive, mixed-content and no-answer cases remain pending OCR-ground-truth review.",
+    note: "Ten positive source-grounded Physics queries run through Vertex embeddings and Qdrant dense+sparse RRF. allExpectedPagesCovered and expectedPageCoverageRate measure only expected physical-page recall in the top five; they are not precision, ranking-quality or answer-correctness gates. Two OCR-reviewed negative/no-answer cases are listed in negativeCasesDeferred and are not run until case-sensitive rejection and abstention thresholds are defined.",
   };
 }
 
