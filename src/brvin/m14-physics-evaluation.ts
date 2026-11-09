@@ -182,3 +182,46 @@ export function summarizeBrvinM14PageCoverage(
     allExpectedPagesCovered: coveredExpectedPageCount === expectedPageCount,
   };
 }
+
+
+export interface BrvinM14RankingSummary {
+  returnedResultCount: number;
+  expectedPageResultCount: number;
+  /** Strict physical-page-label precision over returned top-five chunks; not chunk-level human relevance. */
+  expectedPagePrecisionAt5: number;
+  /** Mean reciprocal rank of the first expected physical page, averaged per query. */
+  meanReciprocalExpectedPageRank: number;
+}
+
+/**
+ * Ranking diagnostics based only on the reviewed expected-page labels.
+ * A non-expected page is not automatically irrelevant; chunk-level judgments
+ * are still required before this can become a formal precision gate.
+ */
+export function summarizeBrvinM14Ranking(
+  checks: readonly {
+    expectedPageResultCount: number;
+    resultCount: number;
+    firstExpectedPageRank: number | null;
+  }[],
+): BrvinM14RankingSummary {
+  const returnedResultCount = checks.reduce((sum, check) => sum + check.resultCount, 0);
+  const expectedPageResultCount = checks.reduce(
+    (sum, check) => sum + check.expectedPageResultCount,
+    0,
+  );
+  const reciprocalRankSum = checks.reduce(
+    (sum, check) => sum + (check.firstExpectedPageRank ? 1 / check.firstExpectedPageRank : 0),
+    0,
+  );
+  return {
+    returnedResultCount,
+    expectedPageResultCount,
+    expectedPagePrecisionAt5: returnedResultCount > 0
+      ? expectedPageResultCount / returnedResultCount
+      : 0,
+    meanReciprocalExpectedPageRank: checks.length > 0
+      ? reciprocalRankSum / checks.length
+      : 0,
+  };
+}
