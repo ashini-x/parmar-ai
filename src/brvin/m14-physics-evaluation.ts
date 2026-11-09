@@ -41,9 +41,10 @@ export interface BrvinM14PhysicsQueryCase {
 }
 
 /**
- * No page label is inferred where the current operator evidence does not
- * establish one. M14 must inspect the immutable OCR before promoting pending
- * cases into the measured golden set.
+ * Positive page labels and formula targets below were checked against all
+ * three pages of the immutable source PDF. Negative cases are explicitly
+ * marked expectedNoMatch and kept out of the positive page-coverage run.
+ * Future cases without reviewed OCR remain pending-ocr-ground-truth.
  */
 export const BRVIN_M14_PHYSICS_QUERY_SUITE: readonly BrvinM14PhysicsQueryCase[] = [
   {
