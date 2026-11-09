@@ -125,3 +125,7 @@ Why these Vertex settings: `gemini-embedding-001` supports output dimensions up 
 5. These are initial live smoke checks, not final M14 acceptance. Formula/symbol-sensitive, mixed theory+math, friction, numerical and no-answer cases remain pending exact OCR-ground-truth review. We will expand the evaluation suite after inspecting the verified OCR corpus.
 
 Production continues to use Cloudflare AI Search. The Qdrant/Vertex settings and routes are only on the dedicated staging Worker.
+
+## Run the non-gating negative and repeatability diagnostic
+
+After the positive ten-query evaluation, reopen the authenticated M14 staging operator at `/admin/m14` and click **Run non-gating negative + rank-stability diagnostics**. This runs the two reviewed expected-no-match retrieval prompts and repeats the friction/net-force query three times. Inspect source/page/chunk IDs, full chunk text where available, content types, scores and ordered point IDs. The endpoint exposes retrieval evidence only: it does not test the Teachers consumer-owned Gemini answer/abstention path, and RRF scores are not confidence probabilities. The three-call repeatability sample is not a formal stability acceptance threshold. Do not upload the PDF, rerun Vision OCR or re-index the seven deterministic points for these query-only checks.
