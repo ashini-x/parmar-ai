@@ -3,6 +3,7 @@ import {
   BRVIN_M14_PHYSICS_PILOT,
   BRVIN_M14_PHYSICS_QUERY_SUITE,
   summarizeBrvinM14PageCoverage,
+  summarizeBrvinM14Ranking,
 } from "../src/brvin/m14-physics-evaluation";
 
 describe("BRVIN M14 Physics pilot evaluation contract", () => {
@@ -77,5 +78,35 @@ describe("BRVIN M14 Physics pilot evaluation contract", () => {
     expect(summary.coveredExpectedPageCount).toBe(3);
     expect(summary.expectedPageCoverageRate).toBe(0.75);
     expect(summary.allExpectedPagesCovered).toBe(false);
+  });
+
+  it("calculates strict expected-page precision and reciprocal first-page rank", () => {
+    const checks = [
+      { expectedPageResultCount: 2, resultCount: 5, firstExpectedPageRank: 1 },
+      { expectedPageResultCount: 2, resultCount: 5, firstExpectedPageRank: 2 },
+      { expectedPageResultCount: 2, resultCount: 5, firstExpectedPageRank: 3 },
+      { expectedPageResultCount: 2, resultCount: 5, firstExpectedPageRank: 1 },
+      { expectedPageResultCount: 2, resultCount: 5, firstExpectedPageRank: 2 },
+      { expectedPageResultCount: 2, resultCount: 5, firstExpectedPageRank: 1 },
+      { expectedPageResultCount: 2, resultCount: 5, firstExpectedPageRank: 1 },
+      { expectedPageResultCount: 2, resultCount: 5, firstExpectedPageRank: 1 },
+      { expectedPageResultCount: 1, resultCount: 5, firstExpectedPageRank: 1 },
+      { expectedPageResultCount: 3, resultCount: 5, firstExpectedPageRank: 1 },
+    ];
+    expect(summarizeBrvinM14Ranking(checks)).toEqual({
+      returnedResultCount: 50,
+      expectedPageResultCount: 20,
+      expectedPagePrecisionAt5: 0.4,
+      meanReciprocalExpectedPageRank: 0.8333333333333333,
+    });
+  });
+
+  it("returns zero ranking metrics for an empty evaluation", () => {
+    expect(summarizeBrvinM14Ranking([])).toEqual({
+      returnedResultCount: 0,
+      expectedPageResultCount: 0,
+      expectedPagePrecisionAt5: 0,
+      meanReciprocalExpectedPageRank: 0,
+    });
   });
 });
