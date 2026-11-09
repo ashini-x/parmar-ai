@@ -178,6 +178,7 @@ function m14AdminPage(): Response {
     </div>
     <button id="indexQdrant" type="button" disabled>Embed and index the 7 Physics chunks in Qdrant</button>
     <button id="evaluateQdrant" class="secondary" type="button" disabled>Run 10 source-grounded Physics retrieval checks</button>
+    <button id="diagnoseQdrant" class="secondary" type="button" disabled>Run non-gating negative + rank-stability diagnostics</button>
     <div id="result" class="status muted" role="status" aria-live="polite">No recovery or backfill action has been started.</div>
     <details>
       <summary>Security and retry information</summary>
@@ -197,6 +198,7 @@ function m14AdminPage(): Response {
   const verifyCorpusButton = document.getElementById("verifyCorpus");
   const indexQdrantButton = document.getElementById("indexQdrant");
   const evaluateQdrantButton = document.getElementById("evaluateQdrant");
+  const diagnoseQdrantButton = document.getElementById("diagnoseQdrant");
   const healthBox = document.getElementById("health");
   const resultBox = document.getElementById("result");
 
@@ -211,6 +213,7 @@ function m14AdminPage(): Response {
     const providerReady = runButton.dataset.providerReady === "true";
     indexQdrantButton.disabled = !canAuthenticate || !ready || !providerReady;
     evaluateQdrantButton.disabled = !canAuthenticate || !ready || !providerReady;
+    diagnoseQdrantButton.disabled = !canAuthenticate || !ready || !providerReady;
     rebuildButton.disabled = !canAuthenticate || !confirmOcrInput.checked || !ready ||
       ["submitting", "running", "completed", "failed", "submission_uncertain"].includes(ocrStatus);
     runButton.disabled = !confirmInput.checked || !canAuthenticate || !ready || !ocrReady;
@@ -403,12 +406,31 @@ function m14AdminPage(): Response {
       "/admin/m14/qdrant/evaluate",
       "POST",
       { confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" },
-      "Running ten positive source-grounded Physics queries through Vertex embeddings and Qdrant hybrid dense+sparse RRF. The receipt reports expected physical-page coverage; reviewed negative/no-answer cases are deferred. This is staging-only."
+      "Running ten positive source-grounded Physics queries through Vertex embeddings and Qdrant hybrid dense+sparse RRF. This is staging-only."
     );
     if (result?.response.ok && result.data.ok === true) {
       evaluateQdrantButton.textContent = "Source-grounded retrieval checks completed";
     } else {
       evaluateQdrantButton.textContent = "Run 10 source-grounded Physics retrieval checks";
+    }
+    refreshButton();
+  });
+
+  diagnoseQdrantButton.addEventListener("click", async () => {
+    refreshButton();
+    if (diagnoseQdrantButton.disabled) return;
+    diagnoseQdrantButton.disabled = true;
+    diagnoseQdrantButton.textContent = "Running non-gating diagnostics…";
+    const result = await authenticatedRequest(
+      "/admin/m14/qdrant/diagnostics",
+      "POST",
+      { confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" },
+      "Running two retrieval-only negative diagnostics and repeating the friction query three times. This does not test Gemini answer abstention and sets no pass/fail threshold."
+    );
+    if (result?.response.ok && result.data.ok === true) {
+      diagnoseQdrantButton.textContent = "Non-gating diagnostics completed";
+    } else {
+      diagnoseQdrantButton.textContent = "Run non-gating negative + rank-stability diagnostics";
     }
     refreshButton();
   });
@@ -1150,6 +1172,172 @@ async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvalua
   };
 }
 
+export interface M14QdrantRetrievalDiagnosticsReceipt {
+  projectId: string;
+  sourceId: string;
+  collection: string;
+  embeddingModel: string;
+  dimensions: number;
+  negativeCaseDiagnostics: Array<{
+    id: string;
+    category: string;
+    query: string;
+    expectedNoMatch: true;
+    resultCount: number;
+    topRrfScore: number | null;
+    results: Array<{
+      rank: number;
+      pointId: string;
+      chunkId?: string;
+      pdfPage: number;
+      rrfScore: number;
+      contentTypes: string[];
+      textPreview: string;
+    }>;
+    interpretation: string;
+  }>;
+  frictionRepeatability: {
+    queryId: string;
+    query: string;
+    expectedPages: number[];
+    repeatCount: number;
+    samples: Array<{
+      repeat: number;
+      firstExpectedPageRank: number | null;
+      expectedPageResultCount: number;
+      orderedResults: Array<{
+        rank: number;
+        pointId: string;
+        chunkId?: string;
+        pdfPage: number;
+        rrfScore: number;
+      }>;
+    }>;
+    distinctOrderedSequences: number;
+    distinctTopFiveSets: number;
+    observedFirstExpectedPageRanks: Array<number | null>;
+    rankStableAcrossRepeats: boolean;
+    note: string;
+  };
+  note: string;
+}
+
+/**
+ * Retrieval-only, non-gating diagnostics. The two expected-no-match queries
+ * expose returned evidence for human inspection; they do not declare an
+ * abstention pass/fail. Three repeated friction queries expose result order,
+ * point/chunk identity and RRF scores so tie/order variation can be diagnosed.
+ */
+async function runM14QdrantRetrievalDiagnostics(
+  env: Env,
+): Promise<M14QdrantRetrievalDiagnosticsReceipt> {
+  const pilot = createM14QdrantPilot(env);
+  const negativeCases = BRVIN_M14_PHYSICS_QUERY_SUITE.filter(
+    (item) => item.expectedNoMatch === true,
+  );
+  const negativeCaseDiagnostics: M14QdrantRetrievalDiagnosticsReceipt["negativeCaseDiagnostics"] = [];
+
+  for (const item of negativeCases) {
+    const results = await pilot.query({
+      projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
+      authorizedSourceIds: [PILOT_SOURCE_ID],
+      query: item.query,
+      limit: 5,
+      prefetchLimit: 15,
+    });
+    negativeCaseDiagnostics.push({
+      id: item.id,
+      category: item.category,
+      query: item.query,
+      expectedNoMatch: true,
+      resultCount: results.length,
+      topRrfScore: results[0]?.score ?? null,
+      results: results.map((result, index) => ({
+        rank: index + 1,
+        pointId: result.id,
+        ...(result.metadata.chunkId ? { chunkId: result.metadata.chunkId } : {}),
+        pdfPage: result.pdfPage,
+        rrfScore: result.score,
+        contentTypes: [...result.contentTypes],
+        textPreview: result.text.replace(/\\s+/gu, " ").slice(0, 260),
+      })),
+      interpretation: "Retrieval-only evidence for human review. This result list is not an abstention pass/fail; RRF scores are rank-fusion scores, not calibrated confidence probabilities.",
+    });
+  }
+
+  const frictionCase = BRVIN_M14_PHYSICS_QUERY_SUITE.find(
+    (item) => item.id === "friction-and-net-force",
+  );
+  if (!frictionCase || frictionCase.expectedPdfPages.length === 0) {
+    throw new Error("The reviewed M14 friction stability query is missing its expected-page ground truth.");
+  }
+  const repeatCount = 3;
+  const samples: M14QdrantRetrievalDiagnosticsReceipt["frictionRepeatability"]["samples"] = [];
+
+  for (let repeat = 1; repeat <= repeatCount; repeat += 1) {
+    const results = await pilot.query({
+      projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
+      authorizedSourceIds: [PILOT_SOURCE_ID],
+      query: frictionCase.query,
+      limit: 5,
+      prefetchLimit: 15,
+    });
+    const retrievedPages = results.map((result) => result.pdfPage);
+    const expectedPageRanks = frictionCase.expectedPdfPages.map((page) => {
+      const index = retrievedPages.indexOf(page);
+      return index >= 0 ? index + 1 : null;
+    });
+    const firstExpectedPageRank = expectedPageRanks
+      .filter((rank): rank is number => rank !== null)
+      .reduce<number | null>((best, rank) => best === null ? rank : Math.min(best, rank), null);
+
+    samples.push({
+      repeat,
+      firstExpectedPageRank,
+      expectedPageResultCount: results.filter(
+        (result) => frictionCase.expectedPdfPages.includes(result.pdfPage),
+      ).length,
+      orderedResults: results.map((result, index) => ({
+        rank: index + 1,
+        pointId: result.id,
+        ...(result.metadata.chunkId ? { chunkId: result.metadata.chunkId } : {}),
+        pdfPage: result.pdfPage,
+        rrfScore: result.score,
+      })),
+    });
+  }
+
+  const orderedFingerprints = samples.map((sample) =>
+    sample.orderedResults.map((result) => result.pointId).join("|"),
+  );
+  const setFingerprints = samples.map((sample) =>
+    sample.orderedResults.map((result) => result.pointId).sort().join("|"),
+  );
+  const observedFirstExpectedPageRanks = samples.map((sample) => sample.firstExpectedPageRank);
+
+  return {
+    projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
+    sourceId: PILOT_SOURCE_ID,
+    collection: env.BRVIN_M14_QDRANT_COLLECTION!.trim(),
+    embeddingModel: env.BRVIN_M14_VERTEX_MODEL!.trim(),
+    dimensions: Number(env.BRVIN_M14_EMBEDDING_DIMENSIONS),
+    negativeCaseDiagnostics,
+    frictionRepeatability: {
+      queryId: frictionCase.id,
+      query: frictionCase.query,
+      expectedPages: [...frictionCase.expectedPdfPages],
+      repeatCount,
+      samples,
+      distinctOrderedSequences: new Set(orderedFingerprints).size,
+      distinctTopFiveSets: new Set(setFingerprints).size,
+      observedFirstExpectedPageRanks,
+      rankStableAcrossRepeats: new Set(observedFirstExpectedPageRanks).size <= 1,
+      note: "Three identical query calls against the same staging project/source. Compare point IDs, chunk IDs, RRF scores and page ranks. This is a diagnostic sample, not a ranking acceptance threshold.",
+    },
+    note: "Non-gating retrieval diagnostics only. Negative-case results are displayed for human inspection; no retrieval abstention or answer correctness is asserted. Qdrant RRF scores are not calibrated confidence probabilities. The friction query is repeated three times to expose within-run ordering and candidate variation. The separate BRVIN Teachers consumer-owned Gemini answer/abstention path is not invoked by this action.",
+  };
+}
+
 async function verifyM14CorpusReadback(env: Env): Promise<M14CorpusReadbackSummary> {
   const corpus = await readVerifiedM14CorpusGeneration(env);
   const source = corpus.sourceManifest;
@@ -1241,6 +1429,7 @@ export async function handleM14StagingRequest(
   verifyCorpus: typeof verifyM14CorpusReadback = verifyM14CorpusReadback,
   indexQdrant: typeof indexM14PhysicsCorpusInQdrant = indexM14PhysicsCorpusInQdrant,
   evaluateQdrant: typeof evaluateM14KnownPhysicsQueries = evaluateM14KnownPhysicsQueries,
+  diagnoseQdrant: typeof runM14QdrantRetrievalDiagnostics = runM14QdrantRetrievalDiagnostics,
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
@@ -1285,9 +1474,10 @@ export async function handleM14StagingRequest(
   const isCorpusVerify = url.pathname === "/admin/m14/corpus/verify";
   const isQdrantIndex = url.pathname === "/admin/m14/qdrant/index";
   const isQdrantEvaluate = url.pathname === "/admin/m14/qdrant/evaluate";
+  const isQdrantDiagnostics = url.pathname === "/admin/m14/qdrant/diagnostics";
   const isBackfill = url.pathname === "/admin/m14/backfill";
   if (!isDiagnostics && !isVisionRebuild && !isVisionStatus && !isCorpusVerify &&
-      !isQdrantIndex && !isQdrantEvaluate && !isBackfill) {
+      !isQdrantIndex && !isQdrantEvaluate && !isQdrantDiagnostics && !isBackfill) {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if ((isDiagnostics && request.method !== "GET") ||
@@ -1296,6 +1486,7 @@ export async function handleM14StagingRequest(
       (isCorpusVerify && request.method !== "GET") ||
       (isQdrantIndex && request.method !== "POST") ||
       (isQdrantEvaluate && request.method !== "POST") ||
+      (isQdrantDiagnostics && request.method !== "POST") ||
       (isBackfill && request.method !== "POST")) {
     return json({ ok: false, error: "method_not_allowed" }, 405);
   }
@@ -1346,7 +1537,7 @@ export async function handleM14StagingRequest(
     return json({ ok: false, error: "staging_google_cloud_configuration_incomplete" }, 503);
   }
 
-  if (isQdrantIndex || isQdrantEvaluate) {
+  if (isQdrantIndex || isQdrantEvaluate || isQdrantDiagnostics) {
     let providerPayload: unknown;
     try {
       providerPayload = await request.json();
@@ -1367,8 +1558,12 @@ export async function handleM14StagingRequest(
         const receipt = await indexQdrant(env);
         return json({ ok: true, index: receipt });
       }
-      const receipt = await evaluateQdrant(env);
-      return json({ ok: true, evaluation: receipt });
+      if (isQdrantEvaluate) {
+        const receipt = await evaluateQdrant(env);
+        return json({ ok: true, evaluation: receipt });
+      }
+      const diagnostics = await diagnoseQdrant(env);
+      return json({ ok: true, diagnostics });
     } catch (error) {
       return json({ ok: false, error: safeError(error) }, 502);
     }
