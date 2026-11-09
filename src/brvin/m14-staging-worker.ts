@@ -5,6 +5,7 @@ import {
   BRVIN_M14_PHYSICS_PILOT,
   BRVIN_M14_PHYSICS_QUERY_SUITE,
   summarizeBrvinM14PageCoverage,
+  summarizeBrvinM14Ranking,
 } from "./m14-physics-evaluation";
 import { BrvinQdrantHybridPilot } from "./qdrant-hybrid-pilot";
 import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
@@ -1063,6 +1064,10 @@ export interface M14QdrantEvaluationReceipt {
   coveredExpectedPageCount: number;
   expectedPageCoverageRate: number;
   allExpectedPagesCovered: boolean;
+  returnedResultCount: number;
+  expectedPageResultCount: number;
+  expectedPagePrecisionAt5: number;
+  meanReciprocalExpectedPageRank: number;
   negativeCasesDeferred: string[];
   checks: Array<{
     id: string;
@@ -1072,6 +1077,9 @@ export interface M14QdrantEvaluationReceipt {
     expectedPageCoverage: number[];
     expectedPageRanks: Array<number | null>;
     pageCoveragePassed: boolean;
+    expectedPageResultCount: number;
+    expectedPagePrecisionAt5: number;
+    firstExpectedPageRank: number | null;
     resultCount: number;
     topScore: number | null;
     verification: "prior-source-evidence" | "ocr-ground-truth-verified";
@@ -1103,6 +1111,12 @@ async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvalua
       const index = retrievedPages.indexOf(page);
       return index >= 0 ? index + 1 : null;
     });
+    const expectedPageResultCount = results.filter(
+      (result) => item.expectedPdfPages.includes(result.pdfPage),
+    ).length;
+    const firstExpectedPageRank = expectedPageRanks
+      .filter((rank): rank is number => rank !== null)
+      .reduce<number | null>((best, rank) => best === null ? rank : Math.min(best, rank), null);
     checks.push({
       id: item.id,
       category: item.category,
@@ -1111,12 +1125,16 @@ async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvalua
       expectedPageCoverage,
       expectedPageRanks,
       pageCoveragePassed: expectedPageCoverage.length === item.expectedPdfPages.length,
+      expectedPageResultCount,
+      expectedPagePrecisionAt5: results.length > 0 ? expectedPageResultCount / results.length : 0,
+      firstExpectedPageRank,
       resultCount: results.length,
       topScore: results[0]?.score ?? null,
       verification: item.verification as "prior-source-evidence" | "ocr-ground-truth-verified",
     });
   }
   const pageCoverage = summarizeBrvinM14PageCoverage(checks);
+  const ranking = summarizeBrvinM14Ranking(checks);
   return {
     projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
     sourceId: PILOT_SOURCE_ID,
@@ -1125,9 +1143,10 @@ async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvalua
     dimensions: Number(env.BRVIN_M14_EMBEDDING_DIMENSIONS),
     queryCount: checks.length,
     ...pageCoverage,
+    ...ranking,
     negativeCasesDeferred,
     checks,
-    note: "Ten positive source-grounded Physics queries run through Vertex embeddings and Qdrant dense+sparse RRF. allExpectedPagesCovered and expectedPageCoverageRate measure only expected physical-page recall in the top five; they are not precision, ranking-quality or answer-correctness gates. Two OCR-reviewed negative/no-answer cases are listed in negativeCasesDeferred and are not run until case-sensitive rejection and abstention thresholds are defined.",
+    note: "Ten positive source-grounded Physics queries run through Vertex embeddings and Qdrant dense+sparse RRF. expectedPageCoverageRate measures expected-page recall in the top five. expectedPagePrecisionAt5 is a strict physical-page-label precision proxy over returned chunks: a result on a non-expected page is not automatically irrelevant, and chunk-level human relevance judgments are required before this becomes a formal precision gate. meanReciprocalExpectedPageRank measures the rank of the first expected page per query; none of these metrics alone proves formula fidelity or answer correctness. Two OCR-reviewed negative/no-answer cases remain deferred until case-sensitive rejection and abstention thresholds are defined.",
   };
 }
 
