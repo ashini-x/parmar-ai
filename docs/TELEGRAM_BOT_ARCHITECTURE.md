@@ -336,3 +336,37 @@ Keep the generic Telegram runtime separate from the new bot's prompts, domain po
 | Production bindings | `wrangler.jsonc` | both Worker dry-run validations |
 
 The architecture is considered locked when code, tests, Worker bindings and this document agree. Any future architecture change must update this source of truth and its tests in the same change.
+
+## 15. Telegram API 429 backoff and regression guard
+
+The normal Telegram API adapter in `src/telegram/api.ts` distinguishes a per-request timeout from Telegram's rate-limit instruction. **Do not reintroduce a five-second cap on `retry_after`.** The `TELEGRAM_REQUEST_TIMEOUT_MS = 5_000` constant is the timeout for one HTTP attempt; it is not the maximum retry delay.
+
+### Locked retry behavior
+
+- Normal API calls allow at most **4 attempts** (`TELEGRAM_MAX_ATTEMPTS`). Each attempt uses the normal **5-second request timeout**, unless a caller explicitly overrides it.
+- Telegram responses with retryable HTTP statuses (408, 429 or 5xx) are retried while attempts remain.
+- When Telegram supplies `parameters.retry_after`, treat that value as authoritative seconds. Convert it to milliseconds with `Math.ceil(seconds * 1_000)`; do not clamp it to five seconds or another short local maximum.
+- A positive delay retains a **250 ms minimum**. Missing, non-finite or non-positive values use the **1-second fallback**. Thus fractional values are rounded up (subject to the 250 ms minimum), and malformed values do not cause a zero/negative sleep.
+- Transient network/timeout failures without a Telegram retry instruction use the existing exponential backoff of 300 ms, 600 ms, 1,200 ms, etc. The retry remains within the same API call and its bounded attempt budget.
+- Cosmetic progress edits remain deliberately separate: one attempt with a 1-second timeout. They must not inherit the normal multi-attempt final-delivery policy or block answer generation.
+
+The helper `getTelegramRetryDelayMs` is exported so the conversion/fallback policy can be unit-tested independently. Keep it in the shared API adapter so message, edit, quiz and other normal Telegram API calls use the same retry policy.
+
+### Regression guard
+
+`test/telegram-api.test.ts` covers:
+
+1. Telegram delays beyond five seconds, including 10, 30 and 120 seconds.
+2. Fractional delays, rounding upward and the 250 ms minimum.
+3. Missing, `NaN`, infinite, zero and negative values using the one-second fallback.
+
+Do not reduce the long-delay cases to a five-second maximum. A future change to retry policy must update these tests and this document together.
+
+### Verification recorded
+
+- Implementation and tests: commit [`c986d01`](https://github.com/ashini-x/parmar-ai/commit/c986d01f3ff1d481f1ee1c88ef01ffa16efc9f4f).
+- GitHub Actions [Release validation run](https://github.com/ashini-x/parmar-ai/actions/runs/42532902093): successful. The run passed `npm run check`, `npm test` (**53 files / 306 tests**, including the 3 Telegram retry tests), `npm run test:node` (**8 files / 54 tests**), both Worker dry-run validations, and the production deploy/smoke-test and release-acceptance steps.
+- The retry fix is on `main` and was included in the successful production deployment associated with that run.
+
+This rate-limit rule is part of the reusable baseline: preserve Telegram's requested wait, keep attempt counts bounded, and keep cosmetic progress retries isolated from final message delivery.
+
