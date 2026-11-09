@@ -1259,7 +1259,7 @@ async function runM14QdrantRetrievalDiagnostics(
         pdfPage: result.pdfPage,
         rrfScore: result.score,
         contentTypes: [...result.contentTypes],
-        textPreview: result.text.replace(/\\s+/gu, " ").slice(0, 260),
+        textPreview: result.text.replace(/\s+/gu, " ").slice(0, 260),
       })),
       interpretation: "Retrieval-only evidence for human review. This result list is not an abstention pass/fail; RRF scores are rank-fusion scores, not calibrated confidence probabilities.",
     });
