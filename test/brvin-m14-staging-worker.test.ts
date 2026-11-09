@@ -3,6 +3,7 @@ import type { Env } from "../src/config/env";
 import {
   BRVIN_M14_PHYSICS_QUERY_SUITE,
   summarizeBrvinM14PageCoverage,
+  summarizeBrvinM14Ranking,
 } from "../src/brvin/m14-physics-evaluation";
 import {
   handleM14StagingRequest,
@@ -241,11 +242,15 @@ describe("BRVIN M14 isolated staging operator", () => {
       expectedPageCoverage: [...item.expectedPdfPages],
       expectedPageRanks: item.expectedPdfPages.map(() => 1),
       pageCoveragePassed: true,
+      expectedPageResultCount: item.expectedPdfPages.length,
+      expectedPagePrecisionAt5: 1,
+      firstExpectedPageRank: 1,
       resultCount: item.expectedPdfPages.length,
       topScore: 0.9,
       verification: item.verification,
     }));
     const pageCoverage = summarizeBrvinM14PageCoverage(checks);
+    const ranking = summarizeBrvinM14Ranking(checks);
     const evaluation = {
       projectId: "448249b4-fed9-45f5-9137-6014f242ddbe",
       sourceId: SOURCE_ID,
@@ -254,6 +259,7 @@ describe("BRVIN M14 isolated staging operator", () => {
       dimensions: 768,
       queryCount: checks.length,
       ...pageCoverage,
+      ...ranking,
       negativeCasesDeferred: BRVIN_M14_PHYSICS_QUERY_SUITE
         .filter((item) => item.expectedNoMatch === true)
         .map((item) => item.id),
@@ -303,6 +309,10 @@ describe("BRVIN M14 isolated staging operator", () => {
         coveredExpectedPageCount: 11,
         expectedPageCoverageRate: 1,
         allExpectedPagesCovered: true,
+        returnedResultCount: 11,
+        expectedPageResultCount: 11,
+        expectedPagePrecisionAt5: 1,
+        meanReciprocalExpectedPageRank: 1,
         negativeCasesDeferred: [
           "lowercase-force-symbol-hard-negative",
           "out-of-corpus-constant",
