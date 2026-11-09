@@ -174,7 +174,7 @@ function m14AdminPage(): Response {
     <button id="verifyCorpus" class="secondary" type="button" disabled>Verify stored M14 manifests (read only)</button>
     <div class="notice">
       <strong>Vertex AI + Qdrant pilot</strong>
-      <p class="small">After configuring the isolated staging Vertex/Qdrant settings, index the seven verified chunks once. The retrieval evaluation runs ten positive Physics queries whose expected pages were checked against the immutable source PDF. Two reviewed negative/no-answer cases remain deferred until an explicit abstention policy is defined.</p>
+      <p class="small">After configuring the isolated staging Vertex/Qdrant settings, index the seven verified chunks once. The positive evaluation runs ten source-grounded Physics queries. The separate non-gating diagnostics show top-five evidence for two reviewed no-match queries and repeat the friction query three times with point/chunk IDs and RRF scores. They do not test consumer answer abstention or set a pass/fail threshold.</p>
     </div>
     <button id="indexQdrant" type="button" disabled>Embed and index the 7 Physics chunks in Qdrant</button>
     <button id="evaluateQdrant" class="secondary" type="button" disabled>Run 10 source-grounded Physics retrieval checks</button>
