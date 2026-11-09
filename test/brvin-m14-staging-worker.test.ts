@@ -334,6 +334,19 @@ describe("BRVIN M14 isolated staging operator", () => {
       collection: "brvin_m14_physics_pilot_v1",
       embeddingModel: "gemini-embedding-001",
       dimensions: 768,
+      candidateEvidence: [{
+        pointId: "point-a",
+        chunkId: "chunk-a",
+        pdfPage: 2,
+        contentTypes: ["formula"],
+        fullText: "Fnet = m × a\nThe net force determines acceleration.",
+        retrievedBy: [{
+          queryId: "lowercase-force-symbol-hard-negative",
+          queryType: "negative",
+          rank: 1,
+          rrfScore: 0.5,
+        }],
+      }],
       negativeCaseDiagnostics: [
         {
           id: "lowercase-force-symbol-hard-negative",
@@ -429,6 +442,20 @@ describe("BRVIN M14 isolated staging operator", () => {
     await expect(allowed.json()).resolves.toMatchObject({
       ok: true,
       diagnostics: {
+        candidateEvidence: expect.arrayContaining([
+          expect.objectContaining({
+            pointId: "point-a",
+            chunkId: "chunk-a",
+            fullText: "Fnet = m × a\nThe net force determines acceleration.",
+            retrievedBy: expect.arrayContaining([
+              expect.objectContaining({
+                queryId: "lowercase-force-symbol-hard-negative",
+                queryType: "negative",
+                rank: 1,
+              }),
+            ]),
+          }),
+        ]),
         negativeCaseDiagnostics: expect.arrayContaining([
           expect.objectContaining({ id: "lowercase-force-symbol-hard-negative", expectedNoMatch: true }),
           expect.objectContaining({ id: "out-of-corpus-constant", expectedNoMatch: true }),
