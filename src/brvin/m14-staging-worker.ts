@@ -1255,9 +1255,9 @@ async function runM14QdrantRetrievalDiagnostics(
       results: results.map((result, index) => ({
         rank: index + 1,
         pointId: result.id,
-        ...(result.metadata.chunkId ? { chunkId: result.metadata.chunkId } : {}),
+        ...(typeof result.metadata?.chunkId === "string" ? { chunkId: result.metadata.chunkId } : {}),
         pdfPage: result.pdfPage,
-        rrfScore: result.score,
+        rrfScore: result.score ?? 0,
         contentTypes: [...result.contentTypes],
         textPreview: result.text.replace(/\s+/gu, " ").slice(0, 260),
       })),
@@ -1300,9 +1300,9 @@ async function runM14QdrantRetrievalDiagnostics(
       orderedResults: results.map((result, index) => ({
         rank: index + 1,
         pointId: result.id,
-        ...(result.metadata.chunkId ? { chunkId: result.metadata.chunkId } : {}),
+        ...(typeof result.metadata?.chunkId === "string" ? { chunkId: result.metadata.chunkId } : {}),
         pdfPage: result.pdfPage,
-        rrfScore: result.score,
+        rrfScore: result.score ?? 0,
       })),
     });
   }
