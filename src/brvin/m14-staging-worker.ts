@@ -1252,15 +1252,20 @@ async function runM14QdrantRetrievalDiagnostics(
       expectedNoMatch: true,
       resultCount: results.length,
       topRrfScore: results[0]?.score ?? null,
-      results: results.map((result, index) => ({
-        rank: index + 1,
-        pointId: result.id,
-        ...(typeof result.metadata?.chunkId === "string" ? { chunkId: result.metadata.chunkId } : {}),
-        pdfPage: result.pdfPage,
-        rrfScore: result.score ?? 0,
-        contentTypes: [...result.contentTypes],
-        textPreview: result.text.replace(/\s+/gu, " ").slice(0, 260),
-      })),
+      results: results.map((result, index) => {
+        const chunkId = typeof result.metadata?.chunkId === "string"
+          ? result.metadata.chunkId
+          : undefined;
+        return {
+          rank: index + 1,
+          pointId: result.id,
+          ...(chunkId ? { chunkId } : {}),
+          pdfPage: result.pdfPage,
+          rrfScore: result.score ?? 0,
+          contentTypes: [...result.contentTypes],
+          textPreview: result.text.replace(/\s+/gu, " ").slice(0, 260),
+        };
+      }),
       interpretation: "Retrieval-only evidence for human review. This result list is not an abstention pass/fail; RRF scores are rank-fusion scores, not calibrated confidence probabilities.",
     });
   }
@@ -1297,13 +1302,18 @@ async function runM14QdrantRetrievalDiagnostics(
       expectedPageResultCount: results.filter(
         (result) => frictionCase.expectedPdfPages.includes(result.pdfPage),
       ).length,
-      orderedResults: results.map((result, index) => ({
-        rank: index + 1,
-        pointId: result.id,
-        ...(typeof result.metadata?.chunkId === "string" ? { chunkId: result.metadata.chunkId } : {}),
-        pdfPage: result.pdfPage,
-        rrfScore: result.score ?? 0,
-      })),
+      orderedResults: results.map((result, index) => {
+        const chunkId = typeof result.metadata?.chunkId === "string"
+          ? result.metadata.chunkId
+          : undefined;
+        return {
+          rank: index + 1,
+          pointId: result.id,
+          ...(chunkId ? { chunkId } : {}),
+          pdfPage: result.pdfPage,
+          rrfScore: result.score ?? 0,
+        };
+      }),
     });
   }
 
