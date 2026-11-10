@@ -221,3 +221,41 @@ Cloudflare read-back confirms staging `ENVIRONMENT=staging`, the AI Search insta
 **Execution receipt still pending:** the public staging endpoint could not be invoked by the current tool session (the external request path is denied), and the staging admin token is intentionally not read or copied into chat. Run the new button from the operator page after entering the token locally, then review the 12-query JSON receipt. Do not re-index, re-upload or rerun OCR. The button call is read-only; no AI Search or Qdrant data is mutated.
 
 This is the first M15 execution surface, not M15 acceptance. Passage-level human qrels, broader corpus, grant/no-grant and revoke-with-vectors-retained tests, throttling/recovery, HNSW-aware load, Worker p50/p95/p99 and cost accounting remain open.
+
+## M15 first paired shadow receipt — 11 November 2026
+
+The operator returned `ok=true` for all 12 cases from the pinned 3-page Physics source (10 positive, 2 expected-no-match), with 12/12 successful queries and zero provider failures. Both providers reported zero source/page provenance violations. The receipt's side-effect counters were all zero: no AI Search item uploads/deletes, no Qdrant point upserts/deletes, no source/OCR changes, no provider-selector changes and no consumer-answer changes.
+
+### Page-level results (not passage-qrels scores)
+
+| Metric | Cloudflare AI Search | Vertex + Qdrant |
+|---|---:|---:|
+| Expected page targets covered | 8/11 (72.7%) | 11/11 (100%) |
+| Mean reciprocal first expected-page rank | 0.6833 | 0.8833 |
+| Returned candidates across 12 queries | 14 | 60 |
+| Expected-page-labelled candidates | 11 | 20 |
+| Old returned-candidate page-label ratio | 11/14 (78.6%) | 20/60 (33.3%) |
+| No-match queries with any candidate | 0/2 | 2/2 |
+| False-positive candidates across no-match queries | 0 | 10 |
+| Observed Worker-side p50 | 965 ms | 656 ms |
+| Observed Worker-side p95 / p99 | 4,487 / 4,487 ms | 1,316 / 1,316 ms |
+
+The original receipt's `pageLabelPrecisionAt5` field used expected-page-labelled candidates divided by *actual candidates returned*. Since AI Search returned 14 total candidates while Qdrant returned 60, this was not a fixed-denominator P@5 comparison. The original values are preserved above as **returned-candidate page-label ratios** for historical traceability.
+
+The corrected scorecard is merged in Core PR #211 and deployed in staging Worker v80. It now reports fixed-cutoff metrics on every future run. Recomputing this receipt with the fixed denominators gives:
+- **All-suite page-label P@5:** AI Search 11/60 = 18.3%; Qdrant 20/60 = 33.3%.
+- **Positive-only page-label P@5:** AI Search 11/50 = 22.0%; Qdrant 20/50 = 40.0%.
+- **No-match false-positive query rate:** AI Search 0/2 = 0%; Qdrant 2/2 = 100%.
+
+These are physical-page label proxies, not independently judged passage relevance. Qdrant retrieved the expected page targets more reliably and earlier, including the uppercase-symbol target (page 2 at rank 2), numerical setup (page 3 at rank 1), friction worked example (page 3 at rank 1), and both expected bus-braking pages (page 3 rank 1, page 1 rank 3). AI Search returned no candidates for uppercase-symbol and numerical-setup positives, and only the page-3 portion of the bus-braking target. Both providers found the expected page 2 for the formula/concept and mixed theory+formula questions, but the receipt does not establish exact passage-level formula correctness.
+
+The most important counter-signal is Qdrant's no-match behavior: it returned five candidates for each negative query, whereas AI Search returned zero. The reported Qdrant scores (0.425 and 0.5) are RRF fusion scores, **not calibrated confidence probabilities**; do not invent a cutoff from these two examples. This is retrieval-only evidence and does not test Gemini answer abstention.
+
+The 12 sequential timing samples are staging observations, not production SLOs, load tests, p99 capacity evidence or cost measurements. Qdrant's observed p50/p95 are lower in this small sample, but broader controlled tests remain required. AI Search has 11 auto-chunks (3/4/4 per source page); Qdrant has 7 custom chunks. No nDCG/MRR cross-provider passage comparison is valid until independent passage qrels or normalized source-span mapping exists.
+
+### Current deployment and next M15 actions
+
+The scorecard correction is Core PR #211 (merge `44986b2504ece84ca66bbf2a3ad55c118cac4085`) and staging Worker **v80** (version `da7d1874-e762-496b-8eca-17d72f358883`, deployment `d66de3af-53f1-4070-8200-e78ee8ec81e7`) at 100%. Focused staging workflow #88 and full Release validation #1089 passed. The production-scope classifier returned `deploy=false`; production deploy/verification jobs were skipped. Production `parmar-ai` remains v710 and `brvin-service` remains v134; both remain at 100% on `cloudflare-ai-search`.
+
+Next: obtain independent human passage relevance judgments for both chunk schemes (or normalize source spans), expand the corpus beyond this single 3-page source, then run wrong-project/no-grant isolation and revoke-with-vectors-retained checks. Follow with retry/recovery, HNSW-aware controlled load, Worker p50/p95/p99 under representative concurrency, and embedding/index/storage/query cost. Do not change the production provider selector or claim M15 acceptance from this receipt.
+
