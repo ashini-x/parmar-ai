@@ -21,8 +21,8 @@ interface BrvinM14FusionWeights {
 
 function resolveM14FusionWeights(query: string): BrvinM14FusionWeights {
   const symbolic = /[=×÷^≠≈≤≥<>]/u.test(query) ||
-    /\\\\(?:frac|times|cdot|sqrt|mathrm|text)\\b/u.test(query) ||
-    /\\b[A-Za-z_][A-Za-z0-9_]*\\s*(?:\\*|\\/)\\s*[A-Za-z0-9(]/u.test(query);
+    /\\(?:frac|times|cdot|sqrt|mathrm|text)\b/u.test(query) ||
+    /\b[A-Za-z_][A-Za-z0-9_]*\s*(?:\*|\/)\s*[A-Za-z0-9(]/u.test(query);
   const weights = symbolic ? SYMBOLIC_RRF_WEIGHTS : SEMANTIC_RRF_WEIGHTS;
   return {
     intent: symbolic ? "symbolic" : "semantic",
