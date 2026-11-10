@@ -1,0 +1,87 @@
+# BRVIN M15 second-source Physics benchmark
+
+**State — 11 November 2026:** the isolated multi-source operator is deployed to staging Worker v82. The eight-page source has **not** yet been uploaded; no OCR, Qdrant indexing, AI Search indexing or 17-query receipt has been run. Production remains selected on Cloudflare AI Search. Teachers has no runtime change.
+
+## Purpose and isolation
+
+The first paired M15 receipt used one fixed three-page Physics pilot. The second benchmark uses a newly created eight-page synthetic Physics source to broaden the evidence and exercise out-of-corpus rejection and exact-symbol near-miss cases.
+
+The source is registered in the dedicated M15 staging registry/table and stored in the private M14 staging GCS bucket. The OCR output and immutable derived corpus are source-scoped. The same verified page text is indexed separately into:
+- Cloudflare AI Search instance: `brvin-m15-physics-staging-v1`
+- Qdrant collection: `brvin_m15_physics_benchmark_v1`
+- Vertex embedding model: `gemini-embedding-001`, 768 dimensions, `asia-south1`
+
+The existing `BRVIN_M15_AI_SEARCH` binding remains the query-only AI Search baseline to the existing instance `fatman-2026-8b183803`. The new AI Search binding has upload capability only within the staging Worker. The original three-page M14 source and `brvin_m14_physics_pilot_v1` collection remain separate.
+
+No production D1, Worker, AI Search index, Qdrant collection, provider selector, consumer answer path or Teachers binding is used by the new source pipeline.
+
+## Approved source file
+
+Use exactly:
+- Filename: `BRVIN_M15_Physics_Benchmark_Source_v1.pdf`
+- Size: `62,012` bytes
+- Page count: 8
+- SHA-256: `cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92`
+
+The separate `BRVIN_M15_Physics_Benchmark_Test_Card_v1.pdf` is for evaluation only. **Never upload the test card** into either provider.
+
+| Physical PDF page | Main topic |
+|---:|---|
+| 1 | Net force and Newton's second law; east/west worked example |
+| 2 | Newton's second-law numerical rearrangements |
+| 3 | Mass and weight |
+| 4 | Static and kinetic friction |
+| 5 | Components of weight on an inclined plane |
+| 6 | Work and kinetic energy |
+| 7 | Momentum and impulse |
+| 8 | Spring restoring force and elastic potential energy |
+
+The query suite's expected physical pages are source-grounded page labels. They are not independent passage-level human qrels.
+
+## Operator URL
+
+Open the dedicated M15 staging operator:
+
+https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark
+
+Health status is shown on the page. A ready page should report the separate AI Search binding, dedicated Qdrant collection, staging database, GCP/Vertex and admin-token bindings as configured.
+
+The old operator at `/admin/m14` remains the fixed three-page pilot operator. Do not use its fixed-source OCR, backfill or Qdrant buttons for this new source.
+
+## Beginner upload and evaluation runbook
+
+The operator is intentionally one-use-token-per-action. After each request, it clears the password field. Re-enter the same `BRVIN_M14_ADMIN_TOKEN` before the next action; the token is not saved to browser storage.
+
+1. Open the URL above. Confirm that the banner identifies the isolated Core staging environment and the status says the M15 staging resources are ready.
+2. Paste the `BRVIN_M14_ADMIN_TOKEN` into **Staging operator token**.
+3. Under **Approved source PDF**, choose exactly `BRVIN_M15_Physics_Benchmark_Source_v1.pdf`. Do not choose the Test Card.
+4. Click **1 · Upload and register benchmark source**. The Worker validates the exact filename, byte length, PDF signature and SHA-256 before writing to private staging storage. A source UUID and project UUID are generated server-side. The response should show `status: uploaded`. Copy/save the source ID from the response if desired; the page also retains it in session storage for this browser tab.
+5. Re-enter the admin token. Tick the Vision OCR cost acknowledgement, then click **2 · Start OCR once (billable)**. This submits one Google Cloud Vision PDF OCR request. Do not click it again. The one-time D1 lock prevents an ambiguous or duplicate submission.
+6. Re-enter the token and click **3 · Check OCR operation and eight-page output inventory (read only)**. Repeat this status check as needed until the operation is completed and the exact eight OCR output files (one for each physical page) are confirmed. The status check does not submit another OCR job.
+7. Re-enter the token and click **4 · Build and verify immutable page manifests**. The response must report the approved SHA-256, 8/8 physical pages, a generation ID, a chunk count and `verified: true`. Every page's OCR and deterministic chunk hashes are checked during read-back.
+8. Re-enter the token and click **5 · Embed and index into isolated Qdrant collection**. The Worker verifies the source generation, prepares the dedicated collection and its project/source payload indexes, and embeds/upserts its deterministic chunks. The receipt must confirm the same source ID, eight pages, and matching point/chunk counts.
+9. Re-enter the token and click **6 · Index eight OCR pages into isolated AI Search**. The Worker uploads the same eight verified OCR page texts to the separate M15 AI Search instance; it does not write to the existing production AI Search instance. The response must confirm eight completed items.
+10. Re-enter the token and click **7 · Run 17-query paired benchmark (read only)**. Save the complete JSON response. Attach that JSON receipt and the separate Test Card PDF in the chat for analysis. Do not upload the Test Card to BRVIN.
+
+If a request fails, read the returned `error`/stage detail first. For a read-only status recheck, re-enter the token. Qdrant indexing is deterministic and can be retried after verifying the source state. AI Search can resume from `ai_search_indexing`; it reuses the same source/page keys. Do not retry OCR if the state is `submission_uncertain` or an operation ID is already recorded.
+
+## The 17 query cases
+
+- 12 positive cases: Newton's law concepts and numericals, mass/weight, friction, inclined plane, work/energy, momentum/impulse, and spring force.
+- 4 out-of-corpus cases: capacitor, Ohm's-law circuit, Lorentz force, and ideal gas law.
+- 1 exact-symbol near-miss: asks for `F_s = +k × x`, while the source's restoring-force expression is `F_s = −k × x`.
+
+Candidate presence on an out-of-corpus query or the near-miss is **not automatically a false positive**. Review the returned passage text against the source and grade relevance. The benchmark deliberately keeps page-label coverage separate from passage relevance. Its page-label P@5 values are page-level proxies, not independent human passage judgments.
+
+The paired runner sends searches to both staging indexes. It does not write/delete index points/items, change the provider selector or invoke Gemini answer generation. It does not prove answer abstention. Qdrant RRF scores are ranking values, not calibrated probabilities; do not set a rejection threshold from this receipt alone.
+
+## Deployment checkpoint
+
+- Core PR #213: multi-source staging pipeline, operator route, separate AI Search binding, Qdrant collection setting, 17-query read-only runner.
+- Core PR #214: added the second-source module, test and staging config verifier to the explicit production-scope allowlist after the first merge unnecessarily triggered a production redeploy.
+- Core PR #215: made source-stage progress monotonic, allowed resumption of partial AI Search indexing, and removed automatic follow-up requests after the one-use token is cleared.
+- M14 staging Worker v82: `5784e06d-33a8-4feb-b75b-09c9a5565d47`, deployment `184ad701-884e-4a96-b101-2c8ccab7de74`, 100% traffic.
+
+Latest Cloudflare read-back confirms production `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search` and `BRVIN_CORPUS_MANIFEST_ENABLED=false`. Production currently reads `parmar-ai` v714 and `brvin-service` v135 at 100%; the release acceptance passed. The first merge did trigger the normal release workflow because the staging-only allowlist was incomplete. PR #214 corrected that classifier; subsequent staging-only merges now skip the production deploy path.
+
+**M15 is not complete.** The next gates remain passage-level human relevance judgments, review of all 17-case evidence, authorization isolation/revocation, retry/recovery, controlled latency/cost and representative load. Do not cut over production based only on this second-source page benchmark.
