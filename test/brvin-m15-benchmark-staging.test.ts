@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   M15_BENCHMARK_QUERY_SUITE,
+  shouldPersistM15VisionStatus,
   summarizeM15BenchmarkProvider,
   validateM15BenchmarkPdf,
 } from "../src/brvin/m15-benchmark-staging";
@@ -17,6 +18,17 @@ function providerResult(pages: Array<number | null>, ok = true) {
 }
 
 describe("M15 second-source benchmark definition", () => {
+  it("updates Vision-derived status only while a source is in the OCR stage", () => {
+    expect(shouldPersistM15VisionStatus("ocr_running")).toBe(true);
+    expect(shouldPersistM15VisionStatus("ocr_completed")).toBe(true);
+    expect(shouldPersistM15VisionStatus("ocr_failed")).toBe(true);
+    expect(shouldPersistM15VisionStatus("ocr_output_incomplete")).toBe(true);
+    expect(shouldPersistM15VisionStatus("corpus_ready")).toBe(false);
+    expect(shouldPersistM15VisionStatus("qdrant_ready")).toBe(false);
+    expect(shouldPersistM15VisionStatus("ai_search_indexing")).toBe(false);
+    expect(shouldPersistM15VisionStatus("ready")).toBe(false);
+  });
+
   it("contains twelve positive queries, four out-of-corpus negatives and one exact-symbol near miss", () => {
     expect(M15_BENCHMARK_QUERY_SUITE).toHaveLength(17);
     expect(M15_BENCHMARK_QUERY_SUITE.filter((item) => item.category === "positive")).toHaveLength(12);
