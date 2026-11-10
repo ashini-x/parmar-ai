@@ -57,6 +57,14 @@ interface M15VisionObject {
   generation?: string;
 }
 
+/** Prevent read-only Vision status checks from moving a completed corpus or index stage backwards. */
+export function shouldPersistM15VisionStatus(currentStatus: string): boolean {
+  return currentStatus === "ocr_running" ||
+    currentStatus === "ocr_completed" ||
+    currentStatus === "ocr_failed" ||
+    currentStatus === "ocr_output_incomplete";
+}
+
 interface M15Candidate {
   rank: number;
   page: number | null;
@@ -557,9 +565,10 @@ async function inspectVision(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourc
     operation.outputDestinations?.some((uri) => uri.replace(/\/+$/u, "") === expectedUri.replace(/\/+$/u, "")) &&
     validateVisionInventory(inventory.objects, prefix, inventory.truncated);
   const status = operation.error ? "ocr_failed" : complete ? "ocr_completed" : operation.done ? "ocr_output_incomplete" : "ocr_running";
-  if (env.DB) {
+  if (env.DB && shouldPersistM15VisionStatus(row.status)) {
     await env.DB.prepare(
-      "UPDATE m15_benchmark_sources SET status = ?, page_count = ?, error_message = ?, updated_at = ? WHERE source_id = ? AND vision_operation = ?",
+      "UPDATE m15_benchmark_sources SET status = ?, page_count = ?, error_message = ?, updated_at = ? " +
+      "WHERE source_id = ? AND vision_operation = ? AND status IN ('ocr_running','ocr_completed','ocr_failed','ocr_output_incomplete')",
     ).bind(
       status,
       complete ? SOURCE_PAGE_COUNT : 0,
@@ -682,7 +691,8 @@ async function indexAiSearch(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourc
   if (!env.DB) throw new Error("The isolated staging D1 database is not configured.");
   const search = env.BRVIN_M15_BENCHMARK_AI_SEARCH;
   if (!search) throw new Error("The isolated M15 benchmark AI Search binding is not configured.");
-  if (row.status !== "corpus_ready" && row.status !== "qdrant_ready" && row.status !== "ai_search_ready" && row.status !== "ready") {
+  if (row.status !== "corpus_ready" && row.status !== "qdrant_ready" && row.status !== "ai_search_ready" &&
+      row.status !== "ai_search_indexing" && row.status !== "ready") {
     throw new Error("Build and verify the eight-page corpus before AI Search indexing.");
   }
   const corpus = await getVerifiedCorpus(env, row);
@@ -1043,7 +1053,7 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
     buttons.status.disabled = !authReady || !hasSource;
     buttons.corpus.disabled = !authReady || !hasSource || sourceStatus !== "ocr_completed";
     buttons.qdrant.disabled = !authReady || !hasSource || !["corpus_ready","qdrant_ready","ai_search_ready","ready"].includes(sourceStatus);
-    buttons.aisearch.disabled = !authReady || !hasSource || !["corpus_ready","qdrant_ready","ai_search_ready","ready"].includes(sourceStatus);
+    buttons.aisearch.disabled = !authReady || !hasSource || !["corpus_ready","qdrant_ready","ai_search_ready","ai_search_indexing","ready"].includes(sourceStatus);
     buttons.benchmark.disabled = !authReady || !hasSource || sourceStatus !== "ready";
   }
   file.addEventListener("change",refresh);token.addEventListener("input",refresh);ocrConfirm.addEventListener("change",refresh);
@@ -1077,20 +1087,17 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
   });
   buttons.ocr.addEventListener("click",async()=>{
     await call("/admin/m15/benchmark/source/ocr","POST",{sourceId:sourceId.value},"Checking the immutable source PDF and submitting one Vision OCR operation into the private staging bucket. Do not click again.");
-    ocrConfirm.checked=false;await refreshStatus();
+    ocrConfirm.checked=false;
   });
   buttons.status.addEventListener("click",refreshStatus);
   buttons.corpus.addEventListener("click",async()=>{
     await call("/admin/m15/benchmark/source/corpus","POST",{sourceId:sourceId.value},"Validating all eight Vision JSON files, persisting immutable page manifests/chunks, and reading them back for hash and page-provenance verification.");
-    await refreshStatus();
   });
   buttons.qdrant.addEventListener("click",async()=>{
     await call("/admin/m15/benchmark/source/qdrant","POST",{sourceId:sourceId.value},"Creating/verifying the dedicated Qdrant collection and indexing deterministic Vertex-embedded chunks. This is a staging index write.");
-    await refreshStatus();
   });
   buttons.aisearch.addEventListener("click",async()=>{
     await call("/admin/m15/benchmark/source/ai-search","POST",{sourceId:sourceId.value},"Uploading the eight stored OCR page texts to the separate M15 AI Search staging instance. This does not use the production AI Search instance.");
-    await refreshStatus();
   });
   buttons.benchmark.addEventListener("click",async()=>{
     await call("/admin/m15/benchmark/run","POST",{sourceId:sourceId.value},"Running the 17 fixed query cases against both staging indexes. This action performs query/search only and does not modify either index.");
