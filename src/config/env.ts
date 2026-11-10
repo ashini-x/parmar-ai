@@ -41,6 +41,7 @@ export interface AiSearchInstance {
         max_num_results?: number;
         match_threshold?: number;
         retrieval_type?: "vector" | "keyword" | "hybrid";
+        keyword_match_mode?: "and" | "or";
         filters?: {
           folder?: string | { $in?: string[]; $gte?: string; $lt?: string };
         };
@@ -269,6 +270,8 @@ export interface Env {
   FATMAN_SEARCH?: AiSearchNamespace;
 
   BRVIN_SEARCH?: AiSearchNamespace;
+  /** Direct search-only binding used by the isolated M15 shadow benchmark. */
+  BRVIN_M15_AI_SEARCH?: Pick<AiSearchInstance, "search">;
   BRVIN_SEARCH_INSTANCE?: string;
   /** Server-side provider selector; M13 supports only cloudflare-ai-search. */
   BRVIN_RETRIEVAL_PROVIDER?: string;
