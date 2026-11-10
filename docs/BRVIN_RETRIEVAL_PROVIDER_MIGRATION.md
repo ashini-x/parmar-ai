@@ -1,7 +1,7 @@
 # BRVIN Retrieval Provider Modernization — Approved Architecture and Migration Plan
 
 **Decision date:** 8 November 2026
-**Status reviewed:** 10 November 2026 — Core PRs #194 and #196 are merged; M14 staging Worker version 74 applies intent-weighted RRF and recognizes worded formula/symbol intent. Assistant-adjudicated source-grounded chunk qrels v0.1 are recorded in `docs/BRVIN_M14_CHUNK_QRELS.md`. Fresh authenticated staging diagnostics and two-call latency/cost benchmarking remain pending; Teachers still lacks a deployed answer-generation path  
+**Status reviewed:** 10 November 2026 — Core PRs #194 and #196 are merged; M14 staging Worker version 74 applies intent-weighted RRF and recognizes worded formula/symbol intent. The authenticated v74 negative/repeatability receipt now confirms stable top-five ordering and ideal qrels ranking for the repeated friction case, while both no-match prompts still return grade-0 retrieval candidates. The authenticated ten-positive-query receipt and two-call latency/cost benchmark remain pending; Teachers still lacks a deployed answer-generation/abstention path.  
 **Status:** APPROVED DESIGN / M13 MERGED / M14 LIVE STAGING PILOT IN PROGRESS / NO PROVIDER CUTOVER  
 **Owning repository:** ashini-x/parmar-ai  
 **Coordinating consumer:** ashini-x/brvin-teachers  
@@ -383,5 +383,22 @@ The current Teachers repository does not contain the live Gemini answer path tha
 5. Coordinate an actual consumer answer/abstention test only after a real consumer generation path exists and has an approved test boundary.
 
 Do not re-upload, rerun Vision OCR, rebuild the seven-point corpus or repeat the ten positive queries for this diagnostic review. Continue to keep AI Search as the production provider and retain the rollback path through the required 14-day production soak.
+
+
+### Authenticated M14 version-74 negative and repeatability receipt — 10 November 2026
+
+The fresh authenticated non-gating diagnostic returned `ok: true` against project `448249b4-fed9-45f5-9137-6014f242ddbe`, source `01238b3a-9902-4a42-90b4-574048ee4f00`, collection `brvin_m14_physics_pilot_v1`, embedding model `gemini-embedding-001`, 768 dimensions. It used the existing seven-point immutable corpus; no OCR, upload or re-index occurred.
+
+For `friction-and-net-force`, all three repeats returned the identical top-five sequence: page-3 worked example (P3-worked), page-2 second-law support (P2-laws), page-1 overview (P1-overview), page-1 inertia (P1-inertia), and page-2 formula tail (P2-tail). The expected page-3 result ranked first in all three calls. Against the source-grounded assistant-adjudicated qrels, the grades are 3, 2, 1, 1, 1: nDCG@5 1.0000, MRR@5 (grade >=2) 1.0000 and recall@5 of grade-2+ chunks 2/2. The receipt reports one distinct ordered sequence, one distinct top-five set and `rankStableAcrossRepeats: true`. This is a one-query, three-repeat staging observation, not broad acceptance evidence.
+
+The friction component trace confirms the expected dense/sparse complementarity: dense ranks P3-worked first and P2-laws second; sparse ranks P1-overview first and P2-laws second, with P3-worked fifth. The live weighted fusion places P3-worked first and P2-laws second. Raw dense and sparse scores are incomparable scales; rank-fusion scores are not confidence probabilities.
+
+The two `expectedNoMatch: true` prompts each returned five candidates:
+- Lowercase-symbol hard negative (`Find a source expression containing lowercase f = ma, not uppercase F = ma.`): five candidates, top RRF 0.425, all five grade 0 against the qrels because the requested lowercase expression is absent.
+- Planck-constant out-of-corpus negative: five candidates, top RRF 0.5, all five grade 0 because all retrieved chunks are unrelated.
+
+These results confirm that retrieval alone does not suppress candidate lists for no-match queries. They do **not** establish an answer failure or pass/fail abstention behavior: the diagnostic is retrieval-only and explicitly does not invoke a Teachers Gemini answer route. The current Teachers repository still has no deployed answer-generation/abstention path. Do not interpret the scores as confidence or permit them to justify unsupported answers.
+
+**Next M14 action:** run the authenticated ten-positive-query diagnostic on the same v74 staging page, then score all live query lists against `docs/BRVIN_M14_CHUNK_QRELS.md`. The ten-positive suite, two-call latency/cost, authorization isolation, revocation with vectors retained, deterministic recovery/retry, HNSW/resource tuning and representative load tests remain open. Production stays on Cloudflare AI Search.
 
 For a new chat, read docs/BRVIN_2_MASTER_PLAN.md first, then this migration plan, docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md, docs/BRVIN_SYSTEM_REFERENCE.md, the frozen v2 RPC contract and the M14 runbook. Establish current commits, CI, deployment versions and provider settings in both repositories before changing code. Preserve the unified math-aware path, raw OCR and physical-page provenance, D1 authorization, private v2 contract and both admin experiences.
