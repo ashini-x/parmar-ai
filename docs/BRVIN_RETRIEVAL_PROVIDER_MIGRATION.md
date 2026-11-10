@@ -1,7 +1,7 @@
 # BRVIN Retrieval Provider Modernization — Approved Architecture and Migration Plan
 
 **Decision date:** 8 November 2026
-**Status reviewed:** 10 November 2026 (post-M14 v78 deployment) — Core PR [#203](https://github.com/ashini-x/parmar-ai/pull/203) introduced the formula-discovery intent experiment and PR [#205](https://github.com/ashini-x/parmar-ai/pull/205) corrected the isolated staging operator explanation/test; both are merged. M14 staging Worker v78 (`842231fb-78ce-4791-a0b9-6b59e86eeb33`) is at 100%. M14 workflow [#76](https://github.com/ashini-x/parmar-ai/actions/runs/42879347728) and paired Core Release validation [#1071](https://github.com/ashini-x/parmar-ai/actions/runs/42879347614) passed, including production health/release acceptance. Production Core Workers are `parmar-ai` v710 (`059c2495-1347-4fa0-89d3-2749f55b582a`) and private `brvin-service` v134 (`6f00da7e-c663-4d24-a509-0b5be5cc5215`), both at 100% and still explicitly configured for `cloudflare-ai-search`; corpus-manifest writes remain disabled and no production Qdrant/Vertex bindings are present. Post-v78 authenticated positive and negative/repeatability receipts are still outstanding, so the formula-discovery ranking experiment is staging-deployed but not accepted. Independent human qrels, expanded-corpus validation, negative/abstention policy, two-component latency/cost, authorization/revocation, retry/recovery and HNSW-aware load gates remain outstanding.
+**Status reviewed:** 11 November 2026 (post-M14 v78 authenticated receipt review) — Core PR [#203](https://github.com/ashini-x/parmar-ai/pull/203) introduced the formula-discovery intent experiment and PR [#205](https://github.com/ashini-x/parmar-ai/pull/205) corrected the isolated staging operator explanation/test; both are merged. M14 staging Worker v78 (`842231fb-78ce-4791-a0b9-6b59e86eeb33`) is at 100%. M14 workflow [#76](https://github.com/ashini-x/parmar-ai/actions/runs/42879347728) and paired Core Release validation [#1071](https://github.com/ashini-x/parmar-ai/actions/runs/42879347614) passed, including production health/release acceptance. Production Core Workers are `parmar-ai` v710 (`059c2495-1347-4fa0-89d3-2749f55b582a`) and private `brvin-service` v134 (`6f00da7e-c663-4d24-a509-0b5be5cc5215`), both at 100% and still explicitly configured for `cloudflare-ai-search`; corpus-manifest writes remain disabled and no production Qdrant/Vertex bindings are present. Post-v78 authenticated positive and negative/repeatability receipts have now been reviewed: all ten positives covered 11/11 expected physical pages; chunk-qrels v0.1 scoring yielded nDCG@5 0.8853, MRR@5 0.9000, grade-2+ recall 1.0000 and precision 0.4000. The exact-formula query now ranks both direct page-2 chunks first/second. Negative prompts still return grade-0 top-five candidates, and three friction repeats return an identical ordered top five. These results improve the seven-chunk benchmark but do not complete M14 acceptance. Independent human qrels, expanded-corpus validation, negative/abstention policy, two-component latency/cost, authorization/revocation, retry/recovery and HNSW-aware load gates remain outstanding.
 **Status:** APPROVED DESIGN / M13 MERGED / M14 LIVE STAGING PILOT IN PROGRESS / NO PROVIDER CUTOVER  
 **Owning repository:** ashini-x/parmar-ai  
 **Coordinating consumer:** ashini-x/brvin-teachers  
@@ -378,7 +378,7 @@ The current Teachers repository does not contain the live Gemini answer path tha
 
 1. Use the source-grounded assistant-adjudicated chunk labels in [BRVIN_M14_CHUNK_QRELS.md](BRVIN_M14_CHUNK_QRELS.md) for the first reproducible precision/recall/ranking pass across all positive and no-match cases; keep physical-page metrics separately. The current matrix was assigned from the immutable PDF and the seven exact stored chunk texts; it is not represented as an independent human annotation.
 2. Keep formula-fidelity cases for the source's uppercase Fnet = m × a, case-sensitive lowercase f = ma, notation/operator differences and OCR uncertainty. Merged PR #196 now recognizes both literal operators and worded cues such as “equation”, “formula”, “expression”, “uppercase”, “lowercase” and “multiplied by”; fresh staging query receipts must verify the routing behavior.
-3. The M14 staging pilot now uses Core-side intent-weighted RRF (semantic 70/30 dense/sparse; symbolic 30/70) with stable per-component tie resolution and stable final ordering. The seven-point unit fixture reproduces the observed friction component ranks and the resulting direct-example-first scores. Run the authenticated ten-query and negative/repeatability receipts on the updated staging Worker, then compare the new receipts with the recorded equal-weight baseline. Measure the two-call latency/cost overhead and inspect all positive, formula, paraphrase and negative cases. Keep these weights provisional until the source-grounded qrels in `docs/BRVIN_M14_CHUNK_QRELS.md` are evaluated across the full live positive suite and no-match cases, with aggregate metrics plus per-query regressions. The qrels are an explicit model adjudication, not an independent human annotation.
+3. The M14 staging pilot now uses Core-side intent-weighted RRF (semantic 70/30 dense/sparse; symbolic 30/70) with stable per-component tie resolution and stable final ordering. The seven-point unit fixture reproduces the observed friction component ranks and the resulting direct-example-first scores. The updated v78 ten-query and negative/repeatability receipts have been run and scored against qrels v0.1; preserve the observed exact-formula improvement but keep intent weights provisional pending independent human labels and broader multi-document validation. Next, measure two-component latency/cost and complete authorization, retained-vector revocation, retry/recovery, HNSW and representative-load gates. Measure the two-call latency/cost overhead and inspect all positive, formula, paraphrase and negative cases. Keep these weights provisional until the source-grounded qrels in `docs/BRVIN_M14_CHUNK_QRELS.md` are evaluated across the full live positive suite and no-match cases, with aggregate metrics plus per-query regressions. The qrels are an explicit model adjudication, not an independent human annotation.
 4. Complete no-grant/wrong-project isolation, revocation while vectors remain present, deterministic retry/recovery, HNSW/resource tuning, latency/concurrency/load and cost benchmarks.
 5. Coordinate an actual consumer answer/abstention test only after a real consumer generation path exists and has an approved test boundary.
 
@@ -447,3 +447,56 @@ For the uppercase-symbol query (`Find the source expression containing uppercase
 The same receipt shows both expected-no-match prompts still return five grade-0 candidates. Lowercase `f = ma` retrieves uppercase-symbol-adjacent content, not the requested case-sensitive expression; Planck returns unrelated Physics chunks. These are retrieval-only observations, not an answer-abstention test. Friction returns one identical ordered top five across all three repeats, with the page-3 worked example rank 1 on each call.
 
 **Decision:** do not change global weights from this small pilot. Keep the current 70/30 semantic and 30/70 symbolic policy provisional. Evaluate a narrow distinction between natural-language formula discovery and explicit symbol/case requests, plus a deterministic case-sensitive exact-expression evidence signal for explicit symbol queries. Add regression tests, replay all ten positive qrels cases and the two no-match cases, then compare with v76. Production remains Cloudflare AI Search; staging remains isolated. No re-index/OCR is needed.
+
+
+### Authenticated M14 version-78 positive chunk-qrels and negative/repeatability receipts — 11 November 2026
+
+Both authenticated actions returned `ok: true` against the immutable project `448249b4-fed9-45f5-9137-6014f242ddbe`, source `01238b3a-9902-4a42-90b4-574048ee4f00`, collection `brvin_m14_physics_pilot_v1`, Vertex `gemini-embedding-001`, 768 dimensions. The seven unique point IDs and chunk IDs in the positive receipt matched the inventory in [BRVIN_M14_CHUNK_QRELS.md](BRVIN_M14_CHUNK_QRELS.md). No source upload, Vision OCR, corpus rebuild or Qdrant re-index was performed.
+
+#### Positive suite scored against qrels v0.1
+
+The ten queries returned 50 candidates. Scoring the top-five point IDs against the existing seven-chunk source-grounded qrels using graded gain (2^{rel}-1), first grade-2+ MRR and grade-2+ recall/precision gives:
+
+| Metric | v75 | v78 |
+|---|---:|---:|
+| Macro nDCG@5 | 0.8556 | **0.8853** |
+| Macro MRR@5 | 0.8500 | **0.9000** |
+| Macro Recall@5, grade >=2 | 1.0000 | **1.0000 (20/20)** |
+| Macro Precision@5, grade >=2 | 0.4000 | **0.4000 (20/50)** |
+| Queries with grade-2+ evidence at rank 1 | 7/10 | **8/10** |
+
+Per-query grades and metrics:
+
+| Query | Grades@5 | nDCG@5 | MRR@5 | Recall@5 |
+|---|---|---:|---:|---:|
+| newtons-second-law-concept | 2,3,1,0,1 | 0.8453 | 1.0000 | 100% (2/2) |
+| newtons-second-law-exact-formula | 3,3,0,1,0 | 0.9942 | 1.0000 | 100% (2/2) |
+| net-force-paraphrase | 2,0,3,2,1 | 0.7557 | 1.0000 | 100% (3/3) |
+| force-mass-acceleration-equivalent-notation | 3,1,0,3,2 | 0.8596 | 1.0000 | 100% (3/3) |
+| uppercase-force-symbol | 1,3,3,0,0 | 0.7482 | 0.5000 | 100% (2/2) |
+| four-kilogram-worked-example | 3,0,1,0,0 | 0.9828 | 1.0000 | 100% (1/1) |
+| numerical-force-setup | 3,0,1,0,0 | 0.9828 | 1.0000 | 100% (1/1) |
+| theory-plus-formula | 3,1,3,1,0 | 0.9364 | 1.0000 | 100% (2/2) |
+| friction-and-net-force | 3,2,1,1,1 | 1.0000 | 1.0000 | 100% (2/2) |
+| bus-braking-answer | 1,3,3,0,0 | 0.7482 | 0.5000 | 100% (2/2) |
+
+The v78 exact-formula query is the only per-query qrels score that changed from v75: the direct page-2 second-law and formula-tail chunks now rank 1 and 2, changing grades from `0,3,3,0,1` to `3,3,0,1,0`. Its nDCG@5 improves from 0.6968 to 0.9942 and MRR@5 from 0.5 to 1.0. The other nine per-query metrics match v75. Seven checks record 70/30 dense/sparse weights and three record 30/70. The exact-formula check records 70/30 but omits the `queryIntent` field from its candidate entries; retain this as a telemetry/receipt observability gap rather than inferring an unreported label.
+
+The same receipt reports 11/11 expected physical pages covered, 20/50 expected-page-labelled candidates, page-label precision proxy@5 0.4000 and mean reciprocal first-expected-page rank 0.8833333. These physical-page metrics are separate from the chunk-level qrels metrics; do not compare the page-level MRR directly with qrels MRR.
+
+#### Negative and repeatability receipt
+
+Both expected-no-match prompts returned five candidates, each grade 0 against qrels:
+
+| Case | Returned candidates | Top RRF | Result |
+|---|---:|---:|---|
+| lowercase `f = ma` hard negative | 5 | 0.425 | All candidates are formula-adjacent but none contains the requested lowercase expression; source text records uppercase `Fnet = m × a`. |
+| Out-of-corpus Planck constant | 5 | 0.5 | All candidates are unrelated Physics chunks; the requested constant/value is absent. |
+
+The negative diagnostic is retrieval-only. It proves that the top-k retrieval action returns grade-0 neighbours for these no-match prompts; it does not invoke a consumer answer model or assert answer abstention. RRF scores are rank-fusion values, not calibrated confidence probabilities.
+
+The friction query returned the same ordered top five across all three calls: P3-worked, P2-laws, P1-overview, P1-inertia, P2-tail. The expected page-3 worked-example chunk ranked first on each repeat; there was one distinct ordered sequence and one distinct top-five set. The ordering and scores were stable for this three-call sample only.
+
+#### Acceptance status
+
+The v78 result is a measurable improvement over v75 on the existing seven-chunk assistant-adjudicated qrels, particularly for natural-language exact-formula discovery. It is not independent human validation and does not establish generalization to larger collections. M14 remains in progress. Independent human qrels and expanded corpus, two-component-query latency/Qdrant cost, wrong-project/no-grant isolation, revocation with vectors retained, deterministic retry/recovery, and HNSW-aware load/performance remain open. The current Teachers application has no deployed Gemini answer/abstention route; do not infer answer correctness or abstention from these Core retrieval receipts. Production remains on AI Search with the existing v2 contract and D1 authorization boundary unchanged.

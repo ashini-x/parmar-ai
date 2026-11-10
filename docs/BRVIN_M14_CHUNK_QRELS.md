@@ -273,3 +273,49 @@ These are retrieval-only diagnostics. They do not execute the Teachers Gemini an
 ### Decision
 
 Do not change the global 70/30 semantic or 30/70 symbolic weights based on this seven-chunk corpus alone. Keep them provisional. A next implementation experiment may distinguish worded formula-discovery prompts (no literal symbol/operator in the query) from explicit case-sensitive symbol requests, and may test a narrow exact-case formula-evidence promotion for the latter. Preserve the current policy as a baseline, add tests for both query classes, then rerun the identical qrels suite and v76 diagnostics before selecting a policy. No code, fusion weight, Qdrant point, corpus, D1 permission, or production provider was changed by this diagnostic.
+
+
+## Live M14 version-78 ten-query chunk-qrels evaluation — 11 November 2026
+
+The authenticated v78 positive receipt returned ten five-result lists (50 total candidates). All seven unique point IDs matched the immutable chunk inventory at the top of the document. Scoring the five point IDs in each query result against the same qrels matrix gives the following macro metrics; the method matches the version-75 evaluation above: graded gain (2^{rel}-1), MRR of the first grade-2+ result, and recall/precision at grade >=2.
+
+| Metric | Version 75 | Version 78 |
+|---|---:|---:|
+| Queries scored | 10/10 | 10/10 |
+| Unique corpus points/chunks represented | 7/7 | 7/7 |
+| Retrieved candidates | 50 | 50 |
+| Grade-2+ relevant chunk occurrences retrieved | 20/20 | 20/20 |
+| Macro nDCG@5 | 0.8556 | **0.8853** |
+| Macro MRR@5 | 0.8500 | **0.9000** |
+| Macro Recall@5, grade >=2 | 1.0000 | **1.0000** |
+| Macro Precision@5, grade >=2 | 0.4000 | **0.4000** |
+| Queries with a grade-2+ chunk at rank 1 | 7/10 | **8/10** |
+
+### Per-query version-78 qrels scores
+
+| Query | Grades@5 | nDCG@5 | MRR@5 | Recall@5 |
+|---|---|---:|---:|---:|
+| newtons-second-law-concept | 2,3,1,0,1 | 0.8453 | 1.0000 | 100% (2/2) |
+| newtons-second-law-exact-formula | 3,3,0,1,0 | 0.9942 | 1.0000 | 100% (2/2) |
+| net-force-paraphrase | 2,0,3,2,1 | 0.7557 | 1.0000 | 100% (3/3) |
+| force-mass-acceleration-equivalent-notation | 3,1,0,3,2 | 0.8596 | 1.0000 | 100% (3/3) |
+| uppercase-force-symbol | 1,3,3,0,0 | 0.7482 | 0.5000 | 100% (2/2) |
+| four-kilogram-worked-example | 3,0,1,0,0 | 0.9828 | 1.0000 | 100% (1/1) |
+| numerical-force-setup | 3,0,1,0,0 | 0.9828 | 1.0000 | 100% (1/1) |
+| theory-plus-formula | 3,1,3,1,0 | 0.9364 | 1.0000 | 100% (2/2) |
+| friction-and-net-force | 3,2,1,1,1 | 1.0000 | 1.0000 | 100% (2/2) |
+| bus-braking-answer | 1,3,3,0,0 | 0.7482 | 0.5000 | 100% (2/2) |
+
+The exact-formula query is the only per-query score change versus v75: its two direct page-2 chunks now rank first and second (grades `3,3,0,1,0` versus v75 `0,3,3,0,1`). Its nDCG@5 rises from 0.6968 to 0.9942 and MRR@5 from 0.5 to 1.0. The other nine query-level metrics are unchanged. This is consistent with the narrow natural-language formula-discovery 70/30 dense/sparse intent introduced in PR #203. Seven query results carry 70/30 weights and three carry 30/70. The exact-formula candidate entries show the 70/30 weights but omit the `queryIntent` field, so the result confirms the weighting but not the serialized intent label for that check.
+
+The positive receipt's separate physical-page metrics are 11/11 expected-page coverage, 20/50 expected-page-labelled results, page-label precision proxy@5 0.4000 and mean reciprocal first-expected-page rank 0.8833333. They must not be conflated with the chunk-level qrels metrics above.
+
+### Version-78 negative and repeatability diagnostic
+
+Both expected-no-match prompts returned five candidates and all retrieved candidates are grade 0 under the no-match qrels. The lowercase `f = ma` hard negative had top RRF 0.425; its candidate text contains related uppercase `F`/`Fnet` Physics evidence but not the requested lowercase expression. The out-of-corpus Planck-constant query had top RRF 0.5 and returned unrelated Physics chunks. This is retrieval-only evidence, not an answer-abstention test; RRF values are not calibrated confidence probabilities and the diagnostic does not invoke a Teachers Gemini answer path.
+
+The friction query returned one distinct ordered sequence and one distinct top-five set over three repeats: P3-worked, P2-laws, P1-overview, P1-inertia, P2-tail. P3-worked (the expected physical page 3) ranked first on all three calls. This is stable for the three-call sample, not a general acceptance threshold.
+
+### Interpretation and remaining gate
+
+On this fixed seven-chunk corpus and the existing assistant-adjudicated qrels, v78 improves macro nDCG@5 and MRR@5 versus v75 without reducing grade-2+ recall or precision. It does not constitute independent human validation or multi-document generalization. Keep the formula-discovery/symbolic policy provisional pending independent chunk qrels, an expanded corpus and the M14 latency/cost, authorization/isolation, retained-vector revocation, retry/recovery and HNSW-aware load gates. Production remains on Cloudflare AI Search. The consumer answer/abstention path remains unavailable in the current Teachers app.
