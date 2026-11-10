@@ -676,6 +676,30 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
     }
   });
 
+  it("skips every collection-preparation request when running a read-only shadow query", async () => {
+    const { request, calls } = makeQdrant({ collectionMissing: true });
+    const pilot = makePilot(request);
+
+    const results = await pilot.query({
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "Newton's second law",
+      ensureCollection: false,
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      sourceId: "source-a",
+      pdfPage: 2,
+      itemKey: "brvin/books/source-a/pages/page-000002.txt",
+    });
+    expect(calls.map((call) => ({ path: new URL(call.url).pathname, method: call.method }))).toEqual([
+      { path: "/collections/brvin_m14_physics_pilot_v1/points/query", method: "POST" },
+    ]);
+    expect(calls.some((call) => call.method === "PUT" || call.url.endsWith("/collections/brvin_m14_physics_pilot_v1")))
+      .toBe(false);
+  });
+
   it("repairs an existing collection missing authorization indexes before filtered queries", async () => {
     const { request, calls } = makeQdrant({ collectionMissing: false });
     const pilot = makePilot(request);
