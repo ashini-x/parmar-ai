@@ -54,7 +54,11 @@ export interface AiSearchInstance {
     };
   }): Promise<{ chunks?: AiSearchChunk[] }>;
   info(): Promise<Record<string, unknown>>;
-  update(args: { indexing_options?: { use_ocr?: boolean }; index_method?: { vector?: boolean; keyword?: boolean } }): Promise<unknown>;
+  update(args: {
+    indexing_options?: { use_ocr?: boolean };
+    index_method?: { vector?: boolean; keyword?: boolean };
+    custom_metadata?: Array<{ field_name: string; data_type: "text" | "number" | "boolean" | "datetime" }>;
+  }): Promise<unknown>;
   items: {
     upload(key: string, content: ReadableStream<Uint8Array> | ArrayBuffer | Blob | string, options?: { metadata?: Record<string, string | number | boolean> }): Promise<AiSearchItem>;
     uploadAndPoll(key: string, content: ReadableStream<Uint8Array> | ArrayBuffer | Blob | string, options?: {
