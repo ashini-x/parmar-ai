@@ -150,3 +150,27 @@ The authenticated version-71 POST /admin/m14/qdrant/diagnostics action completed
 The merged follow-up M14 staging diagnostic (Core PR #191) is deployed in Worker version 72 and adds a component-rank trace to the existing authenticated **Run non-gating negative + rank-stability diagnostics** action. After the three repeated hybrid RRF calls, Core performs one additional dense-only query and one sparse-only query for the same friction prompt, with the same D1-pinned project and source allowlist. The receipt exposes, for each component, the rank, point ID, chunk ID, source ID, physical PDF page and raw component score.
 
 This is a diagnostic-only addition. It does not change the existing hybrid/RRF production query, alter candidate scores, add a reranker, or introduce a deterministic point-ID tie-break. Compare the component orders with the three RRF samples before deciding whether any scoring/ranking change is justified. It remains staging-only and read-only; it does not re-OCR, re-index or touch production. RRF component scores and ranks are not calibrated answer-confidence values.
+
+
+
+## Component-rank receipt review — 10 November 2026
+
+The authenticated version-72 receipt returned \`ok: true\` for the same immutable seven-point Physics corpus. The dense-only and sparse-only traces both returned the same seven eligible point IDs under the pinned project/source filter. Their first five candidates are the same set, but dense and sparse reverse the positions of the direct page-3 worked example and broad page-1 overview:
+
+| Chunk / source role | Dense rank (score) | Sparse rank (score) | Equal-weight RRF contribution |
+|---|---:|---:|---:|
+| \`be24fe40-ee0d-5324-8f77-3baab3322c69\`, page 3; exact 4 kg / 20 N pull / 8 N friction worked example | 1 (0.6746742) | 5 (3.2805996) | 1/2 + 1/6 = 0.6666667 |
+| \`057bcdfa-b2bb-535f-8dc4-f47f1c1229df\`, page 2; second-law explanation and general friction context | 2 (0.64888996) | 2 (7.658746) | 1/3 + 1/3 = 0.6666667 |
+| \`6bb2552e-417c-5169-822f-93c91a8b752f\`, page 1; broad force/net-force introduction | 5 (0.6418122) | 1 (8.145531) | 1/6 + 1/2 = 0.6666667 |
+| \`c601e70a-8570-5122-ab56-4d23b9f334c9\`, page 1; inertia / zero-net-force context | 3 (0.648811) | 3 (3.6299407) | 1/4 + 1/4 = 0.5 |
+| \`020b9743-4a6f-5211-8836-b044137502f7\`, page 2; formula / third-law context | 4 (0.6447945) | 4 (3.6138535) | 1/5 + 1/5 = 0.4 |
+
+The other two points ranked 6 and 7 in both component lists: page-3 answer-key chunk \`2971ad8d-59c4-5a97-8779-15a5c874b132\` (dense 0.60316366; sparse 2.017408), followed by page-3 attribution chunk \`0a2a4f69-be34-5482-b861-4cdf2c8c94f7\` (dense 0.5972749; sparse 0.84754217).
+
+**Interpretation:** dense retrieval puts the exact worked example first; the lexical/sparse leg puts the broad page-1 introduction first. The page-2 chunk ranks second in both legs. Under the observed equal-weight RRF with \(k=2\) and zero-based component positions, all three of those candidates receive the same score, 0.6666667. This exactly explains why the hybrid response retained the same top-five set but returned three different orders. The expected page-3 worked-example chunk ranked 3, 1 and 2 across the three new repeats; the three leading candidates were tied on score in each run. This is tie-order variation, not top-five candidate-set drift.
+
+The raw dense scores (roughly 0.60–0.67) and raw sparse scores (roughly 0.85–8.15) are different scales. RRF fuses positions, not these raw score magnitudes. The component scores must not be compared directly or represented as calibrated confidence.
+
+**Decision:** no ranking code was changed. Do not add a lexicographic point-ID tie-break or choose dense-over-sparse weighting from one friction query. A lexicographic ID tie-break would be deterministic but could put the direct page-3 worked example behind the page-2 and page-1 candidates in this exact tie group. First establish human chunk-level qrels across the positive, negative, formula and paraphrase cases. Then compare the current equal-weight RRF baseline with any candidate fusion/weight/tie policy on the same labelled query set, reporting nDCG/MRR/precision and per-query regressions. Confirm the deployed Qdrant feature/version before testing weighted RRF or alternative fusion. Keep the current ranking unchanged until that comparison supports a change.
+
+The component-rank trace was collected only for the friction prompt. It does not provide dense/sparse rankings for either expected-no-match prompt and does not test answer abstention. The lowercase-symbol and Planck cases remain retrieval-only evidence, and the Teachers Gemini answer route remains unavailable as documented above.
