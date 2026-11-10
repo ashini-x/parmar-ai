@@ -11,7 +11,7 @@ const RRF_K = 2;
 const SEMANTIC_RRF_WEIGHTS = { dense: 0.7, sparse: 0.3 } as const;
 const SYMBOLIC_RRF_WEIGHTS = { dense: 0.3, sparse: 0.7 } as const;
 
-type BrvinM14QueryIntent = "semantic" | "symbolic";
+type BrvinM14QueryIntent = "semantic" | "formula-discovery" | "symbolic";
 
 interface BrvinM14FusionWeights {
   intent: BrvinM14QueryIntent;
@@ -20,18 +20,27 @@ interface BrvinM14FusionWeights {
 }
 
 function resolveM14FusionWeights(query: string): BrvinM14FusionWeights {
-  // Formula intent is often expressed in words rather than literal operators.
-  // Classify explicit formula/equation/symbol/notation language as symbolic so
-  // the exact-formula and case-sensitive suite prompts receive lexical weight.
-  const symbolic = /[=×÷^≠≈≤≥<>]/u.test(query) ||
+  // A question asking which equation expresses a concept is a discovery task,
+  // not an exact-token lookup. The v76 component trace showed dense ranked both
+  // direct formula chunks first while sparse put a grade-0 overview first.
+  // Keep this narrow: literal operators, exact symbol/case requests, notation,
+  // and explicit lexical arithmetic cues retain symbolic weighting.
+  const hasFormulaDiscoveryCue = /\b(?:what|which)\s+(?:(?:is|are)\s+)?(?:the\s+)?(?:equation|formula|expression)\b/iu.test(query);
+  const hasExplicitSymbolCue = /[=×÷^≠≈≤≥<>]/u.test(query) ||
     /\\(?:frac|times|cdot|sqrt|mathrm|text)\b/u.test(query) ||
     /\b[A-Za-z_][A-Za-z0-9_]*\s*(?:\*|\/)\s*[A-Za-z0-9(]/u.test(query) ||
-    /\b(?:equation|formula|expression|symbol|symbols|notation|operator|uppercase|lowercase|case-sensitive)\b/iu.test(query) ||
+    /\b(?:symbol|symbols|notation|operator|uppercase|lowercase|case-sensitive)\b/iu.test(query) ||
     /\b(?:multiplied\s+by|divided\s+by|equals?)\b/iu.test(query) ||
     /\b(?:Fnet|fnet)\b/u.test(query);
+  const formulaDiscovery = hasFormulaDiscoveryCue && !hasExplicitSymbolCue;
+  const symbolic = hasExplicitSymbolCue ||
+    (!formulaDiscovery && /\b(?:equation|formula|expression)\b/iu.test(query));
+  const intent: BrvinM14QueryIntent = formulaDiscovery
+    ? "formula-discovery"
+    : symbolic ? "symbolic" : "semantic";
   const weights = symbolic ? SYMBOLIC_RRF_WEIGHTS : SEMANTIC_RRF_WEIGHTS;
   return {
-    intent: symbolic ? "symbolic" : "semantic",
+    intent,
     dense: weights.dense,
     sparse: weights.sparse,
   };
