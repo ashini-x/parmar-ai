@@ -185,3 +185,10 @@ Use `pointId` / `chunkId` to join each query's ranked candidates to `docs/BRVIN_
 The receipt's `queryIntent`, `denseWeight` and `sparseWeight` fields are an important classifier check: conceptual/paraphrase/worked-example/friction prompts should usually show semantic 0.7/0.3, while formula/equation/symbol/notation prompts should show symbolic 0.3/0.7. Inspect worded formula requests explicitly. A correct weight label does not by itself prove correct formula retrieval; compare the ranked point/chunk IDs and source text to qrels.
 
 The two expected-no-match cases remain excluded from the positive suite. Their earlier retrieval-only diagnostic returns candidates and does not test Gemini answer abstention. Do not infer an abstention pass/fail from this expanded receipt.
+
+
+## Formula/symbol component-rank follow-up — version 76+
+
+The authenticated **Run non-gating negative + rank-stability diagnostics** action now includes `componentRankDiagnostics` for two reviewed positive cases: `newtons-second-law-exact-formula` and `uppercase-force-symbol`. For each prompt, the receipt shows separate dense-only and sparse-only candidate ranks, point IDs, chunk IDs, source/page provenance and component-local raw scores. It retains the earlier friction dense/sparse trace, three-repeat fusion order, and the two expected-no-match candidate previews.
+
+Compare the two new component lists with the v75 positive receipt's fused top-five ranks and the qrels matrix. Determine whether the page-1-overview first-place miss on exact formula and the page-3-worked-example first-place result on uppercase symbol originate in dense retrieval, sparse retrieval, or their weighted fusion. Compare ranks within each component; do not compare raw dense and sparse score magnitudes or interpret RRF as confidence. These traces are read-only, staging-only diagnostics: they do not change query fusion, the Qdrant corpus, the v2 contract, or production provider selection. They add one dense/sparse component query pair per reviewed prompt.
