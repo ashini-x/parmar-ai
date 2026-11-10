@@ -41,22 +41,27 @@ function percentile(values: number[], quantile: number): number | null {
   const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(quantile * sorted.length) - 1));
   return Math.round(sorted[index] * 100) / 100;
 }
-function summarizeProvider(results: Array<{ id: string; expectedPages: number[]; expectedNoMatch: boolean; result: ProviderQueryResult }>) {
+export function summarizeBrvinM15ShadowProvider(results: Array<{
+  id: string; expectedPages: number[]; expectedNoMatch: boolean; result: ProviderQueryResult;
+}>) {
   const positive = results.filter((item) => !item.expectedNoMatch);
   const expectedPageCount = positive.reduce((sum, item) => sum + item.expectedPages.length, 0);
   const coveredExpectedPageCount = positive.reduce((sum, item) =>
     sum + item.expectedPages.filter((page) => item.result.retrievedPages.includes(page)).length, 0);
   const returnedResultCount = results.reduce((sum, item) => sum + item.result.resultCount, 0);
+  const positiveReturnedResultCount = positive.reduce((sum, item) => sum + item.result.resultCount, 0);
   const expectedPageResultCount = positive.reduce((sum, item) =>
     sum + item.result.retrievedPages.filter((page) => page !== null && item.expectedPages.includes(page)).length, 0);
   const reciprocalRankSum = positive.reduce((sum, item) => {
-    const firstRank = item.result.expectedPageRanks
-      .filter((rank): rank is number => rank !== null)
-      .sort((left, right) => left - right)[0];
+    const firstRank = item.result.expectedPageRanks.filter((rank): rank is number => rank !== null).sort((a, b) => a - b)[0];
     return sum + (firstRank ? 1 / firstRank : 0);
   }, 0);
   const timings = results.filter((item) => item.result.ok).map((item) => item.result.elapsedMs);
   const noMatch = results.filter((item) => item.expectedNoMatch);
+  const noMatchFalsePositiveCases = noMatch.filter((item) => item.result.resultCount > 0);
+  const noMatchFalsePositiveCandidateCount = noMatch.reduce((sum, item) => sum + item.result.resultCount, 0);
+  const positiveTopKSlots = positive.length * TOP_K;
+  const allQueryTopKSlots = results.length * TOP_K;
   return {
     queries: results.length,
     successfulQueries: results.filter((item) => item.result.ok).length,
@@ -66,10 +71,19 @@ function summarizeProvider(results: Array<{ id: string; expectedPages: number[];
     expectedPageCoverageRate: expectedPageCount ? coveredExpectedPageCount / expectedPageCount : 0,
     allExpectedPagesCovered: expectedPageCount > 0 && coveredExpectedPageCount === expectedPageCount,
     returnedResultCount,
+    positiveReturnedResultCount,
     expectedPageResultCount,
-    pageLabelPrecisionAt5: returnedResultCount ? expectedPageResultCount / returnedResultCount : 0,
+    // Fixed-cutoff P@5: missing results count as empty slots; no-match queries have no relevant pages.
+    pageLabelPrecisionAt5: allQueryTopKSlots ? expectedPageResultCount / allQueryTopKSlots : 0,
+    positivePageLabelPrecisionAt5: positiveTopKSlots ? expectedPageResultCount / positiveTopKSlots : 0,
+    // Keep the previous variable-denominator ratio under an explicit name for historical comparison.
+    returnedCandidatePageLabelPrecision: returnedResultCount ? expectedPageResultCount / returnedResultCount : 0,
     meanReciprocalExpectedPageRank: positive.length ? reciprocalRankSum / positive.length : 0,
     provenanceViolationCount: results.reduce((sum, item) => sum + item.result.provenanceViolationCount, 0),
+    noMatchQueryCount: noMatch.length,
+    noMatchFalsePositiveQueryCount: noMatchFalsePositiveCases.length,
+    noMatchFalsePositiveCandidateCount,
+    noMatchFalsePositiveRate: noMatch.length ? noMatchFalsePositiveCases.length / noMatch.length : 0,
     noMatchCases: noMatch.map((item) => ({
       id: item.id, resultCount: item.result.resultCount, topScore: item.result.candidates[0]?.score ?? null,
     })),
@@ -78,7 +92,7 @@ function summarizeProvider(results: Array<{ id: string; expectedPages: number[];
       p50: percentile(timings, 0.5),
       p95: percentile(timings, 0.95),
       p99: percentile(timings, 0.99),
-      note: "Twelve sequential paired samples only; staging observation, not a load test or production SLO.",
+      note: "Sequential paired samples only; staging observation, not a load test or production SLO.",
     },
   };
 }
@@ -190,7 +204,7 @@ export async function runBrvinM15ShadowBenchmark(env: BrvinM15ShadowEnv) {
   }
 
   const summarize = (provider: "cloudflareAiSearch" | "qdrantVertex") =>
-    summarizeProvider(results.map((item) => ({
+    summarizeBrvinM15ShadowProvider(results.map((item) => ({
       id: item.id,
       expectedPages: item.expectedPages,
       expectedNoMatch: item.expectedNoMatch,
