@@ -1,7 +1,7 @@
 # BRVIN Retrieval Provider Modernization — Approved Architecture and Migration Plan
 
 **Decision date:** 8 November 2026
-**Status reviewed:** 10 November 2026 — PR #191 merged; authenticated M14 diagnostic now returns dense/sparse component ranks in staging version 72; human chunk qrels and consumer answer-path acceptance remain open  
+**Status reviewed:** 10 November 2026 — M14 staging now applies Core-side intent-weighted RRF after the version-72 component-rank review; human chunk qrels, latency/cost benchmarking and consumer answer-path acceptance remain open  
 **Status:** APPROVED DESIGN / M13 MERGED / M14 LIVE STAGING PILOT IN PROGRESS / NO PROVIDER CUTOVER  
 **Owning repository:** ashini-x/parmar-ai  
 **Coordinating consumer:** ashini-x/brvin-teachers  
@@ -352,7 +352,21 @@ The other two points ranked 6 and 7 in both component lists: page-3 answer-key c
 
 The raw dense scores (roughly 0.60–0.67) and raw sparse scores (roughly 0.85–8.15) are different scales. RRF fuses positions, not these raw score magnitudes. The component scores must not be compared directly or represented as calibrated confidence.
 
-**Decision:** no ranking code was changed. Do not add a lexicographic point-ID tie-break or choose dense-over-sparse weighting from one friction query. A lexicographic ID tie-break would be deterministic but could put the direct page-3 worked example behind the page-2 and page-1 candidates in this exact tie group. First establish human chunk-level qrels across the positive, negative, formula and paraphrase cases. Then compare the current equal-weight RRF baseline with any candidate fusion/weight/tie policy on the same labelled query set, reporting nDCG/MRR/precision and per-query regressions. Confirm the deployed Qdrant feature/version before testing weighted RRF or alternative fusion. Keep the current ranking unchanged until that comparison supports a change.
+**Decision and staging implementation update — 10 November 2026:** the observed tie justified a bounded M14 staging-policy change. Core now obtains dense-only and sparse-only candidate lists independently, applies the identical D1-authorized project/source filter to both, validates every candidate's stored provenance, and fuses the two lists inside Core with **contribution-weighted reciprocal-rank fusion** (RRF, (k=2)). This is not Qdrant's native weighted-RRF API and does not require assuming a Qdrant server version that has not been confirmed.
+
+The initial intent policy is:
+- Natural-language/conceptual questions: **70% dense / 30% sparse**.
+- Formula, operator or exact-symbol questions: **30% dense / 70% sparse**.
+- Query intent is detected from explicit mathematical operators, common LaTeX commands and compact expression patterns. These weights are initial ranking-policy parameters, not calibrated confidence probabilities and not a claim of learned optimum.
+
+For the observed friction ranks (dense positions 1/2/5 and sparse positions 5/2/1), the semantic policy yields:
+- Direct page-3 worked example: (0.7/2 + 0.3/6 = 0.4000000).
+- Page-2 supporting context: (0.7/3 + 0.3/3 = 0.3333333).
+- Broad page-1 overview: (0.7/6 + 0.3/2 = 0.2666667).
+
+This resolves the observed three-way tie in favor of the direct worked example. Component lists are sorted only within their own score scale (descending score, then point ID); raw dense and sparse scores are never compared with each other. Final equal-fusion-score ties use intent-primary rank, secondary rank, then point ID, so the output order is deterministic for a fixed pair of component lists. Dense/sparse payload disagreement for the same point fails closed. The Core unit fixture replays all seven observed component candidates and checks both semantic and symbolic weighting, score arithmetic, authorization filters and stable tie handling.
+
+The cost of the change is two component-query calls instead of one Qdrant-native RRF call. Measure the added query latency and Qdrant request/compute cost during M14/M15; do not claim that deterministic ordering or the improved friction rank establishes overall retrieval quality. Human chunk-level qrels remain required for the multi-query benchmark and for deciding whether these initial weights should be retained, tuned or replaced. The two expected-no-match prompts remain retrieval-only evidence: no answer-abstention pass/fail is asserted, and a rank-fusion score is not a probability.
 
 The component-rank trace was collected only for the friction prompt. It does not provide dense/sparse rankings for either expected-no-match prompt and does not test answer abstention. The lowercase-symbol and Planck cases remain retrieval-only evidence, and the Teachers Gemini answer route remains unavailable as documented above.
 
@@ -364,7 +378,7 @@ The current Teachers repository does not contain the live Gemini answer path tha
 
 1. Obtain human chunk-level judgments for the positive and negative queries against the source PDF, then calculate chunk-level precision/recall/ranking metrics; keep physical-page metrics separately.
 2. Add/verify formula-fidelity cases for the source's uppercase Fnet = m × a, case-sensitive lowercase f = ma, notation/operator differences and OCR uncertainty.
-3. The version-72 component-rank diagnostic has now been reviewed. For the friction query, the direct page-3 worked example ranks dense 1 / sparse 5; the broad page-1 introduction ranks dense 5 / sparse 1; and the page-2 chunk ranks 2 / 2. All three receive equal RRF 0.6666667 under the observed equal-weight default, explaining the three orderings. Keep ranking unchanged. After human chunk qrels are accepted, compare baseline RRF with any weighted/alternative fusion or tie policy on the same labelled query set and document per-query regressions. Do not use a point-ID tie-break merely to hide the instability.
+3. The M14 staging pilot now uses Core-side intent-weighted RRF (semantic 70/30 dense/sparse; symbolic 30/70) with stable per-component tie resolution and stable final ordering. The seven-point unit fixture reproduces the observed friction component ranks and the resulting direct-example-first scores. Run the authenticated ten-query and negative/repeatability receipts on the updated staging Worker, then compare the new receipts with the recorded equal-weight baseline. Measure the two-call latency/cost overhead and inspect all positive, formula, paraphrase and negative cases. Keep these weights provisional until human chunk qrels and a multi-query benchmark report aggregate metrics plus per-query regressions.
 4. Complete no-grant/wrong-project isolation, revocation while vectors remain present, deterministic retry/recovery, HNSW/resource tuning, latency/concurrency/load and cost benchmarks.
 5. Coordinate an actual consumer answer/abstention test only after a real consumer generation path exists and has an approved test boundary.
 
