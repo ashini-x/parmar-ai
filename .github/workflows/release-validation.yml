@@ -185,7 +185,7 @@ jobs:
             case "$path" in
               # Explicit staging-only M14/M15 files. Changes outside this list
               # conservatively retain the normal production deployment path.
-              docs/*|.github/workflows/release-validation.yml|src/brvin/m14-staging-worker.ts|src/brvin/m15-shadow-benchmark.ts|src/brvin/m14-physics-evaluation.ts|src/brvin/qdrant-hybrid-pilot.ts|src/brvin/vertex-embedding.ts|src/brvin/provider-contract.ts|src/config/env.ts|test/brvin-m14-staging-worker.test.ts|test/brvin-qdrant-hybrid-pilot.test.ts|test/brvin-m15-shadow-benchmark.test.ts|wrangler.m14-staging.jsonc|.github/workflows/m14-staging-deploy.yml)
+              docs/*|.github/workflows/release-validation.yml|src/brvin/m14-staging-worker.ts|src/brvin/m15-shadow-benchmark.ts|src/brvin/m15-benchmark-staging.ts|src/brvin/m14-physics-evaluation.ts|src/brvin/qdrant-hybrid-pilot.ts|src/brvin/vertex-embedding.ts|src/brvin/provider-contract.ts|src/config/env.ts|scripts/verify-m14-staging-config.mjs|test/brvin-m14-staging-worker.test.ts|test/brvin-qdrant-hybrid-pilot.test.ts|test/brvin-m15-shadow-benchmark.test.ts|test/brvin-m15-benchmark-staging.test.ts|wrangler.m14-staging.jsonc|.github/workflows/m14-staging-deploy.yml)
                 ;;
               *)
                 deploy=true
