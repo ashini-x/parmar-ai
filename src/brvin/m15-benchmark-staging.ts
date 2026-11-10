@@ -85,7 +85,7 @@ interface M15Case {
   expectedNoMatch: boolean;
 }
 
-const QUERY_SUITE: readonly M15Case[] = [
+export const M15_BENCHMARK_QUERY_SUITE: readonly M15Case[] = [
   { id: "P01", category: "positive", query: "Explain Newton’s second law and how net force, mass and acceleration are related.", expectedPages: [1], expectedNoMatch: false },
   { id: "P02", category: "positive", query: "A trolley has 10 N east and 4 N west acting on it. If its mass is 2 kg, what is its acceleration and direction?", expectedPages: [1], expectedNoMatch: false },
   { id: "P03", category: "positive", query: "A 6 kg cart experiences a net forward force of 18 N. Calculate its acceleration.", expectedPages: [2], expectedNoMatch: false },
@@ -427,6 +427,11 @@ export function summarizeM15BenchmarkProvider(results: Array<{
 }
 
 async function createQdrantPilot(env: Env, collection: string): Promise<BrvinQdrantHybridPilot> {
+  const configuredCollection = env.BRVIN_M15_BENCHMARK_QDRANT_COLLECTION?.trim();
+  if (!configuredCollection || collection !== configuredCollection ||
+      configuredCollection !== BENCHMARK_QDRANT_COLLECTION) {
+    throw new Error("The M15 benchmark must use its exact dedicated staging Qdrant collection.");
+  }
   const dimensions = Number(env.BRVIN_M14_EMBEDDING_DIMENSIONS);
   if (!Number.isSafeInteger(dimensions) || dimensions < 1 || dimensions > 3072) {
     throw new Error("The isolated M15 Vertex embedding dimensions are invalid.");
@@ -694,7 +699,7 @@ async function indexAiSearch(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourc
       "UPDATE m15_benchmark_sources SET ai_search_indexed_pages = ?, status = 'ai_search_indexing', updated_at = ? WHERE source_id = ?",
     ).bind(uploaded, Date.now(), row.source_id).run();
   }
-  const listing = await search.items.list({ per_page: 50, search: row.source_id });
+  const listing = await search.items.list({ per_page: 50 });
   const matching = (listing.result ?? []).filter((item) => item.key?.startsWith(sourcePrefix(row.source_id)));
   if (matching.length !== SOURCE_PAGE_COUNT || matching.some((item) => item.status !== "completed")) {
     throw new Error("The isolated AI Search instance did not confirm all eight source-page text items as completed.");
@@ -788,7 +793,7 @@ export async function runM15BenchmarkSourceShadow(
   }
   const pilot = await createQdrantPilot(env, BENCHMARK_QDRANT_COLLECTION);
   const results = [];
-  for (const item of QUERY_SUITE) {
+  for (const item of M15_BENCHMARK_QUERY_SUITE) {
     const [aiSearch, qdrant] = await Promise.all([
       timedQuery(async () => {
         const response = await env.BRVIN_M15_BENCHMARK_AI_SEARCH!.search({
@@ -846,9 +851,9 @@ export async function runM15BenchmarkSourceShadow(
       generationId: source.generation_id,
     },
     queryCount: results.length,
-    positiveQueryCount: QUERY_SUITE.filter((item) => item.category === "positive").length,
-    outOfCorpusQueryCount: QUERY_SUITE.filter((item) => item.category === "out-of-corpus").length,
-    exactSymbolNearMissQueryCount: QUERY_SUITE.filter((item) => item.category === "exact-symbol-near-miss").length,
+    positiveQueryCount: M15_BENCHMARK_QUERY_SUITE.filter((item) => item.category === "positive").length,
+    outOfCorpusQueryCount: M15_BENCHMARK_QUERY_SUITE.filter((item) => item.category === "out-of-corpus").length,
+    exactSymbolNearMissQueryCount: M15_BENCHMARK_QUERY_SUITE.filter((item) => item.category === "exact-symbol-near-miss").length,
     providers: {
       cloudflareAiSearch: {
         instance: "brvin-m15-physics-staging-v1",
@@ -1034,7 +1039,7 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
   }
   file.addEventListener("change",refresh);token.addEventListener("input",refresh);ocrConfirm.addEventListener("change",refresh);
   async function call(path,method,body,busy) {
-    const secret=token.value.trim();token.value="";refresh();result.className="status muted";result.textContent=busy;
+    let secret=token.value.trim();token.value="";refresh();result.className="status muted";result.textContent=busy;
     try {
       const headers={authorization:"Bearer "+secret};
       const options={method,headers,cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer"};
