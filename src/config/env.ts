@@ -270,8 +270,12 @@ export interface Env {
   FATMAN_SEARCH?: AiSearchNamespace;
 
   BRVIN_SEARCH?: AiSearchNamespace;
-  /** Direct search-only binding used by the isolated M15 shadow benchmark. */
+  /** Direct search-only binding used by the current-provider M15 shadow baseline. */
   BRVIN_M15_AI_SEARCH?: Pick<AiSearchInstance, "search">;
+  /** Separate, upload-capable AI Search instance used only by the second-source M15 staging benchmark. */
+  BRVIN_M15_BENCHMARK_AI_SEARCH?: AiSearchInstance;
+  /** Dedicated Qdrant collection for the second-source M15 staging benchmark; never production. */
+  BRVIN_M15_BENCHMARK_QDRANT_COLLECTION?: string;
   BRVIN_SEARCH_INSTANCE?: string;
   /** Server-side provider selector; M13 supports only cloudflare-ai-search. */
   BRVIN_RETRIEVAL_PROVIDER?: string;
