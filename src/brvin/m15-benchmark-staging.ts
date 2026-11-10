@@ -77,6 +77,11 @@ interface M15ProviderResult {
   errorType?: string;
 }
 
+interface M15ShadowQueryResult extends M15Case {
+  cloudflareAiSearch: M15ProviderResult;
+  qdrantVertex: M15ProviderResult;
+}
+
 interface M15Case {
   id: string;
   category: "positive" | "out-of-corpus" | "exact-symbol-near-miss";
@@ -197,10 +202,12 @@ async function putImmutableSourceObject(
   uploadUrl.searchParams.set("uploadType", "media");
   uploadUrl.searchParams.set("name", objectName);
   uploadUrl.searchParams.set("ifGenerationMatch", "0");
+  const uploadBody = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(uploadBody).set(bytes);
   const response = await fetch(uploadUrl.toString(), {
     method: "POST",
     headers: { authorization: "Bearer " + token, "content-type": "application/pdf" },
-    body: bytes,
+    body: uploadBody,
   });
   if (response.ok) return;
   if (response.status !== 409 && response.status !== 412) {
@@ -226,7 +233,9 @@ async function readGcsBytes(env: Env, bucket: string, objectName: string, genera
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  const hashInput = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(hashInput).set(bytes);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", hashInput));
   return Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
@@ -792,7 +801,7 @@ export async function runM15BenchmarkSourceShadow(
     throw new Error("Both isolated staging indexes must be READY for all eight physical pages before paired evaluation.");
   }
   const pilot = await createQdrantPilot(env, BENCHMARK_QDRANT_COLLECTION);
-  const results = [];
+  const results: M15ShadowQueryResult[] = [];
   for (const item of M15_BENCHMARK_QUERY_SUITE) {
     const [aiSearch, qdrant] = await Promise.all([
       timedQuery(async () => {
