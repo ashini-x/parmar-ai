@@ -33,6 +33,12 @@
     "BRVIN_M14_QDRANT_COLLECTION": "brvin_m14_physics_pilot_v1",
     "BRVIN_M14_QDRANT_URL": "https://8f8aa8b4-c46c-4453-b3b8-f5d6b2c0b146.australia-southeast1-0.gcp.cloud.qdrant.io"
   },
+  "ai_search": [
+    {
+      "binding": "BRVIN_M15_AI_SEARCH",
+      "instance_name": "fatman-2026-8b183803"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
