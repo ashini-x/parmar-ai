@@ -198,6 +198,26 @@ M14 remains **IN PROGRESS**. Next gates are independent human qrels and broader 
 
 ## M15 continuation — active shadow benchmark
 
-M14 is closed as the **isolated pilot milestone**, not as approval for production. M15 now owns the unresolved cross-provider acceptance: same-source comparison at passage level, independent human qrels, formula/symbol fidelity, no-grant/wrong-project isolation, revocation while vectors remain, retry/recovery, Worker-side p50/p95/p99, per-1,000 query cost, embedding/index/storage cost, HNSW tuning and representative concurrency/load. The current AI Search baseline above is read-only and did not change the shared index. The next implementation step is a protected, source-filtered staging shadow runner that compares the current AI Search baseline and isolated Qdrant without modifying consumer answers or either production route.
+M14 is closed as the **isolated pilot milestone**, not as approval for production. M15 now owns the unresolved cross-provider acceptance: same-source comparison at passage level, independent human qrels, formula/symbol fidelity, no-grant/wrong-project isolation, revocation while vectors remain, retry/recovery, Worker-side p50/p95/p99, per-1,000 query cost, embedding/index/storage cost, HNSW tuning and representative concurrency/load. The current AI Search baseline above is read-only and did not change the shared index. The protected, source-filtered staging shadow runner is now implemented and deployed (Core PR #209, staging Worker v79). The next step is to execute its authenticated 12-query receipt from the Core Admin staging operator; this does not modify consumer answers or either production route.
 
 Do not add provider SDKs, credentials or direct retrieval to Teachers. Keep the frozen v2 contract, D1 authorization boundary, upload/index UI and current production selector unchanged. M16 remains the later consumer/admin parity step; M17 remains the only controlled production canary/14-day-soak step.
+
+
+## M15 staging shadow runner — deployed 11 November 2026
+
+Core PR #209 is merged as `136687511673ddcb17ff26aaf4589c3872265466`. The protected M15 read-only paired shadow runner is deployed to isolated staging Worker **v79**, version `a3da7cc7-3556-4e12-a57f-51f2898edb5f`, deployment `8fb4c6cc-0b0a-4d7a-8387-b8550f299807`, serving 100%.
+
+The existing operator page exposes `POST /admin/m15/shadow/evaluate` via the **Run AI Search vs Qdrant shadow benchmark** button. The route requires the staging operator bearer token and exact Physics source confirmation. It runs the fixed 12-case suite (10 positives, 2 no-match) using:
+- A search-only AI Search binding to `fatman-2026-8b183803`, with every request constrained to the exact Physics source folder.
+- The existing Vertex/Qdrant hybrid query path with exact project/source filters and `ensureCollection: false`, which skips collection/index preparation. Hybrid retrieval still performs its intended dense and sparse `points/query` calls.
+- Per-provider Worker-side elapsed time, top-five physical page/passage previews, candidate scores/component ranks, source/page provenance violations and expected-page summary statistics.
+
+Regression coverage includes route auth/source-confirmation/missing-binding gates and a direct Qdrant unit test proving read-only shadow mode makes exactly two dense/sparse `points/query` calls and no collection GET/PUT or payload-index creation.
+
+CI after merge: M14 staging workflow #86 passed, Release validation #1084 passed (typecheck, test, node tests and both Worker dry-run bundles). The production-scope job classified the commit as staging/docs-only (`deploy=false`); production deploy/acceptance jobs were skipped.
+
+Cloudflare read-back confirms staging `ENVIRONMENT=staging`, the AI Search instance binding, the existing Vertex model/location/dimensions and Qdrant collection. Production remains `parmar-ai` v710 and `brvin-service` v134, each at 100%, with `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`; corpus-manifest writes remain disabled and no Qdrant/Vertex production bindings were introduced.
+
+**Execution receipt still pending:** the public staging endpoint could not be invoked by the current tool session (the external request path is denied), and the staging admin token is intentionally not read or copied into chat. Run the new button from the operator page after entering the token locally, then review the 12-query JSON receipt. Do not re-index, re-upload or rerun OCR. The button call is read-only; no AI Search or Qdrant data is mutated.
+
+This is the first M15 execution surface, not M15 acceptance. Passage-level human qrels, broader corpus, grant/no-grant and revoke-with-vectors-retained tests, throttling/recovery, HNSW-aware load, Worker p50/p95/p99 and cost accounting remain open.
