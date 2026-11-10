@@ -174,7 +174,7 @@ function m14AdminPage(): Response {
     <button id="verifyCorpus" class="secondary" type="button" disabled>Verify stored M14 manifests (read only)</button>
     <div class="notice">
       <strong>Vertex AI + Qdrant pilot</strong>
-      <p class="small">After configuring the isolated staging Vertex/Qdrant settings, index the seven verified chunks once. The positive evaluation runs ten source-grounded Physics queries. The separate non-gating diagnostics show top-five evidence for two reviewed no-match queries, repeat the friction query three times with point/chunk IDs and RRF scores, and fetch one read-only dense-only/sparse-only rank trace for the same query to explain RRF ties. They do not change the hybrid ranking, test consumer answer abstention or set a pass/fail threshold.</p>
+      <p class="small">After configuring the isolated staging Vertex/Qdrant settings, index the seven verified chunks once. Core now fuses independent dense and sparse results with intent-weighted RRF: natural-language questions use 70% dense / 30% sparse, while formula and symbol queries use 30% dense / 70% sparse. These are initial ranking policy weights, not confidence probabilities. The non-gating diagnostics show top-five evidence for two reviewed no-match queries, repeat the friction query three times, and expose the raw component ranks behind the weighted result. They do not test consumer answer abstention or set a pass/fail threshold.</p>
     </div>
     <button id="indexQdrant" type="button" disabled>Embed and index the 7 Physics chunks in Qdrant</button>
     <button id="evaluateQdrant" class="secondary" type="button" disabled>Run 10 source-grounded Physics retrieval checks</button>
@@ -406,7 +406,7 @@ function m14AdminPage(): Response {
       "/admin/m14/qdrant/evaluate",
       "POST",
       { confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" },
-      "Running ten positive source-grounded Physics queries through Vertex embeddings and Qdrant hybrid dense+sparse RRF. This is staging-only."
+      "Running ten positive source-grounded Physics queries through Vertex embeddings and Core intent-weighted dense+sparse RRF. This is staging-only."
     );
     if (result?.response.ok && result.data.ok === true) {
       evaluateQdrantButton.textContent = "Source-grounded retrieval checks completed";
@@ -1377,7 +1377,8 @@ async function runM14QdrantRetrievalDiagnostics(
   }
 
   // Capture the underlying component ranks once for the same friction query.
-  // This is diagnostic-only and does not alter the production RRF ordering.
+  // This is diagnostic-only: it observes the two retrieval legs but does not
+  // change the weighted fusion already applied by pilot.query().
   const componentRanks = await pilot.queryComponentRanks({
     projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
     authorizedSourceIds: [PILOT_SOURCE_ID],
@@ -1414,7 +1415,7 @@ async function runM14QdrantRetrievalDiagnostics(
       rankStableAcrossRepeats: new Set(observedFirstExpectedPageRanks).size <= 1,
       note: "Three identical query calls against the same staging project/source. Compare point IDs, chunk IDs, RRF scores and page ranks. This is a diagnostic sample, not a ranking acceptance threshold.",
     },
-    note: "Non-gating retrieval diagnostics only. Complete chunk text for each unique returned point is included once in candidateEvidence for authenticated staging-operator human review; it is sourced from the fixed M14 corpus payload and is not a generated answer. No retrieval abstention or answer correctness is asserted. Qdrant RRF scores are not calibrated confidence probabilities. The friction query is repeated three times to expose within-run ordering and candidate variation; one additional read-only dense-only and sparse-only rank trace exposes the component ranks behind the RRF result. This trace does not change ranking. The separate BRVIN Teachers Gemini answer/abstention path is not invoked by this action.",
+    note: "Non-gating retrieval diagnostics only. Complete chunk text for each unique returned point is included once in candidateEvidence for authenticated staging-operator human review; it is sourced from the fixed M14 corpus payload and is not a generated answer. No retrieval abstention or answer correctness is asserted. Qdrant RRF scores are not calibrated confidence probabilities. The friction query is repeated three times to expose within-run ordering and candidate variation; one additional read-only dense-only and sparse-only rank trace exposes the component ranks behind Core's intent-weighted RRF result. This trace does not influence the returned candidates or fusion weights. The separate BRVIN Teachers Gemini answer/abstention path is not invoked by this action.",
   };
 }
 

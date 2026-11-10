@@ -289,7 +289,7 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
     })).rejects.toThrow("read-back did not return every expected deterministic point ID");
   });
 
-  it("uses one dense+sparse RRF path with server-authorized project/source filters and post-validates every point", async () => {
+  it("runs independent dense and sparse queries with server-authorized filters and post-validates every point", async () => {
     const { request, calls } = makeQdrant();
     const pilot = makePilot(request);
     const result = await pilot.query({
@@ -308,18 +308,31 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
       pdfPage: 2,
       text: "F = ma",
       contentTypes: ["formula", "explanatory_text"],
+      score: 0.5,
+      metadata: {
+        retrievalFusion: {
+          method: "core-intent-weighted-rrf",
+          queryIntent: "semantic",
+          k: 2,
+          denseWeight: 0.7,
+          sparseWeight: 0.3,
+        },
+      },
     });
-    const queryCall = calls.find((call) => call.url.endsWith("/points/query"));
-    expect(queryCall?.body.query).toEqual({ fusion: "rrf" });
-    expect(queryCall?.body.prefetch).toHaveLength(2);
-    expect(queryCall?.body.prefetch.map((item: any) => item.using)).toEqual(["dense", "sparse"]);
-    for (const prefetch of queryCall?.body.prefetch ?? []) {
-      expect(prefetch.filter.must).toEqual([
+    const queryCalls = calls.filter((call) => call.url.endsWith("/points/query"));
+    expect(queryCalls).toHaveLength(2);
+    expect(queryCalls.map((call) => call.body.using)).toEqual(["dense", "sparse"]);
+    for (const call of queryCalls) {
+      expect(call.body.filter.must).toEqual([
         { key: "project_id", match: { value: "project-a" } },
         { key: "source_id", match: { any: ["source-a"] } },
       ]);
+      expect(call.body.limit).toBe(24);
+      expect(call.body.with_payload).toBe(true);
+      expect(call.body.with_vector).toBe(false);
+      expect(call.body.prefetch).toBeUndefined();
+      expect(call.body.query).toBeDefined();
     }
-    expect(queryCall?.body.filter).toEqual(queryCall?.body.prefetch[0].filter);
 
     const payloadIndexCalls = calls.filter((call) =>
       call.url.endsWith("/collections/brvin_m14_physics_pilot_v1/index?wait=true") && call.method === "PUT",
@@ -331,6 +344,161 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
     expect(calls.findIndex((call) => call.url.endsWith("/index?wait=true"))).toBeLessThan(
       calls.findIndex((call) => call.url.endsWith("/points/query")),
     );
+  });
+
+  it("ranks the friction worked example first with semantic weights and reverses weights for exact formula queries", async () => {
+    const point = (id: string, page: number, text: string) => ({
+      id,
+      payload: {
+        project_id: "project-a",
+        source_id: "source-a",
+        item_key: "physics/page-" + page + "/" + id,
+        pdf_page: page,
+        chunk_text: text,
+        chunk_id: id,
+        generation_id: "generation-a",
+        content_types: ["explanatory_text"],
+      },
+    });
+    const worked = point("worked-example", 3, "4 kg box; 20 N pull; 8 N friction; net force 12 N; acceleration 3 m/s².");
+    const supporting = point("supporting-context", 2, "Newton's second law and friction affect net force.");
+    const overview = point("broad-overview", 1, "An introduction to force and net force.");
+
+    const makeRankedRequest = (densePoints: any[], sparsePoints: any[]) => {
+      const base = makeQdrant().request;
+      const calls: Array<{ using: string; filter: any; limit: number }> = [];
+      const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/points/query") && init?.method === "POST") {
+          const body = JSON.parse(String(init.body)) as { using: string; filter: any; limit: number };
+          calls.push(body);
+          const points = body.using === "dense" ? densePoints : sparsePoints;
+          return new Response(JSON.stringify({ result: { points }, status: "ok" }), { status: 200 });
+        }
+        return base(input, init);
+      }) as typeof fetch;
+      return { request, calls };
+    };
+
+    const inertia = point("c601e70a-8570-5122-ab56-4d23b9f334c9", 1, "Inertia and zero-net-force context.");
+    const formulaContext = point("020b9743-4a6f-5211-8836-b044137502f7", 2, "Formula and third-law context.");
+    const answerKey = point("2971ad8d-59c4-5a97-8779-15a5c874b132", 3, "Worked-example answer key.");
+    const attribution = point("0a2a4f69-be34-5482-b861-4cdf2c8c94f7", 3, "Source attribution.");
+    const semanticFixture = makeRankedRequest(
+      [
+        { ...worked, score: 0.6746742 },
+        { ...supporting, score: 0.64888996 },
+        { ...inertia, score: 0.648811 },
+        { ...formulaContext, score: 0.6447945 },
+        { ...overview, score: 0.6418122 },
+        { ...answerKey, score: 0.60316366 },
+        { ...attribution, score: 0.5972749 },
+      ],
+      [
+        { ...overview, score: 8.145531 },
+        { ...supporting, score: 7.658746 },
+        { ...inertia, score: 3.6299407 },
+        { ...formulaContext, score: 3.6138535 },
+        { ...worked, score: 3.2805996 },
+        { ...answerKey, score: 2.017408 },
+        { ...attribution, score: 0.84754217 },
+      ],
+    );
+    const semantic = await makePilot(semanticFixture.request).query({
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "How does friction affect the net force and motion of an object?",
+      limit: 3,
+      prefetchLimit: 7,
+    });
+    expect(semantic.map((item) => item.id)).toEqual([
+      "worked-example",
+      "supporting-context",
+      "broad-overview",
+    ]);
+    expect(semantic[0].score).toBeCloseTo(0.4, 10);
+    expect(semantic[1].score).toBeCloseTo(1 / 3, 10);
+    expect(semantic[2].score).toBeCloseTo(4 / 15, 10);
+    expect(semantic[0].metadata?.retrievalFusion).toMatchObject({
+      queryIntent: "semantic",
+      denseWeight: 0.7,
+      sparseWeight: 0.3,
+    });
+    expect(semanticFixture.calls.map((call) => call.using)).toEqual(["dense", "sparse"]);
+    expect(semanticFixture.calls.every((call) =>
+      call.filter.must[0].key === "project_id" &&
+      call.filter.must[1].key === "source_id" &&
+      call.limit === 7,
+    )).toBe(true);
+
+    const symbolicFixture = makeRankedRequest(
+      [
+        { ...overview, score: 0.6746742 },
+        { ...supporting, score: 0.64888996 },
+        { ...worked, score: 0.6418122 },
+      ],
+      [
+        { ...worked, score: 8.145531 },
+        { ...supporting, score: 7.658746 },
+        { ...overview, score: 3.2805996 },
+      ],
+    );
+    const symbolic = await makePilot(symbolicFixture.request).query({
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "Find the exact source expression f = ma.",
+      limit: 3,
+      prefetchLimit: 7,
+    });
+    expect(symbolic.map((item) => item.id)).toEqual([
+      "worked-example",
+      "supporting-context",
+      "broad-overview",
+    ]);
+    expect(symbolic[0].score).toBeCloseTo(0.425, 10);
+    expect(symbolic[0].metadata?.retrievalFusion).toMatchObject({
+      queryIntent: "symbolic",
+      denseWeight: 0.3,
+      sparseWeight: 0.7,
+    });
+  });
+
+  it("stabilizes equal component scores by point ID before weighted fusion", async () => {
+    const point = (id: string, page: number) => ({
+      id,
+      score: 0.75,
+      payload: {
+        project_id: "project-a",
+        source_id: "source-a",
+        item_key: "physics/page-" + page + "/" + id,
+        pdf_page: page,
+        chunk_text: "Shared force terminology.",
+        chunk_id: id,
+      },
+    });
+    const base = makeQdrant().request;
+    const makeRequest = (reverse: boolean) => vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/points/query") && init?.method === "POST") {
+        const points = reverse
+          ? [point("point-b", 1), point("point-a", 1)]
+          : [point("point-a", 1), point("point-b", 1)];
+        return new Response(JSON.stringify({ result: { points }, status: "ok" }), { status: 200 });
+      }
+      return base(input, init);
+    }) as typeof fetch;
+
+    const query = {
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "Describe force.",
+      limit: 2,
+      prefetchLimit: 2,
+    };
+    const first = await makePilot(makeRequest(false)).query(query);
+    const second = await makePilot(makeRequest(true)).query(query);
+    expect(first.map((item) => item.id)).toEqual(["point-a", "point-b"]);
+    expect(second.map((item) => item.id)).toEqual(["point-a", "point-b"]);
   });
 
   it("exposes independent dense and sparse ranks for M14 RRF tie diagnosis without weakening scope checks", async () => {
