@@ -192,3 +192,22 @@ The two expected-no-match cases remain excluded from the positive suite. Their e
 The authenticated **Run non-gating negative + rank-stability diagnostics** action now includes `componentRankDiagnostics` for two reviewed positive cases: `newtons-second-law-exact-formula` and `uppercase-force-symbol`. For each prompt, the receipt shows separate dense-only and sparse-only candidate ranks, point IDs, chunk IDs, source/page provenance and component-local raw scores. It retains the earlier friction dense/sparse trace, three-repeat fusion order, and the two expected-no-match candidate previews.
 
 Compare the two new component lists with the v75 positive receipt's fused top-five ranks and the qrels matrix. Determine whether the page-1-overview first-place miss on exact formula and the page-3-worked-example first-place result on uppercase symbol originate in dense retrieval, sparse retrieval, or their weighted fusion. Compare ranks within each component; do not compare raw dense and sparse score magnitudes or interpret RRF as confidence. These traces are read-only, staging-only diagnostics: they do not change query fusion, the Qdrant corpus, the v2 contract, or production provider selection. They add one dense/sparse component query pair per reviewed prompt.
+
+
+## Version-76 component trace findings — 10 November 2026
+
+The authenticated v76 **Run non-gating negative + rank-stability diagnostics** receipt has now been reviewed.
+
+### Exact-formula component ranks
+
+For `What equation expresses Newton's second law of motion?`, dense-only ranks the P2 formula-tail and P2 second-law chunks first and second (both qrels grade 3). Sparse-only ranks the P1 overview first (grade 0), P2 second-law second (grade 3), and delays P2 formula-tail to rank 6 (grade 3). The existing symbolic 30% dense / 70% sparse fusion consequently puts the grade-0 overview first, with direct formula chunks second and third. This is a sparse-first-ranking problem for a natural-language formula-discovery query, not a dense-retrieval failure.
+
+### Uppercase-symbol component ranks
+
+For `Find the source expression containing uppercase F in the second-law formula.`, dense-only ranks P3 attribution first (grade 0), then the two direct P2 formula chunks second/third (grade 3/3). Sparse-only ranks P3 worked-example context first (grade 1), then those same direct P2 chunks second/third (grade 3/3). The current fused list puts the worked example first, followed by direct formula chunks. Since both component legs agree on the direct evidence at ranks 2/3 but have different first-place distractors, a global weight change merely switches the distractor; it is not a robust correction.
+
+### Negative and stability checks
+
+The lowercase `f = ma` and Planck expected-no-match prompts each still return five candidates, all qrels grade 0 for the requested exact answer. The lowercase case returns uppercase-symbol-adjacent Physics content, not the requested lowercase expression. This remains retrieval-only and does not establish answer abstention. The friction query returned the same ordered top five on all three repeats, with the page-3 worked-example chunk ranked first each time.
+
+**Decision:** keep 70/30 semantic and 30/70 symbolic weights provisional and unchanged. Avoid global retuning based on this single seven-chunk corpus. A focused follow-up should test (a) formula-discovery queries written entirely in natural language, separately from mixed theory-plus-equation queries, and (b) a case-sensitive exact-symbol evidence promotion for explicit uppercase/lowercase requests. Add regression tests for the known formula and hard-negative pairs; compare a branch against the current v76 baseline on all ten positives and both negatives. This diagnostic itself made no retrieval change. Keep production on Cloudflare AI Search.
