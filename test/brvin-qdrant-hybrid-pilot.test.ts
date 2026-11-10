@@ -468,6 +468,7 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
       "What equation expresses Newton's second law of motion?",
       "State that resultant force is mass multiplied by acceleration.",
       "Find the source expression containing uppercase F in the second-law formula.",
+      "Find a source expression containing lowercase f = ma, not uppercase F = ma.",
       "Explain how net force affects acceleration for a fixed mass and cite the governing equation.",
     ];
     const pilot = makePilot(makeQdrant().request);
@@ -495,6 +496,7 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
       "Set up the numerical force calculation for the four-kilogram example.",
       "How does friction affect the net force and motion of an object?",
       "Find the bus-braking example and its answer-key explanation.",
+      "Give the exact SI value of the Planck constant to nine significant figures.",
     ];
     const pilot = makePilot(makeQdrant().request);
     for (const query of queries) {
