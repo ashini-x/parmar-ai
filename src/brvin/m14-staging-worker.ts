@@ -1,4 +1,5 @@
-import type { Env } from "../config/env";
+import type { AiSearchInstance, Env } from "../config/env";
+import { handleM15BenchmarkStagingRequest } from "./m15-benchmark-staging";
 import { readBrvinCorpusGeneration } from "./corpus-reader";
 import { indexBrvinCorpusGeneration } from "./m14-pilot-runner";
 import {
@@ -53,6 +54,8 @@ interface M14RegistryRecord {
 
 export interface M14StagingWorkerEnv extends Env {
   BRVIN_M14_ADMIN_TOKEN?: string;
+  BRVIN_M15_BENCHMARK_AI_SEARCH?: AiSearchInstance;
+  BRVIN_M15_BENCHMARK_QDRANT_COLLECTION?: string;
 }
 
 interface M14VisionRecoveryRecord {
@@ -1658,6 +1661,10 @@ export async function handleM14StagingRequest(
   runM15Shadow: typeof runBrvinM15ShadowBenchmark = runBrvinM15ShadowBenchmark,
 ): Promise<Response> {
   const url = new URL(request.url);
+  if (url.pathname === "/admin/m15/benchmark" ||
+      url.pathname.startsWith("/admin/m15/benchmark/")) {
+    return handleM15BenchmarkStagingRequest(request, env);
+  }
   if (url.pathname === "/health") {
     return json({
       ok: true,
