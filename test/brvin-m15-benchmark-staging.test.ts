@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   M15_BENCHMARK_QUERY_SUITE,
+  m15QdrantPageWindow,
   shouldPersistM15VisionStatus,
   summarizeM15BenchmarkProvider,
   validateM15BenchmarkPdf,
@@ -18,6 +19,16 @@ function providerResult(pages: Array<number | null>, ok = true) {
 }
 
 describe("M15 second-source benchmark definition", () => {
+  it("splits Qdrant indexing into resumable two-page Worker invocations", () => {
+    expect(m15QdrantPageWindow(0)).toEqual({ startIndex: 0, endIndex: 2 });
+    expect(m15QdrantPageWindow(2)).toEqual({ startIndex: 2, endIndex: 4 });
+    expect(m15QdrantPageWindow(4)).toEqual({ startIndex: 4, endIndex: 6 });
+    expect(m15QdrantPageWindow(6)).toEqual({ startIndex: 6, endIndex: 8 });
+    expect(m15QdrantPageWindow(8)).toEqual({ startIndex: 8, endIndex: 8 });
+    expect(() => m15QdrantPageWindow(-1)).toThrow();
+    expect(() => m15QdrantPageWindow(9)).toThrow();
+  });
+
   it("updates Vision-derived status only while a source is in the OCR stage", () => {
     expect(shouldPersistM15VisionStatus("ocr_running")).toBe(true);
     expect(shouldPersistM15VisionStatus("ocr_completed")).toBe(true);

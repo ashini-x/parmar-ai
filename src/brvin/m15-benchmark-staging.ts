@@ -8,7 +8,6 @@ import {
 import { fatmanIndexPageKey } from "../fatman/library";
 import { persistBrvinPageCorpus } from "./corpus-store";
 import { readBrvinCorpusGeneration } from "./corpus-reader";
-import { indexBrvinCorpusGeneration } from "./m14-pilot-runner";
 import { BrvinQdrantHybridPilot } from "./qdrant-hybrid-pilot";
 import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
 
@@ -22,6 +21,7 @@ const BENCHMARK_QDRANT_COLLECTION = "brvin_m15_physics_benchmark_v1";
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const TOP_K = 5;
 const PREFETCH_LIMIT = 15;
+const M15_QDRANT_PAGES_PER_INVOCATION = 2;
 
 type ProviderName = "cloudflareAiSearch" | "qdrantVertex";
 
@@ -45,6 +45,7 @@ interface M15BenchmarkSourceRow {
   indexed_pages: number;
   generation_id: string | null;
   qdrant_point_count: number;
+  qdrant_indexed_pages: number;
   ai_search_indexed_pages: number;
   error_message: string | null;
   created_at: number;
@@ -63,6 +64,23 @@ export function shouldPersistM15VisionStatus(currentStatus: string): boolean {
     currentStatus === "ocr_completed" ||
     currentStatus === "ocr_failed" ||
     currentStatus === "ocr_output_incomplete";
+}
+
+/** Select a bounded, zero-based page window so large Qdrant replays fit Worker subrequest limits. */
+export function m15QdrantPageWindow(
+  indexedPages: number,
+  pageCount = SOURCE_PAGE_COUNT,
+  batchSize = M15_QDRANT_PAGES_PER_INVOCATION,
+): { startIndex: number; endIndex: number } {
+  if (!Number.isSafeInteger(indexedPages) || !Number.isSafeInteger(pageCount) ||
+      !Number.isSafeInteger(batchSize) || indexedPages < 0 || pageCount < 1 ||
+      indexedPages > pageCount || batchSize < 1) {
+    throw new Error("M15 Qdrant page progress or batch bounds are invalid.");
+  }
+  return {
+    startIndex: indexedPages,
+    endIndex: Math.min(pageCount, indexedPages + batchSize),
+  };
 }
 
 interface M15Candidate {
@@ -162,9 +180,16 @@ async function ensureSchema(env: Env): Promise<void> {
     "source_object TEXT NOT NULL, source_sha256 TEXT NOT NULL UNIQUE, expected_size INTEGER NOT NULL, " +
     "uploaded_bytes INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, vision_operation TEXT, " +
     "vision_output_prefix TEXT NOT NULL, page_count INTEGER NOT NULL DEFAULT 0, indexed_pages INTEGER NOT NULL DEFAULT 0, " +
-    "generation_id TEXT, qdrant_point_count INTEGER NOT NULL DEFAULT 0, ai_search_indexed_pages INTEGER NOT NULL DEFAULT 0, " +
+    "generation_id TEXT, qdrant_point_count INTEGER NOT NULL DEFAULT 0, qdrant_indexed_pages INTEGER NOT NULL DEFAULT 0, " +
+    "ai_search_indexed_pages INTEGER NOT NULL DEFAULT 0, " +
     "error_message TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"
   ).run();
+  const columns = await env.DB.prepare("PRAGMA table_info(m15_benchmark_sources)").all<{ name: string }>();
+  if (!(columns.results ?? []).some((column) => column.name === "qdrant_indexed_pages")) {
+    await env.DB.prepare(
+      "ALTER TABLE m15_benchmark_sources ADD COLUMN qdrant_indexed_pages INTEGER NOT NULL DEFAULT 0",
+    ).run();
+  }
 }
 
 async function getSource(env: Env, sourceId: string): Promise<M15BenchmarkSourceRow | null> {
@@ -657,32 +682,135 @@ async function buildCorpus(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourceR
 
 async function indexQdrant(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourceRow): Promise<Record<string, unknown>> {
   if (!env.DB) throw new Error("The isolated staging D1 database is not configured.");
-  if (row.status !== "corpus_ready" && row.status !== "qdrant_ready" && row.status !== "ai_search_ready") {
+  if (row.status !== "corpus_ready" && row.status !== "qdrant_indexing" &&
+      row.status !== "qdrant_ready" && row.status !== "ai_search_ready" && row.status !== "ready") {
     throw new Error("Build and verify the eight-page corpus before Qdrant indexing.");
   }
   const corpus = await getVerifiedCorpus(env, row);
+  const source = corpus.sourceManifest;
+  const sortedPages = [...corpus.pageManifests].sort((left, right) => left.pdfPage - right.pdfPage);
+  if (source.sourceId !== row.source_id || source.generationId !== row.generation_id ||
+      source.sourcePdfSha256 !== SOURCE_SHA256 || source.pageCount !== SOURCE_PAGE_COUNT ||
+      sortedPages.length !== SOURCE_PAGE_COUNT) {
+    throw new Error("The verified M15 corpus does not match the registered source generation.");
+  }
+
+  // Validate the entire generation before any page write, preserving the same
+  // all-pages provenance gate used by the original whole-generation replay.
+  const seenPages = new Set<number>();
+  const seenChunkIds = new Set<string>();
+  let verifiedChunkCount = 0;
+  for (let index = 0; index < sortedPages.length; index += 1) {
+    const page = sortedPages[index];
+    const expectedPage = index + 1;
+    if (page.sourceId !== source.sourceId || page.generationId !== source.generationId ||
+        page.sourcePdfSha256 !== source.sourcePdfSha256 || page.ocrOperationId !== source.ocrOperationId ||
+        page.pdfPage !== expectedPage || seenPages.has(page.pdfPage) ||
+        !page.stableItemKey?.trim() || !Array.isArray(page.chunks) || page.chunks.length < 1) {
+      throw new Error("M15 Qdrant replay rejected mismatched source, incomplete page coverage, or duplicate page provenance.");
+    }
+    seenPages.add(page.pdfPage);
+    verifiedChunkCount += page.chunks.length;
+    for (const chunk of page.chunks) {
+      if (!chunk.id || seenChunkIds.has(chunk.id) || !chunk.normalizedText?.trim() ||
+          !/^[a-f0-9]{64}$/iu.test(chunk.contentSha256)) {
+        throw new Error("M15 Qdrant replay rejected a duplicate or invalid deterministic chunk identity.");
+      }
+      seenChunkIds.add(chunk.id);
+    }
+  }
+  if (seenPages.size !== SOURCE_PAGE_COUNT || verifiedChunkCount !== corpus.chunkCount) {
+    throw new Error("M15 Qdrant replay did not contain the complete, contiguous page/chunk set.");
+  }
+
+  const indexedPages = Number(row.qdrant_indexed_pages ?? 0);
+  const window = m15QdrantPageWindow(indexedPages);
   const pilot = await createQdrantPilot(env, BENCHMARK_QDRANT_COLLECTION);
-  await pilot.ensureCollection();
-  const indexed = await indexBrvinCorpusGeneration(pilot, row.project_id, corpus);
-  if (indexed.sourceId !== row.source_id || indexed.pageCount !== SOURCE_PAGE_COUNT ||
-      indexed.pointCount !== indexed.chunkCount || indexed.pointCount < SOURCE_PAGE_COUNT ||
-      new Set(indexed.pointIds).size !== indexed.pointCount) {
-    throw new Error("Qdrant did not confirm every deterministic benchmark point.");
+  const modelIds = new Set<string>();
+  const modelVersions = new Set<string>();
+
+  // Each invocation writes at most two physical pages. After every page we
+  // persist a deterministic checkpoint. If a response is lost or a Worker
+  // reaches a platform limit after a Qdrant upsert, replaying that page safely
+  // overwrites the same deterministic point IDs rather than creating duplicates.
+  for (const page of sortedPages.slice(window.startIndex, window.endIndex)) {
+    const indexed = await pilot.upsertPageChunks({
+      projectId: row.project_id,
+      sourceId: row.source_id,
+      itemKey: page.stableItemKey,
+      pdfPage: page.pdfPage,
+      generationId: source.generationId,
+      chunks: page.chunks.map((chunk) => ({
+        id: chunk.id,
+        chunkIndex: chunk.chunkIndex,
+        normalizedText: chunk.normalizedText,
+        contentSha256: chunk.contentSha256,
+        contentTypes: chunk.contentTypes,
+        formulaCandidates: chunk.formulaCandidates.map((formula) => ({
+          originalExpression: formula.originalExpression,
+          normalizedSearchExpression: formula.normalizedSearchExpression,
+          confidence: formula.confidence,
+        })),
+      })),
+    });
+    if (indexed.pointCount !== page.chunks.length || indexed.ids.length !== page.chunks.length ||
+        new Set(indexed.ids).size !== indexed.pointCount) {
+      throw new Error("Qdrant did not confirm every deterministic point for physical page " + page.pdfPage + ".");
+    }
+
+    const completedPages = page.pdfPage;
+    const completedPointCount = sortedPages.slice(0, completedPages)
+      .reduce((sum, completedPage) => sum + completedPage.chunks.length, 0);
+    await env.DB.prepare(
+      "UPDATE m15_benchmark_sources SET qdrant_indexed_pages = ?, qdrant_point_count = ?, status = 'qdrant_indexing', error_message = NULL, updated_at = ? WHERE source_id = ?",
+    ).bind(completedPages, completedPointCount, Date.now(), row.source_id).run();
+    modelIds.add(indexed.modelId);
+    modelVersions.add(indexed.modelVersion);
+  }
+
+  const completedPages = window.endIndex;
+  const completedPointCount = sortedPages.slice(0, completedPages)
+    .reduce((sum, page) => sum + page.chunks.length, 0);
+  if (completedPages < SOURCE_PAGE_COUNT) {
+    return {
+      sourceId: row.source_id,
+      projectId: row.project_id,
+      generationId: source.generationId,
+      collection: BENCHMARK_QDRANT_COLLECTION,
+      status: "qdrant_indexing",
+      pageCount: SOURCE_PAGE_COUNT,
+      indexedPages: completedPages,
+      nextPage: completedPages + 1,
+      remainingPages: SOURCE_PAGE_COUNT - completedPages,
+      chunkCount: corpus.chunkCount,
+      pointCount: completedPointCount,
+      pagesPerInvocation: M15_QDRANT_PAGES_PER_INVOCATION,
+      continuationRequired: true,
+      deterministicRetrySafe: true,
+    };
+  }
+
+  if (completedPointCount !== corpus.chunkCount || completedPointCount < SOURCE_PAGE_COUNT) {
+    throw new Error("Qdrant M15 checkpoint totals do not match the verified corpus chunk count.");
   }
   await env.DB.prepare(
-    "UPDATE m15_benchmark_sources SET qdrant_point_count = ?, status = CASE WHEN ai_search_indexed_pages = ? THEN 'ready' ELSE 'qdrant_ready' END, error_message = NULL, updated_at = ? WHERE source_id = ?",
-  ).bind(indexed.pointCount, SOURCE_PAGE_COUNT, Date.now(), row.source_id).run();
+    "UPDATE m15_benchmark_sources SET qdrant_point_count = ?, qdrant_indexed_pages = ?, status = CASE WHEN ai_search_indexed_pages = ? THEN 'ready' ELSE 'qdrant_ready' END, error_message = NULL, updated_at = ? WHERE source_id = ?",
+  ).bind(completedPointCount, SOURCE_PAGE_COUNT, SOURCE_PAGE_COUNT, Date.now(), row.source_id).run();
   return {
-    sourceId: indexed.sourceId,
+    sourceId: row.source_id,
     projectId: row.project_id,
-    generationId: indexed.generationId,
+    generationId: source.generationId,
     collection: BENCHMARK_QDRANT_COLLECTION,
-    pageCount: indexed.pageCount,
-    chunkCount: indexed.chunkCount,
-    pointCount: indexed.pointCount,
-    embeddingModelIds: indexed.embeddingModelIds,
-    embeddingModelVersions: indexed.embeddingModelVersions,
+    status: "qdrant_ready",
+    pageCount: SOURCE_PAGE_COUNT,
+    indexedPages: SOURCE_PAGE_COUNT,
+    chunkCount: corpus.chunkCount,
+    pointCount: completedPointCount,
+    embeddingModelIds: [...modelIds],
+    embeddingModelVersions: [...modelVersions],
     dimensions: Number(env.BRVIN_M14_EMBEDDING_DIMENSIONS),
+    pagesPerInvocation: M15_QDRANT_PAGES_PER_INVOCATION,
+    continuationRequired: false,
     deterministicRetrySafe: true,
   };
 }
@@ -982,6 +1110,7 @@ function publicSource(row: M15BenchmarkSourceRow): Record<string, unknown> {
     indexedPages: Number(row.indexed_pages),
     generationId: row.generation_id,
     qdrantPointCount: Number(row.qdrant_point_count),
+    qdrantIndexedPages: Number(row.qdrant_indexed_pages ?? 0),
     aiSearchIndexedPages: Number(row.ai_search_indexed_pages),
     visionOperationRecorded: Boolean(row.vision_operation),
     error: row.error_message ?? undefined,
@@ -1052,7 +1181,10 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
     buttons.ocr.disabled = !authReady || !hasSource || !ocrConfirm.checked || sourceStatus !== "uploaded";
     buttons.status.disabled = !authReady || !hasSource;
     buttons.corpus.disabled = !authReady || !hasSource || sourceStatus !== "ocr_completed";
-    buttons.qdrant.disabled = !authReady || !hasSource || !["corpus_ready","qdrant_ready","ai_search_ready","ready"].includes(sourceStatus);
+    buttons.qdrant.disabled = !authReady || !hasSource || !["corpus_ready","qdrant_indexing","qdrant_ready","ai_search_ready","ready"].includes(sourceStatus);
+    buttons.qdrant.textContent = sourceStatus === "qdrant_indexing"
+      ? "5 · Continue Qdrant indexing (next 2 pages)"
+      : "5 · Embed and index into isolated Qdrant collection";
     buttons.aisearch.disabled = !authReady || !hasSource || !["corpus_ready","qdrant_ready","ai_search_ready","ai_search_indexing","ready"].includes(sourceStatus);
     buttons.benchmark.disabled = !authReady || !hasSource || sourceStatus !== "ready";
   }
@@ -1094,7 +1226,7 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
     await call("/admin/m15/benchmark/source/corpus","POST",{sourceId:sourceId.value},"Validating all eight Vision JSON files, persisting immutable page manifests/chunks, and reading them back for hash and page-provenance verification.");
   });
   buttons.qdrant.addEventListener("click",async()=>{
-    await call("/admin/m15/benchmark/source/qdrant","POST",{sourceId:sourceId.value},"Creating/verifying the dedicated Qdrant collection and indexing deterministic Vertex-embedded chunks. This is a staging index write.");
+    await call("/admin/m15/benchmark/source/qdrant","POST",{sourceId:sourceId.value},"Indexing at most two verified PDF pages into the isolated Qdrant collection. Re-enter the token and repeat Step 5 until all eight pages are complete.");
   });
   buttons.aisearch.addEventListener("click",async()=>{
     await call("/admin/m15/benchmark/source/ai-search","POST",{sourceId:sourceId.value},"Uploading the eight stored OCR page texts to the separate M15 AI Search staging instance. This does not use the production AI Search instance.");
