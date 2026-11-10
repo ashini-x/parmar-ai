@@ -107,6 +107,19 @@ export function m15AiSearchPageWindow(
   };
 }
 
+export function m15AiSearchMetadataForPage(sourceId: string, projectId: string, pdfPage: number): Record<string, string> {
+  if (!sourceId.trim() || !projectId.trim() || !Number.isSafeInteger(pdfPage) ||
+      pdfPage < 1 || pdfPage > SOURCE_PAGE_COUNT) {
+    throw new Error("M15 AI Search page metadata requires a source, project and valid physical page number.");
+  }
+  return {
+    source_id: sourceId,
+    project_id: projectId,
+    pdf_page: String(pdfPage),
+    benchmark: "brvin-m15-physics-v1",
+  };
+}
+
 export function m15AiSearchMetadataSchemaMatches(value: unknown): boolean {
   if (!Array.isArray(value) || value.length !== M15_AI_SEARCH_METADATA_SCHEMA.length) return false;
   return M15_AI_SEARCH_METADATA_SCHEMA.every((expected) =>
@@ -922,12 +935,7 @@ async function indexAiSearch(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourc
       }
     } else {
       const item = await search.items.uploadAndPoll(key, page.rawOcrText, {
-        metadata: {
-          source_id: row.source_id,
-          project_id: row.project_id,
-          pdf_page: String(page.pdfPage),
-          benchmark: "brvin-m15-physics-v1",
-        },
+        metadata: m15AiSearchMetadataForPage(row.source_id, row.project_id, page.pdfPage),
         pollIntervalMs: 1000,
         timeoutMs: 10000,
       });
