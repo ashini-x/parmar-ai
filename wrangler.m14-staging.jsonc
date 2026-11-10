@@ -26,7 +26,12 @@
     "GCP_PROJECT_ID": "project-90db7be4-619f-4ed7-89b",
     "FATMAN_GCS_BUCKET": "parmar-fatman-ocr-90db7be4",
     "BRVIN_M14_PILOT_ENABLED": "true",
-    "BRVIN_M14_CORPUS_BUCKET": "brvin-m14-physics-90db7be4-a8ca999e"
+    "BRVIN_M14_CORPUS_BUCKET": "brvin-m14-physics-90db7be4-a8ca999e",
+    "BRVIN_M14_VERTEX_LOCATION": "asia-south1",
+    "BRVIN_M14_VERTEX_MODEL": "gemini-embedding-001",
+    "BRVIN_M14_EMBEDDING_DIMENSIONS": "768",
+    "BRVIN_M14_QDRANT_COLLECTION": "brvin_m14_physics_pilot_v1",
+    "BRVIN_M14_QDRANT_URL": "https://8f8aa8b4-c46c-4453-b3b8-f5d6b2c0b146.australia-southeast1-0.gcp.cloud.qdrant.io"
   },
   "d1_databases": [
     {
