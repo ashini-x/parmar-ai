@@ -428,11 +428,13 @@ export class BrvinQdrantHybridPilot {
     query: string;
     limit?: number;
     prefetchLimit?: number;
+    /** Set false for read-only shadow queries; skip collection/index preparation. */
+    ensureCollection?: boolean;
   }): Promise<BrvinM14QueryResult[]> {
     if (!input.query.trim()) throw new Error("A non-empty pilot query is required.");
     if (!input.authorizedSourceIds.length) return [];
     const filter = payloadFilter(input.projectId, input.authorizedSourceIds);
-    await this.ensureCollection();
+    if (input.ensureCollection !== false) await this.ensureCollection();
     const [denseResult, sparse] = await Promise.all([
       this.embeddings.embedQuery(input.query),
       buildBrvinSparseVector(input.query),

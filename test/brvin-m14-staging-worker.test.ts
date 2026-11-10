@@ -129,6 +129,9 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(html).toContain("Verify stored M14 manifests (read only)");
     expect(html).toContain('/admin/m14/qdrant/index');
     expect(html).toContain('/admin/m14/qdrant/evaluate');
+    expect(html).toContain('/admin/m15/shadow/evaluate');
+    expect(html).toContain("Run AI Search vs Qdrant shadow benchmark");
+    expect(html).toContain("search/query operations only");
     expect(html).toContain("Embed and index the 7 Physics chunks in Qdrant");
     expect(html).toContain("natural-language equation discovery use 70% dense / 30% sparse");
     expect(html).toContain("explicit symbol, case-sensitive, notation and mathematical-expression lookups use 30% dense / 70% sparse");
@@ -908,5 +911,85 @@ describe("BRVIN M14 isolated staging operator", () => {
     );
     expect(response.status).toBe(503);
     expect(run).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("BRVIN M15 read-only provider shadow route", () => {
+  const receipt = {
+    benchmark: "brvin-m15-read-only-shadow",
+    queryCount: 12,
+    sideEffects: {
+      aiSearchItemsUploaded: 0,
+      aiSearchItemsDeleted: 0,
+      qdrantPointsUpserted: 0,
+      qdrantPointsDeleted: 0,
+      sourceOrOcrChanged: false,
+      providerSelectorChanged: false,
+      consumerAnswersChanged: false,
+    },
+  };
+  const deps = (benchmark: ReturnType<typeof vi.fn>) => [
+    undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, benchmark as never,
+  ] as const;
+
+  it("requires bearer authentication and exact source confirmation", async () => {
+    const benchmark = vi.fn(async () => receipt);
+    const aiSearch = { search: vi.fn(async () => ({ chunks: [] })) };
+    const denied = await handleM14StagingRequest(
+      makeRequest("/admin/m15/shadow/evaluate", {
+        token: "wrong-token",
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv({ BRVIN_M15_AI_SEARCH: aiSearch }),
+      ...deps(benchmark),
+    );
+    expect(denied.status).toBe(401);
+    const wrongSource = await handleM14StagingRequest(
+      makeRequest("/admin/m15/shadow/evaluate", {
+        token: TOKEN,
+        body: { confirmSourceId: "00000000-0000-4000-8000-000000000000" },
+      }),
+      makeEnv({ BRVIN_M15_AI_SEARCH: aiSearch }),
+      ...deps(benchmark),
+    );
+    expect(wrongSource.status).toBe(400);
+    expect(benchmark).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the direct AI Search shadow binding is missing", async () => {
+    const benchmark = vi.fn(async () => receipt);
+    const response = await handleM14StagingRequest(
+      makeRequest("/admin/m15/shadow/evaluate", {
+        token: TOKEN,
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv({ BRVIN_M15_AI_SEARCH: undefined }),
+      ...deps(benchmark),
+    );
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "m15_ai_search_shadow_binding_missing",
+    });
+    expect(benchmark).not.toHaveBeenCalled();
+  });
+
+  it("runs the injected comparison only after staging auth and fixed-source confirmation", async () => {
+    const benchmark = vi.fn(async () => receipt);
+    const aiSearch = { search: vi.fn(async () => ({ chunks: [] })) };
+    const response = await handleM14StagingRequest(
+      makeRequest("/admin/m15/shadow/evaluate", {
+        token: TOKEN,
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv({ BRVIN_M15_AI_SEARCH: aiSearch }),
+      ...deps(benchmark),
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      benchmark: { queryCount: 12 },
+    });
+    expect(benchmark).toHaveBeenCalledTimes(1);
   });
 });

@@ -9,6 +9,7 @@ import {
 } from "./m14-physics-evaluation";
 import { BrvinQdrantHybridPilot, type BrvinM14ComponentRankings } from "./qdrant-hybrid-pilot";
 import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
+import { runBrvinM15ShadowBenchmark } from "./m15-shadow-benchmark";
 import { getGoogleAccessToken } from "../auth/google";
 import type {
   FatmanImportJob,
@@ -179,6 +180,11 @@ function m14AdminPage(): Response {
     <button id="indexQdrant" type="button" disabled>Embed and index the 7 Physics chunks in Qdrant</button>
     <button id="evaluateQdrant" class="secondary" type="button" disabled>Run 10 source-grounded Physics retrieval checks</button>
     <button id="diagnoseQdrant" class="secondary" type="button" disabled>Run non-gating negative + rank-stability diagnostics</button>
+    <div class="notice">
+      <strong>M15 · Read-only provider shadow benchmark</strong>
+      <p class="small">Compares the same fixed Physics queries against the existing AI Search source prefix and isolated Qdrant + Vertex index. It performs search/query operations only: no index writes, deletes, OCR, provider-selector or consumer-answer changes.</p>
+    </div>
+    <button id="runM15Shadow" class="secondary" type="button" disabled>Run AI Search vs Qdrant shadow benchmark</button>
     <div id="result" class="status muted" role="status" aria-live="polite">No recovery or backfill action has been started.</div>
     <details>
       <summary>Security and retry information</summary>
@@ -199,6 +205,7 @@ function m14AdminPage(): Response {
   const indexQdrantButton = document.getElementById("indexQdrant");
   const evaluateQdrantButton = document.getElementById("evaluateQdrant");
   const diagnoseQdrantButton = document.getElementById("diagnoseQdrant");
+  const runM15ShadowButton = document.getElementById("runM15Shadow");
   const healthBox = document.getElementById("health");
   const resultBox = document.getElementById("result");
 
@@ -214,6 +221,8 @@ function m14AdminPage(): Response {
     indexQdrantButton.disabled = !canAuthenticate || !ready || !providerReady;
     evaluateQdrantButton.disabled = !canAuthenticate || !ready || !providerReady;
     diagnoseQdrantButton.disabled = !canAuthenticate || !ready || !providerReady;
+    runM15ShadowButton.disabled = !canAuthenticate || !ready || !providerReady ||
+      runButton.dataset.m15ShadowReady !== "true";
     rebuildButton.disabled = !canAuthenticate || !confirmOcrInput.checked || !ready ||
       ["submitting", "running", "completed", "failed", "submission_uncertain"].includes(ocrStatus);
     runButton.disabled = !confirmInput.checked || !canAuthenticate || !ready || !ocrReady;
@@ -249,11 +258,15 @@ function m14AdminPage(): Response {
         .filter(([configured]) => !configured)
         .map(([, name]) => name);
       const providerReady = ready && data.m14ProviderConfigured?.ready === true;
+      const m15ShadowReady = providerReady && data.m15ShadowConfigured?.ready === true;
+      runButton.dataset.m15ShadowReady = m15ShadowReady ? "true" : "false";
       healthBox.className = "status " + (!ready ? "bad" : providerReady ? "good" : "muted");
       healthBox.textContent = !ready
         ? "Staging is not ready. Check the Worker health response and complete any missing base configuration before continuing.\n" + JSON.stringify(data, null, 2)
         : providerReady
-          ? "Staging and Vertex/Qdrant settings are present. The indexing and evaluation buttons are enabled when you enter the M14 operator token."
+          ? (m15ShadowReady
+            ? "Staging, Vertex/Qdrant, and the read-only AI Search binding are present. M15 shadow is enabled when you enter the staging operator token."
+            : "Staging and Vertex/Qdrant settings are present. M15 shadow is disabled until its direct AI Search binding is deployed.")
           : "Base staging checks passed, but Vertex/Qdrant settings are incomplete. The two Qdrant buttons are intentionally disabled. Add these missing settings under Cloudflare Workers & Pages → parmar-ai-m14-staging → Settings → Variables and Secrets:\n" +
             missingProviderSettings.map((name) => "• " + name).join("\n");
       runButton.dataset.ready = ready ? "true" : "false";
@@ -431,6 +444,25 @@ function m14AdminPage(): Response {
       diagnoseQdrantButton.textContent = "Non-gating diagnostics completed";
     } else {
       diagnoseQdrantButton.textContent = "Run non-gating negative + rank-stability diagnostics";
+    }
+    refreshButton();
+  });
+
+  runM15ShadowButton.addEventListener("click", async () => {
+    refreshButton();
+    if (runM15ShadowButton.disabled) return;
+    runM15ShadowButton.disabled = true;
+    runM15ShadowButton.textContent = "Comparing providers…";
+    const result = await authenticatedRequest(
+      "/admin/m15/shadow/evaluate",
+      "POST",
+      { confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" },
+      "Running the fixed 12-query suite against the current AI Search Physics source and isolated Qdrant + Vertex index. Read-only: no uploads, deletes, indexing, OCR or production routing changes."
+    );
+    if (result?.response.ok && result.data.ok === true) {
+      runM15ShadowButton.textContent = "M15 provider shadow benchmark completed";
+    } else {
+      runM15ShadowButton.textContent = "Run AI Search vs Qdrant shadow benchmark";
     }
     refreshButton();
   });
@@ -1623,6 +1655,7 @@ export async function handleM14StagingRequest(
   indexQdrant: typeof indexM14PhysicsCorpusInQdrant = indexM14PhysicsCorpusInQdrant,
   evaluateQdrant: typeof evaluateM14KnownPhysicsQueries = evaluateM14KnownPhysicsQueries,
   diagnoseQdrant: typeof runM14QdrantRetrievalDiagnostics = runM14QdrantRetrievalDiagnostics,
+  runM15Shadow: typeof runBrvinM15ShadowBenchmark = runBrvinM15ShadowBenchmark,
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/health") {
@@ -1648,6 +1681,13 @@ export async function handleM14StagingRequest(
           env.BRVIN_M14_EMBEDDING_DIMENSIONS && env.BRVIN_M14_QDRANT_URL &&
           env.BRVIN_M14_QDRANT_API_KEY && env.BRVIN_M14_QDRANT_COLLECTION),
       },
+      m15ShadowConfigured: {
+        aiSearchInstanceBound: Boolean(env.BRVIN_M15_AI_SEARCH),
+        ready: Boolean(env.BRVIN_M15_AI_SEARCH && env.BRVIN_M14_VERTEX_LOCATION &&
+          env.BRVIN_M14_VERTEX_MODEL && env.BRVIN_M14_EMBEDDING_DIMENSIONS &&
+          env.BRVIN_M14_QDRANT_URL && env.BRVIN_M14_QDRANT_API_KEY &&
+          env.BRVIN_M14_QDRANT_COLLECTION),
+      },
       // Do not expose credential values, bucket names or source-document content.
     });
   }
@@ -1668,9 +1708,10 @@ export async function handleM14StagingRequest(
   const isQdrantIndex = url.pathname === "/admin/m14/qdrant/index";
   const isQdrantEvaluate = url.pathname === "/admin/m14/qdrant/evaluate";
   const isQdrantDiagnostics = url.pathname === "/admin/m14/qdrant/diagnostics";
+  const isM15Shadow = url.pathname === "/admin/m15/shadow/evaluate";
   const isBackfill = url.pathname === "/admin/m14/backfill";
   if (!isDiagnostics && !isVisionRebuild && !isVisionStatus && !isCorpusVerify &&
-      !isQdrantIndex && !isQdrantEvaluate && !isQdrantDiagnostics && !isBackfill) {
+      !isQdrantIndex && !isQdrantEvaluate && !isQdrantDiagnostics && !isM15Shadow && !isBackfill) {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if ((isDiagnostics && request.method !== "GET") ||
@@ -1680,6 +1721,7 @@ export async function handleM14StagingRequest(
       (isQdrantIndex && request.method !== "POST") ||
       (isQdrantEvaluate && request.method !== "POST") ||
       (isQdrantDiagnostics && request.method !== "POST") ||
+      (isM15Shadow && request.method !== "POST") ||
       (isBackfill && request.method !== "POST")) {
     return json({ ok: false, error: "method_not_allowed" }, 405);
   }
@@ -1730,7 +1772,7 @@ export async function handleM14StagingRequest(
     return json({ ok: false, error: "staging_google_cloud_configuration_incomplete" }, 503);
   }
 
-  if (isQdrantIndex || isQdrantEvaluate || isQdrantDiagnostics) {
+  if (isQdrantIndex || isQdrantEvaluate || isQdrantDiagnostics || isM15Shadow) {
     let providerPayload: unknown;
     try {
       providerPayload = await request.json();
@@ -1746,7 +1788,14 @@ export async function handleM14StagingRequest(
         !env.BRVIN_M14_QDRANT_API_KEY || !env.BRVIN_M14_QDRANT_COLLECTION) {
       return json({ ok: false, error: "m14_vertex_qdrant_configuration_incomplete" }, 503);
     }
+    if (isM15Shadow && !env.BRVIN_M15_AI_SEARCH) {
+      return json({ ok: false, error: "m15_ai_search_shadow_binding_missing" }, 503);
+    }
     try {
+      if (isM15Shadow) {
+        const benchmark = await runM15Shadow(env);
+        return json({ ok: true, benchmark });
+      }
       if (isQdrantIndex) {
         const receipt = await indexQdrant(env);
         return json({ ok: true, index: receipt });

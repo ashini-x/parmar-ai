@@ -159,10 +159,51 @@ jobs:
           path: dist/production-release-manifest.json
           if-no-files-found: error
 
+  production-scope:
+    name: Determine whether production runtime changed
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.scope.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Classify the pushed file set
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          base_sha="$BASE_SHA"
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]]; then
+            base_sha="$(git rev-parse "$GITHUB_SHA^")"
+          fi
+          deploy=false
+          while IFS= read -r path; do
+            case "$path" in
+              # Explicit staging-only M14/M15 files. Changes outside this list
+              # conservatively retain the normal production deployment path.
+              docs/*|.github/workflows/release-validation.yml|src/brvin/m14-staging-worker.ts|src/brvin/m15-shadow-benchmark.ts|src/brvin/m14-physics-evaluation.ts|src/brvin/qdrant-hybrid-pilot.ts|src/brvin/vertex-embedding.ts|src/brvin/provider-contract.ts|src/config/env.ts|test/brvin-m14-staging-worker.test.ts|test/brvin-qdrant-hybrid-pilot.test.ts|wrangler.m14-staging.jsonc|.github/workflows/m14-staging-deploy.yml)
+                ;;
+              *)
+                deploy=true
+                break
+                ;;
+            esac
+          done < <(git diff --name-only "$base_sha" "$GITHUB_SHA")
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+          if [[ "$deploy" == "true" ]]; then
+            echo "Production runtime files changed; normal production deploy remains enabled."
+          else
+            echo "Staging/docs-only change set; skip production deploy while keeping full validation and staging deploy."
+          fi
+
   deploy-production:
     name: Deploy and smoke-test production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.production-scope.outputs.deploy == 'true'
+    needs: [validate, production-scope]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:
