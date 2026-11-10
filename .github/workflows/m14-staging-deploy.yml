@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "src/brvin/m14-staging-worker.ts"
+      - "src/brvin/m15-shadow-benchmark.ts"
+      - "test/brvin-m15-shadow-benchmark.test.ts"
       - "src/brvin/m14-pilot-runner.ts"
       - "src/brvin/vertex-embedding.ts"
       - "src/brvin/qdrant-hybrid-pilot.ts"
@@ -25,6 +27,8 @@ on:
       - main
     paths:
       - "src/brvin/m14-staging-worker.ts"
+      - "src/brvin/m15-shadow-benchmark.ts"
+      - "test/brvin-m15-shadow-benchmark.test.ts"
       - "src/brvin/m14-pilot-runner.ts"
       - "src/brvin/vertex-embedding.ts"
       - "src/brvin/qdrant-hybrid-pilot.ts"
@@ -60,7 +64,7 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund --legacy-peer-deps
       - run: npm run check
-      - run: npx vitest run test/brvin-m14-staging-worker.test.ts
+      - run: npx vitest run test/brvin-m14-staging-worker.test.ts test/brvin-m15-shadow-benchmark.test.ts
       - name: Verify versioned Vertex and Qdrant settings
         run: node scripts/verify-m14-staging-config.mjs
       - run: npx wrangler deploy --config wrangler.m14-staging.jsonc --dry-run
