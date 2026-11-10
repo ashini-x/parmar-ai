@@ -22,6 +22,13 @@ const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const TOP_K = 5;
 const PREFETCH_LIMIT = 15;
 const M15_QDRANT_PAGES_PER_INVOCATION = 2;
+const M15_AI_SEARCH_PAGES_PER_INVOCATION = 2;
+const M15_AI_SEARCH_METADATA_SCHEMA = [
+  { field_name: "source_id", data_type: "text" },
+  { field_name: "project_id", data_type: "text" },
+  { field_name: "pdf_page", data_type: "number" },
+  { field_name: "benchmark", data_type: "text" },
+] as const;
 
 type ProviderName = "cloudflareAiSearch" | "qdrantVertex";
 
@@ -81,6 +88,52 @@ export function m15QdrantPageWindow(
     startIndex: indexedPages,
     endIndex: Math.min(pageCount, indexedPages + batchSize),
   };
+}
+
+/** Select a bounded, zero-based AI Search page window for one Worker invocation. */
+export function m15AiSearchPageWindow(
+  indexedPages: number,
+  pageCount = SOURCE_PAGE_COUNT,
+  batchSize = M15_AI_SEARCH_PAGES_PER_INVOCATION,
+): { startIndex: number; endIndex: number } {
+  if (!Number.isSafeInteger(indexedPages) || !Number.isSafeInteger(pageCount) ||
+      !Number.isSafeInteger(batchSize) || indexedPages < 0 || pageCount < 1 ||
+      indexedPages > pageCount || batchSize < 1) {
+    throw new Error("M15 AI Search page progress or batch bounds are invalid.");
+  }
+  return {
+    startIndex: indexedPages,
+    endIndex: Math.min(pageCount, indexedPages + batchSize),
+  };
+}
+
+export function m15AiSearchMetadataSchemaMatches(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length !== M15_AI_SEARCH_METADATA_SCHEMA.length) return false;
+  return M15_AI_SEARCH_METADATA_SCHEMA.every((expected) =>
+    value.some((actual) => typeof actual === "object" && actual !== null &&
+      (actual as { field_name?: unknown }).field_name === expected.field_name &&
+      (actual as { data_type?: unknown }).data_type === expected.data_type)
+  );
+}
+
+async function ensureM15AiSearchMetadataSchema(search: AiSearchInstance): Promise<void> {
+  const current = await search.info();
+  if (m15AiSearchMetadataSchemaMatches(current.custom_metadata)) return;
+
+  // The dedicated M15 instance is created empty. Configure the exact four-field
+  // schema once before the first item write. Refuse to replace an unexpected
+  // non-empty schema because Cloudflare schema changes trigger a full re-index.
+  const configured = current.custom_metadata;
+  if (Array.isArray(configured) && configured.length > 0) {
+    throw new Error("The isolated M15 AI Search instance has an unexpected custom metadata schema; refusing to replace it.");
+  }
+  const updated = await search.update({
+    custom_metadata: M15_AI_SEARCH_METADATA_SCHEMA.map((field) => ({ ...field })),
+  });
+  if (!updated || typeof updated !== "object" ||
+      !m15AiSearchMetadataSchemaMatches((updated as Record<string, unknown>).custom_metadata)) {
+    throw new Error("Cloudflare AI Search did not confirm the required M15 custom metadata schema.");
+  }
 }
 
 interface M15Candidate {
@@ -825,31 +878,110 @@ async function indexAiSearch(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourc
   }
   const corpus = await getVerifiedCorpus(env, row);
   const pages = [...corpus.pageManifests].sort((a, b) => a.pdfPage - b.pdfPage);
-  let uploaded = 0;
-  for (const page of pages) {
+  if (pages.length !== SOURCE_PAGE_COUNT || corpus.sourceManifest.sourceId !== row.source_id ||
+      corpus.sourceManifest.generationId !== row.generation_id ||
+      corpus.sourceManifest.sourcePdfSha256 !== SOURCE_SHA256) {
+    throw new Error("The verified M15 corpus does not match the registered source generation.");
+  }
+
+  await ensureM15AiSearchMetadataSchema(search);
+  const listing = await search.items.list({ page: 1, per_page: 50 });
+  const existingItems = listing.result ?? [];
+  let indexedPages = Number(row.ai_search_indexed_pages ?? 0);
+  const window = m15AiSearchPageWindow(indexedPages);
+
+  // Two pages per request bounds Worker subrequests. Existing deterministic
+  // page keys are checked before upload so an ambiguous prior response is
+  // resumed without creating duplicate items.
+  for (const page of pages.slice(window.startIndex, window.endIndex)) {
     const key = page.stableItemKey;
     if (!key.startsWith(sourcePrefix(row.source_id))) {
       throw new Error("A source page key escaped the exact M15 source prefix; AI Search indexing was stopped.");
     }
-    await search.items.uploadAndPoll(key, page.rawOcrText, {
-      metadata: {
-        source_id: row.source_id,
-        project_id: row.project_id,
-        pdf_page: page.pdfPage,
-        benchmark: "brvin-m15-physics-v1",
-      },
-      pollIntervalMs: 1000,
-      timeoutMs: 120000,
-    });
-    uploaded += 1;
+    const existing = existingItems.find((item) => item.key === key);
+    if (existing) {
+      if (existing.status === "queued" || existing.status === "running") {
+        await env.DB.prepare(
+          "UPDATE m15_benchmark_sources SET status = 'ai_search_indexing', updated_at = ? WHERE source_id = ?",
+        ).bind(Date.now(), row.source_id).run();
+        return {
+          sourceId: row.source_id,
+          instance: "brvin-m15-physics-staging-v1",
+          status: "ai_search_indexing",
+          indexedPages,
+          pendingPage: page.pdfPage,
+          pendingItemStatus: existing.status,
+          nextPage: page.pdfPage,
+          continuationRequired: true,
+          deterministicRetrySafe: true,
+        };
+      }
+      if (existing.status !== "completed") {
+        throw new Error("The existing M15 AI Search item for physical page " + page.pdfPage +
+          " is in status " + existing.status + "; inspect that item before retrying.");
+      }
+    } else {
+      const item = await search.items.uploadAndPoll(key, page.rawOcrText, {
+        metadata: {
+          source_id: row.source_id,
+          project_id: row.project_id,
+          pdf_page: String(page.pdfPage),
+          benchmark: "brvin-m15-physics-v1",
+        },
+        pollIntervalMs: 1000,
+        timeoutMs: 10000,
+      });
+      if (item.key !== key) {
+        throw new Error("Cloudflare AI Search returned an item key that does not match physical page " + page.pdfPage + ".");
+      }
+      if (item.status !== "completed") {
+        await env.DB.prepare(
+          "UPDATE m15_benchmark_sources SET status = 'ai_search_indexing', updated_at = ? WHERE source_id = ?",
+        ).bind(Date.now(), row.source_id).run();
+        return {
+          sourceId: row.source_id,
+          instance: "brvin-m15-physics-staging-v1",
+          status: "ai_search_indexing",
+          indexedPages,
+          pendingPage: page.pdfPage,
+          pendingItemStatus: item.status,
+          nextPage: page.pdfPage,
+          continuationRequired: true,
+          deterministicRetrySafe: true,
+        };
+      }
+      existingItems.push(item);
+    }
+
+    indexedPages = page.pdfPage;
     await env.DB.prepare(
-      "UPDATE m15_benchmark_sources SET ai_search_indexed_pages = ?, status = 'ai_search_indexing', updated_at = ? WHERE source_id = ?",
-    ).bind(uploaded, Date.now(), row.source_id).run();
+      "UPDATE m15_benchmark_sources SET ai_search_indexed_pages = ?, status = 'ai_search_indexing', error_message = NULL, updated_at = ? WHERE source_id = ?",
+    ).bind(indexedPages, Date.now(), row.source_id).run();
   }
-  const listing = await search.items.list({ per_page: 50 });
-  const matching = (listing.result ?? []).filter((item) => item.key?.startsWith(sourcePrefix(row.source_id)));
-  if (matching.length !== SOURCE_PAGE_COUNT || matching.some((item) => item.status !== "completed")) {
-    throw new Error("The isolated AI Search instance did not confirm all eight source-page text items as completed.");
+
+  const completedPages = window.endIndex;
+  if (completedPages < SOURCE_PAGE_COUNT) {
+    return {
+      sourceId: row.source_id,
+      instance: "brvin-m15-physics-staging-v1",
+      status: "ai_search_indexing",
+      pageCount: SOURCE_PAGE_COUNT,
+      indexedPages: completedPages,
+      nextPage: completedPages + 1,
+      remainingPages: SOURCE_PAGE_COUNT - completedPages,
+      pagesPerInvocation: M15_AI_SEARCH_PAGES_PER_INVOCATION,
+      continuationRequired: true,
+      deterministicRetrySafe: true,
+    };
+  }
+
+  const finalListing = await search.items.list({ page: 1, per_page: 50 });
+  const matching = (finalListing.result ?? []).filter((item) => item.key?.startsWith(sourcePrefix(row.source_id)));
+  const expectedKeys = new Set(pages.map((page) => page.stableItemKey));
+  if (matching.length !== SOURCE_PAGE_COUNT ||
+      matching.some((item) => item.status !== "completed" || !expectedKeys.has(item.key)) ||
+      [...expectedKeys].some((key) => !matching.some((item) => item.key === key))) {
+    throw new Error("The isolated AI Search instance did not confirm all eight exact source-page items as completed.");
   }
   await env.DB.prepare(
     "UPDATE m15_benchmark_sources SET ai_search_indexed_pages = ?, status = CASE WHEN qdrant_point_count > 0 THEN 'ready' ELSE 'ai_search_ready' END, error_message = NULL, updated_at = ? WHERE source_id = ?",
@@ -860,6 +992,9 @@ async function indexAiSearch(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourc
     itemCount: matching.length,
     completedItems: matching.filter((item) => item.status === "completed").length,
     pageKeys: matching.map((item) => item.key).sort(),
+    pagesPerInvocation: M15_AI_SEARCH_PAGES_PER_INVOCATION,
+    continuationRequired: false,
+    deterministicRetrySafe: true,
   };
 }
 
@@ -1186,6 +1321,9 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
       ? "5 · Continue Qdrant indexing (next 2 pages)"
       : "5 · Embed and index into isolated Qdrant collection";
     buttons.aisearch.disabled = !authReady || !hasSource || !["corpus_ready","qdrant_ready","ai_search_ready","ai_search_indexing","ready"].includes(sourceStatus);
+    buttons.aisearch.textContent = sourceStatus === "ai_search_indexing"
+      ? "6 · Continue AI Search indexing (next 2 pages)"
+      : "6 · Index eight OCR pages into isolated AI Search";
     buttons.benchmark.disabled = !authReady || !hasSource || sourceStatus !== "ready";
   }
   file.addEventListener("change",refresh);token.addEventListener("input",refresh);ocrConfirm.addEventListener("change",refresh);
@@ -1229,7 +1367,7 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
     await call("/admin/m15/benchmark/source/qdrant","POST",{sourceId:sourceId.value},"Indexing at most two verified PDF pages into the isolated Qdrant collection. Re-enter the token and repeat Step 5 until all eight pages are complete.");
   });
   buttons.aisearch.addEventListener("click",async()=>{
-    await call("/admin/m15/benchmark/source/ai-search","POST",{sourceId:sourceId.value},"Uploading the eight stored OCR page texts to the separate M15 AI Search staging instance. This does not use the production AI Search instance.");
+    await call("/admin/m15/benchmark/source/ai-search","POST",{sourceId:sourceId.value},"Configuring the dedicated M15 metadata schema if needed, then indexing at most two verified OCR pages into the isolated AI Search instance. Re-enter the token and repeat Step 6 until all eight pages are complete.");
   });
   buttons.benchmark.addEventListener("click",async()=>{
     await call("/admin/m15/benchmark/run","POST",{sourceId:sourceId.value},"Running the 17 fixed query cases against both staging indexes. This action performs query/search only and does not modify either index.");
