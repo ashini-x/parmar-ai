@@ -178,3 +178,59 @@ The earlier recorded equal-weight ten-query page-rank baseline was mean reciproc
 **Critical limitation:** the v74 positive receipt returned only physical page numbers/ranks and did not include point IDs, chunk IDs or stored text. It therefore cannot be joined to this seven-chunk relevance matrix. Do not claim that this run has chunk-level nDCG, chunk-level MRR, chunk recall, exact formula fidelity, or answer correctness. In particular, the exact-formula, paraphrase and uppercase-symbol cases find the expected page at ranks 2, 3 and 2, but the receipt cannot show which formula chunk was retrieved or whether the canonical `Fnet = m × a` passage ranked well.
 
 Core PR #199 is adding ranked Qdrant point/chunk IDs, per-query intent weights and deduplicated full chunk text to the protected positive evaluation receipt. Once its checks pass and the updated staging Worker is deployed, rerun the same ten-query action and score each returned top-five chunk list against the matrix in this document. Qrels remain assistant-adjudicated, source-grounded labels rather than independent human gold judgments.
+
+
+## Live M14 version-75 ten-query chunk-qrels evaluation — 10 November 2026
+
+The authenticated version-75 positive evaluation receipt includes all seven unique Qdrant candidates, their deterministic chunk IDs, full stored text, and each query's top-five rank/score. Every returned point ID and chunk ID matched the seven-entry source-grounded qrels inventory above. The ten checks returned 50 candidates in total, with all grade-2+ chunks retrieved for every query.
+
+### Aggregate chunk-level results
+
+Scoring uses the source-grounded assistant-adjudicated matrix above. nDCG@5 uses graded gain (2^{rel}-1) with logarithmic rank discount and ideal DCG over the seven corpus chunks truncated at five. MRR@5 uses the first retrieved chunk with grade >=2. Recall@5 is the fraction of all grade-2+ qrels chunks returned in the top five. Precision@5 is the fraction of top-five results graded >=2. Macro averages give each of the ten queries equal weight; because every query returns five results, macro precision equals 20/50 here.
+
+| Metric | Version-75 result |
+|---|---:|
+| Queries scored | 10/10 |
+| Unique corpus points/chunks represented | 7/7 |
+| Retrieved candidates | 50 |
+| Grade-2+ relevant chunk occurrences retrieved | 20/20 |
+| Macro nDCG@5 | **0.8556** |
+| Macro MRR@5 (first grade >=2) | **0.8500** |
+| Macro Recall@5 (grade >=2) | **1.0000** |
+| Macro Precision@5 (grade >=2) | **0.4000** |
+| Queries with a grade-2+ chunk at rank 1 | **7/10** |
+
+These are chunk-level metrics now that candidate IDs were joined to qrels; they are still measured against assistant-adjudicated labels, not independent human gold judgments.
+
+### Per-query results
+
+Grades are listed in retrieved rank order.
+
+| Query | Grades@5 | nDCG@5 | MRR@5 | Recall@5 |
+|---|---|---:|---:|---:|
+| newtons-second-law-concept | 2, 3, 1, 0, 1 | 0.8453 | 1.0000 | 100% (2/2) |
+| newtons-second-law-exact-formula | 0, 3, 3, 0, 1 | 0.6968 | 0.5000 | 100% (2/2) |
+| net-force-paraphrase | 2, 0, 3, 2, 1 | 0.7557 | 1.0000 | 100% (3/3) |
+| force-mass-acceleration-equivalent-notation | 3, 1, 0, 3, 2 | 0.8596 | 1.0000 | 100% (3/3) |
+| uppercase-force-symbol | 1, 3, 3, 0, 0 | 0.7482 | 0.5000 | 100% (2/2) |
+| four-kilogram-worked-example | 3, 0, 1, 0, 0 | 0.9828 | 1.0000 | 100% (1/1) |
+| numerical-force-setup | 3, 0, 1, 0, 0 | 0.9828 | 1.0000 | 100% (1/1) |
+| theory-plus-formula | 3, 1, 3, 1, 0 | 0.9364 | 1.0000 | 100% (2/2) |
+| friction-and-net-force | 3, 2, 1, 1, 1 | 1.0000 | 1.0000 | 100% (2/2) |
+| bus-braking-answer | 1, 3, 3, 0, 0 | 0.7482 | 0.5000 | 100% (2/2) |
+
+### Intent-routing and ranking observations
+
+All ten queries received the expected broad intent split in the receipt: six semantic queries used dense/sparse 0.7/0.3; four formula/symbol/mixed-formula queries used 0.3/0.7. This confirms that the currently implemented worded cues are routing these reviewed prompts as intended; it does not prove optimal weights.
+
+The four symbolic queries as a group scored mean nDCG@5 **0.8103**, MRR@5 **0.7500**, grade-2+ recall@5 **100%**, and precision@5 **0.4500**. The six semantic queries scored mean nDCG@5 **0.8858**, MRR@5 **0.9167**, grade-2+ recall@5 **100%**, and precision@5 **0.3667**. The subsets are very small and reflect this single seven-chunk corpus only.
+
+**Formula/symbol ranking needs targeted follow-up:**
+- Exact-formula query: page-1 overview (grade 0 for this exact-formula qrel) ranked first; the direct page-2 second-law chunk ranked second and the formula-tail chunk ranked third. MRR is 0.5.
+- Uppercase-symbol query: the page-3 worked-example chunk (grade 1 related context) ranked first; direct page-2 formula evidence ranked second and third. MRR is 0.5.
+- Equivalent-notation and theory-plus-formula queries each ranked the direct page-2 law chunk first.
+- Bus-braking answer: the page-3 worked-example chunk (grade 1) ranked first, answer-key evidence ranked second and page-1 inertia evidence third. Both grade-3 passages are present in the top five.
+
+All grade-2+ chunks are nevertheless present in the top five for every positive query. Do not raise the global symbolic sparse weight solely from this tiny sample. First inspect dense/sparse component ranks for the exact-formula and uppercase-symbol prompts, then consider a narrowly scoped formula-evidence ranking improvement and rerun the same qrels suite. Keep current weights provisional until broader multi-document validation, negatives, latency/cost and authorization/recovery/load gates pass.
+
+The page-level 11/11 coverage, 0.4000 physical-page-label precision proxy and 0.8333333 expected-page MRR remain separate receipt metrics. The equality between page-label precision proxy 0.40 and chunk Precision@5 0.40 in this run is coincidental; their definitions and denominators differ. The two expected-no-match prompts are excluded from this positive scoring and remain retrieval-only; no answer-abstention pass/fail is asserted.
