@@ -380,16 +380,28 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
       return { request, calls };
     };
 
+    const inertia = point("c601e70a-8570-5122-ab56-4d23b9f334c9", 1, "Inertia and zero-net-force context.");
+    const formulaContext = point("020b9743-4a6f-5211-8836-b044137502f7", 2, "Formula and third-law context.");
+    const answerKey = point("2971ad8d-59c4-5a97-8779-15a5c874b132", 3, "Worked-example answer key.");
+    const attribution = point("0a2a4f69-be34-5482-b861-4cdf2c8c94f7", 3, "Source attribution.");
     const semanticFixture = makeRankedRequest(
       [
         { ...worked, score: 0.6746742 },
         { ...supporting, score: 0.64888996 },
+        { ...inertia, score: 0.648811 },
+        { ...formulaContext, score: 0.6447945 },
         { ...overview, score: 0.6418122 },
+        { ...answerKey, score: 0.60316366 },
+        { ...attribution, score: 0.5972749 },
       ],
       [
         { ...overview, score: 8.145531 },
         { ...supporting, score: 7.658746 },
+        { ...inertia, score: 3.6299407 },
+        { ...formulaContext, score: 3.6138535 },
         { ...worked, score: 3.2805996 },
+        { ...answerKey, score: 2.017408 },
+        { ...attribution, score: 0.84754217 },
       ],
     );
     const semantic = await makePilot(semanticFixture.request).query({
