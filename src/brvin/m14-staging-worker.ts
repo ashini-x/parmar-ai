@@ -7,7 +7,7 @@ import {
   summarizeBrvinM14PageCoverage,
   summarizeBrvinM14Ranking,
 } from "./m14-physics-evaluation";
-import { BrvinQdrantHybridPilot } from "./qdrant-hybrid-pilot";
+import { BrvinQdrantHybridPilot, type BrvinM14ComponentRankings } from "./qdrant-hybrid-pilot";
 import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
 import { getGoogleAccessToken } from "../auth/google";
 import type {
@@ -1227,6 +1227,7 @@ export interface M14QdrantRetrievalDiagnosticsReceipt {
         rrfScore: number;
       }>;
     }>;
+    componentRanks: BrvinM14ComponentRankings;
     distinctOrderedSequences: number;
     distinctTopFiveSets: number;
     observedFirstExpectedPageRanks: Array<number | null>;
@@ -1375,6 +1376,15 @@ async function runM14QdrantRetrievalDiagnostics(
     });
   }
 
+  // Capture the underlying component ranks once for the same friction query.
+  // This is diagnostic-only and does not alter the production RRF ordering.
+  const componentRanks = await pilot.queryComponentRanks({
+    projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
+    authorizedSourceIds: [PILOT_SOURCE_ID],
+    query: frictionCase.query,
+    limit: 15,
+  });
+
   const orderedFingerprints = samples.map((sample) =>
     sample.orderedResults.map((result) => result.pointId).join("|"),
   );
@@ -1397,13 +1407,14 @@ async function runM14QdrantRetrievalDiagnostics(
       expectedPages: [...frictionCase.expectedPdfPages],
       repeatCount,
       samples,
+      componentRanks,
       distinctOrderedSequences: new Set(orderedFingerprints).size,
       distinctTopFiveSets: new Set(setFingerprints).size,
       observedFirstExpectedPageRanks,
       rankStableAcrossRepeats: new Set(observedFirstExpectedPageRanks).size <= 1,
       note: "Three identical query calls against the same staging project/source. Compare point IDs, chunk IDs, RRF scores and page ranks. This is a diagnostic sample, not a ranking acceptance threshold.",
     },
-    note: "Non-gating retrieval diagnostics only. Complete chunk text for each unique returned point is included once in candidateEvidence for authenticated staging-operator human review; it is sourced from the fixed M14 corpus payload and is not a generated answer. No retrieval abstention or answer correctness is asserted. Qdrant RRF scores are not calibrated confidence probabilities. The friction query is repeated three times to expose within-run ordering and candidate variation. The separate BRVIN Teachers consumer-owned Gemini answer/abstention path is not invoked by this action.",
+    note: "Non-gating retrieval diagnostics only. Complete chunk text for each unique returned point is included once in candidateEvidence for authenticated staging-operator human review; it is sourced from the fixed M14 corpus payload and is not a generated answer. No retrieval abstention or answer correctness is asserted. Qdrant RRF scores are not calibrated confidence probabilities. The friction query is repeated three times to expose within-run ordering and candidate variation; one additional read-only dense-only and sparse-only rank trace exposes the component ranks behind the RRF result. This trace does not change ranking. The separate BRVIN Teachers Gemini answer/abstention path is not invoked by this action.",
   };
 }
 
