@@ -463,6 +463,58 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
     });
   });
 
+  it("classifies worded equation, formula, notation and case-sensitive symbol prompts as symbolic intent", async () => {
+    const queries = [
+      "What equation expresses Newton's second law of motion?",
+      "State that resultant force is mass multiplied by acceleration.",
+      "Find the source expression containing uppercase F in the second-law formula.",
+      "Find a source expression containing lowercase f = ma, not uppercase F = ma.",
+      "Explain how net force affects acceleration for a fixed mass and cite the governing equation.",
+    ];
+    const pilot = makePilot(makeQdrant().request);
+    for (const query of queries) {
+      const results = await pilot.query({
+        projectId: "project-a",
+        authorizedSourceIds: ["source-a"],
+        query,
+        limit: 1,
+      });
+      expect(results[0]?.metadata?.retrievalFusion).toMatchObject({
+        method: "core-intent-weighted-rrf",
+        queryIntent: "symbolic",
+        denseWeight: 0.3,
+        sparseWeight: 0.7,
+      });
+    }
+  });
+
+  it("keeps conceptual, paraphrase, worked-example, friction and bus-braking prompts semantic", async () => {
+    const queries = [
+      "Explain Newton's second law using net force, mass and acceleration.",
+      "How does an unbalanced force change the motion of an object?",
+      "Find the worked example calculating force for a 4 kg object.",
+      "Set up the numerical force calculation for the four-kilogram example.",
+      "How does friction affect the net force and motion of an object?",
+      "Find the bus-braking example and its answer-key explanation.",
+      "Give the exact SI value of the Planck constant to nine significant figures.",
+    ];
+    const pilot = makePilot(makeQdrant().request);
+    for (const query of queries) {
+      const results = await pilot.query({
+        projectId: "project-a",
+        authorizedSourceIds: ["source-a"],
+        query,
+        limit: 1,
+      });
+      expect(results[0]?.metadata?.retrievalFusion).toMatchObject({
+        method: "core-intent-weighted-rrf",
+        queryIntent: "semantic",
+        denseWeight: 0.7,
+        sparseWeight: 0.3,
+      });
+    }
+  });
+
   it("stabilizes equal component scores by point ID before weighted fusion", async () => {
     const point = (id: string, page: number) => ({
       id,
