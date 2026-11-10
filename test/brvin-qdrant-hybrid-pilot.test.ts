@@ -463,9 +463,30 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
     });
   });
 
-  it("classifies worded equation, formula, notation and case-sensitive symbol prompts as symbolic intent", async () => {
+  it("routes natural-language equation discovery to dense-favored formula-discovery intent", async () => {
     const queries = [
       "What equation expresses Newton's second law of motion?",
+      "What is the formula for net force?",
+    ];
+    const pilot = makePilot(makeQdrant().request);
+    for (const query of queries) {
+      const results = await pilot.query({
+        projectId: "project-a",
+        authorizedSourceIds: ["source-a"],
+        query,
+        limit: 1,
+      });
+      expect(results[0]?.metadata?.retrievalFusion).toMatchObject({
+        method: "core-intent-weighted-rrf",
+        queryIntent: "formula-discovery",
+        denseWeight: 0.7,
+        sparseWeight: 0.3,
+      });
+    }
+  });
+
+  it("keeps explicit symbol, notation and worded arithmetic prompts on symbolic weights", async () => {
+    const queries = [
       "State that resultant force is mass multiplied by acceleration.",
       "Find the source expression containing uppercase F in the second-law formula.",
       "Find a source expression containing lowercase f = ma, not uppercase F = ma.",
@@ -486,6 +507,67 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
         sparseWeight: 0.7,
       });
     }
+  });
+
+  it("ranks direct formula evidence first for the v76 natural-language equation discovery trace", async () => {
+    const point = (id: string, page: number) => ({
+      id,
+      payload: {
+        project_id: "project-a",
+        source_id: "source-a",
+        item_key: "physics/page-" + page + "/" + id,
+        pdf_page: page,
+        chunk_text: "Source-grounded Physics evidence for " + id,
+        chunk_id: id,
+        generation_id: "generation-a",
+        content_types: ["formula", "explanatory_text"],
+      },
+    });
+    const formula = point("formula-tail", 2);
+    const law = point("second-law", 2);
+    const worked = point("worked-example", 3);
+    const overview = point("overview", 1);
+    const answerKey = point("answer-key", 3);
+    const inertia = point("inertia", 1);
+    const attribution = point("attribution", 3);
+    const dense = [formula, law, worked, overview, answerKey, inertia, attribution]
+      .map((item, index) => ({ ...item, score: 7 - index }));
+    const sparse = [overview, law, answerKey, inertia, worked, formula, attribution]
+      .map((item, index) => ({ ...item, score: 7 - index }));
+    const base = makeQdrant().request;
+    const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/points/query") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as { using: string };
+        return new Response(JSON.stringify({
+          result: { points: body.using === "dense" ? dense : sparse },
+          status: "ok",
+        }), { status: 200 });
+      }
+      return base(input, init);
+    }) as typeof fetch;
+
+    const result = await makePilot(request).query({
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "What equation expresses Newton's second law of motion?",
+      limit: 5,
+      prefetchLimit: 7,
+    });
+
+    expect(result.map((item) => item.id)).toEqual([
+      "formula-tail",
+      "second-law",
+      "overview",
+      "worked-example",
+      "answer-key",
+    ]);
+    expect(result[0]?.score).toBeCloseTo(0.7 / 2 + 0.3 / 7, 10);
+    expect(result[0]?.metadata?.retrievalFusion).toMatchObject({
+      queryIntent: "formula-discovery",
+      denseWeight: 0.7,
+      sparseWeight: 0.3,
+    });
   });
 
   it("keeps conceptual, paraphrase, worked-example, friction and bus-braking prompts semantic", async () => {
