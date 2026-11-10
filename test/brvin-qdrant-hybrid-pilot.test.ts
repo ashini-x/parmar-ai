@@ -693,7 +693,9 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
       pdfPage: 2,
       itemKey: "brvin/books/source-a/pages/page-000002.txt",
     });
+    // Hybrid retrieval intentionally issues one dense and one sparse points/query call.
     expect(calls.map((call) => ({ path: new URL(call.url).pathname, method: call.method }))).toEqual([
+      { path: "/collections/brvin_m14_physics_pilot_v1/points/query", method: "POST" },
       { path: "/collections/brvin_m14_physics_pilot_v1/points/query", method: "POST" },
     ]);
     expect(calls.some((call) => call.method === "PUT" || call.url.endsWith("/collections/brvin_m14_physics_pilot_v1")))
