@@ -41,7 +41,7 @@ function percentile(values: number[], quantile: number): number | null {
   const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(quantile * sorted.length) - 1));
   return Math.round(sorted[index] * 100) / 100;
 }
-function summarizeProvider(results: Array<{ expectedPages: number[]; expectedNoMatch: boolean; result: ProviderQueryResult }>) {
+function summarizeProvider(results: Array<{ id: string; expectedPages: number[]; expectedNoMatch: boolean; result: ProviderQueryResult }>) {
   const positive = results.filter((item) => !item.expectedNoMatch);
   const expectedPageCount = positive.reduce((sum, item) => sum + item.expectedPages.length, 0);
   const coveredExpectedPageCount = positive.reduce((sum, item) =>
@@ -197,6 +197,7 @@ export async function runBrvinM15ShadowBenchmark(env: BrvinM15ShadowEnv) {
 
   const summarize = (provider: "cloudflareAiSearch" | "qdrantVertex") =>
     summarizeProvider(results.map((item) => ({
+      id: item.id,
       expectedPages: item.expectedPages,
       expectedNoMatch: item.expectedNoMatch,
       result: item[provider],
