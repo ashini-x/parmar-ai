@@ -101,3 +101,8 @@ M6–M11 remain complete and unchanged. The next planned sequence is defined in 
 ## 11 November 2026 — M15 shadow runner implementation checkpoint
 
 Core PR #209 is merged; staging Worker v79 is deployed at 100% with the direct AI Search instance binding and existing isolated Vertex/Qdrant settings. M14 staging workflow #86 and Release validation #1084 passed. The production-scope classifier returned `deploy=false`; the two production deployment/acceptance jobs were skipped. The M15 operator's 12-query receipt remains pending. See the migration plan for the exact route, query-only safeguards and remaining M15 gates.
+
+## 11 November 2026 — M15 paired shadow receipt completed
+
+The first authenticated 12-case read-only run completed with 12/12 queries successful for both providers, zero provenance violations and zero writes/side effects. Qdrant covered all 11 expected physical-page targets (MRR 0.8833), compared with AI Search's 8/11 (MRR 0.6833). Qdrant also returned candidates for both no-match cases (2/2; 10 candidates), while AI Search returned zero for both. The initial `pageLabelPrecisionAt5` field used a variable returned-candidate denominator; Core PR #211 corrects future receipts and adds fixed-cutoff P@5 plus explicit no-match false-positive rates. Recomputed fixed all-suite page-label P@5 is 18.3% AI Search and 33.3% Qdrant; positive-only P@5 is 22.0% and 40.0%, respectively. These remain page-label proxies, not human passage qrels. The corrected scorecard is deployed on staging Worker v80; production remains on AI Search. See the migration plan for full per-query interpretation and the next gates.
+
