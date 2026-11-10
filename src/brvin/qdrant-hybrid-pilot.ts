@@ -28,6 +28,21 @@ export interface BrvinM14QueryResult extends RetrievalCandidate {
   contentTypes: string[];
 }
 
+
+export interface BrvinM14ComponentRank {
+  rank: number;
+  pointId: string;
+  chunkId?: string;
+  sourceId: string;
+  pdfPage: number;
+  score: number;
+}
+
+export interface BrvinM14ComponentRankings {
+  dense: BrvinM14ComponentRank[];
+  sparse: BrvinM14ComponentRank[];
+}
+
 /** Case- and symbol-preserving sparse terms: F != f, x != ×, and - != −. */
 export async function buildBrvinSparseVector(text: string): Promise<BrvinSparseVector> {
   const frequencies = new Map<string, number>();
@@ -427,6 +442,83 @@ export class BrvinQdrantHybridPilot {
         },
       }];
     });
+  }
+
+
+  /**
+   * Read-only diagnostic for explaining RRF ties. It embeds the query once,
+   * then asks Qdrant for the independent dense and sparse component rankings
+   * using the same server-authorized filter. It never changes the production
+   * hybrid query or applies a client-side tie-breaker.
+   */
+  async queryComponentRanks(input: {
+    projectId: string;
+    authorizedSourceIds: readonly string[];
+    query: string;
+    limit?: number;
+  }): Promise<BrvinM14ComponentRankings> {
+    if (!input.query.trim()) throw new Error("A non-empty pilot query is required.");
+    if (!input.authorizedSourceIds.length) return { dense: [], sparse: [] };
+    const filter = payloadFilter(input.projectId, input.authorizedSourceIds);
+    await this.ensureCollection();
+    const [denseResult, sparse] = await Promise.all([
+      this.embeddings.embedQuery(input.query),
+      buildBrvinSparseVector(input.query),
+    ]);
+    const dense = denseResult.vectors[0];
+    if (!dense || dense.length !== this.dimensions || dense.some((value) => !Number.isFinite(value))) {
+      throw new Error("Vertex query embedding does not match the Qdrant pilot collection dimensions.");
+    }
+    const limit = Math.max(1, Math.min(100, Math.trunc(input.limit ?? 15)));
+    const path = "/collections/" + encodeURIComponent(this.collection) + "/points/query";
+    const [denseResponse, sparseResponse] = await Promise.all([
+      this.requestJson<QdrantQueryResponse>(path, "POST", {
+        query: dense,
+        using: "dense",
+        filter,
+        limit,
+        with_payload: true,
+        with_vector: false,
+      }),
+      this.requestJson<QdrantQueryResponse>(path, "POST", {
+        query: sparse,
+        using: "sparse",
+        filter,
+        limit,
+        with_payload: true,
+        with_vector: false,
+      }),
+    ]);
+    if (!denseResponse || !sparseResponse) {
+      throw new Error("Qdrant returned an empty dense or sparse component-rank response.");
+    }
+
+    const allowed = new Set(input.authorizedSourceIds);
+    const toRanks = (response: QdrantQueryResponse): BrvinM14ComponentRank[] =>
+      (response.points ?? []).flatMap((point, index) => {
+        const payload = point.payload ?? {};
+        const sourceId = typeof payload.source_id === "string" ? payload.source_id : "";
+        const itemKey = typeof payload.item_key === "string" ? payload.item_key : "";
+        const pdfPage = Number(payload.pdf_page);
+        if (payload.project_id !== input.projectId || !allowed.has(sourceId) ||
+            !itemKey || !Number.isSafeInteger(pdfPage) || pdfPage < 1) return [];
+        const pointId = String(point.id ?? payload.chunk_id ?? itemKey);
+        if (!pointId) return [];
+        const chunkId = typeof payload.chunk_id === "string" ? payload.chunk_id : undefined;
+        return [{
+          rank: index + 1,
+          pointId,
+          ...(chunkId ? { chunkId } : {}),
+          sourceId,
+          pdfPage,
+          score: Number.isFinite(point.score) ? Number(point.score) : 0,
+        }];
+      });
+
+    return {
+      dense: toRanks(denseResponse),
+      sparse: toRanks(sparseResponse),
+    };
   }
 
   async deleteSource(projectId: string, sourceId: string): Promise<void> {
