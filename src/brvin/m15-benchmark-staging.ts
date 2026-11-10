@@ -963,6 +963,10 @@ async function indexAiSearch(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourc
           deterministicRetrySafe: true,
         };
       }
+      if (item.status !== "completed") {
+        throw new Error("Cloudflare AI Search indexing failed for physical page " + page.pdfPage +
+          " with status " + item.status + (item.error ? ": " + item.error.slice(0, 160) : "."));
+      }
       existingItems.push(item);
     }
 
