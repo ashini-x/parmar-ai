@@ -102,3 +102,47 @@ The two reviewed no-match prompts remain retrieval-only cases. These chunk label
 ## Acceptance boundary
 
 This matrix is a usable first-pass, source-grounded adjudication set for M14/M15 retrieval benchmarking. Preserve the original PDF SHA, point IDs, chunk IDs and query text when scoring it. Report nDCG@5, MRR@5, recall of grade-2+ chunks, formula/symbol exactness, no-match retrieval behavior and per-query regressions. Keep page-coverage metrics separate from chunk relevance. Do not tune the fusion weights on the friction case alone and then call the same case an independent validation.
+
+
+## Live M14 version-74 authenticated diagnostic — 10 November 2026
+
+The authenticated non-gating negative + rank-stability diagnostic returned `ok: true` for the same immutable project/source/collection and seven-point corpus. The source, point IDs and chunk IDs match the qrels inventory above; no re-index or OCR was performed.
+
+### Friction repeatability and qrels score
+
+The friction prompt was repeated three times. All three calls returned the same ordered five-point list:
+
+| Rank | Chunk key | Point ID | qrels grade |
+|---:|---|---|---:|
+| 1 | P3-worked | `be24fe40-ee0d-5324-8f77-3baab3322c69` | 3 |
+| 2 | P2-laws | `057bcdfa-b2bb-535f-8dc4-f47f1c1229df` | 2 |
+| 3 | P1-overview | `6bb2552e-417c-5169-822f-93c91a8b752f` | 1 |
+| 4 | P1-inertia | `c601e70a-8570-5122-ab56-4d23b9f334c9` | 1 |
+| 5 | P2-tail | `020b9743-4a6f-5211-8836-b044137502f7` | 1 |
+
+The retrieved grade sequence is `3, 2, 1, 1, 1`, matching the ideal ordering for this five-result set:
+
+- **nDCG@5: 1.0000**
+- **MRR@5 (first grade-2+ chunk): 1.0000**
+- **Recall@5 of grade-2+ chunks: 2/2 = 1.0000**
+- **First expected page rank: 1 in all three repeats**
+- **Repeatability:** one distinct ordered sequence, one distinct top-five set; `rankStableAcrossRepeats: true`
+
+This is a successful live staging result for one repeated friction prompt. It is not an independent multi-query benchmark and does not establish general retrieval quality or a latency/cost improvement.
+
+The component traces for the friction prompt show dense ranks P3-worked 1, P2-laws 2, P1-inertia 3, P2-tail 4, P1-overview 5; sparse ranks P1-overview 1, P2-laws 2, P1-inertia 3, P2-tail 4, P3-worked 5. The intent-weighted fusion returned the direct worked example first and the supporting law explanation second. Raw dense and sparse scores remain on different scales and must not be compared as confidence.
+
+### Live expected-no-match retrieval observations
+
+Both reviewed negative prompts were marked `expectedNoMatch: true`, but the retrieval action returned five candidates for each:
+
+| Case | Result count | Top RRF score | Qrels relevance of returned candidates | Interpretation |
+|---|---:|---:|---|---|
+| `lowercase-force-symbol-hard-negative` | 5 | 0.425 | All five grade 0 | No source chunk contains the requested lowercase `f = ma`; returned formula-adjacent chunks do not satisfy this case-sensitive request. |
+| `out-of-corpus-constant` (Planck constant) | 5 | 0.5 | All five grade 0 | All five candidates are unrelated to the requested constant and its SI value. |
+
+These results are expected-no-match **retrieval candidates**, not an answer-generation abstention test. The diagnostic explicitly states that it invokes no Teachers Gemini answer/abstention path. A non-zero RRF score is not a confidence probability and cannot authorize an answer. No abstention pass/fail is claimed.
+
+### M14 follow-up
+
+The authenticated ten-positive-query receipt has not yet been supplied. Run it on the same staging Worker and score every live result list against the complete qrels matrix before treating the initial 70/30 semantic and 30/70 symbolic weights as accepted. Preserve per-query regressions and formula/symbol exactness; keep the negative cases separate from answer-abstention acceptance. Two-component-call latency/cost, authorization isolation, revocation, retry/recovery, HNSW/resource tuning and load benchmarks also remain open.
