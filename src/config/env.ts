@@ -62,7 +62,7 @@ export interface AiSearchInstance {
   items: {
     upload(key: string, content: ReadableStream<Uint8Array> | ArrayBuffer | Blob | string, options?: { metadata?: Record<string, string | number | boolean> }): Promise<AiSearchItem>;
     uploadAndPoll(key: string, content: ReadableStream<Uint8Array> | ArrayBuffer | Blob | string, options?: {
-      metadata?: Record<string, string | number | boolean>;
+      metadata?: Record<string, string>;
       pollIntervalMs?: number;
       timeoutMs?: number;
     }): Promise<AiSearchItem>;
