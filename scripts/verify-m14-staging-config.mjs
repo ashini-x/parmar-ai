@@ -11,6 +11,7 @@ const expected = {
   BRVIN_M14_VERTEX_MODEL: "gemini-embedding-001",
   BRVIN_M14_EMBEDDING_DIMENSIONS: "768",
   BRVIN_M14_QDRANT_COLLECTION: "brvin_m14_physics_pilot_v1",
+  BRVIN_M15_BENCHMARK_QDRANT_COLLECTION: "brvin_m15_physics_benchmark_v1",
 };
 
 for (const [name, value] of Object.entries(expected)) {
@@ -31,4 +32,14 @@ if (parsedEndpoint.username || parsedEndpoint.password || parsedEndpoint.search 
 if (Object.prototype.hasOwnProperty.call(vars, "BRVIN_M14_QDRANT_API_KEY")) {
   throw new Error("BRVIN_M14_QDRANT_API_KEY must remain a Worker secret, not a plain-text var.");
 }
-console.log("M14 staging config is complete; Qdrant API key is not embedded in plain-text vars.");
+const aiSearchBindings = config.ai_search ?? [];
+const expectedBindings = {
+  BRVIN_M15_AI_SEARCH: "fatman-2026-8b183803",
+  BRVIN_M15_BENCHMARK_AI_SEARCH: "brvin-m15-physics-staging-v1",
+};
+for (const [binding, instanceName] of Object.entries(expectedBindings)) {
+  if (!aiSearchBindings.some((entry) => entry.binding === binding && entry.instance_name === instanceName)) {
+    throw new Error("Missing or incorrect isolated M15 AI Search binding: " + binding);
+  }
+}
+console.log("M14/M15 staging config is complete; production AI Search remains a separate baseline binding and Qdrant key is not embedded in plain-text vars.");
