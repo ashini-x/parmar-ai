@@ -211,3 +211,12 @@ For `Find the source expression containing uppercase F in the second-law formula
 The lowercase `f = ma` and Planck expected-no-match prompts each still return five candidates, all qrels grade 0 for the requested exact answer. The lowercase case returns uppercase-symbol-adjacent Physics content, not the requested lowercase expression. This remains retrieval-only and does not establish answer abstention. The friction query returned the same ordered top five on all three repeats, with the page-3 worked-example chunk ranked first each time.
 
 **Decision:** keep 70/30 semantic and 30/70 symbolic weights provisional and unchanged. Avoid global retuning based on this single seven-chunk corpus. A focused follow-up should test (a) formula-discovery queries written entirely in natural language, separately from mixed theory-plus-equation queries, and (b) a case-sensitive exact-symbol evidence promotion for explicit uppercase/lowercase requests. Add regression tests for the known formula and hard-negative pairs; compare a branch against the current v76 baseline on all ten positives and both negatives. This diagnostic itself made no retrieval change. Keep production on Cloudflare AI Search.
+
+
+## M15 second-source Physics benchmark — 11 November 2026
+
+Core PRs #213, #214 and #215 now provide an isolated second-source benchmark path. Use [BRVIN_M15_SECOND_SOURCE_BENCHMARK.md](BRVIN_M15_SECOND_SOURCE_BENCHMARK.md) for the exact source fingerprint, operator URL, UI steps, stage expectations and 17-case protocol.
+
+The dedicated operator is deployed at `/admin/m15/benchmark` on staging Worker **v82** (`5784e06d-33a8-4feb-b75b-09c9a5565d47`, deployment `184ad701-884e-4a96-b101-2c8ccab7de74`, 100%). It has a separate Cloudflare AI Search binding `brvin-m15-physics-staging-v1` and uses Qdrant collection `brvin_m15_physics_benchmark_v1`. The fixed three-page M14 operator, source registry row and collection remain unchanged.
+
+The eight-page source has not yet been uploaded and no OCR or provider indexing has been started. The source must be uploaded only through this dedicated staging operator; never through BRVIN Teachers or the fixed M14 operator. Its separate four-page test card is for evaluation only and must not be indexed.
