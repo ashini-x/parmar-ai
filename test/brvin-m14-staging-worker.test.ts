@@ -247,6 +247,18 @@ describe("BRVIN M14 isolated staging operator", () => {
       firstExpectedPageRank: 1,
       resultCount: item.expectedPdfPages.length,
       topScore: 0.9,
+      retrievedCandidates: [{
+        rank: 1,
+        pointId: "point-" + item.id,
+        itemKey: "pilot-item",
+        chunkId: "chunk-" + item.id,
+        pdfPage: item.expectedPdfPages[0],
+        score: 0.9,
+        contentTypes: ["formula"],
+        queryIntent: "symbolic",
+        denseWeight: 0.3,
+        sparseWeight: 0.7,
+      }],
       verification: item.verification,
     }));
     const pageCoverage = summarizeBrvinM14PageCoverage(checks);
@@ -263,6 +275,15 @@ describe("BRVIN M14 isolated staging operator", () => {
       negativeCasesDeferred: BRVIN_M14_PHYSICS_QUERY_SUITE
         .filter((item) => item.expectedNoMatch === true)
         .map((item) => item.id),
+      candidateEvidence: [{
+        pointId: "point-sample",
+        itemKey: "pilot-item",
+        chunkId: "chunk-sample",
+        pdfPage: 2,
+        contentTypes: ["formula"],
+        fullText: "Fnet = m × a",
+        retrievedBy: [{ queryId: "newtons-second-law-exact-formula", rank: 1, rrfScore: 0.9 }],
+      }],
       checks,
       note: "Ten positive source-grounded cases. Two negative/no-answer cases deferred.",
     };
@@ -313,15 +334,33 @@ describe("BRVIN M14 isolated staging operator", () => {
         expectedPageResultCount: 11,
         expectedPagePrecisionAt5: 1,
         meanReciprocalExpectedPageRank: 1,
+        candidateEvidence: expect.arrayContaining([
+          expect.objectContaining({
+            pointId: "point-sample",
+            chunkId: "chunk-sample",
+            fullText: "Fnet = m × a",
+          }),
+        ]),
+        checks: expect.arrayContaining([
+          expect.objectContaining({
+            id: "newtons-second-law-exact-formula",
+            retrievedCandidates: expect.arrayContaining([
+              expect.objectContaining({
+                pointId: "point-newtons-second-law-exact-formula",
+                chunkId: "chunk-newtons-second-law-exact-formula",
+                queryIntent: "symbolic",
+                denseWeight: 0.3,
+                sparseWeight: 0.7,
+              }),
+            ]),
+          }),
+          expect.objectContaining({ id: "friction-and-net-force" }),
+          expect.objectContaining({ id: "bus-braking-answer" }),
+        ]),
         negativeCasesDeferred: [
           "lowercase-force-symbol-hard-negative",
           "out-of-corpus-constant",
         ],
-        checks: expect.arrayContaining([
-          expect.objectContaining({ id: "newtons-second-law-exact-formula" }),
-          expect.objectContaining({ id: "friction-and-net-force" }),
-          expect.objectContaining({ id: "bus-braking-answer" }),
-        ]),
       },
     });
     expect(evaluate).toHaveBeenCalledTimes(1);

@@ -146,3 +146,35 @@ These results are expected-no-match **retrieval candidates**, not an answer-gene
 ### M14 follow-up
 
 The authenticated ten-positive-query receipt has not yet been supplied. Run it on the same staging Worker and score every live result list against the complete qrels matrix before treating the initial 70/30 semantic and 30/70 symbolic weights as accepted. Preserve per-query regressions and formula/symbol exactness; keep the negative cases separate from answer-abstention acceptance. Two-component-call latency/cost, authorization isolation, revocation, retry/recovery, HNSW/resource tuning and load benchmarks also remain open.
+
+
+## Live M14 version-74 ten-positive-query receipt — 10 November 2026
+
+The authenticated positive suite returned `ok: true` for all ten positive cases against the immutable seven-chunk Physics corpus. It returned 50 candidates in total and reported:
+
+- Expected physical pages: **11/11 covered in top five (100%)**.
+- Expected-page-labelled results: **20/50**.
+- Strict expected-page-label precision proxy@5: **0.4000**.
+- Mean reciprocal rank of the first expected physical page: **0.8333333**.
+- All ten queries completed; the two expected-no-match cases were explicitly deferred to the separate negative diagnostic.
+
+First expected-page ranks in the live receipt:
+
+| Positive query | First expected-page rank | Additional expected-page rank |
+|---|---:|---:|
+| newtons-second-law-concept | 1 | — |
+| newtons-second-law-exact-formula | 2 | — |
+| net-force-paraphrase | 3 | — |
+| force-mass-acceleration-equivalent-notation | 1 | — |
+| uppercase-force-symbol | 2 | — |
+| four-kilogram-worked-example | 1 | — |
+| numerical-force-setup | 1 | — |
+| theory-plus-formula | 1 | — |
+| friction-and-net-force | 1 | — |
+| bus-braking-answer | 1 | 3 (the second expected page) |
+
+The earlier recorded equal-weight ten-query page-rank baseline was mean reciprocal expected-page rank **0.7833333** with the same 11/11 coverage and 0.4000 page-label precision proxy. The fresh v74 receipt is therefore +0.0500 on this page-level MRR proxy, with no change in page coverage or page-label precision proxy. This is a descriptive comparison of expected-page ranking only.
+
+**Critical limitation:** the v74 positive receipt returned only physical page numbers/ranks and did not include point IDs, chunk IDs or stored text. It therefore cannot be joined to this seven-chunk relevance matrix. Do not claim that this run has chunk-level nDCG, chunk-level MRR, chunk recall, exact formula fidelity, or answer correctness. In particular, the exact-formula, paraphrase and uppercase-symbol cases find the expected page at ranks 2, 3 and 2, but the receipt cannot show which formula chunk was retrieved or whether the canonical `Fnet = m × a` passage ranked well.
+
+Core PR #199 is adding ranked Qdrant point/chunk IDs, per-query intent weights and deduplicated full chunk text to the protected positive evaluation receipt. Once its checks pass and the updated staging Worker is deployed, rerun the same ten-query action and score each returned top-five chunk list against the matrix in this document. Qrels remain assistant-adjudicated, source-grounded labels rather than independent human gold judgments.

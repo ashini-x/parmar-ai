@@ -1091,6 +1091,16 @@ export interface M14QdrantEvaluationReceipt {
   expectedPagePrecisionAt5: number;
   meanReciprocalExpectedPageRank: number;
   negativeCasesDeferred: string[];
+  /** Full stored text for each unique candidate, deduplicated across the ten positive queries. */
+  candidateEvidence: Array<{
+    pointId: string;
+    itemKey: string;
+    chunkId?: string;
+    pdfPage: number;
+    contentTypes: string[];
+    fullText: string;
+    retrievedBy: Array<{ queryId: string; rank: number; rrfScore: number }>;
+  }>;
   checks: Array<{
     id: string;
     category: string;
@@ -1104,6 +1114,19 @@ export interface M14QdrantEvaluationReceipt {
     firstExpectedPageRank: number | null;
     resultCount: number;
     topScore: number | null;
+    /** Ranked Qdrant point/chunk identities for source-grounded chunk-qrels scoring. */
+    retrievedCandidates: Array<{
+      rank: number;
+      pointId: string;
+      itemKey: string;
+      chunkId?: string;
+      pdfPage: number;
+      score: number;
+      contentTypes: string[];
+      queryIntent?: "semantic" | "symbolic";
+      denseWeight?: number;
+      sparseWeight?: number;
+    }>;
     verification: "prior-source-evidence" | "ocr-ground-truth-verified";
   }>;
   note: string;
@@ -1119,6 +1142,10 @@ async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvalua
     .filter((item) => item.expectedNoMatch === true)
     .map((item) => item.id);
   const checks: M14QdrantEvaluationReceipt["checks"] = [];
+  const candidateEvidence = new Map<
+    string,
+    M14QdrantEvaluationReceipt["candidateEvidence"][number]
+  >();
   for (const item of cases) {
     const results = await pilot.query({
       projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
@@ -1127,6 +1154,54 @@ async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvalua
       limit: 5,
       prefetchLimit: 15,
     });
+    const retrievedCandidates: M14QdrantEvaluationReceipt["checks"][number]["retrievedCandidates"] =
+      results.map((result, index) => {
+        const metadata = result.metadata ?? {};
+        const chunkId = typeof metadata.chunkId === "string" ? metadata.chunkId : undefined;
+        const fusion = typeof metadata.retrievalFusion === "object" && metadata.retrievalFusion !== null
+          ? metadata.retrievalFusion as Record<string, unknown>
+          : undefined;
+        const queryIntent = fusion?.queryIntent === "semantic" || fusion?.queryIntent === "symbolic"
+          ? fusion.queryIntent
+          : undefined;
+        const denseWeight = typeof fusion?.denseWeight === "number" ? fusion.denseWeight : undefined;
+        const sparseWeight = typeof fusion?.sparseWeight === "number" ? fusion.sparseWeight : undefined;
+        const retrievedBy = {
+          queryId: item.id,
+          rank: index + 1,
+          rrfScore: result.score ?? 0,
+        };
+        const existing = candidateEvidence.get(result.id);
+        if (existing) {
+          if (existing.itemKey !== result.itemKey || existing.chunkId !== chunkId ||
+              existing.pdfPage !== result.pdfPage || existing.fullText !== result.text) {
+            throw new Error("M14 positive evaluation returned inconsistent payload for a repeated Qdrant point.");
+          }
+          existing.retrievedBy.push(retrievedBy);
+        } else {
+          candidateEvidence.set(result.id, {
+            pointId: result.id,
+            itemKey: result.itemKey,
+            ...(chunkId ? { chunkId } : {}),
+            pdfPage: result.pdfPage,
+            contentTypes: [...result.contentTypes],
+            fullText: result.text,
+            retrievedBy: [retrievedBy],
+          });
+        }
+        return {
+          rank: index + 1,
+          pointId: result.id,
+          itemKey: result.itemKey,
+          ...(chunkId ? { chunkId } : {}),
+          pdfPage: result.pdfPage,
+          score: result.score ?? 0,
+          contentTypes: [...result.contentTypes],
+          ...(queryIntent ? { queryIntent } : {}),
+          ...(denseWeight !== undefined ? { denseWeight } : {}),
+          ...(sparseWeight !== undefined ? { sparseWeight } : {}),
+        };
+      });
     const retrievedPages = results.map((result) => result.pdfPage);
     const expectedPageCoverage = item.expectedPdfPages.filter((page) => retrievedPages.includes(page));
     const expectedPageRanks = item.expectedPdfPages.map((page) => {
@@ -1152,6 +1227,7 @@ async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvalua
       firstExpectedPageRank,
       resultCount: results.length,
       topScore: results[0]?.score ?? null,
+      retrievedCandidates,
       verification: item.verification as "prior-source-evidence" | "ocr-ground-truth-verified",
     });
   }
@@ -1167,8 +1243,9 @@ async function evaluateM14KnownPhysicsQueries(env: Env): Promise<M14QdrantEvalua
     ...pageCoverage,
     ...ranking,
     negativeCasesDeferred,
+    candidateEvidence: [...candidateEvidence.values()],
     checks,
-    note: "Ten positive source-grounded Physics queries run through Vertex embeddings and Qdrant dense+sparse RRF. expectedPageCoverageRate measures expected-page recall in the top five. expectedPagePrecisionAt5 is a strict physical-page-label precision proxy over returned chunks: a result on a non-expected page is not automatically irrelevant, and chunk-level human relevance judgments are required before this becomes a formal precision gate. meanReciprocalExpectedPageRank measures the rank of the first expected page per query; none of these metrics alone proves formula fidelity or answer correctness. Two OCR-reviewed negative/no-answer cases remain deferred until case-sensitive rejection and abstention thresholds are defined.",
+    note: "Ten positive source-grounded Physics queries run through Vertex embeddings and Qdrant dense+sparse RRF. Each check includes ranked point/chunk IDs and per-query intent-weighted RRF weights; candidateEvidence includes full stored text once per unique point so the receipt can be scored against the source-grounded chunk qrels. expectedPageCoverageRate measures expected-page recall in the top five. expectedPagePrecisionAt5 is only a physical-page-label proxy: a result on a non-expected page is not automatically irrelevant. meanReciprocalExpectedPageRank measures the rank of the first expected page per query. None of these page metrics alone proves chunk relevance, formula fidelity or answer correctness. Two OCR-reviewed negative/no-answer cases remain deferred until case-sensitive rejection and abstention thresholds are defined.",
   };
 }
 
