@@ -1,7 +1,7 @@
 # BRVIN Retrieval Provider Modernization — Approved Architecture and Migration Plan
 
 **Decision date:** 8 November 2026
-**Status reviewed:** 10 November 2026 — Core PRs #194 and #196 are merged; M14 staging Worker version 74 applies intent-weighted RRF and recognizes worded formula/symbol intent. Assistant-adjudicated source-grounded chunk qrels v0.1 are recorded in `docs/BRVIN_M14_CHUNK_QRELS.md`. Authenticated v74 negative/repeatability and ten-positive query receipts have both been reviewed. The positive receipt reports complete expected-page coverage and mean reciprocal expected-page rank 0.8333, but omits chunk IDs, so chunk-qrels scoring remains pending; PR #199 adds ranked chunk evidence to the protected evaluation response. Two-call latency/cost, authorization/recovery/load benchmarks and a Teachers answer-generation/abstention path remain outstanding.
+**Status reviewed:** 10 November 2026 — Core PRs #194 and #196 are merged; M14 staging Worker version 75 applies intent-weighted RRF and recognizes worded formula/symbol intent. PR #199 is merged, adding ranked point/chunk IDs, per-query intent weights and deduplicated full candidate text to the protected positive evaluation receipt. Authenticated v75 chunk-qrels scoring is now complete: macro nDCG@5 0.8556, MRR@5 0.8500, grade-2+ recall@5 1.0000 and precision@5 0.4000 on ten positive queries against assistant-adjudicated labels. Formula/symbol top-rank regressions remain for targeted review; negative/repeatability, two-call latency/cost, authorization/recovery/load and a Teachers answer-abstention path remain outstanding.
 **Status:** APPROVED DESIGN / M13 MERGED / M14 LIVE STAGING PILOT IN PROGRESS / NO PROVIDER CUTOVER  
 **Owning repository:** ashini-x/parmar-ai  
 **Coordinating consumer:** ashini-x/brvin-teachers  
@@ -413,3 +413,24 @@ These are **page-level retrieval proxies**, not chunk-qrels metrics. The v74 pos
 Core PR #199 adds the ranked point/chunk IDs, per-query intent/fusion weights and full stored text once per unique point to the authenticated, staging-only positive receipt. After PR validation, merge and staging deployment, rerun the ten-query action on the updated staging version and score all ten lists against `docs/BRVIN_M14_CHUNK_QRELS.md`. No retrieval behavior, corpus, indexing, D1 authorization or production selector is changed by this instrumentation.
 
 The separately completed v74 negative/repeatability receipt remains as recorded above: the friction query had a stable ordered top five in all three repeats and the direct worked example ranked first; both expected-no-match prompts returned five grade-0 candidates. This does not test answer abstention. Production remains on Cloudflare AI Search.
+
+
+### Authenticated M14 version-75 positive chunk-qrels evaluation — 10 November 2026
+
+The expanded protected positive receipt was run on staging Worker v75 against the immutable seven-point Physics corpus. Its seven unique point/chunk identities and text entries all matched the qrels inventory. All ten query checks returned five ranked candidates, with the following macro metrics against the source-grounded assistant-adjudicated qrels (gain (2^{rel}-1), MRR/recall threshold grade >=2):
+
+- **nDCG@5: 0.8556**
+- **MRR@5: 0.8500**
+- **Recall@5 of grade-2+ chunks: 1.0000 (20/20 relevant chunk occurrences retrieved)**
+- **Precision@5 of grade-2+ chunks: 0.4000 (20/50)**
+- A grade-2+ chunk ranks first in 7/10 queries.
+
+Per-query nDCG@5 / MRR@5: concept 0.8453/1.0; exact formula 0.6968/0.5; paraphrase 0.7557/1.0; equivalent notation 0.8596/1.0; uppercase symbol 0.7482/0.5; worked example 0.9828/1.0; numerical setup 0.9828/1.0; theory+formula 0.9364/1.0; friction 1.0000/1.0; bus braking 0.7482/0.5. All ten queries retrieved every qrels chunk with grade >=2 in their top five.
+
+The classifier applied semantic 70/30 dense/sparse to six semantic queries and symbolic 30/70 to the four formula/symbol/mixed-formula queries, matching the intended reviewed query categories. For these small subsets, symbolic queries average nDCG@5 0.8103 and MRR@5 0.7500; semantic queries average nDCG@5 0.8858 and MRR@5 0.9167. This is not enough evidence to tune global weights.
+
+**Observed focused weaknesses:** for the exact-formula query, the page-1 overview chunk (qrels grade 0 for this exact-formula prompt) ranked first; the direct page-2 second-law and formula-tail chunks ranked second and third. For the uppercase-symbol prompt, the page-3 worked-example chunk (grade 1 context) ranked first, with direct page-2 formula chunks at ranks two and three. For bus-braking, the page-3 worked-example context (grade 1) ranked first, with the grade-3 answer-key and inertia chunks at ranks two and three. These cases retain full grade-2+ recall@5 but lose first-rank precision; exact formula and uppercase symbol each have MRR 0.5. Equivalent notation and theory-plus-formula rank the direct page-2 law chunk first.
+
+The 0.40 chunk Precision@5 is not the same metric as the 0.40 physical-page-label precision proxy in the page-level receipt; they happen to be equal numerically. The qrels are assistant-adjudicated/source-grounded, not an independent human gold set. The earlier negative diagnostic remains retrieval-only: both expected-no-match cases returned grade-0 candidates, and no answer-abstention test occurred.
+
+**Decision:** retain the current 70/30 and 30/70 weights as provisional while investigating exact-formula and uppercase-symbol top-rank behavior. Inspect the component-rank diagnostics for those prompts and test a narrow formula-evidence improvement on this and a broader corpus before changing global policy. Do not infer a universal benefit from the seven-chunk pilot. Production remains on Cloudflare AI Search; Qdrant stays isolated staging.
