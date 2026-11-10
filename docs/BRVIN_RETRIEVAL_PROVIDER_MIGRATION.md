@@ -1,7 +1,7 @@
 # BRVIN Retrieval Provider Modernization — Approved Architecture and Migration Plan
 
 **Decision date:** 8 November 2026
-**Status reviewed:** 10 November 2026 — M14 staging config repair deployed and verified; full-text chunk adjudication remains the next operator task  
+**Status reviewed:** 10 November 2026 — M14 staging version 71 verified; authenticated full-text negative/repeatability diagnostic received and reviewed; human chunk qrels and answer-path acceptance remain open  
 **Status:** APPROVED DESIGN / M13 MERGED / M14 LIVE STAGING PILOT IN PROGRESS / NO PROVIDER CUTOVER  
 **Owning repository:** ashini-x/parmar-ai  
 **Coordinating consumer:** ashini-x/brvin-teachers  
@@ -228,7 +228,7 @@ Ten positive cases now have source-grounded expected pages across the three-page
 
 Core Release validation [#1031](https://github.com/ashini-x/parmar-ai/actions/runs/42804774993) passed typecheck, Vitest, Node tests, both Worker bundle validations, paired Core production deployment, live smoke checks and the production acceptance record after Core PR #188 merged. Cloudflare reports production `parmar-ai` version `6350d704-5c4f-493b-bf11-9b3f8dd88a56` (version 696) and private `brvin-service` version `cbb94155-58bc-41c1-b585-40718c505580` (version 127), both at 100%. Version settings explicitly select `cloudflare-ai-search`; Core Admin has `BRVIN_CORPUS_MANIFEST_ENABLED=false`. The Qdrant adapter remains isolated to the M14 staging entrypoint, not either production Worker route. No provider cutover or user-facing provider route has changed.
 
-The Teachers production Worker remains on its existing deployment/version; no consumer code, direct provider credentials, SDK, embedding logic or v2 contract change was introduced. The private v2 RPC, D1 authorization/readiness/quota checks, consumer-owned Gemini answer generation, citations and both admin workflows remain unchanged.
+The Teachers production Worker remains on its existing deployment/version; no consumer code, direct provider credentials, SDK, embedding logic or v2 contract change was introduced. The private v2 RPC, D1 authorization/readiness/quota checks and both admin workflows remain unchanged. The consumer owns any eventual final-answer generation, but the current Teachers repository does not yet implement a student/channel/model generation route.
  
 ## 6. Milestones and acceptance gates
 
@@ -290,7 +290,7 @@ Core owns the provider migration; it is not implemented in the consumer by direc
 
 ### ashini-x/brvin-teachers (downstream consumer)
 
-Owns the Operator Console and student-facing experience. It continues calling the existing BRVIN v2 private binding and continues generating its own answers. Its migration work is limited to verifying compatibility, preserving the current UI/workflow, replacing provider-specific wording where present with neutral labels, and optionally displaying safe provider diagnostics returned through an approved operator-only route.
+Owns the Operator Console and student-facing experience. It continues calling the existing BRVIN v2 private binding. The consumer owns any eventual final-answer generation; as verified on 10 November 2026, the current Teachers repository has no deployed student/channel/model answer-generation or abstention route. Its migration work is limited to verifying compatibility, preserving the current UI/workflow, replacing provider-specific wording where present with neutral labels, and optionally displaying safe provider diagnostics returned through an approved operator-only route.
 
 No Qdrant credentials, Vertex credentials, embedding logic, Qdrant SDK or direct AI Search dependency may be added to the consumer.
 
@@ -310,16 +310,41 @@ Any change to the v2 response contract, management RPC lifecycle, readiness sema
 - Do not claim a speedup until same-condition benchmarks have been run and recorded.
 - Do not change student answer generation, prompts, user authentication, chat history or consumer quota as part of the provider migration.
 
-## 11. Current M14 checkpoint and new-chat continuation
 
-As of 9 November 2026, Core PR #182 is merged (20a6a00) and the staging-only diagnostic has been run. Both expected-no-match queries returned five retrieval candidates: lowercase f = ma returned a top RRF score of 0.75, while the out-of-corpus Planck-constant query returned a top RRF score of 1.0. The returned snippets are general Physics chunks and do not visibly establish either requested target; full chunk text still needs human review. This demonstrates that the retrieval route returns candidates for no-match prompts; it does not evaluate the consumer's final answer or abstention. RRF is a rank-fusion score, not a calibrated confidence.
+## 11. Current M14 checkpoint and new-chat continuation — 10 November 2026
 
-Three repeated friction/net-force calls returned an identical top-five point set but two orderings. The top two points tie at 0.6666667 and swap once; the page-3 expected chunk ranked 2, 1, 1. Treat this as observed tie-order variation in a three-call sample, not candidate-set drift or a formal stability result.
+Core PR #188 is merged. M14 staging workflow #56 deployed isolated staging Worker version 71 (822cd50a-8483-486a-81f6-969ad2dfe9c3) at 100%, with the five Vertex/Qdrant non-secret settings verified on the active version and the Qdrant key, M14 operator token and GCP private key remaining secret bindings. Core main is 7607e7c6793cdaa14ce1439333deeb46bdb555a7; production parmar-ai and brvin-service remain on Cloudflare AI Search with corpus-manifest writes disabled. There has been no production Qdrant routing or Teachers deployment.
 
-The two ten-positive-case receipts remain 10/10 query coverage and 11/11 expected physical-page coverage. The latest receipt reports page-label precision@5 0.40 and first-expected-page MRR 0.7833333 (prior 0.8333333). These page labels are not human chunk-level relevance judgments.
+The authenticated, query-only candidateEvidence diagnostic has now been run and its receipt reviewed. It returned five candidates for each expected-no-match query. For the exact lowercase-symbol prompt (Find a source expression containing lowercase f = ma, not uppercase F = ma), none of the returned full chunk texts contains the requested lowercase expression. The nearby formula material is uppercase F/Fnet; the corpus's canonical expression is Fnet = m × a. This is a symbol-sensitive near miss, not evidence that the lowercase expression exists in the source.
 
-Next, use the updated authenticated staging diagnostic's `candidateEvidence` payload to inspect the complete text for each unique point once (with the retrieval query/rank mapping), then create human-reviewed chunk-level judgments for the positive and negative set. Rerun this query-only diagnostic after the staging code update; do not re-index. Separately exercise the existing BRVIN Teachers v2 consumer-owned Gemini answer path with the two expected-no-answer prompts; capture the answer, citations and request evidence to determine whether the consumer abstains appropriately. Do not change the v2 contract or add provider access to Teachers. No re-OCR or re-index is needed.
+For the out-of-corpus Planck-constant prompt, all five candidates are unrelated Physics-handout chunks. The top RRF score is 1.0, which is a rank-fusion score and emphatically not a confidence probability or evidence that the Planck constant is present. These retrieval-only results do not demonstrate answer abstention.
 
-Current deployment boundaries remain: M14 staging Worker `f43676e0-d97b-492d-af6c-3495897e3f7b` (version 70) at 100%; Core production `parmar-ai` `cb3016b7-57f5-4d12-9d0b-e652c355af49` and `brvin-service` `5cbbd904-726d-4215-acbd-b97de7a7742f` at 100%; both production provider settings remain `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`, with `BRVIN_CORPUS_MANIFEST_ENABLED=false` on `parmar-ai`. No production Qdrant routing or Teachers deployment has occurred. M14 is not complete; formula fidelity, no-answer behavior, grant isolation, deterministic retry, performance/load, throughput and cost gates remain open.
+The friction query returned the same top-five point set in all three repeats but three distinct orderings. The direct page-3 worked-example chunk (be24fe40-ee0d-5324-8f77-3baab3322c69; 4 kg box, 20 N pull, 8 N friction, 12 N net force, 3 m/s² acceleration) ranked 1, 1 and 3. The leading candidates were tied at RRF 0.6666667; the first expected page rank was 1, 1 and 3. This is observed within-run ordering variation in a three-call sample, not top-five candidate-set drift and not a formal stability benchmark.
 
-For a new chat, read docs/BRVIN_2_MASTER_PLAN.md first, then this migration plan, docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md, docs/BRVIN_SYSTEM_REFERENCE.md, the frozen v2 RPC contract and the M14 runbook. Establish current commits, CI, deployment versions and provider settings in both repositories before changing anything. Preserve the unified math-aware path, raw OCR and physical-page provenance, D1 authorization, private v2 contract and both admin experiences.
+### Provisional chunk reading — not gold qrels
+
+The receipt supports the following first-pass evidence interpretation, which must not be reported as human-reviewed relevance labels:
+
+- be24fe40-ee0d-5324-8f77-3baab3322c69 (page 3): directly relevant to the friction query; it contains the exact worked example and result.
+- 057bcdfa-b2bb-535f-8dc4-f47f1c1229df (page 2): supporting context; it explains Newton's second law and includes the general statement that friction and air resistance slow a moving object, but it is not the page-3 worked calculation.
+- 6bb2552e-417c-5169-822f-93c91a8b752f (page 1): broad force/net-force background, weaker support than the worked example.
+- c601e70a-8570-5122-ab56-4d23b9f334c9 (page 1): inertia and zero-net-force context, not direct friction evidence.
+- 020b9743-4a6f-5211-8836-b044137502f7 (page 2): formula and Newton's third-law material, not direct support for the friction calculation.
+
+A reviewer must confirm the chunk relevance against the immutable source PDF and explicitly label each query/chunk pair before the positive and negative set can become accepted qrels. Do not turn page labels, RRF scores or this first-pass reading into gold relevance judgments.
+
+### Consumer answer/abstention path finding
+
+The current Teachers repository does not contain the live Gemini answer path that the earlier continuation note assumed. The deployed src/index.ts routes to the Operator Console and health handler; src/retrieval-test.js calls retrieveTeacherKnowledge through the private BRVIN v2 binding and renders returned passages; src/brvin-v2.js is a retrieval adapter. The Teachers repository guide/README also states that student, channel and model runtime are deferred. Therefore there is currently no consumer-owned Gemini answer/abstention route on which to run the two no-answer prompts. The protected retrieval-test page must not be described as an answer test. A future M16 consumer runtime or separately approved operator-only answer harness is needed before answer/abstention acceptance can be measured. No direct provider access or v2 contract change is warranted.
+
+### Remaining M14/M15 work
+
+1. Obtain human chunk-level judgments for the positive and negative queries against the source PDF, then calculate chunk-level precision/recall/ranking metrics; keep physical-page metrics separately.
+2. Add/verify formula-fidelity cases for the source's uppercase Fnet = m × a, case-sensitive lowercase f = ma, notation/operator differences and OCR uncertainty.
+3. Investigate the RRF tie behavior and ordering variation using underlying dense/sparse ranks and repeated controlled runs. Do not add an arbitrary point-ID tie-breaker unless a test proves it improves ordering without systematically demoting the directly relevant chunk.
+4. Complete no-grant/wrong-project isolation, revocation while vectors remain present, deterministic retry/recovery, HNSW/resource tuning, latency/concurrency/load and cost benchmarks.
+5. Coordinate an actual consumer answer/abstention test only after a real consumer generation path exists and has an approved test boundary.
+
+Do not re-upload, rerun Vision OCR, rebuild the seven-point corpus or repeat the ten positive queries for this diagnostic review. Continue to keep AI Search as the production provider and retain the rollback path through the required 14-day production soak.
+
+For a new chat, read docs/BRVIN_2_MASTER_PLAN.md first, then this migration plan, docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md, docs/BRVIN_SYSTEM_REFERENCE.md, the frozen v2 RPC contract and the M14 runbook. Establish current commits, CI, deployment versions and provider settings in both repositories before changing code. Preserve the unified math-aware path, raw OCR and physical-page provenance, D1 authorization, private v2 contract and both admin experiences.
