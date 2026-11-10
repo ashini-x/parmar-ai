@@ -354,16 +354,13 @@ describe("BRVIN M14 isolated staging operator", () => {
               }),
             ]),
           }),
+          expect.objectContaining({ id: "friction-and-net-force" }),
+          expect.objectContaining({ id: "bus-braking-answer" }),
         ]),
         negativeCasesDeferred: [
           "lowercase-force-symbol-hard-negative",
           "out-of-corpus-constant",
         ],
-        checks: expect.arrayContaining([
-          expect.objectContaining({ id: "newtons-second-law-exact-formula" }),
-          expect.objectContaining({ id: "friction-and-net-force" }),
-          expect.objectContaining({ id: "bus-braking-answer" }),
-        ]),
       },
     });
     expect(evaluate).toHaveBeenCalledTimes(1);
