@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   M15_BENCHMARK_QUERY_SUITE,
+  m15AiSearchMetadataForPage,
+  m15AiSearchMetadataSchemaMatches,
+  m15AiSearchPageWindow,
   m15QdrantPageWindow,
   shouldPersistM15VisionStatus,
   summarizeM15BenchmarkProvider,
@@ -19,6 +22,45 @@ function providerResult(pages: Array<number | null>, ok = true) {
 }
 
 describe("M15 second-source benchmark definition", () => {
+  it("defines the required four-field AI Search metadata schema without mutating a conflicting schema", () => {
+    const schema = [
+      { field_name: "source_id", data_type: "text" },
+      { field_name: "project_id", data_type: "text" },
+      { field_name: "pdf_page", data_type: "number" },
+      { field_name: "benchmark", data_type: "text" },
+    ];
+    expect(m15AiSearchMetadataSchemaMatches(schema)).toBe(true);
+    expect(m15AiSearchMetadataSchemaMatches(null)).toBe(false);
+    expect(m15AiSearchMetadataSchemaMatches(schema.slice(0, 3))).toBe(false);
+    expect(m15AiSearchMetadataSchemaMatches([...schema, { field_name: "extra", data_type: "text" }])).toBe(false);
+    expect(m15AiSearchMetadataSchemaMatches(schema.map((field) =>
+      field.field_name === "pdf_page" ? { ...field, data_type: "text" } : field
+    ))).toBe(false);
+  });
+
+  it("sends all custom metadata values as strings to the AI Search Workers binding", () => {
+    const metadata = m15AiSearchMetadataForPage("source-1", "project-1", 8);
+    expect(metadata).toEqual({
+      source_id: "source-1",
+      project_id: "project-1",
+      pdf_page: "8",
+      benchmark: "brvin-m15-physics-v1",
+    });
+    expect(Object.values(metadata).every((value) => typeof value === "string")).toBe(true);
+    expect(() => m15AiSearchMetadataForPage("", "project-1", 1)).toThrow();
+    expect(() => m15AiSearchMetadataForPage("source-1", "project-1", 9)).toThrow();
+  });
+
+  it("splits AI Search indexing into resumable two-page Worker invocations", () => {
+    expect(m15AiSearchPageWindow(0)).toEqual({ startIndex: 0, endIndex: 2 });
+    expect(m15AiSearchPageWindow(2)).toEqual({ startIndex: 2, endIndex: 4 });
+    expect(m15AiSearchPageWindow(4)).toEqual({ startIndex: 4, endIndex: 6 });
+    expect(m15AiSearchPageWindow(6)).toEqual({ startIndex: 6, endIndex: 8 });
+    expect(m15AiSearchPageWindow(8)).toEqual({ startIndex: 8, endIndex: 8 });
+    expect(() => m15AiSearchPageWindow(-1)).toThrow();
+    expect(() => m15AiSearchPageWindow(9)).toThrow();
+  });
+
   it("splits Qdrant indexing into resumable two-page Worker invocations", () => {
     expect(m15QdrantPageWindow(0)).toEqual({ startIndex: 0, endIndex: 2 });
     expect(m15QdrantPageWindow(2)).toEqual({ startIndex: 2, endIndex: 4 });
