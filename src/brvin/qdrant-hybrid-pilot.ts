@@ -3,6 +3,38 @@ import { sha256Hex } from "./corpus";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const TOKEN_PATTERN = /[\p{L}\p{M}\p{N}_]+|[^\s\p{L}\p{M}\p{N}_]/gu;
+const RRF_K = 2;
+
+// Initial M14 weights, selected from the reviewed Physics evidence rather than
+// treated as calibrated probabilities. Natural-language questions lean on
+// semantic recall; equations/symbol expressions lean on case-sensitive terms.
+const SEMANTIC_RRF_WEIGHTS = { dense: 0.7, sparse: 0.3 } as const;
+const SYMBOLIC_RRF_WEIGHTS = { dense: 0.3, sparse: 0.7 } as const;
+
+type BrvinM14QueryIntent = "semantic" | "symbolic";
+
+interface BrvinM14FusionWeights {
+  intent: BrvinM14QueryIntent;
+  dense: number;
+  sparse: number;
+}
+
+function resolveM14FusionWeights(query: string): BrvinM14FusionWeights {
+  const symbolic = /[=×÷^≠≈≤≥<>]/u.test(query) ||
+    /\\\\(?:frac|times|cdot|sqrt|mathrm|text)\\b/u.test(query) ||
+    /\\b[A-Za-z_][A-Za-z0-9_]*\\s*(?:\\*|\\/)\\s*[A-Za-z0-9(]/u.test(query);
+  const weights = symbolic ? SYMBOLIC_RRF_WEIGHTS : SEMANTIC_RRF_WEIGHTS;
+  return {
+    intent: symbolic ? "symbolic" : "semantic",
+    dense: weights.dense,
+    sparse: weights.sparse,
+  };
+}
+
+function comparePointIds(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 
 export interface BrvinSparseVector {
   indices: number[];
@@ -394,54 +426,144 @@ export class BrvinQdrantHybridPilot {
     if (!dense || dense.length !== this.dimensions || dense.some((value) => !Number.isFinite(value))) {
       throw new Error("Vertex query embedding does not match the Qdrant pilot collection dimensions.");
     }
+
     const limit = Math.max(1, Math.min(50, Math.trunc(input.limit ?? 10)));
     const prefetchLimit = Math.max(limit, Math.min(100, Math.trunc(input.prefetchLimit ?? 30)));
-    const result = await this.requestJson<QdrantQueryResponse>(
-      "/collections/" + encodeURIComponent(this.collection) + "/points/query",
-      "POST",
-      {
-        prefetch: [
-          { query: dense, using: "dense", filter, limit: prefetchLimit },
-          { query: sparse, using: "sparse", filter, limit: prefetchLimit },
-        ],
-        query: { fusion: "rrf" },
+    const path = "/collections/" + encodeURIComponent(this.collection) + "/points/query";
+    // Query each component independently. This keeps the policy compatible
+    // with Qdrant versions that predate native weighted RRF and lets Core
+    // apply one deterministic, intent-aware fusion rule.
+    const [denseResponse, sparseResponse] = await Promise.all([
+      this.requestJson<QdrantQueryResponse>(path, "POST", {
+        query: dense,
+        using: "dense",
         filter,
-        limit,
+        limit: prefetchLimit,
         with_payload: true,
         with_vector: false,
-      },
+      }),
+      this.requestJson<QdrantQueryResponse>(path, "POST", {
+        query: sparse,
+        using: "sparse",
+        filter,
+        limit: prefetchLimit,
+        with_payload: true,
+        with_vector: false,
+      }),
+    ]);
+    if (!denseResponse || !sparseResponse) {
+      throw new Error("Qdrant returned an empty dense or sparse component response.");
+    }
+
+    const allowed = new Set(input.authorizedSourceIds);
+    type ComponentCandidate = {
+      candidate: BrvinM14QueryResult;
+      pointId: string;
+      componentScore: number;
+    };
+    const readComponent = (response: QdrantQueryResponse): ComponentCandidate[] =>
+      (response.points ?? []).flatMap((point) => {
+        const payload = point.payload ?? {};
+        const sourceId = typeof payload.source_id === "string" ? payload.source_id : "";
+        const itemKey = typeof payload.item_key === "string" ? payload.item_key : "";
+        const text = typeof payload.chunk_text === "string" ? payload.chunk_text : "";
+        const pdfPage = Number(payload.pdf_page);
+        const pointId = String(point.id ?? payload.chunk_id ?? itemKey);
+        if (payload.project_id !== input.projectId || !allowed.has(sourceId) ||
+            !itemKey || !text || !pointId || !Number.isSafeInteger(pdfPage) || pdfPage < 1) return [];
+        return [{
+          pointId,
+          componentScore: Number.isFinite(point.score) ? Number(point.score) : 0,
+          candidate: {
+            id: pointId,
+            itemKey,
+            text,
+            score: 0,
+            pdfPage,
+            sourceId,
+            contentTypes: Array.isArray(payload.content_types)
+              ? payload.content_types.filter((value): value is string => typeof value === "string")
+              : [],
+            metadata: {
+              projectId: input.projectId,
+              sourceId,
+              pdfPage,
+              generationId: typeof payload.generation_id === "string" ? payload.generation_id : undefined,
+              chunkId: typeof payload.chunk_id === "string" ? payload.chunk_id : undefined,
+              contentSha256: typeof payload.content_sha256 === "string" ? payload.content_sha256 : undefined,
+            },
+          },
+        }];
+      }).sort((left, right) =>
+        right.componentScore - left.componentScore || comparePointIds(left.pointId, right.pointId),
+      );
+
+    const weights = resolveM14FusionWeights(input.query);
+    const ranked = new Map<string, {
+      candidate: BrvinM14QueryResult;
+      denseRank?: number;
+      sparseRank?: number;
+    }>();
+
+    const addComponentRanks = (points: ComponentCandidate[], component: "dense" | "sparse"): void => {
+      points.forEach((entry, rank) => {
+        const existing = ranked.get(entry.pointId);
+        if (existing) {
+          if (existing.candidate.text !== entry.candidate.text ||
+              existing.candidate.itemKey !== entry.candidate.itemKey ||
+              existing.candidate.sourceId !== entry.candidate.sourceId ||
+              existing.candidate.pdfPage !== entry.candidate.pdfPage) {
+            throw new Error("Qdrant dense/sparse results disagree on a point's source, page or chunk text.");
+          }
+          existing[component === "dense" ? "denseRank" : "sparseRank"] = rank;
+        } else {
+          ranked.set(entry.pointId, {
+            candidate: entry.candidate,
+            [component === "dense" ? "denseRank" : "sparseRank"]: rank,
+          });
+        }
+      });
+    };
+
+    // Re-sort within each component by its own score, then stable point ID.
+    // Raw scores are never compared across dense and sparse components.
+    addComponentRanks(readComponent(denseResponse), "dense");
+    addComponentRanks(readComponent(sparseResponse), "sparse");
+
+    const results = [...ranked.entries()].map(([pointId, entry]) => {
+      const denseRank = entry.denseRank;
+      const sparseRank = entry.sparseRank;
+      const score = (denseRank === undefined ? 0 : weights.dense / (RRF_K + denseRank)) +
+        (sparseRank === undefined ? 0 : weights.sparse / (RRF_K + sparseRank));
+      return {
+        pointId,
+        denseRank,
+        sparseRank,
+        primaryRank: weights.intent === "symbolic" ? sparseRank : denseRank,
+        secondaryRank: weights.intent === "symbolic" ? denseRank : sparseRank,
+        candidate: {
+          ...entry.candidate,
+          score,
+          metadata: {
+            ...entry.candidate.metadata,
+            retrievalFusion: {
+              method: "core-intent-weighted-rrf",
+              queryIntent: weights.intent,
+              k: RRF_K,
+              denseWeight: weights.dense,
+              sparseWeight: weights.sparse,
+            },
+          },
+        },
+      };
+    }).sort((left, right) =>
+      right.candidate.score! - left.candidate.score! ||
+      (left.primaryRank ?? Number.POSITIVE_INFINITY) - (right.primaryRank ?? Number.POSITIVE_INFINITY) ||
+      (left.secondaryRank ?? Number.POSITIVE_INFINITY) - (right.secondaryRank ?? Number.POSITIVE_INFINITY) ||
+      comparePointIds(left.pointId, right.pointId),
     );
 
-    if (!result) throw new Error("Qdrant returned an empty hybrid query response.");
-    const allowed = new Set(input.authorizedSourceIds);
-    return (result.points ?? []).flatMap((point) => {
-      const payload = point.payload ?? {};
-      const sourceId = typeof payload.source_id === "string" ? payload.source_id : "";
-      const itemKey = typeof payload.item_key === "string" ? payload.item_key : "";
-      const text = typeof payload.chunk_text === "string" ? payload.chunk_text : "";
-      const pdfPage = Number(payload.pdf_page);
-      if (payload.project_id !== input.projectId || !allowed.has(sourceId) ||
-          !itemKey || !text || !Number.isSafeInteger(pdfPage) || pdfPage < 1) return [];
-      return [{
-        id: String(point.id ?? payload.chunk_id ?? itemKey),
-        itemKey,
-        text,
-        score: Number.isFinite(point.score) ? Number(point.score) : 0,
-        pdfPage,
-        sourceId,
-        contentTypes: Array.isArray(payload.content_types)
-          ? payload.content_types.filter((value): value is string => typeof value === "string")
-          : [],
-        metadata: {
-          projectId: input.projectId,
-          sourceId,
-          pdfPage,
-          generationId: typeof payload.generation_id === "string" ? payload.generation_id : undefined,
-          chunkId: typeof payload.chunk_id === "string" ? payload.chunk_id : undefined,
-          contentSha256: typeof payload.content_sha256 === "string" ? payload.content_sha256 : undefined,
-        },
-      }];
-    });
+    return results.slice(0, limit).map((entry) => entry.candidate);
   }
 
 
