@@ -143,3 +143,16 @@ The authenticated version-71 POST /admin/m14/qdrant/diagnostics action completed
 **Review status:** the evidence can support provisional chunk assessments, but accepted gold qrels still require human review against the immutable Physics PDF. Do not infer human relevance labels from page labels or RRF scores. The diagnostic did not invoke BRVIN Teachers answer generation. The deployed Teachers repository currently has no live student/channel/model Gemini answer route; its protected retrieval-test page only returns evidence through the private v2 binding. Answer-abstention testing therefore remains blocked until a consumer generation path or separately approved operator-only harness exists.
 
 **Next:** review query/chunk pairs as human qrels; add formula/symbol fidelity cases; investigate RRF tie ordering without an arbitrary point-ID sort; then complete authorization/isolation, retry/recovery, HNSW-aware performance, concurrency and cost gates. No OCR or re-index is required for these tasks. Production remains on AI Search.
+
+
+## Diagnostic receipt review — 10 November 2026
+
+The authenticated version-71 POST /admin/m14/qdrant/diagnostics action completed with ok: true. Its returned evidence belongs to project 448249b4-fed9-45f5-9137-6014f242ddbe, source 01238b3a-9902-4a42-90b4-574048ee4f00, collection brvin_m14_physics_pilot_v1, using gemini-embedding-001 at 768 dimensions.
+
+**Expected-no-match cases:** both returned five candidates. The lowercase-symbol query had a top RRF score of 0.75; none of the full candidate texts contained exact lowercase f = ma. The closest material uses uppercase F or Fnet; the source's canonical equation is Fnet = m × a. The out-of-corpus Planck-constant query returned five unrelated chunks with a top RRF score of 1.0. This is retrieval-only evidence; neither case is an answer-abstention pass/fail, and RRF is not calibrated confidence.
+
+**Friction repeatability:** all three calls returned the same five point IDs, but each call had a different ordering. The direct page-3 4 kg / 20 N / 8 N worked-example point (be24fe40-ee0d-5324-8f77-3baab3322c69) ranked 1, 1 and 3. The leading candidates tied at RRF 0.6666667. This is a three-call diagnostic sample, not a formal rank-stability threshold.
+
+**Review status:** the evidence can support provisional chunk assessments, but accepted gold qrels still require human review against the immutable Physics PDF. Do not infer human relevance labels from page labels or RRF scores. The diagnostic did not invoke BRVIN Teachers answer generation. The deployed Teachers repository currently has no live student/channel/model Gemini answer route; its protected retrieval-test page only returns evidence through the private v2 binding. Answer-abstention testing therefore remains blocked until a consumer generation path or separately approved operator-only harness exists.
+
+**Next:** review query/chunk pairs as human qrels; add formula/symbol fidelity cases; investigate RRF tie ordering without an arbitrary point-ID sort; then complete authorization/isolation, retry/recovery, HNSW-aware performance, concurrency and cost gates. No OCR or re-index is required for these tasks. Production remains on AI Search.
