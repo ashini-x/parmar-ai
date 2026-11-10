@@ -1,7 +1,7 @@
 # BRVIN Retrieval Provider Modernization — Approved Architecture and Migration Plan
 
 **Decision date:** 8 November 2026
-**Status reviewed:** 10 November 2026 — M14 staging version 71 verified; authenticated full-text negative/repeatability diagnostic received and reviewed; human chunk qrels and answer-path acceptance remain open  
+**Status reviewed:** 10 November 2026 — PR #191 merged; authenticated M14 diagnostic now returns dense/sparse component ranks in staging version 72; human chunk qrels and consumer answer-path acceptance remain open  
 **Status:** APPROVED DESIGN / M13 MERGED / M14 LIVE STAGING PILOT IN PROGRESS / NO PROVIDER CUTOVER  
 **Owning repository:** ashini-x/parmar-ai  
 **Coordinating consumer:** ashini-x/brvin-teachers  
@@ -313,7 +313,7 @@ Any change to the v2 response contract, management RPC lifecycle, readiness sema
 
 ## 11. Current M14 checkpoint and new-chat continuation — 10 November 2026
 
-Core PR #188 is merged. M14 staging workflow #56 deployed isolated staging Worker version 71 (822cd50a-8483-486a-81f6-969ad2dfe9c3) at 100%, with the five Vertex/Qdrant non-secret settings verified on the active version and the Qdrant key, M14 operator token and GCP private key remaining secret bindings. Core main is 7607e7c6793cdaa14ce1439333deeb46bdb555a7; production parmar-ai and brvin-service remain on Cloudflare AI Search with corpus-manifest writes disabled. There has been no production Qdrant routing or Teachers deployment.
+Core PR #188 repaired and pinned the isolated staging configuration. Core PR [#191](https://github.com/ashini-x/parmar-ai/pull/191) is now squash-merged as `7a5587a9af4743c9216b62902768f817ec57183b`. Its PR validation passed the full Core typecheck, Vitest suite, Node tests and both Worker bundle validations; the M14 staging check passed typecheck, the targeted staging-worker test, versioned-settings guard and Wrangler dry-run. The main-branch M14 deployment created isolated staging Worker version 72 (`ec3614bf-0077-4c93-82e5-f685ea38456f`, deployment `e4bbe875-0216-4d96-a391-4ac4c43dbd76`) at 100%. Cloudflare read-back confirms Vertex `gemini-embedding-001` / `asia-south1` / 768 dimensions, collection `brvin_m14_physics_pilot_v1`, HTTPS Qdrant endpoint and secret separation (Qdrant key, M14 operator token, GCP private key). Core production was paired-released at `parmar-ai` version 698 (`29a993ad-c175-40fe-89d0-58cda2241429`) and `brvin-service` version 128 (`6ab2530e-c45f-4684-b0b2-1e20246adc32`), both 100%. Both production provider selectors still read `cloudflare-ai-search`; `BRVIN_CORPUS_MANIFEST_ENABLED=false`. Teachers remains on its existing Worker/version and no consumer code, v2 contract or provider credential change was made.
 
 The authenticated, query-only candidateEvidence diagnostic has now been run and its receipt reviewed. It returned five candidates for each expected-no-match query. For the exact lowercase-symbol prompt (Find a source expression containing lowercase f = ma, not uppercase F = ma), none of the returned full chunk texts contains the requested lowercase expression. The nearby formula material is uppercase F/Fnet; the corpus's canonical expression is Fnet = m × a. This is a symbol-sensitive near miss, not evidence that the lowercase expression exists in the source.
 
@@ -341,7 +341,7 @@ The current Teachers repository does not contain the live Gemini answer path tha
 
 1. Obtain human chunk-level judgments for the positive and negative queries against the source PDF, then calculate chunk-level precision/recall/ranking metrics; keep physical-page metrics separately.
 2. Add/verify formula-fidelity cases for the source's uppercase Fnet = m × a, case-sensitive lowercase f = ma, notation/operator differences and OCR uncertainty.
-3. Investigate RRF tie behavior using the staging-only dense/sparse component-rank trace (one read-only query per component with the same server-authorized filter) alongside the three repeated hybrid results. Compare underlying component ranks before considering a ranking change. Do not add an arbitrary point-ID tie-breaker unless a reviewed qrel benchmark proves it improves ordering without systematically demoting the directly relevant chunk.
+3. Run the updated authenticated staging diagnostic once on Worker version 72. It now returns one dense-only and one sparse-only component-rank list for the friction prompt, using the same server-authorized project/source filter, alongside the three repeated hybrid RRF results. Compare these component ranks to the returned RRF orders before considering any ranking change. Do not add an arbitrary point-ID tie-breaker unless a reviewed qrel benchmark proves it improves ordering without systematically demoting the directly relevant chunk.
 4. Complete no-grant/wrong-project isolation, revocation while vectors remain present, deterministic retry/recovery, HNSW/resource tuning, latency/concurrency/load and cost benchmarks.
 5. Coordinate an actual consumer answer/abstention test only after a real consumer generation path exists and has an approved test boundary.
 
