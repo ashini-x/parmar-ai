@@ -130,6 +130,9 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(html).toContain('/admin/m14/qdrant/index');
     expect(html).toContain('/admin/m14/qdrant/evaluate');
     expect(html).toContain("Embed and index the 7 Physics chunks in Qdrant");
+    expect(html).toContain("natural-language equation discovery use 70% dense / 30% sparse");
+    expect(html).toContain("explicit symbol, case-sensitive, notation and mathematical-expression lookups use 30% dense / 70% sparse");
+    expect(html).not.toContain("while formula and symbol queries use 30% dense / 70% sparse");
     expect(html).toContain("Base staging checks passed, but Vertex/Qdrant settings are incomplete");
     expect(html).toContain("BRVIN_M14_QDRANT_URL");
     expect(html).toContain("BRVIN_M14_VERTEX_LOCATION");
