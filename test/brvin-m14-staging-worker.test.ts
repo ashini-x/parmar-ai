@@ -394,6 +394,10 @@ describe("BRVIN M14 isolated staging operator", () => {
           { repeat: 2, firstExpectedPageRank: 2, expectedPageResultCount: 1, orderedResults: [{ rank: 1, pointId: "point-b", pdfPage: 2, rrfScore: 0.5 }, { rank: 2, pointId: "point-a", pdfPage: 3, rrfScore: 0.5 }] },
           { repeat: 3, firstExpectedPageRank: 1, expectedPageResultCount: 1, orderedResults: [{ rank: 1, pointId: "point-a", pdfPage: 3, rrfScore: 0.5 }] },
         ],
+        componentRanks: {
+          dense: [{ rank: 1, pointId: "point-a", chunkId: "chunk-a", sourceId: "source-a", pdfPage: 3, score: 0.91 }],
+          sparse: [{ rank: 2, pointId: "point-a", chunkId: "chunk-a", sourceId: "source-a", pdfPage: 3, score: 0.74 }],
+        },
         distinctOrderedSequences: 2,
         distinctTopFiveSets: 2,
         observedFirstExpectedPageRanks: [1, 2, 1],
@@ -463,6 +467,10 @@ describe("BRVIN M14 isolated staging operator", () => {
         frictionRepeatability: {
           queryId: "friction-and-net-force",
           repeatCount: 3,
+          componentRanks: {
+            dense: [expect.objectContaining({ rank: 1, pointId: "point-a", score: 0.91 })],
+            sparse: [expect.objectContaining({ rank: 2, pointId: "point-a", score: 0.74 })],
+          },
           distinctOrderedSequences: 2,
           observedFirstExpectedPageRanks: [1, 2, 1],
           rankStableAcrossRepeats: false,
