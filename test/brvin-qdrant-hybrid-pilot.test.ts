@@ -333,6 +333,47 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
     );
   });
 
+  it("exposes independent dense and sparse ranks for M14 RRF tie diagnosis without weakening scope checks", async () => {
+    const { request, calls } = makeQdrant();
+    const embeddings = makeEmbeddings();
+    const pilot = makePilot(request, embeddings);
+
+    const result = await pilot.queryComponentRanks({
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "How does friction affect the net force and motion of an object?",
+      limit: 15,
+    });
+
+    const expected = [{
+      rank: 1,
+      pointId: "authorized-point",
+      chunkId: "chunk-a",
+      sourceId: "source-a",
+      pdfPage: 2,
+      score: 0.93,
+    }];
+    expect(result.dense).toEqual(expected);
+    expect(result.sparse).toEqual(expected);
+    expect(embeddings.embedQuery).toHaveBeenCalledTimes(1);
+
+    const componentQueries = calls.filter((call) =>
+      call.url.endsWith("/points/query") && call.method === "POST",
+    );
+    expect(componentQueries).toHaveLength(2);
+    expect(componentQueries.map((call) => call.body.using)).toEqual(["dense", "sparse"]);
+    for (const call of componentQueries) {
+      expect(call.body.filter.must).toEqual([
+        { key: "project_id", match: { value: "project-a" } },
+        { key: "source_id", match: { any: ["source-a"] } },
+      ]);
+      expect(call.body.limit).toBe(15);
+      expect(call.body.with_payload).toBe(true);
+      expect(call.body.with_vector).toBe(false);
+      expect(call.body.prefetch).toBeUndefined();
+    }
+  });
+
   it("repairs an existing collection missing authorization indexes before filtered queries", async () => {
     const { request, calls } = makeQdrant({ collectionMissing: false });
     const pilot = makePilot(request);

@@ -341,7 +341,7 @@ The current Teachers repository does not contain the live Gemini answer path tha
 
 1. Obtain human chunk-level judgments for the positive and negative queries against the source PDF, then calculate chunk-level precision/recall/ranking metrics; keep physical-page metrics separately.
 2. Add/verify formula-fidelity cases for the source's uppercase Fnet = m × a, case-sensitive lowercase f = ma, notation/operator differences and OCR uncertainty.
-3. Investigate the RRF tie behavior and ordering variation using underlying dense/sparse ranks and repeated controlled runs. Do not add an arbitrary point-ID tie-breaker unless a test proves it improves ordering without systematically demoting the directly relevant chunk.
+3. Investigate RRF tie behavior using the staging-only dense/sparse component-rank trace (one read-only query per component with the same server-authorized filter) alongside the three repeated hybrid results. Compare underlying component ranks before considering a ranking change. Do not add an arbitrary point-ID tie-breaker unless a reviewed qrel benchmark proves it improves ordering without systematically demoting the directly relevant chunk.
 4. Complete no-grant/wrong-project isolation, revocation while vectors remain present, deterministic retry/recovery, HNSW/resource tuning, latency/concurrency/load and cost benchmarks.
 5. Coordinate an actual consumer answer/abstention test only after a real consumer generation path exists and has an approved test boundary.
 
