@@ -20,9 +20,15 @@ interface BrvinM14FusionWeights {
 }
 
 function resolveM14FusionWeights(query: string): BrvinM14FusionWeights {
+  // Formula intent is often expressed in words rather than literal operators.
+  // Classify explicit formula/equation/symbol/notation language as symbolic so
+  // the exact-formula and case-sensitive suite prompts receive lexical weight.
   const symbolic = /[=×÷^≠≈≤≥<>]/u.test(query) ||
     /\\(?:frac|times|cdot|sqrt|mathrm|text)\b/u.test(query) ||
-    /\b[A-Za-z_][A-Za-z0-9_]*\s*(?:\*|\/)\s*[A-Za-z0-9(]/u.test(query);
+    /\b[A-Za-z_][A-Za-z0-9_]*\s*(?:\*|\/)\s*[A-Za-z0-9(]/u.test(query) ||
+    /\b(?:equation|formula|expression|symbol|symbols|notation|operator|uppercase|lowercase|case-sensitive)\b/iu.test(query) ||
+    /\b(?:multiplied\s+by|divided\s+by|equals?)\b/iu.test(query) ||
+    /\b(?:Fnet|fnet)\b/u.test(query);
   const weights = symbolic ? SYMBOLIC_RRF_WEIGHTS : SEMANTIC_RRF_WEIGHTS;
   return {
     intent: symbolic ? "symbolic" : "semantic",
