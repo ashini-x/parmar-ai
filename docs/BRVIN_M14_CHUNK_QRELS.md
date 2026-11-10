@@ -234,3 +234,42 @@ The four symbolic queries as a group scored mean nDCG@5 **0.8103**, MRR@5 **0.75
 All grade-2+ chunks are nevertheless present in the top five for every positive query. Do not raise the global symbolic sparse weight solely from this tiny sample. First inspect dense/sparse component ranks for the exact-formula and uppercase-symbol prompts, then consider a narrowly scoped formula-evidence ranking improvement and rerun the same qrels suite. Keep current weights provisional until broader multi-document validation, negatives, latency/cost and authorization/recovery/load gates pass.
 
 The page-level 11/11 coverage, 0.4000 physical-page-label precision proxy and 0.8333333 expected-page MRR remain separate receipt metrics. The equality between page-label precision proxy 0.40 and chunk Precision@5 0.40 in this run is coincidental; their definitions and denominators differ. The two expected-no-match prompts are excluded from this positive scoring and remain retrieval-only; no answer-abstention pass/fail is asserted.
+
+
+## Version-76 dense/sparse component trace review — 10 November 2026
+
+The authenticated v76 negative/repeatability diagnostic returned component rank lists for the exact-formula and uppercase-symbol positive prompts. The seven point IDs and chunk IDs match the qrels inventory; source/project/collection remain the fixed M14 staging pilot. The component trace is read-only and does not alter retrieval or scoring.
+
+### Exact-formula prompt
+
+Query: `What equation expresses Newton's second law of motion?`
+
+| Component | Ranked page/chunk shorthand | qrels grades in rank order |
+|---|---|---|
+| Dense | P2 formula-tail, P2 second-law, P3 worked example, P1 overview, P3 answer key, P1 inertia, P3 attribution | **3, 3, 1, 0, 0, 0, 0** |
+| Sparse | P1 overview, P2 second-law, P3 answer key, P1 inertia, P3 worked example, P2 formula-tail, P3 attribution | **0, 3, 0, 0, 1, 3, 0** |
+
+The dense component's first two results are both direct grade-3 evidence. The sparse component puts the grade-0 page-1 overview first and delays the second direct formula chunk to rank 6. The v75 fused output was grades `0, 3, 3, 0, 1`, with the overview at rank 1 and the two direct formula chunks at ranks 2 and 3. This first-rank miss is therefore primarily attributable to the sparse leg's ranking for this worded formula-discovery query, combined with the current symbolic 30/70 dense/sparse weighting. The prompt contains the word "equation" but no literal formula token; the generic cue currently routes it to symbolic weighting.
+
+### Uppercase-symbol prompt
+
+Query: `Find the source expression containing uppercase F in the second-law formula.`
+
+| Component | Ranked page/chunk shorthand | qrels grades in rank order |
+|---|---|---|
+| Dense | P3 attribution, P2 second-law, P2 formula-tail, P3 worked example, P1 overview, P3 answer key, P1 inertia | **0, 3, 3, 1, 0, 0, 0** |
+| Sparse | P3 worked example, P2 second-law, P2 formula-tail, P1 overview, P3 answer key, P1 inertia, P3 attribution | **1, 3, 3, 0, 0, 0, 0** |
+
+Both components independently rank the two direct grade-3 page-2 formula chunks at positions 2 and 3. They disagree on their top distractor: dense puts the grade-0 attribution chunk first; sparse puts grade-1 worked-example context first. The v75 fusion selected the worked-example context at rank 1, followed by the two direct formula chunks (grades `1, 3, 3, 0, 0`). A global dense/sparse weight adjustment alone is not a robust solution: shifting weight toward dense changes the top distractor from the worked example toward the attribution chunk, while both components agree on the direct formula passages at ranks 2/3. A narrowly scoped exact-symbol/case-preserving evidence promotion or a better targeted query representation needs to be evaluated instead.
+
+### Negative and repeatability results in the same v76 receipt
+
+- Lowercase `f = ma` hard negative: five candidates were returned. The stored evidence contains uppercase `F`/`Fnet`-related Physics material, not the exact requested lowercase expression. It remains a grade-0 expected-no-match case.
+- Out-of-corpus Planck constant: five unrelated candidates were returned; all are grade 0 against the no-match qrels.
+- Friction repeatability: all three calls returned the identical ordered top five: P3 worked example, P2 second-law support, P1 overview, P1 inertia, P2 formula-tail. The expected P3 chunk ranked first in all three repeats; the order is stable for this three-call sample.
+
+These are retrieval-only diagnostics. They do not execute the Teachers Gemini answer route or measure answer abstention. RRF scores are not calibrated confidence probabilities. Dense and sparse raw scores are on different scales; compare ranks within each component, not raw score magnitudes across components.
+
+### Decision
+
+Do not change the global 70/30 semantic or 30/70 symbolic weights based on this seven-chunk corpus alone. Keep them provisional. A next implementation experiment may distinguish worded formula-discovery prompts (no literal symbol/operator in the query) from explicit case-sensitive symbol requests, and may test a narrow exact-case formula-evidence promotion for the latter. Preserve the current policy as a baseline, add tests for both query classes, then rerun the identical qrels suite and v76 diagnostics before selecting a policy. No code, fusion weight, Qdrant point, corpus, D1 permission, or production provider was changed by this diagnostic.
