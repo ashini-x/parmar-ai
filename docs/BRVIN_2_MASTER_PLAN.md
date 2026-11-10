@@ -259,3 +259,12 @@ The scorecard correction is Core PR #211 (merge `44986b2504ece84ca66bbf2a3ad55c1
 
 Next: obtain independent human passage relevance judgments for both chunk schemes (or normalize source spans), expand the corpus beyond this single 3-page source, then run wrong-project/no-grant isolation and revoke-with-vectors-retained checks. Follow with retry/recovery, HNSW-aware controlled load, Worker p50/p95/p99 under representative concurrency, and embedding/index/storage/query cost. Do not change the production provider selector or claim M15 acceptance from this receipt.
 
+
+
+## 11 November 2026 — M15 second-source staging operator ready
+
+Core PR #213 merged the second-source M15 staging upload/OCR/corpus/index/paired-query pipeline. PR #214 corrected the production-scope allowlist, and PR #215 fixed monotonic stage progression, partial AI Search indexing resume and the one-use-token UI behavior. The isolated M14 staging Worker is now v82 at 100% (`5784e06d-33a8-4feb-b75b-09c9a5565d47`; deployment `184ad701-884e-4a96-b101-2c8ccab7de74`). The new operator is `/admin/m15/benchmark`; source details and beginner operating instructions are in [BRVIN_M15_SECOND_SOURCE_BENCHMARK.md](BRVIN_M15_SECOND_SOURCE_BENCHMARK.md).
+
+The source is the eight-page generated Physics benchmark (SHA-256 `cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92`). It is not uploaded yet; the next action is the user's authenticated upload through the dedicated staging operator, then one billable Vision OCR request, immutable corpus verification, separate AI Search and Qdrant indexing, and the read-only 17-query receipt. Do not mark M15 complete until passage relevance, negative evidence, security/revocation, recovery, performance/cost and load gates are reviewed.
+
+The initial second-source merge exposed a missing allowlist entry that retriggered the normal production release workflow. Its live release acceptance passed; production remains on `cloudflare-ai-search` with `BRVIN_CORPUS_MANIFEST_ENABLED=false`. Current production versions are `parmar-ai` v714 and `brvin-service` v135 at 100%. PR #214 added the M15 staging-only paths to the production-scope classifier, and the follow-up staging merge confirms the production deploy and verification jobs were skipped.
