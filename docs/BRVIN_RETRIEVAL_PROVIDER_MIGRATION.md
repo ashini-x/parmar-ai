@@ -581,3 +581,14 @@ The scorecard correction is Core PR #211 (merge `44986b2504ece84ca66bbf2a3ad55c1
 
 Next: obtain independent human passage relevance judgments for both chunk schemes (or normalize source spans), expand the corpus beyond this single 3-page source, then run wrong-project/no-grant isolation and revoke-with-vectors-retained checks. Follow with retry/recovery, HNSW-aware controlled load, Worker p50/p95/p99 under representative concurrency, and embedding/index/storage/query cost. Do not change the production provider selector or claim M15 acceptance from this receipt.
 
+
+
+## 11 November 2026 — M15 second-source staging operator ready
+
+Core PR #213 merged the source-pinned eight-page benchmark pipeline and its separate AI Search/Qdrant staging resources. PR #214 corrected the production-scope allowlist after the first merge unnecessarily ran the normal production release workflow; PR #215 fixed monotonic source-stage reporting, AI Search partial-index retry and the one-use-token UI flow. Staging Worker v82 is deployed at 100% (`5784e06d-33a8-4feb-b75b-09c9a5565d47`, deployment `184ad701-884e-4a96-b101-2c8ccab7de74`).
+
+The new operator lives at `/admin/m15/benchmark`. It accepts only `BRVIN_M15_Physics_Benchmark_Source_v1.pdf` (62,012 bytes, eight pages, SHA-256 `cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92`). It stores the source and OCR results in the private staging bucket, builds immutable manifests, indexes the same eight OCR pages into AI Search instance `brvin-m15-physics-staging-v1`, and indexes deterministic Vertex embeddings into Qdrant collection `brvin_m15_physics_benchmark_v1`. The runner compares the two staging indexes on 12 positive, 4 out-of-corpus and 1 exact-symbol near-miss queries. It performs retrieval/search only and does not invoke Gemini answer generation.
+
+**Current state:** the source is not uploaded; OCR/indexing and the second paired receipt are pending. No new source has been added to production or Teachers. Read [BRVIN_M15_SECOND_SOURCE_BENCHMARK.md](BRVIN_M15_SECOND_SOURCE_BENCHMARK.md) before running the operator. Continue to treat page-label metrics as page-level proxies; candidate presence on a negative prompt is not automatically a passage-level false positive. Human passage qrels, security/revocation, recovery, latency/cost and controlled load remain open. Production remains on Cloudflare AI Search.
+
+The first merge did trigger a normal production redeploy because the release-scope allowlist omitted the new staging module/test/config-verifier paths. Production acceptance passed and the production provider settings remained `cloudflare-ai-search` with corpus manifests disabled; current production read-back is `parmar-ai` v714 and `brvin-service` v135 at 100%. Core PR #214 added those staging-only paths to the classifier. Subsequent M15 staging-only merges skip production deployment.
