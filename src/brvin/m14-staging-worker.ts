@@ -1287,6 +1287,13 @@ export interface M14QdrantRetrievalDiagnosticsReceipt {
     }>;
     interpretation: string;
   }>;
+  /** Dense-only and sparse-only ranks for the two positive formula/symbol top-rank misses. */
+  componentRankDiagnostics: Array<{
+    queryId: string;
+    category: string;
+    query: string;
+    componentRanks: BrvinM14ComponentRankings;
+  }>;
   frictionRepeatability: {
     queryId: string;
     query: string;
@@ -1463,6 +1470,33 @@ async function runM14QdrantRetrievalDiagnostics(
     limit: 15,
   });
 
+  // The v75 positive qrels receipt showed weaker first-rank placement on
+  // the exact-formula and uppercase-symbol prompts. Expose their raw component
+  // rankings separately so the next review can tell whether dense or sparse
+  // retrieval is responsible, without changing the fused query path.
+  const componentRankQueryIds = [
+    "newtons-second-law-exact-formula",
+    "uppercase-force-symbol",
+  ] as const;
+  const componentRankDiagnostics = await Promise.all(componentRankQueryIds.map(async (queryId) => {
+    const item = BRVIN_M14_PHYSICS_QUERY_SUITE.find((candidate) => candidate.id === queryId);
+    if (!item || item.expectedNoMatch || item.expectedPdfPages.length === 0) {
+      throw new Error("A reviewed M14 formula/symbol component-rank query is missing its source ground truth.");
+    }
+    const ranks = await pilot.queryComponentRanks({
+      projectId: BRVIN_M14_PHYSICS_PILOT.projectId,
+      authorizedSourceIds: [PILOT_SOURCE_ID],
+      query: item.query,
+      limit: 15,
+    });
+    return {
+      queryId: item.id,
+      category: item.category,
+      query: item.query,
+      componentRanks: ranks,
+    };
+  }));
+
   const orderedFingerprints = samples.map((sample) =>
     sample.orderedResults.map((result) => result.pointId).join("|"),
   );
@@ -1479,6 +1513,7 @@ async function runM14QdrantRetrievalDiagnostics(
     dimensions: Number(env.BRVIN_M14_EMBEDDING_DIMENSIONS),
     candidateEvidence: [...uniqueCandidateEvidence.values()],
     negativeCaseDiagnostics,
+    componentRankDiagnostics,
     frictionRepeatability: {
       queryId: frictionCase.id,
       query: frictionCase.query,
@@ -1492,7 +1527,7 @@ async function runM14QdrantRetrievalDiagnostics(
       rankStableAcrossRepeats: new Set(observedFirstExpectedPageRanks).size <= 1,
       note: "Three identical query calls against the same staging project/source. Compare point IDs, chunk IDs, RRF scores and page ranks. This is a diagnostic sample, not a ranking acceptance threshold.",
     },
-    note: "Non-gating retrieval diagnostics only. Complete chunk text for each unique returned point is included once in candidateEvidence for authenticated staging-operator human review; it is sourced from the fixed M14 corpus payload and is not a generated answer. No retrieval abstention or answer correctness is asserted. Qdrant RRF scores are not calibrated confidence probabilities. The friction query is repeated three times to expose within-run ordering and candidate variation; one additional read-only dense-only and sparse-only rank trace exposes the component ranks behind Core's intent-weighted RRF result. This trace does not influence the returned candidates or fusion weights. The separate BRVIN Teachers Gemini answer/abstention path is not invoked by this action.",
+    note: "Non-gating retrieval diagnostics only. Complete chunk text for each unique returned point is included once in candidateEvidence for authenticated staging-operator human review; it is sourced from the fixed M14 corpus payload and is not a generated answer. No retrieval abstention or answer correctness is asserted. Qdrant RRF scores are not calibrated confidence probabilities. The friction query is repeated three times to expose within-run ordering and candidate variation; read-only dense-only and sparse-only rank traces expose the component ranks behind Core's intent-weighted RRF result for friction, exact formula and uppercase symbol prompts. These traces do not influence the returned candidates or fusion weights. The separate BRVIN Teachers Gemini answer/abstention path is not invoked by this action.",
   };
 }
 

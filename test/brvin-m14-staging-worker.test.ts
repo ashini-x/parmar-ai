@@ -423,6 +423,26 @@ describe("BRVIN M14 isolated staging operator", () => {
           interpretation: "Retrieval-only evidence; no abstention pass/fail.",
         },
       ],
+      componentRankDiagnostics: [
+        {
+          queryId: "newtons-second-law-exact-formula",
+          category: "exact_formula",
+          query: "What equation expresses Newton's second law of motion?",
+          componentRanks: {
+            dense: [{ rank: 1, pointId: "point-p1-overview", chunkId: "chunk-p1-overview", sourceId: SOURCE_ID, pdfPage: 1, score: 0.9 }],
+            sparse: [{ rank: 1, pointId: "point-p2-laws", chunkId: "chunk-p2-laws", sourceId: SOURCE_ID, pdfPage: 2, score: 0.8 }],
+          },
+        },
+        {
+          queryId: "uppercase-force-symbol",
+          category: "symbol_sensitive",
+          query: "Find the source expression containing uppercase F in the second-law formula.",
+          componentRanks: {
+            dense: [{ rank: 1, pointId: "point-p2-laws", chunkId: "chunk-p2-laws", sourceId: SOURCE_ID, pdfPage: 2, score: 0.91 }],
+            sparse: [{ rank: 1, pointId: "point-p2-tail", chunkId: "chunk-p2-tail", sourceId: SOURCE_ID, pdfPage: 2, score: 0.82 }],
+          },
+        },
+      ],
       frictionRepeatability: {
         queryId: "friction-and-net-force",
         query: "How does friction affect the net force and motion of an object?",
@@ -502,6 +522,22 @@ describe("BRVIN M14 isolated staging operator", () => {
         negativeCaseDiagnostics: expect.arrayContaining([
           expect.objectContaining({ id: "lowercase-force-symbol-hard-negative", expectedNoMatch: true }),
           expect.objectContaining({ id: "out-of-corpus-constant", expectedNoMatch: true }),
+        ]),
+        componentRankDiagnostics: expect.arrayContaining([
+          expect.objectContaining({
+            queryId: "newtons-second-law-exact-formula",
+            componentRanks: expect.objectContaining({
+              dense: expect.arrayContaining([expect.objectContaining({ pointId: "point-p1-overview", rank: 1 })]),
+              sparse: expect.arrayContaining([expect.objectContaining({ pointId: "point-p2-laws", rank: 1 })]),
+            }),
+          }),
+          expect.objectContaining({
+            queryId: "uppercase-force-symbol",
+            componentRanks: expect.objectContaining({
+              dense: expect.arrayContaining([expect.objectContaining({ pointId: "point-p2-laws", rank: 1 })]),
+              sparse: expect.arrayContaining([expect.objectContaining({ pointId: "point-p2-tail", rank: 1 })]),
+            }),
+          }),
         ]),
         frictionRepeatability: {
           queryId: "friction-and-net-force",
