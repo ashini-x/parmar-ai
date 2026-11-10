@@ -167,11 +167,8 @@ export async function runBrvinM15ShadowBenchmark(env: BrvinM15ShadowEnv) {
             reranking: { enabled: true, model: "@cf/baai/bge-reranker-base", match_threshold: 0.4 },
           },
         });
-        const candidates = mapAiSearchCandidates(response.chunks ?? []);
-        if (candidates.some((candidate) => !candidate.provenanceValid)) {
-          throw new Error("AI Search returned a candidate outside the pinned Physics source prefix.");
-        }
-        return candidates;
+        // Keep invalid source/page locators visible as provenance violations; do not expose their text or keys.
+        return mapAiSearchCandidates(response.chunks ?? []);
       }, item.expectedPdfPages),
       timedQuery(async () => {
         const chunks = await qdrant.query({
@@ -179,11 +176,8 @@ export async function runBrvinM15ShadowBenchmark(env: BrvinM15ShadowEnv) {
           authorizedSourceIds: [BRVIN_M14_PHYSICS_PILOT.sourceId],
           query: item.query, limit: TOP_K, prefetchLimit: QDRANT_PREFETCH, ensureCollection: false,
         });
-        const candidates = mapQdrantCandidates(chunks);
-        if (candidates.some((candidate) => !candidate.provenanceValid)) {
-          throw new Error("Qdrant returned a candidate with mismatched Physics source/page provenance.");
-        }
-        return candidates;
+        // Preserve out-of-scope candidates as explicit provenance violations without exposing their payload.
+        return mapQdrantCandidates(chunks);
       }, item.expectedPdfPages),
     ]);
     results.push({
