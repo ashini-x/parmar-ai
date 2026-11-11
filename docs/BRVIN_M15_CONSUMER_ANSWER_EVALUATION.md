@@ -1,7 +1,7 @@
 # BRVIN M15 — Consumer answer and abstention evaluation
 
 **Date:** 11 November 2026  
-**Status:** 17/17 paired query cases executed (34 Gemini generations); calibrated offline re-grade is 16/17 for each provider. H01 exact-symbol fidelity and independent claim-level grounding remain open.  
+**Status (12 November 2026):** 17/17 paired OCR-only query cases (34 Gemini generations) and the separate original-PDF-assisted five-query audit (10 Gemini generations) are complete. The original OCR-only receipt calibrates to 16/17 for each provider; the targeted PDF-assisted audit passes 5/5 for each provider on answer correctness, source-grounding, citations and mathematical-symbol fidelity. This demonstrates bounded notation recovery when the exact original page is attached; it does not repair stored OCR/index text. Independent claim-level grounding and the remaining M15 acceptance gates are still open.  
 **Production status:** Cloudflare AI Search remains selected. No provider cutover or production deployment is authorized by this work.
 
 ## 1. Why this is a separate gate
@@ -257,14 +257,14 @@ Run a measured ablation: each provider without reranking, each with the same rer
 
 ## 8. Release decision
 
-M15 remains **IN PROGRESS**. The retrieval-only and 34-generation staging subtests are complete. Manual review supports the numerical answers P01–P12 for both providers and confirms 4/4 explicit abstentions for both providers; Qdrant additionally demonstrated 4/4 abstentions while irrelevant passages were present. H01 is a confirmed exact-symbol-preservation failure: the original PDF prints `F_s = −k × x`, while the indexed OCR and generated answers render `F_s = -k xx`. The source PDF is correct; the OCR/index-to-answer path loses the multiplication glyph boundary. Independent claim-level grounding is also not yet demonstrated.
+M15 remains **IN PROGRESS**. The retrieval-only, 34-generation OCR-only answer, and separate ten-generation original-PDF-assisted formula subtests are complete. Manual review supports the original P01–P12 numerical/conceptual answers for both providers and confirms 4/4 N01–N04 abstentions for each; Qdrant additionally demonstrated 4/4 resistance to irrelevant in-corpus passages. The OCR-only receipt still contains real notation defects (P01 / AI Search, P08 / Qdrant, P12 / AI Search, and H01 / both providers). The targeted PDF-assisted audit then passed all five cases for both providers, including exact notation on P01, P08, P11 and P12 and correct rejection of H01's positive-sign near-miss. This proves the current Gemini generator can recover the audited notation when the exact original page is supplied; it does **not** repair the stored OCR or index representations, nor establish that normal OCR-only answers are now faithful. Independent claim-level grounding remains unproven.
 
-Do not mark the retrieval migration production-ready, alter production provider selection, or authorize a provider cutover until the OCR-to-answer symbol-fidelity failure is remediated without mutating the original source artifact, claim-to-passage grounding is reviewed, the calibrated evaluator passes CI, and the other M15 security, authorization/revocation, recovery, performance, cost and load gates have passed.
+Do not mark the retrieval migration production-ready, alter production provider selection, or authorize a provider cutover until the production-appropriate symbol-fidelity strategy is selected and validated beyond this five-query PDF-assisted sample, claim-to-passage grounding is reviewed, the calibrated evaluator passes CI, and the other M15 security, authorization/revocation, recovery, repeatability, performance, cost and load gates have passed.
 
 
 ## 9. Targeted original-PDF formula-symbol audit — 11 November 2026
 
-**Implementation status:** added to the same authenticated isolated-staging operator; the new audit has **not yet been run**. The completed 34-generation receipt above remains unchanged. The new experiment does not rerun the full P01–P12 / N01–N04 / H01 suite.
+**Implementation and execution status:** the audit was added to the same authenticated isolated-staging operator and was completed on 11 November 2026. It generated a separate five-query / ten-generation receipt; the completed 34-generation OCR-only receipt above remains unchanged. The new experiment did not rerun the full P01–P12 / N01–N04 / H01 suite.
 
 The root cause is that the page OCR text already changes some mathematical glyphs before the existing Gemini generator receives the excerpts. Prompt-only instructions cannot restore a multiplication sign that is absent from the evidence. This targeted experiment tests whether the source-of-record visual representation can preserve the notation without changing OCR or any index.
 
@@ -304,6 +304,24 @@ Regression tests cover:
 - rejection of an invalid source hash, page selector, non-PDF input, or wrong original page count;
 - presence of the separate staging-only operator action.
 
-Core PR #223 is merged as `3c4e7b815bb4f5c21318b083712b2d138b882475`. The final M14 staging validation and full Core Release validation both passed; after merge, the push-to-main workflow deployed staging Worker version `ed239c04-3d71-4194-88c0-d08c8948929c` (deployment `9eaac13a-38a9-4823-9d16-c31ff97c9eab`) at 100%. The Release workflow explicitly classified the change set as staging/docs-only, so production deployment and verification jobs were skipped. The deployed operator is `https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark/answers`. It requires the existing staging `BRVIN_M14_ADMIN_TOKEN` bearer value; that secret is intentionally not retrievable through Cloudflare APIs and must be entered in the operator page. Run only the new five-query button and save its separate JSON receipt. **No PDF-assisted result is claimed yet.** The formula-symbol acceptance gate remains open until the receipt is reviewed against the original PDF and the broader M15 relevance, claim-grounding, authorization, recovery, performance, cost, load and rollback gates pass.
+Core PR #223 is merged as `3c4e7b815bb4f5c21318b083712b2d138b882475`. The final M14 staging validation and full Core Release validation both passed; after merge, the push-to-main workflow deployed staging Worker version `ed239c04-3d71-4194-88c0-d08c8948929c` (deployment `9eaac13a-38a9-4823-9d16-c31ff97c9eab`) at 100%. The Release workflow explicitly classified the change set as staging/docs-only, so production deployment and verification jobs were skipped. The deployed operator is `https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark/answers`; the five-query action required the existing staging `BRVIN_M14_ADMIN_TOKEN`, which was entered locally and was not shared in chat or stored in the report.
 
-Production remains on Cloudflare AI Search. No production cutover or Teachers-side provider access is authorized.
+**Execution receipt — 11 November 2026, 18:39:12 UTC:** all five query pairs completed (`P01`, `P08`, `P11`, `P12`, `H01`) against source `3b4d116d-4c18-450f-9cba-cb2bec3da7ca`, using `gemini-3.8-flash` / `global`. The report's original source SHA-256 exactly matches the pinned eight-page PDF (`cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92`). Each request attached exactly one extracted original physical page (1, 4, 7, 8, 8 respectively); the JSON records the SHA-256 of each transient one-page PDF. No request failure occurred.
+
+| Metric | Cloudflare AI Search | Qdrant + Vertex |
+|---|---:|---:|
+| Overall / answer correctness | 5/5 | 5/5 |
+| Source-grounding check | 5/5 | 5/5 |
+| Citation check | 5/5 | 5/5 |
+| Mathematical-symbol fidelity | 5/5 | 5/5 |
+| Provenance violations | 0 | 0 |
+| Mean retrieval latency | 3,848 ms | 913.2 ms |
+| Median retrieval latency | 3,599 ms | 895 ms |
+| Mean Gemini generation latency | 8,435.6 ms | 14,278 ms |
+| Median Gemini generation latency | 7,442 ms | 5,749 ms |
+
+Both providers returned the expected support page at rank 1 for every case and cited the correct physical page. The generated answers preserve the audited equation boundaries, multiplication signs, zero/inequality, signs and numerical results. Qdrant was faster on retrieval in all five samples (mean 913.2 ms versus 3,848 ms). Its generation median was lower, but its mean was higher because P11 took 50,041 ms; this five-query staging sample does not establish an end-to-end latency winner or an SLO.
+
+**H01 interpretation:** H01 asks for `F_s = +k × x`. Both providers retrieve page 8 and correctly explain that the source equation is `F_s = −k × x` and that the positive-sign expression is explicitly rejected. Although the receipt retains `retrievalExpectedNoMatch: true` for the exact positive-sign formula, this is not a no-evidence abstention case: page 8 contains the positive-sign expression as a negated near-miss and is useful corrective evidence. Abstention and irrelevant-evidence counters are therefore not applicable in this five-query audit (0 applicable queries).
+
+This is a **successful bounded PDF-assisted notation audit**, not an OCR/index repair. The original PDF, Vision OCR, normalized text, manifests, D1 records and both indexes were not modified. The original OCR-only formula defects documented above remain defects in that path until separately remediated or replaced by a production-appropriate visual-evidence strategy. Independent claim-by-claim entailment, passage qrels, authorization/revocation, recovery, repeatable latency/cost, load and rollback remain open. Production remains on Cloudflare AI Search; no provider cutover or Teachers-side provider access is authorized.
