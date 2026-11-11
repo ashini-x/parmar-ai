@@ -829,6 +829,11 @@ describe("BRVIN M14 deterministic Qdrant point identity", () => {
     expect(id).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-5[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u);
   });
 
+
+});
+
+
+describe("BRVIN M15 Qdrant source authorization guardrails", () => {
   it("re-applies the current source allowlist on each query and does no provider work when it is empty", async () => {
     const { request, calls } = makeQdrant();
     const embeddings = makeEmbeddings();
@@ -875,6 +880,4 @@ describe("BRVIN M14 deterministic Qdrant point identity", () => {
     expect(calls).toHaveLength(requestCount);
     expect(vi.mocked(embeddings.embedQuery)).toHaveBeenCalledTimes(embeddingCount);
   });
-
-
 });
