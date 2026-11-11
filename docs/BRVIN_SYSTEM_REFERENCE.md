@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 8 November 2026 (3-page Physics pilot READY at 3/3; model-independent retrieval precision deployed; protected BRVIN Teachers v2 semantic retrieval and physical-page provenance verified; Not Authorised denial after revocation and successful retrieval after re-grant verified; M11 complete)  
+**Last verified against source and production infrastructure:** 12 November 2026 (M11 production consumer acceptance remains complete; Core M15 second-source staging receipts and 109-excerpt independent passage-review handoff verified; live Core/Teachers Worker settings and provider boundaries read back)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/brvin-teachers` (separate downstream app); `ashini-x/askmoina-voice` remains an optional consumer
 
@@ -87,7 +87,7 @@ Consumer application's own Gemini/LLM prompt and answer
 
 The two planes share the existing D1 registry and AI Search namespace. They do not create a database or index per app.
 
-## 1.1 Current production state — 8 November 2026
+## 1.1 Historical production snapshot — 8 November 2026
 
 - Core maintenance PR [#110](https://github.com/ashini-x/parmar-ai/pull/110) was squash-merged as `b473139c4b65fd52fb35204a4e88a2fd4305b0bc`. Release validation [#868](https://github.com/ashini-x/parmar-ai/actions/runs/42393606814) passed typecheck, unit/integration tests, Node/browser-script tests, both Worker dry-runs, paired production deployment, root/`/health` checks, private BRVIN connectivity and Fatman source-readiness smoke acceptance. The previous 100%-traffic Core versions before the 8 November release were `parmar-ai` `92fea836-de6f-4791-98e8-3c1bfcc49698` (deployment `23aceae0-7887-4605-a507-7413c7e19c32`) and `brvin-service` `83c180a5-b041-4019-ae9f-a205e2968b78` (deployment `5e327c76-ed79-42a4-bd53-e3c835accf36`).
 - BRVIN automatic PDF page-count detection and the downstream source page map shipped in Core PR [#133](https://github.com/ashini-x/parmar-ai/pull/133), merged as `9c0b6da978e60cc98778d8838a4d99867390fb2e`; Release validation [#888](https://github.com/ashini-x/parmar-ai/actions/runs/42417392419) passed typecheck, full Vitest and Node tests, both Worker dry-runs, paired production deployment, live root/health/private BRVIN/Fatman source-readiness checks and the release acceptance manifest. Active 100%-traffic versions are `parmar-ai` `5eead825-46cb-4122-a351-634865696142` (deployment `045e0ef6-12cc-44fd-bc72-f0e4bec9940e`) and `brvin-service` `5ad1f448-1700-4e06-abdc-0b39287b89b8` (deployment `e04a9792-941b-4d64-bed0-02bfea96d53c`). The feature uses the already-required one-output-per-page Vision inventory; it adds no OCR operation, D1 schema migration or retrieval RPC v2 change.
@@ -108,6 +108,25 @@ The two planes share the existing D1 registry and AI Search namespace. They do n
 - M6–M11 are **COMPLETE**. The BRVIN Teachers consumer passed useful semantic retrieval, correct physical PDF-page provenance, Not Authorised denial after access revocation, and successful retrieval after the Physics access grant was restored. No student/channel/model runtime is implemented or authorized.
 - The legacy BRVIN Connect retirement code and protected UI are deployed, but retirement is **not yet executed**. The latest read-only Core D1 check on 7 November still showed both GitHub and Cloudflare provider rows as `connected`. The protected button is on `/admin/brvin` under **Legacy provider settings**; it requires an authenticated Core Admin session and the exact confirmation `UNINSTALL BRVIN CONNECT`. The current Cloudflare connector is OAuth-based and the OAuth Clients API returned HTTP 403 because this connection has no `OAuth Client Read`/`OAuth Client Write` API-token permissions. No provider credential, installation or OAuth registration was altered. After the protected action succeeds, delete the GitHub App registration and the dedicated Cloudflare OAuth client registration separately.
 - AskMoina Voice remains an optional independent consumer and must not be treated as a fixed BRVIN test-client host. The retired `brvin-test-client` scaffold must not be recreated.
+
+
+## 1.2 Current production and provider-migration state — 12 November 2026
+
+Cloudflare's current read-only Worker settings/deployment read-back confirms:
+
+| Worker | Environment | Version | Deployment | Traffic |
+|---|---|---|---|---:|
+| `parmar-ai` | production | `9d289364-a65d-4fa4-9df7-84f9418eeac2` | `fae0c117-5330-428d-b0cb-0ccb4798acc7` | 100% |
+| `brvin-service` | production | `fd1fb0c0-98f9-46a8-bf63-6b0f86167359` | `f1c1e8d7-953b-4c75-838c-45c9884f1380` | 100% |
+| `parmar-ai-m14-staging` | staging | `e58546a5-c9e2-4bef-8d27-da8c606995a7` | `2cbed610-fae7-4212-87ac-0cb5c2a9ff48` | 100% |
+| `brvin-teachers` | production | `68d6694c-6371-4cae-8a25-4af40ca15706` | `31ff2a01-b0f4-4be8-92d3-63e2d91adddf` | 100% |
+
+The Core production configuration still selects `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`; `BRVIN_CORPUS_MANIFEST_ENABLED=false` remains set on `parmar-ai`. No Qdrant/Vertex retrieval binding or provider route exists in the production v2 service. The latest Core versions were uploaded by an unintended test-only redeploy following PR #229 because the new v2 authorization test path was omitted from the production-scope allowlist. PR #230 corrected that allowlist. PR #231 also corrected the M14 workflow push trigger so test-only merges no longer trigger a staging Worker upload. The latter two workflow corrections passed validation; neither initiated a production or staging deployment when merged.
+
+Teachers remains on its existing deployed production version and has only two private same-account Service Bindings: `BRVIN_MANAGEMENT` to `parmar-ai` / `BrvinTeachersManagementApi`, and `BRVIN_SERVICE` to `brvin-service` / `BrvinRetrievalApi`. It has no Vertex/Qdrant SDK, credentials, embedding implementation or direct provider path. The frozen v2 RPC contract and current Core Admin / Teachers Operator Console experiences are unchanged.
+
+**M15 is active and incomplete.** The second eight-page Physics source and its immutable OCR/corpus/index artifacts remain isolated to Core staging. The paired 17-query retrieval/34-generation OCR-only evaluation and five-query/ten-generation original-PDF-assisted notation audit are complete, but the latter is bounded visual-evidence assistance and does not repair stored raw OCR or indexed formula text. Core's 109-excerpt independent passage review pack is on main with Reviewer A/B/adjudication values blank. The first incomplete quality gate is two independent human reviews and claim-to-passage grounding. Unit tests now cover revoked app-project grants failing before quota/search and Qdrant re-applying the current per-request source allowlist; they do not prove live v2-to-Qdrant revocation with vectors retained. Live security/revocation, recovery, HNSW/load, repeatable latency/cost and rollback remain open. Production remains on Cloudflare AI Search.
+
 
 ## 2. Architecture decisions that must remain stable
 

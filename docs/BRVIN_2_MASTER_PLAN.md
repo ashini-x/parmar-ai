@@ -1,6 +1,6 @@
 # BRVIN 2 — Current State and Continuation Plan
 
-**Status date:** 11 November 2026  
+**Status date:** 12 November 2026  
 **Repository:** `ashini-x/parmar-ai`  
 **Production workspace:** [BRVIN Admin](https://parmar-ai.thenewtongs.workers.dev/admin/brvin)
 
@@ -21,7 +21,7 @@ BRVIN is **not** an autonomous coding agent, repository factory, provider creden
 Use the documents below in this order. They are the active reference set for BRVIN.
 
 1. **This file — current state and continuation:** current production position, remaining work and new-chat handoff.
-2. [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md) — approved product boundary and active M6–M11 milestone status/acceptance.
+2. [BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md](BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md) — approved product boundary and active M6–M17 milestone status/acceptance.
 3. [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) — as-built architecture, infrastructure, D1 model, source lifecycle, trust boundaries and production snapshot.
 4. [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) — accepted architecture decisions; not a task list or status tracker.
 5. [BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md](BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md) — approved M12–M17 backend modernization plan, rollback gates and same-UI compatibility rules.
@@ -56,23 +56,31 @@ The completed product baseline includes:
 
 ## 4. Verified production snapshot
 
-The latest paired Core production release is **Release validation #1071** on 10 November 2026, from Core main code commit [`a7d1513`](https://github.com/ashini-x/parmar-ai/commit/a7d151305ee86118d3a4d579d022790e23386727). The release workflow [#42879347614](https://github.com/ashini-x/parmar-ai/actions/runs/42879347614) passed build/tests, both production Worker deployments, health/BRVIN/Fatman smoke checks and live release acceptance. The subsequent Core documentation-only PR #206 is merged as [`90c4476`](https://github.com/ashini-x/parmar-ai/commit/90c4476ee9a0d277f5b714006858e84731673b23); it did not deploy code.
+**Latest live read-back: 12 November 2026.** Core `parmar-ai` and private `brvin-service` are both at 100% traffic. The latest versions were created by an unnecessary test-only redeploy after Core PR #229; they do not represent a provider migration or runtime feature rollout.
 
-| Worker | Production version | Deployment |
-|---|---|---|
-| `brvin-service` | `6f00da7e-c663-4d24-a509-0b5be5cc5215` (v134) | `bc672e9d-5335-4372-9be2-74ce0147d74f` |
-| `parmar-ai` | `059c2495-1347-4fa0-89d3-2749f55b582a` (v710) | `ac0dedbc-b6d9-4686-bbe7-99fd3f739556` |
+| Worker | Environment | Version at 100% | Deployment |
+|---|---|---|---|
+| `parmar-ai` | production | `9d289364-a65d-4fa4-9df7-84f9418eeac2` | `fae0c117-5330-428d-b0cb-0ccb4798acc7` |
+| `brvin-service` | production | `fd1fb0c0-98f9-46a8-bf63-6b0f86167359` | `f1c1e8d7-953b-4c75-838c-45c9884f1380` |
 
-The release was the normal paired Core deployment triggered by merging the M14 staging-diagnostic enhancement; it was **not** a retrieval-provider cutover. Cloudflare version metadata confirms `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search` on both production Workers and `BRVIN_CORPUS_MANIFEST_ENABLED=false` on `parmar-ai`. No production Qdrant routing or production corpus write was enabled.
+Cloudflare settings read-back confirms:
 
-The isolated M14 staging Worker is at v78 (`842231fb-78ce-4791-a0b9-6b59e86eeb33`), deployment `817c9ad9-1722-4ffa-bc82-76d8878d01ca`, at 100%. Teachers remains on Worker v12 (`68d6694c-6371-4cae-8a25-4af40ca15706`) at 100%; there was no Teachers deployment for this Core-only staging experiment.
+- Both Core production Workers still have `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`.
+- `parmar-ai` still has `BRVIN_CORPUS_MANIFEST_ENABLED=false`.
+- The Core production `BRVIN_SERVICE` Service Binding still targets private `brvin-service` / `BrvinRetrievalApi`.
+- No production Qdrant/Vertex retrieval binding or provider selector is configured.
+- The provider selected for production remains Cloudflare AI Search. No cutover, corpus-manifest production write or Qdrant point migration has occurred.
 
-Additional verified production facts:
-- D1: `parmar-ai-admin-prod` (the existing shared registry/analytics database).
-- Shared OCR bucket: `parmar-fatman-ocr-90db7be4`.
-- The administrator confirmed **Lifecycle configuration permissions: READY** and **30-day OCR lifecycle rule: INSTALLED (age 30 days)**.
-- The Rain Gardens 3-page sample source remains `READY`, 3/3 indexed, with its original PDF and indexed search pages retained.
-- The 6 November OCR cleanup completion event reported `objectVersionsFound=0` and `objectVersionsDeleted=0`. It confirms the dedicated OCR prefix was clear; it does not prove that this run physically deleted a positive number of objects.
+**Why the Worker versions changed:** Core PR #229 added only test files and migration documentation. The new `test/brvin-v2-service.test.ts` path was missing from the production-scope test-only allowlist, so the normal paired Core push workflow uploaded new Worker versions even though no runtime source/provider/binding file changed. PR #230 corrected the classifier by allowlisting the v2 service test path; its Release validation passed and production deployment/verification jobs were skipped. PR #231 corrected the M14 staging workflow's push paths so test-only merges continue to run M14 validation on PRs without uploading an unnecessary staging Worker on merge.
+
+| Isolated / consumer Worker | Environment | Version at 100% | Deployment |
+|---|---|---|---|
+| `parmar-ai-m14-staging` | staging | `e58546a5-c9e2-4bef-8d27-da8c606995a7` | `2cbed610-fae7-4212-87ac-0cb5c2a9ff48` |
+| `brvin-teachers` | production | `68d6694c-6371-4cae-8a25-4af40ca15706` | `31ff2a01-b0f4-4be8-92d3-63e2d91adddf` |
+
+Teachers remains a private v2 consumer. Its production Worker has only the Core `BRVIN_MANAGEMENT` (`BrvinTeachersManagementApi`) and `BRVIN_SERVICE` (`BrvinRetrievalApi`) Service Bindings; it has no Qdrant/Vertex provider credentials, SDKs or direct provider access. No Teachers runtime or Worker deployment changed during this M15 continuation.
+
+Additional production facts remain unchanged: shared D1 `parmar-ai-admin-prod`, private source/GCS and OCR workflow ownership in Core, and the completed M11 teacher Physics source/retrieval/revocation/re-grant acceptance. The current provider-migration acceptance state and evidence are in `BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md`.
 
 ## 5. Milestone status
 
@@ -104,7 +112,9 @@ The Operations walkthrough on 6 November 2026 recorded 33 project searches that 
 
 The next planned backend workstream is documented in [BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md](BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md). It keeps both admin experiences and the existing teacher upload/indexing workflow intact while evaluating Vertex AI embeddings + Qdrant hybrid retrieval behind the existing Core v2 API. The retrieval design is unified and math-aware: theory, formulas, worked examples and numerical problems share one candidate-retrieval path, with raw OCR, optional formula/LaTeX representations and physical-page provenance preserved; it is not a collection of separate subject bots.
 
-**Current state (12 November 2026): M13 is merged; **M14's non-production Vertex/Qdrant pilot is COMPLETE**; **M15 second-source retrieval, the 34-generation OCR-only consumer answer run, and the authenticated five-query / ten-generation original-PDF-assisted formula audit are complete. Both providers passed 5/5 formula-audit checks, but this validates only the bounded visual-evidence path; OCR/index text defects remain in the original OCR-only path. M15 acceptance gates remain ACTIVE**. The M14 v78 staging evidence is recorded below. The first read-only production AI Search baseline is now captured on the same Physics source SHA; it reveals two positive-query empty results (uppercase-symbol and numerical setup), a non-formula passage for natural-language exact-formula discovery, 8/11 expected-page target coverage, and zero results for both no-match prompts. The baseline is a page-level comparison only because AI Search has 11 internal chunks while Qdrant has 7 custom chunks. ### M15 read-only AI Search baseline — 11 November 2026
+**Current retrieval-modernization state (12 November 2026):** M13 is merged. M14 is complete only as the scoped non-production Vertex/Qdrant Physics pilot. M15 remains **IN PROGRESS**: the eight-page second Physics source is indexed in isolated staging; the 17-query paired retrieval, 34-generation OCR-only answer evaluation and separate five-query/ten-generation original-PDF-assisted notation audit are complete. The OCR-only evaluator's calibrated offline re-grade is 16/17 for each provider; the PDF-assisted audit passed 5/5 for each provider but does not repair stored OCR/index notation. The first incomplete M15 gate is independent human passage relevance and claim-to-passage grounding using the 109-excerpt, blank two-reviewer review pack. Subsequent gates remain wrong-project/no-grant, revocation with vector points retained, throttling/retry/recovery, HNSW-aware load/concurrency, repeatable latency/throughput/cost and rollback. Core PRs #228 and #229 are merged; #230 corrects the production-scope test-only allowlist, and #231 prevents M14 staging uploads for test-only merges. Teachers PR #46 is merged with current consumer guardrails. Production remains on Cloudflare AI Search; the frozen v2 contract, D1 authorization authority, both admin experiences and Teachers private-consumer boundary remain unchanged. **No production provider cutover is authorized.**
+
+### M15 read-only AI Search baseline — 11 November 2026
 
 The current production AI Search source was queried read-only through the existing shared instance `fatman-2026-8b183803`, filtered to the exact Physics source folder `brvin/books/01238b3a-9902-4a42-90b4-574048ee4f00/pages/`. The three source items were already `completed`; their internal AI Search chunk counts are 3/4/4 (11 total). Their source ID, three physical pages and original SHA-256 match the immutable M14 Physics source. No item uploads/deletes, index creation, OCR, selector or production Worker changes were performed.
 
@@ -291,3 +301,12 @@ The 109-excerpt review pack is now published as `docs/BRVIN_M15_PASSAGE_QRELS_RE
 
 Once this human review is complete, continue M15 #144 with the remaining wrong-project/no-grant and revoke-with-vectors-retained checks, retry/recovery and throttling, HNSW-aware concurrency/latency/throughput, embedding/index/storage/query cost, and rollback rehearsal. Keep working through these gates without changing the frozen v2 contract or Teachers provider boundary. Production remains on Cloudflare AI Search; no cutover is authorized.
 
+## 12 November 2026 — coordinated M15 continuation receipt
+
+- Core PR [#228](https://github.com/ashini-x/parmar-ai/pull/228) merged the source-fingerprinted 109-passage human review pack, blank reviewer fixture, Core `AGENTS.md` and synchronized Core continuation/milestone documentation. Release validation passed; production deployment and live-production verification were skipped.
+- Teachers PR [#46](https://github.com/ashini-x/brvin-teachers/pull/46) merged README, repository-guide and provider-compatibility synchronization. No consumer code, contract, UI, binding or deployment changed.
+- Core PR [#229](https://github.com/ashini-x/parmar-ai/pull/229) merged unit regression tests for revoked D1 application-project grants failing before quota/search and for Qdrant re-applying the current source allowlist to both dense/sparse calls on every query. An empty allowlist exits before embedding/network calls. These are unit guardrails only, not live end-to-end Qdrant revocation acceptance.
+- Core PR [#230](https://github.com/ashini-x/parmar-ai/pull/230) merged the production-scope allowlist correction for `test/brvin-v2-service.test.ts`. Its Release validation passed and production deployment/verification jobs were skipped.
+- Core PR [#231](https://github.com/ashini-x/parmar-ai/pull/231) merged the M14 staging push-path correction. M14/M15 tests continue to run during PR validation; test-only merges no longer trigger an M14 staging upload. Its Release and staging validation passed; production and staging deploy steps were skipped on the PR event.
+
+The first incomplete M15 task is still independent human passage qrels/claim grounding. The fixture contains 109 candidates (24 AI Search and 85 Qdrant) with Reviewer A, Reviewer B and adjudication values blank. Two reviewers must annotate independent copies and preserve disagreements before adjudication; model/assistant-generated grades cannot be reported as human qrels. After review, proceed with live authorization/revocation-with-vectors-retained, retry/recovery, HNSW/load, latency/cost and rollback gates. Production settings and current live deployments are listed in section 4 above; the provider remains `cloudflare-ai-search`.
