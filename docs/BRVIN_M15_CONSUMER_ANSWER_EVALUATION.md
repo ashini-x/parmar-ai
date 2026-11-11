@@ -161,7 +161,7 @@ These are recorded as the supplied retrieval checkpoint. They are not answer-gen
 
 The code adds the optional generic source context to `generateGeminiAnswer`, the paired M15 retrieval/generation adapter, the authenticated read-only staging routes, a browser report page, and initial grading regression tests. The staging workflow is configured to validate the changed Gemini source and permits manual staging-only deployment from the selected feature branch.
 
-**Code validation passed on 11 November 2026:** M14 staging workflow run [#112](https://github.com/ashini-x/parmar-ai/actions/runs/43020464133) passed typecheck, M15 tests, versioned Vertex/Qdrant configuration verification and Wrangler staging dry-run. Release validation run [#1116](https://github.com/ashini-x/parmar-ai/actions/runs/43020464061) passed typecheck/test/build. On both PR runs, staging deployment and all production deployment/verification jobs were skipped.
+**Code validation passed on 11 November 2026:** initial M14 staging workflow #112 and Release validation #1116 passed before the live run. After rubric calibration, M14 staging workflow [#124](https://github.com/ashini-x/parmar-ai/actions/runs/43052708663) passed typecheck, all M14/M15 tests, versioned Vertex/Qdrant configuration verification and Wrangler staging dry-run. Release validation [#1133](https://github.com/ashini-x/parmar-ai/actions/runs/43052708634) passed typecheck/test/build. Staging deployment was skipped on the PR event; production deployment and production verification jobs were also skipped.
 
 ### Completed consumer answer/abstention run — 11 November 2026
 
