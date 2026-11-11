@@ -1512,7 +1512,7 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
     const selectedSourceId=sourceId.value.trim();
     if(secret.length<32||!selectedSourceId)return;
     token.value="";refresh();buttons.benchmark.disabled=true;
-    const totalQueries=17;const batchSize=3;let collected=[];
+    const totalQueries=17;let collected=[];let nextIndex=0;let batchNumber=0;
     const requestBatch=async(path,payload)=>{
       const response=await fetch(path,{
         method:"POST",
@@ -1526,14 +1526,16 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
     };
     result.className="status muted";result.textContent="Starting the read-only paired benchmark in small batches. The operator token is held only in memory for this click and cleared when the run ends.";
     try{
-      for(let startIndex=0;startIndex<totalQueries;startIndex+=batchSize){
-        result.textContent="Running paired retrieval batch "+(Math.floor(startIndex/batchSize)+1)+" of "+Math.ceil(totalQueries/batchSize)+" · completed "+collected.length+"/"+totalQueries+" query pairs. Do not close this page.";
-        const data=await requestBatch("/admin/m15/benchmark/run",{sourceId:selectedSourceId,startIndex});
+      while(nextIndex<totalQueries){
+        result.textContent="Running paired retrieval batch "+(batchNumber+1)+" · completed "+collected.length+"/"+totalQueries+" query pairs. Do not close this page.";
+        const data=await requestBatch("/admin/m15/benchmark/run",{sourceId:selectedSourceId,startIndex:nextIndex});
         const batch=data.result?.batch;const batchResults=data.result?.results;
-        if(!batch||batch.startIndex!==startIndex||!Array.isArray(batchResults)||batchResults.length!==Math.min(batchSize,totalQueries-startIndex)){
+        if(!batch||batch.startIndex!==nextIndex||!Number.isSafeInteger(batch.endIndex)||batch.endIndex<=nextIndex||
+            batch.endIndex>totalQueries||batch.hasMore!==(batch.endIndex<totalQueries)||
+            !Array.isArray(batchResults)||batchResults.length!==batch.endIndex-nextIndex){
           throw new Error("The staging Worker returned an incomplete or out-of-order benchmark batch.");
         }
-        collected.push(...batchResults);
+        collected.push(...batchResults);nextIndex=batch.endIndex;batchNumber+=1;
       }
       result.textContent="All "+collected.length+"/"+totalQueries+" query pairs completed. Assembling provider summaries and the final receipt…";
       const receipt=await requestBatch("/admin/m15/benchmark/complete",{sourceId:selectedSourceId,results:collected});
