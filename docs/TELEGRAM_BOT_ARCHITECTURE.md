@@ -258,12 +258,34 @@ The code records per-stage timings so a slow message can be attributed to the ri
 | `question_processing_started` | `queueWaitMs`, `attempts` | Queue wait before consumer processing |
 | `question_context_loaded` | `contextReadMs` | Parallel profile/history read time |
 | `question_answer_generated` | `answerPipelineMs`, `model`, `thinkingLevel`, `grounded` | Retrieval/model/answer-generation pipeline |
+| `gemini_generation_attempt_completed` | `attempt`, `durationMs`, `thinkingLevel`, `firstPartialAnswerMs`, `streamed`, token counts | One successful Vertex request; first useful streamed answer text is separately measured |
+| `gemini_generation_attempt_failed` | `attempt`, `durationMs`, `status`, `retryable`, `streamed` | One failed Vertex request before retry/terminal failure |
 | `question_completed` | `answerLength`, `attempts` | Successful end of processing/delivery |
 | `telegram_partial_answer_stream_failed` | `error` | Cosmetic progress-edit failure |
 
 Use a single request ID/update ID to correlate webhook, Queue and completion events. Do not log tokens, webhook secrets, full private message bodies or personal data.
 
 **Important:** generic Worker `wallTimeMs` includes `ctx.waitUntil` work after the response path has finished. Use `telegram_question_queued.totalWebhookMs` and its stage fields for webhook-to-Queue latency; use `queueWaitMs`, `contextReadMs` and `answerPipelineMs` for processing latency. Do not call the entire invocation wall time the user's wait time.
+
+### Gemini latency investigation and staging-first tuning — 12 November 2026
+
+A read-only inspection of production Worker telemetry and D1 usage records found:
+
+- Six `question_answer_generated` events in the preceding seven-day query window were all `fatmanMode=false`, using `gemini-3.8-flash` at `global`. Their `answerPipelineMs` values were 5,319, 5,608, 5,772, 9,947, 11,073 and 24,856 ms. The 24.856-second request is the long-tail outlier.
+- Because those six requests were not in Fatman mode, they did not call Cloudflare AI Search. Their delay is therefore not explained by AI Search retrieval. Fatman retrieval time must be measured separately from generation; this telemetry sample contained no Fatman answer event and cannot establish Fatman retrieval performance.
+- The production `ai_usage_attempts` sample for the same seven-day period had 32 completed MEDIUM attempts averaging 3,606 prompt tokens, 211 candidate tokens and 251 thought tokens. One HIGH request produced a rejected structured response on attempt 1 and a completed response on attempt 2; it corresponds to the 24.856-second answer-pipeline outlier. This confirms that a retry can add a second full model request, but retries were uncommon in this sample.
+- The earlier M15 PDF-assisted formula audit is not a like-for-like Telegram latency sample: it supplied an extracted original PDF page, used the strict source-grounded prompt and did not attach Telegram's partial-answer handler. Telegram streams through `streamGenerateContent` when its handler is present.
+
+**Merged latency candidate — Core PR [#226](https://github.com/ashini-x/parmar-ai/pull/226), commit `d51c234b72957e7f8aa92565b07635858b524c7b`:**
+
+- Ordinary short questions now default to LOW thinking.
+- Explanations, comparisons and reasoning questions use MEDIUM.
+- HIGH is reserved for explicit multi-step/derivation prompts or unusually long questions; the configured `GEMINI_THINKING_LEVEL` remains the hard ceiling.
+- Each model attempt records duration, thinking tier, token counts, success/failure and whether streaming was used. On streamed Telegram requests it also records the time to the first useful partial answer, separately from total generation time.
+
+**Validation and rollout boundary:** PR checks passed typecheck, full Vitest, Node tests and both Worker bundle dry-runs. M14 staging validation passed focused M14/M15 tests, provider-config verification and Wrangler dry-run. The merged code was deployed only to isolated Worker `parmar-ai-m14-staging`, deployment `9850e243-ae38-4e00-8fbc-a122f56fd7f9`, version `e3f24615-fcaa-4629-8077-ac09350d58fe`, at 100%. Release validation [#43086213061](https://github.com/ashini-x/parmar-ai/actions/runs/43086213061) passed and skipped production deployment/verification. Production `parmar-ai` remains on version `03233306-73d5-4990-be2d-a16dc99a8bd3` and private `brvin-service` remains on `66eac5b4-78f7-4708-a051-7cbe08b999a8`, both at 100%.
+
+**Acceptance status:** this is a staged tuning change, not yet a measured production latency win. Do not claim a percentage improvement until the same normal Telegram workload is measured with the new tier policy. Compare first-partial latency and total answer latency separately, stratified by Fatman/non-Fatman, thinking tier, retry count and token counts. Keep Cloudflare AI Search as the current retrieval provider; no provider or production routing change is part of PR #226.
 
 ## 12. Failure and retry boundaries
 
