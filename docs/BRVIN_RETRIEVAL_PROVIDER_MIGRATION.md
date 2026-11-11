@@ -631,3 +631,12 @@ The original-PDF-assisted five-query notation audit passed 5/5 for both provider
 
 After independent annotation/adjudication, continue the explicit M15 issue gates: broader multi-document formula/mixed-query relevance, wrong-project/no-grant isolation, revoke-with-vectors-retained, throttling and idempotent recovery, HNSW-aware concurrency/latency/throughput, embedding/index/storage/query costs, and rollback rehearsal. Keep D1 authoritative and the private v2 contract unchanged. Production remains `cloudflare-ai-search`; no production selector change or cutover is authorized.
 
+## 12 November 2026 — M15 authorization regression guardrails
+
+Core PR #229 adds unit coverage for two boundaries that the M15 implementation must preserve:
+
+- A revoked application→project grant is rejected by the v2 service resolver as `PROJECT_NOT_AUTHORIZED` before quota reservation and before provider search.
+- The Qdrant hybrid helper applies the current per-request project/source allowlist to both dense and sparse calls, and an empty authorized-source list exits before query embedding or Qdrant network requests.
+
+This is deliberately **unit-level evidence**. It does not prove a live v2 request routed through Qdrant, a live D1 grant revocation while vector points remain, or provider-side cache invalidation. The M15 live authorization/isolation and revoke-with-vectors-retained acceptance remains open and must be exercised in isolated staging before M15 can pass. The provider port on the current private v2 runtime still selects the deployed AI Search provider; this test PR does not add Qdrant to that production retrieval path or change the frozen contract.
+
