@@ -22,6 +22,22 @@ const BENCHMARK_QDRANT_COLLECTION = "brvin_m15_physics_benchmark_v1";
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const TOP_K = 5;
 const PREFETCH_LIMIT = 15;
+
+/** Targeted OCR-to-answer notation audit. This is separate from the completed 17-query run. */
+export const M15_FORMULA_AUDIT_QUERY_IDS = ["P01", "P08", "P11", "P12", "H01"] as const;
+
+export function m15FormulaAuditPdfPages(queryId: string): number[] | null {
+  const pages: Record<(typeof M15_FORMULA_AUDIT_QUERY_IDS)[number], number[]> = {
+    P01: [1],
+    P08: [4],
+    P11: [7],
+    P12: [8],
+    H01: [8],
+  };
+  return Object.prototype.hasOwnProperty.call(pages, queryId)
+    ? [...pages[queryId as keyof typeof pages]]
+    : null;
+}
 const M15_QDRANT_PAGES_PER_INVOCATION = 2;
 const M15_AI_SEARCH_PAGES_PER_INVOCATION = 2;
 const M15_AI_SEARCH_METADATA_SCHEMA = [
@@ -353,6 +369,47 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
   new Uint8Array(hashInput).set(bytes);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", hashInput));
   return Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const blockSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += blockSize) {
+    const block = bytes.subarray(offset, Math.min(bytes.length, offset + blockSize));
+    binary += String.fromCharCode(...block);
+  }
+  return btoa(binary);
+}
+
+/** Build a PDF attachment only after validating the exact source fingerprint and allowed physical pages. */
+export async function createM15FormulaAuditPdfAttachment(
+  bytes: Uint8Array,
+  expectedSha256: string,
+  allowedPhysicalPages: readonly number[],
+): Promise<GroundedGeminiSourceDocument> {
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength < 8 || bytes.byteLength > MAX_SOURCE_BYTES ||
+      new TextDecoder().decode(bytes.subarray(0, 5)) !== "%PDF-") {
+    throw new Error("The formula audit source attachment is not a valid bounded PDF.");
+  }
+  if (!/^[a-f0-9]{64}$/iu.test(expectedSha256)) {
+    throw new Error("The formula audit source fingerprint is invalid.");
+  }
+  const actualSha256 = await sha256Hex(bytes);
+  if (actualSha256 !== expectedSha256.toLowerCase()) {
+    throw new Error("The formula audit PDF does not match the pinned original source SHA-256.");
+  }
+  const pages = [...allowedPhysicalPages];
+  if (!pages.length || pages.some((page) =>
+    !Number.isSafeInteger(page) || page < 1 || page > SOURCE_PAGE_COUNT
+  ) || new Set(pages).size !== pages.length) {
+    throw new Error("The formula audit must specify unique, valid physical PDF pages.");
+  }
+  return {
+    mimeType: "application/pdf",
+    base64Data: bytesToBase64(bytes),
+    sha256: actualSha256,
+    allowedPhysicalPages: pages.sort((left, right) => left - right),
+  };
 }
 
 function objectNameForPage(page: number, prefix: string): string {
@@ -1945,10 +2002,38 @@ export function evaluateM15AnswerQuality(input: {
   };
 }
 
+async function readM15FormulaAuditSourceDocument(
+  env: M15BenchmarkStagingEnv,
+  source: M15BenchmarkSourceRow,
+  queryId: string,
+): Promise<GroundedGeminiSourceDocument> {
+  const allowedPhysicalPages = m15FormulaAuditPdfPages(queryId);
+  if (!allowedPhysicalPages) {
+    throw new Error("The original-PDF visual audit is limited to the fixed symbol-sensitive query subset.");
+  }
+  const expectedObject = "brvin/m15-benchmark/source-pdfs/" + source.source_id + "/source.pdf";
+  if (source.file_name !== SOURCE_FILE_NAME || source.source_sha256.toLowerCase() !== SOURCE_SHA256 ||
+      source.source_object !== expectedObject) {
+    throw new Error("The source PDF object does not match the fingerprint-pinned M15 benchmark source.");
+  }
+  const bucket = googleBucket(env);
+  const metadata = await gcsMetadata(env, bucket, expectedObject);
+  if (metadata.size !== SOURCE_BYTES) {
+    throw new Error("The original M15 PDF object size differs from the approved source.");
+  }
+  const bytes = await readGcsBytes(env, bucket, expectedObject, metadata.generation);
+  const validated = validateM15BenchmarkPdf(SOURCE_FILE_NAME, bytes);
+  if (!validated.ok) {
+    throw new Error("The original M15 source PDF failed its filename, byte-length or PDF-signature validation.");
+  }
+  return createM15FormulaAuditPdfAttachment(bytes, SOURCE_SHA256, allowedPhysicalPages);
+}
+
 async function runM15AnswerEvaluationQuery(
   env: M15BenchmarkStagingEnv,
   source: M15BenchmarkSourceRow,
   queryId: string,
+  options: { attachOriginalPdf?: boolean } = {},
 ): Promise<Record<string, unknown>> {
   if (env.ENVIRONMENT !== "staging" || env.BRVIN_M14_PILOT_ENABLED?.trim().toLowerCase() !== "true") {
     throw new Error("Consumer answer evaluation is restricted to the isolated staging Worker.");
@@ -1972,6 +2057,9 @@ async function runM15AnswerEvaluationQuery(
   }
   const item = M15_BENCHMARK_QUERY_SUITE.find((candidate) => candidate.id === queryId);
   if (!item) throw new Error("The requested query ID is not part of the fixed M15 17-query suite.");
+  const sourceDocument = options.attachOriginalPdf
+    ? await readM15FormulaAuditSourceDocument(env, source, queryId)
+    : undefined;
 
   const [aiSearch, qdrant] = await Promise.all([
     retrieveM15AnswerEvidenceAiSearch(env, source, item),
@@ -1985,6 +2073,7 @@ async function runM15AnswerEvaluationQuery(
     const sourceContext: GroundedGeminiSourceContext = {
       sourceLabel: "BRVIN M15 Physics Benchmark Source v1",
       passages,
+      ...(sourceDocument ? { sourceDocument } : {}),
     };
     const started = performance.now();
     try {
@@ -2076,6 +2165,13 @@ async function runM15AnswerEvaluationQuery(
     expectedRetrievalPages: item.expectedPages,
     answerEvaluationExpectedPages: item.category === "exact-symbol-near-miss" ? [8] : item.expectedPages,
     retrievalExpectedNoMatch: item.expectedNoMatch,
+    sourceDocument: sourceDocument ? {
+      attached: true,
+      mimeType: sourceDocument.mimeType,
+      sha256: sourceDocument.sha256,
+      allowedPhysicalPages: sourceDocument.allowedPhysicalPages,
+      note: "Original immutable PDF attached for visual notation verification only; OCR/manifests/indexes were not changed.",
+    } : { attached: false },
     cloudflareAiSearch: summarizeProvider(aiSearch, aiSearchGeneration),
     qdrantVertex: summarizeProvider(qdrant, qdrantGeneration),
   };
@@ -2272,7 +2368,8 @@ export async function handleM15BenchmarkStagingRequest(
       url.pathname !== "/admin/m15/benchmark/run" &&
       url.pathname !== "/admin/m15/benchmark/complete" &&
       url.pathname !== "/admin/m15/benchmark/answers/source" &&
-      url.pathname !== "/admin/m15/benchmark/answers/run") {
+      url.pathname !== "/admin/m15/benchmark/answers/run" &&
+      url.pathname !== "/admin/m15/benchmark/answers/formula-audit/run") {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if (!["GET","POST"].includes(request.method)) return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -2302,6 +2399,24 @@ export async function handleM15BenchmarkStagingRequest(
     if (!row) return json({ ok: false, error: "benchmark_source_not_found" }, 404);
     try {
       const result = await runM15AnswerEvaluationQuery(env, row, answerBody.queryId);
+      return json({ ok: true, result });
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
+  }
+
+  if (url.pathname === "/admin/m15/benchmark/answers/formula-audit/run" && request.method === "POST") {
+    let answerBody: { sourceId?: unknown; queryId?: unknown };
+    try { answerBody = await request.json() as { sourceId?: unknown; queryId?: unknown }; }
+    catch { return json({ ok: false, error: "invalid_json" }, 400); }
+    if (!validUuid(answerBody.sourceId)) return json({ ok: false, error: "invalid_source_id" }, 400);
+    if (typeof answerBody.queryId !== "string" || !m15FormulaAuditPdfPages(answerBody.queryId)) {
+      return json({ ok: false, error: "query_not_in_formula_audit_subset" }, 400);
+    }
+    const row = await getSource(env, answerBody.sourceId);
+    if (!row) return json({ ok: false, error: "benchmark_source_not_found" }, 404);
+    try {
+      const result = await runM15AnswerEvaluationQuery(env, row, answerBody.queryId, { attachOriginalPdf: true });
       return json({ ok: true, result });
     } catch (error) {
       return json({ ok: false, error: safeError(error) }, 502);
