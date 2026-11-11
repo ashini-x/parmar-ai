@@ -1747,6 +1747,22 @@ function explicitlyAbstainsFromM15(answer: string): boolean {
   return /(?:not enough information|does not provide enough|doesn't provide enough|not supported by (?:the|this) source|not present in (?:the|this) source|not included in (?:the|this) source|cannot be determined from (?:the|this) source|can't be determined from (?:the|this) source|no relevant (?:source )?evidence|no information (?:is )?(?:provided|available) in (?:the|this) source|unable to answer from (?:the|this) source)/iu.test(answer);
 }
 
+function m15AnswerPageCitations(answer: string): number[] {
+  const pages = new Set<number>();
+  const patterns = [
+    /\bpdf\s*(?:page|p\.?)\s*(\d+)\b/giu,
+    /\bpage\s*(?:no\.?\s*)?(\d+)\b/giu,
+    /\bp\.\s*(\d+)\b/giu,
+  ];
+  for (const pattern of patterns) {
+    for (const match of answer.matchAll(pattern)) {
+      const page = Number(match[1]);
+      if (Number.isSafeInteger(page)) pages.add(page);
+    }
+  }
+  return [...pages].sort((a, b) => a - b);
+}
+
 export function evaluateM15AnswerQuality(input: {
   queryId: string;
   answer: string;
@@ -1783,9 +1799,9 @@ export function evaluateM15AnswerQuality(input: {
     const unsupportedCalculation = input.queryId === "N02"
       ? /(?:^|[^0-9])4\s*a(?:mp(?:ere)?s?)?(?:$|[^a-z])/iu.test(normalized)
       : input.queryId === "N03"
-        ? /q\s*v\s*b|q\(v\s*[x*]\s*b\)|lorentz force\s*=/iu.test(normalized)
+        ? /q\s*v\s*b|q\s*v\s*[*x]\s*b|q\(v\s*[x*]\s*b\)|lorentz force\s*=/iu.test(normalized)
         : input.queryId === "N04"
-          ? /p\s*=\s*n\s*r\s*t\s*\/\s*v|n\s*r\s*t\s*\/\s*v/iu.test(normalized)
+          ? /p\s*v\s*=\s*n\s*r\s*t|p\s*=\s*n\s*r\s*t\s*\/\s*v|n\s*r\s*t\s*\/\s*v/iu.test(normalized)
           : /c\s*=\s*(?:epsilon|ε)|(?:epsilon|ε)\s*0\s*a\s*\/\s*d/iu.test(normalized);
     checks = [
       check("explicitSourceAbstention", abstains),
@@ -1890,12 +1906,16 @@ export function evaluateM15AnswerQuality(input: {
   const sourceGroundingCorrectness = input.retrievalOk && noProvenanceViolations && (isNegative
     ? Boolean(abstentionCorrectness) && input.retrievedPages.length > 0 && input.citedPages.length === 0
     : hasTargetEvidence && answerCorrectnessPassed);
-  const citationCorrectness = isNegative
+  const modelCitedPages = m15AnswerPageCitations(answer);
+  const modelCitationPagesValid = isNegative
+    ? modelCitedPages.length === 0
+    : modelCitedPages.every((page) => pageTargets.includes(page));
+  const citationCorrectness = modelCitationPagesValid && (isNegative
     ? input.citedPages.length === 0
     : pageTargets.length > 0 &&
       pageTargets.every((page) => input.citedPages.includes(page)) &&
       input.citedPages.every((page) => pageTargets.includes(page)) &&
-      hasTargetEvidence;
+      hasTargetEvidence);
   const mathematicalSymbolFidelity = mathApplicable
     ? checks.every((item) => item.passed)
     : null;
@@ -1992,6 +2012,7 @@ async function runM15AnswerEvaluationQuery(
         generatedAnswer,
         answerWithCitations,
         citedPages,
+        modelCitedPages: m15AnswerPageCitations(generatedAnswer),
         generationLatencyMs,
         model: env.GEMINI_MODEL?.trim() || "gemini-3.8-flash",
         location: env.GEMINI_LOCATION?.trim() || "global",
@@ -2003,6 +2024,7 @@ async function runM15AnswerEvaluationQuery(
         generatedAnswer: "",
         answerWithCitations: "",
         citedPages: [],
+        modelCitedPages: [],
         generationLatencyMs: Math.round((performance.now() - started) * 100) / 100,
         model: env.GEMINI_MODEL?.trim() || "gemini-3.8-flash",
         location: env.GEMINI_LOCATION?.trim() || "global",
