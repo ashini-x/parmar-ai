@@ -64,6 +64,7 @@ describe("BRVIN retrieval provider boundary", () => {
     expect(search).toHaveBeenCalledWith(expect.objectContaining({
       messages: [{ role: "user", content: "What is Newton's second law?" }],
       ai_search_options: expect.objectContaining({
+        cache: { enabled: true, cache_threshold: "super_strict_match" },
         retrieval: expect.objectContaining({
           retrieval_type: "hybrid",
           filters: { folder: { $in: ["source/"] } },

@@ -10,8 +10,9 @@ describe("Gemini low-latency thinking policy", () => {
     expect(selectThinkingLevel("Capital of Assam?", cap)).toBe("LOW");
   });
 
-  it("uses MEDIUM for explanation and comparison rather than escalating common wording to HIGH", () => {
-    expect(selectThinkingLevel("Explain photosynthesis simply.", cap)).toBe("MEDIUM");
+  it("keeps simple explanations LOW while reserving MEDIUM for explicit reasoning and comparison", () => {
+    expect(selectThinkingLevel("Explain photosynthesis simply.", cap)).toBe("LOW");
+    expect(selectThinkingLevel("Explain the Battle of Plassey in simple language.", cap)).toBe("LOW");
     expect(selectThinkingLevel("Why did the Revolt of 1857 spread?", cap)).toBe("MEDIUM");
     expect(selectThinkingLevel("Compare Fundamental Rights and DPSPs.", cap)).toBe("MEDIUM");
   });

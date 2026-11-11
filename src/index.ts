@@ -1385,15 +1385,35 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.analyzingImage);
         }
         let generation: Awaited<ReturnType<typeof generateGeminiAnswer>> | undefined;
+        let fatmanRetrievalMs: number | undefined;
+        let geminiGenerationMs: number | undefined;
         if (fatmanMode && job.question === DEFAULT_PHOTO_QUESTION && images.length > 0) {
           packet = makeFatmanNoticePacket("Photo mil gaya. Fatman mein sahi page dhoondhne ke liye photo ke saath apna sawaal ya ek keyword bhi likho.");
         } else if (fatmanMode) {
           await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingFatman);
           await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.searchingFatman);
           let bookContext: Awaited<ReturnType<typeof retrieveFatmanContext>> | undefined;
+          const fatmanRetrievalStartedAt = performance.now();
           try {
             bookContext = await retrieveFatmanContext(env, buildFatmanRetrievalQuery(job.question, recentConversation));
+            fatmanRetrievalMs = Math.round((performance.now() - fatmanRetrievalStartedAt) * 100) / 100;
+            logger.info("fatman_retrieval_completed", {
+              requestId: job.requestId,
+              updateId: job.updateId,
+              durationMs: fatmanRetrievalMs,
+              searchCount: bookContext.searchCount ?? 0,
+              passageCount: bookContext.passages.length,
+              pageImageCount: bookContext.pageImages.length,
+            });
           } catch (error) {
+            fatmanRetrievalMs = Math.round((performance.now() - fatmanRetrievalStartedAt) * 100) / 100;
+            logger.warn("fatman_retrieval_failed", {
+              requestId: job.requestId,
+              updateId: job.updateId,
+              durationMs: fatmanRetrievalMs,
+              retryable: error instanceof FatmanRetrievalError ? error.retryable : true,
+              errorType: error instanceof Error ? error.name : "UnknownError",
+            });
             if (error instanceof FatmanRetrievalError && !error.retryable) {
               packet = makeFatmanNoticePacket(error.userMessage ?? "Fatman pages abhi available nahi hain. /help se usual study mode mein wapas aa jao.");
             } else {
@@ -1402,14 +1422,19 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           }
           if (!packet && bookContext) {
             await updatePartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingBookPages);
-            generation = await generateGeminiAnswer(
-              env,
-              job.question,
-              buildProfileContext(profile, recentConversation),
-              images,
-              updatePartialAnswer,
-              bookContext,
-            );
+            const geminiStartedAt = performance.now();
+            try {
+              generation = await generateGeminiAnswer(
+                env,
+                job.question,
+                buildProfileContext(profile, recentConversation),
+                images,
+                updatePartialAnswer,
+                bookContext,
+              );
+            } finally {
+              geminiGenerationMs = Math.round((performance.now() - geminiStartedAt) * 100) / 100;
+            }
             packet = generation.packet;
             const citations = formatFatmanCitations(bookContext.passages, job.question, packet.answer);
             packet.answer = appendFatmanCitations(packet.answer, citations);
@@ -1428,13 +1453,18 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
                 ? TELEGRAM_PROGRESS_LABELS.preparingAnswer
                 : TELEGRAM_PROGRESS_LABELS.preparingAnswer,
           );
-          generation = await generateGeminiAnswer(
-            env,
-            job.question,
-            buildProfileContext(profile, recentConversation),
-            images,
-            updatePartialAnswer,
-          );
+          const geminiStartedAt = performance.now();
+          try {
+            generation = await generateGeminiAnswer(
+              env,
+              job.question,
+              buildProfileContext(profile, recentConversation),
+              images,
+              updatePartialAnswer,
+            );
+          } finally {
+            geminiGenerationMs = Math.round((performance.now() - geminiStartedAt) * 100) / 100;
+          }
           packet = generation.packet;
         }
         if (!packet) {
@@ -1444,6 +1474,8 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           requestId: job.requestId,
           updateId: job.updateId,
           answerPipelineMs: Date.now() - answerPipelineStartedAt,
+          geminiGenerationMs: geminiGenerationMs ?? null,
+          ...(fatmanMode ? { fatmanRetrievalMs: fatmanRetrievalMs ?? null } : {}),
           model: env.GEMINI_MODEL?.trim() || "default",
           thinkingLevel: packet.thinkingLevelUsed,
           grounded: packet.grounded,

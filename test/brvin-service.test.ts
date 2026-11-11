@@ -115,7 +115,7 @@ describe("BRVIN private application retrieval", () => {
     ]);
     expect(search).toHaveBeenCalledWith(expect.objectContaining({
       ai_search_options: {
-        cache: { enabled: false },
+        cache: { enabled: true, cache_threshold: "super_strict_match" },
         retrieval: {
           max_num_results: 16,
           match_threshold: 0.3,

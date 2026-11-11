@@ -257,7 +257,9 @@ The code records per-stage timings so a slow message can be attributed to the ri
 | `telegram_question_mark_queued_failed` | `durationMs`, `error` | Background state/typing hand-off failure |
 | `question_processing_started` | `queueWaitMs`, `attempts` | Queue wait before consumer processing |
 | `question_context_loaded` | `contextReadMs` | Parallel profile/history read time |
-| `question_answer_generated` | `answerPipelineMs`, `model`, `thinkingLevel`, `grounded` | Retrieval/model/answer-generation pipeline |
+| `fatman_retrieval_completed` | `durationMs`, `searchCount`, `passageCount`, `pageImageCount` | Private BRVIN / Cloudflare AI Search retrieval stage for Fatman |
+| `fatman_retrieval_failed` | `durationMs`, `retryable`, `errorType` | Failed Fatman retrieval stage without logging the query or source text |
+| `question_answer_generated` | `answerPipelineMs`, `geminiGenerationMs`, optional `fatmanRetrievalMs`, `model`, `thinkingLevel`, `grounded` | End-to-end answer pipeline plus explicit search and Gemini stage timings |
 | `gemini_generation_attempt_completed` | `attempt`, `durationMs`, `thinkingLevel`, `firstPartialAnswerMs`, `streamed`, token counts | One successful Vertex request; first useful streamed answer text is separately measured |
 | `gemini_generation_attempt_failed` | `attempt`, `durationMs`, `status`, `retryable`, `streamed` | One failed Vertex request before retry/terminal failure |
 | `question_completed` | `answerLength`, `attempts` | Successful end of processing/delivery |
@@ -265,7 +267,7 @@ The code records per-stage timings so a slow message can be attributed to the ri
 
 Use a single request ID/update ID to correlate webhook, Queue and completion events. Do not log tokens, webhook secrets, full private message bodies or personal data.
 
-**Important:** generic Worker `wallTimeMs` includes `ctx.waitUntil` work after the response path has finished. Use `telegram_question_queued.totalWebhookMs` and its stage fields for webhook-to-Queue latency; use `queueWaitMs`, `contextReadMs` and `answerPipelineMs` for processing latency. Do not call the entire invocation wall time the user's wait time.
+**Important:** generic Worker `wallTimeMs` includes `ctx.waitUntil` work after the response path has finished. Use `telegram_question_queued.totalWebhookMs` and its stage fields for webhook-to-Queue latency; use `queueWaitMs`, `contextReadMs` and `answerPipelineMs` for processing latency. For Fatman, compare `fatmanRetrievalMs` with `geminiGenerationMs`; for non-Fatman answers, `geminiGenerationMs` isolates Vertex generation. Do not call the entire invocation wall time the user's wait time.
 
 ### Gemini latency investigation and staging-first tuning — 12 November 2026
 
@@ -286,6 +288,33 @@ A read-only inspection of production Worker telemetry and D1 usage records found
 **Validation and rollout boundary:** PR checks passed typecheck, full Vitest, Node tests and both Worker bundle dry-runs. M14 staging validation passed focused M14/M15 tests, provider-config verification and Wrangler dry-run. The merged code was deployed only to isolated Worker `parmar-ai-m14-staging`, deployment `9850e243-ae38-4e00-8fbc-a122f56fd7f9`, version `e3f24615-fcaa-4629-8077-ac09350d58fe`, at 100%. Release validation [#43086213061](https://github.com/ashini-x/parmar-ai/actions/runs/43086213061) passed and skipped production deployment/verification. Production `parmar-ai` remains on version `03233306-73d5-4990-be2d-a16dc99a8bd3` and private `brvin-service` remains on `66eac5b4-78f7-4708-a051-7cbe08b999a8`, both at 100%.
 
 **Acceptance status:** this is a staged tuning change, not yet a measured production latency win. Do not claim a percentage improvement until the same normal Telegram workload is measured with the new tier policy. Compare first-partial latency and total answer latency separately, stratified by Fatman/non-Fatman, thinking tier, retry count and token counts. Keep Cloudflare AI Search as the current retrieval provider; no provider or production routing change is part of PR #226.
+
+### Cloudflare AI Search cache and Fatman latency candidate — 12 November 2026
+
+A read-only inspection of the live production Fatman AI Search instance found hybrid vector+keyword retrieval, RRF fusion and reranking enabled. The instance had caching enabled at the configuration level, but the shared Core retrieval provider explicitly overrode that setting with `cache: { enabled: false }` on every request.
+
+**Candidate implementation on branch `perf/brvin-exact-similarity-cache-2026-11-12`:**
+
+- Re-enable AI Search response caching per request, but use only `super_strict_match` similarity. This is intended for near-identical repeat queries, not loosely related wording.
+- Keep vector+keyword hybrid retrieval, the existing score thresholds, the existing reranker and source-prefix filter unchanged.
+- Core continues to validate every returned page key against the current D1-authorized source prefix after the provider returns the cached or fresh result.
+- Keep Gemini answer generation fresh on every Telegram question. The cache applies to retrieval results only; it does not cache or replay a student's answer.
+- Cloudflare documents a 48-hour default cache TTL, and states that cache entries are invalidated when indexed chunks are updated or deleted. This should be rechecked if the instance TTL or indexing workflow changes.
+
+A direct, read-only comparison against the live 538-page Fatman index observed a strict-cache near-identical repeat taking about 594 ms versus about 1,313 ms with the cache explicitly disabled, with the same top source page. This is one warmed exact-query observation, not a guarantee for first-time or semantically different questions.
+
+**Reranking was deliberately retained.** A separate paired comparison used the same source folder, hybrid search settings, candidate limit and threshold. Two-to-three Fatman query variants were searched concurrently, matching the production query-expansion pattern. Warm batch durations were approximately 1.4–2.0 seconds with either reranking setting and showed no consistent reranking latency penalty. Reranking did improve the expected Article 79 source page from outside the top five to the top five. Disabling reranking would therefore trade away useful ranking quality without a measured production-shaped speed gain.
+
+The candidate also adds explicit queue-consumer stage fields:
+- `fatman_retrieval_completed` / `fatman_retrieval_failed` report the private BRVIN search duration and bounded result counts.
+- `question_answer_generated.geminiGenerationMs` reports Vertex generation separately from the broader answer pipeline.
+- For Fatman, `question_answer_generated.fatmanRetrievalMs` reports retrieval separately from generation.
+
+A historical read-only 30-day D1 sample contained 63 completed questions, with a mean end-to-end latency of 14,610 ms, median 14,127 ms, and maximum 40,145 ms. The average time from question receipt to Queue processing start was 3,815 ms (median 4,406 ms). These figures include Queue waiting and answer processing; they are not pure Gemini timings. The available recent `question_answer_generated` telemetry sample contained only non-Fatman answers (5,319–24,856 ms), so it cannot be used to claim historical Fatman search latency. The new stage logs are intended to make that split measurable from actual Telegram requests.
+
+The same candidate changes ordinary simple explanation wording (for example, “Explain this in simple language”) to LOW thinking. Explicit why/reasoning and comparison questions remain MEDIUM. HIGH stays reserved for explicit multi-step/derivation requests or unusually long prompts. The configured `GEMINI_THINKING_LEVEL` remains the hard ceiling.
+
+**Rollout state:** this branch is not yet merged or deployed. Keep the current production provider and index intact until CI and the normal release/rollback gate pass. Do not report a measured production latency improvement until actual post-deployment Telegram requests confirm it.
 
 ## 12. Failure and retry boundaries
 

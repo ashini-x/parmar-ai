@@ -1390,7 +1390,6 @@ export function selectThinkingLevel(question: string, cap: ThinkingLevel): Think
   ];
   const mediumComplexitySignals = [
     "why",
-    "explain",
     "compare",
     "difference",
     "differentiate",
@@ -1414,7 +1413,6 @@ export function selectThinkingLevel(question: string, cap: ThinkingLevel): Think
     "which statement",
     "क्यों",
     "अंतर",
-    "समझाओ",
     "गलत कौन",
     "सही कौन",
     "तुलना",
