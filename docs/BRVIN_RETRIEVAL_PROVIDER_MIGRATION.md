@@ -622,3 +622,12 @@ The H01 near-miss is not an abstention case. Page 8 contains `F_s = +k × x` as 
 See [BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md](BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md) for the complete receipts, adjudication, test rubric and separately benchmarked relevance-gating/reranking recommendations.
 
 **Decision:** the migration remains **IN PROGRESS**. The bounded five-query PDF-assisted formula audit passed for both providers, but that does not repair the stored OCR/index representation or prove that all normal OCR-only answers preserve notation. Do not call the retrieval migration production-ready or change the production provider selector until a production-appropriate symbol-fidelity path is validated across a broader multi-document/formula set, independent claim-level grounding and passage qrels are reviewed, the calibrated evaluator passes CI, and the remaining M15 security/isolation/revocation, recovery, repeatability, latency, cost, load and rollback gates pass.
+
+## 12 November 2026 — M15 first incomplete gate: independent passage review
+
+The first incomplete M15 acceptance task is independent passage relevance and claim-to-passage grounding for the eight-page Physics source. Core now carries the 109 bounded source-provenanced excerpts in [BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md](BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md), backed by [the machine-readable review fixture](../test/fixtures/brvin-m15-passage-qrels-review-pack.json). The fields for Reviewer A, Reviewer B and adjudicated grade are intentionally blank. Reviewers must work independently and use the literal source notation and source spans; do not substitute model grades for human qrels or conflate retrieval relevance with answer-generation correctness.
+
+The original-PDF-assisted five-query notation audit passed 5/5 for both providers, but that result applies only to the one-page visual-evidence route. It does not repair the immutable raw OCR, normalized text or indexed passages. The OCR-only answer and retrieval receipts remain separately preserved.
+
+After independent annotation/adjudication, continue the explicit M15 issue gates: broader multi-document formula/mixed-query relevance, wrong-project/no-grant isolation, revoke-with-vectors-retained, throttling and idempotent recovery, HNSW-aware concurrency/latency/throughput, embedding/index/storage/query costs, and rollback rehearsal. Keep D1 authoritative and the private v2 contract unchanged. Production remains `cloudflare-ai-search`; no production selector change or cutover is authorized.
+

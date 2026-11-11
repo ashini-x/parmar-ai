@@ -325,3 +325,13 @@ Both providers returned the expected support page at rank 1 for every case and c
 **H01 interpretation:** H01 asks for `F_s = +k × x`. Both providers retrieve page 8 and correctly explain that the source equation is `F_s = −k × x` and that the positive-sign expression is explicitly rejected. Although the receipt retains `retrievalExpectedNoMatch: true` for the exact positive-sign formula, this is not a no-evidence abstention case: page 8 contains the positive-sign expression as a negated near-miss and is useful corrective evidence. Abstention and irrelevant-evidence counters are therefore not applicable in this five-query audit (0 applicable queries).
 
 This is a **successful bounded PDF-assisted notation audit**, not an OCR/index repair. The original PDF, Vision OCR, normalized text, manifests, D1 records and both indexes were not modified. The original OCR-only formula defects documented above remain defects in that path until separately remediated or replaced by a production-appropriate visual-evidence strategy. Independent claim-by-claim entailment, passage qrels, authorization/revocation, recovery, repeatable latency/cost, load and rollback remain open. Production remains on Cloudflare AI Search; no provider cutover or Teachers-side provider access is authorized.
+
+
+## 12 November 2026 — independent passage-review handoff
+
+The paired OCR-only answer evaluation and the bounded original-PDF-assisted notation audit are complete, but neither creates independent passage qrels. The source-fingerprinted [M15 passage-review pack](BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md) contains 109 exact provider evidence excerpts from the same pinned eight-page Physics source; its machine-readable copy is [brvin-m15-passage-qrels-review-pack.json](../test/fixtures/brvin-m15-passage-qrels-review-pack.json).
+
+Two reviewers must grade separate copies independently using the 0–3 relevance rubric and add a short source-grounded rationale; disagreements must be preserved and adjudicated separately. The fixture's Reviewer A, Reviewer B and adjudicated fields are blank. No model/assistant-produced labels may be reported as human qrels. Evaluate provider passages independently because AI Search auto-chunk boundaries and Qdrant custom chunk boundaries differ.
+
+This review is the first incomplete M15 quality gate. The PDF-assisted audit passing 5/5 is evidence for a bounded visual-evidence path only; it does not fix the stored OCR/index notation defects. Production remains on Cloudflare AI Search and no cutover is authorized.
+

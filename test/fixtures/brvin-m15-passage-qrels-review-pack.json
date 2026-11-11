@@ -1,0 +1,2676 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "BRVIN M15 second-source provider passage review",
+  "status": "prepared_pending_independent_annotation",
+  "source": {
+    "sourceId": "3b4d116d-4c18-450f-9cba-cb2bec3da7ca",
+    "projectId": "890f6317-69f4-4391-aae6-556155ed0d12",
+    "title": "Physics Benchmark — M15 v1",
+    "fileName": "BRVIN_M15_Physics_Benchmark_Source_v1.pdf",
+    "sha256": "cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92",
+    "physicalPdfPageCount": 8,
+    "immutableCorpusGenerationId": "2dc9d4fae3afe7df16927fbf2510afd3"
+  },
+  "retrievalReceipt": {
+    "queryCount": 17,
+    "providerSummaries": {
+      "cloudflare-ai-search": {
+        "queryCount": 17,
+        "successfulQueries": 17,
+        "failedQueries": 0,
+        "positiveQueryCount": 12,
+        "positiveQueriesCompleted": 12,
+        "positiveQueryFailures": 0,
+        "expectedPageTargets": 12,
+        "coveredExpectedPageTargets": 12,
+        "expectedPageCoverageRate": 1,
+        "allExpectedPagesCovered": true,
+        "expectedPageCandidateCount": 14,
+        "positivePageLabelPrecisionAt5": 0.23333333333333334,
+        "allSuitePageLabelPrecisionAt5": 0.16470588235294117,
+        "outOfCorpusQueryCount": 4,
+        "outOfCorpusQueriesCompleted": 4,
+        "outOfCorpusQueryFailures": 0,
+        "outOfCorpusAllQueriesCompleted": true,
+        "outOfCorpusQueriesWithCandidates": 0,
+        "outOfCorpusQueriesWithoutCandidates": 4,
+        "outOfCorpusCandidatePresenceRate": 0,
+        "outOfCorpusCandidateCount": 0,
+        "exactSymbolNearMissCount": 1,
+        "exactSymbolNearMissQueriesCompleted": 1,
+        "exactSymbolNearMissQueryFailures": 0,
+        "exactSymbolNearMissAllQueriesCompleted": true,
+        "exactSymbolNearMissWithCandidates": 1,
+        "exactSymbolNearMissWithoutCandidates": 0,
+        "exactSymbolNearMissCandidatePresenceRate": 1,
+        "exactSymbolNearMissCandidateCount": 2,
+        "allNegativeControlsCompleted": true,
+        "provenanceViolationCount": 0,
+        "observedWorkerLatencyMs": {
+          "sampleCount": 17,
+          "p50": 2524,
+          "p95": 10477,
+          "p99": 10477,
+          "note": "Sequential per-provider staging samples, not a load test or production SLO."
+        }
+      },
+      "qdrant-vertex": {
+        "queryCount": 17,
+        "successfulQueries": 17,
+        "failedQueries": 0,
+        "positiveQueryCount": 12,
+        "positiveQueriesCompleted": 12,
+        "positiveQueryFailures": 0,
+        "expectedPageTargets": 12,
+        "coveredExpectedPageTargets": 12,
+        "expectedPageCoverageRate": 1,
+        "allExpectedPagesCovered": true,
+        "expectedPageCandidateCount": 14,
+        "positivePageLabelPrecisionAt5": 0.23333333333333334,
+        "allSuitePageLabelPrecisionAt5": 0.16470588235294117,
+        "outOfCorpusQueryCount": 4,
+        "outOfCorpusQueriesCompleted": 4,
+        "outOfCorpusQueryFailures": 0,
+        "outOfCorpusAllQueriesCompleted": true,
+        "outOfCorpusQueriesWithCandidates": 4,
+        "outOfCorpusQueriesWithoutCandidates": 0,
+        "outOfCorpusCandidatePresenceRate": 1,
+        "outOfCorpusCandidateCount": 20,
+        "exactSymbolNearMissCount": 1,
+        "exactSymbolNearMissQueriesCompleted": 1,
+        "exactSymbolNearMissQueryFailures": 0,
+        "exactSymbolNearMissAllQueriesCompleted": true,
+        "exactSymbolNearMissWithCandidates": 1,
+        "exactSymbolNearMissWithoutCandidates": 0,
+        "exactSymbolNearMissCandidatePresenceRate": 1,
+        "exactSymbolNearMissCandidateCount": 5,
+        "allNegativeControlsCompleted": true,
+        "provenanceViolationCount": 0,
+        "observedWorkerLatencyMs": {
+          "sampleCount": 17,
+          "p50": 784,
+          "p95": 1097,
+          "p99": 1097,
+          "note": "Sequential per-provider staging samples, not a load test or production SLO."
+        }
+      }
+    },
+    "notes": [
+      "Both providers completed all 17 queries and covered 12/12 positive expected physical-page targets.",
+      "AI Search returned no candidates for N01-N04; Qdrant returned 20 candidates across those four out-of-corpus queries.",
+      "Both providers returned candidates for H01; both reported zero source/page provenance violations.",
+      "Elapsed times are sequential staging observations, not load-test or production SLO results."
+    ]
+  },
+  "answerEvaluationReceipt": {
+    "runAt": "2026-11-11T15:32:24.243Z",
+    "model": "gemini-3.8-flash",
+    "location": "global",
+    "completedQueryPairs": 17,
+    "generationCount": 34,
+    "evidenceMeaning": "Exact bounded evidence excerpts passed to the isolated Core staging answer evaluator; not reconstructed or normalized."
+  },
+  "rubric": {
+    "0": "Irrelevant to the query or contradicts the requested expression/fact.",
+    "1": "Related context only; it does not materially answer the query.",
+    "2": "Useful supporting evidence for answering the query, but not complete alone.",
+    "3": "Directly answers the query using source-supported evidence.",
+    "instruction": "Judge passage text, not page label, score or rank. Review each provider's passage scheme independently. For H01 inspect the sign and multiplication operator literally. Keep retrieval relevance separate from whether an answer generator correctly rejects a near-miss."
+  },
+  "independentReviewRequirements": {
+    "reviewerCount": 2,
+    "reviewIndependently": true,
+    "noModelLabelsPrepopulated": true,
+    "resolveDisagreements": true,
+    "requiredFields": [
+      "reviewerA.grade",
+      "reviewerB.grade",
+      "adjudicatedGrade"
+    ],
+    "validGrades": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "candidateCount": 109,
+  "queries": [
+    {
+      "queryId": "P01",
+      "category": "positive",
+      "query": "Explain Newton’s second law and how net force, mass and acceleration are related.",
+      "expectedRetrievalPages": [
+        1
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P01-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 1,
+            "score": 0.9994227886199952,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n01 / FORCE AND MOTION\nNet force and acceleration: Newton's\nsecond law\nA force changes an object's motion only when the forces do not balance. This page defines the\nrelationship between net force, mass and acceleration.\nThe central idea\nNewton's second law states that an object's acceleration is determined by the net external force acting\non it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net\nforce, a larger mass produces a smaller acceleration.\nEquation\nΣF = m xa | F_net = m × a\nMeaning of each symbol\nΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms\n(kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same\ndirection as the net force.\nWorked example\nA trolley has a 10 N force acting east and a 4 N force acting west.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P01-AI-R02",
+            "provider": "cloudflare-ai-search",
+            "rank": 2,
+            "pdfPage": 2,
+            "score": 0.9662232398986816,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n02/ NUMERICAL METHODS\nUsing Newton's second law in numerical\nproblems\nRearrange the same equation to find force, mass or acceleration. Keep units attached to every value\nand check that the direction is consistent.\nEquation and rearrangements\nF_net = m × a | a = F_net ÷ m | m = F_net ÷ a\nExample A: calculate acceleration\nA 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg =\n3 m/s² forward.\nExample B: calculate net force\nA 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s²\nN to the right.\nExample C: calculate mass\n= 10\nA net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5\nkg.\nUnit check\n1 N = 1 kg x m/s².",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P01-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 1,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P01-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 2,
+            "score": 0.3333333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P01-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 1,
+            "score": 0.205,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before the forces are added. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 1",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P01-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 3,
+            "score": 0.18999999999999997,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000003.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 03/ MASS AND WEIGHT Mass is not the same as weight Mass describes how much matter an object has. Weight is the gravitational force acting on that mass, so weight depends on the local gravitational field. Mass Mass is measured in kilograms (kg). For a given object, its mass does not change merely because the object is moved from Earth to the Moon. Weight equation W = mx g Worked example On Earth, take g = 9.8 m/s². The weight of a 2 kg object is W = 2 kg x 9.8 m/s² How to distinguish them = 19.6 N. A balance or mass measurement reports kilograms. A force meter measuring gravitational pull reports newtons. An object can have the same mass in two locations but different weight if the gravitational field strength differs. Common mistake Do not write \"2 kg of weight\" when the question asks for force. State mass in kg and weight in N. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 3",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P01-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 7,
+            "score": 0.17666666666666664,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 07 / MOMENTUM AND IMPULSE Momentum change and impulse Momentum depends on mass and velocity. Impulse measures the effect of a force acting over a time interval and equals the change in momentum. Linear momentum Momentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of velocity. Impulse For a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It also equals final momentum minus initial momentum. Equations p = mxv|J = F_avg x At = Ap Worked collision example A 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s. The change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force is -4.5 0.05 = -90 N. Direction convention The plus and minus signs indicate direction along the chosen axis. A negative answer does not mean the magnitude of the force is negative. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 |",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P02",
+      "category": "positive",
+      "query": "A trolley has 10 N east and 4 N west acting on it. If its mass is 2 kg, what is its acceleration and direction?",
+      "expectedRetrievalPages": [
+        1
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P02-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 1,
+            "score": 0.9996894598007202,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": ".\nWorked example\nA trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley\nhas a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east.\nRemember\nUse the vector sum of forces, not just the largest individual force. Opposite directions must be assigned\nopposite signs before the forces are added.\nBenchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not\nan official textbook or examination board publication.\nBRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material\nPage 1",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P02-AI-R02",
+            "provider": "cloudflare-ai-search",
+            "rank": 2,
+            "pdfPage": 1,
+            "score": 0.9622950553894044,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n01 / FORCE AND MOTION\nNet force and acceleration: Newton's\nsecond law\nA force changes an object's motion only when the forces do not balance. This page defines the\nrelationship between net force, mass and acceleration.\nThe central idea\nNewton's second law states that an object's acceleration is determined by the net external force acting\non it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net\nforce, a larger mass produces a smaller acceleration.\nEquation\nΣF = m xa | F_net = m × a\nMeaning of each symbol\nΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms\n(kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same\ndirection as the net force.\nWorked example\nA trolley has a 10 N force acting east and a 4 N force acting west.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P02-AI-R03",
+            "provider": "cloudflare-ai-search",
+            "rank": 3,
+            "pdfPage": 3,
+            "score": 0.4635837972164154,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000003.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n03/ MASS AND WEIGHT\nMass is not the same as weight\nMass describes how much matter an object has. Weight is the gravitational force acting on that mass,\nso weight depends on the local gravitational field.\nMass\nMass is measured in kilograms (kg). For a given object, its mass does not change merely because the\nobject is moved from Earth to the Moon.\nWeight equation\nW = mx g\nWorked example\nOn Earth, take g = 9.8 m/s². The weight of a 2 kg object is W = 2 kg x 9.8 m/s²\nHow to distinguish them\n= 19.6 N.\nA balance or mass measurement reports kilograms. A force meter measuring gravitational pull reports\nnewtons. An object can have the same mass in two locations but different weight if the gravitational\nfield strength differs.\nCommon mistake\nDo not write \"2 kg of weight\" when the question asks for force. State mass in kg and weight in N.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P02-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 1,
+            "score": 0.3833333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P02-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 1,
+            "score": 0.38,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before the forces are added. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 1",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P02-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 2,
+            "score": 0.27499999999999997,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P02-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 7,
+            "score": 0.21499999999999997,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 07 / MOMENTUM AND IMPULSE Momentum change and impulse Momentum depends on mass and velocity. Impulse measures the effect of a force acting over a time interval and equals the change in momentum. Linear momentum Momentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of velocity. Impulse For a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It also equals final momentum minus initial momentum. Equations p = mxv|J = F_avg x At = Ap Worked collision example A 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s. The change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force is -4.5 0.05 = -90 N. Direction convention The plus and minus signs indicate direction along the chosen axis. A negative answer does not mean the magnitude of the force is negative. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 |",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P02-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 5,
+            "score": 0.14285714285714285,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 05/INCLINED PLANES Resolving weight on an inclined plane On a straight incline, the weight can be resolved into components parallel and perpendicular to the surface. The normal force is perpendicular to the surface. Parallel component For a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g * sin(0). Perpendicular component The component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces and the block does not accelerate away from or into the surface, the normal force has this magnitude. Equations F_parallel = m × g × sin(0) | N = m × g x cos(0) Worked example A 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8 x sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N. Angle convention Here 0 is measured between the inclined surface and the horizontal. Check the diagram or wording before choosing sine and cosine. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P03",
+      "category": "positive",
+      "query": "A 6 kg cart experiences a net forward force of 18 N. Calculate its acceleration.",
+      "expectedRetrievalPages": [
+        2
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P03-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 2,
+            "score": 0.9984122514724731,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n02/ NUMERICAL METHODS\nUsing Newton's second law in numerical\nproblems\nRearrange the same equation to find force, mass or acceleration. Keep units attached to every value\nand check that the direction is consistent.\nEquation and rearrangements\nF_net = m × a | a = F_net ÷ m | m = F_net ÷ a\nExample A: calculate acceleration\nA 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg =\n3 m/s² forward.\nExample B: calculate net force\nA 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s²\nN to the right.\nExample C: calculate mass\n= 10\nA net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5\nkg.\nUnit check\n1 N = 1 kg x m/s².",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P03-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 2,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P03-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 1,
+            "score": 0.3333333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P03-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 6,
+            "score": 0.21499999999999997,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 06/ WORK AND ENERGY Work, kinetic energy and the work-energy theorem Work transfers energy when a force has a component along an object's displacement. The net work done on an object equals its change in kinetic energy. Work by a constant force For a constant force F acting through displacement d at angle e to the displacement, work is the product of force, displacement and the cosine of the angle. Kinetic energy An object of mass m moving at speed v has kinetic energy one half times its mass times its speed squared. Equations W = F x d x cos(0) | K = ½ x m × v² | W_net = AK Worked example A 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½ x 2 x v², v² = 16 and the final speed is 4 m/s. Sign matters Work is positive when the force component is along the displacement, negative when opposite, and zero when perpendicular. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 6",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P03-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 1,
+            "score": 0.205,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before the forces are added. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 1",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P03-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 7,
+            "score": 0.15416666666666665,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 07 / MOMENTUM AND IMPULSE Momentum change and impulse Momentum depends on mass and velocity. Impulse measures the effect of a force acting over a time interval and equals the change in momentum. Linear momentum Momentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of velocity. Impulse For a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It also equals final momentum minus initial momentum. Equations p = mxv|J = F_avg x At = Ap Worked collision example A 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s. The change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force is -4.5 0.05 = -90 N. Direction convention The plus and minus signs indicate direction along the chosen axis. A negative answer does not mean the magnitude of the force is negative. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 |",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P04",
+      "category": "positive",
+      "query": "An object of mass 4 kg accelerates at 2.5 m/s². Find the net force.",
+      "expectedRetrievalPages": [
+        2
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P04-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 2,
+            "score": 0.9950030446052552,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n02/ NUMERICAL METHODS\nUsing Newton's second law in numerical\nproblems\nRearrange the same equation to find force, mass or acceleration. Keep units attached to every value\nand check that the direction is consistent.\nEquation and rearrangements\nF_net = m × a | a = F_net ÷ m | m = F_net ÷ a\nExample A: calculate acceleration\nA 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg =\n3 m/s² forward.\nExample B: calculate net force\nA 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s²\nN to the right.\nExample C: calculate mass\n= 10\nA net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5\nkg.\nUnit check\n1 N = 1 kg x m/s².",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P04-AI-R02",
+            "provider": "cloudflare-ai-search",
+            "rank": 2,
+            "pdfPage": 1,
+            "score": 0.8464560508728027,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n01 / FORCE AND MOTION\nNet force and acceleration: Newton's\nsecond law\nA force changes an object's motion only when the forces do not balance. This page defines the\nrelationship between net force, mass and acceleration.\nThe central idea\nNewton's second law states that an object's acceleration is determined by the net external force acting\non it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net\nforce, a larger mass produces a smaller acceleration.\nEquation\nΣF = m xa | F_net = m × a\nMeaning of each symbol\nΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms\n(kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same\ndirection as the net force.\nWorked example\nA trolley has a 10 N force acting east and a 4 N force acting west.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P04-AI-R03",
+            "provider": "cloudflare-ai-search",
+            "rank": 3,
+            "pdfPage": 1,
+            "score": 0.434089869260788,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": ".\nWorked example\nA trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley\nhas a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east.\nRemember\nUse the vector sum of forces, not just the largest individual force. Opposite directions must be assigned\nopposite signs before the forces are added.\nBenchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not\nan official textbook or examination board publication.\nBRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material\nPage 1",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P04-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 2,
+            "score": 0.44999999999999996,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P04-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 1,
+            "score": 0.3833333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P04-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 6,
+            "score": 0.22499999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 06/ WORK AND ENERGY Work, kinetic energy and the work-energy theorem Work transfers energy when a force has a component along an object's displacement. The net work done on an object equals its change in kinetic energy. Work by a constant force For a constant force F acting through displacement d at angle e to the displacement, work is the product of force, displacement and the cosine of the angle. Kinetic energy An object of mass m moving at speed v has kinetic energy one half times its mass times its speed squared. Equations W = F x d x cos(0) | K = ½ x m × v² | W_net = AK Worked example A 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½ x 2 x v², v² = 16 and the final speed is 4 m/s. Sign matters Work is positive when the force component is along the displacement, negative when opposite, and zero when perpendicular. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 6",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P04-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 3,
+            "score": 0.1733333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000003.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 03/ MASS AND WEIGHT Mass is not the same as weight Mass describes how much matter an object has. Weight is the gravitational force acting on that mass, so weight depends on the local gravitational field. Mass Mass is measured in kilograms (kg). For a given object, its mass does not change merely because the object is moved from Earth to the Moon. Weight equation W = mx g Worked example On Earth, take g = 9.8 m/s². The weight of a 2 kg object is W = 2 kg x 9.8 m/s² How to distinguish them = 19.6 N. A balance or mass measurement reports kilograms. A force meter measuring gravitational pull reports newtons. An object can have the same mass in two locations but different weight if the gravitational field strength differs. Common mistake Do not write \"2 kg of weight\" when the question asks for force. State mass in kg and weight in N. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 3",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P04-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 7,
+            "score": 0.15416666666666665,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 07 / MOMENTUM AND IMPULSE Momentum change and impulse Momentum depends on mass and velocity. Impulse measures the effect of a force acting over a time interval and equals the change in momentum. Linear momentum Momentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of velocity. Impulse For a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It also equals final momentum minus initial momentum. Equations p = mxv|J = F_avg x At = Ap Worked collision example A 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s. The change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force is -4.5 0.05 = -90 N. Direction convention The plus and minus signs indicate direction along the chosen axis. A negative answer does not mean the magnitude of the force is negative. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 |",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P05",
+      "category": "positive",
+      "query": "What is the weight in newtons of a 2 kg object on Earth when g is 9.8 m/s²?",
+      "expectedRetrievalPages": [
+        3
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P05-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 3,
+            "score": 0.9995046854019164,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000003.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n03/ MASS AND WEIGHT\nMass is not the same as weight\nMass describes how much matter an object has. Weight is the gravitational force acting on that mass,\nso weight depends on the local gravitational field.\nMass\nMass is measured in kilograms (kg). For a given object, its mass does not change merely because the\nobject is moved from Earth to the Moon.\nWeight equation\nW = mx g\nWorked example\nOn Earth, take g = 9.8 m/s². The weight of a 2 kg object is W = 2 kg x 9.8 m/s²\nHow to distinguish them\n= 19.6 N.\nA balance or mass measurement reports kilograms. A force meter measuring gravitational pull reports\nnewtons. An object can have the same mass in two locations but different weight if the gravitational\nfield strength differs.\nCommon mistake\nDo not write \"2 kg of weight\" when the question asks for force. State mass in kg and weight in N.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P05-AI-R02",
+            "provider": "cloudflare-ai-search",
+            "rank": 2,
+            "pdfPage": 4,
+            "score": 0.8833563327789307,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n04/ CONTACT FORCES\nStatic friction and kinetic friction\nFriction acts along the contact surface and opposes relative motion or the tendency of relative\nmotion. Static and kinetic friction describe different conditions.\nStatic friction\nWhen two surfaces do not slide relative to one another, static friction adjusts to oppose the applied\nforce. Its magnitude can vary from zero up to a maximum value.\nKinetic friction\nWhen surfaces slide, kinetic friction is commonly modelled as the coefficient of kinetic friction\nmultiplied by the normal force.\nEquations\nf_k = μ_kx N | O ≤ f_s ≤ μ_s × N\nWorked example on a horizontal surface\nA 5 kg block rests on a horizontal floor. Take g = 9.8 m/s² and μ_k = 0.20. The normal force is N = m x\ng = = 49 N. The kinetic friction magnitude is f_k = 0.20 x 49 N = 9.8 N.\nWhat the coefficients mean\nThe coefficient μ is dimensionless.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P05-AI-R03",
+            "provider": "cloudflare-ai-search",
+            "rank": 3,
+            "pdfPage": 5,
+            "score": 0.4456826150417328,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n05/INCLINED PLANES\nResolving weight on an inclined plane\nOn a straight incline, the weight can be resolved into components parallel and perpendicular to the\nsurface. The normal force is perpendicular to the surface.\nParallel component\nFor a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g\n* sin(0).\nPerpendicular component\nThe component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces\nand the block does not accelerate away from or into the surface, the normal force has this magnitude.\nEquations\nF_parallel = m × g × sin(0) | N = m × g x cos(0)\nWorked example\nA 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8\nx sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N.\nAngle convention\nHere 0 is measured between the inclined surface and the horizontal.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P05-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 3,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000003.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 03/ MASS AND WEIGHT Mass is not the same as weight Mass describes how much matter an object has. Weight is the gravitational force acting on that mass, so weight depends on the local gravitational field. Mass Mass is measured in kilograms (kg). For a given object, its mass does not change merely because the object is moved from Earth to the Moon. Weight equation W = mx g Worked example On Earth, take g = 9.8 m/s². The weight of a 2 kg object is W = 2 kg x 9.8 m/s² How to distinguish them = 19.6 N. A balance or mass measurement reports kilograms. A force meter measuring gravitational pull reports newtons. An object can have the same mass in two locations but different weight if the gravitational field strength differs. Common mistake Do not write \"2 kg of weight\" when the question asks for force. State mass in kg and weight in N. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 3",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P05-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 5,
+            "score": 0.2833333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 05/INCLINED PLANES Resolving weight on an inclined plane On a straight incline, the weight can be resolved into components parallel and perpendicular to the surface. The normal force is perpendicular to the surface. Parallel component For a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g * sin(0). Perpendicular component The component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces and the block does not accelerate away from or into the surface, the normal force has this magnitude. Equations F_parallel = m × g × sin(0) | N = m × g x cos(0) Worked example A 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8 x sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N. Angle convention Here 0 is measured between the inclined surface and the horizontal. Check the diagram or wording before choosing sine and cosine. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P05-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 2,
+            "score": 0.21666666666666665,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P05-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 1,
+            "score": 0.21499999999999997,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P05-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 4,
+            "score": 0.20227272727272727,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 04/ CONTACT FORCES Static friction and kinetic friction Friction acts along the contact surface and opposes relative motion or the tendency of relative motion. Static and kinetic friction describe different conditions. Static friction When two surfaces do not slide relative to one another, static friction adjusts to oppose the applied force. Its magnitude can vary from zero up to a maximum value. Kinetic friction When surfaces slide, kinetic friction is commonly modelled as the coefficient of kinetic friction multiplied by the normal force. Equations f_k = μ_kx N | O ≤ f_s ≤ μ_s × N Worked example on a horizontal surface A 5 kg block rests on a horizontal floor. Take g = 9.8 m/s² and μ_k = 0.20. The normal force is N = m x g = = 49 N. The kinetic friction magnitude is f_k = 0.20 x 49 N = 9.8 N. What the coefficients mean The coefficient μ is dimensionless. The maximum static friction is µ_s × N. Kinetic friction is often approximated as µ_k × N when sliding occurs. Important distinction Static friction is not always equal to µs × N. That expression gives its maximum possible magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P06",
+      "category": "positive",
+      "query": "How is mass different from weight, and which one changes with local gravity?",
+      "expectedRetrievalPages": [
+        3
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P06-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 3,
+            "score": 0.983449161052704,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000003.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n03/ MASS AND WEIGHT\nMass is not the same as weight\nMass describes how much matter an object has. Weight is the gravitational force acting on that mass,\nso weight depends on the local gravitational field.\nMass\nMass is measured in kilograms (kg). For a given object, its mass does not change merely because the\nobject is moved from Earth to the Moon.\nWeight equation\nW = mx g\nWorked example\nOn Earth, take g = 9.8 m/s². The weight of a 2 kg object is W = 2 kg x 9.8 m/s²\nHow to distinguish them\n= 19.6 N.\nA balance or mass measurement reports kilograms. A force meter measuring gravitational pull reports\nnewtons. An object can have the same mass in two locations but different weight if the gravitational\nfield strength differs.\nCommon mistake\nDo not write \"2 kg of weight\" when the question asks for force. State mass in kg and weight in N.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P06-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 3,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000003.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 03/ MASS AND WEIGHT Mass is not the same as weight Mass describes how much matter an object has. Weight is the gravitational force acting on that mass, so weight depends on the local gravitational field. Mass Mass is measured in kilograms (kg). For a given object, its mass does not change merely because the object is moved from Earth to the Moon. Weight equation W = mx g Worked example On Earth, take g = 9.8 m/s². The weight of a 2 kg object is W = 2 kg x 9.8 m/s² How to distinguish them = 19.6 N. A balance or mass measurement reports kilograms. A force meter measuring gravitational pull reports newtons. An object can have the same mass in two locations but different weight if the gravitational field strength differs. Common mistake Do not write \"2 kg of weight\" when the question asks for force. State mass in kg and weight in N. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 3",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P06-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 1,
+            "score": 0.3083333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P06-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 5,
+            "score": 0.24,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 05/INCLINED PLANES Resolving weight on an inclined plane On a straight incline, the weight can be resolved into components parallel and perpendicular to the surface. The normal force is perpendicular to the surface. Parallel component For a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g * sin(0). Perpendicular component The component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces and the block does not accelerate away from or into the surface, the normal force has this magnitude. Equations F_parallel = m × g × sin(0) | N = m × g x cos(0) Worked example A 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8 x sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N. Angle convention Here 0 is measured between the inclined surface and the horizontal. Check the diagram or wording before choosing sine and cosine. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P06-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 7,
+            "score": 0.20833333333333331,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 07 / MOMENTUM AND IMPULSE Momentum change and impulse Momentum depends on mass and velocity. Impulse measures the effect of a force acting over a time interval and equals the change in momentum. Linear momentum Momentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of velocity. Impulse For a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It also equals final momentum minus initial momentum. Equations p = mxv|J = F_avg x At = Ap Worked collision example A 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s. The change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force is -4.5 0.05 = -90 N. Direction convention The plus and minus signs indicate direction along the chosen axis. A negative answer does not mean the magnitude of the force is negative. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 |",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P06-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 6,
+            "score": 0.15999999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 06/ WORK AND ENERGY Work, kinetic energy and the work-energy theorem Work transfers energy when a force has a component along an object's displacement. The net work done on an object equals its change in kinetic energy. Work by a constant force For a constant force F acting through displacement d at angle e to the displacement, work is the product of force, displacement and the cosine of the angle. Kinetic energy An object of mass m moving at speed v has kinetic energy one half times its mass times its speed squared. Equations W = F x d x cos(0) | K = ½ x m × v² | W_net = AK Worked example A 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½ x 2 x v², v² = 16 and the final speed is 4 m/s. Sign matters Work is positive when the force component is along the displacement, negative when opposite, and zero when perpendicular. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 6",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P07",
+      "category": "positive",
+      "query": "Find the kinetic friction on a 5 kg block on a horizontal floor when μ_k = 0.20 and g = 9.8 m/s².",
+      "expectedRetrievalPages": [
+        4
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P07-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 4,
+            "score": 0.9987340569496156,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n04/ CONTACT FORCES\nStatic friction and kinetic friction\nFriction acts along the contact surface and opposes relative motion or the tendency of relative\nmotion. Static and kinetic friction describe different conditions.\nStatic friction\nWhen two surfaces do not slide relative to one another, static friction adjusts to oppose the applied\nforce. Its magnitude can vary from zero up to a maximum value.\nKinetic friction\nWhen surfaces slide, kinetic friction is commonly modelled as the coefficient of kinetic friction\nmultiplied by the normal force.\nEquations\nf_k = μ_kx N | O ≤ f_s ≤ μ_s × N\nWorked example on a horizontal surface\nA 5 kg block rests on a horizontal floor. Take g = 9.8 m/s² and μ_k = 0.20. The normal force is N = m x\ng = = 49 N. The kinetic friction magnitude is f_k = 0.20 x 49 N = 9.8 N.\nWhat the coefficients mean\nThe coefficient μ is dimensionless.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P07-AI-R02",
+            "provider": "cloudflare-ai-search",
+            "rank": 2,
+            "pdfPage": 3,
+            "score": 0.7880756855010986,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000003.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n03/ MASS AND WEIGHT\nMass is not the same as weight\nMass describes how much matter an object has. Weight is the gravitational force acting on that mass,\nso weight depends on the local gravitational field.\nMass\nMass is measured in kilograms (kg). For a given object, its mass does not change merely because the\nobject is moved from Earth to the Moon.\nWeight equation\nW = mx g\nWorked example\nOn Earth, take g = 9.8 m/s². The weight of a 2 kg object is W = 2 kg x 9.8 m/s²\nHow to distinguish them\n= 19.6 N.\nA balance or mass measurement reports kilograms. A force meter measuring gravitational pull reports\nnewtons. An object can have the same mass in two locations but different weight if the gravitational\nfield strength differs.\nCommon mistake\nDo not write \"2 kg of weight\" when the question asks for force. State mass in kg and weight in N.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P07-AI-R03",
+            "provider": "cloudflare-ai-search",
+            "rank": 3,
+            "pdfPage": 5,
+            "score": 0.6368626356124878,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n05/INCLINED PLANES\nResolving weight on an inclined plane\nOn a straight incline, the weight can be resolved into components parallel and perpendicular to the\nsurface. The normal force is perpendicular to the surface.\nParallel component\nFor a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g\n* sin(0).\nPerpendicular component\nThe component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces\nand the block does not accelerate away from or into the surface, the normal force has this magnitude.\nEquations\nF_parallel = m × g × sin(0) | N = m × g x cos(0)\nWorked example\nA 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8\nx sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N.\nAngle convention\nHere 0 is measured between the inclined surface and the horizontal.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P07-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 4,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 04/ CONTACT FORCES Static friction and kinetic friction Friction acts along the contact surface and opposes relative motion or the tendency of relative motion. Static and kinetic friction describe different conditions. Static friction When two surfaces do not slide relative to one another, static friction adjusts to oppose the applied force. Its magnitude can vary from zero up to a maximum value. Kinetic friction When surfaces slide, kinetic friction is commonly modelled as the coefficient of kinetic friction multiplied by the normal force. Equations f_k = μ_kx N | O ≤ f_s ≤ μ_s × N Worked example on a horizontal surface A 5 kg block rests on a horizontal floor. Take g = 9.8 m/s² and μ_k = 0.20. The normal force is N = m x g = = 49 N. The kinetic friction magnitude is f_k = 0.20 x 49 N = 9.8 N. What the coefficients mean The coefficient μ is dimensionless. The maximum static friction is µ_s × N. Kinetic friction is often approximated as µ_k × N when sliding occurs. Important distinction Static friction is not always equal to µs × N. That expression gives its maximum possible magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P07-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 5,
+            "score": 0.3333333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 05/INCLINED PLANES Resolving weight on an inclined plane On a straight incline, the weight can be resolved into components parallel and perpendicular to the surface. The normal force is perpendicular to the surface. Parallel component For a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g * sin(0). Perpendicular component The component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces and the block does not accelerate away from or into the surface, the normal force has this magnitude. Equations F_parallel = m × g × sin(0) | N = m × g x cos(0) Worked example A 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8 x sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N. Angle convention Here 0 is measured between the inclined surface and the horizontal. Check the diagram or wording before choosing sine and cosine. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P07-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 2,
+            "score": 0.22499999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P07-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 6,
+            "score": 0.19166666666666665,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 06/ WORK AND ENERGY Work, kinetic energy and the work-energy theorem Work transfers energy when a force has a component along an object's displacement. The net work done on an object equals its change in kinetic energy. Work by a constant force For a constant force F acting through displacement d at angle e to the displacement, work is the product of force, displacement and the cosine of the angle. Kinetic energy An object of mass m moving at speed v has kinetic energy one half times its mass times its speed squared. Equations W = F x d x cos(0) | K = ½ x m × v² | W_net = AK Worked example A 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½ x 2 x v², v² = 16 and the final speed is 4 m/s. Sign matters Work is positive when the force component is along the displacement, negative when opposite, and zero when perpendicular. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 6",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P07-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 3,
+            "score": 0.16999999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000003.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 03/ MASS AND WEIGHT Mass is not the same as weight Mass describes how much matter an object has. Weight is the gravitational force acting on that mass, so weight depends on the local gravitational field. Mass Mass is measured in kilograms (kg). For a given object, its mass does not change merely because the object is moved from Earth to the Moon. Weight equation W = mx g Worked example On Earth, take g = 9.8 m/s². The weight of a 2 kg object is W = 2 kg x 9.8 m/s² How to distinguish them = 19.6 N. A balance or mass measurement reports kilograms. A force meter measuring gravitational pull reports newtons. An object can have the same mass in two locations but different weight if the gravitational field strength differs. Common mistake Do not write \"2 kg of weight\" when the question asks for force. State mass in kg and weight in N. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 3",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P08",
+      "category": "positive",
+      "query": "Does static friction always equal μ_s times the normal force, or can it adjust?",
+      "expectedRetrievalPages": [
+        4
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P08-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 4,
+            "score": 0.9923175573349,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": ".\nWhat the coefficients mean\nThe coefficient μ is dimensionless. The maximum static friction is µ_s × N. Kinetic friction is often\napproximated as µ_k × N when sliding occurs.\nImportant distinction\nStatic friction is not always equal to µs × N. That expression gives its maximum possible magnitude in this\nmodel.\nBenchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not\nan official textbook or examination board publication.\nBRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material\nPage 4",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P08-AI-R02",
+            "provider": "cloudflare-ai-search",
+            "rank": 2,
+            "pdfPage": 4,
+            "score": 0.9739356637001038,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n04/ CONTACT FORCES\nStatic friction and kinetic friction\nFriction acts along the contact surface and opposes relative motion or the tendency of relative\nmotion. Static and kinetic friction describe different conditions.\nStatic friction\nWhen two surfaces do not slide relative to one another, static friction adjusts to oppose the applied\nforce. Its magnitude can vary from zero up to a maximum value.\nKinetic friction\nWhen surfaces slide, kinetic friction is commonly modelled as the coefficient of kinetic friction\nmultiplied by the normal force.\nEquations\nf_k = μ_kx N | O ≤ f_s ≤ μ_s × N\nWorked example on a horizontal surface\nA 5 kg block rests on a horizontal floor. Take g = 9.8 m/s² and μ_k = 0.20. The normal force is N = m x\ng = = 49 N. The kinetic friction magnitude is f_k = 0.20 x 49 N = 9.8 N.\nWhat the coefficients mean\nThe coefficient μ is dimensionless.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P08-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 4,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 04/ CONTACT FORCES Static friction and kinetic friction Friction acts along the contact surface and opposes relative motion or the tendency of relative motion. Static and kinetic friction describe different conditions. Static friction When two surfaces do not slide relative to one another, static friction adjusts to oppose the applied force. Its magnitude can vary from zero up to a maximum value. Kinetic friction When surfaces slide, kinetic friction is commonly modelled as the coefficient of kinetic friction multiplied by the normal force. Equations f_k = μ_kx N | O ≤ f_s ≤ μ_s × N Worked example on a horizontal surface A 5 kg block rests on a horizontal floor. Take g = 9.8 m/s² and μ_k = 0.20. The normal force is N = m x g = = 49 N. The kinetic friction magnitude is f_k = 0.20 x 49 N = 9.8 N. What the coefficients mean The coefficient μ is dimensionless. The maximum static friction is µ_s × N. Kinetic friction is often approximated as µ_k × N when sliding occurs. Important distinction Static friction is not always equal to µs × N. That expression gives its maximum possible magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P08-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 5,
+            "score": 0.3083333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 05/INCLINED PLANES Resolving weight on an inclined plane On a straight incline, the weight can be resolved into components parallel and perpendicular to the surface. The normal force is perpendicular to the surface. Parallel component For a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g * sin(0). Perpendicular component The component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces and the block does not accelerate away from or into the surface, the normal force has this magnitude. Equations F_parallel = m × g × sin(0) | N = m × g x cos(0) Worked example A 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8 x sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N. Angle convention Here 0 is measured between the inclined surface and the horizontal. Check the diagram or wording before choosing sine and cosine. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P08-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 8,
+            "score": 0.21785714285714286,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000008.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 08/ ELASTIC FORCE Spring restoring force and elastic potential energy For an ideal spring within its linear range, the restoring force is proportional to displacement from equilibrium and acts in the opposite direction. Hooke's law The spring force is a restoring force. The minus sign indicates that the force points opposite to the displacement x from the equilibrium position. Elastic potential energy The energy stored in an ideal spring is one half times the spring constant times the square of the displacement. Equations F_s = -k xx | U_s = ½ x k x x² Worked example = A spring has spring constant k 200 N/m and is stretched by x = 0.05 m. The restoring force is F_s = -200 × 0.05 = -10 N. The stored elastic potential energy is U_s = 2 × 200 × (0.05)² = 0.25 J. Symbol fidelity check The restoring-force expression contains a minus sign: F_s = -k xx. The expression F_s = +k x x is not the restoring-force equation used on this page. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P08-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 1,
+            "score": 0.16666666666666666,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P08-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 6,
+            "score": 0.16499999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 06/ WORK AND ENERGY Work, kinetic energy and the work-energy theorem Work transfers energy when a force has a component along an object's displacement. The net work done on an object equals its change in kinetic energy. Work by a constant force For a constant force F acting through displacement d at angle e to the displacement, work is the product of force, displacement and the cosine of the angle. Kinetic energy An object of mass m moving at speed v has kinetic energy one half times its mass times its speed squared. Equations W = F x d x cos(0) | K = ½ x m × v² | W_net = AK Worked example A 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½ x 2 x v², v² = 16 and the final speed is 4 m/s. Sign matters Work is positive when the force component is along the displacement, negative when opposite, and zero when perpendicular. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 6",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P09",
+      "category": "positive",
+      "query": "For a 4 kg block on a 30 degree frictionless incline, find the downslope component of weight and the normal force.",
+      "expectedRetrievalPages": [
+        5
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P09-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 5,
+            "score": 0.9813643097877502,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n05/INCLINED PLANES\nResolving weight on an inclined plane\nOn a straight incline, the weight can be resolved into components parallel and perpendicular to the\nsurface. The normal force is perpendicular to the surface.\nParallel component\nFor a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g\n* sin(0).\nPerpendicular component\nThe component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces\nand the block does not accelerate away from or into the surface, the normal force has this magnitude.\nEquations\nF_parallel = m × g × sin(0) | N = m × g x cos(0)\nWorked example\nA 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8\nx sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N.\nAngle convention\nHere 0 is measured between the inclined surface and the horizontal.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P09-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 5,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 05/INCLINED PLANES Resolving weight on an inclined plane On a straight incline, the weight can be resolved into components parallel and perpendicular to the surface. The normal force is perpendicular to the surface. Parallel component For a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g * sin(0). Perpendicular component The component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces and the block does not accelerate away from or into the surface, the normal force has this magnitude. Equations F_parallel = m × g × sin(0) | N = m × g x cos(0) Worked example A 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8 x sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N. Angle convention Here 0 is measured between the inclined surface and the horizontal. Check the diagram or wording before choosing sine and cosine. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P09-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 4,
+            "score": 0.2708333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 04/ CONTACT FORCES Static friction and kinetic friction Friction acts along the contact surface and opposes relative motion or the tendency of relative motion. Static and kinetic friction describe different conditions. Static friction When two surfaces do not slide relative to one another, static friction adjusts to oppose the applied force. Its magnitude can vary from zero up to a maximum value. Kinetic friction When surfaces slide, kinetic friction is commonly modelled as the coefficient of kinetic friction multiplied by the normal force. Equations f_k = μ_kx N | O ≤ f_s ≤ μ_s × N Worked example on a horizontal surface A 5 kg block rests on a horizontal floor. Take g = 9.8 m/s² and μ_k = 0.20. The normal force is N = m x g = = 49 N. The kinetic friction magnitude is f_k = 0.20 x 49 N = 9.8 N. What the coefficients mean The coefficient μ is dimensionless. The maximum static friction is µ_s × N. Kinetic friction is often approximated as µ_k × N when sliding occurs. Important distinction Static friction is not always equal to µs × N. That expression gives its maximum possible magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P09-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 1,
+            "score": 0.205,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before the forces are added. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 1",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P09-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 6,
+            "score": 0.18999999999999997,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 06/ WORK AND ENERGY Work, kinetic energy and the work-energy theorem Work transfers energy when a force has a component along an object's displacement. The net work done on an object equals its change in kinetic energy. Work by a constant force For a constant force F acting through displacement d at angle e to the displacement, work is the product of force, displacement and the cosine of the angle. Kinetic energy An object of mass m moving at speed v has kinetic energy one half times its mass times its speed squared. Equations W = F x d x cos(0) | K = ½ x m × v² | W_net = AK Worked example A 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½ x 2 x v², v² = 16 and the final speed is 4 m/s. Sign matters Work is positive when the force component is along the displacement, negative when opposite, and zero when perpendicular. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 6",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P09-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 7,
+            "score": 0.16999999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 07 / MOMENTUM AND IMPULSE Momentum change and impulse Momentum depends on mass and velocity. Impulse measures the effect of a force acting over a time interval and equals the change in momentum. Linear momentum Momentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of velocity. Impulse For a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It also equals final momentum minus initial momentum. Equations p = mxv|J = F_avg x At = Ap Worked collision example A 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s. The change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force is -4.5 0.05 = -90 N. Direction convention The plus and minus signs indicate direction along the chosen axis. A negative answer does not mean the magnitude of the force is negative. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 |",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P10",
+      "category": "positive",
+      "query": "A 2 kg object starts from rest and gains 16 J of net work. What is its final speed?",
+      "expectedRetrievalPages": [
+        6
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P10-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 6,
+            "score": 0.9995967745780944,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n06/ WORK AND ENERGY\nWork, kinetic energy and the\nwork-energy theorem\nWork transfers energy when a force has a component along an object's displacement. The net work\ndone on an object equals its change in kinetic energy.\nWork by a constant force\nFor a constant force F acting through displacement d at angle e to the displacement, work is the\nproduct of force, displacement and the cosine of the angle.\nKinetic energy\nAn object of mass m moving at speed v has kinetic energy one half times its mass times its speed\nsquared.\nEquations\nW = F x d x cos(0) | K = ½ x m × v² | W_net = AK\nWorked example\nA 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½\nx 2 x v², v² = 16 and the final speed is 4 m/s.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P10-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 6,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 06/ WORK AND ENERGY Work, kinetic energy and the work-energy theorem Work transfers energy when a force has a component along an object's displacement. The net work done on an object equals its change in kinetic energy. Work by a constant force For a constant force F acting through displacement d at angle e to the displacement, work is the product of force, displacement and the cosine of the angle. Kinetic energy An object of mass m moving at speed v has kinetic energy one half times its mass times its speed squared. Equations W = F x d x cos(0) | K = ½ x m × v² | W_net = AK Worked example A 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½ x 2 x v², v² = 16 and the final speed is 4 m/s. Sign matters Work is positive when the force component is along the displacement, negative when opposite, and zero when perpendicular. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 6",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P10-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 1,
+            "score": 0.3333333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P10-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 2,
+            "score": 0.25,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P10-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 1,
+            "score": 0.16727272727272727,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before the forces are added. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 1",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P10-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 4,
+            "score": 0.13974358974358972,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 4",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P11",
+      "category": "positive",
+      "query": "A 0.15 kg ball changes velocity from +20 m/s to −10 m/s in 0.05 s. Find its change in momentum and average force.",
+      "expectedRetrievalPages": [
+        7
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P11-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 7,
+            "score": 0.9948340654373168,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n07 / MOMENTUM AND IMPULSE\nMomentum change and impulse\nMomentum depends on mass and velocity. Impulse measures the effect of a force acting over a time\ninterval and equals the change in momentum.\nLinear momentum\nMomentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of\nvelocity.\nImpulse\nFor a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It\nalso equals final momentum minus initial momentum.\nEquations\np = mxv|J = F_avg x At = Ap\nWorked collision example\nA 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s.\nThe change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force\nis -4.5 0.05 = -90 N.\nDirection convention\nThe plus and minus signs indicate direction along the chosen axis.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P11-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 7,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 07 / MOMENTUM AND IMPULSE Momentum change and impulse Momentum depends on mass and velocity. Impulse measures the effect of a force acting over a time interval and equals the change in momentum. Linear momentum Momentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of velocity. Impulse For a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It also equals final momentum minus initial momentum. Equations p = mxv|J = F_avg x At = Ap Worked collision example A 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s. The change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force is -4.5 0.05 = -90 N. Direction convention The plus and minus signs indicate direction along the chosen axis. A negative answer does not mean the magnitude of the force is negative. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 |",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P11-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 1,
+            "score": 0.3333333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P11-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 8,
+            "score": 0.20833333333333331,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000008.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 08/ ELASTIC FORCE Spring restoring force and elastic potential energy For an ideal spring within its linear range, the restoring force is proportional to displacement from equilibrium and acts in the opposite direction. Hooke's law The spring force is a restoring force. The minus sign indicates that the force points opposite to the displacement x from the equilibrium position. Elastic potential energy The energy stored in an ideal spring is one half times the spring constant times the square of the displacement. Equations F_s = -k xx | U_s = ½ x k x x² Worked example = A spring has spring constant k 200 N/m and is stretched by x = 0.05 m. The restoring force is F_s = -200 × 0.05 = -10 N. The stored elastic potential energy is U_s = 2 × 200 × (0.05)² = 0.25 J. Symbol fidelity check The restoring-force expression contains a minus sign: F_s = -k xx. The expression F_s = +k x x is not the restoring-force equation used on this page. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P11-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 2,
+            "score": 0.19999999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P11-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 6,
+            "score": 0.1595238095238095,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 06/ WORK AND ENERGY Work, kinetic energy and the work-energy theorem Work transfers energy when a force has a component along an object's displacement. The net work done on an object equals its change in kinetic energy. Work by a constant force For a constant force F acting through displacement d at angle e to the displacement, work is the product of force, displacement and the cosine of the angle. Kinetic energy An object of mass m moving at speed v has kinetic energy one half times its mass times its speed squared. Equations W = F x d x cos(0) | K = ½ x m × v² | W_net = AK Worked example A 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½ x 2 x v², v² = 16 and the final speed is 4 m/s. Sign matters Work is positive when the force component is along the displacement, negative when opposite, and zero when perpendicular. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 6",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "P12",
+      "category": "positive",
+      "query": "A spring with k = 200 N/m is stretched by 0.05 m. Find the restoring force and elastic potential energy.",
+      "expectedRetrievalPages": [
+        8
+      ],
+      "expectedNoMatch": false,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "P12-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 8,
+            "score": 0.9991957545280457,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000008.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n08/ ELASTIC FORCE\nSpring restoring force and elastic\npotential energy\nFor an ideal spring within its linear range, the restoring force is proportional to displacement from\nequilibrium and acts in the opposite direction.\nHooke's law\nThe spring force is a restoring force. The minus sign indicates that the force points opposite to the\ndisplacement x from the equilibrium position.\nElastic potential energy\nThe energy stored in an ideal spring is one half times the spring constant times the square of the\ndisplacement.\nEquations\nF_s = -k xx | U_s = ½ x k x x²\nWorked example\n=\nA spring has spring constant k 200 N/m and is stretched by x = 0.05 m. The restoring force is F_s =\n-200 × 0.05 = -10 N. The stored elastic potential energy is U_s = 2 × 200 × (0.05)² = 0.25 J.\nSymbol fidelity check\nThe restoring-force expression contains a minus sign: F_s = -k xx.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "P12-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 8,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000008.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 08/ ELASTIC FORCE Spring restoring force and elastic potential energy For an ideal spring within its linear range, the restoring force is proportional to displacement from equilibrium and acts in the opposite direction. Hooke's law The spring force is a restoring force. The minus sign indicates that the force points opposite to the displacement x from the equilibrium position. Elastic potential energy The energy stored in an ideal spring is one half times the spring constant times the square of the displacement. Equations F_s = -k xx | U_s = ½ x k x x² Worked example = A spring has spring constant k 200 N/m and is stretched by x = 0.05 m. The restoring force is F_s = -200 × 0.05 = -10 N. The stored elastic potential energy is U_s = 2 × 200 × (0.05)² = 0.25 J. Symbol fidelity check The restoring-force expression contains a minus sign: F_s = -k xx. The expression F_s = +k x x is not the restoring-force equation used on this page. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P12-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 6,
+            "score": 0.27499999999999997,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 06/ WORK AND ENERGY Work, kinetic energy and the work-energy theorem Work transfers energy when a force has a component along an object's displacement. The net work done on an object equals its change in kinetic energy. Work by a constant force For a constant force F acting through displacement d at angle e to the displacement, work is the product of force, displacement and the cosine of the angle. Kinetic energy An object of mass m moving at speed v has kinetic energy one half times its mass times its speed squared. Equations W = F x d x cos(0) | K = ½ x m × v² | W_net = AK Worked example A 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½ x 2 x v², v² = 16 and the final speed is 4 m/s. Sign matters Work is positive when the force component is along the displacement, negative when opposite, and zero when perpendicular. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 6",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P12-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 7,
+            "score": 0.2708333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 07 / MOMENTUM AND IMPULSE Momentum change and impulse Momentum depends on mass and velocity. Impulse measures the effect of a force acting over a time interval and equals the change in momentum. Linear momentum Momentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of velocity. Impulse For a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It also equals final momentum minus initial momentum. Equations p = mxv|J = F_avg x At = Ap Worked collision example A 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s. The change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force is -4.5 0.05 = -90 N. Direction convention The plus and minus signs indicate direction along the chosen axis. A negative answer does not mean the magnitude of the force is negative. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 |",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P12-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 2,
+            "score": 0.16999999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "P12-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 4,
+            "score": 0.16249999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 04/ CONTACT FORCES Static friction and kinetic friction Friction acts along the contact surface and opposes relative motion or the tendency of relative motion. Static and kinetic friction describe different conditions. Static friction When two surfaces do not slide relative to one another, static friction adjusts to oppose the applied force. Its magnitude can vary from zero up to a maximum value. Kinetic friction When surfaces slide, kinetic friction is commonly modelled as the coefficient of kinetic friction multiplied by the normal force. Equations f_k = μ_kx N | O ≤ f_s ≤ μ_s × N Worked example on a horizontal surface A 5 kg block rests on a horizontal floor. Take g = 9.8 m/s² and μ_k = 0.20. The normal force is N = m x g = = 49 N. The kinetic friction magnitude is f_k = 0.20 x 49 N = 9.8 N. What the coefficients mean The coefficient μ is dimensionless. The maximum static friction is µ_s × N. Kinetic friction is often approximated as µ_k × N when sliding occurs. Important distinction Static friction is not always equal to µs × N. That expression gives its maximum possible magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "N01",
+      "category": "out-of-corpus",
+      "query": "What is the capacitance of a parallel-plate capacitor with a dielectric between its plates?",
+      "expectedRetrievalPages": [],
+      "expectedNoMatch": true,
+      "providers": {
+        "cloudflare-ai-search": [],
+        "qdrant-vertex": [
+          {
+            "candidateId": "N01-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 4,
+            "score": 0.375,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 4",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N01-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 2,
+            "score": 0.26060606060606056,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 2",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N01-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 1,
+            "score": 0.22777777777777777,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N01-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 8,
+            "score": 0.20833333333333331,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000008.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 08/ ELASTIC FORCE Spring restoring force and elastic potential energy For an ideal spring within its linear range, the restoring force is proportional to displacement from equilibrium and acts in the opposite direction. Hooke's law The spring force is a restoring force. The minus sign indicates that the force points opposite to the displacement x from the equilibrium position. Elastic potential energy The energy stored in an ideal spring is one half times the spring constant times the square of the displacement. Equations F_s = -k xx | U_s = ½ x k x x² Worked example = A spring has spring constant k 200 N/m and is stretched by x = 0.05 m. The restoring force is F_s = -200 × 0.05 = -10 N. The stored elastic potential energy is U_s = 2 × 200 × (0.05)² = 0.25 J. Symbol fidelity check The restoring-force expression contains a minus sign: F_s = -k xx. The expression F_s = +k x x is not the restoring-force equation used on this page. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N01-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 5,
+            "score": 0.16363636363636364,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 05/INCLINED PLANES Resolving weight on an inclined plane On a straight incline, the weight can be resolved into components parallel and perpendicular to the surface. The normal force is perpendicular to the surface. Parallel component For a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g * sin(0). Perpendicular component The component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces and the block does not accelerate away from or into the surface, the normal force has this magnitude. Equations F_parallel = m × g × sin(0) | N = m × g x cos(0) Worked example A 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8 x sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N. Angle convention Here 0 is measured between the inclined surface and the horizontal. Check the diagram or wording before choosing sine and cosine. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "N02",
+      "category": "out-of-corpus",
+      "query": "A 12 V battery is connected to a 3 ohm resistor. Use Ohm’s law to calculate the current.",
+      "expectedRetrievalPages": [],
+      "expectedNoMatch": true,
+      "providers": {
+        "cloudflare-ai-search": [],
+        "qdrant-vertex": [
+          {
+            "candidateId": "N02-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 4,
+            "score": 0.375,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 4",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N02-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 2,
+            "score": 0.26666666666666666,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N02-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 2,
+            "score": 0.26060606060606056,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 2",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N02-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 1,
+            "score": 0.24,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N02-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 1,
+            "score": 0.205,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before the forces are added. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 1",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "N03",
+      "category": "out-of-corpus",
+      "query": "What is the magnetic Lorentz force on a moving charged particle in a uniform magnetic field?",
+      "expectedRetrievalPages": [],
+      "expectedNoMatch": true,
+      "providers": {
+        "cloudflare-ai-search": [],
+        "qdrant-vertex": [
+          {
+            "candidateId": "N03-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 4,
+            "score": 0.37727272727272726,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 4",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N03-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 1,
+            "score": 0.29333333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N03-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 6,
+            "score": 0.27499999999999997,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000006.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 06/ WORK AND ENERGY Work, kinetic energy and the work-energy theorem Work transfers energy when a force has a component along an object's displacement. The net work done on an object equals its change in kinetic energy. Work by a constant force For a constant force F acting through displacement d at angle e to the displacement, work is the product of force, displacement and the cosine of the angle. Kinetic energy An object of mass m moving at speed v has kinetic energy one half times its mass times its speed squared. Equations W = F x d x cos(0) | K = ½ x m × v² | W_net = AK Worked example A 2 kg object starts from rest and receives 16 J of net work. Its final kinetic energy is 16 J. Since 16 = ½ x 2 x v², v² = 16 and the final speed is 4 m/s. Sign matters Work is positive when the force component is along the displacement, negative when opposite, and zero when perpendicular. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 6",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N03-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 3,
+            "score": 0.19999999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000003.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 03/ MASS AND WEIGHT Mass is not the same as weight Mass describes how much matter an object has. Weight is the gravitational force acting on that mass, so weight depends on the local gravitational field. Mass Mass is measured in kilograms (kg). For a given object, its mass does not change merely because the object is moved from Earth to the Moon. Weight equation W = mx g Worked example On Earth, take g = 9.8 m/s². The weight of a 2 kg object is W = 2 kg x 9.8 m/s² How to distinguish them = 19.6 N. A balance or mass measurement reports kilograms. A force meter measuring gravitational pull reports newtons. An object can have the same mass in two locations but different weight if the gravitational field strength differs. Common mistake Do not write \"2 kg of weight\" when the question asks for force. State mass in kg and weight in N. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 3",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N03-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 4,
+            "score": 0.19166666666666665,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 04/ CONTACT FORCES Static friction and kinetic friction Friction acts along the contact surface and opposes relative motion or the tendency of relative motion. Static and kinetic friction describe different conditions. Static friction When two surfaces do not slide relative to one another, static friction adjusts to oppose the applied force. Its magnitude can vary from zero up to a maximum value. Kinetic friction When surfaces slide, kinetic friction is commonly modelled as the coefficient of kinetic friction multiplied by the normal force. Equations f_k = μ_kx N | O ≤ f_s ≤ μ_s × N Worked example on a horizontal surface A 5 kg block rests on a horizontal floor. Take g = 9.8 m/s² and μ_k = 0.20. The normal force is N = m x g = = 49 N. The kinetic friction magnitude is f_k = 0.20 x 49 N = 9.8 N. What the coefficients mean The coefficient μ is dimensionless. The maximum static friction is µ_s × N. Kinetic friction is often approximated as µ_k × N when sliding occurs. Important distinction Static friction is not always equal to µs × N. That expression gives its maximum possible magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "N04",
+      "category": "out-of-corpus",
+      "query": "Use the ideal gas law PV = nRT to find the pressure of a gas.",
+      "expectedRetrievalPages": [],
+      "expectedNoMatch": true,
+      "providers": {
+        "cloudflare-ai-search": [],
+        "qdrant-vertex": [
+          {
+            "candidateId": "N04-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 8,
+            "score": 0.41,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000008.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 08/ ELASTIC FORCE Spring restoring force and elastic potential energy For an ideal spring within its linear range, the restoring force is proportional to displacement from equilibrium and acts in the opposite direction. Hooke's law The spring force is a restoring force. The minus sign indicates that the force points opposite to the displacement x from the equilibrium position. Elastic potential energy The energy stored in an ideal spring is one half times the spring constant times the square of the displacement. Equations F_s = -k xx | U_s = ½ x k x x² Worked example = A spring has spring constant k 200 N/m and is stretched by x = 0.05 m. The restoring force is F_s = -200 × 0.05 = -10 N. The stored elastic potential energy is U_s = 2 × 200 × (0.05)² = 0.25 J. Symbol fidelity check The restoring-force expression contains a minus sign: F_s = -k xx. The expression F_s = +k x x is not the restoring-force equation used on this page. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N04-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 2,
+            "score": 0.3333333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N04-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 1,
+            "score": 0.22499999999999998,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000001.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 01 / FORCE AND MOTION Net force and acceleration: Newton's second law A force changes an object's motion only when the forces do not balance. This page defines the relationship between net force, mass and acceleration. The central idea Newton's second law states that an object's acceleration is determined by the net external force acting on it and by its mass. For a fixed mass, a larger net force produces a larger acceleration. For a fixed net force, a larger mass produces a smaller acceleration. Equation ΣF = m xa | F_net = m × a Meaning of each symbol ΣF or F_net is the vector sum of all external forces, measured in newtons (N). m is mass in kilograms (kg). a is acceleration in metres per second squared (m/s²). The acceleration points in the same direction as the net force. Worked example A trolley has a 10 N force acting east and a 4 N force acting west. The net force is 6 N east. If the trolley has a mass of 2 kg, its acceleration is 6 N ÷ 2 kg = 3 m/s² east. Remember Use the vector sum of forces, not just the largest individual force. Opposite directions must be assigned opposite signs before",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N04-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 2,
+            "score": 0.21363636363636362,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material Page 2",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "N04-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 7,
+            "score": 0.18285714285714283,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 07 / MOMENTUM AND IMPULSE Momentum change and impulse Momentum depends on mass and velocity. Impulse measures the effect of a force acting over a time interval and equals the change in momentum. Linear momentum Momentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of velocity. Impulse For a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It also equals final momentum minus initial momentum. Equations p = mxv|J = F_avg x At = Ap Worked collision example A 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s. The change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force is -4.5 0.05 = -90 N. Direction convention The plus and minus signs indicate direction along the chosen axis. A negative answer does not mean the magnitude of the force is negative. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 |",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    },
+    {
+      "queryId": "H01",
+      "category": "exact-symbol-near-miss",
+      "query": "Find the exact restoring-force expression F_s = +k × x as written in the source.",
+      "expectedRetrievalPages": [],
+      "expectedNoMatch": true,
+      "providers": {
+        "cloudflare-ai-search": [
+          {
+            "candidateId": "H01-AI-R01",
+            "provider": "cloudflare-ai-search",
+            "rank": 1,
+            "pdfPage": 8,
+            "score": 0.9384362101554872,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000008.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": ".\nSymbol fidelity check\nThe restoring-force expression contains a minus sign: F_s = -k xx. The expression F_s = +k x x is not the\nrestoring-force equation used on this page.\nBenchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not\nan official textbook or examination board publication.\nBRVIN M15 | Controlled Physics benchmark | Original synthetic teaching material\nPage 8",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "H01-AI-R02",
+            "provider": "cloudflare-ai-search",
+            "rank": 2,
+            "pdfPage": 8,
+            "score": 0.5356102585792542,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000008.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0\n08/ ELASTIC FORCE\nSpring restoring force and elastic\npotential energy\nFor an ideal spring within its linear range, the restoring force is proportional to displacement from\nequilibrium and acts in the opposite direction.\nHooke's law\nThe spring force is a restoring force. The minus sign indicates that the force points opposite to the\ndisplacement x from the equilibrium position.\nElastic potential energy\nThe energy stored in an ideal spring is one half times the spring constant times the square of the\ndisplacement.\nEquations\nF_s = -k xx | U_s = ½ x k x x²\nWorked example\n=\nA spring has spring constant k 200 N/m and is stretched by x = 0.05 m. The restoring force is F_s =\n-200 × 0.05 = -10 N. The stored elastic potential energy is U_s = 2 × 200 × (0.05)² = 0.25 J.\nSymbol fidelity check\nThe restoring-force expression contains a minus sign: F_s = -k xx.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ],
+        "qdrant-vertex": [
+          {
+            "candidateId": "H01-QDRANT-R01",
+            "provider": "qdrant-vertex",
+            "rank": 1,
+            "pdfPage": 8,
+            "score": 0.5,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000008.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 08/ ELASTIC FORCE Spring restoring force and elastic potential energy For an ideal spring within its linear range, the restoring force is proportional to displacement from equilibrium and acts in the opposite direction. Hooke's law The spring force is a restoring force. The minus sign indicates that the force points opposite to the displacement x from the equilibrium position. Elastic potential energy The energy stored in an ideal spring is one half times the spring constant times the square of the displacement. Equations F_s = -k xx | U_s = ½ x k x x² Worked example = A spring has spring constant k 200 N/m and is stretched by x = 0.05 m. The restoring force is F_s = -200 × 0.05 = -10 N. The stored elastic potential energy is U_s = 2 × 200 × (0.05)² = 0.25 J. Symbol fidelity check The restoring-force expression contains a minus sign: F_s = -k xx. The expression F_s = +k x x is not the restoring-force equation used on this page. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 | Controlled Physics benchmark | Original",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "H01-QDRANT-R02",
+            "provider": "qdrant-vertex",
+            "rank": 2,
+            "pdfPage": 4,
+            "score": 0.3333333333333333,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000004.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 04/ CONTACT FORCES Static friction and kinetic friction Friction acts along the contact surface and opposes relative motion or the tendency of relative motion. Static and kinetic friction describe different conditions. Static friction When two surfaces do not slide relative to one another, static friction adjusts to oppose the applied force. Its magnitude can vary from zero up to a maximum value. Kinetic friction When surfaces slide, kinetic friction is commonly modelled as the coefficient of kinetic friction multiplied by the normal force. Equations f_k = μ_kx N | O ≤ f_s ≤ μ_s × N Worked example on a horizontal surface A 5 kg block rests on a horizontal floor. Take g = 9.8 m/s² and μ_k = 0.20. The normal force is N = m x g = = 49 N. The kinetic friction magnitude is f_k = 0.20 x 49 N = 9.8 N. What the coefficients mean The coefficient μ is dimensionless. The maximum static friction is µ_s × N. Kinetic friction is often approximated as µ_k × N when sliding occurs. Important distinction Static friction is not always equal to µs × N. That expression gives its maximum possible magnitude in this model. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "H01-QDRANT-R03",
+            "provider": "qdrant-vertex",
+            "rank": 3,
+            "pdfPage": 7,
+            "score": 0.21785714285714286,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000007.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 07 / MOMENTUM AND IMPULSE Momentum change and impulse Momentum depends on mass and velocity. Impulse measures the effect of a force acting over a time interval and equals the change in momentum. Linear momentum Momentum p is a vector quantity equal to mass multiplied by velocity. Its direction is the direction of velocity. Impulse For a constant or average force over a time interval, impulse equals force multiplied by elapsed time. It also equals final momentum minus initial momentum. Equations p = mxv|J = F_avg x At = Ap Worked collision example A 0.15 kg ball moves initially at +20 m/s and rebounds at -10 m/s. The change in velocity is -30 m/s. The change in momentum is 0.15 x (-30) = -4.5 kg·m/s. If the contact lasts 0.05 s, the average force is -4.5 0.05 = -90 N. Direction convention The plus and minus signs indicate direction along the chosen axis. A negative answer does not mean the magnitude of the force is negative. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an official textbook or examination board publication. BRVIN M15 |",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "H01-QDRANT-R04",
+            "provider": "qdrant-vertex",
+            "rank": 4,
+            "pdfPage": 2,
+            "score": 0.17666666666666664,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000002.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 02/ NUMERICAL METHODS Using Newton's second law in numerical problems Rearrange the same equation to find force, mass or acceleration. Keep units attached to every value and check that the direction is consistent. Equation and rearrangements F_net = m × a | a = F_net ÷ m | m = F_net ÷ a Example A: calculate acceleration A 6 kg cart experiences a net forward force of 18 N. The acceleration is a = F_net ÷ m = 18 N ÷ 6 kg = 3 m/s² forward. Example B: calculate net force A 4 kg object accelerates at 2.5 m/s² to the right. The net force is F_net = m x a = 4 kg x 2.5 m/s² N to the right. Example C: calculate mass = 10 A net force of 20 N produces an acceleration of 4 m/s². The mass is m = F_net ÷ a = 20 N ÷ 4 m/s² = 5 kg. Unit check 1 N = 1 kg x m/s². If the answer for a force is not in newtons, or the answer for mass is not in kilograms, review the rearrangement. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence. It is not an",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          },
+          {
+            "candidateId": "H01-QDRANT-R05",
+            "provider": "qdrant-vertex",
+            "rank": 5,
+            "pdfPage": 5,
+            "score": 0.16727272727272727,
+            "itemKey": "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/page-000005.txt",
+            "pointId": null,
+            "provenanceValid": true,
+            "text": "BRVIN M15 CONTROLLED PHYSICS SOURCE | VERSION 1.0 05/INCLINED PLANES Resolving weight on an inclined plane On a straight incline, the weight can be resolved into components parallel and perpendicular to the surface. The normal force is perpendicular to the surface. Parallel component For a plane inclined at angle 0 above the horizontal, the component of weight down the slope is m × g * sin(0). Perpendicular component The component of weight into the plane is m × g x cos(e). If there are no other perpendicular forces and the block does not accelerate away from or into the surface, the normal force has this magnitude. Equations F_parallel = m × g × sin(0) | N = m × g x cos(0) Worked example A 4 kg block rests on a frictionless 30° incline. Take g = 9.8 m/s². The downslope component is 4 × 9.8 x sin(30°) = 19.6 N. The normal force is 4 × 9.8 × cos(30°) = 33.95 N. Angle convention Here 0 is measured between the inclined surface and the horizontal. Check the diagram or wording before choosing sine and cosine. Benchmark note: This is original, synthetic educational material created to provide known page-level evidence.",
+            "reviewerA": {
+              "grade": null,
+              "rationale": null
+            },
+            "reviewerB": {
+              "grade": null,
+              "rationale": null
+            },
+            "adjudicatedGrade": null,
+            "normalizedSourceSpan": null
+          }
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "No relevance grades are assigned; this is not a completed qrels set.",
+    "The excerpts are the bounded passages actually supplied to the Core staging answer evaluator; this pack does not claim to include every internal candidate beyond those excerpts.",
+    "Source fingerprint is included so reviewers can verify passages against the exact original PDF.",
+    "RRF scores are ranking signals, not calibrated confidence; candidate presence is not relevance or an answer."
+  ]
+}
