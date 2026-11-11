@@ -1894,7 +1894,7 @@ export function evaluateM15AnswerQuality(input: {
       case "H01":
         checks = [
           check("sourceEquationHasNegativeRestoringForceSign", /fs=-kx/iu.test(compact)),
-          check("explicitlyRejectsPositiveSignAsSourceEquation", /f_s\\s*=\\s*\\+\\s*k(?:\\s*(?:[×*x])\\s*x|\\s+x)?[\\s\\S]{0,90}\\bnot\\b/iu.test(normalized)),
+          check("explicitlyRejectsPositiveSignAsSourceEquation", /(?:f_s\\s*=\\s*\\+\\s*k(?:\\s*(?:[×*x])\\s*x|\\s+x)?[\\s\\S]{0,90}\\bnot\\b|\\bdoes\\s+not\\s+use[\\s\\S]{0,40}f_s\\s*=\\s*\\+\\s*k)/iu.test(normalized)),
           check("rendersCanonicalRestoringForceExpression", /f_s\\s*=\\s*-k(?:\\s*[×*]\\s*x|\\s*x|x)(?![a-z])/iu.test(normalized)),
         ];
         break;
