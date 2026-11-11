@@ -1,4 +1,4 @@
-import { generateGeminiAnswer, type GroundedGeminiSourceContext } from "../ai/gemini";
+import { generateGeminiAnswer, type GroundedGeminiSourceContext, type GroundedGeminiSourceDocument } from "../ai/gemini";
 import type { AiSearchInstance, Env, ProfileContext, StudentProfile } from "../config/env";
 import { getGoogleAccessToken } from "../auth/google";
 import {
@@ -2216,9 +2216,14 @@ a{color:#8bb7ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
 <input id="sourceId" type="text" readonly placeholder="Load the registered M15 source">
 <div class="notice small">The model and location are inherited from the staging Worker configuration. The token is held only in page memory for this run, is not stored in browser storage, and is cleared after completion.</div>
 <div class="row"><button id="run" type="button" disabled>Run all 17 queries · both providers · Gemini</button><a href="/admin/m15/benchmark" style="align-self:center;margin-top:18px">Back to M15 retrieval benchmark</a></div>
+<div class="notice"><strong>Separate formula-symbol experiment</strong><p class="small">The targeted audit runs five additional query pairs (10 Gemini generations) and attaches the SHA-verified original PDF as visual evidence. It is limited to the relevant physical page for each query. This does not rerun or overwrite the earlier 34-generation receipt. Google Cloud model-input usage may incur charges.</p></div>
+<div class="row"><button class="secondary" id="formulaRun" type="button" disabled>Run five-query formula-fidelity audit · original PDF</button></div>
 <div id="progress" class="status" role="status" aria-live="polite">No answer-generation calls have been made.</div>
 <div id="summary" class="status" hidden></div>
 <div class="row"><button class="secondary" id="downloadJson" type="button" disabled>Download JSON results</button><button class="secondary" id="downloadMarkdown" type="button" disabled>Download Markdown report</button></div>
+<div id="formulaProgress" class="status" role="status" aria-live="polite">The source-PDF-assisted formula audit has not run.</div>
+<div id="formulaSummary" class="status" hidden></div>
+<div class="row"><button class="secondary" id="downloadFormulaJson" type="button" disabled>Download formula audit JSON</button><button class="secondary" id="downloadFormulaMarkdown" type="button" disabled>Download formula audit Markdown</button></div>
 <details style="margin-top:18px"><summary>What this run does and does not do</summary><p class="small">Read-only queries to the dedicated M15 AI Search instance and Qdrant collection. Each provider is evaluated independently with the same Gemini model, source-only prompt, response schema and deterministic answer rubric. The report includes full retrieved text, page provenance, generated answers, citations, grading checks and latencies. It does not change production provider selection, BRVIN v2 RPC, source OCR, manifests, index contents or D1 records. The deterministic rubric is a first-pass gate and does not replace final human review of nuanced prose.</p></details>
 </main>
 <script>
@@ -2226,10 +2231,17 @@ a{color:#8bb7ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
  const ids=["P01","P02","P03","P04","P05","P06","P07","P08","P09","P10","P11","P12","N01","N02","N03","N04","H01"];
  const tokenInput=document.getElementById("token"), sourceInput=document.getElementById("sourceId");
  const loadButton=document.getElementById("load"), runButton=document.getElementById("run");
+ const formulaButton=document.getElementById("formulaRun");
  const progress=document.getElementById("progress"), summary=document.getElementById("summary");
+ const formulaProgress=document.getElementById("formulaProgress"), formulaSummary=document.getElementById("formulaSummary");
  const jsonButton=document.getElementById("downloadJson"), mdButton=document.getElementById("downloadMarkdown");
- let latestReport=null;
- function refresh(){runButton.disabled=sourceInput.value.trim().length===0||tokenInput.value.trim().length<32;}
+ const formulaJsonButton=document.getElementById("downloadFormulaJson"), formulaMdButton=document.getElementById("downloadFormulaMarkdown");
+ let latestReport=null, latestFormulaReport=null;
+ function refresh(){
+   const ready=sourceInput.value.trim().length>0&&tokenInput.value.trim().length>=32;
+   runButton.disabled=!ready;
+   formulaButton.disabled=!ready;
+ }
  tokenInput.addEventListener("input",refresh);
  async function request(path,method,secret,body){
    const response=await fetch(path,{method,headers:{"authorization":"Bearer "+secret,...(body?{"content-type":"application/json"}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer"});
@@ -2313,6 +2325,41 @@ a{color:#8bb7ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
  });
  jsonButton.addEventListener("click",()=>{if(latestReport)download("brvin-m15-consumer-answer-evaluation.json","application/json",JSON.stringify(latestReport,null,2));});
  mdButton.addEventListener("click",()=>{if(latestReport)download("brvin-m15-consumer-answer-evaluation.md","text/markdown",makeMarkdown(latestReport));});
+ formulaButton.addEventListener("click",async()=>{
+   let secret=tokenInput.value.trim();const sourceId=sourceInput.value.trim();tokenInput.value="";refresh();
+   const ids=["P01","P08","P11","P12","H01"];
+   if(secret.length<32||!sourceId)return;
+   formulaButton.disabled=true;loadButton.disabled=true;formulaProgress.className="status";
+   formulaSummary.hidden=true;formulaJsonButton.disabled=true;formulaMdButton.disabled=true;latestFormulaReport=null;
+   formulaProgress.textContent="Starting the targeted original-PDF visual audit. This performs 10 new Gemini generations and does not modify OCR or indexes.";
+   const results=[];let requestFailure=null;
+   for(let i=0;i<ids.length;i++){
+     formulaProgress.textContent="Auditing "+ids[i]+" ("+(i+1)+"/5). The original PDF is attached for the permitted physical page only.";
+     try{
+       const response=await request("/admin/m15/benchmark/answers/formula-audit/run","POST",secret,{sourceId,queryId:ids[i]});
+       results.push(response.result);
+     }catch(error){requestFailure=ids[i]+": "+error.message;break;}
+   }
+   const model=results.length?((results[0].cloudflareAiSearch||{}).model||"gemini-3.8-flash"):"gemini-3.8-flash";
+   const location=results.length?((results[0].cloudflareAiSearch||{}).location||"global"):"global";
+   const formulaReport={
+     benchmark:"brvin-m15-original-pdf-assisted-formula-fidelity-audit",
+     runAt:new Date().toISOString(),sourceId,sourcePdfSha256:"cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92",
+     model,location,queryCount:ids.length,completedQueryPairs:results.length,
+     complete:results.length===ids.length&&!requestFailure,requestFailure,results,
+     summary:{cloudflareAiSearch:providerSummary("cloudflareAiSearch",results),qdrantVertex:providerSummary("qdrantVertex",results)}
+   };
+   latestFormulaReport=formulaReport;formulaSummary.hidden=false;formulaSummary.className="status";
+   formulaSummary.textContent=JSON.stringify(formulaReport.summary,null,2);
+   formulaJsonButton.disabled=results.length===0;formulaMdButton.disabled=results.length===0;
+   formulaProgress.className="status "+(formulaReport.complete?"good":"bad");
+   formulaProgress.textContent=formulaReport.complete
+     ?"Completed all five PDF-assisted formula queries. Compare each answer with the prior OCR-only run."
+     :"Stopped after "+results.length+"/5 formula queries. "+(requestFailure||"The audit did not complete.");
+   secret="";loadButton.disabled=false;refresh();
+ });
+ formulaJsonButton.addEventListener("click",()=>{if(latestFormulaReport)download("brvin-m15-original-pdf-formula-audit.json","application/json",JSON.stringify(latestFormulaReport,null,2));});
+ formulaMdButton.addEventListener("click",()=>{if(latestFormulaReport)download("brvin-m15-original-pdf-formula-audit.md","text/markdown",makeMarkdown(latestFormulaReport));});
  refresh();
 })();
 </script></body></html>`;
