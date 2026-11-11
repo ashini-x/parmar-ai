@@ -75,6 +75,8 @@ If a request fails, read the returned `error`/stage detail first. For a read-onl
 
 Candidate presence on an out-of-corpus query or the near-miss is **not automatically a false positive**. Review the returned passage text against the source and grade relevance. The benchmark deliberately keeps page-label coverage separate from passage relevance. Its page-label P@5 values are page-level proxies, not independent human passage judgments.
 
+A provider result with `ok: false` is a failed/unevaluated query, **not** a successful empty retrieval. The summary's out-of-corpus and exact-symbol candidate-presence rates use only completed queries; the response also reports completed/failed counts and `allNegativeControlsCompleted`. A null presence rate means no query in that group completed. Do not report a negative-control pass unless every negative and near-miss query completed successfully. Provider failures include a short redacted error message to support staging diagnosis.
+
 The paired runner sends searches to both staging indexes. It does not write/delete index points/items, change the provider selector or invoke Gemini answer generation. It does not prove answer abstention. Qdrant RRF scores are ranking values, not calibrated probabilities; do not set a rejection threshold from this receipt alone.
 
 ## Deployment checkpoint
