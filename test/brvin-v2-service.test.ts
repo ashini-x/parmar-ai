@@ -38,6 +38,7 @@ type Options = {
   projects?: Project[];
   sources?: Source[];
   quotaAllowed?: boolean;
+  grantStatus?: "active" | "revoked";
 };
 
 const fatman: Project = {
@@ -97,7 +98,7 @@ describe("BRVIN private application retrieval RPC v2", () => {
             sql.includes("JOIN brvin_projects p") &&
             sql.includes("WHERE g.application_id=?")
           ) {
-            if (!project) return null;
+            if (!project || options.grantStatus === "revoked") return null;
             if (String(values[0]) !== APPLICATION_ID || String(values[1]) !== project.id) return null;
             return project;
           }
@@ -272,6 +273,25 @@ describe("BRVIN private application retrieval RPC v2", () => {
     });
 
     expect(result).toMatchObject({ ok: false, code: "PROJECT_NOT_AUTHORIZED", retryable: false });
+    expect(prepare).not.toHaveBeenCalledWith(expect.stringContaining("INSERT INTO fatman_search_usage"));
+    expect(search).not.toHaveBeenCalled();
+  });
+
+
+  it("denies a revoked application-project grant before quota reservation or provider search", async () => {
+    const env = makeEnv({ grantStatus: "revoked" });
+
+    const result = await retrieveBrvinForApplicationV2(env, ENVIRONMENT_ID, {
+      projectId: "fatman",
+      queries: ["equality"],
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: "PROJECT_NOT_AUTHORIZED",
+      retryable: false,
+    });
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining("brvin_application_project_grants"));
     expect(prepare).not.toHaveBeenCalledWith(expect.stringContaining("INSERT INTO fatman_search_usage"));
     expect(search).not.toHaveBeenCalled();
   });
