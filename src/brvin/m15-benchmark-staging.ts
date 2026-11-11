@@ -120,6 +120,10 @@ export function m15AiSearchMetadataForPage(sourceId: string, projectId: string, 
   };
 }
 
+export function isM15AiSearchItemPending(status: string): boolean {
+  return status === "queued" || status === "running";
+}
+
 export function m15AiSearchMetadataSchemaMatches(value: unknown): boolean {
   if (!Array.isArray(value) || value.length !== M15_AI_SEARCH_METADATA_SCHEMA.length) return false;
   return M15_AI_SEARCH_METADATA_SCHEMA.every((expected) =>
@@ -913,7 +917,7 @@ async function indexAiSearch(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourc
     }
     const existing = existingItems.find((item) => item.key === key);
     if (existing) {
-      if (existing.status === "queued" || existing.status === "running") {
+      if (isM15AiSearchItemPending(existing.status)) {
         await env.DB.prepare(
           "UPDATE m15_benchmark_sources SET status = 'ai_search_indexing', updated_at = ? WHERE source_id = ?",
         ).bind(Date.now(), row.source_id).run();
@@ -934,15 +938,16 @@ async function indexAiSearch(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourc
           " is in status " + existing.status + "; inspect that item before retrying.");
       }
     } else {
-      const item = await search.items.uploadAndPoll(key, page.rawOcrText, {
+      // Submit once and return the asynchronous item state. Do not hold a Worker
+      // invocation open while Cloudflare embeds/indexes the page; the next Step 6
+      // call inspects the deterministic item key and resumes from its current state.
+      const item = await search.items.upload(key, page.rawOcrText, {
         metadata: m15AiSearchMetadataForPage(row.source_id, row.project_id, page.pdfPage),
-        pollIntervalMs: 1000,
-        timeoutMs: 10000,
       });
       if (item.key !== key) {
         throw new Error("Cloudflare AI Search returned an item key that does not match physical page " + page.pdfPage + ".");
       }
-      if (item.status !== "completed") {
+      if (isM15AiSearchItemPending(item.status)) {
         await env.DB.prepare(
           "UPDATE m15_benchmark_sources SET status = 'ai_search_indexing', updated_at = ? WHERE source_id = ?",
         ).bind(Date.now(), row.source_id).run();
@@ -957,6 +962,10 @@ async function indexAiSearch(env: M15BenchmarkStagingEnv, row: M15BenchmarkSourc
           continuationRequired: true,
           deterministicRetrySafe: true,
         };
+      }
+      if (item.status !== "completed") {
+        throw new Error("Cloudflare AI Search indexing failed for physical page " + page.pdfPage +
+          " with status " + item.status + (item.error ? ": " + item.error.slice(0, 160) : "."));
       }
       existingItems.push(item);
     }

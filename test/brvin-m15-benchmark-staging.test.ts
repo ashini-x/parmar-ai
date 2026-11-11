@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   M15_BENCHMARK_QUERY_SUITE,
+  isM15AiSearchItemPending,
   m15AiSearchMetadataForPage,
   m15AiSearchMetadataSchemaMatches,
   m15AiSearchPageWindow,
@@ -22,6 +23,14 @@ function providerResult(pages: Array<number | null>, ok = true) {
 }
 
 describe("M15 second-source benchmark definition", () => {
+  it("waits on queued/running AI Search items and distinguishes terminal states", () => {
+    expect(isM15AiSearchItemPending("queued")).toBe(true);
+    expect(isM15AiSearchItemPending("running")).toBe(true);
+    expect(isM15AiSearchItemPending("completed")).toBe(false);
+    expect(isM15AiSearchItemPending("error")).toBe(false);
+    expect(isM15AiSearchItemPending("skipped")).toBe(false);
+  });
+
   it("defines the required four-field AI Search metadata schema without mutating a conflicting schema", () => {
     const schema = [
       { field_name: "source_id", data_type: "text" },
