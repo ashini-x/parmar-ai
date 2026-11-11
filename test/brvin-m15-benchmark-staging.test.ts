@@ -91,7 +91,12 @@ describe("M15 second-source benchmark definition", () => {
       .rejects.toThrow("valid bounded PDF");
     const incomplete = await PDFDocument.create();
     incomplete.addPage([600, 800]);
-    await expect(createM15FormulaAuditPdfAttachment(await incomplete.save(), sha256, [8]))
+    const incompleteBytes = await incomplete.save();
+    const incompleteBuffer = new ArrayBuffer(incompleteBytes.byteLength);
+    new Uint8Array(incompleteBuffer).set(incompleteBytes);
+    const incompleteDigest = new Uint8Array(await crypto.subtle.digest("SHA-256", incompleteBuffer));
+    const incompleteSha256 = Array.from(incompleteDigest, (value) => value.toString(16).padStart(2, "0")).join("");
+    await expect(createM15FormulaAuditPdfAttachment(incompleteBytes, incompleteSha256, [8]))
       .rejects.toThrow("exactly eight physical pages");
   });
 
