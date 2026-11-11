@@ -9,6 +9,7 @@ import {
   shouldPersistM15VisionStatus,
   summarizeM15BenchmarkProvider,
   validateM15BenchmarkPdf,
+  handleM15BenchmarkStagingRequest,
 } from "../src/brvin/m15-benchmark-staging";
 
 function providerResult(pages: Array<number | null>, ok = true) {
@@ -23,6 +24,20 @@ function providerResult(pages: Array<number | null>, ok = true) {
 }
 
 describe("M15 second-source benchmark definition", () => {
+  it("offers read-only recovery and durable browser storage for the registered source ID", async () => {
+    const response = await handleM15BenchmarkStagingRequest(
+      new Request("https://staging.example/admin/m15/benchmark"),
+      { ENVIRONMENT: "staging", BRVIN_M14_PILOT_ENABLED: "true" } as never,
+    );
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('id="recover"');
+    expect(html).toContain("/admin/m15/benchmark/source/recover");
+    expect(html).toContain("localStorage.getItem");
+    expect(html).toContain("localStorage.setItem");
+    expect(html).toContain("operator token is never stored");
+  });
+
   it("waits on queued/running AI Search items and distinguishes terminal states", () => {
     expect(isM15AiSearchItemPending("queued")).toBe(true);
     expect(isM15AiSearchItemPending("running")).toBe(true);

@@ -1303,6 +1303,8 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
 <p class="small">Select exactly <code>BRVIN_M15_Physics_Benchmark_Source_v1.pdf</code> (62,012 bytes). The Worker independently checks the filename, PDF signature and SHA-256 before storing it.</p>
 <button id="upload" type="button" disabled>1 · Upload and register benchmark source</button>
 <label for="sourceId">Registered staging source ID</label><input id="sourceId" type="text" readonly placeholder="Generated after successful upload">
+<button id="recover" class="secondary" type="button" disabled>Restore existing registered source (read only)</button>
+<p class="small">After a browser restart, enter the staging operator token and use Restore to reload the existing source ID and saved progress. Only this non-secret ID is remembered locally; the operator token is never stored.</p>
 <label class="confirm"><input id="ocrConfirm" type="checkbox"><span>I understand this submits one Google Cloud Vision PDF OCR request. Google Cloud usage charges may apply. Duplicate OCR submissions are blocked.</span></label>
 <button id="ocr" type="button" disabled>2 · Start OCR once (billable)</button>
 <button id="status" class="secondary" type="button" disabled>3 · Check OCR operation and eight-page output inventory (read only)</button>
@@ -1324,12 +1326,13 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
   const ocrConfirm = document.getElementById("ocrConfirm");
   const result = document.getElementById("result");
   const health = document.getElementById("health");
-  const buttons = Object.fromEntries(["upload","ocr","status","corpus","qdrant","aisearch","benchmark"].map(id=>[id,document.getElementById(id)]));
+  const buttons = Object.fromEntries(["upload","ocr","status","corpus","qdrant","aisearch","benchmark","recover"].map(id=>[id,document.getElementById(id)]));
   let sourceStatus = "";
   function refresh() {
     const authReady = token.value.trim().length >= 32;
     const hasSource = /^[0-9a-f-]{36}$/i.test(sourceId.value.trim());
     buttons.upload.disabled = !authReady || !file.files.length;
+    buttons.recover.disabled = !authReady || hasSource;
     buttons.ocr.disabled = !authReady || !hasSource || !ocrConfirm.checked || sourceStatus !== "uploaded";
     buttons.status.disabled = !authReady || !hasSource;
     buttons.corpus.disabled = !authReady || !hasSource || sourceStatus !== "ocr_completed";
@@ -1343,6 +1346,23 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
       : "6 · Index eight OCR pages into isolated AI Search";
     buttons.benchmark.disabled = !authReady || !hasSource || sourceStatus !== "ready";
   }
+  const sourceStorageKey = "brvinM15BenchmarkSourceId";
+  function rememberSourceId(value) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) return;
+    try { localStorage.setItem(sourceStorageKey,value); } catch {}
+    try { sessionStorage.setItem(sourceStorageKey,value); } catch {}
+  }
+  function readRememberedSourceId() {
+    try {
+      const saved = localStorage.getItem(sourceStorageKey);
+      if (saved && /^[0-9a-f-]{36}$/i.test(saved)) return saved;
+    } catch {}
+    try {
+      const saved = sessionStorage.getItem(sourceStorageKey);
+      if (saved && /^[0-9a-f-]{36}$/i.test(saved)) return saved;
+    } catch {}
+    return "";
+  }
   file.addEventListener("change",refresh);token.addEventListener("input",refresh);ocrConfirm.addEventListener("change",refresh);
   async function call(path,method,body,busy) {
     let secret=token.value.trim();token.value="";refresh();result.className="status muted";result.textContent=busy;
@@ -1352,8 +1372,8 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
       if(body instanceof FormData){options.body=body;}else if(body!==undefined){headers["content-type"]="application/json";options.body=JSON.stringify(body);}
       const response=await fetch(path,options);const data=await response.json();
       result.className="status "+(response.ok&&data.ok===true?"good":"bad");result.textContent=JSON.stringify(data,null,2);
-      if(data.source?.sourceId){sourceId.value=data.source.sourceId;sourceStatus=data.source.status;sessionStorage.setItem("brvinM15BenchmarkSourceId",sourceId.value);}
-      if(data.sourceId&&!sourceId.value){sourceId.value=data.sourceId;sessionStorage.setItem("brvinM15BenchmarkSourceId",sourceId.value);}
+      if(data.source?.sourceId){sourceId.value=data.source.sourceId;sourceStatus=data.source.status;rememberSourceId(sourceId.value);}
+      if(data.sourceId&&!sourceId.value){sourceId.value=data.sourceId;rememberSourceId(sourceId.value);}
       if(data.status){sourceStatus=data.status;}
       if(data.source?.status){sourceStatus=data.source.status;}
       if(data.result?.status){sourceStatus=data.result.status;}
@@ -1377,6 +1397,10 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
     ocrConfirm.checked=false;
   });
   buttons.status.addEventListener("click",refreshStatus);
+  buttons.recover.addEventListener("click",async()=>{
+    await call("/admin/m15/benchmark/source/recover","GET",undefined,
+      "Restoring the existing registered source from the authenticated staging registry. This is read-only; it does not upload a file, run OCR, or modify either index.");
+  });
   buttons.corpus.addEventListener("click",async()=>{
     await call("/admin/m15/benchmark/source/corpus","POST",{sourceId:sourceId.value},"Validating all eight Vision JSON files, persisting immutable page manifests/chunks, and reading them back for hash and page-provenance verification.");
   });
@@ -1389,8 +1413,8 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
   buttons.benchmark.addEventListener("click",async()=>{
     await call("/admin/m15/benchmark/run","POST",{sourceId:sourceId.value},"Running the 17 fixed query cases against both staging indexes. This action performs query/search only and does not modify either index.");
   });
-  const saved=sessionStorage.getItem("brvinM15BenchmarkSourceId");
-  if(saved&&/^[0-9a-f-]{36}$/i.test(saved)){sourceId.value=saved;refresh();}
+  const saved=readRememberedSourceId();
+  if(saved){sourceId.value=saved;refresh();}
   fetch("/admin/m15/benchmark/health",{cache:"no-store",credentials:"omit"}).then(r=>r.json()).then(data=>{
     health.className="status "+(data.ready?"good":"bad");
     health.textContent=data.ready
@@ -1453,6 +1477,16 @@ export async function handleM15BenchmarkStagingRequest(
 
   if (url.pathname === "/admin/m15/benchmark/source/upload" && request.method === "POST") {
     return uploadSource(request, env);
+  }
+
+  if (url.pathname === "/admin/m15/benchmark/source/recover" && request.method === "GET") {
+    // This endpoint can recover only the one fingerprint-pinned M15 source.
+    // It is authenticated and read-only; it never creates, uploads or re-indexes a source.
+    const row = await env.DB.prepare(
+      "SELECT * FROM m15_benchmark_sources WHERE source_sha256 = ? LIMIT 1",
+    ).bind(SOURCE_SHA256).first<M15BenchmarkSourceRow>();
+    if (!row) return json({ ok: false, error: "registered_benchmark_source_not_found" }, 404);
+    return json({ ok: true, source: publicSource(row), recovered: true });
   }
 
   if (url.pathname === "/admin/m15/benchmark/source/status" && request.method === "GET") {
