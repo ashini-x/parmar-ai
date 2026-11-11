@@ -1,7 +1,7 @@
 # BRVIN M15 — Consumer answer and abstention evaluation
 
 **Date:** 11 November 2026  
-**Status:** Evaluation harness implemented on branch; live Gemini execution and answer-quality acceptance are pending.  
+**Status:** 17/17 paired query cases executed (34 Gemini generations); calibrated offline re-grade is 16/17 for each provider. H01 exact-symbol fidelity and independent claim-level grounding remain open.  
 **Production status:** Cloudflare AI Search remains selected. No provider cutover or production deployment is authorized by this work.
 
 ## 1. Why this is a separate gate
@@ -203,6 +203,21 @@ The three P07/P09/P11 failures are rubric false negatives, not answer calculatio
 **Latency interpretation:** per-query retrieval averaged 1,993.65 ms (median 1,652 ms) for AI Search and 788.29 ms (median 792 ms) for Qdrant. Qdrant was materially faster in this one staging sample. Gemini generation medians were effectively identical (5,580 vs 5,560 ms); the AI Search mean is pulled upward by P08 (20,880 ms) and N02 (18,782 ms). The result does not establish a production SLO or repeatable generation-speed advantage.
 
 **Citation and grounding caveat:** the 17/17 citation count is the expected physical-page citation check. It is not independent proof that every answer claim is entailed by its cited passage. The reported source-grounding counter also depends on expected-page presence and the deterministic answer checks. Claim-level grounding remains a human-review gate.
+
+### Supplemental manual formula-symbol audit — 11 November 2026
+
+A second inspection of the saved answer strings against the original eight-page PDF found additional notation defects that the original deterministic math flag did not reliably detect:
+
+- **P01 / AI Search:** the answer includes the malformed fragment `ΣF = m xa`, although it later gives the correct `F_net = m × a` relationship. The valid later equation does not make the earlier fragment good instructional output.
+- **P08 / Qdrant:** the answer prints `O ≤ f_s ≤ μ_s × N` with a capital letter O where the source has the digit zero: `0 ≤ f_s ≤ μ_s × N`. AI Search rendered the zero correctly in this run.
+- **P12 / AI Search:** the answer gives the correct numerical results (−10 N and 0.25 J), but its displayed equations include `F_s = -k xx` and `U_s = ½ x k x x²`. Qdrant rendered both equations in the correct form: `F_s = -k × x` and `U_s = ½ × k × x²`.
+- **H01 / both providers:** both answers reproduce `F_s = -k xx` rather than the source's `F_s = −k × x`.
+
+Both providers returned the expected physical page for all 12 positive cases, with zero provenance violations. Manual review of the requested conceptual/numerical conclusions found them supported by the expected source pages. This is a useful manual review, but it is not yet a separately recorded claim-by-claim entailment annotation and does not close the independent grounding gate.
+
+The original `mathematicalSymbolFidelity` field should not be interpreted as a complete typographic audit: some malformed formula fragments passed its broad checks. The 16/17 calibrated offline result is a deterministic first-pass re-grade of the saved answers, not a proof of exact math notation or a second Gemini execution. A stricter evaluator and regression cases are required before another answer-quality acceptance decision.
+
+**Provider comparison:** Qdrant retrieval latency averaged 788.29 ms (median 792 ms) versus 1,993.65 ms (median 1,652 ms) for AI Search in this single 17-query run. That is a substantial retrieval-speed signal. Gemini generation medians were effectively equal (5,560 ms Qdrant; 5,580 ms AI Search). Both providers had the same calibrated 16/17 first-pass result; Qdrant demonstrated 4/4 abstentions with irrelevant passages, while AI Search demonstrated 4/4 no-evidence abstentions because it returned no candidates for those controls. Qdrant is the stronger migration candidate from this run, but the run does not yet demonstrate a general production answer-accuracy or reliability win.
 
 ### Rubric calibration after the run
 
