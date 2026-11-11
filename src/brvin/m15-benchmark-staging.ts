@@ -2160,7 +2160,7 @@ a{color:#8bb7ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
    a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
  }
  runButton.addEventListener("click",async()=>{
-   const secret=tokenInput.value.trim(),sourceId=sourceInput.value.trim();tokenInput.value="";refresh();
+   let secret=tokenInput.value.trim();const sourceId=sourceInput.value.trim();tokenInput.value="";refresh();
    if(secret.length<32||!sourceId)return;
    runButton.disabled=true;loadButton.disabled=true;progress.className="status";progress.textContent="Starting paired retrieval and Gemini generation. Each query is processed once for each provider.";
    summary.hidden=true;jsonButton.disabled=true;mdButton.disabled=true;latestReport=null;
