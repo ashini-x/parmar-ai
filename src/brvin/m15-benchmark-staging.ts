@@ -171,6 +171,7 @@ interface M15ProviderResult {
   provenanceViolationCount: number;
   candidates: M15Candidate[];
   errorType?: string;
+  errorMessage?: string;
 }
 
 interface M15ShadowQueryResult extends M15Case {
@@ -496,7 +497,13 @@ export function summarizeM15BenchmarkProvider(results: Array<{
   const expectedPageCandidates = positives.reduce((sum, item) =>
     sum + item.result.retrievedPages.filter((page) => page !== null && item.expectedPages.includes(page)).length, 0);
   const noMatch = results.filter((item) => item.category === "out-of-corpus");
+  const completedNoMatch = noMatch.filter((item) => item.result.ok);
+  const failedNoMatch = noMatch.filter((item) => !item.result.ok);
+  const noMatchWithCandidates = completedNoMatch.filter((item) => item.result.resultCount > 0);
   const nearMiss = results.filter((item) => item.category === "exact-symbol-near-miss");
+  const completedNearMiss = nearMiss.filter((item) => item.result.ok);
+  const failedNearMiss = nearMiss.filter((item) => !item.result.ok);
+  const nearMissWithCandidates = completedNearMiss.filter((item) => item.result.resultCount > 0);
   const validTimings = results.filter((item) => item.result.ok).map((item) => item.result.elapsedMs);
   const percentile = (values: number[], quantile: number): number | null => {
     if (!values.length) return null;
@@ -510,6 +517,8 @@ export function summarizeM15BenchmarkProvider(results: Array<{
     successfulQueries: results.filter((item) => item.result.ok).length,
     failedQueries: results.filter((item) => !item.result.ok).length,
     positiveQueryCount: positives.length,
+    positiveQueriesCompleted: positives.filter((item) => item.result.ok).length,
+    positiveQueryFailures: positives.filter((item) => !item.result.ok).length,
     expectedPageTargets: expectedPages,
     coveredExpectedPageTargets: coveredPages,
     expectedPageCoverageRate: expectedPages ? coveredPages / expectedPages : 0,
@@ -517,16 +526,28 @@ export function summarizeM15BenchmarkProvider(results: Array<{
     expectedPageCandidateCount: expectedPageCandidates,
     positivePageLabelPrecisionAt5: positiveSlots ? expectedPageCandidates / positiveSlots : 0,
     allSuitePageLabelPrecisionAt5: allSlots ? expectedPageCandidates / allSlots : 0,
-    // Presence is not a relevance judgment. These fields deliberately avoid calling all nearest neighbours false positives.
+    // A failed query is not an empty retrieval. Candidate-presence rates use completed checks only.
     outOfCorpusQueryCount: noMatch.length,
-    outOfCorpusQueriesWithCandidates: noMatch.filter((item) => item.result.resultCount > 0).length,
-    outOfCorpusCandidatePresenceRate: noMatch.length
-      ? noMatch.filter((item) => item.result.resultCount > 0).length / noMatch.length
-      : 0,
-    outOfCorpusCandidateCount: noMatch.reduce((sum, item) => sum + item.result.resultCount, 0),
+    outOfCorpusQueriesCompleted: completedNoMatch.length,
+    outOfCorpusQueryFailures: failedNoMatch.length,
+    outOfCorpusAllQueriesCompleted: completedNoMatch.length === noMatch.length,
+    outOfCorpusQueriesWithCandidates: noMatchWithCandidates.length,
+    outOfCorpusQueriesWithoutCandidates: completedNoMatch.length - noMatchWithCandidates.length,
+    outOfCorpusCandidatePresenceRate: completedNoMatch.length
+      ? noMatchWithCandidates.length / completedNoMatch.length
+      : null,
+    outOfCorpusCandidateCount: completedNoMatch.reduce((sum, item) => sum + item.result.resultCount, 0),
     exactSymbolNearMissCount: nearMiss.length,
-    exactSymbolNearMissWithCandidates: nearMiss.filter((item) => item.result.resultCount > 0).length,
-    exactSymbolNearMissCandidateCount: nearMiss.reduce((sum, item) => sum + item.result.resultCount, 0),
+    exactSymbolNearMissQueriesCompleted: completedNearMiss.length,
+    exactSymbolNearMissQueryFailures: failedNearMiss.length,
+    exactSymbolNearMissAllQueriesCompleted: completedNearMiss.length === nearMiss.length,
+    exactSymbolNearMissWithCandidates: nearMissWithCandidates.length,
+    exactSymbolNearMissWithoutCandidates: completedNearMiss.length - nearMissWithCandidates.length,
+    exactSymbolNearMissCandidatePresenceRate: completedNearMiss.length
+      ? nearMissWithCandidates.length / completedNearMiss.length
+      : null,
+    exactSymbolNearMissCandidateCount: completedNearMiss.reduce((sum, item) => sum + item.result.resultCount, 0),
+    allNegativeControlsCompleted: failedNoMatch.length === 0 && failedNearMiss.length === 0,
     provenanceViolationCount: results.reduce((sum, item) => sum + item.result.provenanceViolationCount, 0),
     observedWorkerLatencyMs: {
       sampleCount: validTimings.length,
@@ -1055,6 +1076,21 @@ function mapQdrant(chunks: Awaited<ReturnType<BrvinQdrantHybridPilot["query"]>>,
   });
 }
 
+function safeM15ProviderErrorMessage(error: unknown): string {
+  const raw = error instanceof Error
+    ? error.message
+    : typeof error === "string"
+      ? error
+      : "Provider query failed with a non-Error value.";
+  return raw
+    .replace(/\\bBearer\\s+[A-Za-z0-9._~+\\/-]+=*/giu, "Bearer [redacted]")
+    .replace(/\\b(authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|token)\\b\\s*[:=]\\s*["']?[^,\\s;"']+["']?/giu, "$1=[redacted]")
+    .replace(/(https?:\\/\\/[^\\s?]+)\\?[^\\s]+/giu, "$1?[redacted]")
+    .replace(/\\s+/gu, " ")
+    .trim()
+    .slice(0, 240) || "Provider query failed.";
+}
+
 async function timedQuery(run: () => Promise<M15Candidate[]>): Promise<M15ProviderResult> {
   const started = performance.now();
   try {
@@ -1076,6 +1112,7 @@ async function timedQuery(run: () => Promise<M15Candidate[]>): Promise<M15Provid
       provenanceViolationCount: 0,
       candidates: [],
       errorType: error instanceof Error && error.name ? error.name.slice(0, 64) : "ProviderError",
+      errorMessage: safeM15ProviderErrorMessage(error),
     };
   }
 }
