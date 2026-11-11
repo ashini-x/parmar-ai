@@ -105,23 +105,22 @@ P01 checks Newton's second-law relationship and the roles of net force, mass and
 
 ### Negative cases N01–N04
 
-A negative case passes only when:
+Negative cases now report two distinct outcomes:
 
-- The provider query succeeded.
-- At least one unrelated in-corpus candidate was actually retrieved, so the test demonstrates abstention in the presence of irrelevant evidence rather than an empty-retrieval fallback.
-- The generated answer explicitly says the indexed source does not provide sufficient evidence.
-- The answer does not provide the unsupported result tested for that negative.
-- No unrelated source-page citation is attached.
+- **Abstention correctness:** the provider query succeeded; the answer explicitly says the indexed source does not provide sufficient evidence; it does not supply the unsupported result tested for that negative; and it attaches no source-page citation. This can pass with either empty evidence or irrelevant evidence.
+- **Irrelevant-evidence resistance demonstrated:** abstention correctness passes **and** at least one provenance-valid, in-corpus passage was actually retrieved and supplied to Gemini. This separate field is false/not exercised when retrieval returns no candidate.
 
-A failed provider query, a zero-candidate query, or a Gemini generation error is not a successful negative-control pass. It is an incomplete or failed test.
+A failed provider query or Gemini generation error is not a pass. A successful zero-candidate query can pass no-evidence abstention, but it does not demonstrate that the generator ignored unrelated passages. Do not conflate the two outcomes.
 
 ### Exact-symbol near-miss H01
 
-H01 is graded as a source-supported correction. It passes only when the answer identifies `F_s = −kx`, rejects `F_s = +kx` as the restoring-force equation given by the source, preserves the sign, retrieves page 8 with valid provenance, and cites physical PDF page 8. It must not be scored as an abstention.
+H01 is a source-supported correction, not an abstention. It must identify the negative restoring-force sign, reject the positive-sign premise, retrieve page 8 with valid provenance, and cite physical PDF page 8. Exact-symbol fidelity is a separate requirement: the generated expression must be rendered canonically as `F_s = −kx` (or an unambiguous multiplication-symbol equivalent). The 11 November receipt quoted the OCR rendering `F_s = -k xx`; this is not accepted as canonical notation until the original page image is checked. A sign-correct explanation can therefore pass the semantic correction check while H01 remains blocked on exact-symbol fidelity.
 
 ### Rubric limitation
 
-The initial implementation is a transparent, deterministic first-pass rubric built around the fixed test suite. It is not an independent semantic judge and does not prove that every sentence in a generated answer is grounded. For any ambiguous or failed case, inspect the complete evidence and answer in the downloaded receipt. Human review of claim-to-passage support remains required before any migration acceptance decision.
+The rubric is a transparent, deterministic first-pass check, not an independent semantic judge. The initial 11 November grade was over-strict on P07, P09 and P11: the generated answers satisfy the actual requested numerical tasks, but the initial rules demanded an unasked friction-direction sentence, assumed a particular order for the P09 label/value, and demanded verbal direction wording despite correct signed P11 results. The rubric has been calibrated in the feature branch and regression tests added; the original downloaded JSON remains immutable and retains its original counters.
+
+Also, `sourceGroundingCorrectness` in this harness is a page-presence plus answer-rubric proxy, not independent claim-by-claim entailment. `citationCorrectness` checks the expected physical-page citation appended by the application and any model-written page references; it does not prove that every claim is supported by the cited passage. Human review of claim-to-passage support remains required before any migration acceptance decision.
 
 ## 5. Isolation and side-effect controls
 
@@ -164,17 +163,61 @@ The code adds the optional generic source context to `generateGeminiAnswer`, the
 
 **Code validation passed on 11 November 2026:** M14 staging workflow run [#112](https://github.com/ashini-x/parmar-ai/actions/runs/43020464133) passed typecheck, M15 tests, versioned Vertex/Qdrant configuration verification and Wrangler staging dry-run. Release validation run [#1116](https://github.com/ashini-x/parmar-ai/actions/runs/43020464061) passed typecheck/test/build. On both PR runs, staging deployment and all production deployment/verification jobs were skipped.
 
-**Not yet executed:** this work session did not deploy the feature branch to the staging Worker or invoke Gemini. The 34 answer-generation calls (17 queries × 2 providers), generated answer payloads, generation latencies and answer pass/fail counts therefore remain pending. No result has been fabricated or inferred from the retrieval receipt.
+### Completed consumer answer/abstention run — 11 November 2026
 
-To run it:
-1. Open the GitHub Actions workflow `M14 staging operator` in the `ashini-x/parmar-ai` repository.
-2. Select branch `feat/m15-consumer-answer-evaluation-2026-11-11` and use **Run workflow**. This workflow's dispatch deploys only `parmar-ai-m14-staging`; it does not deploy either production Worker.
-3. Wait for the validation and staging deployment jobs to complete successfully. In particular, `npm run check`, the M15 tests and the Wrangler staging dry-run must pass.
-4. Open `https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark/answers`.
-5. Enter the staging operator token in the page, load the registered source read-only, then run all 17 paired queries.
-6. Download and review both the JSON receipt and Markdown report. Keep the raw JSON with the milestone evidence.
+The operator executed all 17 query pairs successfully. The raw JSON and Markdown report were attached to the conversation.
 
-Do not paste the staging operator token into chat, GitHub issues, source files or the generated report. It is used in the browser only.
+| Run field | Value |
+|---|---|
+| Run timestamp | 2026-11-11 15:32:24 UTC (21:02:24 IST) |
+| Source ID | `3b4d116d-4c18-450f-9cba-cb2bec3da7ca` |
+| Model / location | `gemini-3.8-flash` / `global` |
+| Completed pairs | 17/17 |
+| Generation calls | 34 |
+| Request failure | None |
+
+**Original automated counters from the downloaded receipt (before rubric calibration):**
+
+| Metric | Cloudflare AI Search | Qdrant + Vertex |
+|---|---:|---:|
+| Overall pass | 9/17 | 13/17 |
+| Failed IDs | P07, P09, P11, N01–N04, H01 | P07, P09, P11, H01 |
+| Answer correctness | 9/17 | 13/17 |
+| Source-grounding proxy | 9/17 | 13/17 |
+| Appended page-citation check | 17/17 | 17/17 |
+| Math-symbol check | 8/12 | 8/12 |
+| Abstention correctness (original strict definition) | 0/4 | 4/4 |
+| Mean Gemini generation latency | 7,430.06 ms | 6,011.24 ms |
+| Median Gemini generation latency | 5,580 ms | 5,560 ms |
+
+**Manual review of the actual answers and supplied evidence found:**
+
+- **P07:** both providers calculate the requested kinetic-friction magnitude as 9.8 N. The original grader additionally required a friction-direction statement that the query did not request and that cannot be specified without a motion direction.
+- **P09:** both providers give 19.6 N for the downslope component and 33.95 N for the normal force. The original grader missed the correct answer because its regular expression coupled the word “downslope” to a narrow position around the number.
+- **P11:** both providers give `Δp = −4.5 kg·m/s` and `F_avg = −90 N`. The negative signs preserve the direction. The original grader incorrectly required a verbal phrase such as “negative direction” or “opposite direction.”
+- **N01–N04:** both providers generated explicit source abstentions for all four queries. Cloudflare AI Search returned no candidates on all four, so this demonstrates no-evidence abstention (4/4), but does not exercise resistance to irrelevant passages (0/4). Qdrant returned unrelated in-corpus candidates and Gemini abstained in all four cases (4/4), which does demonstrate irrelevant-evidence resistance.
+- **H01:** both answers correctly reject the positive-sign premise and explain that the source's restoring-force sign is negative. However, both reproduce the retrieved OCR notation `F_s = -k xx` instead of the required canonical `F_s = −kx`. The original source page image must be checked before exact-symbol fidelity is accepted. The original grader also falsely missed the positive-sign rejection because its regular expression did not tolerate the OCR spacing.
+
+The three P07/P09/P11 failures are rubric false negatives, not answer calculation failures. With the calibrated answer rules applied offline to the same saved answers, the mechanical outcome would be **16/17 for each provider**, with H01 the remaining exact-notation failure. This is a rubric re-grade, not a second Gemini run. The raw attached receipt is not rewritten.
+
+**Latency interpretation:** per-query retrieval averaged 1,993.65 ms (median 1,652 ms) for AI Search and 788.29 ms (median 792 ms) for Qdrant. Qdrant was materially faster in this one staging sample. Gemini generation medians were effectively identical (5,580 vs 5,560 ms); the AI Search mean is pulled upward by P08 (20,880 ms) and N02 (18,782 ms). The result does not establish a production SLO or repeatable generation-speed advantage.
+
+**Citation and grounding caveat:** the 17/17 citation count is the expected physical-page citation check. It is not independent proof that every answer claim is entailed by its cited passage. The reported source-grounding counter also depends on expected-page presence and the deterministic answer checks. Claim-level grounding remains a human-review gate.
+
+### Rubric calibration after the run
+
+The feature branch now:
+- Removes the unasked P07 direction requirement.
+- Makes P09's result/downslope checks independent of answer ordering.
+- Accepts signed P11 numerical results as direction preservation.
+- Separates abstention correctness from whether the irrelevant-evidence challenge was actually exercised.
+- Requires canonical H01 notation separately from sign-correction semantics.
+
+Regression tests were added for these cases. These changes affect future staging evaluator executions/reports; they do not alter the downloaded run output or trigger more Gemini calls. Revalidate the updated branch before any further staging deployment.
+
+**Execution status:** the 34 Gemini generations are complete. The answer review is partially accepted, with H01 exact notation and independent claim-level grounding still open. Do not rerun the 17-query generation suite merely to apply rubric corrections.
+
+Do not paste the staging operator token into chat, GitHub issues, source files or the generated report.
 
 ## 7. Relevance gating and reranking — recommendations only
 
@@ -199,6 +242,6 @@ Run a measured ablation: each provider without reranking, each with the same rer
 
 ## 8. Release decision
 
-M15 remains **IN PROGRESS**. The retrieval-only 17-query checkpoint is a completed subtest, not migration acceptance. Consumer answer correctness, claim-level source grounding, citation correctness, mathematical-symbol fidelity and N01–N04 abstention have not yet been demonstrated.
+M15 remains **IN PROGRESS**. The retrieval-only and 34-generation staging subtests are complete. Manual review supports the numerical answers P01–P12 for both providers and confirms 4/4 explicit abstentions for both providers; Qdrant additionally demonstrated 4/4 abstentions while irrelevant passages were present. H01's sign correction is semantically right but exact canonical notation remains unverified because the retrieved OCR and generated answer contain `-k xx`. Independent claim-level grounding is also not yet demonstrated.
 
-Do not mark the retrieval migration production-ready, alter production provider selection, or authorize a provider cutover until the live answer/abstention receipt has been executed, every failure case has been reviewed, relevant outputs have been human-checked, and the other M15 security, authorization/revocation, recovery, performance, cost and load gates have passed.
+Do not mark the retrieval migration production-ready, alter production provider selection, or authorize a provider cutover until H01 notation is resolved against the source page image, claim-to-passage grounding is reviewed, the calibrated evaluator passes CI, and the other M15 security, authorization/revocation, recovery, performance, cost and load gates have passed.
