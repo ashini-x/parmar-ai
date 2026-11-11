@@ -10,9 +10,9 @@ The second-source M15 retrieval-only benchmark and the consumer answer-generatio
 
 The retrieval-only test checks whether each provider returns source-scoped candidate passages and expected physical PDF pages. It does not test whether a model answers those passages correctly, cites the right page, preserves mathematical notation, or abstains when retrieved text is irrelevant.
 
-The existing BRVIN v2 RPC is a retrieval contract. It returns retrieved passages and provenance; it does not call Gemini or own answer generation. The consumer-owned Gemini generator is implemented in \`src/ai/gemini.ts\`. Its existing Fatman book-mode call path is separate from BRVIN v2. This evaluation reuses the same \`generateGeminiAnswer\` function and Vertex AI request/response validation. It does **not** claim that BRVIN v2 already has a live Gemini consumer integration.
+The existing BRVIN v2 RPC is a retrieval contract. It returns retrieved passages and provenance; it does not call Gemini or own answer generation. The consumer-owned Gemini generator is implemented in `src/ai/gemini.ts`. Its existing Fatman book-mode call path is separate from BRVIN v2. This evaluation reuses the same `generateGeminiAnswer` function and Vertex AI request/response validation. It does **not** claim that BRVIN v2 already has a live Gemini consumer integration.
 
-An additive, optional \`GroundedGeminiSourceContext\` parameter allows an isolated consumer to give the existing generator generic source excerpts. Existing callers that omit it keep their previous behavior. The M15 staging adapter is the only new caller in this evaluation. It does not replace the consumer-owned generator or modify the BRVIN v2 RPC contract.
+An additive, optional `GroundedGeminiSourceContext` parameter allows an isolated consumer to give the existing generator generic source excerpts. Existing callers that omit it keep their previous behavior. The M15 staging adapter is the only new caller in this evaluation. It does not replace the consumer-owned generator or modify the BRVIN v2 RPC contract.
 
 ## 2. Fixed test inputs
 
@@ -20,41 +20,41 @@ Use only the already-indexed, fingerprint-pinned M15 source:
 
 | Field | Value |
 |---|---|
-| Source | \`BRVIN_M15_Physics_Benchmark_Source_v1.pdf\` |
-| SHA-256 | \`cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92\` |
+| Source | `BRVIN_M15_Physics_Benchmark_Source_v1.pdf` |
+| SHA-256 | `cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92` |
 | Physical PDF pages | 8 |
-| Immutable generation | \`2dc9d4fae3afe7df16927fbf2510afd3\` |
-| Cloudflare AI Search | \`brvin-m15-physics-staging-v1\` |
-| Qdrant collection | \`brvin_m15_physics_benchmark_v1\` |
-| Embedding model | \`gemini-embedding-001\`, 768 dimensions |
-| Embedding region | \`asia-south1\` |
+| Immutable generation | `2dc9d4fae3afe7df16927fbf2510afd3` |
+| Cloudflare AI Search | `brvin-m15-physics-staging-v1` |
+| Qdrant collection | `brvin_m15_physics_benchmark_v1` |
+| Embedding model | `gemini-embedding-001`, 768 dimensions |
+| Embedding region | `asia-south1` |
 
-The evaluation uses the original \`M15_BENCHMARK_QUERY_SUITE\` without changing query text or expected retrieval page labels:
+The evaluation uses the original `M15_BENCHMARK_QUERY_SUITE` without changing query text or expected retrieval page labels:
 
 - **P01–P12:** positive Physics concepts and calculations.
 - **N01–N04:** four out-of-corpus controls (capacitor, Ohm's-law circuit, Lorentz force, and ideal gas law).
-- **H01:** exact-symbol near-miss asking for \`F_s = +k × x\`.
+- **H01:** exact-symbol near-miss asking for `F_s = +k × x`.
 
-H01 retains \`expectedNoMatch: true\` in the retrieval suite because the exact positive-sign expression is not in the source. That retrieval label does **not** mean the answer should abstain. The source's page 8 supports a correction: \`F_s = −kx\`; the answer must identify the positive-sign restoring-force expression as incorrect for this source. Only N01–N04 are abstention controls.
+H01 retains `expectedNoMatch: true` in the retrieval suite because the exact positive-sign expression is not in the source. That retrieval label does **not** mean the answer should abstain. The source's page 8 supports a correction: `F_s = −kx`; the answer must identify the positive-sign restoring-force expression as incorrect for this source. Only N01–N04 are abstention controls.
 
 ## 3. Evaluation flow
 
 The new staging-only operator is served at:
 
-\`https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark/answers\`
+`https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark/answers`
 
 The page exposes two authenticated endpoints:
 
-- \`GET /admin/m15/benchmark/answers/source\`: read the one source row matching the pinned SHA-256 from the isolated M15 staging D1 registry.
-- \`POST /admin/m15/benchmark/answers/run\`: evaluate one fixed query ID against both staging providers.
+- `GET /admin/m15/benchmark/answers/source`: read the one source row matching the pinned SHA-256 from the isolated M15 staging D1 registry.
+- `POST /admin/m15/benchmark/answers/run`: evaluate one fixed query ID against both staging providers.
 
 For each query ID, the worker:
 
-1. Confirms \`ENVIRONMENT=staging\`, the M15 staging flag, the exact source SHA-256, the eight-page source state, and both completed staging indexes.
+1. Confirms `ENVIRONMENT=staging`, the M15 staging flag, the exact source SHA-256, the eight-page source state, and both completed staging indexes.
 2. Queries the dedicated M15 AI Search instance using the same source folder filter, hybrid retrieval, BGE reranker and top-five candidate limit as the paired retrieval runner.
-3. Queries the dedicated M15 Qdrant collection with the same project ID, exact authorized source ID, top-five limit and prefetch size as the paired retrieval runner. It explicitly sets \`ensureCollection: false\`.
+3. Queries the dedicated M15 Qdrant collection with the same project ID, exact authorized source ID, top-five limit and prefetch size as the paired retrieval runner. It explicitly sets `ensureCollection: false`.
 4. Checks candidate provenance. A candidate with an invalid source key or physical page is reported as a provenance violation and its text is not sent to Gemini.
-5. Feeds the two providers' respective retrieved excerpts into two independent calls to the existing \`generateGeminiAnswer\` function. Both calls use the same query text, source-only system instructions, response schema, staging Gemini model and location.
+5. Feeds the two providers' respective retrieved excerpts into two independent calls to the existing `generateGeminiAnswer` function. Both calls use the same query text, source-only system instructions, response schema, staging Gemini model and location.
 6. Records full text for each valid retrieved candidate, its rank, physical page, score, item key and provenance status; then records the generated answer, app-generated citation, generation latency, model/location and grading result.
 7. Returns the complete pair to the browser. The UI loops through P01–P12, N01–N04 and H01, then offers JSON and Markdown downloads.
 
@@ -99,7 +99,7 @@ Important math checks include:
 - P09: downslope component 19.6 N and normal force about 34 N.
 - P10: final speed 4 m/s with the work–energy relationship.
 - P11: change in momentum −4.5 kg·m/s and average force −90 N, preserving the negative direction.
-- P12: restoring-force equation \`F_s = −kx\`, restoring force −10 N for the given stretch, and elastic potential energy 0.25 J.
+- P12: restoring-force equation `F_s = −kx`, restoring force −10 N for the given stretch, and elastic potential energy 0.25 J.
 
 P01 checks Newton's second-law relationship and the roles of net force, mass and acceleration.
 
@@ -117,7 +117,7 @@ A failed provider query, a zero-candidate query, or a Gemini generation error is
 
 ### Exact-symbol near-miss H01
 
-H01 is graded as a source-supported correction. It passes only when the answer identifies \`F_s = −kx\`, rejects \`F_s = +kx\` as the restoring-force equation given by the source, preserves the sign, retrieves page 8 with valid provenance, and cites physical PDF page 8. It must not be scored as an abstention.
+H01 is graded as a source-supported correction. It passes only when the answer identifies `F_s = −kx`, rejects `F_s = +kx` as the restoring-force equation given by the source, preserves the sign, retrieves page 8 with valid provenance, and cites physical PDF page 8. It must not be scored as an abstention.
 
 ### Rubric limitation
 
@@ -127,24 +127,24 @@ The initial implementation is a transparent, deterministic first-pass rubric bui
 
 The answer endpoints are available only when the Worker identifies itself as staging and the M15 staging flag is enabled. They authenticate with the staging operator bearer token.
 
-For these two answer endpoints, the worker deliberately bypasses the existing staging schema-setup helper and uses D1 only for read-only \`SELECT\` operations. Evaluation results are held in page memory and downloaded by the operator. The evaluator does not persist results into D1.
+For these two answer endpoints, the worker deliberately bypasses the existing staging schema-setup helper and uses D1 only for read-only `SELECT` operations. Evaluation results are held in page memory and downloaded by the operator. The evaluator does not persist results into D1.
 
 It does not:
 
-- Change \`BRVIN_RETRIEVAL_PROVIDER\` or any production provider selection.
+- Change `BRVIN_RETRIEVAL_PROVIDER` or any production provider selection.
 - Modify the production worker, BRVIN v2 RPC, or consumer routing.
 - Deploy production.
 - Upload, re-OCR, replace, delete or mutate the M15 PDF, OCR output, manifests, AI Search items or Qdrant points.
-- Run Qdrant collection creation or mutation; \`ensureCollection: false\` is mandatory.
+- Run Qdrant collection creation or mutation; `ensureCollection: false` is mandatory.
 - Change production D1, the production AI Search instance, Teachers, or any production binding.
 
-The staging build workflow validates the branch with typecheck/tests and Wrangler dry-run. A manual \`workflow_dispatch\` from this feature branch deploys the M14/M15 staging Worker only. Do not merge this branch as part of the test run: the production release classifier treats \`src/ai/gemini.ts\` as a production runtime path, so merging it would enter the normal production release workflow.
+The staging build workflow validates the branch with typecheck/tests and Wrangler dry-run. A manual `workflow_dispatch` from this feature branch deploys the M14/M15 staging Worker only. Do not merge this branch as part of the test run: the production release classifier treats `src/ai/gemini.ts` as a production runtime path, so merging it would enter the normal production release workflow.
 
 ## 6. Execution status on 11 November 2026
 
 ### Completed retrieval-only checkpoint (reported by the operator)
 
-The user reported the completed \`brvin-m15-second-source-paired-shadow\` retrieval-only receipt with:
+The user reported the completed `brvin-m15-second-source-paired-shadow` retrieval-only receipt with:
 
 - 17 queries executed against both providers.
 - 12/12 positive expected-page targets covered by both providers.
@@ -158,17 +158,19 @@ These are recorded as the supplied retrieval checkpoint. They are not answer-gen
 
 ### Consumer answer/abstention evaluator
 
-**Implemented on branch:** \`feat/m15-consumer-answer-evaluation-2026-11-11\`.
+**Implemented on branch:** `feat/m15-consumer-answer-evaluation-2026-11-11` (draft PR [#223](https://github.com/ashini-x/parmar-ai/pull/223)).
 
-The code adds the optional generic source context to \`generateGeminiAnswer\`, the paired M15 retrieval/generation adapter, the authenticated read-only staging routes, a browser report page, and initial grading regression tests. The staging workflow is configured to validate the changed Gemini source and permits manual staging-only deployment from the selected feature branch.
+The code adds the optional generic source context to `generateGeminiAnswer`, the paired M15 retrieval/generation adapter, the authenticated read-only staging routes, a browser report page, and initial grading regression tests. The staging workflow is configured to validate the changed Gemini source and permits manual staging-only deployment from the selected feature branch.
+
+**Code validation passed on 11 November 2026:** M14 staging workflow run [#112](https://github.com/ashini-x/parmar-ai/actions/runs/43020464133) passed typecheck, M15 tests, versioned Vertex/Qdrant configuration verification and Wrangler staging dry-run. Release validation run [#1116](https://github.com/ashini-x/parmar-ai/actions/runs/43020464061) passed typecheck/test/build. On both PR runs, staging deployment and all production deployment/verification jobs were skipped.
 
 **Not yet executed:** this work session did not deploy the feature branch to the staging Worker or invoke Gemini. The 34 answer-generation calls (17 queries × 2 providers), generated answer payloads, generation latencies and answer pass/fail counts therefore remain pending. No result has been fabricated or inferred from the retrieval receipt.
 
 To run it:
-1. Open the GitHub Actions workflow \`M14 staging operator\` in the \`ashini-x/parmar-ai\` repository.
-2. Select branch \`feat/m15-consumer-answer-evaluation-2026-11-11\` and use **Run workflow**. This workflow's dispatch deploys only \`parmar-ai-m14-staging\`; it does not deploy either production Worker.
-3. Wait for the validation and staging deployment jobs to complete successfully. In particular, \`npm run check\`, the M15 tests and the Wrangler staging dry-run must pass.
-4. Open \`https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark/answers\`.
+1. Open the GitHub Actions workflow `M14 staging operator` in the `ashini-x/parmar-ai` repository.
+2. Select branch `feat/m15-consumer-answer-evaluation-2026-11-11` and use **Run workflow**. This workflow's dispatch deploys only `parmar-ai-m14-staging`; it does not deploy either production Worker.
+3. Wait for the validation and staging deployment jobs to complete successfully. In particular, `npm run check`, the M15 tests and the Wrangler staging dry-run must pass.
+4. Open `https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark/answers`.
 5. Enter the staging operator token in the page, load the registered source read-only, then run all 17 paired queries.
 6. Download and review both the JSON receipt and Markdown report. Keep the raw JSON with the milestone evidence.
 
