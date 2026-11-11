@@ -427,7 +427,7 @@ async function requestVertexGemini(
     if (sourceContext?.sourceDocument) {
       const document = sourceContext.sourceDocument;
       userParts.push({
-        text: "Original source PDF (SHA-256 " + document.sha256 + "). Use only the physical pages explicitly permitted in the source-grounding prompt below; inspect it only as visual evidence for exact printed notation.",
+        text: "Original source PDF (SHA-256 " + document.sourceSha256 + "). Use only the physical pages explicitly permitted in the source-grounding prompt below; inspect it only as visual evidence for exact printed notation.",
       });
       userParts.push({ inlineData: { mimeType: document.mimeType, data: document.base64Data } });
     }
