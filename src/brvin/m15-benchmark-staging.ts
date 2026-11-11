@@ -1508,7 +1508,43 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
     await call("/admin/m15/benchmark/source/ai-search","POST",{sourceId:sourceId.value},"Configuring the dedicated M15 metadata schema if needed, then indexing at most two verified OCR pages into the isolated AI Search instance. Re-enter the token and repeat Step 6 until all eight pages are complete.");
   });
   buttons.benchmark.addEventListener("click",async()=>{
-    await call("/admin/m15/benchmark/run","POST",{sourceId:sourceId.value},"Running the 17 fixed query cases against both staging indexes. This action performs query/search only and does not modify either index.");
+    let secret=token.value.trim();
+    const selectedSourceId=sourceId.value.trim();
+    if(secret.length<32||!selectedSourceId)return;
+    token.value="";refresh();buttons.benchmark.disabled=true;
+    const totalQueries=17;const batchSize=3;let collected=[];
+    const requestBatch=async(path,payload)=>{
+      const response=await fetch(path,{
+        method:"POST",
+        headers:{authorization:"Bearer "+secret,"content-type":"application/json"},
+        body:JSON.stringify(payload),cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer"
+      });
+      let data;
+      try{data=await response.json();}catch{throw new Error("The staging Worker returned an unreadable response (HTTP "+response.status+").");}
+      if(!response.ok||data.ok!==true)throw new Error(data.error||("Staging benchmark request failed (HTTP "+response.status+")."));
+      return data;
+    };
+    result.className="status muted";result.textContent="Starting the read-only paired benchmark in small batches. The operator token is held only in memory for this click and cleared when the run ends.";
+    try{
+      for(let startIndex=0;startIndex<totalQueries;startIndex+=batchSize){
+        result.textContent="Running paired retrieval batch "+(Math.floor(startIndex/batchSize)+1)+" of "+Math.ceil(totalQueries/batchSize)+" · completed "+collected.length+"/"+totalQueries+" query pairs. Do not close this page.";
+        const data=await requestBatch("/admin/m15/benchmark/run",{sourceId:selectedSourceId,startIndex});
+        const batch=data.result?.batch;const batchResults=data.result?.results;
+        if(!batch||batch.startIndex!==startIndex||!Array.isArray(batchResults)||batchResults.length!==Math.min(batchSize,totalQueries-startIndex)){
+          throw new Error("The staging Worker returned an incomplete or out-of-order benchmark batch.");
+        }
+        collected.push(...batchResults);
+      }
+      result.textContent="All "+collected.length+"/"+totalQueries+" query pairs completed. Assembling provider summaries and the final receipt…";
+      const receipt=await requestBatch("/admin/m15/benchmark/complete",{sourceId:selectedSourceId,results:collected});
+      result.className="status "+(receipt.ok===true?"good":"bad");
+      result.textContent=JSON.stringify(receipt,null,2);
+    }catch(error){
+      result.className="status bad";
+      result.textContent="Benchmark stopped after "+collected.length+"/"+totalQueries+" query pairs. "+(error instanceof Error?error.message:"Unexpected request failure.")+" Re-enter the staging token and click Step 7 again to restart the read-only benchmark from the beginning.";
+    }finally{
+      secret="";token.value="";refresh();
+    }
   });
   const saved=readRememberedSourceId();
   if(saved){sourceId.value=saved;refresh();}
@@ -1564,7 +1600,8 @@ export async function handleM15BenchmarkStagingRequest(
   }
 
   if (!url.pathname.startsWith("/admin/m15/benchmark/source/") &&
-      url.pathname !== "/admin/m15/benchmark/run") {
+      url.pathname !== "/admin/m15/benchmark/run" &&
+      url.pathname !== "/admin/m15/benchmark/complete") {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if (!["GET","POST"].includes(request.method)) return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -1595,8 +1632,8 @@ export async function handleM15BenchmarkStagingRequest(
     return json({ ok: true, source: publicSource(latest), ...(vision ? { vision } : {}) });
   }
 
-  let body: { sourceId?: unknown };
-  try { body = await request.json() as { sourceId?: unknown }; }
+  let body: { sourceId?: unknown; startIndex?: unknown; results?: unknown };
+  try { body = await request.json() as { sourceId?: unknown; startIndex?: unknown; results?: unknown }; }
   catch { return json({ ok: false, error: "invalid_json" }, 400); }
   if (!validUuid(body.sourceId)) return json({ ok: false, error: "invalid_source_id" }, 400);
   const row = await getSource(env, body.sourceId);
@@ -1623,7 +1660,14 @@ export async function handleM15BenchmarkStagingRequest(
       return json({ ok: true, result, source: latest ? publicSource(latest) : undefined });
     }
     if (url.pathname === "/admin/m15/benchmark/run" && request.method === "POST") {
-      const result = await runM15BenchmarkSourceShadow(env, row);
+      if (typeof body.startIndex !== "number" || !Number.isSafeInteger(body.startIndex)) {
+        return json({ ok: false, error: "invalid_benchmark_batch_cursor" }, 400);
+      }
+      const result = await runM15BenchmarkSourceShadow(env, row, body.startIndex);
+      return json({ ok: true, result });
+    }
+    if (url.pathname === "/admin/m15/benchmark/complete" && request.method === "POST") {
+      const result = buildM15BenchmarkReceipt(env, row, body.results);
       return json({ ok: true, result });
     }
     return json({ ok: false, error: "not_found" }, 404);
