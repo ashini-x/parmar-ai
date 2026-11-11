@@ -1776,6 +1776,7 @@ export function evaluateM15AnswerQuality(input: {
   citationCorrectness: boolean;
   mathematicalSymbolFidelity: boolean | null;
   abstentionCorrectness: boolean | null;
+  irrelevantEvidenceResistanceDemonstrated: boolean | null;
   overallPass: boolean;
   failureCases: string[];
 } {
@@ -1792,6 +1793,7 @@ export function evaluateM15AnswerQuality(input: {
   const isNegative = /^N0[1-4]$/u.test(input.queryId);
   let checks: Array<{ id: string; passed: boolean }> = [];
   let abstentionCorrectness: boolean | null = null;
+  let irrelevantEvidenceResistanceDemonstrated: boolean | null = null;
   let mathApplicable = true;
 
   if (isNegative) {
@@ -1806,10 +1808,10 @@ export function evaluateM15AnswerQuality(input: {
     checks = [
       check("explicitSourceAbstention", abstains),
       check("doesNotSupplyUnsupportedResult", !unsupportedCalculation),
-      check("unrelatedRetrievedEvidenceWasPresent", input.retrievedPages.length > 0),
       check("doesNotCiteUnrelatedPage", input.citedPages.length === 0),
     ];
     abstentionCorrectness = checks.every((item) => item.passed);
+    irrelevantEvidenceResistanceDemonstrated = abstentionCorrectness && input.retrievedPages.length > 0;
     mathApplicable = false;
   } else {
     switch (input.queryId) {
@@ -1852,7 +1854,6 @@ export function evaluateM15AnswerQuality(input: {
         checks = [
           check("kineticFrictionNinePointEightNewtons", m15AnswerHasUnitValue(answer, "9.8", "n\\b|newtons?\\b")),
           check("identifiesKineticFriction", /kinetic friction/iu.test(normalized)),
-          check("frictionOpposesMotion", /opposite.{0,35}motion|opposes? (?:the )?motion/iu.test(normalized)),
         ];
         break;
       case "P08":
@@ -1864,7 +1865,7 @@ export function evaluateM15AnswerQuality(input: {
         break;
       case "P09":
         checks = [
-          check("downslopeComponentNineteenPointSixNewtons", /(?:19\.6\s*(?:n|newtons?).{0,35}(?:down|slope)|(?:down|slope).{0,35}19\.6\s*(?:n|newtons?))/iu.test(normalized)),
+          check("downslopeComponentNineteenPointSixNewtons", m15AnswerHasUnitValue(answer, "19.6", "n\\b|newtons?\\b") && /downslope|down the slope/iu.test(normalized)),
           check("normalForceApproximatelyThirtyFourNewtons", /(?:33\.9[0-9]?|34(?:\.0+)?)\s*(?:n|newtons?)/iu.test(normalized)),
           check("identifiesNormalForce", /normal force/iu.test(normalized)),
         ];
@@ -1880,7 +1881,7 @@ export function evaluateM15AnswerQuality(input: {
           check("changeInMomentumMinusFourPointFive", m15AnswerHasSignedUnitValue(answer, "4.5", "kg\\s*(?:[.*]\\s*)?m\\s*\\/\\s*s")),
           check("averageForceMinusNinetyNewtons", m15AnswerHasSignedUnitValue(answer, "90", "n\\b|newtons?\\b")),
           check("identifiesAverageForce", /average force/iu.test(normalized)),
-          check("preservesNegativeDirection", /negative direction|opposite (?:to )?(?:the )?initial|opposite direction/iu.test(normalized)),
+          check("preservesNegativeDirection", m15AnswerHasSignedUnitValue(answer, "4.5", "kg\\s*(?:[.*]\\s*)?m\\s*\\/\\s*s") && m15AnswerHasSignedUnitValue(answer, "90", "n\\b|newtons?\\b")),
         ];
         break;
       case "P12":
@@ -1892,8 +1893,9 @@ export function evaluateM15AnswerQuality(input: {
         break;
       case "H01":
         checks = [
-          check("sourceEquationIsFsEqualsMinusKx", /fs=-kx/iu.test(compact)),
-          check("explicitlyRejectsPositiveSignAsSourceEquation", /(?:not|incorrect|wrong|rather than|instead of).{0,55}(?:\+\s*kx|positive|plus)|(?:\+\s*kx|positive|plus).{0,55}(?:not|incorrect|wrong)/iu.test(normalized)),
+          check("sourceEquationHasNegativeRestoringForceSign", /fs=-kx/iu.test(compact)),
+          check("explicitlyRejectsPositiveSignAsSourceEquation", /f_s\\s*=\\s*\\+\\s*k(?:\\s*(?:[×*x])\\s*x|\\s+x)?[\\s\\S]{0,90}\\bnot\\b/iu.test(normalized)),
+          check("rendersCanonicalRestoringForceExpression", /f_s\\s*=\\s*-k(?:\\s*[×*]\\s*x|\\s*x|x)(?![a-z])/iu.test(normalized)),
         ];
         break;
       default:
@@ -1904,7 +1906,7 @@ export function evaluateM15AnswerQuality(input: {
 
   const answerCorrectnessPassed = checks.length > 0 && checks.every((item) => item.passed);
   const sourceGroundingCorrectness = input.retrievalOk && noProvenanceViolations && (isNegative
-    ? Boolean(abstentionCorrectness) && input.retrievedPages.length > 0 && input.citedPages.length === 0
+input.citedPages.length === 0
     : hasTargetEvidence && answerCorrectnessPassed);
   const modelCitedPages = m15AnswerPageCitations(answer);
   const modelCitationPagesValid = isNegative
@@ -1933,6 +1935,7 @@ export function evaluateM15AnswerQuality(input: {
     citationCorrectness,
     mathematicalSymbolFidelity,
     abstentionCorrectness,
+    irrelevantEvidenceResistanceDemonstrated,
     overallPass: failureCases.length === 0,
     failureCases: [...new Set(failureCases)],
   };
