@@ -43,7 +43,7 @@ on:
       - "src/fatman/import.ts"
       - "src/config/env.ts"
       - "wrangler.m14-staging.jsonc"
-      - ".github/workflows/m14-staging-deploy.yml"
+
   workflow_dispatch:
 
 permissions:
