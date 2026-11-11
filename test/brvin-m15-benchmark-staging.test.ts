@@ -1,3 +1,4 @@
+import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import {
   M15_BENCHMARK_QUERY_SUITE,
@@ -55,24 +56,41 @@ describe("M15 second-source benchmark definition", () => {
     expect(m15FormulaAuditPdfPages("P02")).toBeNull();
   });
 
-  it("attaches only a bounded PDF whose bytes match the approved SHA-256 and permitted pages", async () => {
-    const bytes = new TextEncoder().encode("%PDF-1.7\nsource fixture");
+  it("attaches only an extracted original PDF page after verifying the complete source SHA-256", async () => {
+    const original = await PDFDocument.create();
+    for (let page = 1; page <= 8; page += 1) {
+      const pdfPage = original.addPage([600, 800]);
+      pdfPage.drawText("Original physical PDF page " + page, { x: 50, y: 750 });
+    }
+    const bytes = await original.save();
     const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
     const sha256 = Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
     const attachment = await createM15FormulaAuditPdfAttachment(bytes, sha256, [8]);
     expect(attachment).toMatchObject({
       mimeType: "application/pdf",
-      sha256,
-      allowedPhysicalPages: [8],
+      sourceSha256: sha256,
+      originalPhysicalPage: 8,
+      attachedPdfPageCount: 1,
     });
+    expect(attachment.attachedPdfSha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(attachment.attachedPdfSha256).not.toBe(sha256);
     const decoded = Uint8Array.from(atob(attachment.base64Data), (character) => character.charCodeAt(0));
-    expect(decoded).toEqual(bytes);
+    const extracted = await PDFDocument.load(decoded);
+    expect(extracted.getPageCount()).toBe(1);
+    expect(extracted.getPage(0).getWidth()).toBe(600);
+    expect(extracted.getPage(0).getHeight()).toBe(800);
     await expect(createM15FormulaAuditPdfAttachment(bytes, "0".repeat(64), [8]))
       .rejects.toThrow("does not match");
     await expect(createM15FormulaAuditPdfAttachment(bytes, sha256, [0]))
-      .rejects.toThrow("valid physical PDF pages");
+      .rejects.toThrow("exactly one valid original physical PDF page");
+    await expect(createM15FormulaAuditPdfAttachment(bytes, sha256, [1, 8]))
+      .rejects.toThrow("exactly one valid original physical PDF page");
     await expect(createM15FormulaAuditPdfAttachment(new TextEncoder().encode("not a PDF"), sha256, [8]))
       .rejects.toThrow("valid bounded PDF");
+    const incomplete = await PDFDocument.create();
+    incomplete.addPage([600, 800]);
+    await expect(createM15FormulaAuditPdfAttachment(await incomplete.save(), sha256, [8]))
+      .rejects.toThrow("exactly eight physical pages");
   });
 
   it("serves the isolated consumer answer evaluation page only in staging", async () => {
