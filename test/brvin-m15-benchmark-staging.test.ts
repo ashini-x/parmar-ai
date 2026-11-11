@@ -227,6 +227,49 @@ describe("M15 consumer answer quality rubric", () => {
     expect(result.mathematicalSymbolFidelity).toBe(true);
   });
 
+  it("rejects a malformed Newton-law equation fragment even when a second equation is correct", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P01",
+      answer: "The relationship is ΣF = m xa | F_net = m × a.",
+      retrievedPages: [1],
+      citedPages: [1],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.checks.find(x => x.id === "avoidsMalformedMassAccelerationToken")?.passed).toBe(false);
+    expect(result.mathematicalSymbolFidelity).toBe(false);
+    expect(result.overallPass).toBe(false);
+  });
+
+  it("rejects capital O in the static-friction zero lower bound", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P08",
+      answer: "Static friction is not always at its maximum. It adjusts from zero up to the maximum: O ≤ f_s ≤ μ_s × N.",
+      retrievedPages: [4],
+      citedPages: [4],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.checks.find(x => x.id === "doesNotRenderZeroAsLetterO")?.passed).toBe(false);
+    expect(result.mathematicalSymbolFidelity).toBe(false);
+    expect(result.overallPass).toBe(false);
+  });
+
+  it("rejects OCR-like doubled-x spring and energy formula strings despite correct final values", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P12",
+      answer: "F_s = -k xx = -10 N. U_s = ½ x k x x² = 0.25 J.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.checks.find(x => x.id === "rendersSpringForceVariableBoundary")?.passed).toBe(false);
+    expect(result.answerCorrectness.checks.find(x => x.id === "rendersElasticEnergyFormula")?.passed).toBe(false);
+    expect(result.mathematicalSymbolFidelity).toBe(false);
+    expect(result.overallPass).toBe(false);
+  });
+
   it("does not require an unasked friction-direction explanation for P07 magnitude", () => {
     const result = evaluateM15AnswerQuality({
       queryId: "P07",
