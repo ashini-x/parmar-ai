@@ -244,6 +244,21 @@ describe("M15 consumer answer quality rubric", () => {
     });
   });
 
+  it("rejects a model-generated citation to the wrong physical page", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "H01",
+      answer: "The source gives F_s = -kx. F_s = +kx is not the restoring-force equation. See PDF page 7.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.passed).toBe(true);
+    expect(result.sourceGroundingCorrectness).toBe(true);
+    expect(result.citationCorrectness).toBe(false);
+    expect(result.overallPass).toBe(false);
+  });
+
   it("requires abstention when unrelated retrieved evidence is present", () => {
     const result = evaluateM15AnswerQuality({
       queryId: "N01",
