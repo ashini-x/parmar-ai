@@ -2212,6 +2212,9 @@ export async function handleM15BenchmarkStagingRequest(
   if (url.pathname === "/admin/m15/benchmark" && request.method === "GET") {
     return m15BenchmarkAdminPage();
   }
+  if (url.pathname === "/admin/m15/benchmark/answers" && request.method === "GET") {
+    return m15AnswerEvaluationPage();
+  }
   if (url.pathname === "/admin/m15/benchmark/health" && request.method === "GET") {
     return json({
       ok: true,
@@ -2235,12 +2238,44 @@ export async function handleM15BenchmarkStagingRequest(
 
   if (!url.pathname.startsWith("/admin/m15/benchmark/source/") &&
       url.pathname !== "/admin/m15/benchmark/run" &&
-      url.pathname !== "/admin/m15/benchmark/complete") {
+      url.pathname !== "/admin/m15/benchmark/complete" &&
+      url.pathname !== "/admin/m15/benchmark/answers/source" &&
+      url.pathname !== "/admin/m15/benchmark/answers/run") {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if (!["GET","POST"].includes(request.method)) return json({ ok: false, error: "method_not_allowed" }, 405);
   if (!await authenticated(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
   if (!env.DB) return json({ ok: false, error: "staging_database_missing" }, 503);
+
+  // Answer evaluation is intentionally read-only: no schema setup, D1 writes,
+  // source mutation, or index mutation occurs on either answer endpoint.
+  if (url.pathname === "/admin/m15/benchmark/answers/source" && request.method === "GET") {
+    const row = await env.DB.prepare(
+      "SELECT * FROM m15_benchmark_sources WHERE source_sha256 = ? LIMIT 1",
+    ).bind(SOURCE_SHA256).first<M15BenchmarkSourceRow>();
+    if (!row) return json({ ok: false, error: "registered_benchmark_source_not_found" }, 404);
+    return json({ ok: true, source: publicSource(row) });
+  }
+
+  if (url.pathname === "/admin/m15/benchmark/answers/run" && request.method === "POST") {
+    let answerBody: { sourceId?: unknown; queryId?: unknown };
+    try { answerBody = await request.json() as { sourceId?: unknown; queryId?: unknown }; }
+    catch { return json({ ok: false, error: "invalid_json" }, 400); }
+    if (!validUuid(answerBody.sourceId)) return json({ ok: false, error: "invalid_source_id" }, 400);
+    if (typeof answerBody.queryId !== "string" ||
+        !M15_BENCHMARK_QUERY_SUITE.some((item) => item.id === answerBody.queryId)) {
+      return json({ ok: false, error: "invalid_m15_query_id" }, 400);
+    }
+    const row = await getSource(env, answerBody.sourceId);
+    if (!row) return json({ ok: false, error: "benchmark_source_not_found" }, 404);
+    try {
+      const result = await runM15AnswerEvaluationQuery(env, row, answerBody.queryId);
+      return json({ ok: true, result });
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
+  }
+
   await ensureSchema(env);
 
   if (url.pathname === "/admin/m15/benchmark/source/upload" && request.method === "POST") {
