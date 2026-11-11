@@ -100,7 +100,7 @@ function makeQdrant(options: {
               payload: {
                 project_id: "project-a",
                 source_id: "source-b",
-                item_key: "private/source-b",
+                item_key: "brvin/books/source-b/pages/page-000001.txt",
                 pdf_page: 1,
                 chunk_text: "not authorized",
               },
@@ -828,4 +828,53 @@ describe("BRVIN M14 deterministic Qdrant point identity", () => {
     expect(await brvinM14PointId("source-a", "item-a", "chunk-a", "b".repeat(64))).not.toBe(id);
     expect(id).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-5[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u);
   });
+
+  it("re-applies the current source allowlist on each query and does no provider work when it is empty", async () => {
+    const { request, calls } = makeQdrant();
+    const embeddings = makeEmbeddings();
+    const pilot = makePilot(request, embeddings);
+    const runQuery = (authorizedSourceIds: string[]) => pilot.query({
+      projectId: "project-a",
+      authorizedSourceIds,
+      query: "Find evidence for force and acceleration.",
+      limit: 10,
+      ensureCollection: false,
+    });
+
+    const beforeRevocation = await runQuery(["source-a", "source-b"]);
+    expect(beforeRevocation.map((item) => item.id)).toEqual(["wrong-source", "authorized-point"]);
+
+    const queryCalls = () => calls.filter((call) => call.url.endsWith("/points/query"));
+    expect(queryCalls()).toHaveLength(2);
+    for (const call of queryCalls()) {
+      expect(call.body.filter.must).toEqual([
+        { key: "project_id", match: { value: "project-a" } },
+        { key: "source_id", match: { any: ["source-a", "source-b"] } },
+      ]);
+    }
+
+    // Simulate the next request after D1 has revoked source-a. The helper has
+    // no permission cache: it uses the newly resolved allowlist supplied by
+    // Core and filters both dense and sparse calls with that exact list.
+    const afterRevocation = await runQuery(["source-b"]);
+    expect(afterRevocation.map((item) => item.id)).toEqual(["wrong-source"]);
+    expect(queryCalls()).toHaveLength(4);
+    for (const call of queryCalls().slice(2)) {
+      expect(call.body.filter.must).toEqual([
+        { key: "project_id", match: { value: "project-a" } },
+        { key: "source_id", match: { any: ["source-b"] } },
+      ]);
+    }
+
+    // With no currently authorized sources, retrieval must stop before
+    // embedding or contacting Qdrant. This is the fail-closed revoke-all case.
+    const requestCount = calls.length;
+    const embeddingCount = vi.mocked(embeddings.embedQuery).mock.calls.length;
+    const revokedAll = await runQuery([]);
+    expect(revokedAll).toEqual([]);
+    expect(calls).toHaveLength(requestCount);
+    expect(vi.mocked(embeddings.embedQuery)).toHaveBeenCalledTimes(embeddingCount);
+  });
+
+
 });
