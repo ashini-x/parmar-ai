@@ -646,3 +646,9 @@ Core PR #229 added only tests and migration documentation. The v2 authorization 
 
 The follow-up CI correction adds `test/brvin-v2-service.test.ts` to the unit-test-only allowlist. Its purpose is to keep the full typecheck/test/build workflow while ensuring that test-only changes do not cause production Worker uploads. Actual source/provider/binding changes remain subject to the normal production classifier and paired deployment/acceptance process. The new allowlist path itself must pass PR validation, then be verified on main before this classification is considered fixed.
 
+## 12 November 2026 — M14 staging workflow test-only deployment guard
+
+Core PR #229 changed a Qdrant authorization test, which correctly triggered M14 staging validation on the pull request. The same test path was also listed under the M14 workflow's `push` trigger, so merging the test-only change caused an unnecessary staging Worker upload even though no staging runtime/config source changed. The resulting staging version remained the isolated Vertex/Qdrant environment; no production provider selection was changed by this staging deploy.
+
+The follow-up separates the trigger behavior: staging-related tests remain in `pull_request.paths` so a PR validates the M14/M15 staging tests and dry-run; the corresponding test-only paths and the workflow's own file are removed from `push.paths`. Main-branch test merges continue to receive full Core Release validation through the general `test/**` trigger, while actual M14 runtime/config changes still trigger the isolated staging deploy. This avoids redeploying staging for test-only changes.
+
