@@ -227,6 +227,42 @@ describe("M15 consumer answer quality rubric", () => {
     expect(result.mathematicalSymbolFidelity).toBe(true);
   });
 
+  it("does not require an unasked friction-direction explanation for P07 magnitude", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P07",
+      answer: "The normal force is N = 5 kg × 9.8 m/s² = 49 N. Kinetic friction is f_k = 0.20 × 49 N = 9.8 N.",
+      retrievedPages: [4],
+      citedPages: [4],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(true);
+  });
+
+  it("grades P09 downslope result independently of phrase/result ordering", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P09",
+      answer: "Downslope component of weight: 4 × 9.8 × sin(30°) = 19.6 N. Normal force: 4 × 9.8 × cos(30°) = 33.95 N.",
+      retrievedPages: [5],
+      citedPages: [5],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(true);
+  });
+
+  it("accepts negative signs as preserved direction when P11's signed results are correct", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P11",
+      answer: "Δp = 0.15 kg × (-30 m/s) = -4.5 kg·m/s. Average force = -4.5 ÷ 0.05 = -90 N.",
+      retrievedPages: [7],
+      citedPages: [7],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(true);
+  });
+
   it("treats H01 as a source-supported correction, not an abstention", () => {
     const result = evaluateM15AnswerQuality({
       queryId: "H01",
@@ -242,6 +278,21 @@ describe("M15 consumer answer quality rubric", () => {
       mathematicalSymbolFidelity: true,
       citationCorrectness: true,
     });
+  });
+
+  it("keeps H01 symbol fidelity pending when OCR-like double-x notation is copied", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "H01",
+      answer: "F_s = +k x x is not the restoring-force equation. The source writes F_s = -k xx.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.checks.find(x => x.id === "explicitlyRejectsPositiveSignAsSourceEquation")?.passed).toBe(true);
+    expect(result.answerCorrectness.checks.find(x => x.id === "rendersCanonicalRestoringForceExpression")?.passed).toBe(false);
+    expect(result.mathematicalSymbolFidelity).toBe(false);
+    expect(result.overallPass).toBe(false);
   });
 
   it("rejects a model-generated citation to the wrong physical page", () => {
@@ -276,7 +327,7 @@ describe("M15 consumer answer quality rubric", () => {
     });
   });
 
-  it("does not award a negative-control pass when retrieval returned no unrelated evidence", () => {
+  it("passes no-evidence abstention while reporting that irrelevant-evidence resistance was not exercised", () => {
     const result = evaluateM15AnswerQuality({
       queryId: "N01",
       answer: "The indexed source does not provide enough information to answer this question.",
@@ -285,8 +336,11 @@ describe("M15 consumer answer quality rubric", () => {
       provenanceViolationCount: 0,
       retrievalOk: true,
     });
-    expect(result.overallPass).toBe(false);
-    expect(result.abstentionCorrectness).toBe(false);
+    expect(result).toMatchObject({
+      overallPass: true,
+      abstentionCorrectness: true,
+      irrelevantEvidenceResistanceDemonstrated: false,
+    });
   });
 
   it("rejects an abstention followed by an unsupported external result", () => {
