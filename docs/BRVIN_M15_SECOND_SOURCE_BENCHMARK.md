@@ -93,7 +93,7 @@ The operator reports that the fixed 17-query suite completed against both stagin
 
 The above is the supplied retrieval receipt summary. The full query-by-query JSON is not included in this document, so no additional candidate scores, exact latency values, or passage-level human relevance grades are inferred here. Candidate presence on N01–N04 still requires passage inspection; a non-empty result is not itself a retrieval relevance pass or an answer-abstention pass.
 
-**Retrieval result:** the paired second-source retrieval-only subtest is complete as reported. **Consumer answer/abstention result:** not tested by this receipt. See [BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md](BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md) for the separate Gemini evaluation harness and execution status. M15 remains in progress and production remains on Cloudflare AI Search.
+**Retrieval result:** the paired second-source retrieval-only subtest is complete as reported. This receipt itself does not include Gemini answers. The separate consumer-owned Gemini evaluation has since completed all 17 query pairs (34 generations) on this same source; its raw counters, manual adjudication, rubric corrections and remaining H01/claim-grounding gates are recorded in [BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md](BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md). The answer run was read-only and did not mutate this source or either index. M15 remains in progress and production remains on Cloudflare AI Search.
 
 ## Deployment checkpoint
 
