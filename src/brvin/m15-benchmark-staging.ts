@@ -1083,10 +1083,10 @@ function safeM15ProviderErrorMessage(error: unknown): string {
       ? error
       : "Provider query failed with a non-Error value.";
   return raw
-    .replace(/\\bBearer\\s+[A-Za-z0-9._~+\\/-]+=*/giu, "Bearer [redacted]")
-    .replace(/\\b(authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|token)\\b\\s*[:=]\\s*["']?[^,\\s;"']+["']?/giu, "$1=[redacted]")
-    .replace(/(https?:\\/\\/[^\\s?]+)\\?[^\\s]+/giu, "$1?[redacted]")
-    .replace(/\\s+/gu, " ")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/giu, "Bearer [redacted]")
+    .replace(/\b(authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|token)\b\s*[:=]\s*["']?[^,\s;"']+["']?/giu, "$1=[redacted]")
+    .replace(/(https?:\/\/[^\s?]+)\?[^\s]+/giu, "$1?[redacted]")
+    .replace(/\s+/gu, " ")
     .trim()
     .slice(0, 240) || "Provider query failed.";
 }
