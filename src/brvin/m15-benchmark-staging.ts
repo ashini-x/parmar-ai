@@ -1,4 +1,6 @@
-import type { AiSearchInstance, Env } from "../config/env";
+import { PDFDocument } from "pdf-lib";
+import { generateGeminiAnswer, type GroundedGeminiSourceContext, type GroundedGeminiSourceDocument } from "../ai/gemini";
+import type { AiSearchInstance, Env, ProfileContext, StudentProfile } from "../config/env";
 import { getGoogleAccessToken } from "../auth/google";
 import {
   getFatmanVisionOperation,
@@ -21,6 +23,22 @@ const BENCHMARK_QDRANT_COLLECTION = "brvin_m15_physics_benchmark_v1";
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const TOP_K = 5;
 const PREFETCH_LIMIT = 15;
+
+/** Targeted OCR-to-answer notation audit. This is separate from the completed 17-query run. */
+export const M15_FORMULA_AUDIT_QUERY_IDS = ["P01", "P08", "P11", "P12", "H01"] as const;
+
+export function m15FormulaAuditPdfPages(queryId: string): number[] | null {
+  const pages: Record<(typeof M15_FORMULA_AUDIT_QUERY_IDS)[number], number[]> = {
+    P01: [1],
+    P08: [4],
+    P11: [7],
+    P12: [8],
+    H01: [8],
+  };
+  return Object.prototype.hasOwnProperty.call(pages, queryId)
+    ? [...pages[queryId as keyof typeof pages]]
+    : null;
+}
 const M15_QDRANT_PAGES_PER_INVOCATION = 2;
 const M15_AI_SEARCH_PAGES_PER_INVOCATION = 2;
 const M15_AI_SEARCH_METADATA_SCHEMA = [
@@ -352,6 +370,66 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
   new Uint8Array(hashInput).set(bytes);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", hashInput));
   return Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const blockSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += blockSize) {
+    const block = bytes.subarray(offset, Math.min(bytes.length, offset + blockSize));
+    binary += String.fromCharCode(...block);
+  }
+  return btoa(binary);
+}
+
+/** Build a PDF attachment only after validating the exact source fingerprint and allowed physical pages. */
+export async function createM15FormulaAuditPdfAttachment(
+  bytes: Uint8Array,
+  expectedSha256: string,
+  allowedPhysicalPages: readonly number[],
+): Promise<GroundedGeminiSourceDocument> {
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength < 8 || bytes.byteLength > MAX_SOURCE_BYTES ||
+      new TextDecoder().decode(bytes.subarray(0, 5)) !== "%PDF-") {
+    throw new Error("The formula audit source attachment is not a valid bounded PDF.");
+  }
+  if (!/^[a-f0-9]{64}$/iu.test(expectedSha256)) {
+    throw new Error("The formula audit source fingerprint is invalid.");
+  }
+  const actualSha256 = await sha256Hex(bytes);
+  if (actualSha256 !== expectedSha256.toLowerCase()) {
+    throw new Error("The formula audit PDF does not match the pinned original source SHA-256.");
+  }
+  const pages = [...allowedPhysicalPages];
+  if (pages.length !== 1 || pages.some((page) =>
+    !Number.isSafeInteger(page) || page < 1 || page > SOURCE_PAGE_COUNT
+  )) {
+    throw new Error("The formula audit must select exactly one valid original physical PDF page.");
+  }
+
+  // Verify the original PDF's page count, then copy only the requested page
+  // into a new transient PDF. The model never receives the other seven pages.
+  const original = await PDFDocument.load(bytes);
+  if (original.getPageCount() !== SOURCE_PAGE_COUNT) {
+    throw new Error("The original formula audit PDF does not contain exactly eight physical pages.");
+  }
+  const onePageDocument = await PDFDocument.create();
+  const [page] = await onePageDocument.copyPages(original, [pages[0] - 1]);
+  if (!page) throw new Error("The requested original physical PDF page could not be extracted.");
+  onePageDocument.addPage(page);
+  onePageDocument.setTitle("BRVIN M15 original physical PDF page " + pages[0]);
+  const attachedBytes = await onePageDocument.save({ useObjectStreams: false });
+  if (!attachedBytes.byteLength || attachedBytes.byteLength > MAX_SOURCE_BYTES) {
+    throw new Error("The extracted one-page formula audit PDF is empty or exceeds the safe size limit.");
+  }
+
+  return {
+    mimeType: "application/pdf",
+    base64Data: bytesToBase64(attachedBytes),
+    sourceSha256: actualSha256,
+    attachedPdfSha256: await sha256Hex(attachedBytes),
+    originalPhysicalPage: pages[0],
+    attachedPdfPageCount: 1,
+  };
 }
 
 function objectNameForPage(page: number, prefix: string): string {
@@ -1568,6 +1646,757 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
   }});
 }
 
+
+interface M15AnswerEvidenceCandidate {
+  rank: number;
+  page: number | null;
+  score: number | null;
+  itemKey?: string;
+  provenanceValid: boolean;
+  text: string;
+}
+
+interface M15AnswerRetrieval {
+  ok: boolean;
+  elapsedMs: number;
+  candidates: M15AnswerEvidenceCandidate[];
+  provenanceViolationCount: number;
+  errorType?: string;
+  errorMessage?: string;
+}
+
+function m15AnswerProfile(): ProfileContext {
+  const profile: StudentProfile = {
+    version: 2,
+    targetExam: "Physics source-grounding evaluation",
+    recentTopics: [],
+    recentSubjects: [],
+    attentionTopics: [],
+    revisionQueue: [],
+    learningSignals: [],
+    questionCount: 0,
+    lastUpdatedAt: Date.now(),
+  };
+  return {
+    profile,
+    recentTopicHint: "",
+    attentionTopicHint: "",
+    revisionHint: "",
+    recentConversation: [],
+  };
+}
+
+async function retrieveM15AnswerEvidenceAiSearch(
+  env: M15BenchmarkStagingEnv,
+  source: M15BenchmarkSourceRow,
+  item: M15Case,
+): Promise<M15AnswerRetrieval> {
+  const started = performance.now();
+  try {
+    const search = env.BRVIN_M15_BENCHMARK_AI_SEARCH;
+    if (!search) throw new Error("The isolated M15 staging AI Search binding is missing.");
+    const response = await search.search({
+      messages: [{ role: "user", content: item.query }],
+      ai_search_options: {
+        cache: { enabled: false },
+        retrieval: {
+          max_num_results: 16,
+          match_threshold: 0.3,
+          retrieval_type: "hybrid",
+          keyword_match_mode: "or",
+          filters: { folder: { $in: [sourcePrefix(source.source_id)] } },
+        },
+        reranking: { enabled: true, model: "@cf/baai/bge-reranker-base", match_threshold: 0.4 },
+      },
+    });
+    const candidates = (response.chunks ?? []).slice(0, TOP_K).map((chunk, index) => {
+      const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
+      const page = pageFromItemKey(key, source.source_id);
+      const valid = page !== null;
+      return {
+        rank: index + 1,
+        page,
+        score: typeof chunk.score === "number" ? chunk.score : null,
+        ...(valid ? { itemKey: key } : {}),
+        provenanceValid: valid,
+        text: valid && typeof chunk.text === "string" ? chunk.text.slice(0, 4_500) : "",
+      };
+    });
+    return {
+      ok: true,
+      elapsedMs: Math.round((performance.now() - started) * 100) / 100,
+      candidates,
+      provenanceViolationCount: candidates.filter((candidate) => !candidate.provenanceValid).length,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      elapsedMs: Math.round((performance.now() - started) * 100) / 100,
+      candidates: [],
+      provenanceViolationCount: 0,
+      errorType: error instanceof Error && error.name ? error.name.slice(0, 64) : "ProviderError",
+      errorMessage: safeM15ProviderErrorMessage(error),
+    };
+  }
+}
+
+async function retrieveM15AnswerEvidenceQdrant(
+  env: M15BenchmarkStagingEnv,
+  source: M15BenchmarkSourceRow,
+  item: M15Case,
+): Promise<M15AnswerRetrieval> {
+  const started = performance.now();
+  try {
+    const pilot = await createQdrantPilot(env, BENCHMARK_QDRANT_COLLECTION);
+    const hits = await pilot.query({
+      projectId: source.project_id,
+      authorizedSourceIds: [source.source_id],
+      query: item.query,
+      limit: TOP_K,
+      prefetchLimit: PREFETCH_LIMIT,
+      ensureCollection: false,
+    });
+    const candidates = hits.slice(0, TOP_K).map((hit, index) => {
+      const valid = hit.sourceId === source.source_id &&
+        hit.itemKey.startsWith(sourcePrefix(source.source_id)) &&
+        Number.isSafeInteger(hit.pdfPage) && hit.pdfPage >= 1 && hit.pdfPage <= SOURCE_PAGE_COUNT;
+      return {
+        rank: index + 1,
+        page: valid ? hit.pdfPage : null,
+        score: typeof hit.score === "number" ? hit.score : null,
+        ...(valid ? { itemKey: hit.itemKey } : {}),
+        provenanceValid: valid,
+        text: valid && typeof hit.text === "string" ? hit.text.slice(0, 4_500) : "",
+      };
+    });
+    return {
+      ok: true,
+      elapsedMs: Math.round((performance.now() - started) * 100) / 100,
+      candidates,
+      provenanceViolationCount: candidates.filter((candidate) => !candidate.provenanceValid).length,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      elapsedMs: Math.round((performance.now() - started) * 100) / 100,
+      candidates: [],
+      provenanceViolationCount: 0,
+      errorType: error instanceof Error && error.name ? error.name.slice(0, 64) : "ProviderError",
+      errorMessage: safeM15ProviderErrorMessage(error),
+    };
+  }
+}
+
+function normalizeM15Answer(answer: string): string {
+  return answer
+    .toLowerCase()
+    .replace(/[−–—]/gu, "-")
+    .replace(/[×·]/gu, "*")
+    .replace(/²/gu, "2")
+    .replace(/ₛ/gu, "s")
+    .replace(/\\(?:times|cdot)/gu, "*")
+    .replace(/\\(?:mathrm|text)\{([^}]+)\}/gu, "$1")
+    .replace(/\\(?:left|right)/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function m15AnswerHasUnitValue(answer: string, value: string, unitPattern: string): boolean {
+  const normalized = normalizeM15Answer(answer);
+  const number = value.replace(/\./gu, "\\.");
+  return new RegExp("(?<![0-9.])" + number + "(?![0-9])\\s*(?:" + unitPattern + ")", "iu").test(normalized);
+}
+
+function m15AnswerHasSignedUnitValue(answer: string, value: string, unitPattern: string): boolean {
+  const normalized = normalizeM15Answer(answer);
+  const number = value.replace(/\./gu, "\\.");
+  return new RegExp("-\\s*" + number + "(?![0-9])\\s*(?:" + unitPattern + ")", "iu").test(normalized);
+}
+
+function m15AnswerCompactMath(answer: string): string {
+  return normalizeM15Answer(answer)
+    .replace(/\\(?:frac)\{([^}]+)\}\{([^}]+)\}/gu, "$1/$2")
+    .replace(/[_{}$^\\\s]/gu, "")
+    .replace(/\*/gu, "");
+}
+
+function explicitlyAbstainsFromM15(answer: string): boolean {
+  return /(?:not enough information|does not provide enough|doesn't provide enough|not supported by (?:the|this) source|not present in (?:the|this) source|not included in (?:the|this) source|cannot be determined from (?:the|this) source|can't be determined from (?:the|this) source|no relevant (?:source )?evidence|no information (?:is )?(?:provided|available) in (?:the|this) source|unable to answer from (?:the|this) source)/iu.test(answer);
+}
+
+function m15AnswerPageCitations(answer: string): number[] {
+  const pages = new Set<number>();
+  const patterns = [
+    /\bpdf\s*(?:page|p\.?)\s*(\d+)\b/giu,
+    /\bpage\s*(?:no\.?\s*)?(\d+)\b/giu,
+    /\bp\.\s*(\d+)\b/giu,
+  ];
+  for (const pattern of patterns) {
+    for (const match of answer.matchAll(pattern)) {
+      const page = Number(match[1]);
+      if (Number.isSafeInteger(page)) pages.add(page);
+    }
+  }
+  return [...pages].sort((a, b) => a - b);
+}
+
+export function evaluateM15AnswerQuality(input: {
+  queryId: string;
+  answer: string;
+  retrievedPages: number[];
+  citedPages: number[];
+  provenanceViolationCount: number;
+  retrievalOk: boolean;
+}): {
+  answerCorrectness: { passed: boolean; checks: Array<{ id: string; passed: boolean }> };
+  sourceGroundingCorrectness: boolean;
+  citationCorrectness: boolean;
+  mathematicalSymbolFidelity: boolean | null;
+  abstentionCorrectness: boolean | null;
+  irrelevantEvidenceResistanceDemonstrated: boolean | null;
+  overallPass: boolean;
+  failureCases: string[];
+} {
+  const answer = input.answer ?? "";
+  const normalized = normalizeM15Answer(answer);
+  const compact = m15AnswerCompactMath(answer);
+  const check = (id: string, passed: boolean) => ({ id, passed });
+  const pageTargets = input.queryId === "H01"
+    ? [8]
+    : M15_BENCHMARK_QUERY_SUITE.find((item) => item.id === input.queryId)?.expectedPages ?? [];
+  const hasTargetEvidence = pageTargets.length > 0 &&
+    pageTargets.every((page) => input.retrievedPages.includes(page));
+  const noProvenanceViolations = input.provenanceViolationCount === 0;
+  const isNegative = /^N0[1-4]$/u.test(input.queryId);
+  let checks: Array<{ id: string; passed: boolean }> = [];
+  let abstentionCorrectness: boolean | null = null;
+  let irrelevantEvidenceResistanceDemonstrated: boolean | null = null;
+  let mathApplicable = true;
+
+  if (isNegative) {
+    const abstains = explicitlyAbstainsFromM15(answer);
+    const unsupportedCalculation = input.queryId === "N02"
+      ? /(?:^|[^0-9])4\s*a(?:mp(?:ere)?s?)?(?:$|[^a-z])/iu.test(normalized)
+      : input.queryId === "N03"
+        ? /q\s*v\s*b|q\s*v\s*[*x]\s*b|q\(v\s*[x*]\s*b\)|lorentz force\s*=/iu.test(normalized)
+        : input.queryId === "N04"
+          ? /p\s*v\s*=\s*n\s*r\s*t|p\s*=\s*n\s*r\s*t\s*\/\s*v|n\s*r\s*t\s*\/\s*v/iu.test(normalized)
+          : /c\s*=\s*(?:epsilon|ε)|(?:epsilon|ε)\s*0\s*a\s*\/\s*d/iu.test(normalized);
+    checks = [
+      check("explicitSourceAbstention", abstains),
+      check("doesNotSupplyUnsupportedResult", !unsupportedCalculation),
+      check("doesNotCiteUnrelatedPage", input.citedPages.length === 0),
+    ];
+    abstentionCorrectness = checks.every((item) => item.passed);
+    irrelevantEvidenceResistanceDemonstrated = abstentionCorrectness && input.retrievedPages.length > 0;
+    mathApplicable = false;
+  } else {
+    switch (input.queryId) {
+      case "P01":
+        checks = [
+          check("statesNewtonSecondLawEquation", /(?:fnet|f)=ma|fnet=mass(?:x|\*)acceleration/iu.test(compact)),
+          check("connectsNetForceMassAcceleration", /net force/iu.test(normalized) && /mass/iu.test(normalized) && /acceleration/iu.test(normalized)),
+          check("avoidsMalformedMassAccelerationToken", !/\bm\s+xa\b/iu.test(normalized)),
+        ];
+        break;
+      case "P02":
+        checks = [
+          check("netForceSixNewtonsEast", /(?:6\s*(?:n|newtons?).{0,30}east|east.{0,30}6\s*(?:n|newtons?))/iu.test(normalized)),
+          check("accelerationThreeMetresPerSecondSquared", m15AnswerHasUnitValue(answer, "3", "m\\s*\\/\\s*s2|m\\s*\\/\\s*s\\s*\\^\\s*2")),
+          check("accelerationDirectionEast", /(?:3\s*m\s*\/\s*s2?.{0,40}east|east.{0,40}3\s*m\s*\/\s*s2?)/iu.test(normalized)),
+        ];
+        break;
+      case "P03":
+        checks = [
+          check("accelerationThreeMetresPerSecondSquared", m15AnswerHasUnitValue(answer, "3", "m\\s*\\/\\s*s2|m\\s*\\/\\s*s\\s*\\^\\s*2")),
+          check("forwardDirection", /forward|forwards/iu.test(normalized)),
+        ];
+        break;
+      case "P04":
+        checks = [check("netForceTenNewtons", m15AnswerHasUnitValue(answer, "10", "n\\b|newtons?\\b"))];
+        break;
+      case "P05":
+        checks = [
+          check("weightNineteenPointSixNewtons", m15AnswerHasUnitValue(answer, "19.6", "n\\b|newtons?\\b")),
+          check("identifiesWeight", /weight/iu.test(normalized)),
+        ];
+        break;
+      case "P06":
+        checks = [
+          check("massRemainsConstant", /mass.{0,70}(?:constant|unchanged|does not change|remains the same|independent of gravity)|(?:constant|unchanged).{0,50}mass/iu.test(normalized)),
+          check("weightDependsOnLocalGravity", /weight.{0,90}(?:changes|varies|depends|proportional).{0,50}(?:gravity|g\b)|(?:gravity|g\b).{0,50}weight.{0,50}(?:changes|varies|depends)/iu.test(normalized)),
+        ];
+        mathApplicable = false;
+        break;
+      case "P07":
+        checks = [
+          check("kineticFrictionNinePointEightNewtons", m15AnswerHasUnitValue(answer, "9.8", "n\\b|newtons?\\b")),
+          check("identifiesKineticFriction", /kinetic friction/iu.test(normalized)),
+        ];
+        break;
+      case "P08":
+        checks = [
+          check("staticFrictionAdjusts", /static friction/iu.test(normalized) && /adjust|self.?adjust|var(?:y|ies)|changes? as needed/iu.test(normalized)),
+          check("staticFrictionIsNotAlwaysAtMaximum", /not always|not necessarily|does not always/iu.test(normalized)),
+          check("statesMaximumLimit", /maximum|up to|less than or equal|at most|≤|mu.?s.{0,20}(?:n|normal)/iu.test(normalized)),
+          check("doesNotRenderZeroAsLetterO", !/\bo\s*(?:≤|<=)\s*f_s\b/iu.test(answer)),
+        ];
+        break;
+      case "P09":
+        checks = [
+          check("downslopeComponentNineteenPointSixNewtons", m15AnswerHasUnitValue(answer, "19.6", "n\\b|newtons?\\b") && /downslope|down the slope/iu.test(normalized)),
+          check("normalForceApproximatelyThirtyFourNewtons", /(?:33\.9[0-9]?|34(?:\.0+)?)\s*(?:n|newtons?)/iu.test(normalized)),
+          check("identifiesNormalForce", /normal force/iu.test(normalized)),
+        ];
+        break;
+      case "P10":
+        checks = [
+          check("finalSpeedFourMetresPerSecond", m15AnswerHasUnitValue(answer, "4", "m\\s*\\/\\s*s\\b")),
+          check("usesWorkEnergyRelationship", /work.?energy|kinetic energy|change in kinetic energy|work is equal to/iu.test(normalized)),
+        ];
+        break;
+      case "P11":
+        checks = [
+          check("changeInMomentumMinusFourPointFive", m15AnswerHasSignedUnitValue(answer, "4.5", "kg\\s*(?:[.*]\\s*)?m\\s*\\/\\s*s")),
+          check("averageForceMinusNinetyNewtons", m15AnswerHasSignedUnitValue(answer, "90", "n\\b|newtons?\\b")),
+          check("identifiesAverageForce", /average force/iu.test(normalized)),
+          check("preservesNegativeDirection", m15AnswerHasSignedUnitValue(answer, "4.5", "kg\\s*(?:[.*]\\s*)?m\\s*\\/\\s*s") && m15AnswerHasSignedUnitValue(answer, "90", "n\\b|newtons?\\b")),
+        ];
+        break;
+      case "P12":
+        checks = [
+          check("restoringForceEquationHasNegativeSign", /fs=-kx/iu.test(compact)),
+          check("restoringForceMinusTenNewtons", m15AnswerHasSignedUnitValue(answer, "10", "n\\b|newtons?\\b")),
+          check("elasticPotentialEnergyQuarterJoule", m15AnswerHasUnitValue(answer, "0.25", "j\\b|joules?\\b")),
+          check("rendersSpringForceVariableBoundary", /f_s\s*=\s*-k(?:\s*\*\s*x|\s*x|x)(?![a-z])/iu.test(normalized)),
+          check("rendersElasticEnergyFormula", /(?:u_s|e)\s*=\s*(?:1\/2|½)\s*(?:\*\s*)?k(?:\s*\*\s*x|\s*x|x)(?:\s*\^\s*2|2)\b/iu.test(normalized)),
+        ];
+        break;
+      case "H01":
+        checks = [
+          check("sourceEquationHasNegativeRestoringForceSign", /fs=-kx/iu.test(compact)),
+          check("explicitlyRejectsPositiveSignAsSourceEquation", /(?:f_s\s*=\s*\+\s*k(?:\s*(?:[×*x])\s*x|\s+x)?[\s\S]{0,90}\bnot\b|\bdoes\s+not\s+use[\s\S]{0,40}f_s\s*=\s*\+\s*k)/iu.test(normalized)),
+          check("rendersCanonicalRestoringForceExpression", /f_s\s*=\s*-k(?:\s*[×*]\s*x|\s*x|x)(?![a-z])/iu.test(normalized)),
+        ];
+        break;
+      default:
+        checks = [check("knownM15QueryId", false)];
+        mathApplicable = false;
+    }
+  }
+
+  const answerCorrectnessPassed = checks.length > 0 && checks.every((item) => item.passed);
+  const sourceGroundingCorrectness = input.retrievalOk && noProvenanceViolations && (isNegative
+    ? Boolean(abstentionCorrectness) && input.citedPages.length === 0
+    : hasTargetEvidence && answerCorrectnessPassed);
+  const modelCitedPages = m15AnswerPageCitations(answer);
+  const modelCitationPagesValid = isNegative
+    ? modelCitedPages.length === 0
+    : modelCitedPages.every((page) => pageTargets.includes(page));
+  const citationCorrectness = modelCitationPagesValid && (isNegative
+    ? input.citedPages.length === 0
+    : pageTargets.length > 0 &&
+      pageTargets.every((page) => input.citedPages.includes(page)) &&
+      input.citedPages.every((page) => pageTargets.includes(page)) &&
+      hasTargetEvidence);
+  const mathematicalSymbolFidelity = mathApplicable
+    ? checks.every((item) => item.passed)
+    : null;
+  const failureCases: string[] = [];
+  if (!answerCorrectnessPassed) failureCases.push("answerCorrectness");
+  if (!sourceGroundingCorrectness) failureCases.push("sourceGroundingCorrectness");
+  if (!citationCorrectness) failureCases.push("citationCorrectness");
+  if (mathematicalSymbolFidelity === false) failureCases.push("mathematicalSymbolFidelity");
+  if (abstentionCorrectness === false) failureCases.push("abstentionCorrectness");
+  if (!input.retrievalOk) failureCases.push("retrievalFailed");
+  if (!noProvenanceViolations) failureCases.push("provenanceViolation");
+  return {
+    answerCorrectness: { passed: answerCorrectnessPassed, checks },
+    sourceGroundingCorrectness,
+    citationCorrectness,
+    mathematicalSymbolFidelity,
+    abstentionCorrectness,
+    irrelevantEvidenceResistanceDemonstrated,
+    overallPass: failureCases.length === 0,
+    failureCases: [...new Set(failureCases)],
+  };
+}
+
+async function readM15FormulaAuditSourceDocument(
+  env: M15BenchmarkStagingEnv,
+  source: M15BenchmarkSourceRow,
+  queryId: string,
+): Promise<GroundedGeminiSourceDocument> {
+  const allowedPhysicalPages = m15FormulaAuditPdfPages(queryId);
+  if (!allowedPhysicalPages) {
+    throw new Error("The original-PDF visual audit is limited to the fixed symbol-sensitive query subset.");
+  }
+  const expectedObject = "brvin/m15-benchmark/source-pdfs/" + source.source_id + "/source.pdf";
+  if (source.file_name !== SOURCE_FILE_NAME || source.source_sha256.toLowerCase() !== SOURCE_SHA256 ||
+      source.source_object !== expectedObject) {
+    throw new Error("The source PDF object does not match the fingerprint-pinned M15 benchmark source.");
+  }
+  const bucket = googleBucket(env);
+  const metadata = await gcsMetadata(env, bucket, expectedObject);
+  if (metadata.size !== SOURCE_BYTES) {
+    throw new Error("The original M15 PDF object size differs from the approved source.");
+  }
+  const bytes = await readGcsBytes(env, bucket, expectedObject, metadata.generation);
+  const validated = validateM15BenchmarkPdf(SOURCE_FILE_NAME, bytes);
+  if (!validated.ok) {
+    throw new Error("The original M15 source PDF failed its filename, byte-length or PDF-signature validation.");
+  }
+  return createM15FormulaAuditPdfAttachment(bytes, SOURCE_SHA256, allowedPhysicalPages);
+}
+
+async function runM15AnswerEvaluationQuery(
+  env: M15BenchmarkStagingEnv,
+  source: M15BenchmarkSourceRow,
+  queryId: string,
+  options: { attachOriginalPdf?: boolean } = {},
+): Promise<Record<string, unknown>> {
+  if (env.ENVIRONMENT !== "staging" || env.BRVIN_M14_PILOT_ENABLED?.trim().toLowerCase() !== "true") {
+    throw new Error("Consumer answer evaluation is restricted to the isolated staging Worker.");
+  }
+  if (source.source_sha256.toLowerCase() !== SOURCE_SHA256 ||
+      source.file_name !== SOURCE_FILE_NAME ||
+      source.status !== "ready" ||
+      source.page_count !== SOURCE_PAGE_COUNT ||
+      source.indexed_pages !== SOURCE_PAGE_COUNT ||
+      source.ai_search_indexed_pages !== SOURCE_PAGE_COUNT ||
+      source.qdrant_indexed_pages !== SOURCE_PAGE_COUNT ||
+      source.qdrant_point_count < SOURCE_PAGE_COUNT ||
+      !source.generation_id) {
+    throw new Error("The fingerprint-pinned eight-page M15 source and both staging indexes must remain READY.");
+  }
+  if (!env.GCP_PROJECT_ID?.trim() || !env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim()) {
+    throw new Error("Google service-account credentials required by the existing consumer Gemini generator are missing from staging.");
+  }
+  if (!env.BRVIN_M15_BENCHMARK_AI_SEARCH) {
+    throw new Error("The dedicated M15 staging AI Search binding is missing.");
+  }
+  const item = M15_BENCHMARK_QUERY_SUITE.find((candidate) => candidate.id === queryId);
+  if (!item) throw new Error("The requested query ID is not part of the fixed M15 17-query suite.");
+  const sourceDocument = options.attachOriginalPdf
+    ? await readM15FormulaAuditSourceDocument(env, source, queryId)
+    : undefined;
+
+  const [aiSearch, qdrant] = await Promise.all([
+    retrieveM15AnswerEvidenceAiSearch(env, source, item),
+    retrieveM15AnswerEvidenceQdrant(env, source, item),
+  ]);
+
+  const generate = async (retrieval: M15AnswerRetrieval) => {
+    const passages = retrieval.candidates
+      .filter((candidate) => candidate.provenanceValid && candidate.page !== null && candidate.text.trim().length > 0)
+      .map((candidate) => ({ pdfPage: candidate.page!, text: candidate.text }));
+    const sourceContext: GroundedGeminiSourceContext = {
+      sourceLabel: "BRVIN M15 Physics Benchmark Source v1",
+      passages,
+      ...(sourceDocument ? { sourceDocument } : {}),
+    };
+    const started = performance.now();
+    try {
+      const generation = await generateGeminiAnswer(
+        env,
+        item.query,
+        m15AnswerProfile(),
+        [],
+        undefined,
+        undefined,
+        sourceContext,
+      );
+      const generationLatencyMs = Math.round((performance.now() - started) * 100) / 100;
+      const expectedPages = item.category === "exact-symbol-near-miss" ? [8] : item.expectedPages;
+      const availablePages = [...new Set(passages.map((passage) => passage.pdfPage))];
+      const abstained = explicitlyAbstainsFromM15(generation.packet.answer);
+      const citedPages = abstained ? [] : expectedPages.filter((page) => availablePages.includes(page));
+      const citation = citedPages.length
+        ? "\n\nSource: BRVIN M15 Physics Benchmark Source v1, PDF p. " + citedPages.join(", ") + "."
+        : "";
+      const generatedAnswer = generation.packet.answer.trim();
+      const answerWithCitations = generatedAnswer + citation;
+      const evaluation = evaluateM15AnswerQuality({
+        queryId: item.id,
+        answer: generatedAnswer,
+        retrievedPages: availablePages,
+        citedPages,
+        provenanceViolationCount: retrieval.provenanceViolationCount,
+        retrievalOk: retrieval.ok,
+      });
+      return {
+        generatedAnswer,
+        answerWithCitations,
+        citedPages,
+        modelCitedPages: m15AnswerPageCitations(generatedAnswer),
+        generationLatencyMs,
+        model: env.GEMINI_MODEL?.trim() || "gemini-3.8-flash",
+        location: env.GEMINI_LOCATION?.trim() || "global",
+        responseMode: generation.packet.responseMode,
+        evaluation,
+      };
+    } catch (error) {
+      return {
+        generatedAnswer: "",
+        answerWithCitations: "",
+        citedPages: [],
+        modelCitedPages: [],
+        generationLatencyMs: Math.round((performance.now() - started) * 100) / 100,
+        model: env.GEMINI_MODEL?.trim() || "gemini-3.8-flash",
+        location: env.GEMINI_LOCATION?.trim() || "global",
+        generationError: safeM15ProviderErrorMessage(error),
+        evaluation: evaluateM15AnswerQuality({
+          queryId: item.id,
+          answer: "",
+          retrievedPages: passages.map((passage) => passage.pdfPage),
+          citedPages: [],
+          provenanceViolationCount: retrieval.provenanceViolationCount,
+          retrievalOk: retrieval.ok,
+        }),
+      };
+    }
+  };
+
+  const [aiSearchGeneration, qdrantGeneration] = await Promise.all([
+    generate(aiSearch),
+    generate(qdrant),
+  ]);
+  const summarizeProvider = (retrieval: M15AnswerRetrieval, generation: Record<string, unknown>) => ({
+    retrievalOk: retrieval.ok,
+    retrievalLatencyMs: retrieval.elapsedMs,
+    retrievedPages: retrieval.candidates.map((candidate) => candidate.page),
+    provenanceViolationCount: retrieval.provenanceViolationCount,
+    evidence: retrieval.candidates.map((candidate) => ({
+      rank: candidate.rank,
+      pdfPage: candidate.page,
+      score: candidate.score,
+      itemKey: candidate.itemKey ?? null,
+      provenanceValid: candidate.provenanceValid,
+      text: candidate.text,
+    })),
+    ...(retrieval.errorType ? { retrievalErrorType: retrieval.errorType } : {}),
+    ...(retrieval.errorMessage ? { retrievalError: retrieval.errorMessage } : {}),
+    ...generation,
+  });
+  return {
+    queryId: item.id,
+    category: item.category,
+    query: item.query,
+    expectedRetrievalPages: item.expectedPages,
+    answerEvaluationExpectedPages: item.category === "exact-symbol-near-miss" ? [8] : item.expectedPages,
+    retrievalExpectedNoMatch: item.expectedNoMatch,
+    sourceDocument: sourceDocument ? {
+      attached: true,
+      mimeType: sourceDocument.mimeType,
+      sourceSha256: sourceDocument.sourceSha256,
+      attachedPdfSha256: sourceDocument.attachedPdfSha256,
+      originalPhysicalPage: sourceDocument.originalPhysicalPage,
+      attachedPdfPageCount: sourceDocument.attachedPdfPageCount,
+      note: "Only this one-page extraction of the original immutable PDF was attached for visual notation verification; the original PDF, OCR, manifests and indexes were not changed.",
+    } : { attached: false },
+    cloudflareAiSearch: summarizeProvider(aiSearch, aiSearchGeneration),
+    qdrantVertex: summarizeProvider(qdrant, qdrantGeneration),
+  };
+}
+
+
+function m15AnswerEvaluationPage(): Response {
+  const html = String.raw`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>BRVIN M15 Consumer Answer Evaluation</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#090f1b;color:#e8eef8;padding:28px;min-height:100vh}
+main{width:min(100%,920px);margin:0 auto;background:#111b2b;border:1px solid #2a3b54;border-radius:18px;padding:clamp(20px,4vw,34px)}
+.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8ea6c7;font-weight:750}
+h1{font-size:clamp(25px,4vw,34px);letter-spacing:-.03em;margin:9px 0}
+p{color:#b9c7da;line-height:1.6}.notice{background:#17263a;border:1px solid #3b506b;padding:14px 16px;border-radius:12px;margin:18px 0}
+label{display:block;margin:17px 0 7px;font-weight:650}
+input{width:100%;padding:13px;border-radius:9px;border:1px solid #536985;background:#08111f;color:#fff;font:inherit}
+.row{display:flex;gap:12px;flex-wrap:wrap}button{padding:13px 17px;border:0;border-radius:10px;background:#2763c9;color:#fff;font:inherit;font-weight:750;cursor:pointer;margin-top:18px}
+button.secondary{background:#273850;border:1px solid #4a607d}button:disabled{opacity:.45;cursor:not-allowed}
+.status{white-space:pre-wrap;overflow-wrap:anywhere;background:#080f1b;border:1px solid #2b3e58;padding:14px;border-radius:10px;margin-top:16px;color:#b7c6d9}
+.good{color:#9ce4b4}.bad{color:#ffaaa6}.small{font-size:13px;color:#97abc5}
+a{color:#8bb7ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+@media(max-width:600px){body{padding:12px}main{padding:18px}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">Isolated staging only · M15 · no index writes</div>
+<h1>Consumer answer & abstention evaluation</h1>
+<p>Runs the original 17 fixed M15 queries against both staging retrieval providers, then passes each provider's verified retrieved excerpts through the existing consumer-owned Gemini generator. It uses one query per request and writes no result data to D1.</p>
+<div class="notice">
+<strong>Evaluation rules</strong>
+<p class="small">P01–P12 must be source-grounded and correct. N01–N04 must abstain even when unrelated passages are retrieved. H01 is not an abstention case: the source must correct the sign and identify F_s = -kx. Retrieved passages with invalid source-page provenance are not sent to Gemini.</p>
+</div>
+<label for="token">M15 staging operator token</label>
+<input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste the staging operator token">
+<div class="row"><button class="secondary" id="load" type="button">Load pinned eight-page source (read only)</button></div>
+<label for="sourceId">Pinned source ID</label>
+<input id="sourceId" type="text" readonly placeholder="Load the registered M15 source">
+<div class="notice small">The model and location are inherited from the staging Worker configuration. The token is held only in page memory for this run, is not stored in browser storage, and is cleared after completion.</div>
+<div class="row"><button id="run" type="button" disabled>Run all 17 queries · both providers · Gemini</button><a href="/admin/m15/benchmark" style="align-self:center;margin-top:18px">Back to M15 retrieval benchmark</a></div>
+<div class="notice"><strong>Separate formula-symbol experiment</strong><p class="small">The targeted audit runs five additional query pairs (10 Gemini generations) and attaches the SHA-verified original PDF as visual evidence. It is limited to the relevant physical page for each query. This does not rerun or overwrite the earlier 34-generation receipt. Google Cloud model-input usage may incur charges.</p></div>
+<div class="row"><button class="secondary" id="formulaRun" type="button" disabled>Run five-query formula-fidelity audit · original PDF</button></div>
+<div id="progress" class="status" role="status" aria-live="polite">No answer-generation calls have been made.</div>
+<div id="summary" class="status" hidden></div>
+<div class="row"><button class="secondary" id="downloadJson" type="button" disabled>Download JSON results</button><button class="secondary" id="downloadMarkdown" type="button" disabled>Download Markdown report</button></div>
+<div id="formulaProgress" class="status" role="status" aria-live="polite">The source-PDF-assisted formula audit has not run.</div>
+<div id="formulaSummary" class="status" hidden></div>
+<div class="row"><button class="secondary" id="downloadFormulaJson" type="button" disabled>Download formula audit JSON</button><button class="secondary" id="downloadFormulaMarkdown" type="button" disabled>Download formula audit Markdown</button></div>
+<details style="margin-top:18px"><summary>What this run does and does not do</summary><p class="small">Read-only queries to the dedicated M15 AI Search instance and Qdrant collection. Each provider is evaluated independently with the same Gemini model, source-only prompt, response schema and deterministic answer rubric. The report includes full retrieved text, page provenance, generated answers, citations, grading checks and latencies. It does not change production provider selection, BRVIN v2 RPC, source OCR, manifests, index contents or D1 records. The deterministic rubric is a first-pass gate and does not replace final human review of nuanced prose.</p></details>
+</main>
+<script>
+(() => {
+ const ids=["P01","P02","P03","P04","P05","P06","P07","P08","P09","P10","P11","P12","N01","N02","N03","N04","H01"];
+ const tokenInput=document.getElementById("token"), sourceInput=document.getElementById("sourceId");
+ const loadButton=document.getElementById("load"), runButton=document.getElementById("run");
+ const formulaButton=document.getElementById("formulaRun");
+ const progress=document.getElementById("progress"), summary=document.getElementById("summary");
+ const formulaProgress=document.getElementById("formulaProgress"), formulaSummary=document.getElementById("formulaSummary");
+ const jsonButton=document.getElementById("downloadJson"), mdButton=document.getElementById("downloadMarkdown");
+ const formulaJsonButton=document.getElementById("downloadFormulaJson"), formulaMdButton=document.getElementById("downloadFormulaMarkdown");
+ let latestReport=null, latestFormulaReport=null;
+ function refresh(){
+   const ready=sourceInput.value.trim().length>0&&tokenInput.value.trim().length>=32;
+   runButton.disabled=!ready;
+   formulaButton.disabled=!ready;
+ }
+ tokenInput.addEventListener("input",refresh);
+ async function request(path,method,secret,body){
+   const response=await fetch(path,{method,headers:{"authorization":"Bearer "+secret,...(body?{"content-type":"application/json"}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer"});
+   let data;try{data=await response.json()}catch{throw new Error("Staging returned a non-JSON response (HTTP "+response.status+").")}
+   if(!response.ok||data.ok!==true)throw new Error(data.error||data.message||("Staging request failed (HTTP "+response.status+")."));
+   return data;
+ }
+ loadButton.addEventListener("click",async()=>{
+   const secret=tokenInput.value.trim();tokenInput.value="";refresh();
+   if(secret.length<32){progress.className="status bad";progress.textContent="Enter the staging operator token first.";return;}
+   loadButton.disabled=true;progress.className="status";progress.textContent="Reading the registered source row (no source/index writes)…";
+   try{
+     const data=await request("/admin/m15/benchmark/answers/source","GET",secret);
+     sourceInput.value=data.source.sourceId||data.source.source_id||"";
+     progress.className="status good";progress.textContent="Pinned M15 source loaded: "+sourceInput.value+". Status: "+(data.source.status||"ready")+". Pages: "+(data.source.pageCount||data.source.page_count||8)+".";
+   }catch(error){progress.className="status bad";progress.textContent=error.message;}
+   finally{loadButton.disabled=false;refresh();}
+ });
+ function providerSummary(key,results){
+   const rows=results.map(x=>x[key]||{});
+   const evaluations=rows.map(x=>x.evaluation||{});
+   const passed=rows.filter(x=>x.evaluation&&x.evaluation.overallPass).length;
+   const latencies=rows.map(x=>x.generationLatencyMs).filter(x=>typeof x==="number").sort((a,b)=>a-b);
+   const avg=latencies.length?Math.round(latencies.reduce((a,b)=>a+b,0)/latencies.length*100)/100:null;
+   const negativeRows=results.filter(x=>/^N0[1-4]$/u.test(x.queryId)).map(x=>x[key]?.evaluation||{});
+   return {queryCount:rows.length,overallPassCount:passed,failedQueryIds:results.filter((x,i)=>!rows[i].evaluation||!rows[i].evaluation.overallPass).map(x=>x.queryId),answerCorrectCount:evaluations.filter(x=>x.answerCorrectness&&x.answerCorrectness.passed).length,sourceGroundingCorrectCount:evaluations.filter(x=>x.sourceGroundingCorrectness).length,citationCorrectCount:evaluations.filter(x=>x.citationCorrectness).length,mathSymbolFidelityApplicableCount:evaluations.filter(x=>x.mathematicalSymbolFidelity!==null&&x.mathematicalSymbolFidelity!==undefined).length,mathSymbolFidelityPassCount:evaluations.filter(x=>x.mathematicalSymbolFidelity===true).length,abstentionApplicableCount:evaluations.filter(x=>x.abstentionCorrectness!==null&&x.abstentionCorrectness!==undefined).length,abstentionPassCount:evaluations.filter(x=>x.abstentionCorrectness===true).length,irrelevantEvidenceChallengeCount:negativeRows.length,irrelevantEvidenceResistancePassCount:negativeRows.filter(x=>x.irrelevantEvidenceResistanceDemonstrated===true).length,negativeQueriesWithoutRetrievedEvidence:negativeRows.filter(x=>x.irrelevantEvidenceResistanceDemonstrated===false).length,averageGenerationLatencyMs:avg,medianGenerationLatencyMs:latencies.length?latencies[Math.floor((latencies.length-1)/2)]:null};
+ }
+ function makeMarkdown(report){
+   let out="# BRVIN M15 Consumer Answer & Abstention Evaluation\n\n";
+   out+="Run: "+report.runAt+"\nSource: "+report.sourceId+"\nModel: "+report.model+" ("+report.location+")\nCompleted query pairs: "+report.results.length+"/17\n\n";
+   for(const key of ["cloudflareAiSearch","qdrantVertex"]){
+     const s=report.summary[key];out+="## "+key+"\n\n";
+     out+="Pass: "+s.overallPassCount+"/"+s.queryCount+"; failed: "+(s.failedQueryIds.join(", ")||"none")+"; average generation latency: "+s.averageGenerationLatencyMs+" ms; median: "+s.medianGenerationLatencyMs+" ms.\n\n";
+     out+="| Query | Evidence pages | Answer | Grounding | Citation | Math | Abstention | Irrelevant-evidence challenge | Generation ms | Pass | Failures |\\n|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|\\n";
+     for(const result of report.results){
+       const p=result[key]||{},e=p.evaluation||{},pages=(p.retrievedPages||[]).filter(x=>x!==null).join(", ");
+       const v=x=>x===null||x===undefined?"N/A":x?"PASS":"FAIL";
+       out+="| "+result.queryId+" | "+pages+" | "+v(e.answerCorrectness&&e.answerCorrectness.passed)+" | "+v(e.sourceGroundingCorrectness)+" | "+v(e.citationCorrectness)+" | "+v(e.mathematicalSymbolFidelity)+" | "+v(e.abstentionCorrectness)+" | "+v(e.irrelevantEvidenceResistanceDemonstrated)+" | "+(p.generationLatencyMs??"N/A")+" | "+v(e.overallPass)+" | "+((e.failureCases||[]).join(", ")||"—")+" |\\n";
+     }
+     out+="\n";
+     for(const result of report.results){
+       const p=result[key]||{},e=p.evaluation||{};
+       out+="### "+result.queryId+" · "+result.query+"\n\n";
+       out+="**Retrieved evidence and pages**\n\n";
+       for(const candidate of p.evidence||[]) out+="- Rank "+candidate.rank+", PDF p. "+candidate.pdfPage+", score "+candidate.score+", provenance "+candidate.provenanceValid+"\n\n"+candidate.text+"\n\n";
+       out+="**Generated answer**\n\n"+(p.answerWithCitations||p.generationError||"No generated answer.")+"\n\n";
+       out+="**Model-supplied page references:** "+((p.modelCitedPages||[]).join(", ")||"none")+". **Appended source-page citations:** "+((p.citedPages||[]).join(", ")||"none")+".\n\n";
+       out+="**Evaluation**\n\n"+JSON.stringify(e,null,2)+"\n\n";
+     }
+   }
+   return out;
+ }
+ function download(name,mime,value){
+   const blob=new Blob([value],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement("a");
+   a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+ }
+ runButton.addEventListener("click",async()=>{
+   let secret=tokenInput.value.trim();const sourceId=sourceInput.value.trim();tokenInput.value="";refresh();
+   if(secret.length<32||!sourceId)return;
+   runButton.disabled=true;loadButton.disabled=true;progress.className="status";progress.textContent="Starting paired retrieval and Gemini generation. Each query is processed once for each provider.";
+   summary.hidden=true;jsonButton.disabled=true;mdButton.disabled=true;latestReport=null;
+   const results=[];let requestFailure=null;
+   for(let i=0;i<ids.length;i++){
+     progress.textContent="Evaluating "+ids[i]+" ("+(i+1)+"/17). Two Gemini generations are being run against the same query.";
+     try{
+       const response=await request("/admin/m15/benchmark/answers/run","POST",secret,{sourceId,queryId:ids[i]});
+       results.push(response.result);
+     }catch(error){requestFailure=ids[i]+": "+error.message;break;}
+   }
+   const model=results.length?((results[0].cloudflareAiSearch||{}).model||"gemini-3.8-flash"):"gemini-3.8-flash";
+   const location=results.length?((results[0].cloudflareAiSearch||{}).location||"global"):"global";
+   const report={benchmark:"brvin-m15-consumer-answer-evaluation",runAt:new Date().toISOString(),sourceId,model,location,queryCount:17,completedQueryPairs:results.length,complete:results.length===17&&!requestFailure,requestFailure,results,summary:{cloudflareAiSearch:providerSummary("cloudflareAiSearch",results),qdrantVertex:providerSummary("qdrantVertex",results)}};
+   latestReport=report;
+   const summaryText=JSON.stringify(report.summary,null,2);
+   summary.hidden=false;summary.className="status";summary.textContent=summaryText;
+   jsonButton.disabled=results.length===0;mdButton.disabled=results.length===0;
+   progress.className="status "+(report.complete?"good":"bad");
+   progress.textContent=report.complete?"Completed all 17 paired queries. Review exact failed IDs and download both reports.":"Stopped after "+results.length+"/17 pairs. "+(requestFailure||"The run did not complete.");
+   secret="";
+   loadButton.disabled=false;refresh();
+ });
+ jsonButton.addEventListener("click",()=>{if(latestReport)download("brvin-m15-consumer-answer-evaluation.json","application/json",JSON.stringify(latestReport,null,2));});
+ mdButton.addEventListener("click",()=>{if(latestReport)download("brvin-m15-consumer-answer-evaluation.md","text/markdown",makeMarkdown(latestReport));});
+ formulaButton.addEventListener("click",async()=>{
+   let secret=tokenInput.value.trim();const sourceId=sourceInput.value.trim();tokenInput.value="";refresh();
+   const ids=["P01","P08","P11","P12","H01"];
+   if(secret.length<32||!sourceId)return;
+   formulaButton.disabled=true;loadButton.disabled=true;formulaProgress.className="status";
+   formulaSummary.hidden=true;formulaJsonButton.disabled=true;formulaMdButton.disabled=true;latestFormulaReport=null;
+   formulaProgress.textContent="Starting the targeted original-PDF visual audit. This performs 10 new Gemini generations and does not modify OCR or indexes.";
+   const results=[];let requestFailure=null;
+   for(let i=0;i<ids.length;i++){
+     formulaProgress.textContent="Auditing "+ids[i]+" ("+(i+1)+"/5). The original PDF is attached for the permitted physical page only.";
+     try{
+       const response=await request("/admin/m15/benchmark/answers/formula-audit/run","POST",secret,{sourceId,queryId:ids[i]});
+       results.push(response.result);
+     }catch(error){requestFailure=ids[i]+": "+error.message;break;}
+   }
+   const model=results.length?((results[0].cloudflareAiSearch||{}).model||"gemini-3.8-flash"):"gemini-3.8-flash";
+   const location=results.length?((results[0].cloudflareAiSearch||{}).location||"global"):"global";
+   const formulaReport={
+     benchmark:"brvin-m15-original-pdf-assisted-formula-fidelity-audit",
+     runAt:new Date().toISOString(),sourceId,sourcePdfSha256:"cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92",
+     model,location,queryCount:ids.length,completedQueryPairs:results.length,
+     complete:results.length===ids.length&&!requestFailure,requestFailure,results,
+     summary:{cloudflareAiSearch:providerSummary("cloudflareAiSearch",results),qdrantVertex:providerSummary("qdrantVertex",results)}
+   };
+   latestFormulaReport=formulaReport;formulaSummary.hidden=false;formulaSummary.className="status";
+   formulaSummary.textContent=JSON.stringify(formulaReport.summary,null,2);
+   formulaJsonButton.disabled=results.length===0;formulaMdButton.disabled=results.length===0;
+   formulaProgress.className="status "+(formulaReport.complete?"good":"bad");
+   formulaProgress.textContent=formulaReport.complete
+     ?"Completed all five PDF-assisted formula queries. Compare each answer with the prior OCR-only run."
+     :"Stopped after "+results.length+"/5 formula queries. "+(requestFailure||"The audit did not complete.");
+   secret="";loadButton.disabled=false;refresh();
+ });
+ formulaJsonButton.addEventListener("click",()=>{if(latestFormulaReport)download("brvin-m15-original-pdf-formula-audit.json","application/json",JSON.stringify(latestFormulaReport,null,2));});
+ formulaMdButton.addEventListener("click",()=>{if(latestFormulaReport)download("brvin-m15-original-pdf-formula-audit.md","text/markdown",makeMarkdown(latestFormulaReport));});
+ refresh();
+})();
+</script></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, private",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
+    },
+  });
+}
+
 export async function handleM15BenchmarkStagingRequest(
   request: Request,
   env: M15BenchmarkStagingEnv,
@@ -1579,6 +2408,9 @@ export async function handleM15BenchmarkStagingRequest(
   }
   if (url.pathname === "/admin/m15/benchmark" && request.method === "GET") {
     return m15BenchmarkAdminPage();
+  }
+  if (url.pathname === "/admin/m15/benchmark/answers" && request.method === "GET") {
+    return m15AnswerEvaluationPage();
   }
   if (url.pathname === "/admin/m15/benchmark/health" && request.method === "GET") {
     return json({
@@ -1603,12 +2435,63 @@ export async function handleM15BenchmarkStagingRequest(
 
   if (!url.pathname.startsWith("/admin/m15/benchmark/source/") &&
       url.pathname !== "/admin/m15/benchmark/run" &&
-      url.pathname !== "/admin/m15/benchmark/complete") {
+      url.pathname !== "/admin/m15/benchmark/complete" &&
+      url.pathname !== "/admin/m15/benchmark/answers/source" &&
+      url.pathname !== "/admin/m15/benchmark/answers/run" &&
+      url.pathname !== "/admin/m15/benchmark/answers/formula-audit/run") {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if (!["GET","POST"].includes(request.method)) return json({ ok: false, error: "method_not_allowed" }, 405);
   if (!await authenticated(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
   if (!env.DB) return json({ ok: false, error: "staging_database_missing" }, 503);
+
+  // Answer evaluation is intentionally read-only: no schema setup, D1 writes,
+  // source mutation, or index mutation occurs on either answer endpoint.
+  if (url.pathname === "/admin/m15/benchmark/answers/source" && request.method === "GET") {
+    const row = await env.DB.prepare(
+      "SELECT * FROM m15_benchmark_sources WHERE source_sha256 = ? LIMIT 1",
+    ).bind(SOURCE_SHA256).first<M15BenchmarkSourceRow>();
+    if (!row) return json({ ok: false, error: "registered_benchmark_source_not_found" }, 404);
+    return json({ ok: true, source: publicSource(row) });
+  }
+
+  if (url.pathname === "/admin/m15/benchmark/answers/run" && request.method === "POST") {
+    let answerBody: { sourceId?: unknown; queryId?: unknown };
+    try { answerBody = await request.json() as { sourceId?: unknown; queryId?: unknown }; }
+    catch { return json({ ok: false, error: "invalid_json" }, 400); }
+    if (!validUuid(answerBody.sourceId)) return json({ ok: false, error: "invalid_source_id" }, 400);
+    if (typeof answerBody.queryId !== "string" ||
+        !M15_BENCHMARK_QUERY_SUITE.some((item) => item.id === answerBody.queryId)) {
+      return json({ ok: false, error: "invalid_m15_query_id" }, 400);
+    }
+    const row = await getSource(env, answerBody.sourceId);
+    if (!row) return json({ ok: false, error: "benchmark_source_not_found" }, 404);
+    try {
+      const result = await runM15AnswerEvaluationQuery(env, row, answerBody.queryId);
+      return json({ ok: true, result });
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
+  }
+
+  if (url.pathname === "/admin/m15/benchmark/answers/formula-audit/run" && request.method === "POST") {
+    let answerBody: { sourceId?: unknown; queryId?: unknown };
+    try { answerBody = await request.json() as { sourceId?: unknown; queryId?: unknown }; }
+    catch { return json({ ok: false, error: "invalid_json" }, 400); }
+    if (!validUuid(answerBody.sourceId)) return json({ ok: false, error: "invalid_source_id" }, 400);
+    if (typeof answerBody.queryId !== "string" || !m15FormulaAuditPdfPages(answerBody.queryId)) {
+      return json({ ok: false, error: "query_not_in_formula_audit_subset" }, 400);
+    }
+    const row = await getSource(env, answerBody.sourceId);
+    if (!row) return json({ ok: false, error: "benchmark_source_not_found" }, 404);
+    try {
+      const result = await runM15AnswerEvaluationQuery(env, row, answerBody.queryId, { attachOriginalPdf: true });
+      return json({ ok: true, result });
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
+  }
+
   await ensureSchema(env);
 
   if (url.pathname === "/admin/m15/benchmark/source/upload" && request.method === "POST") {

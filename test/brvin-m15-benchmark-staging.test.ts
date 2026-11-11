@@ -1,6 +1,10 @@
+import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import {
   M15_BENCHMARK_QUERY_SUITE,
+  M15_FORMULA_AUDIT_QUERY_IDS,
+  createM15FormulaAuditPdfAttachment,
+  m15FormulaAuditPdfPages,
   m15BenchmarkBatchWindow,
   isM15AiSearchItemPending,
   m15AiSearchMetadataForPage,
@@ -9,6 +13,7 @@ import {
   m15QdrantPageWindow,
   shouldPersistM15VisionStatus,
   summarizeM15BenchmarkProvider,
+  evaluateM15AnswerQuality,
   validateM15BenchmarkPdf,
   handleM15BenchmarkStagingRequest,
 } from "../src/brvin/m15-benchmark-staging";
@@ -38,6 +43,83 @@ describe("M15 second-source benchmark definition", () => {
     expect(html).toContain("localStorage.getItem");
     expect(html).toContain("localStorage.setItem");
     expect(html).toContain("operator token is never stored");
+  });
+
+  it("limits the original-PDF audit to the five fixed formula-sensitive queries and their expected physical pages", () => {
+    expect(M15_FORMULA_AUDIT_QUERY_IDS).toEqual(["P01", "P08", "P11", "P12", "H01"]);
+    expect(m15FormulaAuditPdfPages("P01")).toEqual([1]);
+    expect(m15FormulaAuditPdfPages("P08")).toEqual([4]);
+    expect(m15FormulaAuditPdfPages("P11")).toEqual([7]);
+    expect(m15FormulaAuditPdfPages("P12")).toEqual([8]);
+    expect(m15FormulaAuditPdfPages("H01")).toEqual([8]);
+    expect(m15FormulaAuditPdfPages("N01")).toBeNull();
+    expect(m15FormulaAuditPdfPages("P02")).toBeNull();
+  });
+
+  it("attaches only an extracted original PDF page after verifying the complete source SHA-256", async () => {
+    const original = await PDFDocument.create();
+    for (let page = 1; page <= 8; page += 1) {
+      const pdfPage = original.addPage([600, 800]);
+      pdfPage.drawText("Original physical PDF page " + page, { x: 50, y: 750 });
+    }
+    const bytes = await original.save();
+    const digestInput = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(digestInput).set(bytes);
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", digestInput));
+    const sha256 = Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
+    const attachment = await createM15FormulaAuditPdfAttachment(bytes, sha256, [8]);
+    expect(attachment).toMatchObject({
+      mimeType: "application/pdf",
+      sourceSha256: sha256,
+      originalPhysicalPage: 8,
+      attachedPdfPageCount: 1,
+    });
+    expect(attachment.attachedPdfSha256).toMatch(/^[a-f0-9]{64}$/u);
+    expect(attachment.attachedPdfSha256).not.toBe(sha256);
+    const decoded = Uint8Array.from(atob(attachment.base64Data), (character) => character.charCodeAt(0));
+    const extracted = await PDFDocument.load(decoded);
+    expect(extracted.getPageCount()).toBe(1);
+    expect(extracted.getPage(0).getWidth()).toBe(600);
+    expect(extracted.getPage(0).getHeight()).toBe(800);
+    await expect(createM15FormulaAuditPdfAttachment(bytes, "0".repeat(64), [8]))
+      .rejects.toThrow("does not match");
+    await expect(createM15FormulaAuditPdfAttachment(bytes, sha256, [0]))
+      .rejects.toThrow("exactly one valid original physical PDF page");
+    await expect(createM15FormulaAuditPdfAttachment(bytes, sha256, [1, 8]))
+      .rejects.toThrow("exactly one valid original physical PDF page");
+    await expect(createM15FormulaAuditPdfAttachment(new TextEncoder().encode("not a PDF"), sha256, [8]))
+      .rejects.toThrow("valid bounded PDF");
+    const incomplete = await PDFDocument.create();
+    incomplete.addPage([600, 800]);
+    const incompleteBytes = await incomplete.save();
+    const incompleteBuffer = new ArrayBuffer(incompleteBytes.byteLength);
+    new Uint8Array(incompleteBuffer).set(incompleteBytes);
+    const incompleteDigest = new Uint8Array(await crypto.subtle.digest("SHA-256", incompleteBuffer));
+    const incompleteSha256 = Array.from(incompleteDigest, (value) => value.toString(16).padStart(2, "0")).join("");
+    await expect(createM15FormulaAuditPdfAttachment(incompleteBytes, incompleteSha256, [8]))
+      .rejects.toThrow("exactly eight physical pages");
+  });
+
+  it("serves the isolated consumer answer evaluation page only in staging", async () => {
+    const staging = await handleM15BenchmarkStagingRequest(
+      new Request("https://staging.example/admin/m15/benchmark/answers"),
+      { ENVIRONMENT: "staging", BRVIN_M14_PILOT_ENABLED: "true" } as never,
+    );
+    const html = await staging.text();
+    expect(staging.status).toBe(200);
+    expect(html).toContain("/admin/m15/benchmark/answers/source");
+    expect(html).toContain("/admin/m15/benchmark/answers/run");
+    expect(html).toContain("Run all 17 queries");
+    expect(html).toContain('id="formulaRun"');
+    expect(html).toContain("/admin/m15/benchmark/answers/formula-audit/run");
+    expect(html).toContain("five additional query pairs");
+    expect(html).toContain("Download JSON results");
+
+    const production = await handleM15BenchmarkStagingRequest(
+      new Request("https://production.example/admin/m15/benchmark/answers"),
+      { ENVIRONMENT: "production", BRVIN_M14_PILOT_ENABLED: "true" } as never,
+    );
+    expect(production.status).toBe(404);
   });
 
   it("waits on queued/running AI Search items and distinguishes terminal states", () => {
@@ -189,5 +271,207 @@ describe("M15 second-source benchmark definition", () => {
       allNegativeControlsCompleted: false,
     });
     expect("falsePositiveRate" in summary).toBe(false);
+  });
+});
+
+
+describe("M15 consumer answer quality rubric", () => {
+  it("grades the restoring-force equation, negative sign, units and energy", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P12",
+      answer: "The restoring force is F_s = -kx = -10 N. Elastic potential energy is E = 1/2 kx^2 = 0.25 J.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(true);
+    expect(result.mathematicalSymbolFidelity).toBe(true);
+  });
+
+  it("rejects a malformed Newton-law equation fragment even when a second equation is correct", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P01",
+      answer: "The relationship is ΣF = m xa | F_net = m × a.",
+      retrievedPages: [1],
+      citedPages: [1],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.checks.find(x => x.id === "avoidsMalformedMassAccelerationToken")?.passed).toBe(false);
+    expect(result.mathematicalSymbolFidelity).toBe(false);
+    expect(result.overallPass).toBe(false);
+  });
+
+  it("rejects capital O in the static-friction zero lower bound", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P08",
+      answer: "Static friction is not always at its maximum. It adjusts from zero up to the maximum: O ≤ f_s ≤ μ_s × N.",
+      retrievedPages: [4],
+      citedPages: [4],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.checks.find(x => x.id === "doesNotRenderZeroAsLetterO")?.passed).toBe(false);
+    expect(result.mathematicalSymbolFidelity).toBe(false);
+    expect(result.overallPass).toBe(false);
+  });
+
+  it("rejects OCR-like doubled-x spring and energy formula strings despite correct final values", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P12",
+      answer: "F_s = -k xx = -10 N. U_s = ½ x k x x² = 0.25 J.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.checks.find(x => x.id === "rendersSpringForceVariableBoundary")?.passed).toBe(false);
+    expect(result.answerCorrectness.checks.find(x => x.id === "rendersElasticEnergyFormula")?.passed).toBe(false);
+    expect(result.mathematicalSymbolFidelity).toBe(false);
+    expect(result.overallPass).toBe(false);
+  });
+
+  it("does not require an unasked friction-direction explanation for P07 magnitude", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P07",
+      answer: "The normal force is N = 5 kg × 9.8 m/s² = 49 N. Kinetic friction is f_k = 0.20 × 49 N = 9.8 N.",
+      retrievedPages: [4],
+      citedPages: [4],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(true);
+  });
+
+  it("grades P09 downslope result independently of phrase/result ordering", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P09",
+      answer: "Downslope component of weight: 4 × 9.8 × sin(30°) = 19.6 N. Normal force: 4 × 9.8 × cos(30°) = 33.95 N.",
+      retrievedPages: [5],
+      citedPages: [5],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(true);
+  });
+
+  it("accepts negative signs as preserved direction when P11's signed results are correct", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P11",
+      answer: "Δp = 0.15 kg × (-30 m/s) = -4.5 kg·m/s. Average force = -4.5 ÷ 0.05 = -90 N.",
+      retrievedPages: [7],
+      citedPages: [7],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(true);
+  });
+
+  it("treats H01 as a source-supported correction, not an abstention", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "H01",
+      answer: "The source gives F_s = -kx. F_s = +kx is not the restoring-force equation stated in the source.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result).toMatchObject({
+      overallPass: true,
+      abstentionCorrectness: null,
+      mathematicalSymbolFidelity: true,
+      citationCorrectness: true,
+    });
+  });
+
+  it("recognizes H01 rejection when the negation precedes the positive-sign formula", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "H01",
+      answer: "The indexed source does not use F_s = +k x x as the restoring-force equation. It gives F_s = -kx.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.passed).toBe(true);
+    expect(result.mathematicalSymbolFidelity).toBe(true);
+    expect(result.overallPass).toBe(true);
+  });
+
+  it("keeps H01 symbol fidelity pending when OCR-like double-x notation is copied", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "H01",
+      answer: "F_s = +k x x is not the restoring-force equation. The source writes F_s = -k xx.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.checks.find(x => x.id === "explicitlyRejectsPositiveSignAsSourceEquation")?.passed).toBe(true);
+    expect(result.answerCorrectness.checks.find(x => x.id === "rendersCanonicalRestoringForceExpression")?.passed).toBe(false);
+    expect(result.mathematicalSymbolFidelity).toBe(false);
+    expect(result.overallPass).toBe(false);
+  });
+
+  it("rejects a model-generated citation to the wrong physical page", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "H01",
+      answer: "The source gives F_s = -kx. F_s = +kx is not the restoring-force equation. See PDF page 7.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.passed).toBe(true);
+    expect(result.sourceGroundingCorrectness).toBe(true);
+    expect(result.citationCorrectness).toBe(false);
+    expect(result.overallPass).toBe(false);
+  });
+
+  it("requires abstention when unrelated retrieved evidence is present", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "N01",
+      answer: "The indexed source does not provide enough information to answer this question.",
+      retrievedPages: [2, 3],
+      citedPages: [],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result).toMatchObject({
+      overallPass: true,
+      abstentionCorrectness: true,
+      sourceGroundingCorrectness: true,
+      citationCorrectness: true,
+    });
+  });
+
+  it("passes no-evidence abstention while reporting that irrelevant-evidence resistance was not exercised", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "N01",
+      answer: "The indexed source does not provide enough information to answer this question.",
+      retrievedPages: [],
+      citedPages: [],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result).toMatchObject({
+      overallPass: true,
+      abstentionCorrectness: true,
+      irrelevantEvidenceResistanceDemonstrated: false,
+    });
+  });
+
+  it("rejects an abstention followed by an unsupported external result", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "N02",
+      answer: "The indexed source does not provide enough information. However, the current is 4 A.",
+      retrievedPages: [1, 2],
+      citedPages: [],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(false);
+    expect(result.abstentionCorrectness).toBe(false);
   });
 });

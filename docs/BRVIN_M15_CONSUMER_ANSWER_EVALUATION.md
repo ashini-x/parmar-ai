@@ -260,3 +260,50 @@ Run a measured ablation: each provider without reranking, each with the same rer
 M15 remains **IN PROGRESS**. The retrieval-only and 34-generation staging subtests are complete. Manual review supports the numerical answers P01–P12 for both providers and confirms 4/4 explicit abstentions for both providers; Qdrant additionally demonstrated 4/4 abstentions while irrelevant passages were present. H01 is a confirmed exact-symbol-preservation failure: the original PDF prints `F_s = −k × x`, while the indexed OCR and generated answers render `F_s = -k xx`. The source PDF is correct; the OCR/index-to-answer path loses the multiplication glyph boundary. Independent claim-level grounding is also not yet demonstrated.
 
 Do not mark the retrieval migration production-ready, alter production provider selection, or authorize a provider cutover until the OCR-to-answer symbol-fidelity failure is remediated without mutating the original source artifact, claim-to-passage grounding is reviewed, the calibrated evaluator passes CI, and the other M15 security, authorization/revocation, recovery, performance, cost and load gates have passed.
+
+
+## 9. Targeted original-PDF formula-symbol audit — 11 November 2026
+
+**Implementation status:** added to the same authenticated isolated-staging operator; the new audit has **not yet been run**. The completed 34-generation receipt above remains unchanged. The new experiment does not rerun the full P01–P12 / N01–N04 / H01 suite.
+
+The root cause is that the page OCR text already changes some mathematical glyphs before the existing Gemini generator receives the excerpts. Prompt-only instructions cannot restore a multiplication sign that is absent from the evidence. This targeted experiment tests whether the source-of-record visual representation can preserve the notation without changing OCR or any index.
+
+### Fixed query subset and page isolation
+
+The separate **Run five-query formula-fidelity audit · original PDF** action adds five query pairs / ten Gemini generations:
+
+| Query | Original physical PDF page attached |
+|---|---:|
+| P01 — Newton's second-law notation | 1 |
+| P08 — static-friction lower bound and zero glyph | 4 |
+| P11 — signed momentum and impulse notation | 7 |
+| P12 — spring force and elastic energy | 8 |
+| H01 — minus sign and multiplication operator | 8 |
+
+The route is `POST /admin/m15/benchmark/answers/formula-audit/run`. It accepts only those five fixed query IDs. It does not replace the existing OCR-only `/answers/run` route.
+
+Before any Gemini call, Core verifies the registered staging source ID, expected PDF filename, exact immutable source object path, source SHA-256, GCS object size, and immutable GCS object generation. It reads the exact original object generation and checks the complete byte-level SHA-256 against `cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92`.
+
+Core then uses `pdf-lib` to copy **only the one permitted original physical PDF page** into a transient one-page PDF. The helper verifies that the original has exactly eight physical pages, that the requested page is valid, and that the extracted attachment has exactly one page. The report records both the original source SHA-256 and the extracted one-page PDF SHA-256. The other seven pages are not sent to Gemini. This is a transient in-memory derivative; it is not written to GCS, D1, or either index.
+
+The source-only Gemini prompt treats the attached page as untrusted source data and uses it only to inspect literal mathematical notation on that single original page. Retrieved excerpts remain the evidence for conceptual/numerical claims; the visual page must not introduce unsupported facts. When the printed glyph is not clearly legible, the answer must state uncertainty rather than reconstructing the expected equation.
+
+### No-mutation boundary
+
+The experiment is read-only with respect to the registered source and retrieval system. It does not change the original PDF, stored Vision OCR JSON, raw OCR strings, normalized text, formula-candidate metadata, immutable GCS manifests, Qdrant points, AI Search items, D1 records, provider settings, production Workers, the BRVIN v2 request/response contract, or BRVIN Teachers. The PDF bytes are fetched using the recorded immutable GCS generation; the extracted one-page attachment exists only in Worker memory for the paired generation calls.
+
+The original OCR-only answers and the new PDF-assisted answers are separate receipts. Do not overwrite the earlier receipt or present the new result as a rerun of the original conditions. Compare answers against the visually inspected original physical page and report, per query/provider, whether exact variable boundaries, multiplication glyphs, zero, signs, subscripts and superscripts are preserved. A successful PDF-assisted answer is evidence for a bounded visual-grounding path, not proof that the OCR/indexing pipeline itself has been repaired.
+
+### Validation and acceptance status
+
+Regression tests cover:
+- the fixed query-to-physical-page allowlist;
+- rejection of queries outside the formula audit subset;
+- complete original-source SHA-256 verification;
+- extraction of exactly one page from an eight-page PDF;
+- rejection of an invalid source hash, page selector, non-PDF input, or wrong original page count;
+- presence of the separate staging-only operator action.
+
+The code and tests are on Core PR #223, head `66816d83d7f0946566fe4f95e31f812407a67aff`. On 11 November 2026, the M14 staging validation passed TypeScript, the focused M14/M15 test suite, the pinned Vertex/Qdrant configuration check and Wrangler staging dry-run. Core Release validation passed TypeScript, the complete Vitest suite, Node tests and both Worker bundle dry-runs. The production-scope classifier explicitly reported this change set as staging/docs-only, so production deployment remains disabled. The PR event did not deploy staging; the normal push-to-main M14 workflow is the deployment path. The operator must then run only the new five-query button and save its separate JSON receipt. **No PDF-assisted result is claimed yet.** The formula-symbol acceptance gate remains open until the receipt is reviewed against the original PDF and the broader M15 relevance, claim-grounding, authorization, recovery, performance, cost, load and rollback gates pass.
+
+Production remains on Cloudflare AI Search. No production cutover or Teachers-side provider access is authorized.
