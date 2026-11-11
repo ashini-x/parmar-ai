@@ -109,3 +109,10 @@ The above is the supplied retrieval receipt summary. The full query-by-query JSO
 Latest Cloudflare read-back confirms production `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search` and `BRVIN_CORPUS_MANIFEST_ENABLED=false`. Production currently reads `parmar-ai` v714 and `brvin-service` v135 at 100%; the release acceptance passed. The first merge did trigger the normal release workflow because the staging-only allowlist was incomplete. PR #214 corrected that classifier; subsequent staging-only merges now skip the production deploy path.
 
 **M15 is not complete.** The next gates remain passage-level human relevance judgments, review of all 17-case evidence, authorization isolation/revocation, retry/recovery, controlled latency/cost and representative load. Do not cut over production based only on this second-source page benchmark.
+
+
+## 11 November paired retrieval result — reconciled receipt
+
+The saved paired receipt completed 17/17 queries on each provider. Both covered 12/12 positive expected physical-page targets. AI Search returned no candidates for N01–N04; Qdrant returned 20 candidates across those four out-of-corpus prompts. Both returned H01 candidates (2 AI Search, 5 Qdrant). Both reported zero provenance violations. Sequential staging p50/p95/p99 was 2,524/10,477/10,477 ms for AI Search and 784/1,097/1,097 ms for Qdrant. These are 17 sequential observations, not load or production SLO evidence. Page-level results do not replace passage qrels.
+
+The separate Core answer-evaluation receipt completed 17 paired queries / 34 Gemini generations. Calibrated offline re-grade of the saved answers is 16/17 for each provider. See [BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md](BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md). The two-reviewer passage annotation pack is at [BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md](BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md); no human grades have yet been entered.
