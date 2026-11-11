@@ -282,3 +282,33 @@ The evaluator keeps the BRVIN v2 RPC retrieval-only and unchanged; it does not a
 The migration remains **IN PROGRESS**, and production remains on Cloudflare AI Search. The report records page-citation checks, not independent claim-level entailment. Do not mark exact-symbol fidelity or independent source grounding as passed yet. Full findings and operating instructions: [BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md](BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md).
 
 The initial second-source merge exposed a missing allowlist entry that retriggered the normal production release workflow. Its live release acceptance passed; production remains on `cloudflare-ai-search` with `BRVIN_CORPUS_MANIFEST_ENABLED=false`. Current production versions are `parmar-ai` v714 and `brvin-service` v135 at 100%. PR #214 added the M15 staging-only paths to the production-scope classifier, and the follow-up staging merge confirms the production deploy and verification jobs were skipped.
+
+
+
+## M15 second-source paired retrieval receipt — 11 November 2026
+
+The authenticated read-only paired run completed all 17 queries against both isolated staging providers on the eight-page source (`3b4d116d-4c18-450f-9cba-cb2bec3da7ca`, SHA-256 `cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92`, GCS generation `2dc9d4fae3afe7df16927fbf2510afd3`).
+
+| Measure | Cloudflare AI Search | Vertex + Qdrant |
+|---|---:|---:|
+| Successful queries | 17/17 | 17/17 |
+| Positive expected-page targets covered | 12/12 | 12/12 |
+| Out-of-corpus N01–N04 returning candidates | 0/4 | 4/4 (20 candidates) |
+| H01 exact-symbol near-miss returning candidates | Yes (2) | Yes (5) |
+| Provenance violations | 0 | 0 |
+| Sequential staging p50 / p95 / p99 | 2,524 / 10,477 / 10,477 ms | 784 / 1,097 / 1,097 ms |
+
+Fixed-cutoff page-label precision proxy is 14/60 (23.3%) for the positive-query denominator and 14/85 (16.5%) across all 17 queries for both providers. These remain **page-label proxies, not passage qrels**. Different provider passage schemes require independent judgments or normalized source-span mapping. Qdrant's candidates on N01–N04 must be judged from their text; candidate presence alone is not a relevance result.
+
+The timing values are 17 sequential staging observations, not load-test results, production SLOs, p99 capacity evidence or cost measurements. The run was query-only and reported no index writes/deletes, source/OCR changes, selector changes or production side effects.
+
+## M15 passage-review preparation
+
+The separate Core answer-evaluation receipt completed 17 query pairs / 34 Gemini generations using `gemini-3.8-flash`. Original strict counters were 9/17 for AI Search and 13/17 for Qdrant; calibrated offline re-grading of those same saved answers is 16/17 for each provider. This was a re-grade, not a second generation run. Both providers abstained on N01–N04; Qdrant did so while irrelevant in-corpus evidence was present.
+
+The exact page-8 defect is confirmed against the original PDF: source `F_s = −k × x`; OCR-derived candidate/answer text `F_s = -k xx`. Other supplemental findings include malformed AI Search equation text on P01/P12 and Qdrant's `O` versus `0` on P08. Do not mutate the original PDF, raw OCR or current indexes.
+
+A blind two-reviewer pack containing 109 exact answer-evidence passages is prepared at [`test/fixtures/brvin-m15-passage-qrels-review-pack.json`](../test/fixtures/brvin-m15-passage-qrels-review-pack.json), with instructions at [`BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md`](BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md). Reviewer fields are blank; no human qrels acceptance is claimed. Independent claim-to-passage grounding, formula/symbol remediation, wrong-project/no-grant and retained-vector revocation, throttling/retry/recovery, HNSW-aware performance, controlled concurrency, cost and rollback rehearsal remain open. Production remains `cloudflare-ai-search`; M15 does not authorize cutover.
+
+
+The next M15 action is independent passage annotation using the source-fingerprinted review pack. Do not reuse the page-level proxy as passage qrels, do not pre-populate human labels from model output, and do not promote the calibrated offline answer grade to a human quality result.
