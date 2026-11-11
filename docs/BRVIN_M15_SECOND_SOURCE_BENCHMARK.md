@@ -1,6 +1,6 @@
 # BRVIN M15 second-source Physics benchmark
 
-**State — 11 November 2026:** the isolated eight-page source is uploaded and OCR-complete. Its immutable corpus is verified (generation `2dc9d4fae3afe7df16927fbf2510afd3`, 8 pages, 14 chunks), and the dedicated Qdrant collection is fully populated (8/8 pages, 14/14 points) using the two-page resumable Worker path. The first AI Search upload attempt returned `invalid_metadata_format`. A read-only check of the dedicated `brvin-m15-physics-staging-v1` instance confirmed zero items and `custom_metadata: null`, so no source-page items were created by that attempt. The fix defines the four-field custom metadata schema before upload, sends string values as required by the Workers binding, and batches AI Search indexing in two-page invocations. The 17-query receipt has not been run. Production remains selected on Cloudflare AI Search. Teachers has no runtime change.
+**State — 11 November 2026:** the isolated eight-page source is uploaded and OCR-complete. Its immutable corpus is verified (generation `2dc9d4fae3afe7df16927fbf2510afd3`, 8 pages, 14 chunks), and the dedicated Qdrant collection is fully populated (8/8 pages, 14/14 points) using the two-page resumable Worker path. The first AI Search upload attempt returned `invalid_metadata_format`. A read-only check of the dedicated `brvin-m15-physics-staging-v1` instance confirmed zero items and `custom_metadata: null`, so no source-page items were created by that attempt. The fix defines the four-field custom metadata schema before upload, sends string values as required by the Workers binding, and batches AI Search indexing in two-page invocations. The operator-reported 17-query paired retrieval receipt is now complete (details below). This remains retrieval-only evidence: it does not evaluate Gemini answers or prove abstention. Production remains selected on Cloudflare AI Search. Teachers has no runtime change.
 
 ## Purpose and isolation
 
@@ -78,6 +78,22 @@ Candidate presence on an out-of-corpus query or the near-miss is **not automatic
 A provider result with `ok: false` is a failed/unevaluated query, **not** a successful empty retrieval. The summary's out-of-corpus and exact-symbol candidate-presence rates use only completed queries; the response also reports completed/failed counts and `allNegativeControlsCompleted`. A null presence rate means no query in that group completed. Do not report a negative-control pass unless every negative and near-miss query completed successfully. Provider failures include a short redacted error message to support staging diagnosis.
 
 The paired runner sends searches to both staging indexes in bounded batches of at most three query pairs per Worker invocation. A single operator click coordinates six separate authenticated invocations and assembles the complete receipt in the browser; the staging D1 source/index registry is not modified by the query batches or receipt assembly. It does not write/delete index points/items, change the provider selector or invoke Gemini answer generation. It does not prove answer abstention. Qdrant RRF scores are ranking values, not calibrated probabilities; do not set a rejection threshold from this receipt alone.
+
+## Retrieval-only paired receipt — 11 November 2026
+
+The operator reports that the fixed 17-query suite completed against both staging providers:
+
+- 17 queries executed against both providers.
+- Both providers covered 12/12 positive expected-page targets.
+- Qdrant latency was significantly lower in this staging run; this is a single benchmark observation, not a production latency/SLO claim.
+- Qdrant returned candidates for all four out-of-corpus questions.
+- H01 retrieved the source page with the corrective restoring-force expression.
+- Zero provenance violations were reported.
+- No indexing or production side effects were reported.
+
+The above is the supplied retrieval receipt summary. The full query-by-query JSON is not included in this document, so no additional candidate scores, exact latency values, or passage-level human relevance grades are inferred here. Candidate presence on N01–N04 still requires passage inspection; a non-empty result is not itself a retrieval relevance pass or an answer-abstention pass.
+
+**Retrieval result:** the paired second-source retrieval-only subtest is complete as reported. This receipt itself does not include Gemini answers. The separate consumer-owned Gemini evaluation has since completed all 17 query pairs (34 generations) on this same source; its raw counters, manual adjudication, rubric corrections and remaining H01/claim-grounding gates are recorded in [BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md](BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md). The answer run was read-only and did not mutate this source or either index. M15 remains in progress and production remains on Cloudflare AI Search.
 
 ## Deployment checkpoint
 
