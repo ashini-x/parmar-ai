@@ -67,7 +67,7 @@ describe("M15 owner-waived AI passage assessment", () => {
     expect(assessment.candidateCount).toBe(109);
     expect(assessment.aiAssessment.assessedCandidateCount).toBe(109);
     expect(assessment.status).toBe("owner_waived_ai_assessment_complete_not_independent_human_qrels");
-    expect(assessment.aiAssessment.status).toBe(assessment.status);
+    expect(assessment.aiAssessment.status).toBe("owner_approved_ai_assessment_complete_not_independent_human_qrels");
   });
 
   it("reproduces the positive-query precision, nDCG and MRR summaries from the stored labels", () => {
