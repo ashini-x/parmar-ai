@@ -2154,7 +2154,8 @@ a{color:#8bb7ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
    const passed=rows.filter(x=>x.evaluation&&x.evaluation.overallPass).length;
    const latencies=rows.map(x=>x.generationLatencyMs).filter(x=>typeof x==="number").sort((a,b)=>a-b);
    const avg=latencies.length?Math.round(latencies.reduce((a,b)=>a+b,0)/latencies.length*100)/100:null;
-   return {queryCount:rows.length,overallPassCount:passed,failedQueryIds:results.filter((x,i)=>!rows[i].evaluation||!rows[i].evaluation.overallPass).map(x=>x.queryId),answerCorrectCount:evaluations.filter(x=>x.answerCorrectness&&x.answerCorrectness.passed).length,sourceGroundingCorrectCount:evaluations.filter(x=>x.sourceGroundingCorrectness).length,citationCorrectCount:evaluations.filter(x=>x.citationCorrectness).length,mathSymbolFidelityApplicableCount:evaluations.filter(x=>x.mathematicalSymbolFidelity!==null&&x.mathematicalSymbolFidelity!==undefined).length,mathSymbolFidelityPassCount:evaluations.filter(x=>x.mathematicalSymbolFidelity===true).length,abstentionApplicableCount:evaluations.filter(x=>x.abstentionCorrectness!==null&&x.abstentionCorrectness!==undefined).length,abstentionPassCount:evaluations.filter(x=>x.abstentionCorrectness===true).length,averageGenerationLatencyMs:avg,medianGenerationLatencyMs:latencies.length?latencies[Math.floor((latencies.length-1)/2)]:null};
+   const negativeRows=results.filter(x=>/^N0[1-4]$/u.test(x.queryId)).map(x=>x[key]?.evaluation||{});
+   return {queryCount:rows.length,overallPassCount:passed,failedQueryIds:results.filter((x,i)=>!rows[i].evaluation||!rows[i].evaluation.overallPass).map(x=>x.queryId),answerCorrectCount:evaluations.filter(x=>x.answerCorrectness&&x.answerCorrectness.passed).length,sourceGroundingCorrectCount:evaluations.filter(x=>x.sourceGroundingCorrectness).length,citationCorrectCount:evaluations.filter(x=>x.citationCorrectness).length,mathSymbolFidelityApplicableCount:evaluations.filter(x=>x.mathematicalSymbolFidelity!==null&&x.mathematicalSymbolFidelity!==undefined).length,mathSymbolFidelityPassCount:evaluations.filter(x=>x.mathematicalSymbolFidelity===true).length,abstentionApplicableCount:evaluations.filter(x=>x.abstentionCorrectness!==null&&x.abstentionCorrectness!==undefined).length,abstentionPassCount:evaluations.filter(x=>x.abstentionCorrectness===true).length,irrelevantEvidenceChallengeCount:negativeRows.length,irrelevantEvidenceResistancePassCount:negativeRows.filter(x=>x.irrelevantEvidenceResistanceDemonstrated===true).length,negativeQueriesWithoutRetrievedEvidence:negativeRows.filter(x=>x.irrelevantEvidenceResistanceDemonstrated===false).length,averageGenerationLatencyMs:avg,medianGenerationLatencyMs:latencies.length?latencies[Math.floor((latencies.length-1)/2)]:null};
  }
  function makeMarkdown(report){
    let out="# BRVIN M15 Consumer Answer & Abstention Evaluation\n\n";
@@ -2162,11 +2163,11 @@ a{color:#8bb7ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
    for(const key of ["cloudflareAiSearch","qdrantVertex"]){
      const s=report.summary[key];out+="## "+key+"\n\n";
      out+="Pass: "+s.overallPassCount+"/"+s.queryCount+"; failed: "+(s.failedQueryIds.join(", ")||"none")+"; average generation latency: "+s.averageGenerationLatencyMs+" ms; median: "+s.medianGenerationLatencyMs+" ms.\n\n";
-     out+="| Query | Evidence pages | Answer | Grounding | Citation | Math | Abstention | Generation ms | Pass | Failures |\n|---|---|---:|---:|---:|---:|---:|---:|---:|---|\n";
+     out+="| Query | Evidence pages | Answer | Grounding | Citation | Math | Abstention | Irrelevant-evidence challenge | Generation ms | Pass | Failures |\\n|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|\\n";
      for(const result of report.results){
        const p=result[key]||{},e=p.evaluation||{},pages=(p.retrievedPages||[]).filter(x=>x!==null).join(", ");
        const v=x=>x===null||x===undefined?"N/A":x?"PASS":"FAIL";
-       out+="| "+result.queryId+" | "+pages+" | "+v(e.answerCorrectness&&e.answerCorrectness.passed)+" | "+v(e.sourceGroundingCorrectness)+" | "+v(e.citationCorrectness)+" | "+v(e.mathematicalSymbolFidelity)+" | "+v(e.abstentionCorrectness)+" | "+(p.generationLatencyMs??"N/A")+" | "+v(e.overallPass)+" | "+((e.failureCases||[]).join(", ")||"—")+" |\n";
+       out+="| "+result.queryId+" | "+pages+" | "+v(e.answerCorrectness&&e.answerCorrectness.passed)+" | "+v(e.sourceGroundingCorrectness)+" | "+v(e.citationCorrectness)+" | "+v(e.mathematicalSymbolFidelity)+" | "+v(e.abstentionCorrectness)+" | "+v(e.irrelevantEvidenceResistanceDemonstrated)+" | "+(p.generationLatencyMs??"N/A")+" | "+v(e.overallPass)+" | "+((e.failureCases||[]).join(", ")||"—")+" |\\n";
      }
      out+="\n";
      for(const result of report.results){
