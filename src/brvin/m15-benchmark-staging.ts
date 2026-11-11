@@ -1819,6 +1819,7 @@ export function evaluateM15AnswerQuality(input: {
         checks = [
           check("statesNewtonSecondLawEquation", /(?:fnet|f)=ma|fnet=mass(?:x|\*)acceleration/iu.test(compact)),
           check("connectsNetForceMassAcceleration", /net force/iu.test(normalized) && /mass/iu.test(normalized) && /acceleration/iu.test(normalized)),
+          check("avoidsMalformedMassAccelerationToken", !/\bm\s+xa\b/iu.test(normalized)),
         ];
         break;
       case "P02":
@@ -1861,6 +1862,7 @@ export function evaluateM15AnswerQuality(input: {
           check("staticFrictionAdjusts", /static friction/iu.test(normalized) && /adjust|self.?adjust|var(?:y|ies)|changes? as needed/iu.test(normalized)),
           check("staticFrictionIsNotAlwaysAtMaximum", /not always|not necessarily|does not always/iu.test(normalized)),
           check("statesMaximumLimit", /maximum|up to|less than or equal|at most|≤|mu.?s.{0,20}(?:n|normal)/iu.test(normalized)),
+          check("doesNotRenderZeroAsLetterO", !/\bo\s*(?:≤|<=)\s*f_s\b/iu.test(answer)),
         ];
         break;
       case "P09":
@@ -1889,6 +1891,8 @@ export function evaluateM15AnswerQuality(input: {
           check("restoringForceEquationHasNegativeSign", /fs=-kx/iu.test(compact)),
           check("restoringForceMinusTenNewtons", m15AnswerHasSignedUnitValue(answer, "10", "n\\b|newtons?\\b")),
           check("elasticPotentialEnergyQuarterJoule", m15AnswerHasUnitValue(answer, "0.25", "j\\b|joules?\\b")),
+          check("rendersSpringForceVariableBoundary", /f_s\s*=\s*-k(?:\s*\*\s*x|\s*x|x)(?![a-z])/iu.test(normalized)),
+          check("rendersElasticEnergyFormula", /(?:u_s|e)\s*=\s*(?:1\/2|½)\s*(?:\*\s*)?k(?:\s*\*\s*x|\s*x|x)(?:\s*\^\s*2|2)\b/iu.test(normalized)),
         ];
         break;
       case "H01":
