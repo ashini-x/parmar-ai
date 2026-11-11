@@ -129,7 +129,12 @@ class CloudflareAiSearchRetrievalProvider implements RetrievalProvider {
     const result = await this.instance.search({
       messages: [{ role: "user", content: input.query }],
       ai_search_options: {
-        cache: { enabled: false },
+        // Strict similarity cache reuses only near-identical prompts. Core
+        // still validates every returned item key against the caller's current
+        // D1-authorized source prefixes before any passage text is returned.
+        // Cloudflare invalidates cached entries when their indexed chunks change
+        // or are deleted; the instance TTL remains 48 hours.
+        cache: { enabled: true, cache_threshold: "super_strict_match" },
         retrieval: {
           max_num_results: input.maxResults,
           retrieval_type: "hybrid",
