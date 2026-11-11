@@ -130,11 +130,15 @@ export interface GroundedGeminiSourcePassage {
 /** Optional exact original PDF supplied only as visual notation evidence in a controlled evaluation. */
 export interface GroundedGeminiSourceDocument {
   mimeType: "application/pdf";
-  /** Base64-encoded PDF bytes, validated against the immutable source fingerprint by the caller. */
+  /** Base64-encoded one-page PDF extracted from the original immutable source. */
   base64Data: string;
-  sha256: string;
-  /** 1-based physical PDF pages permitted as source evidence for this query. */
-  allowedPhysicalPages: number[];
+  /** SHA-256 of the complete immutable original PDF. */
+  sourceSha256: string;
+  /** SHA-256 of the one-page PDF actually attached to this generation. */
+  attachedPdfSha256: string;
+  /** Original 1-based physical PDF page represented by the single attached page. */
+  originalPhysicalPage: number;
+  attachedPdfPageCount: 1;
 }
 
 /** Generic, consumer-owned source context. An empty passage list is an explicit no-evidence state. */
@@ -690,8 +694,8 @@ function buildGroundedSourceUserPrompt(
     "A retrieved passage can be unrelated to this question. Answer only if the excerpts directly support the answer; otherwise explicitly abstain and say the indexed source does not provide enough information.",
     "Preserve mathematical expressions exactly, including variable case, subscripts, superscripts, operators, positive/negative signs, units, and vector directions. Do not silently convert a restoring-force minus sign into a plus sign.",
     ...(context.sourceDocument ? [
-      "ORIGINAL SOURCE PDF VISUAL CHECK: An immutable original PDF is attached with SHA-256 " + context.sourceDocument.sha256 + ". The only permitted physical PDF pages are: " + context.sourceDocument.allowedPhysicalPages.join(", ") + ". Do not use any other page in that document.",
-      "Use the attached PDF only to verify literal mathematical notation on those permitted pages. If OCR text differs from clearly legible printed notation, preserve the exact printed glyphs and variable boundaries. Do not introduce facts from the PDF that are not supported by the retrieved excerpts. If a symbol is unclear, report the uncertainty instead of reconstructing it from expectation.",
+      "ORIGINAL SOURCE PDF VISUAL CHECK: The attached PDF is a one-page extraction of original physical PDF page " + context.sourceDocument.originalPhysicalPage + " from immutable source SHA-256 " + context.sourceDocument.sourceSha256 + ". The attached one-page extraction SHA-256 is " + context.sourceDocument.attachedPdfSha256 + ". It contains exactly one PDF page.",
+      "Use this single attached original page only to verify literal mathematical notation. If OCR text differs from clearly legible printed notation, preserve the exact printed glyphs and variable boundaries. Do not introduce facts from the PDF that are not supported by the retrieved excerpts. If a symbol is unclear, report the uncertainty instead of reconstructing it from expectation.",
     ] : []),
     "For numerical work, show the calculation briefly and include units and direction when relevant. Do not invent missing constants.",
     "Do not write page numbers or citations. The application will append citations for verified source pages.",
