@@ -2205,7 +2205,7 @@ a{color:#8bb7ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
    progress.className="status "+(report.complete?"good":"bad");
    progress.textContent=report.complete?"Completed all 17 paired queries. Review exact failed IDs and download both reports.":"Stopped after "+results.length+"/17 pairs. "+(requestFailure||"The run did not complete.");
    secret="";
-   runButton.disabled=false;loadButton.disabled=false;
+   loadButton.disabled=false;refresh();
  });
  jsonButton.addEventListener("click",()=>{if(latestReport)download("brvin-m15-consumer-answer-evaluation.json","application/json",JSON.stringify(latestReport,null,2));});
  mdButton.addEventListener("click",()=>{if(latestReport)download("brvin-m15-consumer-answer-evaluation.md","text/markdown",makeMarkdown(latestReport));});
