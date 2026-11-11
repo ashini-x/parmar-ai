@@ -3,6 +3,7 @@ import type { FatmanBookContext } from "../fatman/retrieval";
 import { GoogleAuthError, getGoogleAccessToken, invalidateGoogleAccessToken } from "../auth/google";
 import { getConfig, MAX_QUIZ_BATCH_SIZE, type QuizItem } from "../config/env";
 import { TELEGRAM_PROGRESS_LABELS } from "../telegram/progress";
+import { logger } from "../core/logger";
 
 const DEFAULT_LOCATION = "global";
 const DEFAULT_MODEL = "gemini-3.8-flash";
@@ -334,16 +335,24 @@ export async function generateGeminiAnswer(
   const usageRecords: AiUsageRecord[] = [];
 
   for (let attempt = 1; attempt <= MAX_INTERNAL_ATTEMPTS; attempt += 1) {
+    const attemptStartedAt = performance.now();
+    let firstPartialAnswerMs: number | undefined;
+    const attemptPartialAnswer = onPartialAnswer
+      ? observePartialAnswerHandler(onPartialAnswer, (elapsedMs) => {
+        firstPartialAnswerMs = elapsedMs;
+      }, attemptStartedAt)
+      : undefined;
+
     try {
       // A retry is announced during the backoff after a failed request, not
       // while the next generation is running. Every new attempt returns to a
       // truthful working state before it starts streaming.
       if (bookContext || sourceContext) {
-        await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.writingAnswer);
+        await attemptPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.writingAnswer);
       } else if (requiresGrounding) {
-        await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingSources);
+        await attemptPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingSources);
       } else if (attempt > 1) {
-        await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.preparingAnswer);
+        await attemptPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.preparingAnswer);
       }
 
       const result = await requestVertexGemini(
@@ -356,20 +365,46 @@ export async function generateGeminiAnswer(
         attempt,
         requestedQuizCount,
         images,
-        onPartialAnswer,
+        attemptPartialAnswer,
         bookContext,
         sourceContext,
       );
+      logger.info("gemini_generation_attempt_completed", {
+        attempt,
+        model,
+        location,
+        thinkingLevel,
+        durationMs: Math.round((performance.now() - attemptStartedAt) * 100) / 100,
+        firstPartialAnswerMs: firstPartialAnswerMs ?? null,
+        streamed: Boolean(attemptPartialAnswer),
+        promptTokens: result.usage.promptTokens,
+        candidatesTokens: result.usage.candidatesTokens,
+        thoughtsTokens: result.usage.thoughtsTokens,
+        totalTokens: result.usage.totalTokens,
+        grounded: result.usage.grounded,
+      });
       return { packet: result.packet, usage: [...usageRecords, result.usage] };
     } catch (error) {
       const geminiError = toGeminiError(error);
       usageRecords.push(...geminiError.usageRecords);
       geminiError.usageRecords = usageRecords.slice();
       lastError = geminiError;
+      logger.warn("gemini_generation_attempt_failed", {
+        attempt,
+        model,
+        location,
+        thinkingLevel,
+        durationMs: Math.round((performance.now() - attemptStartedAt) * 100) / 100,
+        firstPartialAnswerMs: firstPartialAnswerMs ?? null,
+        streamed: Boolean(attemptPartialAnswer),
+        status: geminiError.status ?? null,
+        retryable: geminiError.retryable,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
 
       if (!geminiError.retryable || attempt >= MAX_INTERNAL_ATTEMPTS) throw geminiError;
 
-      await onPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.retrying);
+      await attemptPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.retrying);
       await sleep(800 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
     }
   }
@@ -1323,18 +1358,118 @@ function normalizeEnum<T extends string>(value: unknown, allowed: readonly T[], 
   return allowed.includes(candidate) ? candidate : fallback;
 }
 
-function selectThinkingLevel(question: string, cap: ThinkingLevel): ThinkingLevel {
-  const q = question.toLowerCase();
-  const complexSignals = [
-    "why", "explain", "compare", "difference", "differentiate", "reason", "incorrect", "correct", "statement", "assertion", "confused", "between", "trap", "eliminate", "option", "options", "chronology", "sequence", "cause", "effect", "how did", "why did", "which statement", "क्यों", "अंतर", "समझाओ", "गलत कौन", "सही कौन", "तुलना",
+/**
+ * Keep the common Telegram path on the lowest reasoning tier. MEDIUM is
+ * reserved for explanatory/comparative questions; HIGH is for explicit
+ * multi-step work, not ordinary words such as "explain" or "why".
+ *
+ * The configured thinking level remains a ceiling, so operators can still
+ * lower the maximum without changing this policy.
+ */
+export function selectThinkingLevel(question: string, cap: ThinkingLevel): ThinkingLevel {
+  const q = question.toLowerCase().replace(/\s+/gu, " ").trim();
+  const highComplexitySignals = [
+    "step by step",
+    "step-by-step",
+    "show all steps",
+    "derive",
+    "derive the",
+    "prove that",
+    "proof of",
+    "full derivation",
+    "comprehensive analysis",
+    "analyze in detail",
+    "analyse in detail",
+    "evaluate both",
+    "multiple-step",
+    "multi-step",
+    "चरणबद्ध",
+    "चरणों में",
+    "साबित कीजिए",
+    "व्युत्पन्न कीजिए",
+  ];
+  const mediumComplexitySignals = [
+    "why",
+    "explain",
+    "compare",
+    "difference",
+    "differentiate",
+    "reason",
+    "incorrect",
+    "correct",
+    "statement",
+    "assertion",
+    "confused",
+    "between",
+    "trap",
+    "eliminate",
+    "option",
+    "options",
+    "chronology",
+    "sequence",
+    "cause",
+    "effect",
+    "how did",
+    "why did",
+    "which statement",
+    "क्यों",
+    "अंतर",
+    "समझाओ",
+    "गलत कौन",
+    "सही कौन",
+    "तुलना",
   ];
   const directFactSignals = [
-    "who is", "who was", "when was", "which year", "in which year", "where is", "where was", "capital of", "founder of", "founded by", "author of", "called as", "known as", "किसने", "कौन था", "कब हुआ", "किस वर्ष", "राजधानी",
+    "who is",
+    "who was",
+    "when was",
+    "which year",
+    "in which year",
+    "where is",
+    "where was",
+    "capital of",
+    "founder of",
+    "founded by",
+    "author of",
+    "called as",
+    "known as",
+    "किसने",
+    "कौन था",
+    "कब हुआ",
+    "किस वर्ष",
+    "राजधानी",
   ];
 
-  if (q.length <= 180 && directFactSignals.some((signal) => q.includes(signal))) return minThinking("LOW", cap);
-  if (complexSignals.some((signal) => q.includes(signal)) || q.length > 500) return minThinking("HIGH", cap);
-  return minThinking("MEDIUM", cap);
+  if (highComplexitySignals.some((signal) => q.includes(signal)) || q.length > 900) {
+    return minThinking("HIGH", cap);
+  }
+  if (q.length <= 220 && directFactSignals.some((signal) => q.includes(signal))) {
+    return minThinking("LOW", cap);
+  }
+  if (mediumComplexitySignals.some((signal) => q.includes(signal)) || q.length > 320) {
+    return minThinking("MEDIUM", cap);
+  }
+
+  return minThinking("LOW", cap);
+}
+
+function observePartialAnswerHandler(
+  handler: PartialAnswerHandler,
+  onFirstPartialAnswer: (elapsedMs: number) => void,
+  startedAt: number,
+): PartialAnswerHandler {
+  let observedFirstPartialAnswer = false;
+  const observed = ((answer: string) => {
+    if (!observedFirstPartialAnswer) {
+      observedFirstPartialAnswer = true;
+      onFirstPartialAnswer(Math.round((performance.now() - startedAt) * 100) / 100);
+    }
+    handler(answer);
+  }) as PartialAnswerHandler;
+  if (handler.setStatus) observed.setStatus = handler.setStatus.bind(handler);
+  if (handler.stop) observed.stop = handler.stop.bind(handler);
+  observed.flush = handler.flush.bind(handler);
+  return observed;
 }
 
 function minThinking(requested: ThinkingLevel, cap: ThinkingLevel): ThinkingLevel {
