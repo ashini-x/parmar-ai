@@ -2154,25 +2154,26 @@ a{color:#8bb7ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
    return {queryCount:rows.length,overallPassCount:passed,failedQueryIds:results.filter((x,i)=>!rows[i].evaluation||!rows[i].evaluation.overallPass).map(x=>x.queryId),answerCorrectCount:evaluations.filter(x=>x.answerCorrectness&&x.answerCorrectness.passed).length,sourceGroundingCorrectCount:evaluations.filter(x=>x.sourceGroundingCorrectness).length,citationCorrectCount:evaluations.filter(x=>x.citationCorrectness).length,mathSymbolFidelityApplicableCount:evaluations.filter(x=>x.mathematicalSymbolFidelity!==null&&x.mathematicalSymbolFidelity!==undefined).length,mathSymbolFidelityPassCount:evaluations.filter(x=>x.mathematicalSymbolFidelity===true).length,abstentionApplicableCount:evaluations.filter(x=>x.abstentionCorrectness!==null&&x.abstentionCorrectness!==undefined).length,abstentionPassCount:evaluations.filter(x=>x.abstentionCorrectness===true).length,averageGenerationLatencyMs:avg,medianGenerationLatencyMs:latencies.length?latencies[Math.floor((latencies.length-1)/2)]:null};
  }
  function makeMarkdown(report){
-   let out="# BRVIN M15 Consumer Answer & Abstention Evaluation\\n\\n";
-   out+="Run: "+report.runAt+"\\nSource: "+report.sourceId+"\\nModel: "+report.model+" ("+report.location+")\\nCompleted query pairs: "+report.results.length+"/17\\n\\n";
+   let out="# BRVIN M15 Consumer Answer & Abstention Evaluation\n\n";
+   out+="Run: "+report.runAt+"\nSource: "+report.sourceId+"\nModel: "+report.model+" ("+report.location+")\nCompleted query pairs: "+report.results.length+"/17\n\n";
    for(const key of ["cloudflareAiSearch","qdrantVertex"]){
-     const s=report.summary[key];out+="## "+key+"\\n\\n";
-     out+="Pass: "+s.overallPassCount+"/"+s.queryCount+"; failed: "+(s.failedQueryIds.join(", ")||"none")+"; average generation latency: "+s.averageGenerationLatencyMs+" ms; median: "+s.medianGenerationLatencyMs+" ms.\\n\\n";
-     out+="| Query | Evidence pages | Answer | Grounding | Citation | Math | Abstention | Generation ms | Pass | Failures |\\n|---|---|---:|---:|---:|---:|---:|---:|---:|---|\\n";
+     const s=report.summary[key];out+="## "+key+"\n\n";
+     out+="Pass: "+s.overallPassCount+"/"+s.queryCount+"; failed: "+(s.failedQueryIds.join(", ")||"none")+"; average generation latency: "+s.averageGenerationLatencyMs+" ms; median: "+s.medianGenerationLatencyMs+" ms.\n\n";
+     out+="| Query | Evidence pages | Answer | Grounding | Citation | Math | Abstention | Generation ms | Pass | Failures |\n|---|---|---:|---:|---:|---:|---:|---:|---:|---|\n";
      for(const result of report.results){
        const p=result[key]||{},e=p.evaluation||{},pages=(p.retrievedPages||[]).filter(x=>x!==null).join(", ");
        const v=x=>x===null||x===undefined?"N/A":x?"PASS":"FAIL";
-       out+="| "+result.queryId+" | "+pages+" | "+v(e.answerCorrectness&&e.answerCorrectness.passed)+" | "+v(e.sourceGroundingCorrectness)+" | "+v(e.citationCorrectness)+" | "+v(e.mathematicalSymbolFidelity)+" | "+v(e.abstentionCorrectness)+" | "+(p.generationLatencyMs??"N/A")+" | "+v(e.overallPass)+" | "+((e.failureCases||[]).join(", ")||"—")+" |\\n";
+       out+="| "+result.queryId+" | "+pages+" | "+v(e.answerCorrectness&&e.answerCorrectness.passed)+" | "+v(e.sourceGroundingCorrectness)+" | "+v(e.citationCorrectness)+" | "+v(e.mathematicalSymbolFidelity)+" | "+v(e.abstentionCorrectness)+" | "+(p.generationLatencyMs??"N/A")+" | "+v(e.overallPass)+" | "+((e.failureCases||[]).join(", ")||"—")+" |\n";
      }
-     out+="\\n";
+     out+="\n";
      for(const result of report.results){
        const p=result[key]||{},e=p.evaluation||{};
-       out+="### "+result.queryId+" · "+result.query+"\\n\\n";
-       out+="**Retrieved evidence and pages**\\n\\n";
-       for(const candidate of p.evidence||[]) out+="- Rank "+candidate.rank+", PDF p. "+candidate.pdfPage+", score "+candidate.score+", provenance "+candidate.provenanceValid+"\\n\\n"+candidate.text+"\\n\\n";
-       out+="**Generated answer**\\n\\n"+(p.answerWithCitations||p.generationError||"No generated answer.")+"\\n\\n";
-       out+="**Evaluation**\\n\\n"+JSON.stringify(e,null,2)+"\\n\\n";
+       out+="### "+result.queryId+" · "+result.query+"\n\n";
+       out+="**Retrieved evidence and pages**\n\n";
+       for(const candidate of p.evidence||[]) out+="- Rank "+candidate.rank+", PDF p. "+candidate.pdfPage+", score "+candidate.score+", provenance "+candidate.provenanceValid+"\n\n"+candidate.text+"\n\n";
+       out+="**Generated answer**\n\n"+(p.answerWithCitations||p.generationError||"No generated answer.")+"\n\n";
+       out+="**Model-supplied page references:** "+((p.modelCitedPages||[]).join(", ")||"none")+". **Appended source-page citations:** "+((p.citedPages||[]).join(", ")||"none")+".\n\n";
+       out+="**Evaluation**\n\n"+JSON.stringify(e,null,2)+"\n\n";
      }
    }
    return out;
