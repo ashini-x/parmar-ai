@@ -183,13 +183,13 @@ jobs:
           deploy=false
           while IFS= read -r path; do
             case "$path" in
-              # Explicit staging-only M14/M15 evaluator and configuration files.
-              # The production retrieval provider contract is intentionally not
-              # allowlisted: changing its cache behaviour affects live queries.
+              # M14/M15 staging evaluator paths and unit-test-only files that do not
+              # change a deployed Worker bundle. Production source/config stays
+              # outside this allowlist; provider-contract edits require production CI.
               # src/index.ts is also deliberately outside this list, so Telegram
               # stage instrumentation ships through the normal paired production
               # release and rollback gate after all validation passes.
-              docs/*|.github/workflows/release-validation.yml|src/ai/gemini.ts|package.json|src/brvin/m14-staging-worker.ts|src/brvin/m15-shadow-benchmark.ts|src/brvin/m15-benchmark-staging.ts|src/brvin/m14-physics-evaluation.ts|src/brvin/qdrant-hybrid-pilot.ts|src/brvin/vertex-embedding.ts|src/config/env.ts|scripts/verify-m14-staging-config.mjs|test/gemini-low-latency.test.ts|test/brvin-m14-staging-worker.test.ts|test/brvin-qdrant-hybrid-pilot.test.ts|test/brvin-m15-shadow-benchmark.test.ts|test/brvin-m15-benchmark-staging.test.ts|wrangler.m14-staging.jsonc|.github/workflows/m14-staging-deploy.yml)
+              docs/*|.github/workflows/release-validation.yml|src/ai/gemini.ts|package.json|src/brvin/m14-staging-worker.ts|src/brvin/m15-shadow-benchmark.ts|src/brvin/m15-benchmark-staging.ts|src/brvin/m14-physics-evaluation.ts|src/brvin/qdrant-hybrid-pilot.ts|src/brvin/vertex-embedding.ts|src/config/env.ts|scripts/verify-m14-staging-config.mjs|test/gemini-low-latency.test.ts|test/brvin-m14-staging-worker.test.ts|test/brvin-qdrant-hybrid-pilot.test.ts|test/brvin-v2-service.test.ts|test/brvin-m15-shadow-benchmark.test.ts|test/brvin-m15-benchmark-staging.test.ts|wrangler.m14-staging.jsonc|.github/workflows/m14-staging-deploy.yml)
                 ;;
               *)
                 deploy=true

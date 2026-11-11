@@ -640,3 +640,9 @@ Core PR #229 adds unit coverage for two boundaries that the M15 implementation m
 
 This is deliberately **unit-level evidence**. It does not prove a live v2 request routed through Qdrant, a live D1 grant revocation while vector points remain, or provider-side cache invalidation. The M15 live authorization/isolation and revoke-with-vectors-retained acceptance remains open and must be exercised in isolated staging before M15 can pass. The provider port on the current private v2 runtime still selects the deployed AI Search provider; this test PR does not add Qdrant to that production retrieval path or change the frozen contract.
 
+## 12 November 2026 — release-scope classifier correction
+
+Core PR #229 added only tests and migration documentation. The v2 authorization unit-test path was not in the explicit production-scope allowlist, although the companion Qdrant test path was. As a result, the main-branch workflow treated the test-only v2 file as a production runtime change and uploaded new paired Worker versions. This was an unnecessary redeploy, not a retrieval-provider cutover: Cloudflare read-back still showed Core `parmar-ai` and `brvin-service` at 100% with `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`, `BRVIN_CORPUS_MANIFEST_ENABLED=false`, and Teachers unchanged on its existing private bindings.
+
+The follow-up CI correction adds `test/brvin-v2-service.test.ts` to the unit-test-only allowlist. Its purpose is to keep the full typecheck/test/build workflow while ensuring that test-only changes do not cause production Worker uploads. Actual source/provider/binding changes remain subject to the normal production classifier and paired deployment/acceptance process. The new allowlist path itself must pass PR validation, then be verified on main before this classification is considered fixed.
+
