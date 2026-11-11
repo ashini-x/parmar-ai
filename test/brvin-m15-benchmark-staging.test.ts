@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   M15_BENCHMARK_QUERY_SUITE,
+  M15_FORMULA_AUDIT_QUERY_IDS,
+  createM15FormulaAuditPdfAttachment,
+  m15FormulaAuditPdfPages,
   m15BenchmarkBatchWindow,
   isM15AiSearchItemPending,
   m15AiSearchMetadataForPage,
@@ -41,6 +44,37 @@ describe("M15 second-source benchmark definition", () => {
     expect(html).toContain("operator token is never stored");
   });
 
+  it("limits the original-PDF audit to the five fixed formula-sensitive queries and their expected physical pages", () => {
+    expect(M15_FORMULA_AUDIT_QUERY_IDS).toEqual(["P01", "P08", "P11", "P12", "H01"]);
+    expect(m15FormulaAuditPdfPages("P01")).toEqual([1]);
+    expect(m15FormulaAuditPdfPages("P08")).toEqual([4]);
+    expect(m15FormulaAuditPdfPages("P11")).toEqual([7]);
+    expect(m15FormulaAuditPdfPages("P12")).toEqual([8]);
+    expect(m15FormulaAuditPdfPages("H01")).toEqual([8]);
+    expect(m15FormulaAuditPdfPages("N01")).toBeNull();
+    expect(m15FormulaAuditPdfPages("P02")).toBeNull();
+  });
+
+  it("attaches only a bounded PDF whose bytes match the approved SHA-256 and permitted pages", async () => {
+    const bytes = new TextEncoder().encode("%PDF-1.7\nsource fixture");
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+    const sha256 = Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
+    const attachment = await createM15FormulaAuditPdfAttachment(bytes, sha256, [8]);
+    expect(attachment).toMatchObject({
+      mimeType: "application/pdf",
+      sha256,
+      allowedPhysicalPages: [8],
+    });
+    const decoded = Uint8Array.from(atob(attachment.base64Data), (character) => character.charCodeAt(0));
+    expect(decoded).toEqual(bytes);
+    await expect(createM15FormulaAuditPdfAttachment(bytes, "0".repeat(64), [8]))
+      .rejects.toThrow("does not match");
+    await expect(createM15FormulaAuditPdfAttachment(bytes, sha256, [0]))
+      .rejects.toThrow("valid physical PDF pages");
+    await expect(createM15FormulaAuditPdfAttachment(new TextEncoder().encode("not a PDF"), sha256, [8]))
+      .rejects.toThrow("valid bounded PDF");
+  });
+
   it("serves the isolated consumer answer evaluation page only in staging", async () => {
     const staging = await handleM15BenchmarkStagingRequest(
       new Request("https://staging.example/admin/m15/benchmark/answers"),
@@ -51,6 +85,9 @@ describe("M15 second-source benchmark definition", () => {
     expect(html).toContain("/admin/m15/benchmark/answers/source");
     expect(html).toContain("/admin/m15/benchmark/answers/run");
     expect(html).toContain("Run all 17 queries");
+    expect(html).toContain('id="formulaRun"');
+    expect(html).toContain("/admin/m15/benchmark/answers/formula-audit/run");
+    expect(html).toContain("five additional query pairs");
     expect(html).toContain("Download JSON results");
 
     const production = await handleM15BenchmarkStagingRequest(
