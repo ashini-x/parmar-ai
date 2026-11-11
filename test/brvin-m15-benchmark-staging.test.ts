@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   M15_BENCHMARK_QUERY_SUITE,
+  m15BenchmarkBatchWindow,
   isM15AiSearchItemPending,
   m15AiSearchMetadataForPage,
   m15AiSearchMetadataSchemaMatches,
@@ -113,6 +114,18 @@ describe("M15 second-source benchmark definition", () => {
     expect(M15_BENCHMARK_QUERY_SUITE.filter((item) => item.category === "out-of-corpus")).toHaveLength(4);
     expect(M15_BENCHMARK_QUERY_SUITE.filter((item) => item.category === "exact-symbol-near-miss")).toHaveLength(1);
     expect(M15_BENCHMARK_QUERY_SUITE.filter((item) => item.expectedNoMatch)).toHaveLength(5);
+  });
+
+  it("splits the 17 paired benchmark queries into small Worker invocation windows", () => {
+    expect(m15BenchmarkBatchWindow(0)).toEqual({ startIndex: 0, endIndex: 3, hasMore: true });
+    expect(m15BenchmarkBatchWindow(3)).toEqual({ startIndex: 3, endIndex: 6, hasMore: true });
+    expect(m15BenchmarkBatchWindow(6)).toEqual({ startIndex: 6, endIndex: 9, hasMore: true });
+    expect(m15BenchmarkBatchWindow(9)).toEqual({ startIndex: 9, endIndex: 12, hasMore: true });
+    expect(m15BenchmarkBatchWindow(12)).toEqual({ startIndex: 12, endIndex: 15, hasMore: true });
+    expect(m15BenchmarkBatchWindow(15)).toEqual({ startIndex: 15, endIndex: 17, hasMore: false });
+    expect(() => m15BenchmarkBatchWindow(1)).toThrow();
+    expect(() => m15BenchmarkBatchWindow(17)).toThrow();
+    expect(() => m15BenchmarkBatchWindow(-3)).toThrow();
   });
 
   it("accepts only the pinned source filename, byte length and PDF signature", () => {
