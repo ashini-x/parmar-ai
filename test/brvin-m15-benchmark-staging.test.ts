@@ -41,6 +41,25 @@ describe("M15 second-source benchmark definition", () => {
     expect(html).toContain("operator token is never stored");
   });
 
+  it("serves the isolated consumer answer evaluation page only in staging", async () => {
+    const staging = await handleM15BenchmarkStagingRequest(
+      new Request("https://staging.example/admin/m15/benchmark/answers"),
+      { ENVIRONMENT: "staging", BRVIN_M14_PILOT_ENABLED: "true" } as never,
+    );
+    const html = await staging.text();
+    expect(staging.status).toBe(200);
+    expect(html).toContain("/admin/m15/benchmark/answers/source");
+    expect(html).toContain("/admin/m15/benchmark/answers/run");
+    expect(html).toContain("Run all 17 queries");
+    expect(html).toContain("Download JSON results");
+
+    const production = await handleM15BenchmarkStagingRequest(
+      new Request("https://production.example/admin/m15/benchmark/answers"),
+      { ENVIRONMENT: "production", BRVIN_M14_PILOT_ENABLED: "true" } as never,
+    );
+    expect(production.status).toBe(404);
+  });
+
   it("waits on queued/running AI Search items and distinguishes terminal states", () => {
     expect(isM15AiSearchItemPending("queued")).toBe(true);
     expect(isM15AiSearchItemPending("running")).toBe(true);
