@@ -1786,10 +1786,11 @@ export function evaluateM15AnswerQuality(input: {
         ? /q\s*v\s*b|q\(v\s*[x*]\s*b\)|lorentz force\s*=/iu.test(normalized)
         : input.queryId === "N04"
           ? /p\s*=\s*n\s*r\s*t\s*\/\s*v|n\s*r\s*t\s*\/\s*v/iu.test(normalized)
-          : /c\s*=\s*(?:epsilon|ε)|\epsilon\s*0\s*a\s*\/\s*d/iu.test(normalized);
+          : /c\s*=\s*(?:epsilon|ε)|(?:epsilon|ε)\s*0\s*a\s*\/\s*d/iu.test(normalized);
     checks = [
       check("explicitSourceAbstention", abstains),
       check("doesNotSupplyUnsupportedResult", !unsupportedCalculation),
+      check("unrelatedRetrievedEvidenceWasPresent", input.retrievedPages.length > 0),
       check("doesNotCiteUnrelatedPage", input.citedPages.length === 0),
     ];
     abstentionCorrectness = checks.every((item) => item.passed);
@@ -1886,9 +1887,9 @@ export function evaluateM15AnswerQuality(input: {
   }
 
   const answerCorrectnessPassed = checks.length > 0 && checks.every((item) => item.passed);
-  const sourceGroundingCorrectness = isNegative
-    ? Boolean(abstentionCorrectness) && input.citedPages.length === 0
-    : input.retrievalOk && noProvenanceViolations && hasTargetEvidence && answerCorrectnessPassed;
+  const sourceGroundingCorrectness = input.retrievalOk && noProvenanceViolations && (isNegative
+    ? Boolean(abstentionCorrectness) && input.retrievedPages.length > 0 && input.citedPages.length === 0
+    : hasTargetEvidence && answerCorrectnessPassed);
   const citationCorrectness = isNegative
     ? input.citedPages.length === 0
     : pageTargets.length > 0 &&
