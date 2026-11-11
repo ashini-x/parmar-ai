@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 // The Vitest/Workers test runtime bundles JSON fixtures; Node fs is unavailable
 // inside the isolated Worker test module.
-// @ts-expect-error JSON fixture import is handled by the Vite test transformer.
 import assessmentJson from "./fixtures/brvin-m15-owner-waived-ai-passage-assessment.json";
 
 type Candidate = {
