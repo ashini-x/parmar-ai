@@ -2051,6 +2051,155 @@ async function runM15AnswerEvaluationQuery(
   };
 }
 
+
+function m15AnswerEvaluationPage(): Response {
+  const html = String.raw`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>BRVIN M15 Consumer Answer Evaluation</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#090f1b;color:#e8eef8;padding:28px;min-height:100vh}
+main{width:min(100%,920px);margin:0 auto;background:#111b2b;border:1px solid #2a3b54;border-radius:18px;padding:clamp(20px,4vw,34px)}
+.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#8ea6c7;font-weight:750}
+h1{font-size:clamp(25px,4vw,34px);letter-spacing:-.03em;margin:9px 0}
+p{color:#b9c7da;line-height:1.6}.notice{background:#17263a;border:1px solid #3b506b;padding:14px 16px;border-radius:12px;margin:18px 0}
+label{display:block;margin:17px 0 7px;font-weight:650}
+input{width:100%;padding:13px;border-radius:9px;border:1px solid #536985;background:#08111f;color:#fff;font:inherit}
+.row{display:flex;gap:12px;flex-wrap:wrap}button{padding:13px 17px;border:0;border-radius:10px;background:#2763c9;color:#fff;font:inherit;font-weight:750;cursor:pointer;margin-top:18px}
+button.secondary{background:#273850;border:1px solid #4a607d}button:disabled{opacity:.45;cursor:not-allowed}
+.status{white-space:pre-wrap;overflow-wrap:anywhere;background:#080f1b;border:1px solid #2b3e58;padding:14px;border-radius:10px;margin-top:16px;color:#b7c6d9}
+.good{color:#9ce4b4}.bad{color:#ffaaa6}.small{font-size:13px;color:#97abc5}
+a{color:#8bb7ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+@media(max-width:600px){body{padding:12px}main{padding:18px}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">Isolated staging only · M15 · no index writes</div>
+<h1>Consumer answer & abstention evaluation</h1>
+<p>Runs the original 17 fixed M15 queries against both staging retrieval providers, then passes each provider's verified retrieved excerpts through the existing consumer-owned Gemini generator. It uses one query per request and writes no result data to D1.</p>
+<div class="notice">
+<strong>Evaluation rules</strong>
+<p class="small">P01–P12 must be source-grounded and correct. N01–N04 must abstain even when unrelated passages are retrieved. H01 is not an abstention case: the source must correct the sign and identify F_s = -kx. Retrieved passages with invalid source-page provenance are not sent to Gemini.</p>
+</div>
+<label for="token">M15 staging operator token</label>
+<input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste the staging operator token">
+<div class="row"><button class="secondary" id="load" type="button">Load pinned eight-page source (read only)</button></div>
+<label for="sourceId">Pinned source ID</label>
+<input id="sourceId" type="text" readonly placeholder="Load the registered M15 source">
+<div class="notice small">The model and location are inherited from the staging Worker configuration. The token is held only in page memory for this run, is not stored in browser storage, and is cleared after completion.</div>
+<div class="row"><button id="run" type="button" disabled>Run all 17 queries · both providers · Gemini</button><a href="/admin/m15/benchmark" style="align-self:center;margin-top:18px">Back to M15 retrieval benchmark</a></div>
+<div id="progress" class="status" role="status" aria-live="polite">No answer-generation calls have been made.</div>
+<div id="summary" class="status" hidden></div>
+<div class="row"><button class="secondary" id="downloadJson" type="button" disabled>Download JSON results</button><button class="secondary" id="downloadMarkdown" type="button" disabled>Download Markdown report</button></div>
+<details style="margin-top:18px"><summary>What this run does and does not do</summary><p class="small">Read-only queries to the dedicated M15 AI Search instance and Qdrant collection. Each provider is evaluated independently with the same Gemini model, source-only prompt, response schema and deterministic answer rubric. The report includes full retrieved text, page provenance, generated answers, citations, grading checks and latencies. It does not change production provider selection, BRVIN v2 RPC, source OCR, manifests, index contents or D1 records. The deterministic rubric is a first-pass gate and does not replace final human review of nuanced prose.</p></details>
+</main>
+<script>
+(() => {
+ const ids=["P01","P02","P03","P04","P05","P06","P07","P08","P09","P10","P11","P12","N01","N02","N03","N04","H01"];
+ const tokenInput=document.getElementById("token"), sourceInput=document.getElementById("sourceId");
+ const loadButton=document.getElementById("load"), runButton=document.getElementById("run");
+ const progress=document.getElementById("progress"), summary=document.getElementById("summary");
+ const jsonButton=document.getElementById("downloadJson"), mdButton=document.getElementById("downloadMarkdown");
+ let latestReport=null;
+ function refresh(){runButton.disabled=sourceInput.value.trim().length===0||tokenInput.value.trim().length<32;}
+ tokenInput.addEventListener("input",refresh);
+ async function request(path,method,secret,body){
+   const response=await fetch(path,{method,headers:{"authorization":"Bearer "+secret,...(body?{"content-type":"application/json"}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer"});
+   let data;try{data=await response.json()}catch{throw new Error("Staging returned a non-JSON response (HTTP "+response.status+").")}
+   if(!response.ok||data.ok!==true)throw new Error(data.error||data.message||("Staging request failed (HTTP "+response.status+")."));
+   return data;
+ }
+ loadButton.addEventListener("click",async()=>{
+   const secret=tokenInput.value.trim();tokenInput.value="";refresh();
+   if(secret.length<32){progress.className="status bad";progress.textContent="Enter the staging operator token first.";return;}
+   loadButton.disabled=true;progress.className="status";progress.textContent="Reading the registered source row (no source/index writes)…";
+   try{
+     const data=await request("/admin/m15/benchmark/answers/source","GET",secret);
+     sourceInput.value=data.source.sourceId||data.source.source_id||"";
+     progress.className="status good";progress.textContent="Pinned M15 source loaded: "+sourceInput.value+". Status: "+(data.source.status||"ready")+". Pages: "+(data.source.pageCount||data.source.page_count||8)+".";
+   }catch(error){progress.className="status bad";progress.textContent=error.message;}
+   finally{loadButton.disabled=false;refresh();}
+ });
+ function providerSummary(key,results){
+   const rows=results.map(x=>x[key]||{});
+   const evaluations=rows.map(x=>x.evaluation||{});
+   const passed=rows.filter(x=>x.evaluation&&x.evaluation.overallPass).length;
+   const latencies=rows.map(x=>x.generationLatencyMs).filter(x=>typeof x==="number").sort((a,b)=>a-b);
+   const avg=latencies.length?Math.round(latencies.reduce((a,b)=>a+b,0)/latencies.length*100)/100:null;
+   return {queryCount:rows.length,overallPassCount:passed,failedQueryIds:results.filter((x,i)=>!rows[i].evaluation||!rows[i].evaluation.overallPass).map(x=>x.queryId),answerCorrectCount:evaluations.filter(x=>x.answerCorrectness&&x.answerCorrectness.passed).length,sourceGroundingCorrectCount:evaluations.filter(x=>x.sourceGroundingCorrectness).length,citationCorrectCount:evaluations.filter(x=>x.citationCorrectness).length,mathSymbolFidelityApplicableCount:evaluations.filter(x=>x.mathematicalSymbolFidelity!==null&&x.mathematicalSymbolFidelity!==undefined).length,mathSymbolFidelityPassCount:evaluations.filter(x=>x.mathematicalSymbolFidelity===true).length,abstentionApplicableCount:evaluations.filter(x=>x.abstentionCorrectness!==null&&x.abstentionCorrectness!==undefined).length,abstentionPassCount:evaluations.filter(x=>x.abstentionCorrectness===true).length,averageGenerationLatencyMs:avg,medianGenerationLatencyMs:latencies.length?latencies[Math.floor((latencies.length-1)/2)]:null};
+ }
+ function makeMarkdown(report){
+   let out="# BRVIN M15 Consumer Answer & Abstention Evaluation\\n\\n";
+   out+="Run: "+report.runAt+"\\nSource: "+report.sourceId+"\\nModel: "+report.model+" ("+report.location+")\\nCompleted query pairs: "+report.results.length+"/17\\n\\n";
+   for(const key of ["cloudflareAiSearch","qdrantVertex"]){
+     const s=report.summary[key];out+="## "+key+"\\n\\n";
+     out+="Pass: "+s.overallPassCount+"/"+s.queryCount+"; failed: "+(s.failedQueryIds.join(", ")||"none")+"; average generation latency: "+s.averageGenerationLatencyMs+" ms; median: "+s.medianGenerationLatencyMs+" ms.\\n\\n";
+     out+="| Query | Evidence pages | Answer | Grounding | Citation | Math | Abstention | Generation ms | Pass | Failures |\\n|---|---|---:|---:|---:|---:|---:|---:|---:|---|\\n";
+     for(const result of report.results){
+       const p=result[key]||{},e=p.evaluation||{},pages=(p.retrievedPages||[]).filter(x=>x!==null).join(", ");
+       const v=x=>x===null||x===undefined?"N/A":x?"PASS":"FAIL";
+       out+="| "+result.queryId+" | "+pages+" | "+v(e.answerCorrectness&&e.answerCorrectness.passed)+" | "+v(e.sourceGroundingCorrectness)+" | "+v(e.citationCorrectness)+" | "+v(e.mathematicalSymbolFidelity)+" | "+v(e.abstentionCorrectness)+" | "+(p.generationLatencyMs??"N/A")+" | "+v(e.overallPass)+" | "+((e.failureCases||[]).join(", ")||"—")+" |\\n";
+     }
+     out+="\\n";
+     for(const result of report.results){
+       const p=result[key]||{},e=p.evaluation||{};
+       out+="### "+result.queryId+" · "+result.query+"\\n\\n";
+       out+="**Retrieved evidence and pages**\\n\\n";
+       for(const candidate of p.evidence||[]) out+="- Rank "+candidate.rank+", PDF p. "+candidate.pdfPage+", score "+candidate.score+", provenance "+candidate.provenanceValid+"\\n\\n"+candidate.text+"\\n\\n";
+       out+="**Generated answer**\\n\\n"+(p.answerWithCitations||p.generationError||"No generated answer.")+"\\n\\n";
+       out+="**Evaluation**\\n\\n"+JSON.stringify(e,null,2)+"\\n\\n";
+     }
+   }
+   return out;
+ }
+ function download(name,mime,value){
+   const blob=new Blob([value],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement("a");
+   a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+ }
+ runButton.addEventListener("click",async()=>{
+   const secret=tokenInput.value.trim(),sourceId=sourceInput.value.trim();tokenInput.value="";refresh();
+   if(secret.length<32||!sourceId)return;
+   runButton.disabled=true;loadButton.disabled=true;progress.className="status";progress.textContent="Starting paired retrieval and Gemini generation. Each query is processed once for each provider.";
+   summary.hidden=true;jsonButton.disabled=true;mdButton.disabled=true;latestReport=null;
+   const results=[];let requestFailure=null;
+   for(let i=0;i<ids.length;i++){
+     progress.textContent="Evaluating "+ids[i]+" ("+(i+1)+"/17). Two Gemini generations are being run against the same query.";
+     try{
+       const response=await request("/admin/m15/benchmark/answers/run","POST",secret,{sourceId,queryId:ids[i]});
+       results.push(response.result);
+     }catch(error){requestFailure=ids[i]+": "+error.message;break;}
+   }
+   const model=results.length?((results[0].cloudflareAiSearch||{}).model||"gemini-3.8-flash"):"gemini-3.8-flash";
+   const location=results.length?((results[0].cloudflareAiSearch||{}).location||"global"):"global";
+   const report={benchmark:"brvin-m15-consumer-answer-evaluation",runAt:new Date().toISOString(),sourceId,model,location,queryCount:17,completedQueryPairs:results.length,complete:results.length===17&&!requestFailure,requestFailure,results,summary:{cloudflareAiSearch:providerSummary("cloudflareAiSearch",results),qdrantVertex:providerSummary("qdrantVertex",results)}};
+   latestReport=report;
+   const summaryText=JSON.stringify(report.summary,null,2);
+   summary.hidden=false;summary.className="status";summary.textContent=summaryText;
+   jsonButton.disabled=results.length===0;mdButton.disabled=results.length===0;
+   progress.className="status "+(report.complete?"good":"bad");
+   progress.textContent=report.complete?"Completed all 17 paired queries. Review exact failed IDs and download both reports.":"Stopped after "+results.length+"/17 pairs. "+(requestFailure||"The run did not complete.");
+   secret="";
+   runButton.disabled=false;loadButton.disabled=false;
+ });
+ jsonButton.addEventListener("click",()=>{if(latestReport)download("brvin-m15-consumer-answer-evaluation.json","application/json",JSON.stringify(latestReport,null,2));});
+ mdButton.addEventListener("click",()=>{if(latestReport)download("brvin-m15-consumer-answer-evaluation.md","text/markdown",makeMarkdown(latestReport));});
+ refresh();
+})();
+</script></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, private",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
+    },
+  });
+}
+
 export async function handleM15BenchmarkStagingRequest(
   request: Request,
   env: M15BenchmarkStagingEnv,
