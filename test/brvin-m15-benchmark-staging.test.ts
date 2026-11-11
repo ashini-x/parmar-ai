@@ -16,10 +16,11 @@ function providerResult(pages: Array<number | null>, ok = true) {
   return {
     ok,
     elapsedMs: 12,
-    resultCount: pages.length,
-    retrievedPages: pages,
+    resultCount: ok ? pages.length : 0,
+    retrievedPages: ok ? pages : [],
     provenanceViolationCount: 0,
     candidates: [],
+    ...(ok ? {} : { errorType: "Error", errorMessage: "simulated provider failure" }),
   };
 }
 
@@ -124,7 +125,7 @@ describe("M15 second-source benchmark definition", () => {
     expect(validateM15BenchmarkPdf("BRVIN_M15_Physics_Benchmark_Source_v1.pdf", badSignature).ok).toBe(false);
   });
 
-  it("keeps page-label metrics separate from candidate presence on no-match cases", () => {
+  it("does not count failed negative-control queries as successful zero-candidate checks", () => {
     const summary = summarizeM15BenchmarkProvider([
       {
         id: "P01", category: "positive", expectedPages: [1], expectedNoMatch: false,
@@ -139,24 +140,40 @@ describe("M15 second-source benchmark definition", () => {
         result: providerResult([]),
       },
       {
+        id: "N03", category: "out-of-corpus", expectedPages: [], expectedNoMatch: true,
+        result: providerResult([], false),
+      },
+      {
         id: "H01", category: "exact-symbol-near-miss", expectedPages: [], expectedNoMatch: true,
-        result: providerResult([8]),
+        result: providerResult([], false),
       },
     ]);
     expect(summary).toMatchObject({
-      queryCount: 4,
+      queryCount: 5,
       positiveQueryCount: 1,
+      positiveQueriesCompleted: 1,
+      positiveQueryFailures: 0,
       expectedPageTargets: 1,
       coveredExpectedPageTargets: 1,
       positivePageLabelPrecisionAt5: 2 / 5,
-      allSuitePageLabelPrecisionAt5: 2 / 20,
-      outOfCorpusQueryCount: 2,
+      allSuitePageLabelPrecisionAt5: 2 / 25,
+      outOfCorpusQueryCount: 3,
+      outOfCorpusQueriesCompleted: 2,
+      outOfCorpusQueryFailures: 1,
+      outOfCorpusAllQueriesCompleted: false,
       outOfCorpusQueriesWithCandidates: 1,
+      outOfCorpusQueriesWithoutCandidates: 1,
       outOfCorpusCandidatePresenceRate: 0.5,
       outOfCorpusCandidateCount: 2,
       exactSymbolNearMissCount: 1,
-      exactSymbolNearMissWithCandidates: 1,
-      exactSymbolNearMissCandidateCount: 1,
+      exactSymbolNearMissQueriesCompleted: 0,
+      exactSymbolNearMissQueryFailures: 1,
+      exactSymbolNearMissAllQueriesCompleted: false,
+      exactSymbolNearMissWithCandidates: 0,
+      exactSymbolNearMissWithoutCandidates: 0,
+      exactSymbolNearMissCandidatePresenceRate: null,
+      exactSymbolNearMissCandidateCount: 0,
+      allNegativeControlsCompleted: false,
     });
     expect("falsePositiveRate" in summary).toBe(false);
   });
