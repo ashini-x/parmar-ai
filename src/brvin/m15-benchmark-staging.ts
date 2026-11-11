@@ -1906,7 +1906,7 @@ export function evaluateM15AnswerQuality(input: {
 
   const answerCorrectnessPassed = checks.length > 0 && checks.every((item) => item.passed);
   const sourceGroundingCorrectness = input.retrievalOk && noProvenanceViolations && (isNegative
-input.citedPages.length === 0
+    ? Boolean(abstentionCorrectness) && input.citedPages.length === 0
     : hasTargetEvidence && answerCorrectnessPassed);
   const modelCitedPages = m15AnswerPageCitations(answer);
   const modelCitationPagesValid = isNegative
