@@ -1,7 +1,7 @@
 # BRVIN Retrieval Provider Modernization — Approved Architecture and Migration Plan
 
 **Decision date:** 8 November 2026
-**Status reviewed:** 11 November 2026 — M14 is complete as the scoped non-production Vertex/Qdrant Physics pilot. The second-source M15 retrieval-only receipt is complete. The consumer-owned Gemini answer/abstention evaluation also completed in isolated staging: all 17 query pairs (34 generations) returned. The original auto-grader was over-strict on P07/P09/P11; manual review confirms the numerical answers are correct. Both providers explicitly abstained on N01–N04, with Qdrant additionally demonstrating abstention despite irrelevant retrieved passages. H01 sign reasoning is correct, but exact `F_s = -kx` notation is unresolved because OCR/generation show `-k xx`; independent claim-level grounding remains open. Production remains on AI Search; no provider cutover is authorized.
+**Status reviewed:** 11 November 2026 — M14 is complete as the scoped non-production Vertex/Qdrant Physics pilot. The second-source M15 retrieval-only receipt and separate consumer-owned Gemini answer/abstention run are complete (17 paired queries, 34 generations). Manual review confirms P01–P12 calculations and 4/4 explicit abstentions for each provider; Qdrant additionally demonstrated 4/4 abstentions with irrelevant passages present. The original PDF page 8 confirms `F_s = −k × x`, while the indexed OCR and both generated H01 answers show `F_s = -k xx`, a confirmed symbol-fidelity defect. Claim-level grounding remains open. Production remains on AI Search; no provider cutover is authorized.
 **Status:** APPROVED DESIGN / M13 MERGED / M14 PILOT COMPLETE / M15 SHADOW BENCHMARK ACTIVE / NO PROVIDER CUTOVER  
 **Owning repository:** ashini-x/parmar-ai  
 **Coordinating consumer:** ashini-x/brvin-teachers  
@@ -603,7 +603,7 @@ The operator completed **17/17 query pairs and 34 Gemini generations** at 2026-1
 - P09: both answers correctly calculate 19.6 N downslope and 33.95 N normal force; the original regex was position-sensitive.
 - P11: both answers correctly give −4.5 kg·m/s and −90 N; their negative signs preserve direction even without a separate verbal phrase.
 - N01–N04: both generators explicitly abstain 4/4. AI Search returned no passages, so its run demonstrates no-evidence abstention but does not exercise ignoring irrelevant evidence (0/4 challenge contexts). Qdrant returned unrelated in-corpus passages and the generator abstained in all four cases (4/4 resistance demonstrated).
-- H01: both answers reject the positive-sign premise and identify the negative sign. However, both output `F_s = -k xx`, matching the extracted OCR text rather than the required canonical `F_s = -kx`. Exact-symbol fidelity remains open until the original source page image is checked.
+- H01: the original PDF page 8 visibly prints `F_s = −k × x` and explicitly rejects `F_s = +k × x`. Both answers reject the positive-sign premise, but the indexed OCR and generated answers show `F_s = -k xx`, so exact-symbol preservation fails at the OCR-to-answer boundary. The original PDF is correct and no source/OCR/index artifact was modified.
 
 The calibrated rules re-grade the saved answer text to **16/17 for each provider**, leaving H01 as an exact-notation failure. This is an offline rubric re-grade, not another Gemini run. Positive-query content P01–P12 is correct on manual review for both providers. No single aggregate score should hide the distinction between empty-evidence abstention, irrelevant-evidence resistance and exact-symbol fidelity.
 
@@ -615,8 +615,8 @@ The 17/17 citation counters mean the expected physical-page citations were appen
 
 **Implementation status:** evaluator and calibrated rubric are on draft PR #223 / branch `feat/m15-consumer-answer-evaluation-2026-11-11`. Earlier M14 staging validation #112 and Release validation #1116 passed. The latest rubric-calibration changes have new tests and require fresh CI; no new generation run is required to apply them.
 
-**Execution status:** the 34 staging generations are complete. H01 exact notation and independent claim-level grounding remain open. The PR remains unmerged; the new `src/ai/gemini.ts` path is a production runtime file and must go through normal review/release controls before any production use.
+**Execution status:** the 34 staging generations are complete. H01's OCR-to-answer symbol-fidelity defect is confirmed against the original PDF; independent claim-level grounding remains open. The PR remains unmerged; the new `src/ai/gemini.ts` path is a production runtime file and must go through normal review/release controls before any production use.
 
 See [BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md](BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md) for the complete receipts, adjudication, test rubric and separately benchmarked relevance-gating/reranking recommendations.
 
-**Decision:** the migration remains **IN PROGRESS**. Do not call the retrieval migration production-ready or change the production provider selector until H01 notation is resolved, claim-level grounding is reviewed, the calibrated evaluator passes CI, and the remaining M15 security, recovery, performance, cost and load gates pass.
+**Decision:** the migration remains **IN PROGRESS**. Do not call the retrieval migration production-ready or change the production provider selector until the OCR-to-answer symbol-fidelity defect is remediated without modifying the original source artifact, claim-level grounding is reviewed, the calibrated evaluator passes CI, and the remaining M15 security, recovery, performance, cost and load gates pass.
