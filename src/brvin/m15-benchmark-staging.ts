@@ -207,6 +207,17 @@ export const M15_BENCHMARK_QUERY_SUITE: readonly M15Case[] = [
   { id: "H01", category: "exact-symbol-near-miss", query: "Find the exact restoring-force expression F_s = +k × x as written in the source.", expectedPages: [], expectedNoMatch: true },
 ] as const;
 
+const M15_BENCHMARK_BATCH_SIZE = 3;
+
+export function m15BenchmarkBatchWindow(startIndex: number): { startIndex: number; endIndex: number; hasMore: boolean } {
+  if (!Number.isSafeInteger(startIndex) || startIndex < 0 || startIndex >= M15_BENCHMARK_QUERY_SUITE.length ||
+      startIndex % M15_BENCHMARK_BATCH_SIZE !== 0) {
+    throw new Error("The M15 benchmark batch cursor is invalid.");
+  }
+  const endIndex = Math.min(M15_BENCHMARK_QUERY_SUITE.length, startIndex + M15_BENCHMARK_BATCH_SIZE);
+  return { startIndex, endIndex, hasMore: endIndex < M15_BENCHMARK_QUERY_SUITE.length };
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -1120,6 +1131,7 @@ async function timedQuery(run: () => Promise<M15Candidate[]>): Promise<M15Provid
 export async function runM15BenchmarkSourceShadow(
   env: M15BenchmarkStagingEnv,
   source: M15BenchmarkSourceRow,
+  startIndex: number,
 ): Promise<Record<string, unknown>> {
   if (!env.BRVIN_M15_BENCHMARK_AI_SEARCH) throw new Error("The separate M15 staging AI Search binding is missing.");
   if (source.status !== "ready" || source.page_count !== SOURCE_PAGE_COUNT ||
@@ -1127,9 +1139,10 @@ export async function runM15BenchmarkSourceShadow(
       source.ai_search_indexed_pages !== SOURCE_PAGE_COUNT || source.qdrant_point_count < SOURCE_PAGE_COUNT) {
     throw new Error("Both isolated staging indexes must be READY for all eight physical pages before paired evaluation.");
   }
+  const batch = m15BenchmarkBatchWindow(startIndex);
   const pilot = await createQdrantPilot(env, BENCHMARK_QDRANT_COLLECTION);
   const results: M15ShadowQueryResult[] = [];
-  for (const item of M15_BENCHMARK_QUERY_SUITE) {
+  for (const item of M15_BENCHMARK_QUERY_SUITE.slice(batch.startIndex, batch.endIndex)) {
     const [aiSearch, qdrant] = await Promise.all([
       timedQuery(async () => {
         const response = await env.BRVIN_M15_BENCHMARK_AI_SEARCH!.search({
@@ -1165,6 +1178,53 @@ export async function runM15BenchmarkSourceShadow(
       cloudflareAiSearch: aiSearch,
       qdrantVertex: qdrant,
     });
+  }
+  return {
+    benchmark: "brvin-m15-second-source-paired-shadow",
+    sourceId: source.source_id,
+    batch: {
+      ...batch,
+      totalQueries: M15_BENCHMARK_QUERY_SUITE.length,
+      completedQueriesInBatch: results.length,
+    },
+    results,
+  };
+}
+
+function isM15ProviderResult(value: unknown): value is M15ProviderResult {
+  if (value === null || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.ok === "boolean" && typeof item.elapsedMs === "number" &&
+    Number.isFinite(item.elapsedMs) && typeof item.resultCount === "number" &&
+    Number.isSafeInteger(item.resultCount) && item.resultCount >= 0 &&
+    Array.isArray(item.retrievedPages) && typeof item.provenanceViolationCount === "number" &&
+    Array.isArray(item.candidates);
+}
+
+function buildM15BenchmarkReceipt(
+  env: M15BenchmarkStagingEnv,
+  source: M15BenchmarkSourceRow,
+  rawResults: unknown,
+): Record<string, unknown> {
+  if (source.status !== "ready" || source.page_count !== SOURCE_PAGE_COUNT ||
+      source.indexed_pages !== SOURCE_PAGE_COUNT || source.ai_search_indexed_pages !== SOURCE_PAGE_COUNT ||
+      source.qdrant_point_count < SOURCE_PAGE_COUNT) {
+    throw new Error("Both isolated staging indexes must remain READY before the paired receipt is assembled.");
+  }
+  if (!Array.isArray(rawResults) || rawResults.length !== M15_BENCHMARK_QUERY_SUITE.length) {
+    throw new Error("The complete 17-query benchmark result set is required to assemble the receipt.");
+  }
+  const results = rawResults as M15ShadowQueryResult[];
+  for (let index = 0; index < M15_BENCHMARK_QUERY_SUITE.length; index += 1) {
+    const expected = M15_BENCHMARK_QUERY_SUITE[index];
+    const actual = results[index] as unknown as Record<string, unknown>;
+    if (!actual || actual.id !== expected.id || actual.query !== expected.query ||
+        actual.category !== expected.category || !Array.isArray(actual.expectedPages) ||
+        JSON.stringify(actual.expectedPages) !== JSON.stringify(expected.expectedPages) ||
+        actual.expectedNoMatch !== expected.expectedNoMatch ||
+        !isM15ProviderResult(actual.cloudflareAiSearch) || !isM15ProviderResult(actual.qdrantVertex)) {
+      throw new Error("Benchmark results are missing, duplicated, reordered or do not match the fixed 17-query suite.");
+    }
   }
   const summarize = (provider: ProviderName) => summarizeM15BenchmarkProvider(
     results.map((item) => ({
@@ -1214,7 +1274,7 @@ export async function runM15BenchmarkSourceShadow(
       providerSelectorChanged: false,
       consumerAnswersChanged: false,
     },
-    interpretation: "This is a 17-query retrieval-only benchmark. Positive expected-page metrics are page-label proxies, not independent passage qrels. Candidate presence on N01-N04 and H01 is not automatically a false positive: reviewers must grade returned passages against the source. H01 is a separate exact-symbol near-miss because the source contains the opposite restoring-force sign. Qdrant RRF scores are ranking values, not confidence probabilities. The benchmark does not invoke Gemini answer generation or prove answer abstention. The paired evaluation performs search/query calls only and has zero index side effects.",
+    interpretation: "This is a 17-query retrieval-only benchmark executed in six small Worker invocations to stay below the per-invocation subrequest limit. Positive expected-page metrics are page-label proxies, not independent passage qrels. Candidate presence on N01-N04 and H01 is not automatically a false positive: reviewers must grade returned passages against the source. H01 is a separate exact-symbol near-miss because the source contains the opposite restoring-force sign. Qdrant RRF scores are ranking values, not confidence probabilities. The benchmark does not invoke Gemini answer generation or prove answer abstention. Each batch performs search/query only and has zero index side effects.",
   };
 }
 
@@ -1448,7 +1508,45 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
     await call("/admin/m15/benchmark/source/ai-search","POST",{sourceId:sourceId.value},"Configuring the dedicated M15 metadata schema if needed, then indexing at most two verified OCR pages into the isolated AI Search instance. Re-enter the token and repeat Step 6 until all eight pages are complete.");
   });
   buttons.benchmark.addEventListener("click",async()=>{
-    await call("/admin/m15/benchmark/run","POST",{sourceId:sourceId.value},"Running the 17 fixed query cases against both staging indexes. This action performs query/search only and does not modify either index.");
+    let secret=token.value.trim();
+    const selectedSourceId=sourceId.value.trim();
+    if(secret.length<32||!selectedSourceId)return;
+    token.value="";refresh();buttons.benchmark.disabled=true;
+    const totalQueries=17;let collected=[];let nextIndex=0;let batchNumber=0;
+    const requestBatch=async(path,payload)=>{
+      const response=await fetch(path,{
+        method:"POST",
+        headers:{authorization:"Bearer "+secret,"content-type":"application/json"},
+        body:JSON.stringify(payload),cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer"
+      });
+      let data;
+      try{data=await response.json();}catch{throw new Error("The staging Worker returned an unreadable response (HTTP "+response.status+").");}
+      if(!response.ok||data.ok!==true)throw new Error(data.error||("Staging benchmark request failed (HTTP "+response.status+")."));
+      return data;
+    };
+    result.className="status muted";result.textContent="Starting the read-only paired benchmark in small batches. The operator token is held only in memory for this click and cleared when the run ends.";
+    try{
+      while(nextIndex<totalQueries){
+        result.textContent="Running paired retrieval batch "+(batchNumber+1)+" · completed "+collected.length+"/"+totalQueries+" query pairs. Do not close this page.";
+        const data=await requestBatch("/admin/m15/benchmark/run",{sourceId:selectedSourceId,startIndex:nextIndex});
+        const batch=data.result?.batch;const batchResults=data.result?.results;
+        if(!batch||batch.startIndex!==nextIndex||!Number.isSafeInteger(batch.endIndex)||batch.endIndex<=nextIndex||
+            batch.endIndex>totalQueries||batch.hasMore!==(batch.endIndex<totalQueries)||
+            !Array.isArray(batchResults)||batchResults.length!==batch.endIndex-nextIndex){
+          throw new Error("The staging Worker returned an incomplete or out-of-order benchmark batch.");
+        }
+        collected.push(...batchResults);nextIndex=batch.endIndex;batchNumber+=1;
+      }
+      result.textContent="All "+collected.length+"/"+totalQueries+" query pairs completed. Assembling provider summaries and the final receipt…";
+      const receipt=await requestBatch("/admin/m15/benchmark/complete",{sourceId:selectedSourceId,results:collected});
+      result.className="status "+(receipt.ok===true?"good":"bad");
+      result.textContent=JSON.stringify(receipt,null,2);
+    }catch(error){
+      result.className="status bad";
+      result.textContent="Benchmark stopped after "+collected.length+"/"+totalQueries+" query pairs. "+(error instanceof Error?error.message:"Unexpected request failure.")+" Re-enter the staging token and click Step 7 again to restart the read-only benchmark from the beginning.";
+    }finally{
+      secret="";token.value="";refresh();
+    }
   });
   const saved=readRememberedSourceId();
   if(saved){sourceId.value=saved;refresh();}
@@ -1504,7 +1602,8 @@ export async function handleM15BenchmarkStagingRequest(
   }
 
   if (!url.pathname.startsWith("/admin/m15/benchmark/source/") &&
-      url.pathname !== "/admin/m15/benchmark/run") {
+      url.pathname !== "/admin/m15/benchmark/run" &&
+      url.pathname !== "/admin/m15/benchmark/complete") {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if (!["GET","POST"].includes(request.method)) return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -1535,8 +1634,8 @@ export async function handleM15BenchmarkStagingRequest(
     return json({ ok: true, source: publicSource(latest), ...(vision ? { vision } : {}) });
   }
 
-  let body: { sourceId?: unknown };
-  try { body = await request.json() as { sourceId?: unknown }; }
+  let body: { sourceId?: unknown; startIndex?: unknown; results?: unknown };
+  try { body = await request.json() as { sourceId?: unknown; startIndex?: unknown; results?: unknown }; }
   catch { return json({ ok: false, error: "invalid_json" }, 400); }
   if (!validUuid(body.sourceId)) return json({ ok: false, error: "invalid_source_id" }, 400);
   const row = await getSource(env, body.sourceId);
@@ -1563,7 +1662,14 @@ export async function handleM15BenchmarkStagingRequest(
       return json({ ok: true, result, source: latest ? publicSource(latest) : undefined });
     }
     if (url.pathname === "/admin/m15/benchmark/run" && request.method === "POST") {
-      const result = await runM15BenchmarkSourceShadow(env, row);
+      if (typeof body.startIndex !== "number" || !Number.isSafeInteger(body.startIndex)) {
+        return json({ ok: false, error: "invalid_benchmark_batch_cursor" }, 400);
+      }
+      const result = await runM15BenchmarkSourceShadow(env, row, body.startIndex);
+      return json({ ok: true, result });
+    }
+    if (url.pathname === "/admin/m15/benchmark/complete" && request.method === "POST") {
+      const result = buildM15BenchmarkReceipt(env, row, body.results);
       return json({ ok: true, result });
     }
     return json({ ok: false, error: "not_found" }, 404);
