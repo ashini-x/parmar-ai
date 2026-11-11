@@ -109,3 +109,26 @@ The above is the supplied retrieval receipt summary. The full query-by-query JSO
 Latest Cloudflare read-back confirms production `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search` and `BRVIN_CORPUS_MANIFEST_ENABLED=false`. Production currently reads `parmar-ai` v714 and `brvin-service` v135 at 100%; the release acceptance passed. The first merge did trigger the normal release workflow because the staging-only allowlist was incomplete. PR #214 corrected that classifier; subsequent staging-only merges now skip the production deploy path.
 
 **M15 is not complete.** The next gates remain passage-level human relevance judgments, review of all 17-case evidence, authorization isolation/revocation, retry/recovery, controlled latency/cost and representative load. Do not cut over production based only on this second-source page benchmark.
+
+
+## 12 November 2026 — paired retrieval receipt reconciled with answer evaluation
+
+The saved 17-query staging retrieval receipt completed all queries on both providers, with 12/12 positive expected physical-page targets covered and zero provenance violations.
+
+| Measure | Cloudflare AI Search | Vertex + Qdrant |
+|---|---:|---:|
+| Positive expected page targets covered | 12/12 | 12/12 |
+| Positive page-label precision@5 proxy | 23.3% | 23.3% |
+| All-suite page-label precision@5 proxy | 16.5% | 16.5% |
+| Out-of-corpus N01–N04 with candidates | 0/4 | 4/4 (20 candidates) |
+| H01 exact-symbol near-miss candidates | 2 | 5 |
+| Provenance violations | 0 | 0 |
+| Sequential Worker retrieval p50 | 2,524 ms | 784 ms |
+| Sequential Worker retrieval p95 / p99 | 10,477 / 10,477 ms | 1,097 / 1,097 ms |
+
+The page-label values are physical-page proxies, not passage-qrels metrics. A candidate on an out-of-corpus query is not automatically relevant; judge the candidate text against the source. The timings are 17 sequential staging samples, not representative load measurements, a production SLO, or per-query cost evidence.
+
+The separate OCR-only consumer answer evaluation completed 17 paired queries / 34 Gemini generations. Calibrated offline re-grade of the same saved answers is 16/17 for each provider; this was not a second generation run. The later five-query original-PDF-assisted notation audit is a separate run and passed 5/5 for each provider on answer correctness, source grounding, citations and symbol fidelity. The PDF-assisted pass does not modify or repair raw OCR, normalized text, manifests or indexed provider text. See [BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md](BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md).
+
+The first remaining M15 gate is independent passage relevance and claim-to-passage grounding. The 109-excerpt two-reviewer pack is in [BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md](BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md) and [the machine-readable review fixture](../test/fixtures/brvin-m15-passage-qrels-review-pack.json). Reviewer grades remain blank by design. Next gates include authorization/no-grant and retained-vector revocation, retry/recovery/throttling, HNSW-aware concurrency/load, repeatable latency/throughput/cost and rollback. Production remains on Cloudflare AI Search.
+
