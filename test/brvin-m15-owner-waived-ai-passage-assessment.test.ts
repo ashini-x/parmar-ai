@@ -1,6 +1,8 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+// The Vitest/Workers test runtime bundles JSON fixtures; Node fs is unavailable
+// inside the isolated Worker test module.
+// @ts-expect-error JSON fixture import is handled by the Vite test transformer.
+import assessmentJson from "./fixtures/brvin-m15-owner-waived-ai-passage-assessment.json";
 
 type Candidate = {
   reviewerA: { grade: number | null; rationale: string | null };
@@ -40,12 +42,7 @@ type Assessment = {
   };
 };
 
-const assessment = JSON.parse(
-  readFileSync(
-    resolve(process.cwd(), "test/fixtures/brvin-m15-owner-waived-ai-passage-assessment.json"),
-    "utf8",
-  ),
-) as Assessment;
+const assessment = assessmentJson as unknown as Assessment;
 
 const dcg = (grades: number[]): number =>
   grades.reduce((sum, grade, index) => sum + (2 ** grade - 1) / Math.log2(index + 2), 0);
