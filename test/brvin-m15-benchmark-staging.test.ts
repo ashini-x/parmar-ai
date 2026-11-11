@@ -63,7 +63,9 @@ describe("M15 second-source benchmark definition", () => {
       pdfPage.drawText("Original physical PDF page " + page, { x: 50, y: 750 });
     }
     const bytes = await original.save();
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+    const digestInput = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(digestInput).set(bytes);
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", digestInput));
     const sha256 = Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join("");
     const attachment = await createM15FormulaAuditPdfAttachment(bytes, sha256, [8]);
     expect(attachment).toMatchObject({
