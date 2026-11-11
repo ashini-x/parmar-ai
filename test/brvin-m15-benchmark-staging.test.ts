@@ -9,6 +9,7 @@ import {
   m15QdrantPageWindow,
   shouldPersistM15VisionStatus,
   summarizeM15BenchmarkProvider,
+  evaluateM15AnswerQuality,
   validateM15BenchmarkPdf,
   handleM15BenchmarkStagingRequest,
 } from "../src/brvin/m15-benchmark-staging";
@@ -189,5 +190,81 @@ describe("M15 second-source benchmark definition", () => {
       allNegativeControlsCompleted: false,
     });
     expect("falsePositiveRate" in summary).toBe(false);
+  });
+});
+
+
+describe("M15 consumer answer quality rubric", () => {
+  it("grades the restoring-force equation, negative sign, units and energy", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "P12",
+      answer: "The restoring force is F_s = -kx = -10 N. Elastic potential energy is E = 1/2 kx^2 = 0.25 J.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(true);
+    expect(result.mathematicalSymbolFidelity).toBe(true);
+  });
+
+  it("treats H01 as a source-supported correction, not an abstention", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "H01",
+      answer: "The source gives F_s = -kx. F_s = +kx is not the restoring-force equation stated in the source.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result).toMatchObject({
+      overallPass: true,
+      abstentionCorrectness: null,
+      mathematicalSymbolFidelity: true,
+      citationCorrectness: true,
+    });
+  });
+
+  it("requires abstention when unrelated retrieved evidence is present", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "N01",
+      answer: "The indexed source does not provide enough information to answer this question.",
+      retrievedPages: [2, 3],
+      citedPages: [],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result).toMatchObject({
+      overallPass: true,
+      abstentionCorrectness: true,
+      sourceGroundingCorrectness: true,
+      citationCorrectness: true,
+    });
+  });
+
+  it("does not award a negative-control pass when retrieval returned no unrelated evidence", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "N01",
+      answer: "The indexed source does not provide enough information to answer this question.",
+      retrievedPages: [],
+      citedPages: [],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(false);
+    expect(result.abstentionCorrectness).toBe(false);
+  });
+
+  it("rejects an abstention followed by an unsupported external result", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "N02",
+      answer: "The indexed source does not provide enough information. However, the current is 4 A.",
+      retrievedPages: [1, 2],
+      citedPages: [],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.overallPass).toBe(false);
+    expect(result.abstentionCorrectness).toBe(false);
   });
 });
