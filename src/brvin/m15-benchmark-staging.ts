@@ -1,4 +1,5 @@
-import type { AiSearchInstance, Env } from "../config/env";
+import { generateGeminiAnswer, type GroundedGeminiSourceContext } from "../ai/gemini";
+import type { AiSearchInstance, Env, ProfileContext, StudentProfile } from "../config/env";
 import { getGoogleAccessToken } from "../auth/google";
 import {
   getFatmanVisionOperation,
@@ -1566,6 +1567,488 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
   }});
+}
+
+
+interface M15AnswerEvidenceCandidate {
+  rank: number;
+  page: number | null;
+  score: number | null;
+  itemKey?: string;
+  provenanceValid: boolean;
+  text: string;
+}
+
+interface M15AnswerRetrieval {
+  ok: boolean;
+  elapsedMs: number;
+  candidates: M15AnswerEvidenceCandidate[];
+  provenanceViolationCount: number;
+  errorType?: string;
+  errorMessage?: string;
+}
+
+function m15AnswerProfile(): ProfileContext {
+  const profile: StudentProfile = {
+    version: 2,
+    targetExam: "Physics source-grounding evaluation",
+    recentTopics: [],
+    recentSubjects: [],
+    attentionTopics: [],
+    revisionQueue: [],
+    learningSignals: [],
+    questionCount: 0,
+    lastUpdatedAt: Date.now(),
+  };
+  return {
+    profile,
+    recentTopicHint: "",
+    attentionTopicHint: "",
+    revisionHint: "",
+    recentConversation: [],
+  };
+}
+
+async function retrieveM15AnswerEvidenceAiSearch(
+  env: M15BenchmarkStagingEnv,
+  source: M15BenchmarkSourceRow,
+  item: M15Case,
+): Promise<M15AnswerRetrieval> {
+  const started = performance.now();
+  try {
+    const search = env.BRVIN_M15_BENCHMARK_AI_SEARCH;
+    if (!search) throw new Error("The isolated M15 staging AI Search binding is missing.");
+    const response = await search.search({
+      messages: [{ role: "user", content: item.query }],
+      ai_search_options: {
+        cache: { enabled: false },
+        retrieval: {
+          max_num_results: 16,
+          match_threshold: 0.3,
+          retrieval_type: "hybrid",
+          keyword_match_mode: "or",
+          filters: { folder: { $in: [sourcePrefix(source.source_id)] } },
+        },
+        reranking: { enabled: true, model: "@cf/baai/bge-reranker-base", match_threshold: 0.4 },
+      },
+    });
+    const candidates = (response.chunks ?? []).slice(0, TOP_K).map((chunk, index) => {
+      const key = typeof chunk.item?.key === "string" ? chunk.item.key : "";
+      const page = pageFromItemKey(key, source.source_id);
+      const valid = page !== null;
+      return {
+        rank: index + 1,
+        page,
+        score: typeof chunk.score === "number" ? chunk.score : null,
+        ...(valid ? { itemKey: key } : {}),
+        provenanceValid: valid,
+        text: valid && typeof chunk.text === "string" ? chunk.text.slice(0, 4_500) : "",
+      };
+    });
+    return {
+      ok: true,
+      elapsedMs: Math.round((performance.now() - started) * 100) / 100,
+      candidates,
+      provenanceViolationCount: candidates.filter((candidate) => !candidate.provenanceValid).length,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      elapsedMs: Math.round((performance.now() - started) * 100) / 100,
+      candidates: [],
+      provenanceViolationCount: 0,
+      errorType: error instanceof Error && error.name ? error.name.slice(0, 64) : "ProviderError",
+      errorMessage: safeM15ProviderErrorMessage(error),
+    };
+  }
+}
+
+async function retrieveM15AnswerEvidenceQdrant(
+  env: M15BenchmarkStagingEnv,
+  source: M15BenchmarkSourceRow,
+  item: M15Case,
+): Promise<M15AnswerRetrieval> {
+  const started = performance.now();
+  try {
+    const pilot = await createQdrantPilot(env, BENCHMARK_QDRANT_COLLECTION);
+    const hits = await pilot.query({
+      projectId: source.project_id,
+      authorizedSourceIds: [source.source_id],
+      query: item.query,
+      limit: TOP_K,
+      prefetchLimit: PREFETCH_LIMIT,
+      ensureCollection: false,
+    });
+    const candidates = hits.slice(0, TOP_K).map((hit, index) => {
+      const valid = hit.sourceId === source.source_id &&
+        hit.itemKey.startsWith(sourcePrefix(source.source_id)) &&
+        Number.isSafeInteger(hit.pdfPage) && hit.pdfPage >= 1 && hit.pdfPage <= SOURCE_PAGE_COUNT;
+      return {
+        rank: index + 1,
+        page: valid ? hit.pdfPage : null,
+        score: typeof hit.score === "number" ? hit.score : null,
+        ...(valid ? { itemKey: hit.itemKey } : {}),
+        provenanceValid: valid,
+        text: valid && typeof hit.text === "string" ? hit.text.slice(0, 4_500) : "",
+      };
+    });
+    return {
+      ok: true,
+      elapsedMs: Math.round((performance.now() - started) * 100) / 100,
+      candidates,
+      provenanceViolationCount: candidates.filter((candidate) => !candidate.provenanceValid).length,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      elapsedMs: Math.round((performance.now() - started) * 100) / 100,
+      candidates: [],
+      provenanceViolationCount: 0,
+      errorType: error instanceof Error && error.name ? error.name.slice(0, 64) : "ProviderError",
+      errorMessage: safeM15ProviderErrorMessage(error),
+    };
+  }
+}
+
+function normalizeM15Answer(answer: string): string {
+  return answer
+    .toLowerCase()
+    .replace(/[−–—]/gu, "-")
+    .replace(/[×·]/gu, "*")
+    .replace(/²/gu, "2")
+    .replace(/ₛ/gu, "s")
+    .replace(/\\(?:times|cdot)/gu, "*")
+    .replace(/\\(?:mathrm|text)\{([^}]+)\}/gu, "$1")
+    .replace(/\\(?:left|right)/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function m15AnswerHasUnitValue(answer: string, value: string, unitPattern: string): boolean {
+  const normalized = normalizeM15Answer(answer);
+  const number = value.replace(/\./gu, "\\.");
+  return new RegExp("(?<![0-9.])" + number + "(?![0-9])\\s*(?:" + unitPattern + ")", "iu").test(normalized);
+}
+
+function m15AnswerHasSignedUnitValue(answer: string, value: string, unitPattern: string): boolean {
+  const normalized = normalizeM15Answer(answer);
+  const number = value.replace(/\./gu, "\\.");
+  return new RegExp("-\\s*" + number + "(?![0-9])\\s*(?:" + unitPattern + ")", "iu").test(normalized);
+}
+
+function m15AnswerCompactMath(answer: string): string {
+  return normalizeM15Answer(answer)
+    .replace(/\\(?:frac)\{([^}]+)\}\{([^}]+)\}/gu, "$1/$2")
+    .replace(/[_{}$^\\\s]/gu, "")
+    .replace(/\*/gu, "");
+}
+
+function explicitlyAbstainsFromM15(answer: string): boolean {
+  return /(?:not enough information|does not provide enough|doesn't provide enough|not supported by (?:the|this) source|not present in (?:the|this) source|not included in (?:the|this) source|cannot be determined from (?:the|this) source|can't be determined from (?:the|this) source|no relevant (?:source )?evidence|no information (?:is )?(?:provided|available) in (?:the|this) source|unable to answer from (?:the|this) source)/iu.test(answer);
+}
+
+export function evaluateM15AnswerQuality(input: {
+  queryId: string;
+  answer: string;
+  retrievedPages: number[];
+  citedPages: number[];
+  provenanceViolationCount: number;
+  retrievalOk: boolean;
+}): {
+  answerCorrectness: { passed: boolean; checks: Array<{ id: string; passed: boolean }> };
+  sourceGroundingCorrectness: boolean;
+  citationCorrectness: boolean;
+  mathematicalSymbolFidelity: boolean | null;
+  abstentionCorrectness: boolean | null;
+  overallPass: boolean;
+  failureCases: string[];
+} {
+  const answer = input.answer ?? "";
+  const normalized = normalizeM15Answer(answer);
+  const compact = m15AnswerCompactMath(answer);
+  const check = (id: string, passed: boolean) => ({ id, passed });
+  const pageTargets = input.queryId === "H01"
+    ? [8]
+    : M15_BENCHMARK_QUERY_SUITE.find((item) => item.id === input.queryId)?.expectedPages ?? [];
+  const hasTargetEvidence = pageTargets.length > 0 &&
+    pageTargets.every((page) => input.retrievedPages.includes(page));
+  const noProvenanceViolations = input.provenanceViolationCount === 0;
+  const isNegative = /^N0[1-4]$/u.test(input.queryId);
+  let checks: Array<{ id: string; passed: boolean }> = [];
+  let abstentionCorrectness: boolean | null = null;
+  let mathApplicable = true;
+
+  if (isNegative) {
+    const abstains = explicitlyAbstainsFromM15(answer);
+    const unsupportedCalculation = input.queryId === "N02"
+      ? /(?:^|[^0-9])4\s*a(?:mp(?:ere)?s?)?(?:$|[^a-z])/iu.test(normalized)
+      : input.queryId === "N03"
+        ? /q\s*v\s*b|q\(v\s*[x*]\s*b\)|lorentz force\s*=/iu.test(normalized)
+        : input.queryId === "N04"
+          ? /p\s*=\s*n\s*r\s*t\s*\/\s*v|n\s*r\s*t\s*\/\s*v/iu.test(normalized)
+          : /c\s*=\s*(?:epsilon|ε)|\epsilon\s*0\s*a\s*\/\s*d/iu.test(normalized);
+    checks = [
+      check("explicitSourceAbstention", abstains),
+      check("doesNotSupplyUnsupportedResult", !unsupportedCalculation),
+      check("doesNotCiteUnrelatedPage", input.citedPages.length === 0),
+    ];
+    abstentionCorrectness = checks.every((item) => item.passed);
+    mathApplicable = false;
+  } else {
+    switch (input.queryId) {
+      case "P01":
+        checks = [
+          check("statesNewtonSecondLawEquation", /(?:fnet|f)=ma|fnet=mass(?:x|\*)acceleration/iu.test(compact)),
+          check("connectsNetForceMassAcceleration", /net force/iu.test(normalized) && /mass/iu.test(normalized) && /acceleration/iu.test(normalized)),
+        ];
+        break;
+      case "P02":
+        checks = [
+          check("netForceSixNewtonsEast", /(?:6\s*(?:n|newtons?).{0,30}east|east.{0,30}6\s*(?:n|newtons?))/iu.test(normalized)),
+          check("accelerationThreeMetresPerSecondSquared", m15AnswerHasUnitValue(answer, "3", "m\\s*\\/\\s*s2|m\\s*\\/\\s*s\\s*\\^\\s*2")),
+          check("accelerationDirectionEast", /(?:3\s*m\s*\/\s*s2?.{0,40}east|east.{0,40}3\s*m\s*\/\s*s2?)/iu.test(normalized)),
+        ];
+        break;
+      case "P03":
+        checks = [
+          check("accelerationThreeMetresPerSecondSquared", m15AnswerHasUnitValue(answer, "3", "m\\s*\\/\\s*s2|m\\s*\\/\\s*s\\s*\\^\\s*2")),
+          check("forwardDirection", /forward|forwards/iu.test(normalized)),
+        ];
+        break;
+      case "P04":
+        checks = [check("netForceTenNewtons", m15AnswerHasUnitValue(answer, "10", "n\\b|newtons?\\b"))];
+        break;
+      case "P05":
+        checks = [
+          check("weightNineteenPointSixNewtons", m15AnswerHasUnitValue(answer, "19.6", "n\\b|newtons?\\b")),
+          check("identifiesWeight", /weight/iu.test(normalized)),
+        ];
+        break;
+      case "P06":
+        checks = [
+          check("massRemainsConstant", /mass.{0,70}(?:constant|unchanged|does not change|remains the same|independent of gravity)|(?:constant|unchanged).{0,50}mass/iu.test(normalized)),
+          check("weightDependsOnLocalGravity", /weight.{0,90}(?:changes|varies|depends|proportional).{0,50}(?:gravity|g\b)|(?:gravity|g\b).{0,50}weight.{0,50}(?:changes|varies|depends)/iu.test(normalized)),
+        ];
+        mathApplicable = false;
+        break;
+      case "P07":
+        checks = [
+          check("kineticFrictionNinePointEightNewtons", m15AnswerHasUnitValue(answer, "9.8", "n\\b|newtons?\\b")),
+          check("identifiesKineticFriction", /kinetic friction/iu.test(normalized)),
+          check("frictionOpposesMotion", /opposite.{0,35}motion|opposes? (?:the )?motion/iu.test(normalized)),
+        ];
+        break;
+      case "P08":
+        checks = [
+          check("staticFrictionAdjusts", /static friction/iu.test(normalized) && /adjust|self.?adjust|var(?:y|ies)|changes? as needed/iu.test(normalized)),
+          check("staticFrictionIsNotAlwaysAtMaximum", /not always|not necessarily|does not always/iu.test(normalized)),
+          check("statesMaximumLimit", /maximum|up to|less than or equal|at most|≤|mu.?s.{0,20}(?:n|normal)/iu.test(normalized)),
+        ];
+        break;
+      case "P09":
+        checks = [
+          check("downslopeComponentNineteenPointSixNewtons", /(?:19\.6\s*(?:n|newtons?).{0,35}(?:down|slope)|(?:down|slope).{0,35}19\.6\s*(?:n|newtons?))/iu.test(normalized)),
+          check("normalForceApproximatelyThirtyFourNewtons", /(?:33\.9[0-9]?|34(?:\.0+)?)\s*(?:n|newtons?)/iu.test(normalized)),
+          check("identifiesNormalForce", /normal force/iu.test(normalized)),
+        ];
+        break;
+      case "P10":
+        checks = [
+          check("finalSpeedFourMetresPerSecond", m15AnswerHasUnitValue(answer, "4", "m\\s*\\/\\s*s\\b")),
+          check("usesWorkEnergyRelationship", /work.?energy|kinetic energy|change in kinetic energy|work is equal to/iu.test(normalized)),
+        ];
+        break;
+      case "P11":
+        checks = [
+          check("changeInMomentumMinusFourPointFive", m15AnswerHasSignedUnitValue(answer, "4.5", "kg\\s*(?:[.*]\\s*)?m\\s*\\/\\s*s")),
+          check("averageForceMinusNinetyNewtons", m15AnswerHasSignedUnitValue(answer, "90", "n\\b|newtons?\\b")),
+          check("identifiesAverageForce", /average force/iu.test(normalized)),
+          check("preservesNegativeDirection", /negative direction|opposite (?:to )?(?:the )?initial|opposite direction/iu.test(normalized)),
+        ];
+        break;
+      case "P12":
+        checks = [
+          check("restoringForceEquationHasNegativeSign", /fs=-kx/iu.test(compact)),
+          check("restoringForceMinusTenNewtons", m15AnswerHasSignedUnitValue(answer, "10", "n\\b|newtons?\\b")),
+          check("elasticPotentialEnergyQuarterJoule", m15AnswerHasUnitValue(answer, "0.25", "j\\b|joules?\\b")),
+        ];
+        break;
+      case "H01":
+        checks = [
+          check("sourceEquationIsFsEqualsMinusKx", /fs=-kx/iu.test(compact)),
+          check("explicitlyRejectsPositiveSignAsSourceEquation", /(?:not|incorrect|wrong|rather than|instead of).{0,55}(?:\+\s*kx|positive|plus)|(?:\+\s*kx|positive|plus).{0,55}(?:not|incorrect|wrong)/iu.test(normalized)),
+        ];
+        break;
+      default:
+        checks = [check("knownM15QueryId", false)];
+        mathApplicable = false;
+    }
+  }
+
+  const answerCorrectnessPassed = checks.length > 0 && checks.every((item) => item.passed);
+  const sourceGroundingCorrectness = isNegative
+    ? Boolean(abstentionCorrectness) && input.citedPages.length === 0
+    : input.retrievalOk && noProvenanceViolations && hasTargetEvidence && answerCorrectnessPassed;
+  const citationCorrectness = isNegative
+    ? input.citedPages.length === 0
+    : pageTargets.length > 0 &&
+      pageTargets.every((page) => input.citedPages.includes(page)) &&
+      input.citedPages.every((page) => pageTargets.includes(page)) &&
+      hasTargetEvidence;
+  const mathematicalSymbolFidelity = mathApplicable
+    ? checks.every((item) => item.passed)
+    : null;
+  const failureCases: string[] = [];
+  if (!answerCorrectnessPassed) failureCases.push("answerCorrectness");
+  if (!sourceGroundingCorrectness) failureCases.push("sourceGroundingCorrectness");
+  if (!citationCorrectness) failureCases.push("citationCorrectness");
+  if (mathematicalSymbolFidelity === false) failureCases.push("mathematicalSymbolFidelity");
+  if (abstentionCorrectness === false) failureCases.push("abstentionCorrectness");
+  if (!input.retrievalOk) failureCases.push("retrievalFailed");
+  if (!noProvenanceViolations) failureCases.push("provenanceViolation");
+  return {
+    answerCorrectness: { passed: answerCorrectnessPassed, checks },
+    sourceGroundingCorrectness,
+    citationCorrectness,
+    mathematicalSymbolFidelity,
+    abstentionCorrectness,
+    overallPass: failureCases.length === 0,
+    failureCases: [...new Set(failureCases)],
+  };
+}
+
+async function runM15AnswerEvaluationQuery(
+  env: M15BenchmarkStagingEnv,
+  source: M15BenchmarkSourceRow,
+  queryId: string,
+): Promise<Record<string, unknown>> {
+  if (env.ENVIRONMENT !== "staging" || env.BRVIN_M14_PILOT_ENABLED?.trim().toLowerCase() !== "true") {
+    throw new Error("Consumer answer evaluation is restricted to the isolated staging Worker.");
+  }
+  if (source.source_sha256.toLowerCase() !== SOURCE_SHA256 ||
+      source.file_name !== SOURCE_FILE_NAME ||
+      source.status !== "ready" ||
+      source.page_count !== SOURCE_PAGE_COUNT ||
+      source.indexed_pages !== SOURCE_PAGE_COUNT ||
+      source.ai_search_indexed_pages !== SOURCE_PAGE_COUNT ||
+      source.qdrant_indexed_pages !== SOURCE_PAGE_COUNT ||
+      source.qdrant_point_count < SOURCE_PAGE_COUNT ||
+      !source.generation_id) {
+    throw new Error("The fingerprint-pinned eight-page M15 source and both staging indexes must remain READY.");
+  }
+  if (!env.GCP_PROJECT_ID?.trim() || !env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim()) {
+    throw new Error("Google service-account credentials required by the existing consumer Gemini generator are missing from staging.");
+  }
+  if (!env.BRVIN_M15_BENCHMARK_AI_SEARCH) {
+    throw new Error("The dedicated M15 staging AI Search binding is missing.");
+  }
+  const item = M15_BENCHMARK_QUERY_SUITE.find((candidate) => candidate.id === queryId);
+  if (!item) throw new Error("The requested query ID is not part of the fixed M15 17-query suite.");
+
+  const [aiSearch, qdrant] = await Promise.all([
+    retrieveM15AnswerEvidenceAiSearch(env, source, item),
+    retrieveM15AnswerEvidenceQdrant(env, source, item),
+  ]);
+
+  const generate = async (retrieval: M15AnswerRetrieval) => {
+    const passages = retrieval.candidates
+      .filter((candidate) => candidate.provenanceValid && candidate.page !== null && candidate.text.trim().length > 0)
+      .map((candidate) => ({ pdfPage: candidate.page!, text: candidate.text }));
+    const sourceContext: GroundedGeminiSourceContext = {
+      sourceLabel: "BRVIN M15 Physics Benchmark Source v1",
+      passages,
+    };
+    const started = performance.now();
+    try {
+      const generation = await generateGeminiAnswer(
+        env,
+        item.query,
+        m15AnswerProfile(),
+        [],
+        undefined,
+        undefined,
+        sourceContext,
+      );
+      const generationLatencyMs = Math.round((performance.now() - started) * 100) / 100;
+      const expectedPages = item.category === "exact-symbol-near-miss" ? [8] : item.expectedPages;
+      const availablePages = [...new Set(passages.map((passage) => passage.pdfPage))];
+      const abstained = explicitlyAbstainsFromM15(generation.packet.answer);
+      const citedPages = abstained ? [] : expectedPages.filter((page) => availablePages.includes(page));
+      const citation = citedPages.length
+        ? "\n\nSource: BRVIN M15 Physics Benchmark Source v1, PDF p. " + citedPages.join(", ") + "."
+        : "";
+      const generatedAnswer = generation.packet.answer.trim();
+      const answerWithCitations = generatedAnswer + citation;
+      const evaluation = evaluateM15AnswerQuality({
+        queryId: item.id,
+        answer: generatedAnswer,
+        retrievedPages: availablePages,
+        citedPages,
+        provenanceViolationCount: retrieval.provenanceViolationCount,
+        retrievalOk: retrieval.ok,
+      });
+      return {
+        generatedAnswer,
+        answerWithCitations,
+        citedPages,
+        generationLatencyMs,
+        model: env.GEMINI_MODEL?.trim() || "gemini-3.8-flash",
+        location: env.GEMINI_LOCATION?.trim() || "global",
+        responseMode: generation.packet.responseMode,
+        evaluation,
+      };
+    } catch (error) {
+      return {
+        generatedAnswer: "",
+        answerWithCitations: "",
+        citedPages: [],
+        generationLatencyMs: Math.round((performance.now() - started) * 100) / 100,
+        model: env.GEMINI_MODEL?.trim() || "gemini-3.8-flash",
+        location: env.GEMINI_LOCATION?.trim() || "global",
+        generationError: safeM15ProviderErrorMessage(error),
+        evaluation: evaluateM15AnswerQuality({
+          queryId: item.id,
+          answer: "",
+          retrievedPages: passages.map((passage) => passage.pdfPage),
+          citedPages: [],
+          provenanceViolationCount: retrieval.provenanceViolationCount,
+          retrievalOk: retrieval.ok,
+        }),
+      };
+    }
+  };
+
+  const [aiSearchGeneration, qdrantGeneration] = await Promise.all([
+    generate(aiSearch),
+    generate(qdrant),
+  ]);
+  const summarizeProvider = (retrieval: M15AnswerRetrieval, generation: Record<string, unknown>) => ({
+    retrievalOk: retrieval.ok,
+    retrievalLatencyMs: retrieval.elapsedMs,
+    retrievedPages: retrieval.candidates.map((candidate) => candidate.page),
+    provenanceViolationCount: retrieval.provenanceViolationCount,
+    evidence: retrieval.candidates.map((candidate) => ({
+      rank: candidate.rank,
+      pdfPage: candidate.page,
+      score: candidate.score,
+      itemKey: candidate.itemKey ?? null,
+      provenanceValid: candidate.provenanceValid,
+      text: candidate.text,
+    })),
+    ...(retrieval.errorType ? { retrievalErrorType: retrieval.errorType } : {}),
+    ...(retrieval.errorMessage ? { retrievalError: retrieval.errorMessage } : {}),
+    ...generation,
+  });
+  return {
+    queryId: item.id,
+    category: item.category,
+    query: item.query,
+    expectedRetrievalPages: item.expectedPages,
+    answerEvaluationExpectedPages: item.category === "exact-symbol-near-miss" ? [8] : item.expectedPages,
+    retrievalExpectedNoMatch: item.expectedNoMatch,
+    cloudflareAiSearch: summarizeProvider(aiSearch, aiSearchGeneration),
+    qdrantVertex: summarizeProvider(qdrant, qdrantGeneration),
+  };
 }
 
 export async function handleM15BenchmarkStagingRequest(
