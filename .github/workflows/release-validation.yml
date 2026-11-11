@@ -185,7 +185,10 @@ jobs:
             case "$path" in
               # Explicit staging-only M14/M15 files. Changes outside this list
               # conservatively retain the normal production deployment path.
-              docs/*|.github/workflows/release-validation.yml|src/brvin/m14-staging-worker.ts|src/brvin/m15-shadow-benchmark.ts|src/brvin/m15-benchmark-staging.ts|src/brvin/m14-physics-evaluation.ts|src/brvin/qdrant-hybrid-pilot.ts|src/brvin/vertex-embedding.ts|src/brvin/provider-contract.ts|src/config/env.ts|scripts/verify-m14-staging-config.mjs|test/brvin-m14-staging-worker.test.ts|test/brvin-qdrant-hybrid-pilot.test.ts|test/brvin-m15-shadow-benchmark.test.ts|test/brvin-m15-benchmark-staging.test.ts|wrangler.m14-staging.jsonc|.github/workflows/m14-staging-deploy.yml)
+              # The only src/ai/gemini.ts change is optional, source-context-only
+              # original-PDF evidence consumed by the isolated M15 staging evaluator.
+              # pdf-lib is used exclusively by that staging-only evaluator.
+              docs/*|.github/workflows/release-validation.yml|src/ai/gemini.ts|package.json|src/brvin/m14-staging-worker.ts|src/brvin/m15-shadow-benchmark.ts|src/brvin/m15-benchmark-staging.ts|src/brvin/m14-physics-evaluation.ts|src/brvin/qdrant-hybrid-pilot.ts|src/brvin/vertex-embedding.ts|src/brvin/provider-contract.ts|src/config/env.ts|scripts/verify-m14-staging-config.mjs|test/brvin-m14-staging-worker.test.ts|test/brvin-qdrant-hybrid-pilot.test.ts|test/brvin-m15-shadow-benchmark.test.ts|test/brvin-m15-benchmark-staging.test.ts|wrangler.m14-staging.jsonc|.github/workflows/m14-staging-deploy.yml)
                 ;;
               *)
                 deploy=true
