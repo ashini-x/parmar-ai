@@ -280,6 +280,20 @@ describe("M15 consumer answer quality rubric", () => {
     });
   });
 
+  it("recognizes H01 rejection when the negation precedes the positive-sign formula", () => {
+    const result = evaluateM15AnswerQuality({
+      queryId: "H01",
+      answer: "The indexed source does not use F_s = +k x x as the restoring-force equation. It gives F_s = -kx.",
+      retrievedPages: [8],
+      citedPages: [8],
+      provenanceViolationCount: 0,
+      retrievalOk: true,
+    });
+    expect(result.answerCorrectness.passed).toBe(true);
+    expect(result.mathematicalSymbolFidelity).toBe(true);
+    expect(result.overallPass).toBe(true);
+  });
+
   it("keeps H01 symbol fidelity pending when OCR-like double-x notation is copied", () => {
     const result = evaluateM15AnswerQuality({
       queryId: "H01",
