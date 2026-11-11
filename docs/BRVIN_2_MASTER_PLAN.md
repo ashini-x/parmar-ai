@@ -282,3 +282,12 @@ The evaluator keeps the BRVIN v2 RPC retrieval-only and unchanged; it does not a
 The migration remains **IN PROGRESS**, and production remains on Cloudflare AI Search. The five-query PDF-assisted notation check passed, but the normal OCR-only representation still contains formula defects and the five-query pass is not proof of broad formula fidelity. The existing citation/page-presence proxies do not prove independent claim-level entailment. Full details: [BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md](BRVIN_M15_CONSUMER_ANSWER_EVALUATION.md).
 
 Production `parmar-ai` and private `brvin-service` were not deployed by this merge; the Release workflow explicitly skipped production. BRVIN Teachers received no code or deployment changes.
+
+## 12 November 2026 — M15 first incomplete task and reviewer handoff
+
+**Current first incomplete M15 task:** independent passage-level relevance labels and claim-to-passage grounding for the paired eight-page Physics source. The paired retrieval and answer runs, offline rubric calibration, and five-query original-PDF-assisted notation audit are already recorded above; they must not be rerun just to reproduce existing results.
+
+The 109-excerpt review pack is now published as `docs/BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md` with its source-fingerprinted machine-readable fixture at `test/fixtures/brvin-m15-passage-qrels-review-pack.json`. The fixture deliberately contains no prefilled grades. Two reviewers must annotate separate copies independently, retain rationales/source spans, then adjudicate disagreements. Model/assistant grades must never be described as independent human qrels.
+
+Once this human review is complete, continue M15 #144 with the remaining wrong-project/no-grant and revoke-with-vectors-retained checks, retry/recovery and throttling, HNSW-aware concurrency/latency/throughput, embedding/index/storage/query cost, and rollback rehearsal. Keep working through these gates without changing the frozen v2 contract or Teachers provider boundary. Production remains on Cloudflare AI Search; no cutover is authorized.
+
