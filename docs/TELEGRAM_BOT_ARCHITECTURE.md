@@ -289,11 +289,11 @@ A read-only inspection of production Worker telemetry and D1 usage records found
 
 **Acceptance status:** this is a staged tuning change, not yet a measured production latency win. Do not claim a percentage improvement until the same normal Telegram workload is measured with the new tier policy. Compare first-partial latency and total answer latency separately, stratified by Fatman/non-Fatman, thinking tier, retry count and token counts. Keep Cloudflare AI Search as the current retrieval provider; no provider or production routing change is part of PR #226.
 
-### Cloudflare AI Search cache and Fatman latency candidate — 12 November 2026
+### Cloudflare AI Search cache and Fatman latency optimization — 12 November 2026
 
 A read-only inspection of the live production Fatman AI Search instance found hybrid vector+keyword retrieval, RRF fusion and reranking enabled. The instance had caching enabled at the configuration level, but the shared Core retrieval provider explicitly overrode that setting with `cache: { enabled: false }` on every request.
 
-**Candidate implementation on branch `perf/brvin-exact-similarity-cache-2026-11-12`:**
+**Merged implementation — PR [#227](https://github.com/ashini-x/parmar-ai/pull/227), commit `204b64c943c34695a707e952a7262c6e854ec202`:**
 
 - Re-enable AI Search response caching per request, but use only `super_strict_match` similarity. This is intended for near-identical repeat queries, not loosely related wording.
 - Keep vector+keyword hybrid retrieval, the existing score thresholds, the existing reranker and source-prefix filter unchanged.
@@ -314,7 +314,16 @@ A historical read-only 30-day D1 sample contained 63 completed questions, with a
 
 The same candidate changes ordinary simple explanation wording (for example, “Explain this in simple language”) to LOW thinking. Explicit why/reasoning and comparison questions remain MEDIUM. HIGH stays reserved for explicit multi-step/derivation requests or unusually long prompts. The configured `GEMINI_THINKING_LEVEL` remains the hard ceiling.
 
-**Rollout state:** this branch is not yet merged or deployed. Keep the current production provider and index intact until CI and the normal release/rollback gate pass. Do not report a measured production latency improvement until actual post-deployment Telegram requests confirm it.
+**Deployment receipt — 12 November 2026:**
+
+- PR #227 merged as commit `204b64c943c34695a707e952a7262c6e854ec202`.
+- Release validation [run #1168](https://github.com/ashini-x/parmar-ai/actions/runs/43092750374) passed: typecheck, full Vitest suite, Node tests, private BRVIN and Parmar Worker bundle dry-runs, production deployment, live root/BRVIN/Fatman smoke tests and release-manifest write.
+- The isolated M14 staging Worker was also deployed and independently confirmed at 100%: deployment `7b5ada22-d43e-4915-9ece-8fe503405bc7`, version `f2a5c4ef-3c69-4fe8-a26c-fe1f888728eb`.
+- Production `parmar-ai` is at 100% on deployment `82034528-fd6d-4aa6-ab78-5f037df607d7`, version `fbde2747-c095-4dd8-a9c7-a84c06866b15`.
+- Production `brvin-service` is at 100% on deployment `7291d9a8-121a-4488-bd8a-e5606ace2bc0`, version `ff2ed4e3-3f06-4d05-833d-8bd98c045305`.
+- Both automatic rollback jobs were skipped because deployment and smoke verification succeeded.
+
+**Post-rollout measurement status:** the first 30-minute Observability query after deployment returned zero events for `gemini_generation_attempt_completed`, `fatman_retrieval_completed` and `question_answer_generated`. The release is live, but no real post-release Telegram request has yet been observed in that window. Do not claim a measured latency improvement until new Telegram traffic produces these stage timings. On subsequent requests, compare `geminiGenerationMs`, `fatmanRetrievalMs`, `firstPartialAnswerMs`, thinking level and retry count. Keep the existing Cloudflare AI Search provider and indexed source as-is; no provider migration, OCR mutation or index rebuild was part of this optimization.
 
 ## 12. Failure and retry boundaries
 
