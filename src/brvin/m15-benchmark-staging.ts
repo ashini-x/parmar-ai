@@ -1,3 +1,4 @@
+import { PDFDocument } from "pdf-lib";
 import { generateGeminiAnswer, type GroundedGeminiSourceContext, type GroundedGeminiSourceDocument } from "../ai/gemini";
 import type { AiSearchInstance, Env, ProfileContext, StudentProfile } from "../config/env";
 import { getGoogleAccessToken } from "../auth/google";
@@ -399,16 +400,35 @@ export async function createM15FormulaAuditPdfAttachment(
     throw new Error("The formula audit PDF does not match the pinned original source SHA-256.");
   }
   const pages = [...allowedPhysicalPages];
-  if (!pages.length || pages.some((page) =>
+  if (pages.length !== 1 || pages.some((page) =>
     !Number.isSafeInteger(page) || page < 1 || page > SOURCE_PAGE_COUNT
-  ) || new Set(pages).size !== pages.length) {
-    throw new Error("The formula audit must specify unique, valid physical PDF pages.");
+  )) {
+    throw new Error("The formula audit must select exactly one valid original physical PDF page.");
   }
+
+  // Verify the original PDF's page count, then copy only the requested page
+  // into a new transient PDF. The model never receives the other seven pages.
+  const original = await PDFDocument.load(bytes);
+  if (original.getPageCount() !== SOURCE_PAGE_COUNT) {
+    throw new Error("The original formula audit PDF does not contain exactly eight physical pages.");
+  }
+  const onePageDocument = await PDFDocument.create();
+  const [page] = await onePageDocument.copyPages(original, [pages[0] - 1]);
+  if (!page) throw new Error("The requested original physical PDF page could not be extracted.");
+  onePageDocument.addPage(page);
+  onePageDocument.setTitle("BRVIN M15 original physical PDF page " + pages[0]);
+  const attachedBytes = await onePageDocument.save({ useObjectStreams: false });
+  if (!attachedBytes.byteLength || attachedBytes.byteLength > MAX_SOURCE_BYTES) {
+    throw new Error("The extracted one-page formula audit PDF is empty or exceeds the safe size limit.");
+  }
+
   return {
     mimeType: "application/pdf",
-    base64Data: bytesToBase64(bytes),
-    sha256: actualSha256,
-    allowedPhysicalPages: pages.sort((left, right) => left - right),
+    base64Data: bytesToBase64(attachedBytes),
+    sourceSha256: actualSha256,
+    attachedPdfSha256: await sha256Hex(attachedBytes),
+    originalPhysicalPage: pages[0],
+    attachedPdfPageCount: 1,
   };
 }
 
