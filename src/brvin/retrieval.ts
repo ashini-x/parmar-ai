@@ -527,7 +527,7 @@ export async function retrieveBrvinProjectContextForProject(
         // A cross-encoder evaluates semantic relevance, including paraphrases.
         // Apply the stricter lexical coverage guard only when no reranking score
         // is available (for disabled/legacy retrieval paths).
-        const providerSuppliesHybridFusion = chunk.scoringDetails?.fusionMethod === "rrf";
+        const providerSuppliesHybridFusion = chunk.scoringDetails?.fusionMethod === "qdrant-rrf";
         if (
           rerankingScore === undefined &&
           !providerSuppliesHybridFusion &&
