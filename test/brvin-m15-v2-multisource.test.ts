@@ -6,6 +6,10 @@ import {
   summarizeM15MultiSourceProvider,
 } from "../src/brvin/m15-v2-multisource";
 import { BRVIN_M15_STAGING_SOURCE_ID } from "../src/brvin/m15-v2-staging";
+import {
+  prepareBrvinM15MultiSourceCorpus,
+  runM15MultiSourceCoreV2Evaluation,
+} from "../src/brvin/m15-v2-multisource";
 
 describe("M15 multi-source Core v2 staging evaluation", () => {
   it("pins two distinct Physics sources with their exact physical page ranges", () => {
@@ -95,5 +99,20 @@ describe("M15 multi-source Core v2 staging evaluation", () => {
     expect(summary.authorizedSourceIdsReturned).toEqual([]);
     expect(summary.bothSourcesRepresented).toBe(false);
     expect(summary.provenanceViolationCount).toBe(1);
+  });
+  it("fails closed outside isolated staging before touching D1 or provider resources", async () => {
+    const env = { ENVIRONMENT: "production", BRVIN_M14_PILOT_ENABLED: "true" } as never;
+    await expect(prepareBrvinM15MultiSourceCorpus(env))
+      .rejects.toThrow("restricted to isolated Core staging");
+    await expect(runM15MultiSourceCoreV2Evaluation(env))
+      .rejects.toThrow("restricted to isolated Core staging");
+  });
+
+  it("fails closed when the isolated staging D1 binding is absent", async () => {
+    const env = { ENVIRONMENT: "staging", BRVIN_M14_PILOT_ENABLED: "true" } as never;
+    await expect(prepareBrvinM15MultiSourceCorpus(env))
+      .rejects.toThrow("isolated M15 staging D1 database is missing");
+    await expect(runM15MultiSourceCoreV2Evaluation(env))
+      .rejects.toThrow("isolated M15 staging D1 database is missing");
   });
 });
