@@ -60,3 +60,22 @@ Expected: the temporary application/environment/project/grant fixture, one stagi
 Not expected: production D1 access, production identity rows, production provider selection, production traffic, source PDF or raw OCR changes, corpus manifest/index writes, AI Search changes, Qdrant upserts/deletes, Gemini answer generation, v2 contract changes or Teachers runtime changes.
 
 The Qdrant adapter remains query-only. Corpus upsert/delete migration is a separate acceptance gate.
+
+
+## Live execution result — 12 November 2026
+
+The operator action completed at `2026-11-12T17:13:38.529Z` and its persisted receipt `e305a581-3d3c-469c-b2b5-093598783df4` has status `passed`.
+
+All eight named checks were true:
+
+- Authorized Core v2 Qdrant retrieval succeeded and returned three passages from physical pages 4, 5 and 8 of the eight-page source.
+- Source/project/page provenance was valid; the expected physical page four was returned.
+- The unknown-project request returned `PROJECT_NOT_AUTHORIZED` without incrementing quota.
+- The request after revoking the staging grant returned `PROJECT_NOT_AUTHORIZED` before provider retrieval and without incrementing quota.
+- All 14 Qdrant points for the eight-page source remained present while the grant was revoked.
+- The temporary staging grant was restored in the `finally` path.
+- Exactly one authorized query reservation was recorded: usage moved from 0 to 1; the denied requests left it at 1.
+
+The saved result reports no Qdrant upserts/deletes, no source/OCR changes, no production provider changes and no production D1 access. This closes the live Core v2 authorization/revocation subgate for this fixed staging fixture; it does not close M15 overall.
+
+**Next gate:** after the M15 multi-source staging code is merged and the isolated staging Worker has deployed it, prepare the second source and run the paired two-provider Core v2 evaluation using [BRVIN_M15_MULTI_SOURCE_CORE_V2_STAGING_RUNBOOK.md](BRVIN_M15_MULTI_SOURCE_CORE_V2_STAGING_RUNBOOK.md).
