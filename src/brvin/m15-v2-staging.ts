@@ -712,6 +712,12 @@ export async function runBrvinM15V2MultiSourceCheck(env: Env) {
     if (uploaded.status !== "completed") {
       throw new Error("AI Search indexing failed for immutable M14 page " + page.pdfPage + " with status " + uploaded.status + ".");
     }
+    const completedBefore = visibleItems.filter((item) =>
+      item.key.startsWith(M14_SOURCE_PREFIX) && item.status === "completed"
+    ).length;
+    await assertDb(env).prepare(
+      "UPDATE m15_v2_multisource_sources SET ai_search_indexed_pages=?,ai_search_items_uploaded=ai_search_items_uploaded+1,updated_at=? WHERE source_id=?"
+    ).bind(completedBefore + 1, Date.now(), M14_SOURCE_ID).run();
     visibleItems.push(uploaded);
   }
 
@@ -835,6 +841,15 @@ export async function runBrvinM15V2MultiSourceCheck(env: Env) {
       (passage.sourceId === SOURCE_ID && passage.pdfPage >= 1 && passage.pdfPage <= SOURCE_PAGE_COUNT)
     )
   );
+  const finalState = await db.prepare(
+    "SELECT source_id,project_id,generation_id,source_sha256,page_count,qdrant_point_count,qdrant_points_upserted,qdrant_verified_at,ai_search_indexed_pages,ai_search_items_uploaded,status " +
+    "FROM m15_v2_multisource_sources WHERE source_id=? LIMIT 1"
+  ).bind(M14_SOURCE_ID).first<M15MultiSourceState>();
+  if (!finalState || finalState.status !== "ready" ||
+      Number(finalState.ai_search_indexed_pages) !== M14_SOURCE_PAGE_COUNT) {
+    throw new Error("The second-source indexing progress receipt did not reach READY.");
+  }
+
   const checks = {
     bothSourcesRegisteredAndReadyInD1: sourceCount === 2,
     immutableM14CorpusVerified: corpus.chunkCount === 7 && corpus.pageManifests.length === 3,
@@ -869,9 +884,9 @@ export async function runBrvinM15V2MultiSourceCheck(env: Env) {
     checks,
     quotaUsage: { before: baseUsage, afterTwoCoreV2Queries: usageAfterCoreV2 },
     sideEffects: {
-      qdrantPointsUpsertedOrReplayed: Number(state.qdrant_points_upserted ?? qdrantUpsertedPointCount),
+      qdrantPointsUpsertedOrReplayed: Number(finalState.qdrant_points_upserted ?? qdrantUpsertedPointCount),
       qdrantPointsDeleted: 0,
-      aiSearchItemsCreated: Number(state.ai_search_items_uploaded ?? newlyUploadedAiSearchItems),
+      aiSearchItemsCreated: Number(finalState.ai_search_items_uploaded ?? newlyUploadedAiSearchItems),
       aiSearchItemsDeleted: 0,
       pdfUploads: 0,
       visionOcrRequests: 0,
