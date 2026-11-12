@@ -144,8 +144,11 @@ class QdrantVertexReadOnlyRetrievalProvider implements RetrievalProvider {
 
   async query(input: RetrievalQuery): Promise<RetrievalCandidate[]> {
     const sourceIds = [...new Set(input.sourcePrefixes.flatMap((prefix) => {
-      const match = prefix.match(/^brvin\\/books\\/([^/]+)\\/pages\\/$/u);
-      return match ? [match[1]] : [];
+      const parts = prefix.split("/");
+      return parts.length === 4 && parts[0] === "brvin" &&
+        parts[1] === "books" && parts[2] && parts[3] === "pages"
+        ? [parts[2]]
+        : [];
     }))];
     // An empty D1 allowlist must stop before Vertex embedding or Qdrant I/O.
     if (!sourceIds.length) return [];
