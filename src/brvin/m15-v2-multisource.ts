@@ -8,6 +8,7 @@ import {
   BRVIN_M15_STAGING_ENVIRONMENT_ID,
   BRVIN_M15_STAGING_PROJECT_ID,
   BRVIN_M15_STAGING_SOURCE_ID,
+  BRVIN_M15_STAGING_SOURCE_SHA256,
 } from "./m15-v2-staging";
 
 export const BRVIN_M15_SECOND_SOURCE = {
@@ -429,25 +430,38 @@ export async function runM15MultiSourceQdrantDiagnostics(
     BRVIN_M15_SECOND_SOURCE.sourceId,
   ]);
   const registry = await env.DB!.prepare(
-    "SELECT b.id,b.title,b.page_count,b.indexed_pages,b.status " +
+    "SELECT b.id,b.title,b.source_sha256,b.page_count,b.indexed_pages,b.status " +
     "FROM brvin_books b JOIN brvin_project_books pb ON pb.book_id=b.id " +
     "WHERE pb.project_id=? ORDER BY b.id",
   ).bind(BRVIN_M15_STAGING_PROJECT_ID).all<{
-    id: string; title: string; page_count: number; indexed_pages: number; status: string;
+    id: string; title: string; source_sha256: string; page_count: number; indexed_pages: number; status: string;
   }>();
+  const expectedHashes = new Map<string, string>([
+    [BRVIN_M15_STAGING_SOURCE_ID, BRVIN_M15_STAGING_SOURCE_SHA256],
+    [BRVIN_M15_SECOND_SOURCE.sourceId, BRVIN_M15_SECOND_SOURCE.sourcePdfSha256],
+  ]);
+  const expectedPages = new Map<string, number>([
+    [BRVIN_M15_STAGING_SOURCE_ID, 8],
+    [BRVIN_M15_SECOND_SOURCE.sourceId, BRVIN_M15_SECOND_SOURCE.pageCount],
+  ]);
   const readySources = (registry.results ?? []).filter((source) =>
     source.status === "ready" && Number(source.indexed_pages) === Number(source.page_count));
-  if (readySources.length !== 2 || readySources.some((source) => !expectedIds.has(source.id))) {
-    throw new Error("The read-only Qdrant diagnostic requires exactly the two approved READY M15 project sources.");
+  if (readySources.length !== 2 || readySources.some((source) =>
+      !expectedIds.has(source.id) ||
+      source.source_sha256.toLowerCase() !== expectedHashes.get(source.id) ||
+      Number(source.page_count) !== expectedPages.get(source.id))) {
+    throw new Error("The read-only Qdrant diagnostic requires the exact fingerprint-pinned two-source M15 project inventory in READY state.");
   }
   const checkpoint = await env.DB!.prepare(
-    "SELECT project_id,page_count,chunk_count,qdrant_status,qdrant_point_count,ai_search_status,status " +
+    "SELECT project_id,source_sha256,generation_id,page_count,chunk_count,qdrant_status,qdrant_point_count,ai_search_status,status " +
     "FROM m15_v2_multisource_sources WHERE source_id=? LIMIT 1",
   ).bind(BRVIN_M15_SECOND_SOURCE.sourceId).first<{
-    project_id: string; page_count: number; chunk_count: number; qdrant_status: string;
-    qdrant_point_count: number; ai_search_status: string; status: string;
+    project_id: string; source_sha256: string; generation_id: string; page_count: number; chunk_count: number;
+    qdrant_status: string; qdrant_point_count: number; ai_search_status: string; status: string;
   }>();
   if (!checkpoint || checkpoint.project_id !== BRVIN_M15_STAGING_PROJECT_ID ||
+      checkpoint.source_sha256.toLowerCase() !== BRVIN_M15_SECOND_SOURCE.sourcePdfSha256 ||
+      checkpoint.generation_id !== BRVIN_M15_SECOND_SOURCE.generationId ||
       Number(checkpoint.page_count) !== BRVIN_M15_SECOND_SOURCE.pageCount ||
       Number(checkpoint.chunk_count) !== 7 ||
       checkpoint.qdrant_status !== "ready" || Number(checkpoint.qdrant_point_count) !== 7 ||
