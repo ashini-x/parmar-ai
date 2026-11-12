@@ -117,7 +117,7 @@ const DDL = [
     completed_at INTEGER
   )`,
   "CREATE INDEX IF NOT EXISTS idx_m15_v2_authorization_runs_started ON m15_v2_authorization_runs(started_at DESC)",
-  "CREATE TABLE IF NOT EXISTS m15_v2_multisource_sources (source_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, generation_id TEXT NOT NULL, source_sha256 TEXT NOT NULL, page_count INTEGER NOT NULL, qdrant_point_count INTEGER NOT NULL DEFAULT 0, qdrant_verified_at INTEGER, ai_search_indexed_pages INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS m15_v2_multisource_sources (source_id TEXT PRIMARY KEY, project_id TEXT NOT NULL, generation_id TEXT NOT NULL, source_sha256 TEXT NOT NULL, page_count INTEGER NOT NULL, qdrant_point_count INTEGER NOT NULL DEFAULT 0, qdrant_points_upserted INTEGER NOT NULL DEFAULT 0, qdrant_verified_at INTEGER, ai_search_indexed_pages INTEGER NOT NULL DEFAULT 0, ai_search_items_uploaded INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS m15_v2_multisource_runs (id TEXT PRIMARY KEY, status TEXT NOT NULL CHECK (status IN ('running', 'passed', 'failed')), result_json TEXT, started_at INTEGER NOT NULL, completed_at INTEGER)"
 ];
 
@@ -434,8 +434,10 @@ type M15MultiSourceState = {
   source_sha256: string;
   page_count: number;
   qdrant_point_count: number;
+  qdrant_points_upserted: number;
   qdrant_verified_at: number | null;
   ai_search_indexed_pages: number;
+  ai_search_items_uploaded: number;
   status: string;
 };
 
@@ -517,8 +519,8 @@ async function ensureM15MultiSourceRegistry(
     ).bind(PROJECT_ID, M14_SOURCE_ID, now),
     db.prepare(
       "INSERT OR IGNORE INTO m15_v2_multisource_sources " +
-      "(source_id,project_id,generation_id,source_sha256,page_count,qdrant_point_count,qdrant_verified_at,ai_search_indexed_pages,status,created_at,updated_at) " +
-      "VALUES (?,?,?,?,?,0,NULL,0,'pending',?,?)"
+      "(source_id,project_id,generation_id,source_sha256,page_count,qdrant_point_count,qdrant_points_upserted,qdrant_verified_at,ai_search_indexed_pages,ai_search_items_uploaded,status,created_at,updated_at) " +
+      "VALUES (?,?,?,?,?,0,0,NULL,0,0,'pending',?,?)"
     ).bind(
       M14_SOURCE_ID,
       PROJECT_ID,
@@ -545,7 +547,7 @@ async function ensureM15MultiSourceRegistry(
       "SELECT project_id,book_id FROM brvin_project_books WHERE project_id=? AND book_id=? LIMIT 1"
     ).bind(PROJECT_ID, M14_SOURCE_ID).first<{ project_id: string; book_id: string }>(),
     db.prepare(
-      "SELECT source_id,project_id,generation_id,source_sha256,page_count,qdrant_point_count,qdrant_verified_at,ai_search_indexed_pages,status " +
+      "SELECT source_id,project_id,generation_id,source_sha256,page_count,qdrant_point_count,qdrant_points_upserted,qdrant_verified_at,ai_search_indexed_pages,ai_search_items_uploaded,status " +
       "FROM m15_v2_multisource_sources WHERE source_id=? LIMIT 1"
     ).bind(M14_SOURCE_ID).first<M15MultiSourceState>()
   ]);
@@ -635,8 +637,8 @@ export async function runBrvinM15V2MultiSourceCheck(env: Env) {
       throw new Error("Qdrant did not verify all deterministic chunks from the retained M14 corpus.");
     }
     await assertDb(env).prepare(
-      "UPDATE m15_v2_multisource_sources SET qdrant_point_count=?,qdrant_verified_at=?,status='qdrant_ready',updated_at=? WHERE source_id=? AND project_id=?"
-    ).bind(qdrantPointCount, Date.now(), Date.now(), M14_SOURCE_ID, PROJECT_ID).run();
+      "UPDATE m15_v2_multisource_sources SET qdrant_point_count=?,qdrant_points_upserted=qdrant_points_upserted+?,qdrant_verified_at=?,status='qdrant_ready',updated_at=? WHERE source_id=? AND project_id=?"
+    ).bind(qdrantPointCount, indexed.pointCount, Date.now(), Date.now(), M14_SOURCE_ID, PROJECT_ID).run();
   }
 
   await ensureM15MultiSourceAiSearchSchema(env);
@@ -654,8 +656,8 @@ export async function runBrvinM15V2MultiSourceCheck(env: Env) {
     if (existing) {
       if (existing.status === "queued" || existing.status === "running") {
         await assertDb(env).prepare(
-          "UPDATE m15_v2_multisource_sources SET status='ai_search_indexing',updated_at=? WHERE source_id=?"
-        ).bind(Date.now(), M14_SOURCE_ID).run();
+          "UPDATE m15_v2_multisource_sources SET status='ai_search_indexing',ai_search_indexed_pages=?,updated_at=? WHERE source_id=?"
+        ).bind(visibleItems.filter((item) => item.key.startsWith(M14_SOURCE_PREFIX) && item.status === "completed").length, Date.now(), M14_SOURCE_ID).run();
         return {
           ok: true,
           complete: false,
@@ -690,8 +692,8 @@ export async function runBrvinM15V2MultiSourceCheck(env: Env) {
     newlyUploadedAiSearchItems += 1;
     if (uploaded.status === "queued" || uploaded.status === "running") {
       await assertDb(env).prepare(
-        "UPDATE m15_v2_multisource_sources SET status='ai_search_indexing',updated_at=? WHERE source_id=?"
-      ).bind(Date.now(), M14_SOURCE_ID).run();
+        "UPDATE m15_v2_multisource_sources SET status='ai_search_indexing',ai_search_indexed_pages=?,ai_search_items_uploaded=ai_search_items_uploaded+1,updated_at=? WHERE source_id=?"
+      ).bind(visibleItems.filter((item) => item.key.startsWith(M14_SOURCE_PREFIX) && item.status === "completed").length, Date.now(), M14_SOURCE_ID).run();
       return {
         ok: true,
         complete: false,
@@ -721,8 +723,8 @@ export async function runBrvinM15V2MultiSourceCheck(env: Env) {
       [...expectedKeys].some((key) => !finalM14Items.some((item) => item.key === key))) {
     const completed = finalM14Items.filter((item) => item.status === "completed").length;
     await assertDb(env).prepare(
-      "UPDATE m15_v2_multisource_sources SET status='ai_search_indexing',updated_at=? WHERE source_id=?"
-    ).bind(Date.now(), M14_SOURCE_ID).run();
+      "UPDATE m15_v2_multisource_sources SET status='ai_search_indexing',ai_search_indexed_pages=?,updated_at=? WHERE source_id=?"
+    ).bind(completed, Date.now(), M14_SOURCE_ID).run();
     return {
       ok: true,
       complete: false,
@@ -867,9 +869,9 @@ export async function runBrvinM15V2MultiSourceCheck(env: Env) {
     checks,
     quotaUsage: { before: baseUsage, afterTwoCoreV2Queries: usageAfterCoreV2 },
     sideEffects: {
-      qdrantPointsUpsertedOrReplayed: qdrantUpsertedPointCount,
+      qdrantPointsUpsertedOrReplayed: Number(state.qdrant_points_upserted ?? qdrantUpsertedPointCount),
       qdrantPointsDeleted: 0,
-      aiSearchItemsCreated: newlyUploadedAiSearchItems,
+      aiSearchItemsCreated: Number(state.ai_search_items_uploaded ?? newlyUploadedAiSearchItems),
       aiSearchItemsDeleted: 0,
       pdfUploads: 0,
       visionOcrRequests: 0,
