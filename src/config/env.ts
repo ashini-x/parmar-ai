@@ -60,7 +60,7 @@ export interface AiSearchInstance {
     custom_metadata?: Array<{ field_name: string; data_type: "text" | "number" | "boolean" | "datetime" }>;
   }): Promise<unknown>;
   items: {
-    upload(key: string, content: ReadableStream<Uint8Array> | ArrayBuffer | Blob | string, options?: { metadata?: Record<string, string | number | boolean> }): Promise<AiSearchItem>;
+    upload(key: string, content: ReadableStream<Uint8Array> | ArrayBuffer | Blob | string, options?: { metadata?: Record<string, string> }): Promise<AiSearchItem>;
     uploadAndPoll(key: string, content: ReadableStream<Uint8Array> | ArrayBuffer | Blob | string, options?: {
       metadata?: Record<string, string>;
       pollIntervalMs?: number;

@@ -416,14 +416,16 @@ export async function prepareBrvinM15MultiSourceCorpus(
   };
 }
 
-export function m15MultiSourcePageMetadata(page: number): Record<string, string | number> {
+export function m15MultiSourcePageMetadata(page: number): Record<string, string> {
   if (!Number.isSafeInteger(page) || page < 1 || page > BRVIN_M15_SECOND_SOURCE.pageCount) {
     throw new Error("A valid physical PDF page for the pinned M15 second source is required.");
   }
+  // The AI Search Workers Items binding accepts string metadata values. Its
+  // declared custom_metadata schema still casts pdf_page to a numeric field.
   return {
     source_id: BRVIN_M15_SECOND_SOURCE.sourceId,
     project_id: BRVIN_M15_STAGING_PROJECT_ID,
-    pdf_page: page,
+    pdf_page: String(page),
     benchmark: "brvin-m15-multisource-v1",
   };
 }
