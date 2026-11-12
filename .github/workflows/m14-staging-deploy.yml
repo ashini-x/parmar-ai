@@ -27,7 +27,6 @@ on:
       - "src/brvin/corpus.ts"
       - "src/fatman/import.ts"
       - "src/config/env.ts"
-      - "test/brvin-m14-staging-worker.test.ts"
       - "wrangler.m14-staging.jsonc"
       - ".github/workflows/m14-staging-deploy.yml"
   push:
