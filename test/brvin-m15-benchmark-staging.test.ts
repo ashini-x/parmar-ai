@@ -495,7 +495,7 @@ describe("M15 multi-source Core v2 operator routes", () => {
     expect(html).toContain("/admin/m15/benchmark/multi-source/prepare");
     expect(html).toContain("/admin/m15/benchmark/multi-source/evaluate");
     expect(html).toContain("01238b3a-9902-4a42-90b4-574048ee4f00");
-    expect(html).toContain("No PDF upload or Vision OCR request");
+    expect(html).toContain("no PDF upload or Vision OCR request is made");
     expect(html).not.toContain(token);
 
     const production = await handleM15BenchmarkStagingRequest(
