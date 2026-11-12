@@ -167,7 +167,7 @@ export class QdrantVertexReadOnlyRetrievalProvider implements RetrievalProvider 
       itemKey: candidate.itemKey,
       text: candidate.text,
       score: candidate.score,
-      scoringDetails: { fusionMethod: "rrf" },
+      scoringDetails: { fusionMethod: "qdrant-rrf" },
       metadata: {
         ...(candidate.metadata ?? {}),
         pdfPage: candidate.pdfPage,
