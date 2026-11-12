@@ -144,7 +144,8 @@ export class QdrantVertexReadOnlyRetrievalProvider implements RetrievalProvider 
 
   async query(input: RetrievalQuery): Promise<RetrievalCandidate[]> {
     const sourceIds = [...new Set(input.sourcePrefixes.flatMap((prefix) => {
-      const parts = prefix.split("/");
+      const normalized = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
+      const parts = normalized.split("/");
       return parts.length === 4 && parts[0] === "brvin" &&
         parts[1] === "books" && parts[2] && parts[3] === "pages"
         ? [parts[2]]
