@@ -123,7 +123,7 @@ export function createBrvinRetrievalProvider(
   throw new Error("The configured BRVIN retrieval provider is not implemented in this release.");
 }
 
-class QdrantVertexReadOnlyRetrievalProvider implements RetrievalProvider {
+export class QdrantVertexReadOnlyRetrievalProvider implements RetrievalProvider {
   readonly providerId = "qdrant-vertex";
 
   constructor(private readonly pilot: BrvinQdrantHybridPilot) {}
