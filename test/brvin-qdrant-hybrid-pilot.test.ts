@@ -654,6 +654,7 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
       sourceId: "source-a",
       pdfPage: 2,
       score: 0.93,
+      textPreview: "F = ma",
     }];
     expect(result.dense).toEqual(expected);
     expect(result.sparse).toEqual(expected);
@@ -674,6 +675,37 @@ describe("BRVIN M14 Qdrant dense+sparse hybrid pilot", () => {
       expect(call.body.with_vector).toBe(false);
       expect(call.body.prefetch).toBeUndefined();
     }
+  });
+
+  it("skips every collection-preparation request for read-only dense/sparse component diagnostics", async () => {
+    const { request, calls } = makeQdrant({ collectionMissing: true });
+    const embeddings = makeEmbeddings();
+    const pilot = makePilot(request, embeddings);
+
+    const result = await pilot.queryComponentRanks({
+      projectId: "project-a",
+      authorizedSourceIds: ["source-a"],
+      query: "Give the exact SI value of the Planck constant.",
+      limit: 15,
+      ensureCollection: false,
+    });
+
+    expect(result.dense).toMatchObject([{
+      rank: 1,
+      pointId: "authorized-point",
+      sourceId: "source-a",
+      pdfPage: 2,
+      textPreview: "F = ma",
+    }]);
+    expect(result.sparse).toHaveLength(1);
+    expect(embeddings.embedQuery).toHaveBeenCalledTimes(1);
+    expect(calls).toHaveLength(2);
+    expect(calls.map((call) => new URL(call.url).pathname)).toEqual([
+      "/collections/brvin_m14_physics_pilot_v1/points/query",
+      "/collections/brvin_m14_physics_pilot_v1/points/query",
+    ]);
+    expect(calls.every((call) => call.method === "POST")).toBe(true);
+    expect(calls.some((call) => call.url.endsWith("/index?wait=true") || call.method === "PUT")).toBe(false);
   });
 
   it("skips every collection-preparation request when running a read-only shadow query", async () => {
