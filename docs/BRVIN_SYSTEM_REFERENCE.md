@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 12 November 2026 (M11 production consumer acceptance remains complete; Core M15 second-source staging receipts and 109-excerpt independent passage-review handoff verified; live Core/Teachers Worker settings and provider boundaries read back)  
+**Last verified against source and production infrastructure:** 12 November 2026 (M11 production consumer acceptance remains complete; M15 owner-waived AI passage assessment, Core v2 staging authorization route and receipt persistence are verified in source/CI; the protected live authorization action is still pending; live Core/Teachers Worker settings and provider boundaries read back)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/brvin-teachers` (separate downstream app); `ashini-x/askmoina-voice` remains an optional consumer
 
@@ -112,20 +112,22 @@ The two planes share the existing D1 registry and AI Search namespace. They do n
 
 ## 1.2 Current production and provider-migration state — 12 November 2026
 
-Cloudflare's current read-only Worker settings/deployment read-back confirms:
+Cloudflare read-only deployment/settings read-back confirms the following current 100% deployments:
 
 | Worker | Environment | Version | Deployment | Traffic |
 |---|---|---|---|---:|
-| `parmar-ai` | production | `9d289364-a65d-4fa4-9df7-84f9418eeac2` | `fae0c117-5330-428d-b0cb-0ccb4798acc7` | 100% |
-| `brvin-service` | production | `fd1fb0c0-98f9-46a8-bf63-6b0f86167359` | `f1c1e8d7-953b-4c75-838c-45c9884f1380` | 100% |
-| `parmar-ai-m14-staging` | staging | `e58546a5-c9e2-4bef-8d27-da8c606995a7` | `2cbed610-fae7-4212-87ac-0cb5c2a9ff48` | 100% |
+| `parmar-ai` | production | `5c55b8a6-151b-4d21-8748-30d221507923` | `91a074f0-241f-4c29-b18f-f5f2eeb1fd1c` | 100% |
+| `brvin-service` | production | `e59d976e-07ba-4974-b1bd-56a9a48e5555` | `e0a86373-d290-4259-aa99-edc62308095b` | 100% |
+| `parmar-ai-m14-staging` | staging | `ffbaa06f-e2ca-46e4-8e82-7516c6738555` | `f4878038-ca99-477a-93f2-2de0c7b1f219` | 100% |
 | `brvin-teachers` | production | `68d6694c-6371-4cae-8a25-4af40ca15706` | `31ff2a01-b0f4-4be8-92d3-63e2d91adddf` | 100% |
 
-The Core production configuration still selects `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`; `BRVIN_CORPUS_MANIFEST_ENABLED=false` remains set on `parmar-ai`. No Qdrant/Vertex retrieval binding or provider route exists in the production v2 service. The latest Core versions were uploaded by an unintended test-only redeploy following PR #229 because the new v2 authorization test path was omitted from the production-scope allowlist. PR #230 corrected that allowlist. PR #231 also corrected the M14 workflow push trigger so test-only merges no longer trigger a staging Worker upload. The latter two workflow corrections passed validation; neither initiated a production or staging deployment when merged.
+Production Core remains on the existing provider: both `parmar-ai` and `brvin-service` have `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`; `parmar-ai` has `BRVIN_CORPUS_MANIFEST_ENABLED=false`. Production has no Qdrant/Vertex retrieval binding or credentials. The paired production release after Core PR #234 deployed the query-only adapter/service code behind the unchanged selector and passed the production smoke/acceptance job in [Release validation #43214641677](https://github.com/ashini-x/parmar-ai/actions/runs/43214641677). This was not a provider cutover. Core PR #235 changed staging receipt handling/tests and docs only; [Release validation #43219853527](https://github.com/ashini-x/parmar-ai/actions/runs/43219853527) passed full validation while production deploy/verification jobs were skipped.
 
-Teachers remains on its existing deployed production version and has only two private same-account Service Bindings: `BRVIN_MANAGEMENT` to `parmar-ai` / `BrvinTeachersManagementApi`, and `BRVIN_SERVICE` to `brvin-service` / `BrvinRetrievalApi`. It has no Vertex/Qdrant SDK, credentials, embedding implementation or direct provider path. The frozen v2 RPC contract and current Core Admin / Teachers Operator Console experiences are unchanged.
+The isolated staging Worker has Vertex `gemini-embedding-001` in `asia-south1` at 768 dimensions, its dedicated M15 Qdrant collection, the separate staging AI Search bindings and isolated D1. [M14 staging workflow #43219853491](https://github.com/ashini-x/parmar-ai/actions/runs/43219853491) passed typecheck, focused M14/M15 tests (including the v2 receipt test), versioned provider-setting verification, Wrangler dry-run and staging deployment. The currently deployed M15 operator route is staging-only.
 
-**M15 is active and incomplete.** The second eight-page Physics source and its immutable OCR/corpus/index artifacts remain isolated to Core staging. The paired 17-query retrieval/34-generation OCR-only evaluation and five-query/ten-generation original-PDF-assisted notation audit are complete, but the latter is bounded visual-evidence assistance and does not repair stored raw OCR or indexed formula text. Core's 109-excerpt independent passage review pack is on main with Reviewer A/B/adjudication values blank. The first incomplete quality gate is two independent human reviews and claim-to-passage grounding. Unit tests now cover revoked app-project grants failing before quota/search and Qdrant re-applying the current per-request source allowlist; they do not prove live v2-to-Qdrant revocation with vectors retained. Live security/revocation, recovery, HNSW/load, repeatable latency/cost and rollback remain open. Production remains on Cloudflare AI Search.
+BRVIN Teachers remains a downstream private v2 consumer. Its Worker has only `BRVIN_MANAGEMENT` to `parmar-ai` / `BrvinTeachersManagementApi`, `BRVIN_SERVICE` to `brvin-service` / `BrvinRetrievalApi`, and its own D1. It has no Qdrant/Vertex SDKs, credentials, embeddings, or direct provider bindings. The existing private v2 contract, D1 authorization authority, Core Admin and Teachers Operator Console remain unchanged.
+
+**M15 status: IN PROGRESS.** The second eight-page Physics source is isolated to Core staging. The paired retrieval/answer evaluations, bounded five-query PDF-assisted notation audit and owner-waived AI assessment of all 109 candidates are complete. The AI assessment is not independent human qrels; the original human-review fields remain blank. Core PR #234 added the real Core v2 Qdrant query-only authorization/revocation action; PR #235 added persisted run receipts and tests. The staging receipt table is created lazily when that protected action initializes its fixture; a pre-run D1 lookup showing no table is expected. The action has not yet been run, so live unknown-project denial, revocation with vector retention and quota behavior are not accepted. After that action, broader formula/mixed-content grounding, retry/recovery, HNSW/load, repeatable latency/cost and rollback remain open. Production stays on AI Search; M16 and M17 are not yet authorized.
 
 
 ## 2. Architecture decisions that must remain stable
