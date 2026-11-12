@@ -103,6 +103,14 @@ const DDL = [
   "CREATE INDEX IF NOT EXISTS idx_m15_v2_app_env_lookup ON brvin_application_environments(application_id, status, environment_key)",
   "CREATE UNIQUE INDEX IF NOT EXISTS idx_m15_v2_one_active_environment ON brvin_application_environments(application_id, environment_key) WHERE status = 'active'",
   "CREATE INDEX IF NOT EXISTS idx_m15_v2_grant_lookup ON brvin_application_project_grants(application_id, project_id, status)",
+  `CREATE TABLE IF NOT EXISTS m15_v2_authorization_runs (
+    id TEXT PRIMARY KEY,
+    status TEXT NOT NULL CHECK (status IN ('running', 'passed', 'failed')),
+    result_json TEXT,
+    started_at INTEGER NOT NULL,
+    completed_at INTEGER
+  )`,
+  "CREATE INDEX IF NOT EXISTS idx_m15_v2_authorization_runs_started ON m15_v2_authorization_runs(started_at DESC)",
 ];
 
 type M15BenchmarkSourceRow = {
@@ -238,6 +246,18 @@ export async function runBrvinM15V2AuthorizationCheck(env: Env) {
   await ensureFixture(env);
   await setGrantStatus(env, "active");
 
+  // Persist a staging-only receipt so operators do not need to copy the JSON
+  // response. The receipt contains test outcomes, never credentials or passage text.
+  const runId = crypto.randomUUID();
+  const db = assertDb(env);
+  const startedAt = Date.now();
+  const started = await db.prepare(
+    "INSERT INTO m15_v2_authorization_runs (id,status,result_json,started_at,completed_at) VALUES (?,'running',NULL,?,NULL)",
+  ).bind(runId, startedAt).run();
+  if (!started.success || Number(started.meta?.changes ?? 0) !== 1) {
+    throw new Error("M15 v2 authorization run receipt could not be initialized.");
+  }
+
   const serviceEnv = { ...env, BRVIN_RETRIEVAL_PROVIDER: "qdrant-vertex" };
   const baseUsage = await queryUsage(env);
   const authorized = await retrieveBrvinForApplicationV2(serviceEnv, ENVIRONMENT_ID, {
@@ -303,8 +323,9 @@ export async function runBrvinM15V2AuthorizationCheck(env: Env) {
   };
   const passed = Object.values(checks).every(Boolean);
 
-  return {
+  const report = {
     ok: passed,
+    receiptId: runId,
     benchmark: "brvin-m15-core-v2-qdrant-authorization",
     environment: "staging",
     provider: "qdrant-vertex",
@@ -349,4 +370,11 @@ export async function runBrvinM15V2AuthorizationCheck(env: Env) {
     },
     note: "This invokes the real Core v2 service authorization, D1 source registry, project quota and Qdrant hybrid query path against the isolated M15 staging database/collection. The application/environment/project/grant fixture and one project quota counter are staging-only. The temporary staging grant is restored active in a finally block. Qdrant indexing and deletion remain disabled.",
   };
+  const persisted = await db.prepare(
+    "UPDATE m15_v2_authorization_runs SET status=?,result_json=?,completed_at=? WHERE id=? AND status='running'",
+  ).bind(report.ok ? "passed" : "failed", JSON.stringify(report), Date.now(), runId).run();
+  if (!persisted.success || Number(persisted.meta?.changes ?? 0) !== 1) {
+    throw new Error("M15 v2 authorization result could not be persisted to isolated staging D1.");
+  }
+  return report;
 }
