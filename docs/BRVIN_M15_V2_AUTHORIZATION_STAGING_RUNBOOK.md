@@ -16,6 +16,8 @@ This runbook executes the actual Core `retrieveBrvinForApplicationV2` service fu
 3. Click **Run Core v2 Qdrant authorization + revocation proof** once. The page shows the JSON result. The result is also saved into the staging-only D1 table `m15_v2_authorization_runs`; no need to copy the JSON into chat.
 4. Tell the engineering agent that the button completed. The agent can read back the most recent receipt directly from the staging D1 database and calculate the M15 gate outcome.
 
+The receipt table is initialized lazily by this action when it prepares the fixed staging fixture. Before the first run, a read-only query for `m15_v2_authorization_runs` may return `no such table`; this is expected and does not indicate a failed deployment. Do not manually create the table or run the action repeatedly.
+
 Do not click repeatedly while a run is in progress. One authorized retrieval increments one project-scoped staging quota counter; denied requests must not increment it.
 
 ## Checks performed
