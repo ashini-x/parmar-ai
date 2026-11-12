@@ -7,6 +7,7 @@ import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
 import {
   BRVIN_M15_STAGING_ENVIRONMENT_ID,
   BRVIN_M15_STAGING_PROJECT_ID,
+  BRVIN_M15_STAGING_SOURCE_ID,
 } from "./m15-v2-staging";
 
 export const BRVIN_M15_SECOND_SOURCE = {
@@ -49,7 +50,7 @@ export const M15_MULTI_SOURCE_QUERY_SUITE: readonly M15MultiSourceCase[] = [
     expectedLocations: [
       { sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 2 },
       { sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 3 },
-      { sourceId: BRVIN_M15_STAGING_PROJECT_ID, pdfPage: 1 },
+      { sourceId: BRVIN_M15_STAGING_SOURCE_ID, pdfPage: 1 },
     ],
   },
   {
@@ -57,23 +58,22 @@ export const M15_MULTI_SOURCE_QUERY_SUITE: readonly M15MultiSourceCase[] = [
     query: "How does static friction adjust to the applied force, and how is that different from the kinetic friction in the worked block example?",
     expectedLocations: [
       { sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 3 },
-      { sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 4 },
+      { sourceId: BRVIN_M15_STAGING_SOURCE_ID, pdfPage: 4 },
     ],
   },
   {
     id: "MS03",
     query: "Explain the difference between mass and weight, and how mass is used in Newton's second law.",
     expectedLocations: [
-      { sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 2 },
-      { sourceId: BRVIN_M15_STAGING_PROJECT_ID, pdfPage: 1 },
-      { sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 3 },
+      { sourceId: BRVIN_M15_STAGING_SOURCE_ID, pdfPage: 2 },
+      { sourceId: BRVIN_M15_STAGING_SOURCE_ID, pdfPage: 3 },
     ],
   },
   {
     id: "MS04",
     query: "What is the restoring-force formula of the spring, including the sign and the physical PDF page that shows it?",
     expectedLocations: [
-      { sourceId: BRVIN_M15_STAGING_PROJECT_ID, pdfPage: 8 },
+      { sourceId: BRVIN_M15_STAGING_SOURCE_ID, pdfPage: 8 },
     ],
   },
   {
@@ -481,7 +481,7 @@ export function summarizeM15MultiSourceProvider(
     failedQueries: cases.filter((item) => !item.result.ok).length,
     authorizedSourceIdsReturned: sourceIds,
     bothSourcesRepresented: sourceIds.includes(BRVIN_M15_SECOND_SOURCE.sourceId) &&
-      sourceIds.includes("3b4d116d-4c18-450f-9cba-cb2bec3da7ca"),
+      sourceIds.includes(BRVIN_M15_STAGING_SOURCE_ID),
     expectedLocationCount: expected.size,
     expectedLocationsFound: expectedFound.length,
     expectedLocationCoverage: expected.size ? expectedFound.length / expected.size : 0,
@@ -544,8 +544,8 @@ async function retrieveOne(
       };
     }
     const allowedPages = new Map<string, number>([
-      ["3b4d116d-4c18-450f-9cba-cb2bec3da7ca", 3],
       [BRVIN_M15_SECOND_SOURCE.sourceId, BRVIN_M15_SECOND_SOURCE.pageCount],
+      [BRVIN_M15_STAGING_SOURCE_ID, 8],
     ]);
     const passages = result.data.passages.map((passage) => {
       const maxPage = allowedPages.get(passage.bookId);
@@ -597,7 +597,7 @@ export async function runM15MultiSourceCoreV2Evaluation(
     id: string; title: string; page_count: number; indexed_pages: number; status: string;
   }>();
   const expectedIds = new Set([
-    "3b4d116d-4c18-450f-9cba-cb2bec3da7ca",
+    BRVIN_M15_STAGING_SOURCE_ID,
     BRVIN_M15_SECOND_SOURCE.sourceId,
   ]);
   const readySources = (ready.results ?? []).filter((source) =>
