@@ -53,6 +53,7 @@ function makeEnv(overrides: Partial<Env> = {}): M14StagingWorkerEnv {
     BRVIN_M14_QDRANT_URL: "https://qdrant-test.example:6333",
     BRVIN_M14_QDRANT_API_KEY: "test-only-qdrant-api-key",
     BRVIN_M14_QDRANT_COLLECTION: "brvin_m14_physics_pilot_v1",
+    BRVIN_M15_BENCHMARK_QDRANT_COLLECTION: "brvin_m15_physics_benchmark_v1",
     DB: db as never,
     ...overrides,
   } as M14StagingWorkerEnv;
@@ -131,6 +132,8 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(html).toContain('/admin/m14/qdrant/evaluate');
     expect(html).toContain('/admin/m15/shadow/evaluate');
     expect(html).toContain("Run AI Search vs Qdrant shadow benchmark");
+    expect(html).toContain("Run Core v2 Qdrant authorization + revocation proof");
+    expect(html).toContain("/admin/m15/v2/authorization-check");
     expect(html).toContain("search/query operations only");
     expect(html).toContain("Embed and index the 7 Physics chunks in Qdrant");
     expect(html).toContain("natural-language equation discovery use 70% dense / 30% sparse");
@@ -144,6 +147,56 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(html).not.toContain(TOKEN);
     expect(html).not.toContain("test-only-private-key");
     expect(html).not.toContain("https://");
+  });
+
+
+  it("protects the Core v2 Qdrant authorization check with the operator token and exact M15 source confirmation", async () => {
+    const runV2 = vi.fn(async () => ({
+      ok: true,
+      benchmark: "brvin-m15-core-v2-qdrant-authorization",
+      checks: { authorizedV2RetrievalSucceeded: true },
+    }));
+    const denied = await handleM14StagingRequest(
+      makeRequest("/admin/m15/v2/authorization-check", {
+        body: { confirmSourceId: "3b4d116d-4c18-450f-9cba-cb2bec3da7ca" },
+      }),
+      makeEnv(),
+      undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined,
+      runV2 as never,
+    );
+    expect(denied.status).toBe(401);
+    expect(runV2).not.toHaveBeenCalled();
+
+    const wrongSource = await handleM14StagingRequest(
+      makeRequest("/admin/m15/v2/authorization-check", {
+        token: TOKEN,
+        body: { confirmSourceId: SOURCE_ID },
+      }),
+      makeEnv(),
+      undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined,
+      runV2 as never,
+    );
+    expect(wrongSource.status).toBe(400);
+    expect(runV2).not.toHaveBeenCalled();
+
+    const allowed = await handleM14StagingRequest(
+      makeRequest("/admin/m15/v2/authorization-check", {
+        token: TOKEN,
+        body: { confirmSourceId: "3b4d116d-4c18-450f-9cba-cb2bec3da7ca" },
+      }),
+      makeEnv(),
+      undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined,
+      runV2 as never,
+    );
+    expect(allowed.status).toBe(200);
+    await expect(allowed.json()).resolves.toMatchObject({
+      ok: true,
+      benchmark: "brvin-m15-core-v2-qdrant-authorization",
+    });
+    expect(runV2).toHaveBeenCalledTimes(1);
   });
 
   it("requires the exact Physics source and bearer authentication before Qdrant indexing", async () => {
