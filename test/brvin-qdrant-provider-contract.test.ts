@@ -59,7 +59,7 @@ describe("BRVIN Qdrant query-only retrieval adapter", () => {
       id: "point-1",
       itemKey: "brvin/books/source-1/pages/page-000004.txt",
       score: 0.5,
-      scoringDetails: { fusionMethod: "rrf" },
+      scoringDetails: { fusionMethod: "qdrant-rrf" },
       metadata: {
         generationId: "generation-1",
         pdfPage: 4,
