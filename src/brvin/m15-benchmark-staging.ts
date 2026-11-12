@@ -2452,6 +2452,10 @@ export async function handleM15BenchmarkStagingRequest(
     return json({ ok: false, error: "not_found" }, 404);
   }
   if (!["GET","POST"].includes(request.method)) return json({ ok: false, error: "method_not_allowed" }, 405);
+  if ((url.pathname === "/admin/m15/benchmark/multi-source/prepare" ||
+       url.pathname === "/admin/m15/benchmark/multi-source/evaluate") && request.method !== "POST") {
+    return json({ ok: false, error: "method_not_allowed" }, 405);
+  }
   if (!await authenticated(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
   if (!env.DB) return json({ ok: false, error: "staging_database_missing" }, 503);
 
