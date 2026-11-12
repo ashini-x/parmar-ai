@@ -20,7 +20,7 @@ describe("M15 multi-source Core v2 staging evaluation", () => {
       page_count: 8,
       indexed_pages: 8,
       status: "ready",
-      search_prefix: "brvin/books/3b4d116d-4c18-450f-9cba-cb2ec3da7ca/pages/",
+      search_prefix: "brvin/books/3b4d116d-4c18-450f-9cba-cb2bec3da7ca/pages/",
     };
     expect(isM15MultiSourceDiagnosticSourcePinned(original)).toBe(true);
     expect(isM15MultiSourceDiagnosticSourcePinned({
