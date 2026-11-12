@@ -3,6 +3,7 @@ import {
   BRVIN_M15_SECOND_SOURCE,
   M15_MULTI_SOURCE_QUERY_SUITE,
   M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS,
+  isM15MultiSourceDiagnosticSourcePinned,
   m15MultiSourcePageKey,
   m15MultiSourcePageMetadata,
   prepareBrvinM15MultiSourceCorpus,
@@ -12,6 +13,43 @@ import {
 import { BRVIN_M15_STAGING_SOURCE_ID } from "../src/brvin/m15-v2-staging";
 
 describe("M15 multi-source Core v2 staging evaluation", () => {
+  it("accepts only the exact fingerprint, page-count and search-prefix identities of the two M15 sources", () => {
+    const original = {
+      id: BRVIN_M15_STAGING_SOURCE_ID,
+      source_sha256: "cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92",
+      page_count: 8,
+      indexed_pages: 8,
+      status: "ready",
+      search_prefix: "brvin/books/3b4d116d-4c18-450f-9cba-cb2ec3da7ca/pages/",
+    };
+    expect(isM15MultiSourceDiagnosticSourcePinned(original)).toBe(true);
+    expect(isM15MultiSourceDiagnosticSourcePinned({
+      ...original,
+      source_sha256: "0".repeat(64),
+    })).toBe(false);
+    expect(isM15MultiSourceDiagnosticSourcePinned({
+      ...original,
+      page_count: 7,
+    })).toBe(false);
+    expect(isM15MultiSourceDiagnosticSourcePinned({
+      ...original,
+      search_prefix: "brvin/books/wrong/pages/",
+    })).toBe(false);
+    expect(isM15MultiSourceDiagnosticSourcePinned({
+      ...original,
+      status: "indexing",
+    })).toBe(false);
+
+    expect(isM15MultiSourceDiagnosticSourcePinned({
+      id: BRVIN_M15_SECOND_SOURCE.sourceId,
+      source_sha256: BRVIN_M15_SECOND_SOURCE.sourcePdfSha256,
+      page_count: 3,
+      indexed_pages: 3,
+      status: "ready",
+      search_prefix: "brvin/books/" + BRVIN_M15_SECOND_SOURCE.sourceId + "/pages/",
+    })).toBe(true);
+  });
+
   it("pins the bounded Qdrant component diagnostic to the five existing paired cases", () => {
     expect(M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS).toEqual(["MS01", "MS02", "MS03", "MS04", "MN01"]);
     expect(M15_MULTI_SOURCE_QUERY_SUITE.map((item) => item.id)).toEqual(
