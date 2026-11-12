@@ -33,9 +33,9 @@ The first protected Prepare attempt (before the follow-up correction) returned `
 
 Core PR [#241](https://github.com/ashini-x/parmar-ai/pull/241) merged as `d9313d822f63960d8baa22404c6f323c89415945`. It changes the upload to send `pdf_page: String(page)`, narrows the Core binding type to string values, and adds regression coverage. Post-merge validation passed full typecheck/tests/build; production deploy and live verification were skipped. M14 staging workflow [#43317133051](https://github.com/ashini-x/parmar-ai/actions/runs/43317133051) deployed staging Worker version `a1158a7c-4422-4768-93e0-140363e791c2` at 100% using deployment `b46a8d37-362c-4ac3-94f8-68f602d367a3`. Cloudflare version read-back confirms the dedicated M15 AI Search instance, Qdrant collection and isolated staging D1 remain bound. Production Core and Teachers versions did not change.
 
-**Post-correction Prepare result — verified 13 November 2026:** the protected operator returned `ok: true`, `qdrantPointCount=7`, `qdrantStatus=ready`, `aiSearchItemCount=3`, `aiSearchStatus=ready`, `status=ready` and `authorizedReadySourceCount=2`. Its side-effect flags were all false, including PDF upload, Vision OCR, source/OCR mutation, production D1 access, production provider change, Qdrant upsert/delete and new staging point adds. Independent read-only staging D1 verification confirms the second-source checkpoint is `ready` with seven Qdrant points and AI Search ready; the `brvin_books` / `brvin_project_books` join returns exactly two mapped books, both READY (original M15 source 8/8, M14 handout 3/3); and the multi-source evaluation receipt table is empty. Exact-key AI Search read-backs for pages 1–3 show one item each, all `completed`, with the expected source/project metadata and numeric `pdf_page` values 1–3. November project query usage remains one, attributable to the earlier authorization test. The multi-source preparation gate is therefore **PASSED**; only the paired evaluation is pending.
+**Post-correction Prepare result — verified 13 November 2026:** the protected operator returned `ok: true`, `qdrantPointCount=7`, `qdrantStatus=ready`, `aiSearchItemCount=3`, `aiSearchStatus=ready`, `status=ready` and `authorizedReadySourceCount=2`. Its side-effect flags were all false, including PDF upload, Vision OCR, source/OCR mutation, production D1 access, production provider change, Qdrant upsert/delete and new staging point adds. Independent read-only staging D1 verification confirms exactly two mapped books, both READY (original M15 source 8/8, M14 handout 3/3); the second-source checkpoint is READY with seven Qdrant points and three AI Search pages. All three exact-key AI Search items are `completed` with numeric `pdf_page` 1–3.
 
-**Next action:** run **Run paired Core v2 multi-source evaluation** once from the same operator page. Re-enter `BRVIN_M14_ADMIN_TOKEN` locally; do not share it. The evaluation runs the five fixed queries through the real Core v2 resolver against each provider and reserves ten M15 staging query units. Save the complete operator JSON. Do not repeat Prepare now that D1, Qdrant and AI Search are independently verified READY.
+**Paired evaluation result — verified 13 November 2026:** run completed and persisted as `passed` under receipt `18728f63-e13d-4e73-880f-a2b980844d04`. D1 contains one passed run and zero failed runs; project quota moved from 1 to 11, exactly ten reservations. See **Recorded paired result** below. Do not rerun the same evaluation merely to reproduce the receipt; continue with the separately planned M15 quality/recovery/load/cost/rollback gates.
 
 ## Prepare the second source
 
@@ -95,6 +95,43 @@ LIMIT 5;
 The table is initialized lazily by the preparation/evaluation action. Its absence before the first action is expected. A `running` row is not a pass; inspect the final status and every named check.
 
 The preparation checkpoint is recorded in `m15_v2_multisource_sources`. It records the pinned source/generation identity, Qdrant point count, AI Search progress and overall status.
+
+## Recorded paired result — 13 November 2026
+
+**Persisted receipt:** `18728f63-e13d-4e73-880f-a2b980844d04`  
+**D1 status:** `passed` (one row, zero failed rows)  
+**Environment/project:** isolated staging / `890f6317-69f4-4391-aae6-556155ed0d12`  
+**Provider paths:** `cloudflare-ai-search` and `qdrant-vertex`  
+**Quota:** 1 before, 11 after; exactly ten reservations (five queries × two provider paths).
+
+All seven named structural checks passed: exactly two authorized READY sources; both providers completed all five queries; both searched both READY sources per query; no provenance violations for either provider; evidence from both sources appeared across results; and exactly one reservation per provider query. Both providers completed 5/5 with zero failures and zero provenance violations.
+
+### Query-specific expected-page hits
+
+There are **eight query-specific expected page-target instances** but only **seven distinct source/page pairs**, because M14 handout page 3 is expected by both MS01 and MS02. Use per-query hits rather than interpreting the unique-page summary as per-query recall.
+
+| Case | AI Search expected hits | Qdrant/Vertex expected hits | Interpretation |
+|---|---:|---:|---|
+| MS01 — second law + rough-floor example | 3/3 | 3/3 | Both found the handout pages 2/3 and M15 page 1 |
+| MS02 — static vs kinetic friction | 1/2 | 2/2 | AI Search found M15 page 4 but not the expected handout page 3; Qdrant found both |
+| MS03 — mass/weight + second law | 2/2 | 1/2 | Qdrant found M15 page 3 but missed expected M15 page 2 |
+| MS04 — spring restoring-force formula/sign | 1/1 | 1/1 | Both found M15 page 8 |
+| MN01 — Planck constant / photon energy no-match | 0 expected | 0 expected | AI Search returned no candidates; Qdrant returned 3 candidates |
+
+The receipt's distinct-page aggregate is AI Search **7/7 (100%)** and Qdrant/Vertex **6/7 (85.7%)**. Query-instance hits are **7/8 (87.5%) for each**, but the missed query target differs. Qdrant's missing distinct target is M15 source page 2 on MS03.
+
+For MN01, Qdrant's three returned passages came from the handout page 1 and M15 pages 8 and 6. These passages do not contain the requested Planck/photon-energy evidence; this is a no-match candidate/precision warning, not an answer-generation test. AI Search returned zero candidates.
+
+### Latency and limits
+
+| Provider | p50 | p95 | Samples |
+|---|---:|---:|---:|
+| Cloudflare AI Search | 4,394 ms | 6,718 ms | 5 |
+| Qdrant + Vertex | 1,441 ms | 1,611 ms | 5 |
+
+Qdrant/Vertex was faster in this small sequential sample, but n=5 is not a representative load test, Worker p95/p99 baseline, production SLO, or end-to-end answer-latency comparison. The evaluation made no Gemini calls and assessed no generated-answer correctness, abstention, claim entailment, or independent passage qrels.
+
+**Subgate decision:** two-source authorization, provider completion, source discovery, provenance and quota accounting **PASSED**. Comparative retrieval-quality evidence is mixed: AI Search has higher distinct-page coverage and clean no-match abstention; Qdrant is faster but misses M15 page 2 in MS03 and emits three unrelated candidates on MN01. Do not declare an overall provider winner or authorize production cutover based on this receipt alone.
 
 ## Side-effect boundary
 
