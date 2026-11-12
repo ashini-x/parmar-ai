@@ -3,7 +3,8 @@ import { retrieveBrvinForApplicationV2 } from "./service-core";
 import { BrvinQdrantHybridPilot } from "./qdrant-hybrid-pilot";
 import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
 
-const SOURCE_ID = "3b4d116d-4c18-450f-9cba-cb2bec3da7ca";
+export const BRVIN_M15_STAGING_SOURCE_ID = "3b4d116d-4c18-450f-9cba-cb2bec3da7ca";
+const SOURCE_ID = BRVIN_M15_STAGING_SOURCE_ID;
 const PROJECT_ID = BRVIN_M15_STAGING_PROJECT_ID;
 const SOURCE_SHA256 = "cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92";
 const SOURCE_PAGE_COUNT = 8;
