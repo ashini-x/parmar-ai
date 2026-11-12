@@ -331,12 +331,7 @@ export async function prepareBrvinM15MultiSourceCorpus(
     }
 
     const uploaded = await search.items.upload(key, page.rawOcrText, {
-      metadata: {
-        source_id: source.sourceId,
-        project_id: BRVIN_M15_STAGING_PROJECT_ID,
-        pdf_page: String(page.pdfPage),
-        benchmark: "brvin-m15-multisource-v1",
-      },
+      metadata: m15MultiSourcePageMetadata(page.pdfPage),
     });
     if (uploaded.key !== key) {
       throw new Error("M15 AI Search returned an unexpected item key for physical page " + page.pdfPage + ".");
@@ -421,6 +416,17 @@ export async function prepareBrvinM15MultiSourceCorpus(
   };
 }
 
+export function m15MultiSourcePageMetadata(page: number): Record<string, string | number> {
+  if (!Number.isSafeInteger(page) || page < 1 || page > BRVIN_M15_SECOND_SOURCE.pageCount) {
+    throw new Error("A valid physical PDF page for the pinned M15 second source is required.");
+  }
+  return {
+    source_id: BRVIN_M15_SECOND_SOURCE.sourceId,
+    project_id: BRVIN_M15_STAGING_PROJECT_ID,
+    pdf_page: page,
+    benchmark: "brvin-m15-multisource-v1",
+  };
+}
 export function m15MultiSourcePageKey(sourceId: string, page: number): string {
   if (!/^[a-f0-9-]{36}$/iu.test(sourceId) ||
       !Number.isSafeInteger(page) || page < 1 || page > 2_000) {
