@@ -421,6 +421,35 @@ export async function prepareBrvinM15MultiSourceCorpus(
   };
 }
 
+export function isM15MultiSourceDiagnosticSourcePinned(source: {
+  id: string;
+  source_sha256: string;
+  page_count: number;
+  indexed_pages: number;
+  status: string;
+  search_prefix: string;
+}): boolean {
+  const expected = source.id === BRVIN_M15_STAGING_SOURCE_ID
+    ? {
+        sha256: BRVIN_M15_STAGING_SOURCE_SHA256,
+        pageCount: 8,
+        prefix: sourcePrefix(BRVIN_M15_STAGING_SOURCE_ID),
+      }
+    : source.id === BRVIN_M15_SECOND_SOURCE.sourceId
+      ? {
+          sha256: BRVIN_M15_SECOND_SOURCE.sourcePdfSha256,
+          pageCount: BRVIN_M15_SECOND_SOURCE.pageCount,
+          prefix: sourcePrefix(BRVIN_M15_SECOND_SOURCE.sourceId),
+        }
+      : null;
+  return Boolean(expected && source.source_sha256.toLowerCase() === expected.sha256 &&
+    Number(source.page_count) === expected.pageCount &&
+    Number(source.indexed_pages) === expected.pageCount &&
+    source.status === "ready" &&
+    source.search_prefix === expected.prefix);
+}
+
+
 export async function runM15MultiSourceQdrantDiagnostics(
   env: BrvinM15MultiSourceEnv,
 ): Promise<Record<string, unknown>> {
@@ -430,26 +459,17 @@ export async function runM15MultiSourceQdrantDiagnostics(
     BRVIN_M15_SECOND_SOURCE.sourceId,
   ]);
   const registry = await env.DB!.prepare(
-    "SELECT b.id,b.title,b.source_sha256,b.page_count,b.indexed_pages,b.status " +
+    "SELECT b.id,b.title,b.source_sha256,b.page_count,b.indexed_pages,b.status,b.search_prefix " +
     "FROM brvin_books b JOIN brvin_project_books pb ON pb.book_id=b.id " +
     "WHERE pb.project_id=? ORDER BY b.id",
   ).bind(BRVIN_M15_STAGING_PROJECT_ID).all<{
-    id: string; title: string; source_sha256: string; page_count: number; indexed_pages: number; status: string;
+    id: string; title: string; source_sha256: string; page_count: number; indexed_pages: number;
+    status: string; search_prefix: string;
   }>();
-  const expectedHashes = new Map<string, string>([
-    [BRVIN_M15_STAGING_SOURCE_ID, BRVIN_M15_STAGING_SOURCE_SHA256],
-    [BRVIN_M15_SECOND_SOURCE.sourceId, BRVIN_M15_SECOND_SOURCE.sourcePdfSha256],
-  ]);
-  const expectedPages = new Map<string, number>([
-    [BRVIN_M15_STAGING_SOURCE_ID, 8],
-    [BRVIN_M15_SECOND_SOURCE.sourceId, BRVIN_M15_SECOND_SOURCE.pageCount],
-  ]);
   const readySources = (registry.results ?? []).filter((source) =>
     source.status === "ready" && Number(source.indexed_pages) === Number(source.page_count));
   if (readySources.length !== 2 || readySources.some((source) =>
-      !expectedIds.has(source.id) ||
-      source.source_sha256.toLowerCase() !== expectedHashes.get(source.id) ||
-      Number(source.page_count) !== expectedPages.get(source.id))) {
+      !expectedIds.has(source.id) || !isM15MultiSourceDiagnosticSourcePinned(source))) {
     throw new Error("The read-only Qdrant diagnostic requires the exact fingerprint-pinned two-source M15 project inventory in READY state.");
   }
   const checkpoint = await env.DB!.prepare(
