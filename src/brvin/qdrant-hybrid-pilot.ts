@@ -83,6 +83,7 @@ export interface BrvinM14ComponentRank {
   sourceId: string;
   pdfPage: number;
   score: number;
+  textPreview: string;
 }
 
 export interface BrvinM14ComponentRankings {
@@ -595,11 +596,13 @@ export class BrvinQdrantHybridPilot {
     authorizedSourceIds: readonly string[];
     query: string;
     limit?: number;
+    /** Skip collection preparation for read-only staging diagnostics. */
+    ensureCollection?: boolean;
   }): Promise<BrvinM14ComponentRankings> {
     if (!input.query.trim()) throw new Error("A non-empty pilot query is required.");
     if (!input.authorizedSourceIds.length) return { dense: [], sparse: [] };
     const filter = payloadFilter(input.projectId, input.authorizedSourceIds);
-    await this.ensureCollection();
+    if (input.ensureCollection !== false) await this.ensureCollection();
     const [denseResult, sparse] = await Promise.all([
       this.embeddings.embedQuery(input.query),
       buildBrvinSparseVector(input.query),
@@ -644,6 +647,9 @@ export class BrvinQdrantHybridPilot {
         const pointId = String(point.id ?? payload.chunk_id ?? itemKey);
         if (!pointId) return [];
         const chunkId = typeof payload.chunk_id === "string" ? payload.chunk_id : undefined;
+        const textPreview = typeof payload.chunk_text === "string"
+          ? payload.chunk_text.replace(/\s+/gu, " ").trim().slice(0, 360)
+          : "";
         return [{
           rank: index + 1,
           pointId,
@@ -651,6 +657,7 @@ export class BrvinQdrantHybridPilot {
           sourceId,
           pdfPage,
           score: Number.isFinite(point.score) ? Number(point.score) : 0,
+          textPreview,
         }];
       });
 
