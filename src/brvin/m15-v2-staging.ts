@@ -227,7 +227,8 @@ export async function persistM15V2AuthorizationReceipt(
     completedAt: number;
   },
 ): Promise<void> {
-  const db = assertDb(env);
+  const db = env.DB;
+  if (!db) throw new Error("M15 v2 staging requires its isolated D1 database.");
   const persisted = await db.prepare(
     "UPDATE m15_v2_authorization_runs SET status=?,result_json=?,completed_at=? WHERE id=? AND status='running'",
   ).bind(input.status, JSON.stringify(input.result), input.completedAt, input.runId).run();
