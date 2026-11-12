@@ -57,12 +57,12 @@ The completed product baseline includes:
 
 ## 4. Verified production snapshot
 
-**Latest live read-back: 12 November 2026, 12:39 UTC.** Core `parmar-ai`, private `brvin-service`, isolated `parmar-ai-m14-staging`, and downstream `brvin-teachers` are each at 100% of their current deployments. The 12 November paired Core release after PR #234 shipped the query-only v2 adapter code while production still selects Cloudflare AI Search; this was not a provider cutover.
+**Latest live read-back: 13 November 2026, 20:24 UTC.** Core `parmar-ai`, private `brvin-service`, isolated `parmar-ai-m14-staging`, and downstream `brvin-teachers` are each at 100% of their current deployments. The 13 November main-branch release after PR #237 deployed only the isolated M14/M15 staging Worker; the Core production-scope classifier skipped production deployment and verification. Both production Core Workers still select Cloudflare AI Search; this was not a provider cutover.
 
 | Worker | Environment | Version at 100% | Deployment |
 |---|---|---|---|
-| `parmar-ai` | production | `9d289364-a65d-4fa4-9df7-84f9418eeac2` | `fae0c117-5330-428d-b0cb-0ccb4798acc7` |
-| `brvin-service` | production | `fd1fb0c0-98f9-46a8-bf63-6b0f86167359` | `f1c1e8d7-953b-4c75-838c-45c9884f1380` |
+| `parmar-ai` | production | `5c55b8a6-151b-4d21-8748-30d221507923` | `91a074f0-241f-4c29-b18f-f5f2eeb1fd1c` |
+| `brvin-service` | production | `e59d976e-07ba-4974-b1bd-56a9a48e5555` | `e0a86373-d290-4259-aa99-edc62308095b` |
 
 Cloudflare settings read-back confirms:
 
@@ -76,7 +76,7 @@ Cloudflare settings read-back confirms:
 
 | Isolated / consumer Worker | Environment | Version at 100% | Deployment |
 |---|---|---|---|
-| `parmar-ai-m14-staging` | staging | `ffbaa06f-e2ca-46e4-8e82-7516c6738555` | `f4878038-ca99-477a-93f2-2de0c7b1f219` |
+| `parmar-ai-m14-staging` | staging | `0ee8d49d-7fd2-4961-963a-ffa033ec357b` | `8d650d72-6ad5-4ca6-8c6b-8100ba8d1069` |
 | `brvin-teachers` | production | `68d6694c-6371-4cae-8a25-4af40ca15706` | `31ff2a01-b0f4-4be8-92d3-63e2d91adddf` |
 
 Teachers remains a private v2 consumer. Its production Worker has only the Core `BRVIN_MANAGEMENT` (`BrvinTeachersManagementApi`) and `BRVIN_SERVICE` (`BrvinRetrievalApi`) Service Bindings; it has no Qdrant/Vertex provider credentials, SDKs or direct provider access. No Teachers runtime or Worker deployment changed during this M15 continuation.
