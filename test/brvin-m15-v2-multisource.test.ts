@@ -114,14 +114,14 @@ describe("M15 multi-source Core v2 staging evaluation", () => {
     await expect(runM15MultiSourceCoreV2Evaluation(env))
       .rejects.toThrow("isolated M15 staging D1 database is missing");
   });
-  it("sends physical PDF page metadata as a number matching the AI Search schema", () => {
+  it("sends string-valued metadata accepted by the AI Search Items binding while preserving the numeric schema", () => {
     expect(m15MultiSourcePageMetadata(3)).toEqual({
       source_id: BRVIN_M15_SECOND_SOURCE.sourceId,
       project_id: "890f6317-69f4-4391-aae6-556155ed0d12",
-      pdf_page: 3,
+      pdf_page: "3",
       benchmark: "brvin-m15-multisource-v1",
     });
-    expect(typeof m15MultiSourcePageMetadata(1).pdf_page).toBe("number");
+    expect(typeof m15MultiSourcePageMetadata(1).pdf_page).toBe("string");
     expect(() => m15MultiSourcePageMetadata(0)).toThrow();
     expect(() => m15MultiSourcePageMetadata(4)).toThrow();
   });
