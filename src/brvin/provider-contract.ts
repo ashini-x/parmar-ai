@@ -1,4 +1,6 @@
-import type { AiSearchInstance } from "../config/env";
+import type { AiSearchInstance, Env } from "../config/env";
+import { BrvinQdrantHybridPilot } from "./qdrant-hybrid-pilot";
+import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
 
 /**
  * Core-owned retrieval port. Providers return candidates only; authorization,
@@ -22,6 +24,8 @@ export interface RetrievalCandidate {
 }
 
 export interface RetrievalQuery {
+  /** D1-authorized project identity, supplied by Core and never by a consumer. */
+  projectId: string;
   query: string;
   sourcePrefixes: string[];
   maxResults: number;
@@ -77,19 +81,113 @@ export interface EmbeddingProvider {
 }
 
 /**
- * The currently deployed provider is the only selectable implementation in
- * M13. Selection is a server-side Worker setting, never a consumer request.
+ * Provider selection is server-side only. Qdrant is query-only in the M15
+ * integration gate; writes/deletes remain blocked until the complete durable
+ * corpus lifecycle is migrated. The production default remains AI Search.
  */
+export interface BrvinQdrantRetrievalEnv {
+  GCP_PROJECT_ID?: string;
+  GCP_CLIENT_EMAIL?: string;
+  GCP_PRIVATE_KEY?: string;
+  BRVIN_M14_VERTEX_LOCATION?: string;
+  BRVIN_M14_VERTEX_MODEL?: string;
+  BRVIN_M14_EMBEDDING_DIMENSIONS?: string;
+  BRVIN_M14_QDRANT_URL?: string;
+  BRVIN_M14_QDRANT_API_KEY?: string;
+  BRVIN_M14_QDRANT_COLLECTION?: string;
+  BRVIN_M15_BENCHMARK_QDRANT_COLLECTION?: string;
+}
+
 export function createBrvinRetrievalProvider(
   providerId: string | undefined,
-  instance: AiSearchInstance,
+  instance: AiSearchInstance | undefined,
+  qdrantEnv?: BrvinQdrantRetrievalEnv,
 ): RetrievalProvider {
   const selected = providerId?.trim().toLowerCase() || "cloudflare-ai-search";
-  if (selected !== "cloudflare-ai-search") {
-    throw new Error("The configured BRVIN retrieval provider is not implemented in this release.");
+  if (selected === "cloudflare-ai-search") {
+    if (!instance) throw new Error("Cloudflare AI Search is not configured for BRVIN retrieval.");
+    return new CloudflareAiSearchRetrievalProvider(instance);
+  }
+  if (selected === "qdrant-vertex") {
+    if (!qdrantEnv) throw new Error("The server-side Qdrant/Vertex retrieval configuration is missing.");
+    const dimensions = Number(qdrantEnv.BRVIN_M14_EMBEDDING_DIMENSIONS);
+    const pilot = new BrvinQdrantHybridPilot({
+      url: qdrantEnv.BRVIN_M14_QDRANT_URL,
+      apiKey: qdrantEnv.BRVIN_M14_QDRANT_API_KEY,
+      collection: qdrantEnv.BRVIN_M15_BENCHMARK_QDRANT_COLLECTION?.trim() ||
+        qdrantEnv.BRVIN_M14_QDRANT_COLLECTION,
+      dimensions,
+    }, new BrvinVertexEmbeddingProvider(qdrantEnv as Env));
+    return new QdrantVertexReadOnlyRetrievalProvider(pilot);
+  }
+  throw new Error("The configured BRVIN retrieval provider is not implemented in this release.");
+}
+
+class QdrantVertexReadOnlyRetrievalProvider implements RetrievalProvider {
+  readonly providerId = "qdrant-vertex";
+
+  constructor(private readonly pilot: BrvinQdrantHybridPilot) {}
+
+  private readOnlyError(): Error {
+    return new Error(
+      "The M15 Qdrant provider is query-only; corpus upsert and delete operations remain disabled.",
+    );
   }
 
-  return new CloudflareAiSearchRetrievalProvider(instance);
+  async findExisting(_key: string): Promise<{ status: string } | null> {
+    throw this.readOnlyError();
+  }
+
+  async upsert(_document: RetrievalDocument): Promise<{ status: string }> {
+    throw this.readOnlyError();
+  }
+
+  async query(input: RetrievalQuery): Promise<RetrievalCandidate[]> {
+    const sourceIds = [...new Set(input.sourcePrefixes.flatMap((prefix) => {
+      const match = prefix.match(/^brvin\\/books\\/([^/]+)\\/pages\\/$/u);
+      return match ? [match[1]] : [];
+    }))];
+    // An empty D1 allowlist must stop before Vertex embedding or Qdrant I/O.
+    if (!sourceIds.length) return [];
+    const limit = Math.max(1, Math.min(50, Math.trunc(input.maxResults)));
+    const candidates = await this.pilot.query({
+      projectId: input.projectId,
+      authorizedSourceIds: sourceIds,
+      query: input.query,
+      limit,
+      prefetchLimit: Math.max(limit, Math.min(100, limit * 3)),
+      ensureCollection: false,
+    });
+    return candidates.map((candidate) => ({
+      id: candidate.id,
+      itemKey: candidate.itemKey,
+      text: candidate.text,
+      score: candidate.score,
+      scoringDetails: { fusionMethod: "rrf" },
+      metadata: {
+        ...(candidate.metadata ?? {}),
+        pdfPage: candidate.pdfPage,
+        sourceId: candidate.sourceId,
+        contentTypes: candidate.contentTypes,
+      },
+    }));
+  }
+
+  async deleteByKey(_key: string): Promise<void> {
+    throw this.readOnlyError();
+  }
+
+  async deleteSource(_itemKeys: readonly string[]): Promise<void> {
+    throw this.readOnlyError();
+  }
+
+  async health(): Promise<RetrievalProviderHealth> {
+    try {
+      return await this.pilot.health();
+    } catch {
+      return { providerId: this.providerId, ok: false, version: "m15-query-only-dense-sparse-rrf" };
+    }
+  }
 }
 
 class CloudflareAiSearchRetrievalProvider implements RetrievalProvider {
