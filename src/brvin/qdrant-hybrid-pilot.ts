@@ -679,6 +679,20 @@ export class BrvinQdrantHybridPilot {
     );
   }
 
+  /** Read-only exact count used to prove that revoked staging grants do not delete vectors. */
+  async countSourcePoints(projectId: string, sourceId: string): Promise<number> {
+    const response = await this.requestJson<{ count?: number }>(
+      "/collections/" + encodeURIComponent(this.collection) + "/points/count",
+      "POST",
+      { filter: payloadFilter(projectId, [sourceId]), exact: true },
+    );
+    const count = Number(response?.count);
+    if (!Number.isSafeInteger(count) || count < 0) {
+      throw new Error("Qdrant returned an invalid exact source-point count.");
+    }
+    return count;
+  }
+
   async health(): Promise<{ providerId: string; ok: boolean; version?: string }> {
     const info = await this.requestJson<QdrantCollectionInfo>(
       "/collections/" + encodeURIComponent(this.collection),
