@@ -11,7 +11,7 @@ import {
 import { BrvinQdrantHybridPilot, type BrvinM14ComponentRankings } from "./qdrant-hybrid-pilot";
 import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
 import { runBrvinM15ShadowBenchmark } from "./m15-shadow-benchmark";
-import { runBrvinM15V2AuthorizationCheck, runBrvinM15V2MultiSourceCheck } from "./m15-v2-staging";
+import { runBrvinM15V2AuthorizationCheck } from "./m15-v2-staging";
 import { getGoogleAccessToken } from "../auth/google";
 import type {
   FatmanImportJob,
@@ -190,7 +190,6 @@ function m14AdminPage(): Response {
     </div>
     <button id="runM15Shadow" class="secondary" type="button" disabled>Run AI Search vs Qdrant shadow benchmark</button>
     <button id="runM15V2Authorization" class="secondary" type="button" disabled>Run Core v2 Qdrant authorization + revocation proof</button>
-    <button id="runM15V2MultiSource" class="secondary" type="button" disabled>Prepare second source + run multi-source Core v2 comparison</button>
     <div id="result" class="status muted" role="status" aria-live="polite">No recovery or backfill action has been started.</div>
     <details>
       <summary>Security and retry information</summary>
@@ -213,7 +212,6 @@ function m14AdminPage(): Response {
   const diagnoseQdrantButton = document.getElementById("diagnoseQdrant");
   const runM15ShadowButton = document.getElementById("runM15Shadow");
   const runM15V2AuthorizationButton = document.getElementById("runM15V2Authorization");
-  const runM15V2MultiSourceButton = document.getElementById("runM15V2MultiSource");
   const healthBox = document.getElementById("health");
   const resultBox = document.getElementById("result");
 
@@ -233,8 +231,6 @@ function m14AdminPage(): Response {
       runButton.dataset.m15ShadowReady !== "true";
     runM15V2AuthorizationButton.disabled = !canAuthenticate || !ready ||
       runButton.dataset.m15V2Ready !== "true";
-    runM15V2MultiSourceButton.disabled = !canAuthenticate || !ready ||
-      runButton.dataset.m15V2MultiSourceReady !== "true";
     rebuildButton.disabled = !canAuthenticate || !confirmOcrInput.checked || !ready ||
       ["submitting", "running", "completed", "failed", "submission_uncertain"].includes(ocrStatus);
     runButton.disabled = !confirmInput.checked || !canAuthenticate || !ready || !ocrReady;
@@ -274,8 +270,6 @@ function m14AdminPage(): Response {
       runButton.dataset.m15ShadowReady = m15ShadowReady ? "true" : "false";
       const m15V2Ready = ready && data.m15V2Configured?.ready === true;
       runButton.dataset.m15V2Ready = m15V2Ready ? "true" : "false";
-      const m15V2MultiSourceReady = ready && data.m15V2Configured?.multiSourceReady === true;
-      runButton.dataset.m15V2MultiSourceReady = m15V2MultiSourceReady ? "true" : "false";
       healthBox.className = "status " + (!ready ? "bad" : providerReady ? "good" : "muted");
       healthBox.textContent = !ready
         ? "Staging is not ready. Check the Worker health response and complete any missing base configuration before continuing.\n" + JSON.stringify(data, null, 2)
@@ -498,28 +492,6 @@ function m14AdminPage(): Response {
       runM15V2AuthorizationButton.textContent = "Core v2 authorization + revocation proof passed";
     } else {
       runM15V2AuthorizationButton.textContent = "Run Core v2 Qdrant authorization + revocation proof";
-    }
-    refreshButton();
-  });
-  runM15V2MultiSourceButton.addEventListener("click", async () => {
-    refreshButton();
-    if (runM15V2MultiSourceButton.disabled) return;
-    runM15V2MultiSourceButton.disabled = true;
-    runM15V2MultiSourceButton.textContent = "Preparing second source…";
-    const result = await authenticatedRequest(
-      "/admin/m15/v2/multisource-check",
-      "POST",
-      { confirmSourceId: "01238b3a-9902-4a42-90b4-574048ee4f00" },
-      "Reusing the existing immutable three-page M14 OCR/chunk manifests. This indexes them only into the isolated M15 Qdrant collection and separate M15 AI Search instance, then queries both sources through the real Core v2 service. No PDF upload, Vision OCR, production or Teachers changes. If AI Search is still processing, re-enter the token and click this action again."
-    );
-    if (result?.response.ok && result.data.ok === true && result.data.complete === true) {
-      runM15V2MultiSourceButton.textContent = result.data.ok
-        ? "Two-source Core v2 comparison completed"
-        : "Two-source comparison completed with failed checks";
-    } else if (result?.response.ok && result.data.ok === true && result.data.complete === false) {
-      runM15V2MultiSourceButton.textContent = "Continue second-source indexing (re-enter token)";
-    } else {
-      runM15V2MultiSourceButton.textContent = "Prepare second source + run multi-source Core v2 comparison";
     }
     refreshButton();
   });
@@ -1714,7 +1686,6 @@ export async function handleM14StagingRequest(
   diagnoseQdrant: typeof runM14QdrantRetrievalDiagnostics = runM14QdrantRetrievalDiagnostics,
   runM15Shadow: typeof runBrvinM15ShadowBenchmark = runBrvinM15ShadowBenchmark,
   runM15V2AuthCheck: typeof runBrvinM15V2AuthorizationCheck = runBrvinM15V2AuthorizationCheck,
-  runM15V2MultiSource: typeof runBrvinM15V2MultiSourceCheck = runBrvinM15V2MultiSourceCheck,
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/admin/m15/benchmark" ||
@@ -1757,11 +1728,6 @@ export async function handleM14StagingRequest(
           env.BRVIN_M14_VERTEX_LOCATION && env.BRVIN_M14_VERTEX_MODEL &&
           env.BRVIN_M14_EMBEDDING_DIMENSIONS && env.BRVIN_M14_QDRANT_URL &&
           env.BRVIN_M14_QDRANT_API_KEY && env.BRVIN_M15_BENCHMARK_QDRANT_COLLECTION),
-        multiSourceReady: Boolean(env.DB && env.GCP_PROJECT_ID && env.GCP_CLIENT_EMAIL && env.GCP_PRIVATE_KEY &&
-          env.BRVIN_M14_VERTEX_LOCATION && env.BRVIN_M14_VERTEX_MODEL &&
-          env.BRVIN_M14_EMBEDDING_DIMENSIONS && env.BRVIN_M14_QDRANT_URL &&
-          env.BRVIN_M14_QDRANT_API_KEY && env.BRVIN_M15_BENCHMARK_QDRANT_COLLECTION &&
-          env.BRVIN_M15_BENCHMARK_AI_SEARCH),
       },
       // Do not expose credential values, bucket names or source-document content.
     });
@@ -1785,7 +1751,6 @@ export async function handleM14StagingRequest(
   const isQdrantDiagnostics = url.pathname === "/admin/m14/qdrant/diagnostics";
   const isM15Shadow = url.pathname === "/admin/m15/shadow/evaluate";
   const isM15V2Authorization = url.pathname === "/admin/m15/v2/authorization-check";
-  const isM15V2MultiSource = url.pathname === "/admin/m15/v2/multisource-check";
   const isBackfill = url.pathname === "/admin/m14/backfill";
   if (!isDiagnostics && !isVisionRebuild && !isVisionStatus && !isCorpusVerify &&
       !isQdrantIndex && !isQdrantEvaluate && !isQdrantDiagnostics && !isM15Shadow &&
@@ -1801,7 +1766,6 @@ export async function handleM14StagingRequest(
       (isQdrantDiagnostics && request.method !== "POST") ||
       (isM15Shadow && request.method !== "POST") ||
       (isM15V2Authorization && request.method !== "POST") ||
-      (isM15V2MultiSource && request.method !== "POST") ||
       (isBackfill && request.method !== "POST")) {
     return json({ ok: false, error: "method_not_allowed" }, 405);
   }
@@ -1840,31 +1804,6 @@ export async function handleM14StagingRequest(
     try {
       const result = await runM15V2AuthCheck(env);
       return json(result, result.ok ? 200 : 502);
-    } catch (error) {
-      return json({ ok: false, error: safeError(error) }, 502);
-    }
-  }
-  if (isM15V2MultiSource) {
-    let payload: unknown;
-    try {
-      payload = await request.json();
-    } catch {
-      return json({ ok: false, error: "invalid_json" }, 400);
-    }
-    if (!payload || typeof payload !== "object" ||
-        (payload as { confirmSourceId?: unknown }).confirmSourceId !== PILOT_SOURCE_ID) {
-      return json({ ok: false, error: "m15_multisource_confirmation_mismatch" }, 400);
-    }
-    if (!env.DB || !env.GCP_PROJECT_ID || !env.GCP_CLIENT_EMAIL || !env.GCP_PRIVATE_KEY ||
-        !env.BRVIN_M14_VERTEX_LOCATION || !env.BRVIN_M14_VERTEX_MODEL ||
-        !env.BRVIN_M14_EMBEDDING_DIMENSIONS || !env.BRVIN_M14_QDRANT_URL ||
-        !env.BRVIN_M14_QDRANT_API_KEY || !env.BRVIN_M15_BENCHMARK_QDRANT_COLLECTION ||
-        !env.BRVIN_M15_BENCHMARK_AI_SEARCH || !env.BRVIN_M14_CORPUS_BUCKET) {
-      return json({ ok: false, error: "m15_multisource_configuration_incomplete" }, 503);
-    }
-    try {
-      const result = await runM15V2MultiSource(env);
-      return json(result, result.complete === false ? 202 : result.ok ? 200 : 502);
     } catch (error) {
       return json({ ok: false, error: safeError(error) }, 502);
     }
