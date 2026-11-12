@@ -8,6 +8,7 @@ import {
   BRVIN_M15_STAGING_ENVIRONMENT_ID,
   BRVIN_M15_STAGING_PROJECT_ID,
   BRVIN_M15_STAGING_SOURCE_ID,
+  BRVIN_M15_STAGING_SOURCE_SHA256,
 } from "./m15-v2-staging";
 
 export const BRVIN_M15_SECOND_SOURCE = {
@@ -42,6 +43,10 @@ export interface M15MultiSourceCase {
   expectedLocations: M15ExpectedLocation[];
   expectedNoMatch?: boolean;
 }
+
+export const M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS = [
+  "MS01", "MS02", "MS03", "MS04", "MN01",
+] as const;
 
 export const M15_MULTI_SOURCE_QUERY_SUITE: readonly M15MultiSourceCase[] = [
   {
@@ -416,6 +421,120 @@ export async function prepareBrvinM15MultiSourceCorpus(
   };
 }
 
+export async function runM15MultiSourceQdrantDiagnostics(
+  env: BrvinM15MultiSourceEnv,
+): Promise<Record<string, unknown>> {
+  assertStaging(env);
+  const expectedIds = new Set([
+    BRVIN_M15_STAGING_SOURCE_ID,
+    BRVIN_M15_SECOND_SOURCE.sourceId,
+  ]);
+  const registry = await env.DB!.prepare(
+    "SELECT b.id,b.title,b.source_sha256,b.page_count,b.indexed_pages,b.status " +
+    "FROM brvin_books b JOIN brvin_project_books pb ON pb.book_id=b.id " +
+    "WHERE pb.project_id=? ORDER BY b.id",
+  ).bind(BRVIN_M15_STAGING_PROJECT_ID).all<{
+    id: string; title: string; source_sha256: string; page_count: number; indexed_pages: number; status: string;
+  }>();
+  const expectedHashes = new Map<string, string>([
+    [BRVIN_M15_STAGING_SOURCE_ID, BRVIN_M15_STAGING_SOURCE_SHA256],
+    [BRVIN_M15_SECOND_SOURCE.sourceId, BRVIN_M15_SECOND_SOURCE.sourcePdfSha256],
+  ]);
+  const expectedPages = new Map<string, number>([
+    [BRVIN_M15_STAGING_SOURCE_ID, 8],
+    [BRVIN_M15_SECOND_SOURCE.sourceId, BRVIN_M15_SECOND_SOURCE.pageCount],
+  ]);
+  const readySources = (registry.results ?? []).filter((source) =>
+    source.status === "ready" && Number(source.indexed_pages) === Number(source.page_count));
+  if (readySources.length !== 2 || readySources.some((source) =>
+      !expectedIds.has(source.id) ||
+      source.source_sha256.toLowerCase() !== expectedHashes.get(source.id) ||
+      Number(source.page_count) !== expectedPages.get(source.id))) {
+    throw new Error("The read-only Qdrant diagnostic requires the exact fingerprint-pinned two-source M15 project inventory in READY state.");
+  }
+  const checkpoint = await env.DB!.prepare(
+    "SELECT project_id,source_sha256,generation_id,page_count,chunk_count,qdrant_status,qdrant_point_count,ai_search_status,status " +
+    "FROM m15_v2_multisource_sources WHERE source_id=? LIMIT 1",
+  ).bind(BRVIN_M15_SECOND_SOURCE.sourceId).first<{
+    project_id: string; source_sha256: string; generation_id: string; page_count: number; chunk_count: number;
+    qdrant_status: string; qdrant_point_count: number; ai_search_status: string; status: string;
+  }>();
+  if (!checkpoint || checkpoint.project_id !== BRVIN_M15_STAGING_PROJECT_ID ||
+      checkpoint.source_sha256.toLowerCase() !== BRVIN_M15_SECOND_SOURCE.sourcePdfSha256 ||
+      checkpoint.generation_id !== BRVIN_M15_SECOND_SOURCE.generationId ||
+      Number(checkpoint.page_count) !== BRVIN_M15_SECOND_SOURCE.pageCount ||
+      Number(checkpoint.chunk_count) !== 7 ||
+      checkpoint.qdrant_status !== "ready" || Number(checkpoint.qdrant_point_count) !== 7 ||
+      checkpoint.ai_search_status !== "ready" || checkpoint.status !== "ready") {
+    throw new Error("The immutable second-source Qdrant and AI Search checkpoints must remain READY before diagnostics.");
+  }
+
+  const usageBefore = await queryUsage(env);
+  const pilot = new BrvinQdrantHybridPilot({
+    url: required(env.BRVIN_M14_QDRANT_URL, "BRVIN_M14_QDRANT_URL"),
+    apiKey: required(env.BRVIN_M14_QDRANT_API_KEY, "BRVIN_M14_QDRANT_API_KEY"),
+    collection: required(env.BRVIN_M15_BENCHMARK_QDRANT_COLLECTION, "BRVIN_M15_BENCHMARK_QDRANT_COLLECTION"),
+    dimensions: Number(required(env.BRVIN_M14_EMBEDDING_DIMENSIONS, "BRVIN_M14_EMBEDDING_DIMENSIONS")),
+  }, new BrvinVertexEmbeddingProvider(env));
+
+  const diagnosticCases = M15_MULTI_SOURCE_QUERY_SUITE.filter((item) =>
+    M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS.includes(item.id as typeof M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS[number]));
+  if (diagnosticCases.length !== M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS.length) {
+    throw new Error("The pinned M15 Qdrant diagnostic query suite is incomplete.");
+  }
+  const results: Array<Record<string, unknown>> = [];
+  for (const item of diagnosticCases) {
+    const ranks = await pilot.queryComponentRanks({
+      projectId: BRVIN_M15_STAGING_PROJECT_ID,
+      authorizedSourceIds: [...expectedIds],
+      query: item.query,
+      limit: 15,
+      ensureCollection: false,
+    });
+    const expectedHits = (component: "dense" | "sparse") => item.expectedLocations.filter((target) =>
+      ranks[component].some((rank) =>
+        rank.sourceId === target.sourceId && rank.pdfPage === target.pdfPage));
+    results.push({
+      id: item.id,
+      query: item.query,
+      expectedLocations: item.expectedLocations,
+      expectedNoMatch: item.expectedNoMatch === true,
+      dense: ranks.dense,
+      sparse: ranks.sparse,
+      denseExpectedLocationHits: expectedHits("dense"),
+      sparseExpectedLocationHits: expectedHits("sparse"),
+    });
+  }
+  const usageAfter = await queryUsage(env);
+  return {
+    ok: usageBefore === usageAfter,
+    benchmark: "brvin-m15-qdrant-component-rank-diagnostic",
+    environment: "staging",
+    projectId: BRVIN_M15_STAGING_PROJECT_ID,
+    sourceIds: readySources.map((source) => source.id),
+    queryCount: results.length,
+    componentQueryCount: results.length * 2,
+    vertexQueryEmbeddingCount: results.length,
+    quota: {
+      before: usageBefore,
+      after: usageAfter,
+      reservations: usageAfter - usageBefore,
+    },
+    results,
+    sideEffects: {
+      qdrantPointsUpserted: 0,
+      qdrantPointsDeleted: 0,
+      aiSearchItemsUploaded: 0,
+      aiSearchItemsDeleted: 0,
+      sourceOrOcrChanged: false,
+      productionD1Accessed: false,
+      productionProviderChanged: false,
+    },
+    interpretation: "Read-only component diagnostics for the fixed five-case M15 suite. Dense similarity and sparse BM25 scores are separate component scales and must not be compared directly or treated as confidence probabilities. The action skips Qdrant collection preparation and D1 application-query quota reservation; Vertex query embeddings and Qdrant reads still incur provider usage. Use the component ranks and source excerpts to diagnose coverage/no-match behavior before selecting any relevance gate or RRF weight change.",
+  };
+}
+
+
 export function m15MultiSourcePageMetadata(page: number): Record<string, string> {
   if (!Number.isSafeInteger(page) || page < 1 || page > BRVIN_M15_SECOND_SOURCE.pageCount) {
     throw new Error("A valid physical PDF page for the pinned M15 second source is required.");
@@ -748,15 +867,17 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
 <button id="prepare" type="button" disabled>Prepare second source from immutable manifests</button>
 <p class="small">If AI Search returns queued/running, re-enter the same token and repeat this button. Qdrant uses deterministic point IDs and a persisted checkpoint, so completed chunks are not needlessly re-embedded.</p>
 <button id="evaluate" class="secondary" type="button" disabled>Run paired Core v2 multi-source evaluation</button>
+<button id="diagnose" class="secondary" type="button" disabled>Diagnose Qdrant dense/sparse component ranks</button>
+<p class="small">Read-only follow-up for the MS01–MS04 positives and MN01 no-match case. It returns the top component ranks and short passage previews, skips Qdrant collection setup, makes no application-query quota reservations, and does not change either index. Vertex embeddings and Qdrant reads still incur provider usage.</p>
 <div id="progress" class="status" role="status" aria-live="polite">No multi-source action has been started.</div>
 <div class="notice small">The evaluation performs five fixed read-only queries through the actual Core v2 resolver: one run against the isolated M15 AI Search binding and one against Qdrant + Vertex for each query. Both use the same D1 project/source grants and quota authority. The run reserves ten staging query units; it does not generate Gemini answers or modify either index.</div>
 <p class="small"><a href="/admin/m15/benchmark" style="color:#8bb7ff">Back to M15 benchmark operator</a> · <a href="/admin/m14" style="color:#8bb7ff">M14 staging operator</a></p>
 </main>
 <script>
 (() => {
- const token=document.getElementById("token"),prepare=document.getElementById("prepare"),evaluate=document.getElementById("evaluate");
+ const token=document.getElementById("token"),prepare=document.getElementById("prepare"),evaluate=document.getElementById("evaluate"),diagnose=document.getElementById("diagnose");
  const progress=document.getElementById("progress");let ready=false;
- function refresh(){const valid=token.value.trim().length>=32;prepare.disabled=!valid;evaluate.disabled=!valid||!ready;}
+ function refresh(){const valid=token.value.trim().length>=32;prepare.disabled=!valid;evaluate.disabled=!valid||!ready;diagnose.disabled=!valid;}
  token.addEventListener("input",refresh);
  async function call(path){
    let secret=token.value.trim();token.value="";refresh();
@@ -783,6 +904,15 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
    progress.className="status";progress.textContent="Running the real Core v2 resolver against both staging providers. This will consume ten M15 staging quota reservations…";
    try{
      const data=await call("/admin/m15/benchmark/multi-source/evaluate");
+     progress.className="status "+(data.ok?"good":"bad");progress.textContent=JSON.stringify(data,null,2);
+   }catch(error){progress.className="status bad";progress.textContent=error.message;}
+   refresh();
+ });
+ diagnose.addEventListener("click",async()=>{
+   if(diagnose.disabled)return;diagnose.disabled=true;
+   progress.className="status";progress.textContent="Reading separate Qdrant dense/sparse component ranks for the fixed M15 queries. No collection setup or project quota reservation will occur…";
+   try{
+     const data=await call("/admin/m15/benchmark/multi-source/diagnose");
      progress.className="status "+(data.ok?"good":"bad");progress.textContent=JSON.stringify(data,null,2);
    }catch(error){progress.className="status bad";progress.textContent=error.message;}
    refresh();

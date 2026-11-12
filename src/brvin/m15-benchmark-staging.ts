@@ -16,6 +16,7 @@ import {
   brvinM15MultiSourceOperatorPage,
   prepareBrvinM15MultiSourceCorpus,
   runM15MultiSourceCoreV2Evaluation,
+  runM15MultiSourceQdrantDiagnostics,
 } from "./m15-v2-multisource";
 
 const GCS_API = "https://storage.googleapis.com";
@@ -2448,12 +2449,14 @@ export async function handleM15BenchmarkStagingRequest(
       url.pathname !== "/admin/m15/benchmark/answers/run" &&
       url.pathname !== "/admin/m15/benchmark/answers/formula-audit/run" &&
       url.pathname !== "/admin/m15/benchmark/multi-source/prepare" &&
-      url.pathname !== "/admin/m15/benchmark/multi-source/evaluate") {
+      url.pathname !== "/admin/m15/benchmark/multi-source/evaluate" &&
+      url.pathname !== "/admin/m15/benchmark/multi-source/diagnose") {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if (!["GET","POST"].includes(request.method)) return json({ ok: false, error: "method_not_allowed" }, 405);
   if ((url.pathname === "/admin/m15/benchmark/multi-source/prepare" ||
-       url.pathname === "/admin/m15/benchmark/multi-source/evaluate") && request.method !== "POST") {
+       url.pathname === "/admin/m15/benchmark/multi-source/evaluate" ||
+       url.pathname === "/admin/m15/benchmark/multi-source/diagnose") && request.method !== "POST") {
     return json({ ok: false, error: "method_not_allowed" }, 405);
   }
   if (!await authenticated(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
@@ -2470,6 +2473,14 @@ export async function handleM15BenchmarkStagingRequest(
   if (url.pathname === "/admin/m15/benchmark/multi-source/evaluate" && request.method === "POST") {
     try {
       return json(await runM15MultiSourceCoreV2Evaluation(env));
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
+  }
+
+  if (url.pathname === "/admin/m15/benchmark/multi-source/diagnose" && request.method === "POST") {
+    try {
+      return json(await runM15MultiSourceQdrantDiagnostics(env));
     } catch (error) {
       return json({ ok: false, error: safeError(error) }, 502);
     }

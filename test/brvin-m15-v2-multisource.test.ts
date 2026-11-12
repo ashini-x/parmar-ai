@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BRVIN_M15_SECOND_SOURCE,
   M15_MULTI_SOURCE_QUERY_SUITE,
+  M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS,
   m15MultiSourcePageKey,
   m15MultiSourcePageMetadata,
   prepareBrvinM15MultiSourceCorpus,
@@ -11,6 +12,14 @@ import {
 import { BRVIN_M15_STAGING_SOURCE_ID } from "../src/brvin/m15-v2-staging";
 
 describe("M15 multi-source Core v2 staging evaluation", () => {
+  it("pins the bounded Qdrant component diagnostic to the five existing paired cases", () => {
+    expect(M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS).toEqual(["MS01", "MS02", "MS03", "MS04", "MN01"]);
+    expect(M15_MULTI_SOURCE_QUERY_SUITE.map((item) => item.id)).toEqual(
+      M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS,
+    );
+    expect(M15_MULTI_SOURCE_QUERY_SUITE.find((item) => item.id === "MN01")?.expectedNoMatch).toBe(true);
+  });
+
   it("pins two distinct Physics sources with their exact physical page ranges", () => {
     expect(BRVIN_M15_SECOND_SOURCE).toMatchObject({
       sourceId: "01238b3a-9902-4a42-90b4-574048ee4f00",

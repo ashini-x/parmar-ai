@@ -133,6 +133,23 @@ Qdrant/Vertex was faster in this small sequential sample, but n=5 is not a repre
 
 **Subgate decision:** two-source authorization, provider completion, source discovery, provenance and quota accounting **PASSED**. Comparative retrieval-quality evidence is mixed: AI Search has higher distinct-page coverage and clean no-match abstention; Qdrant is faster but misses M15 page 2 in MS03 and emits three unrelated candidates on MN01. Do not declare an overall provider winner or authorize production cutover based on this receipt alone.
 
+## Next M15 action — Qdrant component-rank diagnosis
+
+The paired receipt shows a speed/quality trade-off, but it does not expose the separate dense and sparse ranks that produced Qdrant's final RRF list. Do **not** set a fixed RRF score cutoff: RRF values are ranking values, not calibrated relevance probabilities, and a cutoff chosen from one negative query could remove a relevant low-ranked passage.
+
+The protected multi-source operator now includes **Diagnose Qdrant dense/sparse component ranks** at `POST /admin/m15/benchmark/multi-source/diagnose`. Use the same staging page and enter `BRVIN_M14_ADMIN_TOKEN` locally. It runs the five pinned cases (MS01–MS04 and MN01) against the exact two READY source IDs from the isolated M15 project. For each query it returns the top 15 dense and sparse component ranks separately, with physical page, source, point/chunk identity, component score and a short passage preview. It also reports expected-location hits for each component.
+
+**Safety and accounting:** the handler validates the two D1 project-mapped READY sources and the READY second-source checkpoint; it applies the exact M15 project/source allowlist to both Qdrant component calls; it skips collection preparation/index checks; it does not call the normal Core v2 resolver or reserve application query quota; and it does not write D1, Qdrant points, AI Search items, source/OCR data or production state. It makes five Vertex query-embedding requests and ten Qdrant component reads (dense + sparse per query), so provider usage/cost still applies. November project query usage must remain unchanged.
+
+**Diagnostic questions to answer from the JSON:**
+- Is the expected M15 page 2 for MS03 present in either component's top 15, and at what rank?
+- Do MS03's M15 page 3 / page 1 candidates dominate dense, sparse or both?
+- For MN01, do the three unrelated candidates appear in dense, sparse or both, and at what component ranks?
+- Which exact terms/chunks explain any sparse matches on the no-match case?
+- Does MS02's handout page 3 remain present in component candidates even though AI Search missed it in the paired resolver run?
+
+Use these results to design a bounded feature/weight/rerank change and add regression cases for MS01–MS04 plus the MN01 abstention control. Retest positives and negatives together. Do not introduce an uncalibrated score threshold or claim a quality fix until the receipt demonstrates that positive recall did not regress and no-match candidates are reduced. Keep production on AI Search.
+
 ## Side-effect boundary
 
 Expected staging-only changes: one `brvin_books` row for the second source, one `brvin_project_books` mapping, the M15 multi-source checkpoint/receipt tables, seven deterministic points in the dedicated M15 Qdrant collection, three page items in the separate M15 AI Search instance, and ten project quota reservations when evaluation is run.
