@@ -184,8 +184,9 @@ jobs:
           while IFS= read -r path; do
             case "$path" in
               # M14/M15 staging evaluator paths and unit-test-only files that do not
-              # change a deployed Worker bundle. Production source/config stays
-              # outside this allowlist; provider-contract edits require production CI.
+              # change a production-selected Worker bundle. The Qdrant provider adapter
+              # is query-only and is selected only by the M15 staging override; the
+              # production provider selector remains Cloudflare AI Search.
               # src/index.ts is also deliberately outside this list, so Telegram
               # stage instrumentation ships through the normal paired production
               # release and rollback gate after all validation passes.
