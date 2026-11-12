@@ -29,6 +29,16 @@ export type BrvinRetrievalEnv = Pick<Env, "DB"> &
     | "BRVIN_RERANKING_ENABLED"
     | "BRVIN_RERANKING_MODEL"
     | "BRVIN_RERANKING_MIN_SCORE"
+    | "GCP_PROJECT_ID"
+    | "GCP_CLIENT_EMAIL"
+    | "GCP_PRIVATE_KEY"
+    | "BRVIN_M14_VERTEX_LOCATION"
+    | "BRVIN_M14_VERTEX_MODEL"
+    | "BRVIN_M14_EMBEDDING_DIMENSIONS"
+    | "BRVIN_M14_QDRANT_URL"
+    | "BRVIN_M14_QDRANT_API_KEY"
+    | "BRVIN_M14_QDRANT_COLLECTION"
+    | "BRVIN_M15_BENCHMARK_QDRANT_COLLECTION"
     | "FATMAN_SEARCH"
     | "FATMAN_INSTANCE_NAME"
     | "FATMAN_MIN_SCORE"
@@ -385,11 +395,16 @@ export async function retrieveBrvinProjectContextForProject(
   resolvedSources?: BrvinSource[],
   requestedPageNumbers: number[] = [],
 ): Promise<BrvinProjectContext> {
+  const providerId = env.BRVIN_RETRIEVAL_PROVIDER?.trim().toLowerCase() || "cloudflare-ai-search";
   const searchNamespace = env.BRVIN_SEARCH ?? env.FATMAN_SEARCH;
   const searchInstanceName = env.BRVIN_SEARCH_INSTANCE ?? env.FATMAN_INSTANCE_NAME;
   const minScoreSetting = env.BRVIN_MIN_SCORE ?? env.FATMAN_MIN_SCORE;
-  if (!env.DB || !searchNamespace || !searchInstanceName?.trim()) {
-    throw new BrvinRetrievalError("BRVIN retrieval is not configured.");
+  if (!env.DB) throw new BrvinRetrievalError("BRVIN retrieval is not configured.");
+  if (providerId === "cloudflare-ai-search" && (!searchNamespace || !searchInstanceName?.trim())) {
+    throw new BrvinRetrievalError("Cloudflare AI Search is not configured for BRVIN retrieval.");
+  }
+  if (providerId !== "cloudflare-ai-search" && providerId !== "qdrant-vertex") {
+    throw new BrvinRetrievalError("The configured BRVIN retrieval provider is not implemented in this release.");
   }
 
   const normalizedQueries = normalizeQueries(queries);
@@ -411,10 +426,21 @@ export async function retrieveBrvinProjectContextForProject(
       throw new BrvinRetrievalError("A registered BRVIN search prefix is invalid.");
     }
     const prefixSources = [...sources].sort((a, b) => b.search_prefix.length - a.search_prefix.length);
-    const instance = searchNamespace.get(searchInstanceName.trim());
-    const provider = createBrvinRetrievalProvider(env.BRVIN_RETRIEVAL_PROVIDER, instance);
+    const instance = searchNamespace && searchInstanceName?.trim()
+      ? searchNamespace.get(searchInstanceName.trim())
+      : undefined;
+    const provider = createBrvinRetrievalProvider(
+      providerId,
+      instance,
+      env,
+    );
 
     if (pageNumbers.length) {
+      if (!instance) {
+        throw new BrvinRetrievalError(
+          "Explicit PDF-page retrieval requires the Cloudflare AI Search item store; the M15 Qdrant adapter is query-only.",
+        );
+      }
       const exact = await retrieveExplicitBookPages(instance, prefixSources, pageNumbers);
       if (exact.passages.length) {
         return {
@@ -435,6 +461,7 @@ export async function retrieveBrvinProjectContextForProject(
 
     const settled = await Promise.allSettled(normalizedQueries.map(async (query) => {
       const chunks = await provider.query({
+        projectId: project.id,
         query,
         sourcePrefixes: prefixes,
         maxResults: MAX_RESULTS_PER_QUERY,
@@ -500,7 +527,12 @@ export async function retrieveBrvinProjectContextForProject(
         // A cross-encoder evaluates semantic relevance, including paraphrases.
         // Apply the stricter lexical coverage guard only when no reranking score
         // is available (for disabled/legacy retrieval paths).
-        if (rerankingScore === undefined && !isBrvinPassageRelevant(searchResult.value.query, rawText)) continue;
+        const providerSuppliesHybridFusion = chunk.scoringDetails?.fusionMethod === "rrf";
+        if (
+          rerankingScore === undefined &&
+          !providerSuppliesHybridFusion &&
+          !isBrvinPassageRelevant(searchResult.value.query, rawText)
+        ) continue;
         const text = extractBrvinEvidenceExcerpt(searchResult.value.query, rawText, MAX_PASSAGE_CHARS);
         if (!text) continue;
 
