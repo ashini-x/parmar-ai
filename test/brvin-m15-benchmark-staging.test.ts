@@ -494,6 +494,8 @@ describe("M15 multi-source Core v2 operator routes", () => {
     expect(html).toContain("Multi-source Core v2 verification");
     expect(html).toContain("/admin/m15/benchmark/multi-source/prepare");
     expect(html).toContain("/admin/m15/benchmark/multi-source/evaluate");
+    expect(html).toContain("/admin/m15/benchmark/multi-source/diagnose");
+    expect(html).toContain("Diagnose Qdrant dense/sparse component ranks");
     expect(html).toContain("01238b3a-9902-4a42-90b4-574048ee4f00");
     expect(html).toContain("no PDF upload or Vision OCR request is made");
     expect(html).not.toContain(token);
@@ -503,6 +505,40 @@ describe("M15 multi-source Core v2 operator routes", () => {
       { ENVIRONMENT: "production", BRVIN_M14_PILOT_ENABLED: "true" } as never,
     );
     expect(production.status).toBe(404);
+  });
+
+  it("requires bearer authentication before allowing Qdrant component diagnostics", async () => {
+    const response = await handleM15BenchmarkStagingRequest(
+      new Request("https://staging.example/admin/m15/benchmark/multi-source/diagnose", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      }),
+      stagingEnv,
+    );
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ ok: false, error: "unauthorized" });
+  });
+
+  it("requires POST and the isolated D1 binding for Qdrant component diagnostics", async () => {
+    const wrongMethod = await handleM15BenchmarkStagingRequest(
+      new Request("https://staging.example/admin/m15/benchmark/multi-source/diagnose", {
+        method: "GET",
+        headers: { authorization: "Bearer " + token },
+      }),
+      stagingEnv,
+    );
+    expect(wrongMethod.status).toBe(405);
+    const noDatabase = await handleM15BenchmarkStagingRequest(
+      new Request("https://staging.example/admin/m15/benchmark/multi-source/diagnose", {
+        method: "POST",
+        headers: { authorization: "Bearer " + token, "content-type": "application/json" },
+        body: "{}",
+      }),
+      stagingEnv,
+    );
+    expect(noDatabase.status).toBe(503);
+    await expect(noDatabase.json()).resolves.toMatchObject({ error: "staging_database_missing" });
   });
 
   it("requires bearer authentication before allowing multi-source preparation", async () => {
