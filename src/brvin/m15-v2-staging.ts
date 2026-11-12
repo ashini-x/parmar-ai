@@ -50,6 +50,13 @@ const DDL = [
     created_by TEXT,
     PRIMARY KEY(project_id, book_id)
   )`,
+  `CREATE TABLE IF NOT EXISTS brvin_project_collections (
+    project_id TEXT NOT NULL,
+    collection_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    created_by TEXT,
+    PRIMARY KEY(project_id, collection_id)
+  )`,
   `CREATE TABLE IF NOT EXISTS brvin_applications (
     id TEXT PRIMARY KEY CHECK (length(id) = 36),
     slug TEXT NOT NULL UNIQUE,
