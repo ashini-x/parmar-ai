@@ -1685,6 +1685,7 @@ export async function handleM14StagingRequest(
   evaluateQdrant: typeof evaluateM14KnownPhysicsQueries = evaluateM14KnownPhysicsQueries,
   diagnoseQdrant: typeof runM14QdrantRetrievalDiagnostics = runM14QdrantRetrievalDiagnostics,
   runM15Shadow: typeof runBrvinM15ShadowBenchmark = runBrvinM15ShadowBenchmark,
+  runM15V2AuthCheck: typeof runBrvinM15V2AuthorizationCheck = runBrvinM15V2AuthorizationCheck,
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/admin/m15/benchmark" ||
