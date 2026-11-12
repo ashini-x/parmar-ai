@@ -704,3 +704,89 @@ export async function runM15MultiSourceCoreV2Evaluation(
   }
   return report;
 }
+
+
+export function brvinM15MultiSourceOperatorPage(): Response {
+  const html = String.raw`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer"><title>BRVIN M15 Multi-source Core v2 Gate</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#10151f;color:#edf2fa;padding:22px;min-height:100vh}
+main{max-width:900px;margin:20px auto;background:#172131;border:1px solid #34445a;border-radius:18px;padding:clamp(20px,4vw,34px)}
+h1{font-size:clamp(25px,4vw,34px);margin:8px 0}.eyebrow{color:#91b5e2;font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase}
+p{color:#b8c6d8;line-height:1.6}.notice{padding:14px 16px;margin:16px 0;border:1px solid #40566f;border-radius:12px;background:#1d2c40}
+label{display:block;margin:14px 0 8px;font-weight:650}input{width:100%;padding:12px;border:1px solid #50657e;border-radius:9px;background:#0d1521;color:#fff;font:inherit}
+button{width:100%;border:0;border-radius:10px;padding:13px 15px;margin-top:10px;background:#2767c8;color:#fff;font:inherit;font-weight:750;cursor:pointer}
+button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opacity:.45;cursor:not-allowed}
+.status{padding:14px;border:1px solid #394d66;border-radius:10px;background:#0d1725;margin-top:16px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;color:#b8c6d8}
+.good{color:#9ae6b4}.bad{color:#ffaaa6}.small{font-size:13px;color:#9fb1c7}code{color:#d7e7ff;overflow-wrap:anywhere}
+</style></head>
+<body><main>
+<div class="eyebrow">Core only · isolated M15 staging · no production cutover</div>
+<h1>Multi-source Core v2 verification</h1>
+<p>Adds the existing three-page M14 Physics source as a second document in the fixed M15 staging project. Reuses its immutable private GCS page manifests, raw OCR and deterministic chunks; no PDF upload or Vision OCR request is made.</p>
+<div class="notice">
+<strong>Exact staging boundary</strong>
+<p class="small">The additional source is <code>01238b3a-9902-4a42-90b4-574048ee4f00</code>, SHA-256 <code>062c7d111c987b3a75c6f9acb44696e38b64bfeaf203417156b21f7fe9de7f8c</code>, 3 pages. It will be indexed only into the dedicated M15 Qdrant collection and M15 staging AI Search instance, then granted in the isolated M15 D1 project. The existing 8-page M15 source remains unchanged. No production D1, provider, source or Teachers Worker is accessed.</p>
+</div>
+<label for="token">Existing M15 staging operator token</label>
+<input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Enter BRVIN_M14_ADMIN_TOKEN" minlength="32">
+<button id="prepare" type="button" disabled>Prepare second source from immutable manifests</button>
+<p class="small">If AI Search returns queued/running, re-enter the same token and repeat this button. Qdrant uses deterministic point IDs and a persisted checkpoint, so completed chunks are not needlessly re-embedded.</p>
+<button id="evaluate" class="secondary" type="button" disabled>Run paired Core v2 multi-source evaluation</button>
+<div id="progress" class="status" role="status" aria-live="polite">No multi-source action has been started.</div>
+<div class="notice small">The evaluation performs five fixed read-only queries through the actual Core v2 resolver: one run against the isolated M15 AI Search binding and one against Qdrant + Vertex for each query. Both use the same D1 project/source grants and quota authority. The run reserves ten staging query units; it does not generate Gemini answers or modify either index.</div>
+<p class="small"><a href="/admin/m15/benchmark" style="color:#8bb7ff">Back to M15 benchmark operator</a> · <a href="/admin/m14" style="color:#8bb7ff">M14 staging operator</a></p>
+</main>
+<script>
+(() => {
+ const token=document.getElementById("token"),prepare=document.getElementById("prepare"),evaluate=document.getElementById("evaluate");
+ const progress=document.getElementById("progress");let ready=false;
+ function refresh(){const valid=token.value.trim().length>=32;prepare.disabled=!valid;evaluate.disabled=!valid||!ready;}
+ token.addEventListener("input",refresh);
+ async function call(path){
+   let secret=token.value.trim();token.value="";refresh();
+   const response=await fetch(path,{method:"POST",headers:{authorization:"Bearer "+secret,"content-type":"application/json"},body:"{}",cache:"no-store",credentials:"omit",referrerPolicy:"no-referrer"});
+   secret="";
+   let data;try{data=await response.json();}catch{throw new Error("Staging returned a non-JSON response (HTTP "+response.status+").");}
+   if(!response.ok||data.ok!==true)throw new Error(data.error||data.message||("Staging request failed (HTTP "+response.status+")."));
+   return data;
+ }
+ prepare.addEventListener("click",async()=>{
+   if(prepare.disabled)return;prepare.disabled=true;evaluate.disabled=true;ready=false;
+   progress.className="status";progress.textContent="Reading and verifying the original immutable three-page GCS corpus. Qdrant/AI Search indexing will occur only in the dedicated M15 staging resources…";
+   try{
+     const data=await call("/admin/m15/benchmark/multi-source/prepare");
+     ready=data.status==="ready";
+     progress.className="status "+(ready?"good":"");
+     progress.textContent=JSON.stringify(data,null,2);
+     if(!ready)progress.textContent+="\\n\\nThe second source is still indexing. Re-enter the staging token and repeat Prepare; do not upload a PDF or run OCR.";
+   }catch(error){progress.className="status bad";progress.textContent=error.message;}
+   refresh();
+ });
+ evaluate.addEventListener("click",async()=>{
+   if(evaluate.disabled)return;evaluate.disabled=true;prepare.disabled=true;
+   progress.className="status";progress.textContent="Running the real Core v2 resolver against both staging providers. This will consume ten M15 staging quota reservations…";
+   try{
+     const data=await call("/admin/m15/benchmark/multi-source/evaluate");
+     progress.className="status "+(data.ok?"good":"bad");progress.textContent=JSON.stringify(data,null,2);
+   }catch(error){progress.className="status bad";progress.textContent=error.message;}
+   refresh();
+ });
+ refresh();
+})();
+</script></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, private",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "no-referrer",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'",
+    },
+  });
+}
