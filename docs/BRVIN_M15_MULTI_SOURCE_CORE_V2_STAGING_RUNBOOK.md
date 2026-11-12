@@ -35,7 +35,7 @@ After the code PR is merged and the M14 staging workflow deploys the updated iso
 2. Confirm the page identifies Core-only isolated M15 staging and the pinned second source. Do not use the production admin or any Teachers page.
 3. Enter the existing `BRVIN_M14_ADMIN_TOKEN` into the local password field. Never send it in chat or add it to GitHub.
 4. Click **Prepare second source from immutable manifests** once.
-5. The action verifies the source SHA, generation, three physical pages, seven chunks and stable source/page keys; it then replays those chunks into the dedicated M15 Qdrant collection and indexes the three existing raw-OCR page texts into the separate M15 AI Search instance.
+5. The action verifies the source SHA, generation, three physical pages, seven chunks and stable source/page keys; it then replays those chunks into the dedicated M15 Qdrant collection and indexes the three existing raw-OCR page texts into the separate M15 AI Search instance. The AI Search Items Workers binding accepts string-valued metadata pairs, so the upload sends `pdf_page` as `"1"`, `"2"` or `"3"`; the instance schema still declares `pdf_page` as `number` so AI Search stores it as a numeric filter field.
 6. If AI Search reports `queued` or `running`, re-enter the token and repeat the same preparation action after the item has had time to finish. It inspects the existing deterministic item key and resumes; it does not upload the PDF or rerun OCR.
 7. Proceed only when the result says `status: ready`, Qdrant has seven points for the second source, AI Search confirms all three exact page items completed, and D1 contains exactly the two intended READY sources in the existing M15 project.
 
