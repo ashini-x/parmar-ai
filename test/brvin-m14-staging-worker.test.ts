@@ -153,6 +153,7 @@ describe("BRVIN M14 isolated staging operator", () => {
   it("protects the Core v2 Qdrant authorization check with the operator token and exact M15 source confirmation", async () => {
     const runV2 = vi.fn(async () => ({
       ok: true,
+      receiptId: "m15-run-receipt-001",
       benchmark: "brvin-m15-core-v2-qdrant-authorization",
       checks: { authorizedV2RetrievalSucceeded: true },
     }));
@@ -194,6 +195,7 @@ describe("BRVIN M14 isolated staging operator", () => {
     expect(allowed.status).toBe(200);
     await expect(allowed.json()).resolves.toMatchObject({
       ok: true,
+      receiptId: "m15-run-receipt-001",
       benchmark: "brvin-m15-core-v2-qdrant-authorization",
     });
     expect(runV2).toHaveBeenCalledTimes(1);
