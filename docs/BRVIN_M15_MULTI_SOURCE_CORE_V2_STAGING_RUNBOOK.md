@@ -27,6 +27,14 @@ Pinned source inventory:
 
 The three-page source has seven deterministic chunks in its already verified private GCS corpus generation. The M15 eight-page source currently has 14 Qdrant points and eight READY page items in the separate M15 AI Search instance.
 
+## First prepare attempt and corrected upload wire format — 13 November 2026
+
+The first protected Prepare attempt (before the follow-up correction) returned `AiSearchError: invalid_metadata_format`; it did not establish READY state, and the paired evaluation was not run. The cause was a mismatch between the upload binding and the instance schema: the AI Search Items Workers binding accepts `Record<string, string>` metadata values, while the upload supplied `pdf_page` as a JavaScript number. The field's custom metadata schema remains correctly declared as `number`; the service casts the string wire value according to that schema.
+
+Core PR [#241](https://github.com/ashini-x/parmar-ai/pull/241) merged as `d9313d822f63960d8baa22404c6f323c89415945`. It changes the upload to send `pdf_page: String(page)`, narrows the Core binding type to string values, and adds regression coverage. Post-merge validation passed full typecheck/tests/build; production deploy and live verification were skipped. M14 staging workflow [#43317133051](https://github.com/ashini-x/parmar-ai/actions/runs/43317133051) deployed staging Worker version `a1158a7c-4422-4768-93e0-140363e791c2` at 100% using deployment `b46a8d37-362c-4ac3-94f8-68f602d367a3`. Cloudflare version read-back confirms the dedicated M15 AI Search instance, Qdrant collection and isolated staging D1 remain bound. Production Core and Teachers versions did not change.
+
+**Next action:** reopen the same operator page and repeat Prepare with the existing staging token entered locally. The prepare handler inspects the deterministic item keys and persisted checkpoint before any new upload; it does not delete/replace existing items or repeat OCR. If it reports queued/running, repeat the same action as below. Stop on any new error or terminal item status. Do not run evaluation until the full READY criteria below are met.
+
 ## Prepare the second source
 
 After the code PR is merged and the M14 staging workflow deploys the updated isolated Worker:
