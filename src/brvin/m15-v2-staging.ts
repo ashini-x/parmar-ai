@@ -218,6 +218,24 @@ async function setGrantStatus(env: Env, status: "active" | "revoked"): Promise<v
   }
 }
 
+export async function persistM15V2AuthorizationReceipt(
+  env: Pick<Env, "DB">,
+  input: {
+    runId: string;
+    status: "passed" | "failed";
+    result: Record<string, unknown>;
+    completedAt: number;
+  },
+): Promise<void> {
+  const db = assertDb(env);
+  const persisted = await db.prepare(
+    "UPDATE m15_v2_authorization_runs SET status=?,result_json=?,completed_at=? WHERE id=? AND status='running'",
+  ).bind(input.status, JSON.stringify(input.result), input.completedAt, input.runId).run();
+  if (!persisted.success || Number(persisted.meta?.changes ?? 0) !== 1) {
+    throw new Error("M15 v2 authorization result could not be persisted to isolated staging D1.");
+  }
+}
+
 async function queryUsage(env: Env): Promise<number> {
   const db = assertDb(env);
   const month = new Date().toISOString().slice(0, 7);
@@ -370,11 +388,11 @@ export async function runBrvinM15V2AuthorizationCheck(env: Env) {
     },
     note: "This invokes the real Core v2 service authorization, D1 source registry, project quota and Qdrant hybrid query path against the isolated M15 staging database/collection. The application/environment/project/grant fixture and one project quota counter are staging-only. The temporary staging grant is restored active in a finally block. Qdrant indexing and deletion remain disabled.",
   };
-  const persisted = await db.prepare(
-    "UPDATE m15_v2_authorization_runs SET status=?,result_json=?,completed_at=? WHERE id=? AND status='running'",
-  ).bind(report.ok ? "passed" : "failed", JSON.stringify(report), Date.now(), runId).run();
-  if (!persisted.success || Number(persisted.meta?.changes ?? 0) !== 1) {
-    throw new Error("M15 v2 authorization result could not be persisted to isolated staging D1.");
-  }
+  await persistM15V2AuthorizationReceipt(env, {
+    runId,
+    status: report.ok ? "passed" : "failed",
+    result: report,
+    completedAt: Date.now(),
+  });
   return report;
 }
