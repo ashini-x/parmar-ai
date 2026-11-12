@@ -4,16 +4,18 @@ import { BrvinQdrantHybridPilot } from "./qdrant-hybrid-pilot";
 import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
 
 const SOURCE_ID = "3b4d116d-4c18-450f-9cba-cb2bec3da7ca";
-const PROJECT_ID = "890f6317-69f4-4391-aae6-556155ed0d12";
+const PROJECT_ID = BRVIN_M15_STAGING_PROJECT_ID;
 const SOURCE_SHA256 = "cc20addb908b8bcecc350f252cc4ff64d05147daa6c3f670d91863ce518f9b92";
 const SOURCE_PAGE_COUNT = 8;
 const SOURCE_PREFIX = "brvin/books/" + SOURCE_ID + "/pages/";
 
 const APPLICATION_ID = "a1500000-0000-4000-8000-000000000001";
-const ENVIRONMENT_ID = "a1500000-0000-4000-8000-000000000002";
+export const BRVIN_M15_STAGING_ENVIRONMENT_ID = "a1500000-0000-4000-8000-000000000002";
+const ENVIRONMENT_ID = BRVIN_M15_STAGING_ENVIRONMENT_ID;
 const GRANT_ID = "a1500000-0000-4000-8000-000000000003";
 const APPLICATION_SLUG = "brvin-m15-staging-evaluator";
 const APPLICATION_NAME = "BRVIN M15 Staging Evaluator";
+export const BRVIN_M15_STAGING_PROJECT_ID = "890f6317-69f4-4391-aae6-556155ed0d12";
 const QUERY = "Does static friction always equal μ_s times the normal force, or can it adjust?";
 
 const DDL = [
