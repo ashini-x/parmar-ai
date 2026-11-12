@@ -3,13 +3,11 @@ import {
   BRVIN_M15_SECOND_SOURCE,
   M15_MULTI_SOURCE_QUERY_SUITE,
   m15MultiSourcePageKey,
+  prepareBrvinM15MultiSourceCorpus,
+  runM15MultiSourceCoreV2Evaluation,
   summarizeM15MultiSourceProvider,
 } from "../src/brvin/m15-v2-multisource";
 import { BRVIN_M15_STAGING_SOURCE_ID } from "../src/brvin/m15-v2-staging";
-import {
-  prepareBrvinM15MultiSourceCorpus,
-  runM15MultiSourceCoreV2Evaluation,
-} from "../src/brvin/m15-v2-multisource";
 
 describe("M15 multi-source Core v2 staging evaluation", () => {
   it("pins two distinct Physics sources with their exact physical page ranges", () => {
