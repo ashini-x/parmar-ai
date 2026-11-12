@@ -12,6 +12,11 @@ import { persistBrvinPageCorpus } from "./corpus-store";
 import { readBrvinCorpusGeneration } from "./corpus-reader";
 import { BrvinQdrantHybridPilot } from "./qdrant-hybrid-pilot";
 import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
+import {
+  brvinM15MultiSourceOperatorPage,
+  prepareBrvinM15MultiSourceCorpus,
+  runM15MultiSourceCoreV2Evaluation,
+} from "./m15-v2-multisource";
 
 const GCS_API = "https://storage.googleapis.com";
 const VISION_API = "https://vision.googleapis.com/v1";
@@ -2409,6 +2414,9 @@ export async function handleM15BenchmarkStagingRequest(
   if (url.pathname === "/admin/m15/benchmark" && request.method === "GET") {
     return m15BenchmarkAdminPage();
   }
+  if (url.pathname === "/admin/m15/benchmark/multi-source" && request.method === "GET") {
+    return brvinM15MultiSourceOperatorPage();
+  }
   if (url.pathname === "/admin/m15/benchmark/answers" && request.method === "GET") {
     return m15AnswerEvaluationPage();
   }
@@ -2438,12 +2446,30 @@ export async function handleM15BenchmarkStagingRequest(
       url.pathname !== "/admin/m15/benchmark/complete" &&
       url.pathname !== "/admin/m15/benchmark/answers/source" &&
       url.pathname !== "/admin/m15/benchmark/answers/run" &&
-      url.pathname !== "/admin/m15/benchmark/answers/formula-audit/run") {
+      url.pathname !== "/admin/m15/benchmark/answers/formula-audit/run" &&
+      url.pathname !== "/admin/m15/benchmark/multi-source/prepare" &&
+      url.pathname !== "/admin/m15/benchmark/multi-source/evaluate") {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if (!["GET","POST"].includes(request.method)) return json({ ok: false, error: "method_not_allowed" }, 405);
   if (!await authenticated(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
   if (!env.DB) return json({ ok: false, error: "staging_database_missing" }, 503);
+
+  if (url.pathname === "/admin/m15/benchmark/multi-source/prepare" && request.method === "POST") {
+    try {
+      return json(await prepareBrvinM15MultiSourceCorpus(env));
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
+  }
+
+  if (url.pathname === "/admin/m15/benchmark/multi-source/evaluate" && request.method === "POST") {
+    try {
+      return json(await runM15MultiSourceCoreV2Evaluation(env));
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
+  }
 
   // Answer evaluation is intentionally read-only: no schema setup, D1 writes,
   // source mutation, or index mutation occurs on either answer endpoint.
