@@ -43,6 +43,10 @@ export interface M15MultiSourceCase {
   expectedNoMatch?: boolean;
 }
 
+export const M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS = [
+  "MS01", "MS02", "MS03", "MS04", "MN01",
+] as const;
+
 export const M15_MULTI_SOURCE_QUERY_SUITE: readonly M15MultiSourceCase[] = [
   {
     id: "MS01",
@@ -459,8 +463,13 @@ export async function runM15MultiSourceQdrantDiagnostics(
     dimensions: Number(required(env.BRVIN_M14_EMBEDDING_DIMENSIONS, "BRVIN_M14_EMBEDDING_DIMENSIONS")),
   }, new BrvinVertexEmbeddingProvider(env));
 
+  const diagnosticCases = M15_MULTI_SOURCE_QUERY_SUITE.filter((item) =>
+    M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS.includes(item.id as typeof M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS[number]));
+  if (diagnosticCases.length !== M15_MULTI_SOURCE_QDRANT_DIAGNOSTIC_CASE_IDS.length) {
+    throw new Error("The pinned M15 Qdrant diagnostic query suite is incomplete.");
+  }
   const results: Array<Record<string, unknown>> = [];
-  for (const item of M15_MULTI_SOURCE_QUERY_SUITE) {
+  for (const item of diagnosticCases) {
     const ranks = await pilot.queryComponentRanks({
       projectId: BRVIN_M15_STAGING_PROJECT_ID,
       authorizedSourceIds: [...expectedIds],
