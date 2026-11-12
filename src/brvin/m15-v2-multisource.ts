@@ -654,6 +654,9 @@ export async function runM15MultiSourceCoreV2Evaluation(
     bothProvidersCompletedEveryQuery: results.every((item) =>
       (item.cloudflareAiSearch as ProviderQueryResult).ok &&
       (item.qdrantVertex as ProviderQueryResult).ok),
+    bothProvidersSearchedBothReadySourcesForEveryQuery: results.every((item) =>
+      (item.cloudflareAiSearch as ProviderQueryResult).searchedSources === 2 &&
+      (item.qdrantVertex as ProviderQueryResult).searchedSources === 2),
     noAiSearchProvenanceViolations: cloudflareSummary.provenanceViolationCount === 0,
     noQdrantProvenanceViolations: qdrantSummary.provenanceViolationCount === 0,
     bothProvidersRetrievedEvidenceFromBothSources: cloudflareSummary.bothSourcesRepresented &&
