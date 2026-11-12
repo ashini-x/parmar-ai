@@ -11,6 +11,7 @@ import {
 import { BrvinQdrantHybridPilot, type BrvinM14ComponentRankings } from "./qdrant-hybrid-pilot";
 import { BrvinVertexEmbeddingProvider } from "./vertex-embedding";
 import { runBrvinM15ShadowBenchmark } from "./m15-shadow-benchmark";
+import { runBrvinM15V2AuthorizationCheck } from "./m15-v2-staging";
 import { getGoogleAccessToken } from "../auth/google";
 import type {
   FatmanImportJob,
@@ -188,6 +189,7 @@ function m14AdminPage(): Response {
       <p class="small">Compares the same fixed Physics queries against the existing AI Search source prefix and isolated Qdrant + Vertex index. It performs search/query operations only: no index writes, deletes, OCR, provider-selector or consumer-answer changes.</p>
     </div>
     <button id="runM15Shadow" class="secondary" type="button" disabled>Run AI Search vs Qdrant shadow benchmark</button>
+    <button id="runM15V2Authorization" class="secondary" type="button" disabled>Run Core v2 Qdrant authorization + revocation proof</button>
     <div id="result" class="status muted" role="status" aria-live="polite">No recovery or backfill action has been started.</div>
     <details>
       <summary>Security and retry information</summary>
@@ -209,6 +211,7 @@ function m14AdminPage(): Response {
   const evaluateQdrantButton = document.getElementById("evaluateQdrant");
   const diagnoseQdrantButton = document.getElementById("diagnoseQdrant");
   const runM15ShadowButton = document.getElementById("runM15Shadow");
+  const runM15V2AuthorizationButton = document.getElementById("runM15V2Authorization");
   const healthBox = document.getElementById("health");
   const resultBox = document.getElementById("result");
 
@@ -226,6 +229,8 @@ function m14AdminPage(): Response {
     diagnoseQdrantButton.disabled = !canAuthenticate || !ready || !providerReady;
     runM15ShadowButton.disabled = !canAuthenticate || !ready || !providerReady ||
       runButton.dataset.m15ShadowReady !== "true";
+    runM15V2AuthorizationButton.disabled = !canAuthenticate || !ready ||
+      runButton.dataset.m15V2Ready !== "true";
     rebuildButton.disabled = !canAuthenticate || !confirmOcrInput.checked || !ready ||
       ["submitting", "running", "completed", "failed", "submission_uncertain"].includes(ocrStatus);
     runButton.disabled = !confirmInput.checked || !canAuthenticate || !ready || !ocrReady;
@@ -263,6 +268,8 @@ function m14AdminPage(): Response {
       const providerReady = ready && data.m14ProviderConfigured?.ready === true;
       const m15ShadowReady = providerReady && data.m15ShadowConfigured?.ready === true;
       runButton.dataset.m15ShadowReady = m15ShadowReady ? "true" : "false";
+      const m15V2Ready = ready && data.m15V2Configured?.ready === true;
+      runButton.dataset.m15V2Ready = m15V2Ready ? "true" : "false";
       healthBox.className = "status " + (!ready ? "bad" : providerReady ? "good" : "muted");
       healthBox.textContent = !ready
         ? "Staging is not ready. Check the Worker health response and complete any missing base configuration before continuing.\n" + JSON.stringify(data, null, 2)
@@ -466,6 +473,25 @@ function m14AdminPage(): Response {
       runM15ShadowButton.textContent = "M15 provider shadow benchmark completed";
     } else {
       runM15ShadowButton.textContent = "Run AI Search vs Qdrant shadow benchmark";
+    }
+    refreshButton();
+  });
+
+  runM15V2AuthorizationButton.addEventListener("click", async () => {
+    refreshButton();
+    if (runM15V2AuthorizationButton.disabled) return;
+    runM15V2AuthorizationButton.disabled = true;
+    runM15V2AuthorizationButton.textContent = "Testing v2 authorization…";
+    const result = await authenticatedRequest(
+      "/admin/m15/v2/authorization-check",
+      "POST",
+      { confirmSourceId: "3b4d116d-4c18-450f-9cba-cb2bec3da7ca" },
+      "Invoking the real Core v2 service with isolated M15 D1 identities and Qdrant. It checks the granted query, no-grant denial, grant revocation while Qdrant vectors remain, quota behaviour, then restores the isolated staging grant. No corpus writes/deletes or production D1 access."
+    );
+    if (result?.response.ok && result.data.ok === true) {
+      runM15V2AuthorizationButton.textContent = "Core v2 authorization + revocation proof passed";
+    } else {
+      runM15V2AuthorizationButton.textContent = "Run Core v2 Qdrant authorization + revocation proof";
     }
     refreshButton();
   });
@@ -1659,6 +1685,7 @@ export async function handleM14StagingRequest(
   evaluateQdrant: typeof evaluateM14KnownPhysicsQueries = evaluateM14KnownPhysicsQueries,
   diagnoseQdrant: typeof runM14QdrantRetrievalDiagnostics = runM14QdrantRetrievalDiagnostics,
   runM15Shadow: typeof runBrvinM15ShadowBenchmark = runBrvinM15ShadowBenchmark,
+  runM15V2AuthCheck: typeof runBrvinM15V2AuthorizationCheck = runBrvinM15V2AuthorizationCheck,
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/admin/m15/benchmark" ||
@@ -1695,6 +1722,13 @@ export async function handleM14StagingRequest(
           env.BRVIN_M14_QDRANT_URL && env.BRVIN_M14_QDRANT_API_KEY &&
           env.BRVIN_M14_QDRANT_COLLECTION),
       },
+      m15V2Configured: {
+        benchmarkCollection: Boolean(env.BRVIN_M15_BENCHMARK_QDRANT_COLLECTION),
+        ready: Boolean(env.DB && env.GCP_PROJECT_ID && env.GCP_CLIENT_EMAIL && env.GCP_PRIVATE_KEY &&
+          env.BRVIN_M14_VERTEX_LOCATION && env.BRVIN_M14_VERTEX_MODEL &&
+          env.BRVIN_M14_EMBEDDING_DIMENSIONS && env.BRVIN_M14_QDRANT_URL &&
+          env.BRVIN_M14_QDRANT_API_KEY && env.BRVIN_M15_BENCHMARK_QDRANT_COLLECTION),
+      },
       // Do not expose credential values, bucket names or source-document content.
     });
   }
@@ -1716,9 +1750,11 @@ export async function handleM14StagingRequest(
   const isQdrantEvaluate = url.pathname === "/admin/m14/qdrant/evaluate";
   const isQdrantDiagnostics = url.pathname === "/admin/m14/qdrant/diagnostics";
   const isM15Shadow = url.pathname === "/admin/m15/shadow/evaluate";
+  const isM15V2Authorization = url.pathname === "/admin/m15/v2/authorization-check";
   const isBackfill = url.pathname === "/admin/m14/backfill";
   if (!isDiagnostics && !isVisionRebuild && !isVisionStatus && !isCorpusVerify &&
-      !isQdrantIndex && !isQdrantEvaluate && !isQdrantDiagnostics && !isM15Shadow && !isBackfill) {
+      !isQdrantIndex && !isQdrantEvaluate && !isQdrantDiagnostics && !isM15Shadow &&
+      !isM15V2Authorization && !isBackfill) {
     return json({ ok: false, error: "not_found" }, 404);
   }
   if ((isDiagnostics && request.method !== "GET") ||
@@ -1729,6 +1765,7 @@ export async function handleM14StagingRequest(
       (isQdrantEvaluate && request.method !== "POST") ||
       (isQdrantDiagnostics && request.method !== "POST") ||
       (isM15Shadow && request.method !== "POST") ||
+      (isM15V2Authorization && request.method !== "POST") ||
       (isBackfill && request.method !== "POST")) {
     return json({ ok: false, error: "method_not_allowed" }, 405);
   }
@@ -1744,6 +1781,32 @@ export async function handleM14StagingRequest(
   const suppliedToken = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
   if (!equalSecret(suppliedToken, configuredToken)) {
     return json({ ok: false, error: "unauthorized" }, 401);
+  }
+
+  if (isM15V2Authorization) {
+    let payload: unknown;
+    try {
+      payload = await request.json();
+    } catch {
+      return json({ ok: false, error: "invalid_json" }, 400);
+    }
+    if (!payload || typeof payload !== "object" ||
+        (payload as { confirmSourceId?: unknown }).confirmSourceId !==
+          "3b4d116d-4c18-450f-9cba-cb2bec3da7ca") {
+      return json({ ok: false, error: "m15_source_confirmation_mismatch" }, 400);
+    }
+    if (!env.DB || !env.GCP_PROJECT_ID || !env.GCP_CLIENT_EMAIL || !env.GCP_PRIVATE_KEY ||
+        !env.BRVIN_M14_VERTEX_LOCATION || !env.BRVIN_M14_VERTEX_MODEL ||
+        !env.BRVIN_M14_EMBEDDING_DIMENSIONS || !env.BRVIN_M14_QDRANT_URL ||
+        !env.BRVIN_M14_QDRANT_API_KEY || !env.BRVIN_M15_BENCHMARK_QDRANT_COLLECTION) {
+      return json({ ok: false, error: "m15_v2_qdrant_configuration_incomplete" }, 503);
+    }
+    try {
+      const result = await runM15V2AuthCheck(env);
+      return json(result, result.ok ? 200 : 502);
+    } catch (error) {
+      return json({ ok: false, error: safeError(error) }, 502);
+    }
   }
 
   if (isDiagnostics) {

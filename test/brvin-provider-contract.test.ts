@@ -54,6 +54,7 @@ describe("BRVIN retrieval provider boundary", () => {
     const provider = createBrvinRetrievalProvider("cloudflare-ai-search", instance);
 
     const candidates = await provider.query({
+      projectId: "project-physics",
       query: "What is Newton's second law?",
       sourcePrefixes: ["source/"],
       maxResults: 16,

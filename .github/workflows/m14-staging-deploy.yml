@@ -15,6 +15,11 @@ on:
       - "src/brvin/vertex-embedding.ts"
       - "src/brvin/qdrant-hybrid-pilot.ts"
       - "src/brvin/provider-contract.ts"
+      - "src/brvin/retrieval.ts"
+      - "src/brvin/service-core.ts"
+      - "src/brvin/m15-v2-staging.ts"
+      - "test/brvin-qdrant-provider-contract.test.ts"
+      - "test/brvin-m14-staging-worker.test.ts"
       - "test/brvin-vertex-embedding.test.ts"
       - "test/brvin-qdrant-hybrid-pilot.test.ts"
       - "src/brvin/m14-vision-backfill.ts"
@@ -22,7 +27,6 @@ on:
       - "src/brvin/corpus.ts"
       - "src/fatman/import.ts"
       - "src/config/env.ts"
-      - "test/brvin-m14-staging-worker.test.ts"
       - "wrangler.m14-staging.jsonc"
       - ".github/workflows/m14-staging-deploy.yml"
   push:
@@ -37,6 +41,8 @@ on:
       - "src/brvin/vertex-embedding.ts"
       - "src/brvin/qdrant-hybrid-pilot.ts"
       - "src/brvin/provider-contract.ts"
+      - "src/brvin/retrieval.ts"
+      - "src/brvin/m15-v2-staging.ts"
       - "src/brvin/m14-vision-backfill.ts"
       - "src/brvin/corpus-store.ts"
       - "src/brvin/corpus.ts"
@@ -65,7 +71,7 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund --legacy-peer-deps
       - run: npm run check
-      - run: npx vitest run test/brvin-m14-staging-worker.test.ts test/brvin-m15-shadow-benchmark.test.ts test/brvin-m15-benchmark-staging.test.ts
+      - run: npx vitest run test/brvin-m14-staging-worker.test.ts test/brvin-m15-shadow-benchmark.test.ts test/brvin-m15-benchmark-staging.test.ts test/brvin-qdrant-provider-contract.test.ts
       - name: Verify versioned Vertex and Qdrant settings
         run: node scripts/verify-m14-staging-config.mjs
       - run: npx wrangler deploy --config wrangler.m14-staging.jsonc --dry-run
