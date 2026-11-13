@@ -4,6 +4,7 @@ import {
   sendTelegramBusinessMessage,
   sendTelegramMessageWithToken,
   sendTelegramVoiceWithToken,
+  editTelegramMessageReplyMarkup,
   buildFatmanStartMarkup,
   buildFatmanExitMarkup,
 } from "../src/telegram/api";
@@ -39,6 +40,32 @@ describe("Telegram retry_after handling", () => {
     expect(getTelegramRetryDelayMs(Number.POSITIVE_INFINITY)).toBe(1_000);
     expect(getTelegramRetryDelayMs(0)).toBe(1_000);
     expect(getTelegramRetryDelayMs(-1)).toBe(1_000);
+  });
+});
+
+describe("Telegram Fatman transition keyboard", () => {
+  it("clears the clicked message keyboard without adding another button", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: true,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = { TELEGRAM_BOT_TOKEN: "bot-token" } as unknown as Env;
+    await expect(editTelegramMessageReplyMarkup(
+      env, 42, 777, { inline_keyboard: [] }, undefined, false,
+    )).resolves.toBeUndefined();
+
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/editMessageReplyMarkup");
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      chat_id: 42,
+      message_id: 777,
+      reply_markup: { inline_keyboard: [] },
+    });
   });
 });
 
