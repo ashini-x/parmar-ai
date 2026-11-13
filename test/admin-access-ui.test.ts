@@ -19,6 +19,13 @@ describe("admin access UI", () => {
     expect(source).toContain("isOwner || isAdmin || staticUnlimited || Number(user.unlimited) === 1");
   });
 
+  it("shows the configured daily question quota instead of a stale hard-coded value", () => {
+    expect(source).toContain("const dailyQuestionLimit = getConfig(env).dailyQuestionLimit;");
+    expect(source).toContain("daily_limit: dailyQuestionLimit");
+    expect(source).toContain("String(dailyLimit)+'/day'");
+    expect(source).not.toContain("'20/day'");
+  });
+
   it("subscribes Telegram webhooks to poll answers and Fatman callbacks", () => {
     expect(source).toContain('allowed_updates: ["message", "poll_answer", "business_connection", "business_message", "callback_query"]');
   });
