@@ -7,6 +7,7 @@ import {
   editTelegramMessageReplyMarkup,
   buildFatmanStartMarkup,
   buildFatmanExitMarkup,
+  buildHelpMenuMarkup,
 } from "../src/telegram/api";
 import type { Env } from "../src/config/env";
 
@@ -145,6 +146,38 @@ describe("BRɅIN Telegram button", () => {
 });
 
 describe("Telegram welcome voice delivery", () => {
+  it("sends the Help voice with all four controls in one inline row and no BRɅIN footer", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 127 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const voiceUrl = "https://raw.githubusercontent.com/ashini-x/parmar-ai/main/assets/telegram-welcome.ogg";
+    await expect(sendTelegramVoiceWithToken(
+      "bot-token", 42, voiceUrl, false, buildHelpMenuMarkup(),
+    )).resolves.toEqual({ message_id: 127 });
+
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendVoice");
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      chat_id: 42,
+      voice: voiceUrl,
+      disable_notification: true,
+      reply_markup: {
+        inline_keyboard: [[
+          { text: "Exam", callback_data: "help:exam" },
+          { text: "Profile", callback_data: "help:profile" },
+          { text: "Reset", callback_data: "help:reset" },
+          { text: "Delete", callback_data: "help:delete" },
+        ]],
+      },
+    });
+  });
+
   it("sends the Parmar Sir voice with only a Start Fatman callback button", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,
