@@ -28,6 +28,7 @@ import {
   sendTelegramMessage,
   sendTelegramChatActionWithToken,
   sendTelegramMessageWithToken,
+  sendTelegramVoiceWithToken,
   editTelegramMessageWithToken,
   sendTelegramBusinessMessage,
   sendTelegramQuiz,
@@ -76,6 +77,7 @@ import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getA
 const QUEUE_MAX_RETRIES = 10;
 const STATUS_TEXT = "Thinking…";
 const BOT_BRAND_NAME = "परमार्थAI";
+const START_WELCOME_VOICE_URL = "https://raw.githubusercontent.com/ashini-x/parmar-ai/main/assets/telegram-welcome.ogg";
 const RATE_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
 const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
 const FINAL_FAILURE_TEXT = "Bhai, is waqt answer complete nahi ho paaya. Tumhara sawal retry hua hai; same doubt dobara bhejna. 🙏";
@@ -552,6 +554,15 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       deliveryMs: Date.now() - welcomeStartedAt,
       delivered: Boolean(welcomeDelivery),
     });
+
+    // Keep the text welcome as the first immediate response. Deliver the
+    // compact prerecorded Opus voice note in the background so media fetching
+    // can never delay the webhook acknowledgement or first visible message.
+    if (welcomeDelivery) {
+      ctx.waitUntil(bestEffortTelegram("start_voice", () =>
+        sendTelegramVoiceWithToken(bot.token, chatId, START_WELCOME_VOICE_URL),
+      ));
+    }
 
     // Analytics are still recorded, but only after the welcome has been sent.
     queueAnalytics(ctx, "user_seen", () => recordUserSeen(env, analyticsUser));
