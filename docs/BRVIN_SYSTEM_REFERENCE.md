@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 14 November 2026 (Cloudflare read-back confirms Core production `parmar-ai` v779 and `brvin-service` v156, isolated M15 staging v102 and Teachers v12 at 100%; production remains on AI Search; two-source Prepare and the original pre-PR-247 paired receipt are complete, but no post-fix paired evaluation receipt exists)  
+**Last verified against source and production infrastructure:** 14 November 2026 (Cloudflare read-back confirms Core production `parmar-ai` v779 and `brvin-service` v156, isolated M15 staging v102 and Teachers v12 at 100%; production remains on AI Search; post-PR-247 paired Core v2 staging receipt `fa1b8076-9375-480b-bb4b-e22d1c13d9bb` is passed and verifies MS03 pages 2/3; no-match candidate noise remains open)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/brvin-teachers` (separate downstream app); `ashini-x/askmoina-voice` remains an optional consumer
 
@@ -147,7 +147,7 @@ The latest Core production Release validation [#43506613105](https://github.com/
 
 **Quota read-back:** the student-facing `DAILY_QUESTION_LIMIT` production variable is `10`; Core source defaults are also 10/day, with the existing burst settings retained (5 questions per 10 seconds). This is separate from the Core project-level retrieval allowance: `brvin-service` has `BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT=800`, and current source `src/brvin/service-core.ts` defines both `BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT` and `BRVIN_MAX_MONTHLY_QUERY_LIMIT` as 800. The 800/month project ceiling is therefore still a real code-and-config limit and does not meet the 300,000/month planning target.
 
-**Current M15 receipt state:** isolated staging D1 contains one row in `m15_v2_multisource_runs`: receipt `18728f63-e13d-4e73-880f-a2b980844d04`, status `passed`, started 12 November 2026 at 22:52:36 UTC. It is the pre-PR-247 baseline. Qdrant coverage remains 6/7 unique expected source/page pairs, with the MS03 M15 page-2 target missed; MN01 returned three unrelated candidates. November project usage is 11. No post-PR-247 paired retrieval receipt is present, so the fix's effect on the normal Core v2 result remains unverified.
+**Current M15 receipt state:** isolated staging D1 contains two rows in `m15_v2_multisource_runs`: pre-fix baseline `18728f63-e13d-4e73-880f-a2b980844d04` and post-fix receipt `fa1b8076-9375-480b-bb4b-e22d1c13d9bb`, both status `passed`. The new receipt covers five paired cases and records exact quota movement 11→21. Both providers cover all seven distinct expected source/page locations; Qdrant finds all 8/8 query-specific positive targets, including MS03 M15 pages 2 and 3, while AI Search finds 7/8 (it misses the repeated M14 handout page 3 in MS02). Both have zero provenance violations. Qdrant still returns three unrelated MN01 Planck no-match candidates, while AI Search returns none. Qdrant sequential p50/p95 is 1,180/1,326 ms and AI Search is 3,903/5,374 ms (n=5; not a load test or SLO). The PR #247 fix is now live-verified in the normal Core v2 staging path. The next M15 gate is a calibrated relevance/no-match gating ablation; do not infer a generic RRF threshold from the current five-case control.
 
 ## 2. Architecture decisions that must remain stable
 
