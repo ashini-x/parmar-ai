@@ -4,6 +4,8 @@ import {
   sendTelegramBusinessMessage,
   sendTelegramMessageWithToken,
   sendTelegramVoiceWithToken,
+  buildFatmanStartMarkup,
+  buildFatmanExitMarkup,
 } from "../src/telegram/api";
 import type { Env } from "../src/config/env";
 
@@ -64,6 +66,31 @@ describe("BRɅIN Telegram button", () => {
     });
   });
 
+  it("sends Fatman answers with only the Exit Fatman inline button", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 126 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(sendTelegramMessageWithToken(
+      "bot-token", 42, "Fatman answer", undefined, false, buildFatmanExitMarkup(),
+    )).resolves.toEqual({ message_id: 126 });
+
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
+    expect(JSON.parse(String(requestInit.body))).toMatchObject({
+      chat_id: 42,
+      text: "Fatman answer",
+      reply_markup: {
+        inline_keyboard: [[{ text: "Exit Fatman", callback_data: "fatman:exit" }]],
+      },
+    });
+  });
+
   it("omits the BRɅIN footer button on personal-account business replies", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,
@@ -91,6 +118,33 @@ describe("BRɅIN Telegram button", () => {
 });
 
 describe("Telegram welcome voice delivery", () => {
+  it("sends the Parmar Sir voice with only a Start Fatman callback button", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 125 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const voiceUrl = "https://raw.githubusercontent.com/ashini-x/parmar-ai/main/assets/telegram-welcome.ogg";
+    await expect(sendTelegramVoiceWithToken(
+      "bot-token", 42, voiceUrl, false, buildFatmanStartMarkup(),
+    )).resolves.toEqual({ message_id: 125 });
+
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendVoice");
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      chat_id: 42,
+      voice: voiceUrl,
+      disable_notification: true,
+      reply_markup: {
+        inline_keyboard: [[{ text: "Start Fatman", callback_data: "fatman:enter" }]],
+      },
+    });
+  });
+
   it("sends the hosted Opus recording as a silent voice note with the Telegram profile button", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,

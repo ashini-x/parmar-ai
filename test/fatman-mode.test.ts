@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildFatmanExitMarkup, buildFatmanStartMarkup } from "../src/telegram/api";
 import { buildFatmanHelpFooter, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "../src/telegram/fatman-mode";
 
 describe("Fatman mode controls", () => {
@@ -8,6 +9,15 @@ describe("Fatman mode controls", () => {
     );
     expect(buildFatmanHelpFooter(false, false)).not.toContain("/fatman");
     expect(buildFatmanHelpFooter(true, false)).not.toContain("/fatman on");
+  });
+
+  it("builds one-button Start Fatman and Exit Fatman controls", () => {
+    expect(buildFatmanStartMarkup()).toEqual({
+      inline_keyboard: [[{ text: "Start Fatman", callback_data: "fatman:enter" }]],
+    });
+    expect(buildFatmanExitMarkup()).toEqual({
+      inline_keyboard: [[{ text: "Exit Fatman", callback_data: "fatman:exit" }]],
+    });
   });
 
   it("uses explicit enter and exit callback actions", () => {
