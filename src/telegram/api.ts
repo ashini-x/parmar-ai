@@ -625,6 +625,27 @@ export async function deleteTelegramMessageWithToken(
   });
 }
 
+/**
+ * Send the prerecorded start greeting as a Telegram voice note. The file is
+ * hosted publicly so Telegram can fetch it directly without a multipart
+ * upload from the Worker. Silent delivery avoids a second notification after
+ * the synchronous welcome text.
+ */
+export async function sendTelegramVoiceWithToken(
+  token: string,
+  chatId: number,
+  voiceUrl: string,
+  includeCreatorFooter = true,
+): Promise<TelegramMessageResult> {
+  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
+  return telegramApiWithToken<TelegramMessageResult>(token, "sendVoice", {
+    chat_id: chatId,
+    voice: voiceUrl,
+    disable_notification: true,
+    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
+  });
+}
+
 export async function sendTelegramMessageWithToken(
   token: string,
   chatId: number,
