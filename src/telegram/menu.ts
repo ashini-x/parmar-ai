@@ -55,5 +55,5 @@ export function buildTelegramMenuCommandTargets(
 }
 
 export function isParmarSirCommand(text: string): boolean {
-  return /^\\/parmar(?:@\\w+)?(?:\\s|$)/i.test(text.trim());
+  return /^\/parmar(?:@\w+)?(?:\s|$)/i.test(text.trim());
 }
