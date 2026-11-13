@@ -14,7 +14,7 @@ afterEach(() => {
 const creatorKeyboard = {
   inline_keyboard: [[{
     text: "BRɅIN",
-    url: "https://t.me/projectbrain",
+    url: "tg://resolve?domain=projectbrain&profile",
   }]],
 };
 

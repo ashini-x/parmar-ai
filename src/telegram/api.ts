@@ -5,7 +5,7 @@ import { getActiveTelegramBot, getTelegramBotApiToken, hasTelegramBotRecords } f
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
 const CREATOR_NAME = "BRɅIN";
-const CREATOR_TELEGRAM_URL = "https://t.me/projectbrain";
+const CREATOR_TELEGRAM_URL = "tg://resolve?domain=projectbrain&profile";
 function limitTelegramMessage(text: string): { text: string } {
   return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH) };
 }
