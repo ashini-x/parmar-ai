@@ -1,7 +1,7 @@
 # BRVIN Retrieval Provider Modernization — Approved Architecture and Migration Plan
 
 **Decision date:** 8 November 2026
-**Status reviewed:** 14 November 2026 — M14 is complete as the scoped non-production Vertex/Qdrant Physics pilot; M15 remains active and its implementation state is last verified on 13 November. The capacity and semantic-cache decisions in section 1.1 are newly approved planning requirements, not shipped code.
+**Status reviewed:** 14 November 2026 — M14 is complete as the scoped non-production Vertex/Qdrant Physics pilot; M15 remains active. Core's 14 November Cloudflare read-back confirms production `parmar-ai` v779 and `brvin-service` v156, isolated staging v102 and Teachers v12 at 100%; both production provider selectors remain `cloudflare-ai-search`. The only persisted two-source paired Core v2 receipt still predates PR #247, so the post-fix MS03 page-2 result is not yet live-verified. The capacity and semantic-cache decisions in section 1.1 are approved planning requirements, not shipped code.
 **Status:** APPROVED DESIGN / M13 MERGED / M14 PILOT COMPLETE / M15 SHADOW BENCHMARK ACTIVE / NO PROVIDER CUTOVER  
 **Owning repository:** ashini-x/parmar-ai  
 **Coordinating consumer:** ashini-x/brvin-teachers  
@@ -734,3 +734,22 @@ Core PR [#247](https://github.com/ashini-x/parmar-ai/pull/247) merged as `cab5df
 This production release deployed the Core code but **did not migrate the provider**. Cloudflare settings read-back confirms `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search` on both production Core Workers, `BRVIN_CORPUS_MANIFEST_ENABLED=false` on `parmar-ai`, and `BRVIN_MIN_SCORE=0.2` on `brvin-service`. The private retrieval Worker has only its D1 and AI Search namespace bindings for retrieval; no Qdrant URL/API key, embedding model or Vertex service credential is configured there. The Core Admin Worker's existing GCP credentials are retained for its existing Google integrations and are not Qdrant retrieval access. The dedicated Qdrant/Vertex bindings and secrets remain isolated to `parmar-ai-m14-staging`. Teachers remains unchanged with only `BRVIN_MANAGEMENT`, `BRVIN_SERVICE` and its own D1; it has no provider SDKs/credentials/direct provider route.
 
 The merged code resolves only the MS03 exact-boundary floating-point defect. The protected paired Core v2 evaluation has **not yet been rerun after this fix**, so MS03 recovery must not be claimed until a new staging receipt confirms it. MN01's unrelated component candidates remain unresolved. M15 remains **IN PROGRESS** for the paired MS03 verification, calibrated no-match behavior, broader formula/mixed-content and claim grounding, recovery/throttling, HNSW-aware representative load, repeatable latency/throughput/cost and rollback. M16 UI/consumer parity and M17 canary/14-day soak remain future gates. Production continues on AI Search.
+
+## 14 November 2026 — live deployment and post-score-floor verification checkpoint
+
+Cloudflare read-only read-back confirms these active deployments at 100%:
+
+| Worker | Environment | Version | Deployment |
+|---|---|---|---|
+| `parmar-ai` | production | `04e4ac51-06a0-4514-9470-f5547a8cc0cd` (v779) | `51c90a18-170c-4ae1-8f39-7b6225450581` |
+| `brvin-service` | production | `0e291556-7e84-4958-b132-712e6d394eda` (v156) | `9a3be7e6-33b0-4556-a1c4-da3c66d1c258` |
+| `parmar-ai-m14-staging` | isolated staging | `c29d046b-525b-4483-9f15-4b152f7178d2` (v102) | `80d08e74-0d0b-4fc3-a4a1-8ae7ac734f59` |
+| `brvin-teachers` | production | `68d6694c-6371-4cae-8a25-4af40ca15706` (v12) | `31ff2a01-b0f4-4be8-92d3-63e2d91adddf` |
+
+Both production Core Workers still select `cloudflare-ai-search`; `parmar-ai` keeps corpus-manifest writes disabled. Qdrant/Vertex retrieval bindings remain on the isolated staging Worker only. Teachers has only its private Core management/retrieval Service Bindings and its own D1; there is no consumer-side provider access.
+
+The isolated staging D1 currently contains one `m15_v2_multisource_runs` row: receipt `18728f63-e13d-4e73-880f-a2b980844d04`, status `passed`, started 12 November 2026 at 22:52:36 UTC. It is the pre-PR-247 baseline. It records Qdrant expected-location coverage of 6/7 distinct source/page pairs (missing M15 source page 2 for MS03) and three candidates for the MN01 Planck-constant no-match control. The project usage row remains 11, representing the previous ten paired-query reservations plus the authorized v2 check. No later paired receipt is present.
+
+The score-floor tolerance from Core PR #247 has since been deployed in production and staging. Staging workflow [#43494582920](https://github.com/ashini-x/parmar-ai/actions/runs/43494582920) passed typecheck, focused M14/M15 tests, provider-settings verification and Wrangler dry-run, then deployed staging v102. Core Release validation [#43506613105](https://github.com/ashini-x/parmar-ai/actions/runs/43506613105) passed the production deployment and post-deploy health/acceptance steps. These are deployment and CI evidence, not a post-fix retrieval receipt.
+
+**Immediate next action:** open the isolated [multi-source staging operator](https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark/multi-source), enter `BRVIN_M14_ADMIN_TOKEN` in its local password field, and run **Run paired Core v2 multi-source evaluation** once. Do not send the token to chat or GitHub. Do not repeat Prepare, re-upload either source, re-run Vision OCR, or rerun the component-rank diagnostic. The evaluation reserves ten staging project-query units. Verify MS03 returns the expected M15 physical page 2 after the fix, and record the new receipt. Treat MN01's no-match candidates separately; this run is not a calibrated no-match acceptance, broad qrels, load test, SLO or production cutover. Keep production on AI Search.

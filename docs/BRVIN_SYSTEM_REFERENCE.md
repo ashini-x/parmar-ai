@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 13 November 2026 (Core PR #241 merged; corrected M15 upload metadata wire format deployed to isolated staging Worker v98 at 100%; first protected Prepare attempt had failed before correction and must be retried; M15 auth receipt passed 8/8; Core production and Teachers production versions confirmed unchanged)  
+**Last verified against source and production infrastructure:** 14 November 2026 (Cloudflare read-back confirms Core production `parmar-ai` v779 and `brvin-service` v156, isolated M15 staging v102 and Teachers v12 at 100%; production remains on AI Search; two-source Prepare and the original pre-PR-247 paired receipt are complete, but no post-fix paired evaluation receipt exists)  
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/brvin-teachers` (separate downstream app); `ashini-x/askmoina-voice` remains an optional consumer
 
@@ -110,7 +110,7 @@ The two planes share the existing D1 registry and AI Search namespace. They do n
 - AskMoina Voice remains an optional independent consumer and must not be treated as a fixed BRVIN test-client host. The retired `brvin-test-client` scaffold must not be recreated.
 
 
-## 1.2 Current production and provider-migration state — 12 November 2026
+## 1.2 Historical production and provider-migration snapshot — 12 November 2026
 
 Cloudflare read-only deployment/settings read-back confirms the following current 100% deployments:
 
@@ -129,6 +129,25 @@ BRVIN Teachers remains a downstream private v2 consumer. Its Worker has only `BR
 
 **M15 status: IN PROGRESS.** The eight-page benchmark remains READY at 8/8; the pinned M14 handout is READY at 3/3. Live authorization/revocation passed 8/8 under receipt `e305a581-3d3c-469c-b2b5-093598783df4`. The corrected two-source Prepare gate passed with two project-mapped READY sources, seven Qdrant points and three completed AI Search page items. The protected paired Core v2 run is persisted as `passed` under receipt `18728f63-e13d-4e73-880f-a2b980844d04`; D1 read-back confirms one passed run, no failed runs and query usage 1→11 (ten reservations). All structural, authorized-source, searched-both-sources, provenance and quota checks passed. Quality diagnostics: eight query-specific expected target instances (seven unique source/page pairs); AI Search returned 7/8 per-query targets and 7/7 unique pages; Qdrant returned 7/8 per-query targets and 6/7 unique pages, missing M15 p2 in MS03. AI Search returned zero candidates on MN01 Planck no-match; Qdrant returned three unrelated candidates from M14 p1, M15 p8 and M15 p6. Sequential n=5 p50/p95 was 4,394/6,718 ms AI Search and 1,441/1,611 ms Qdrant/Vertex; this is not a load test/SLO. No answer generation, source/index writes, or production side effects occurred. The bounded operational/provenance gate passed, but quality is mixed and no overall provider winner is established. M15 remains open. Next is the protected read-only Qdrant dense/sparse component-rank diagnostic for MS01–MS04/MN01, followed by an evidence-based rank/no-match fix with positive and negative regression tests; no uncalibrated RRF cutoff. Later gates remain qrels/claim grounding, formula coverage, recovery, load, latency/cost and rollback. Production remains on AI Search; no cutover is authorized.
 
+
+## 1.3 Current Cloudflare read-back — 14 November 2026
+
+Cloudflare deployment, settings and binding read-back on 14 November 2026 confirms the following versions at 100% traffic:
+
+| Worker | Environment | Version | Deployment |
+|---|---|---|---|
+| `parmar-ai` | production | `04e4ac51-06a0-4514-9470-f5547a8cc0cd` (v779) | `51c90a18-170c-4ae1-8f39-7b6225450581` |
+| `brvin-service` | production | `0e291556-7e84-4958-b132-712e6d394eda` (v156) | `9a3be7e6-33b0-4556-a1c4-da3c66d1c258` |
+| `parmar-ai-m14-staging` | isolated staging | `c29d046b-525b-4483-9f15-4b152f7178d2` (v102) | `80d08e74-0d0b-4fc3-a4a1-8ae7ac734f59` |
+| `brvin-teachers` | production | `68d6694c-6371-4cae-8a25-4af40ca15706` (v12) | `31ff2a01-b0f4-4be8-92d3-63e2d91adddf` |
+
+The latest Core production Release validation [#43506613105](https://github.com/ashini-x/parmar-ai/actions/runs/43506613105) completed successfully, including production deployment and post-deploy health/acceptance steps. The isolated staging workflow [#43494582920](https://github.com/ashini-x/parmar-ai/actions/runs/43494582920) passed the focused M14/M15 tests, versioned provider-setting checks and Wrangler dry-run, then deployed only the isolated staging Worker. The latest Core main commit at the time of this read-back was a documentation-only migration-plan cleanup; it did not change deployed runtime code.
+
+**Production provider and consumer boundary:** `parmar-ai` and `brvin-service` both retain `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`; `parmar-ai` retains `BRVIN_CORPUS_MANIFEST_ENABLED=false`. The private retrieval Worker has D1 and the AI Search namespace, with no Qdrant URL/API key, Vertex embedding model or Vertex retrieval credential. The dedicated staging Worker alone has the M15 Qdrant/Vertex and separate staging AI Search bindings. Teachers v12 has only `BRVIN_MANAGEMENT` to `parmar-ai`, `BRVIN_SERVICE` to `brvin-service`, and its own D1; no Qdrant/Vertex credentials, SDKs, embedding generation or provider route are present in that consumer Worker.
+
+**Quota read-back:** the student-facing `DAILY_QUESTION_LIMIT` production variable is `10`; Core source defaults are also 10/day, with the existing burst settings retained (5 questions per 10 seconds). This is separate from the Core project-level retrieval allowance: `brvin-service` has `BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT=800`, and current source `src/brvin/service-core.ts` defines both `BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT` and `BRVIN_MAX_MONTHLY_QUERY_LIMIT` as 800. The 800/month project ceiling is therefore still a real code-and-config limit and does not meet the 300,000/month planning target.
+
+**Current M15 receipt state:** isolated staging D1 contains one row in `m15_v2_multisource_runs`: receipt `18728f63-e13d-4e73-880f-a2b980844d04`, status `passed`, started 12 November 2026 at 22:52:36 UTC. It is the pre-PR-247 baseline. Qdrant coverage remains 6/7 unique expected source/page pairs, with the MS03 M15 page-2 target missed; MN01 returned three unrelated candidates. November project usage is 11. No post-PR-247 paired retrieval receipt is present, so the fix's effect on the normal Core v2 result remains unverified.
 
 ## 2. Architecture decisions that must remain stable
 
