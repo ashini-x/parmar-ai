@@ -17,7 +17,7 @@ import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./teleg
 import { loadQuestionContextInParallel, runSuspensionAndModeLookup } from "./telegram/parallel-work";
 import { buildFatmanHelpFooter, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
 import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
-import { buildTelegramMenuCommands, isParmarSirCommand } from "./telegram/menu";
+import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isParmarSirCommand } from "./telegram/menu";
 import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
@@ -90,7 +90,7 @@ const PROFILE_EMPTY_TEXT = "Abhi main tumhare questions se tumhari SSC preparati
 interface TelegramMessage {
   message_id?: number;
   chat?: { id?: number; type?: string };
-  from?: { id?: number; is_bot?: boolean; username?: string; first_name?: string; last_name?: string };
+  from?: { id?: number; is_bot?: boolean; username?: string; first_name?: string; last_name?: string; language_code?: string };
   sender_business_bot?: { id?: number };
   business_connection_id?: string;
   text?: string;
@@ -601,7 +601,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     // front of the student's first visible response.
     ctx.waitUntil(bestEffortTelegram(
       "start_menu_sync",
-      () => syncTelegramCommandMenu(env, bot.connectionId),
+      () => syncTelegramCommandMenu(env, bot.connectionId, chatId, message?.from?.language_code),
     ));
 
     // Prefetch only the short-lived Google OAuth token for the first study
@@ -621,7 +621,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (isHelp(text)) {
     queueAnalytics(ctx, "help", () => recordEvent(env, "help", analyticsUser));
-    ctx.waitUntil(bestEffortTelegram("help_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId)));
+    ctx.waitUntil(bestEffortTelegram("help_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId, chatId, message?.from?.language_code)));
     const mode = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId }).catch(() => ({ ok: true as const, active: false }));
     const fatmanReady = await isFatmanReady(env);
     const callbackWebhookReady = fatmanReady
@@ -2203,8 +2203,18 @@ function buildSetupCommands() {
   return buildTelegramMenuCommands();
 }
 
-function syncTelegramCommandMenu(env: Env, botConnectionId: string): Promise<unknown> {
-  return telegramApi(env, "setMyCommands", { commands: buildSetupCommands() }, botConnectionId);
+async function syncTelegramCommandMenu(
+  env: Env,
+  botConnectionId: string,
+  chatId?: number,
+  languageCode?: string,
+): Promise<boolean> {
+  const commands = buildSetupCommands();
+  const targets = buildTelegramMenuCommandTargets(chatId, languageCode);
+  const results = await Promise.all(targets.map((target) =>
+    telegramApi(env, "setMyCommands", { commands, ...target }, botConnectionId),
+  ));
+  return results.every((result) => result === true);
 }
 
 async function syncTelegramWebhookForCallbacks(
@@ -2255,10 +2265,16 @@ async function telegramSetup(request: Request, env: Env, requestId: string): Pro
     buildTelegramWebhookSetupPayload(webhookUrl, webhookSecret, token),
   );
 
-  const commandsResult = await telegramSetupMethod(env, "setMyCommands", {
-    commands: buildSetupCommands(),
-    botTokenOverride: token,
-  });
+  const commands = buildSetupCommands();
+  const commandTargets = buildTelegramMenuCommandTargets();
+  const commandResults = await Promise.all(commandTargets.map((target) =>
+    telegramSetupMethod(env, "setMyCommands", {
+      commands,
+      ...target,
+      botTokenOverride: token,
+    }),
+  ));
+  const commandsResult = commandResults.every((result) => result === true);
 
   logger.info("telegram_webhook_setup", {
     requestId,
