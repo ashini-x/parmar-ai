@@ -25,7 +25,7 @@
     "APP_VERSION": "2.8.0",
     "BURST_QUESTION_LIMIT": "5",
     "BURST_WINDOW_SECONDS": "10",
-    "DAILY_QUESTION_LIMIT": "20",
+    "DAILY_QUESTION_LIMIT": "10",
     "ENVIRONMENT": "production",
     "FATMAN_ENABLED": "true",
     "FATMAN_DOCUMENT_VERSION": "fatman-2026-8b183803",
@@ -128,7 +128,7 @@
       "BRVIN_HOME_ACCOUNT_ID": "",
       "ENVIRONMENT": "preview",
       "FATMAN_ENABLED": "false",
-      "DAILY_QUESTION_LIMIT": "20"
+      "DAILY_QUESTION_LIMIT": "10"
     },
     "d1_databases": [
       {

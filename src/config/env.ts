@@ -439,7 +439,7 @@ export function getConfig(env: Env) {
     maxThinkingLevel: normalizeThinkingLevel(env.GEMINI_THINKING_LEVEL),
     maxOutputTokens: parsePositiveInt(env.MAX_OUTPUT_TOKENS, 1_200),
     maxQuestionLength: parsePositiveInt(env.MAX_QUESTION_LENGTH, 4_000),
-    dailyQuestionLimit: parsePositiveInt(env.DAILY_QUESTION_LIMIT, 20),
+    dailyQuestionLimit: parsePositiveInt(env.DAILY_QUESTION_LIMIT, 10),
     burstQuestionLimit: parsePositiveInt(env.BURST_QUESTION_LIMIT, 5),
     burstWindowSeconds: parsePositiveInt(env.BURST_WINDOW_SECONDS, 10),
     aiBudgetUsd: parseNonNegativeFloat(env.AI_BUDGET_USD, 0),
