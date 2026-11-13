@@ -76,6 +76,20 @@ export interface BrvinSource {
   page_count: number;
 }
 
+/**
+ * Compare provider scores with a tiny floating-point tolerance.
+ *
+ * Weighted RRF is a sum of fractional rank contributions. A mathematically
+ * exact boundary value (for example 0.7 / 5 + 0.3 / 5 = 0.2) can be encoded
+ * just below that boundary by IEEE-754 rounding. Treat only that machine-
+ * precision difference as equality; materially sub-threshold scores still
+ * fail the configured relevance floor.
+ */
+export function isBrvinScoreBelowFloor(score: number, floor: number): boolean {
+  const tolerance = Number.EPSILON * 8 * Math.max(1, Math.abs(score), Math.abs(floor));
+  return score < floor - tolerance;
+}
+
 export class BrvinRetrievalError extends Error {
   readonly retryable: boolean;
 
@@ -518,7 +532,7 @@ export async function retrieveBrvinProjectContextForProject(
         if (score === undefined) continue;
         if (rerankingScore !== undefined) {
           if (rerankingScore < rerankingMinScore) continue;
-        } else if ((vectorScore ?? fusedScore ?? 0) < minScore) {
+        } else if (isBrvinScoreBelowFloor(vectorScore ?? fusedScore ?? 0, minScore)) {
           continue;
         }
 
