@@ -1,6 +1,6 @@
 # BRVIN 2 — Current State and Continuation Plan
 
-**Status date:** 13 November 2026  
+**Status date:** 14 November 2026  
 **Repository:** `ashini-x/parmar-ai`  
 **Production workspace:** [BRVIN Admin](https://parmar-ai.thenewtongs.workers.dev/admin/brvin)
 
@@ -31,6 +31,8 @@ Use the documents below in this order. They are the active reference set for BRV
 9. [BRVIN_OPERATIONS_RUNBOOK.md](BRVIN_OPERATIONS_RUNBOOK.md) — deeper engineering/operator procedures, API routes, troubleshooting and deployment.
 10. [BRVIN_PRIVATE_RETRIEVAL_API.md](BRVIN_PRIVATE_RETRIEVAL_API.md) — legacy v1 contract only; consult it when maintaining existing v1 compatibility, not for a new integration.
 11. [BRVIN_M15_V2_AUTHORIZATION_STAGING_RUNBOOK.md](BRVIN_M15_V2_AUTHORIZATION_STAGING_RUNBOOK.md) and [BRVIN_M15_MULTI_SOURCE_CORE_V2_STAGING_RUNBOOK.md](BRVIN_M15_MULTI_SOURCE_CORE_V2_STAGING_RUNBOOK.md) — live M15 v2 authorization and multi-source staging actions.
+12. [BRVIN_SCALE_AND_SEMANTIC_CACHE_PLAN.md](BRVIN_SCALE_AND_SEMANTIC_CACHE_PLAN.md) — approved 1,000-DAU/10-questions-per-day capacity target, Qdrant/AI Search economics, semantic-cache safety, quota redesign and load/rollout acceptance.
+13. [BRVIN_NEW_CHAT_CONTINUATION_PROMPT.md](BRVIN_NEW_CHAT_CONTINUATION_PROMPT.md) — durable prompt to copy into any new chat; it instructs the next session to recover live state rather than relying on stale milestone numbers.
 
 The [documentation index](README.md) lists these references. The old autonomous Project Factory proposal and earlier M3 connector/test-client design were removed from the active docs tree because they describe superseded or retired work. Git history preserves the prior text; it is not an implementation instruction.
 
@@ -165,11 +167,15 @@ D1 remains the authoritative project/source grant, readiness and quota boundary;
 
 The same five-stage upload flow, page-index map, retry/recovery semantics and READY gating are compatibility requirements in Core Admin and BRVIN Teachers. Only limited provider-specific wording/advanced diagnostics may change; do not redesign either admin UI.
 
+## Approved scale and caching objective — 14 November 2026
+
+The product capacity target is 1,000 daily active aspirants × 10 questions/day = 10,000 questions/day and 300,000 questions per 30-day month. The target retrieval provider remains Vertex AI embeddings + Qdrant dense/BM25 hybrid retrieval + Core RRF. Qdrant is not literally unlimited; use its resource-based Standard tier for production after load sizing, with Free limited to staging/prototypes. The current student 10/day allowance is distinct from the Core project monthly quota; the last verified Core code/config still caps a project at 800 queries/month and must be redesigned before the production target can be met.
+
+Semantic caching is an approved design requirement, not an implemented feature. Exact normalized caching comes first; semantic answer caching must be labelled-evaluation-backed and safe for numeric near-misses, permissions and source-version changes. Final answer caching belongs to consumers; Core can only cache retrieval evidence/results without bypassing D1 authorization. Full rules are in [BRVIN_SCALE_AND_SEMANTIC_CACHE_PLAN.md](BRVIN_SCALE_AND_SEMANTIC_CACHE_PLAN.md). This does not change the M15–M17 gate sequence or authorize production cutover.
+
 ## 8. New-chat continuation instruction
 
-Start a new BRVIN chat with this instruction:
-
-> Continue BRVIN 2 in `ashini-x/parmar-ai`. Read this file first, then `docs/BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md`, `docs/BRVIN_2_PRODUCT_SCOPE_AND_FINAL_MILESTONES.md`, `docs/BRVIN_SYSTEM_REFERENCE.md`, the frozen v2 RPC contract, `docs/BRVIN_M14_STAGING_SETUP.md` and `docs/BRVIN_M14_CHUNK_QRELS.md`. Core PRs #194, #196, #199 and #201 are merged; M14 staging Worker version 76 is deployed at 100%. Its Qdrant query path uses Core-side contribution-weighted RRF (`k=2`): semantic intent uses dense/sparse weights 70/30, while symbolic/formula intent uses 30/70. Worded formula cues such as “equation”, “formula”, “expression”, “uppercase”, “lowercase”, “notation” and “multiplied by” now route as symbolic intent; conceptual, paraphrase, worked-example, friction, bus-braking and Planck no-match prompts remain semantic unless they contain a formula cue. The seven-point fixture replays the friction ranks, yielding page-3 worked-example score 0.4000, page-2 context 0.3333, and page-1 overview 0.2667. Source-grounded assistant-adjudicated qrels v0.1 cover seven stored chunks × ten positive and two no-match cases; the predicted friction nDCG@5/MRR improvement is in-sample, not independent validation. M14 staging Worker v75 is `52468073-ee79-487a-9c02-19ef08c404ee`, deployment `9f2f0264-154b-4ca5-aed6-2e20e1aadf25`. PR #199 added the chunk-evidence receipt; its M14 staging and full Core release validations passed, with paired production smoke tests succeeding. Production Core still explicitly selects `cloudflare-ai-search`; manifest writes remain disabled. Teachers remains on version 12 and has no deployed Gemini answer/abstention route. The v75 positive suite has been scored against qrels (nDCG@5 0.8556, MRR@5 0.8500, grade-2+ recall@5 100%, Precision@5 0.40). The v76 component traces show dense is stronger for the natural-language exact-equation prompt, while both components put direct page-2 evidence at ranks 2/3 for uppercase F but disagree on top distractors. Keep global weights provisional; test a narrow formula-discovery intent distinction and exact-case symbol evidence signal. Remaining work: two-component-query latency/cost overhead, authorization/isolation, revocation, retry/recovery, HNSW/load gates, plus answer-abstention only after an actual consumer answer path exists. The bearer-protected diagnostic token remains a Worker secret and must not be retrieved or exposed; the operator UI requires the token to execute the live receipt. Do not re-upload or re-OCR the fixed corpus. Preserve D1 authorization, private v2 contract, existing admin UIs and secret isolation; never expose Qdrant/Vertex credentials to Teachers.
+For a new session, copy the complete, maintained prompt from [BRVIN_NEW_CHAT_CONTINUATION_PROMPT.md](BRVIN_NEW_CHAT_CONTINUATION_PROMPT.md). Do not use the historical prompt fragment below this section or hard-code a milestone number from an old conversation. The dedicated prompt tells the next session to read the canonical documents and verify current commits, issues, CI, deployments, selectors and bindings before choosing the next action.
 
 When a future change alters code, D1, bindings, access rules, ingestion, retrieval or production behavior, update the relevant current reference in the same PR. Keep this file concise and current; do not append a second historical milestone ledger.
 
