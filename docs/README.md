@@ -48,6 +48,8 @@ The generic Telegram runtime should be copied independently from Parmar's SSC/Fa
 | [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md) | Current as-built architecture, infrastructure, D1 model, trust boundary and production state. |
 | [BRVIN_2_ARCHITECTURE_DECISIONS.md](BRVIN_2_ARCHITECTURE_DECISIONS.md) | Accepted architecture decisions; historical evidence is labelled and is not a task list. |
 | [BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md](BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md) | Approved M12–M17 provider modernization plan, current implementation/acceptance status, unified math-aware hybrid retrieval, compatibility and rollback gates. |
+| [BRVIN_SCALE_AND_SEMANTIC_CACHE_PLAN.md](BRVIN_SCALE_AND_SEMANTIC_CACHE_PLAN.md) | Approved 1,000-DAU capacity target, Qdrant economics, semantic-cache design, quota redesign and load/rollout requirements. |
+| [BRVIN_NEW_CHAT_CONTINUATION_PROMPT.md](BRVIN_NEW_CHAT_CONTINUATION_PROMPT.md) | Copyable, self-refreshing new-chat prompt that recovers current status from GitHub and Cloudflare. |
 | [BRVIN_2_RPC_V2_CONTRACT.md](BRVIN_2_RPC_V2_CONTRACT.md) | Current private v2 retrieval and connection-proof contract. |
 | [BRVIN_INTEGRATION_GUIDE.md](BRVIN_INTEGRATION_GUIDE.md) | One-time integration of a same-account consumer Worker. |
 | [BRVIN_ADMIN_RUNBOOK.md](BRVIN_ADMIN_RUNBOOK.md) | Day-to-day administrator instructions. |
