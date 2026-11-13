@@ -338,7 +338,7 @@ async function handleHelpMenuCallback(
       await sendTelegramMessage(
         env,
         chatId,
-        "Target exam choose karo:\\n/exam cgl\\n/exam chsl\\n/exam cpo\\n/exam mts\\n/exam gd\\n/exam steno",
+        "Target exam choose karo:\n/exam cgl\n/exam chsl\n/exam cpo\n/exam mts\n/exam gd\n/exam steno",
         undefined,
         botConnectionId,
       );
