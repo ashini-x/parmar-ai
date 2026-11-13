@@ -1,0 +1,54 @@
+name: Import /start welcome voice
+on:
+  push:
+    branches:
+      - automation/start-welcome-voice
+    paths:
+      - .voice-import-trigger
+permissions:
+  contents: write
+jobs:
+  import-voice:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the branch
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - name: Download and convert the welcome recording
+        run: |
+          set -euo pipefail
+          SOURCE="/tmp/start-welcome-source.ogg"
+          OUTPUT="assets/telegram-welcome-20261114.ogg"
+          mkdir -p assets
+          curl --fail --location --retry 3 --retry-all-errors \
+            'https://drive.google.com/uc?export=download&id=1dLNrb8qQNzx4SO0Q-09GEfOqiUggnSyz' \
+            --output "$SOURCE"
+          test -s "$SOURCE"
+          echo "Downloaded source size: $(stat -c%s "$SOURCE") bytes"
+          ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,channels,sample_rate \
+            -show_entries format=duration -of json "$SOURCE"
+          ffmpeg -hide_banner -y -i "$SOURCE" -map 0:a:0 -map_metadata -1 \
+            -af 'asetpts=N/SR/TB' -ac 1 -ar 48000 -c:a libopus -b:a 128k \
+            -vbr on -compression_level 10 -application voip "$OUTPUT"
+          CODEC="$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 "$OUTPUT")"
+          CHANNELS="$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$OUTPUT")"
+          RATE="$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate -of csv=p=0 "$OUTPUT")"
+          DURATION="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$OUTPUT")"
+          test "$CODEC" = "opus"
+          test "$CHANNELS" = "1"
+          test "$RATE" = "48000"
+          python3 -c 'import sys; d=float(sys.argv[1]); assert 1 < d < 180, d' "$DURATION"
+          echo "Verified output: codec=$CODEC channels=$CHANNELS sample_rate=$RATE duration=$DURATION size=$(stat -c%s "$OUTPUT")"
+      - name: Commit the converted voice asset
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/telegram-welcome-20261114.ogg
+          git commit -m "Add new Telegram /start welcome voice [skip ci]"
+          git push
