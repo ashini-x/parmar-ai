@@ -1,0 +1,79 @@
+name: Import Telegram Parmar voice (one-time)
+
+on:
+  push:
+    branches:
+      - feat/telegram-parmar-voice-opus
+    paths:
+      - ".github/workflows/import-telegram-parmar-voice-once.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: import-telegram-parmar-voice
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/telegram-parmar-voice-opus
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Drive downloader
+        run: python -m pip install --disable-pip-version-check "gdown==5.2.0"
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+
+      - name: Download the original recording from Google Drive
+        env:
+          DRIVE_FILE_ID: 1nhw8BeZVaZNS7UncGsxgnAsyTfCAYKHC
+        run: |
+          set -euo pipefail
+          gdown "https://drive.google.com/uc?id=${DRIVE_FILE_ID}" --output /tmp/telegram-parmar-source.ogg
+          test -s /tmp/telegram-parmar-source.ogg
+          file /tmp/telegram-parmar-source.ogg
+          ffprobe -v error -show_entries format=duration,size:stream=codec_name,sample_rate,channels,bit_rate -of json /tmp/telegram-parmar-source.ogg
+
+      - name: Preserve the source or encode losslessly as practical for Telegram voice
+        run: |
+          set -euo pipefail
+          source=/tmp/telegram-parmar-source.ogg
+          output=assets/telegram-parmar.ogg
+          codec="$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=nw=1:nk=1 "$source")"
+          if [[ "$codec" == "opus" ]]; then
+            echo "Source is already Opus; preserving original bytes without re-encoding."
+            cp "$source" "$output"
+          else
+            echo "Source codec is $codec; encoding once to high-bitrate Opus for Telegram."
+            ffmpeg -hide_banner -y -i "$source" -map 0:a:0 -vn \
+              -c:a libopus -b:a 128k -vbr on -compression_level 10 \
+              -application voip -frame_duration 20 -ac 1 -ar 48000 "$output"
+          fi
+          test -s "$output"
+          output_codec="$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=nw=1:nk=1 "$output")"
+          [[ "$output_codec" == "opus" ]]
+          echo "sha256=$(sha256sum "$source" | awk '{print $1}')" >> "$GITHUB_STEP_SUMMARY"
+          echo "output_sha256=$(sha256sum "$output" | awk '{print $1}')" >> "$GITHUB_STEP_SUMMARY"
+          ffprobe -v error -show_entries format=duration,size:stream=codec_name,sample_rate,channels,bit_rate -of json "$output" | tee /tmp/output-probe.json
+          cat /tmp/output-probe.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit the dedicated voice asset
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/telegram-parmar.ogg
+          git commit -m "Add high-quality OGG Opus voice for Telegram /parmar"
+          git push origin HEAD:feat/telegram-parmar-voice-opus
