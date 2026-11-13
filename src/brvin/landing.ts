@@ -168,7 +168,7 @@ export function brvinLandingPage(): Response {
     .code-top { display: flex; justify-content: space-between; padding: 15px 19px; border-bottom: 1px solid #303431; color: #929990; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
     .code-panel pre { overflow-x: auto; margin: 0; padding: 24px; color: #d4e2cb; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 1.9; }
     .code-panel .comment { color: #818b7a; }
-    .code-panel .key { color: #c2e6a9; }
+    .code-panel .key { color: #c2e6a9; }\n    .code-note { margin: 0; padding: 0 24px 20px; color: #8d958a; font-size: 9px; line-height: 1.5; }
     .developer-notes { display: grid; gap: 12px; margin-top: 26px; }
     .developer-note { display: flex; gap: 11px; align-items: flex-start; color: #4d504b; font-size: 12px; line-height: 1.55; }
     .developer-note .feature-tick { margin-top: 1px; }
@@ -480,8 +480,8 @@ export function brvinLandingPage(): Response {
           <div class="hero-actions"><a class="button" href="/admin/brvin">Connect an application <span class="arrow">↗</span></a></div>
         </div>
         <div class="code-panel">
-          <div class="code-top"><span>Integration model</span><span>Private service boundary</span></div>
-          <pre><span class="comment">// Your application owns the user experience</span>
+          <div class="code-top"><span>Conceptual integration flow</span><span>Private service boundary</span></div>
+          <pre><span class="comment">// Pseudocode: your application owns the user experience</span>
 const result = await knowledge.retrieve({
   <span class="key">projectId</span>: "authorised-project",
   <span class="key">query</span>: "Explain the key concept",
@@ -520,7 +520,7 @@ renderAnswer({
         <div class="footer-columns">
           <div class="footer-column"><strong>Platform</strong><div class="footer-links"><a href="#platform">Knowledge workspace</a><a href="#capabilities">Retrieval</a><a href="#trust">Trust & governance</a></div></div>
           <div class="footer-column"><strong>Resources</strong><div class="footer-links"><a href="#developers">Developers</a><a href="/admin/brvin">Admin console</a><a href="/contact">Contact</a></div></div>
-          <div class="footer-column"><strong>Company</strong><div class="footer-links"><a href="#trust">Trust approach</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></div></div>
+          <div class="footer-column"><strong>Company</strong><div class="footer-links"><a href="#trust">Trust approach</a><a href="/contact">Contact</a></div></div>
         </div>
       </div>
       <div class="footer-bottom"><span>© 2026 BRɅIN. All rights reserved.</span><span>Knowledge, with its sources intact.</span></div>
