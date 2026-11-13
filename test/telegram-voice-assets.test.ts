@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { HELP_VOICE_URL, START_WELCOME_VOICE_URL } from "../src/telegram/voice-assets";
+import { HELP_VOICE_URL, PARMAR_SIR_VOICE_URL, START_WELCOME_VOICE_URL } from "../src/telegram/voice-assets";
 
 describe("Telegram voice asset routing", () => {
-  it("uses the dedicated Drive recording for Help without changing the Start/Parmar Sir recording", () => {
+  it("keeps dedicated recordings for Help, Parmar Sir, and Start", () => {
     expect(HELP_VOICE_URL).toBe("https://raw.githubusercontent.com/ashini-x/parmar-ai/main/assets/telegram-help.ogg");
+    expect(PARMAR_SIR_VOICE_URL).toBe("https://raw.githubusercontent.com/ashini-x/parmar-ai/main/assets/telegram-parmar.ogg");
     expect(START_WELCOME_VOICE_URL).toBe("https://raw.githubusercontent.com/ashini-x/parmar-ai/main/assets/telegram-welcome.ogg");
-    expect(HELP_VOICE_URL).not.toBe(START_WELCOME_VOICE_URL);
+    expect(new Set([HELP_VOICE_URL, PARMAR_SIR_VOICE_URL, START_WELCOME_VOICE_URL]).size).toBe(3);
   });
 });
