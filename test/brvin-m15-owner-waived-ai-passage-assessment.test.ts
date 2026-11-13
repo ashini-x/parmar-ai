@@ -189,7 +189,7 @@ describe("M15 exploratory relevance-gate feasibility (offline only)", () => {
       positiveKept: 11, negativesCleared: 3, h01Kept: true, falseAbstentions: ["P02"],
     });
     expect(summary(lexical)).toEqual({
-      positiveKept: 11, negativesCleared: 4, h01Kept: true, falseAbstentions: ["P06"],
+      positiveKept: 11, negativesCleared: 4, h01Kept: false, falseAbstentions: ["P06"],
     });
   });
   it("keeps owner-waived AI grades distinct from independent human qrels", () => {

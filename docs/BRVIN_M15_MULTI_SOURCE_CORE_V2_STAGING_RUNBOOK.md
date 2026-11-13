@@ -183,7 +183,7 @@ The first offline ablation is complete and documented in [BRVIN_M15_RELEVANCE_GA
 - No gate preserves 12/12 positive queries, but Qdrant returns candidates for all 4/4 out-of-corpus questions (20 candidates: 15 grade 0 and 5 grade 1).
 - A fixed RRF cutoff of 0.38 preserves 12/12 positives but clears only 3/4 negative controls; at 0.42 it clears 4/4 but loses P02.
 - A leave-one-query-out lexical coverage proxy clears 4/4 negatives but loses held-out positive P06 (11/12 query-positive recall).
-- Both filters preserve H01's grade-3 source correction, which is not a true abstention case.
+- The tested RRF cutoffs retain H01's grade-3 correction, but the lexical proxy removes it; this adds a second false-abstention case.
 
 **Decision:** no RRF cutoff, lexical gate, evidence-sufficiency policy or reranker is selected. This is a single-subject owner-waived AI-labelled pool, not independent human qrels. Do not alter runtime behavior.
 

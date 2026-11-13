@@ -20,9 +20,9 @@ The test-only evaluation compares no gate, fixed RRF score cutoffs and a single-
 | No gate | 12/12 | 0/4 | All 20 Qdrant negative candidates remain |
 | Fixed RRF cutoff `>= 0.38` | 12/12 | 3/4 | N04 remains noisy |
 | Fixed RRF cutoff `>= 0.42` | 11/12 | 4/4 | P02 is falsely abstained |
-| LOQO lexical query-term coverage | 11/12 | 4/4 | P06 is falsely abstained |
+| LOQO lexical query-term coverage | 11/12 | 4/4 | P06 is falsely abstained; H01's correction is suppressed |
 
-Both single-feature gates retained H01's grade-3 correction passage, but neither meets the positive-recall requirement. RRF values are rank-fusion signals, not calibrated relevance probabilities. The lexical feature is distinct non-stopword query-token coverage; it is not a semantic model, exact-symbol verifier or complete evidence-sufficiency gate.
+The RRF-based cutoff retained H01's grade-3 correction, but the lexical proxy also suppressed it; neither feature gate meets the positive-recall requirement. RRF values are rank-fusion signals, not calibrated relevance probabilities. The lexical feature is distinct non-stopword query-token coverage; it is not a semantic model, exact-symbol verifier or complete evidence-sufficiency gate. In the leave-one-query-out fold, it suppresses H01's grade-3 correction passage as well as falsely abstaining on P06.
 
 This is a feasibility diagnostic on one source/subject and owner-waived labels, not a calibrated production model. The new two-source MN01 result is an additional negative diagnostic; its candidates are not part of the 109-candidate labelled pool.
 
