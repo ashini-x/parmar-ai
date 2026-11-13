@@ -66,18 +66,23 @@ jobs:
 
           python - <<'PY'
           from pathlib import Path
+          new = "https://raw.githubusercontent.com/ashini-x/parmar-ai/main/assets/telegram-help.ogg"
+
           source = Path("src/telegram/voice-assets.ts")
-          content = source.read_text()
-          old = 'https://drive.google.com/uc?export=download&id=1T5seafoB-RB3AKebibhDQx1CA_VqAb7s'
-          new = 'https://raw.githubusercontent.com/ashini-x/parmar-ai/main/assets/telegram-help.ogg'
-          if old not in content:
-              raise SystemExit("Expected Drive URL was not found in voice-assets.ts")
-          source.write_text(content.replace(old, new))
+          lines = source.read_text().splitlines()
+          matches = [i for i, line in enumerate(lines) if line.startswith("export const HELP_VOICE_URL =")]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected one HELP_VOICE_URL constant, found {len(matches)}")
+          lines[matches[0]] = f'export const HELP_VOICE_URL = "{new}";'
+          source.write_text("\n".join(lines) + "\n")
+
           test = Path("test/telegram-voice-assets.test.ts")
-          test_content = test.read_text()
-          if old not in test_content:
-              raise SystemExit("Expected Drive URL was not found in the voice asset test")
-          test.write_text(test_content.replace(old, new))
+          lines = test.read_text().splitlines()
+          matches = [i for i, line in enumerate(lines) if "expect(HELP_VOICE_URL).toBe(" in line]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected one HELP_VOICE_URL assertion, found {len(matches)}")
+          lines[matches[0]] = f'    expect(HELP_VOICE_URL).toBe("{new}");'
+          test.write_text("\n".join(lines) + "\n")
           PY
 
           git rm .github/workflows/import-telegram-help-voice-once.yml
