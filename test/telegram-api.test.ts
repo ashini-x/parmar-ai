@@ -5,6 +5,7 @@ import {
   sendTelegramMessageWithToken,
   sendTelegramVoiceWithToken,
   buildFatmanStartMarkup,
+  buildFatmanExitMarkup,
 } from "../src/telegram/api";
 import type { Env } from "../src/config/env";
 
@@ -62,6 +63,31 @@ describe("BRɅIN Telegram button", () => {
       chat_id: 42,
       text: "Answer text",
       reply_markup: creatorKeyboard,
+    });
+  });
+
+  it("sends Fatman answers with only the Exit Fatman inline button", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 126 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(sendTelegramMessageWithToken(
+      "bot-token", 42, "Fatman answer", undefined, false, buildFatmanExitMarkup(),
+    )).resolves.toEqual({ message_id: 126 });
+
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
+    expect(JSON.parse(String(requestInit.body))).toMatchObject({
+      chat_id: 42,
+      text: "Fatman answer",
+      reply_markup: {
+        inline_keyboard: [[{ text: "Exit Fatman", callback_data: "fatman:exit" }]],
+      },
     });
   });
 

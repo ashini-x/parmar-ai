@@ -663,7 +663,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
             : "Fatman Mode is OFF. New doubts will use the usual SSC study mode.",
         messageId,
         bot.connectionId,
-        true,
+        !active,
         ready ? (active ? buildFatmanExitMarkup() : buildFatmanModeMarkup(false)) : undefined,
       ));
       return withRequestId(json({ ok: true, fatmanMode: active }), requestId);
