@@ -168,7 +168,8 @@ export function brvinLandingPage(): Response {
     .code-top { display: flex; justify-content: space-between; padding: 15px 19px; border-bottom: 1px solid #303431; color: #929990; font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
     .code-panel pre { overflow-x: auto; margin: 0; padding: 24px; color: #d4e2cb; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; line-height: 1.9; }
     .code-panel .comment { color: #818b7a; }
-    .code-panel .key { color: #c2e6a9; }\n    .code-note { margin: 0; padding: 0 24px 20px; color: #8d958a; font-size: 9px; line-height: 1.5; }
+    .code-panel .key { color: #c2e6a9; }
+    .code-note { margin: 0; padding: 0 24px 20px; color: #8d958a; font-size: 9px; line-height: 1.5; }
     .developer-notes { display: grid; gap: 12px; margin-top: 26px; }
     .developer-note { display: flex; gap: 11px; align-items: flex-start; color: #4d504b; font-size: 12px; line-height: 1.55; }
     .developer-note .feature-tick { margin-top: 1px; }
