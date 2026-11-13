@@ -82,7 +82,7 @@ import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, findTelegramBotByWebhookSecret, getA
 const QUEUE_MAX_RETRIES = 10;
 const STATUS_TEXT = "Thinking…";
 const BOT_BRAND_NAME = "परमार्थAI";
-import { HELP_VOICE_URL, START_WELCOME_VOICE_URL } from "./telegram/voice-assets";
+import { HELP_VOICE_URL, PARMAR_SIR_VOICE_URL, START_WELCOME_VOICE_URL } from "./telegram/voice-assets";
 const RATE_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
 const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
 const FINAL_FAILURE_TEXT = "Bhai, is waqt answer complete nahi ho paaya. Tumhara sawal retry hua hai; same doubt dobara bhejna. 🙏";
@@ -665,7 +665,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       sendTelegramVoiceWithToken(
         bot.token,
         chatId,
-        START_WELCOME_VOICE_URL,
+        PARMAR_SIR_VOICE_URL,
         false,
         buildFatmanStartMarkup(),
       ),
