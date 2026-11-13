@@ -1,6 +1,6 @@
 # BRVIN 2 — Product Scope and Active Milestone Acceptance
 
-**Status date:** 13 November 2026  
+**Status date:** 14 November 2026  
 **Status authority:** [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md)  
 **As-built authority:** [BRVIN_SYSTEM_REFERENCE.md](BRVIN_SYSTEM_REFERENCE.md)
 
@@ -96,6 +96,17 @@ M6–M11 remain complete and unchanged. The next planned sequence is defined in 
 | M16 | Coordinated Core Admin and Teachers UI/consumer compatibility; preserve current workflows and v2 response contract. | PLANNED  | [Core #145](https://github.com/ashini-x/parmar-ai/issues/145) · [Teachers #18](https://github.com/ashini-x/brvin-teachers/issues/18) |
 | M17 | Controlled canary/production cutover, monitoring, rollback, 14-day soak and only then explicit legacy retirement review. | PLANNED  | [Core #146](https://github.com/ashini-x/parmar-ai/issues/146) |
 
+
+
+## Scale and semantic-cache objective — approved 14 November 2026
+
+The cross-cutting capacity target for the existing M15–M17 modernization is **1,000 daily active aspirants, each using up to 10 questions/day: 10,000 questions/day or 300,000 per 30-day month**. Load acceptance must include realistic bursts, not only daily-average throughput. This is a planning target, not evidence that current production has been load-tested or can already serve that demand.
+
+The provider target remains Vertex AI embeddings plus Qdrant Cloud dense/BM25 hybrid retrieval and Core-side RRF. Qdrant Standard avoids a fixed included monthly query allowance like Cloudflare AI Search, but throughput remains resource-bounded; Qdrant Free is for staging/prototypes, not a production availability commitment. Cloudflare AI Search remains the live provider and rollback path until M17's canary and required 14-day soak pass.
+
+Semantic caching is approved as an efficiency requirement, with strict separation of ownership: Core may cache authorized retrieval evidence/results; final-answer cache belongs to the consumer's application layer because the consumer owns Gemini generation. D1 identity, grants, source readiness and usage checks must precede cache reuse. Cache keys/invalidation must account for tenant/project/source scope, corpus generation and model/prompt versions. Numeric calculations with changed operands, units or assumptions, time-sensitive/personalized/context-dependent questions and ambiguous/no-match questions must bypass semantic answer reuse unless separately proven safe.
+
+The last verified Core system reference records an 800-query/month project-level allowance with a code maximum of 800. This is not the same as the student-facing 10/day allowance. Core must redesign the project-wide ceiling and test headroom for at least the 300,000/month target plus measured bursts while preserving authorization, usage accounting, fair-share and abuse protection. This decision adds acceptance requirements to M15–M17; it does not create a new numbered milestone or mark any implementation complete. See [BRVIN_SCALE_AND_SEMANTIC_CACHE_PLAN.md](BRVIN_SCALE_AND_SEMANTIC_CACHE_PLAN.md).
 
 **No production provider cutover has been performed.** The 12 November Cloudflare read-back confirms production `parmar-ai` version `9d289364-a65d-4fa4-9df7-84f9418eeac2` (deployment `fae0c117-5330-428d-b0cb-0ccb4798acc7`) and private `brvin-service` version `fd1fb0c0-98f9-46a8-bf63-6b0f86167359` (deployment `f1c1e8d7-953b-4c75-838c-45c9884f1380`) are both at 100%. Both still select `BRVIN_RETRIEVAL_PROVIDER=cloudflare-ai-search`; `parmar-ai` has `BRVIN_CORPUS_MANIFEST_ENABLED=false`. These version IDs were created by an unintended test-only paired redeploy after Core PR #229; that PR changed only tests/documentation, and this was not a provider cutover or a runtime source change.
 
