@@ -17,6 +17,7 @@ import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./teleg
 import { loadQuestionContextInParallel, runSuspensionAndModeLookup } from "./telegram/parallel-work";
 import { buildFatmanHelpFooter, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
 import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
+import { buildTelegramMenuCommands, isParmarSirCommand } from "./telegram/menu";
 import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
@@ -38,6 +39,8 @@ import {
   TelegramMediaError,
   downloadTelegramPhotos,
   buildFatmanModeMarkup,
+  buildFatmanStartMarkup,
+  buildFatmanExitMarkup,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, ensureAnalyticsSchema, getLatestFatmanReleaseQaRun, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
@@ -352,8 +355,9 @@ async function handleFatmanModeCallback(
           env,
           chatId,
           callback.message!.message_id!,
-          buildFatmanModeMarkup(active),
+          active ? buildFatmanExitMarkup() : { inline_keyboard: [] },
           botConnectionId,
+          !active,
         );
       } catch (error) {
         logger.warn("fatman_mode_keyboard_refresh_failed", {
@@ -371,7 +375,8 @@ async function handleFatmanModeCallback(
         : "✅ Fatman Mode is OFF. New doubts will use the usual SSC study mode.",
       undefined,
       botConnectionId,
-      true,
+      !active,
+      active ? buildFatmanExitMarkup() : undefined,
     );
   } catch (error) {
     logger.warn("fatman_mode_callback_failed", {
@@ -534,6 +539,35 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true }), requestId);
   }
 
+  if (isParmarSirCommand(text)) {
+    const ready = await isFatmanReady(env);
+    const callbackWebhookReady = ready
+      ? await syncTelegramWebhookForCallbacks(request, env, bot, requestId)
+      : false;
+    if (!ready || !callbackWebhookReady) {
+      await bestEffortTelegram("parmar_sir_unavailable", () => sendTelegramMessage(
+        env,
+        chatId,
+        "Parmar Sir is temporarily unavailable. Please try again shortly.",
+        messageId,
+        bot.connectionId,
+      ));
+      return withRequestId(json({ ok: true, parmarSirUnavailable: true }), requestId);
+    }
+
+    queueAnalytics(ctx, "parmar_sir", () => recordEvent(env, "parmar_sir", analyticsUser));
+    ctx.waitUntil(bestEffortTelegram("parmar_sir_voice", () =>
+      sendTelegramVoiceWithToken(
+        bot.token,
+        chatId,
+        START_WELCOME_VOICE_URL,
+        false,
+        buildFatmanStartMarkup(),
+      ),
+    ));
+    return withRequestId(json({ ok: true, parmarSir: true }), requestId);
+  }
+
   if (isStart(text)) {
     logger.info("telegram_start_received", {
       requestId,
@@ -593,9 +627,13 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     const callbackWebhookReady = fatmanReady
       ? await syncTelegramWebhookForCallbacks(request, env, bot, requestId)
       : false;
-    const markup = fatmanReady && callbackWebhookReady ? buildFatmanModeMarkup(mode.active) : undefined;
+    const markup = fatmanReady && callbackWebhookReady
+      ? (mode.active ? buildFatmanExitMarkup() : buildFatmanModeMarkup(false))
+      : undefined;
     const helpText = buildHelpText() + "\n\n" + buildFatmanHelpFooter(fatmanReady, callbackWebhookReady);
-    await bestEffortTelegram("help", () => sendTelegramMessage(env, chatId, helpText, undefined, bot.connectionId, true, markup));
+    await bestEffortTelegram("help", () => sendTelegramMessage(
+      env, chatId, helpText, undefined, bot.connectionId, !mode.active, markup,
+    ));
     return withRequestId(json({ ok: true }), requestId);
   }
 
@@ -626,7 +664,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
         messageId,
         bot.connectionId,
         true,
-        ready ? buildFatmanModeMarkup(active) : undefined,
+        ready ? (active ? buildFatmanExitMarkup() : buildFatmanModeMarkup(false)) : undefined,
       ));
       return withRequestId(json({ ok: true, fatmanMode: active }), requestId);
     }
@@ -664,8 +702,10 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       commandText,
       messageId,
       bot.connectionId,
-      true,
-      ready ? buildFatmanModeMarkup(desiredActive) : undefined,
+      !desiredActive,
+      ready
+        ? (desiredActive ? buildFatmanExitMarkup() : buildFatmanModeMarkup(false))
+        : undefined,
     ));
     return withRequestId(json({ ok: true, fatmanMode: desiredActive }), requestId);
   }
@@ -1609,6 +1649,8 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
               item.explanation,
               job.messageId,
               job.botConnectionId,
+              job.fatmanModeSnapshot !== true,
+              job.fatmanModeSnapshot === true ? buildFatmanExitMarkup() : undefined,
             );
 
             deliveredQuizzes.push({
@@ -2012,15 +2054,21 @@ function createTelegramPartialAnswerUpdater(
 }
 
 async function deliverAnswer(env: Env, job: QuestionJob, statusMessageId: number | undefined, answer: string): Promise<void> {
+  const fatmanMode = job.fatmanModeSnapshot === true;
+  const replyMarkup = fatmanMode ? buildFatmanExitMarkup() : undefined;
   if (statusMessageId) {
     try {
-      await editTelegramMessage(env, job.chatId, statusMessageId, answer, job.botConnectionId);
+      await editTelegramMessage(
+        env, job.chatId, statusMessageId, answer, job.botConnectionId, !fatmanMode, replyMarkup,
+      );
       return;
     } catch (error) {
       if (!isMessageEditTerminalError(error)) throw error;
     }
   }
-  await sendTelegramMessage(env, job.chatId, answer, job.messageId, job.botConnectionId);
+  await sendTelegramMessage(
+    env, job.chatId, answer, job.messageId, job.botConnectionId, !fatmanMode, replyMarkup,
+  );
 }
 
 async function getStudentProfile(env: Env, chatId: number): Promise<StudentProfile> {
@@ -2152,9 +2200,7 @@ function titleCaseExam(value: string): string {
 }
 
 function buildSetupCommands() {
-  return [
-    { command: "help", description: "Show help and commands" },
-  ];
+  return buildTelegramMenuCommands();
 }
 
 function syncTelegramCommandMenu(env: Env, botConnectionId: string): Promise<unknown> {

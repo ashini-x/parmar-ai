@@ -40,6 +40,14 @@ export function buildFatmanModeMarkup(active: boolean): TelegramInlineKeyboardMa
   };
 }
 
+export function buildFatmanStartMarkup(): TelegramInlineKeyboardMarkup {
+  return { inline_keyboard: [[{ text: "Start Fatman", callback_data: "fatman:enter" }]] };
+}
+
+export function buildFatmanExitMarkup(): TelegramInlineKeyboardMarkup {
+  return { inline_keyboard: [[{ text: "Exit Fatman", callback_data: "fatman:exit" }]] };
+}
+
 function mergeInlineKeyboard(
   custom: TelegramInlineKeyboardMarkup | undefined,
   creator: CreatorContactKeyboardMarkup | undefined,
@@ -406,9 +414,12 @@ export async function sendTelegramQuiz(
   explanation: string,
   replyToMessageId?: number,
   botConnectionId?: string,
+  includeCreatorFooter = true,
+  replyMarkup?: TelegramInlineKeyboardMarkup,
 ): Promise<TelegramQuizResult> {
   const pollExplanation = limitTelegramPollExplanation(explanation);
-  const creatorMarkup = creatorContactMarkup(chatId);
+  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
+  const combinedMarkup = mergeInlineKeyboard(replyMarkup, creatorMarkup);
   const result = await telegramApi<{
     message_id: number;
     poll?: { id: string };
@@ -422,7 +433,7 @@ export async function sendTelegramQuiz(
     allows_revoting: false,
     correct_option_ids: [...correctOptionIds].sort((a, b) => a - b),
     explanation: pollExplanation,
-    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
+    ...(combinedMarkup ? { reply_markup: combinedMarkup } : {}),
     ...(replyToMessageId ? {
       reply_parameters: {
         message_id: replyToMessageId,
@@ -576,15 +587,17 @@ export async function editTelegramMessage(
   text: string,
   botConnectionId?: string,
   includeCreatorFooter = true,
+  replyMarkup?: TelegramInlineKeyboardMarkup,
 ): Promise<void> {
   const message = limitTelegramMessage(text);
   const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
+  const combinedMarkup = mergeInlineKeyboard(replyMarkup, creatorMarkup);
   try {
     await telegramApi(env, "editMessageText", {
       chat_id: chatId,
       message_id: messageId,
       text: message.text,
-      ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
+      ...(combinedMarkup ? { reply_markup: combinedMarkup } : {}),
       link_preview_options: { is_disabled: true },
     }, botConnectionId);
   } catch (error) {
@@ -636,13 +649,15 @@ export async function sendTelegramVoiceWithToken(
   chatId: number,
   voiceUrl: string,
   includeCreatorFooter = true,
+  replyMarkup?: TelegramInlineKeyboardMarkup,
 ): Promise<TelegramMessageResult> {
   const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
+  const combinedMarkup = mergeInlineKeyboard(replyMarkup, creatorMarkup);
   return telegramApiWithToken<TelegramMessageResult>(token, "sendVoice", {
     chat_id: chatId,
     voice: voiceUrl,
     disable_notification: true,
-    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
+    ...(combinedMarkup ? { reply_markup: combinedMarkup } : {}),
   });
 }
 
@@ -652,13 +667,15 @@ export async function sendTelegramMessageWithToken(
   text: string,
   replyToMessageId?: number,
   includeCreatorFooter = true,
+  replyMarkup?: TelegramInlineKeyboardMarkup,
 ): Promise<TelegramMessageResult> {
   const message = limitTelegramMessage(text);
   const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
+  const combinedMarkup = mergeInlineKeyboard(replyMarkup, creatorMarkup);
   const payload: Record<string, unknown> = {
     chat_id: chatId,
     text: message.text,
-    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
+    ...(combinedMarkup ? { reply_markup: combinedMarkup } : {}),
     link_preview_options: { is_disabled: true },
   };
   if (replyToMessageId) {
