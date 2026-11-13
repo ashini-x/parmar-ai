@@ -83,9 +83,9 @@ const QUEUE_MAX_RETRIES = 10;
 const STATUS_TEXT = "Thinking…";
 const BOT_BRAND_NAME = "परमार्थAI";
 import { HELP_VOICE_URL, START_WELCOME_VOICE_URL } from "./telegram/voice-assets";
-const RATE_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
-const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
-const FINAL_FAILURE_TEXT = "Bhai, is waqt answer complete nahi ho paaya. Tumhara sawal retry hua hai; same doubt dobara bhejna. 🙏";
+const RATE_LIMIT_TEXT = "Abhi ek saath bahut saare doubts aa rahe hain. System thoda slow ho raha hai, thodi der baad phirse doubt bhejna 🙂";
+const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara 10/10 question limit complete ho gaya hai. 24 hours ke baad phir continue kar lena 🙌";
+const FINAL_FAILURE_TEXT = "Bhai, is waqt answer complete nahi ho paaya. Tumhara sawal retry hua hai; same doubt dobara bhejna 🙏";
 const PREFLIGHT_FAILURE_TEXT = "I couldn't process your question because a required service is temporarily unavailable. Please try again shortly.";
 const PROFILE_EMPTY_TEXT = "Abhi main tumhare questions se tumhari SSC preparation profile bana raha hoon. Thode aur doubts bhejo, phir main bata paunga ki kis topic par revision priority honi chahiye. 📚";
 
@@ -338,7 +338,7 @@ async function handleHelpMenuCallback(
       await sendTelegramMessage(
         env,
         chatId,
-        "Target exam choose karo:\n/exam cgl\n/exam chsl\n/exam cpo\n/exam mts\n/exam gd\n/exam steno",
+        "Choose your target exam:\n/exam cgl\n/exam chsl\n/exam cpo\n/exam mts\n/exam gd\n/exam steno",
         undefined,
         botConnectionId,
       );
@@ -359,7 +359,7 @@ async function handleHelpMenuCallback(
       await sendTelegramMessage(
         env,
         chatId,
-        `Theek hai. Tumhari ${BOT_BRAND_NAME} study profile reset kar di. Ab fresh tracking se shuru karte hain. 📚`,
+        `Theek hai. Tumhari ${BOT_BRAND_NAME} study profile reset kar di. Ab fresh tracking se shuru karte hain 📚`,
         undefined,
         botConnectionId,
       );
@@ -377,7 +377,7 @@ async function handleHelpMenuCallback(
     await sendTelegramMessage(
       env,
       chatId,
-      `Tumhari ${BOT_BRAND_NAME} ki stored study data aur history delete kar di gayi hai. Ab fresh start hoga. 🗑️`,
+      `Tumhari ${BOT_BRAND_NAME} ki stored study data aur history delete kar di gayi hai. Ab fresh start hoga 🗑️`,
       undefined,
       botConnectionId,
     );
@@ -472,8 +472,8 @@ async function handleFatmanModeCallback(
       env,
       chatId,
       active
-        ? "✅ Fatman Mode is ON. New doubts will use the book and page citations."
-        : "✅ Fatman Mode is OFF. New doubts will use the usual SSC study mode.",
+        ? "📖 Fatman Mode is ON. New doubts will use the book and page citations."
+        : "👻 Fatman Mode is OFF. New doubts will use the exam relevant SSC study mode.",
       undefined,
       botConnectionId,
       !active,
@@ -776,7 +776,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
           ? "Fatman Mode is unavailable right now. It is OFF; usual study mode remains available."
           : active
             ? "Fatman Mode is ON. New doubts will use the book and page citations."
-            : "Fatman Mode is OFF. New doubts will use the usual SSC study mode.",
+            : "Fatman Mode is OFF. New doubts will use the exam relevant SSC study mode.",
         messageId,
         bot.connectionId,
         !active,
@@ -810,8 +810,8 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       active: desiredActive,
     });
     const commandText = desiredActive
-      ? (current.active ? "Fatman Mode is already ON." : "✅ Fatman Mode is ON. New doubts will use the book and page citations.")
-      : (current.active ? "✅ Fatman Mode is OFF. New doubts will use the usual SSC study mode." : "Fatman Mode is already OFF.");
+      ? (current.active ? "Fatman Mode is already ON." : "📖 Fatman Mode is ON. New doubts will use the book and page citations.")
+      : (current.active ? "👻 Fatman Mode is OFF. New doubts will use the exam relevant SSC study mode." : "Fatman Mode is already OFF.");
     await bestEffortTelegram("fatman_command", () => sendTelegramMessage(
       env,
       chatId,
@@ -844,14 +844,14 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "delete_data" }),
     });
-    await bestEffortTelegram("delete_data", () => sendTelegramMessage(env, chatId, `Tumhari ${BOT_BRAND_NAME} ki stored study data aur history delete kar di gayi hai. Ab fresh start hoga. 🗑️`));
+    await bestEffortTelegram("delete_data", () => sendTelegramMessage(env, chatId, `Tumhari ${BOT_BRAND_NAME} ki stored study data aur history delete kar di gayi hai. Ab fresh start hoga 🗑️`));
     return withRequestId(json({ ok: true, deleted: true }), requestId);
   }
 
   if (isReset(text)) {
     await jobStoreRequest(env, chatId, { action: "reset_profile" });
     queueAnalytics(ctx, "reset", () => recordEvent(env, "reset", analyticsUser));
-    await bestEffortTelegram("reset", () => sendTelegramMessage(env, chatId, `Theek hai. Tumhari ${BOT_BRAND_NAME} study profile reset kar di. Ab fresh tracking se shuru karte hain. 📚`));
+    await bestEffortTelegram("reset", () => sendTelegramMessage(env, chatId, `Theek hai. Tumhari ${BOT_BRAND_NAME} study profile reset kar di. Ab fresh tracking se shuru karte hain 📚`));
     return withRequestId(json({ ok: true }), requestId);
   }
 
@@ -868,7 +868,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
           await bestEffortTelegram("admin_grant", () => sendTelegramMessage(env, chatId, `✅ Unlimited daily AI access granted to Telegram ID ${targetId}.`));
         } catch (error) {
           logger.error("admin_unlimited_ai_grant_failed", { requestId, targetTelegramUserId: targetId, error: error instanceof Error ? error.message : String(error) });
-          await bestEffortTelegram("admin_grant_failed", () => sendTelegramMessage(env, chatId, "Access change nahi ho paaya. D1/admin configuration check karo. 🙏"));
+          await bestEffortTelegram("admin_grant_failed", () => sendTelegramMessage(env, chatId, "Access change nahi ho paaya. D1/admin configuration check karo 🙏"));
         }
       }
       return withRequestId(json({ ok: true }), requestId);
@@ -903,7 +903,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (/^\/exam$/i.test(text)) {
     queueAnalytics(ctx, "exam_help", () => recordEvent(env, "exam_help", analyticsUser));
-    await bestEffortTelegram("exam_help", () => sendTelegramMessage(env, chatId, "Target exam choose karo:\n/exam cgl\n/exam chsl\n/exam cpo\n/exam mts\n/exam gd\n/exam steno", messageId));
+    await bestEffortTelegram("exam_help", () => sendTelegramMessage(env, chatId, "Choose your target exam:\n/exam cgl\n/exam chsl\n/exam cpo\n/exam mts\n/exam gd\n/exam steno", messageId));
     return withRequestId(json({ ok: true }), requestId);
   }
 
@@ -911,7 +911,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   if (examCommand) {
     await jobStoreRequest(env, chatId, { action: "set_exam", exam: examCommand });
     queueAnalytics(ctx, "exam_set", () => updateUserIdentity(env, { ...analyticsUser, targetExam: examCommand }).then(() => recordEvent(env, "exam_set", analyticsUser, { exam: examCommand })));
-    await bestEffortTelegram("exam_set", () => sendTelegramMessage(env, chatId, `Target exam set: ${examCommand}. Ab mere answers aur revision priorities isi SSC target ko dhyan mein rakhenge. 🎯`));
+    await bestEffortTelegram("exam_set", () => sendTelegramMessage(env, chatId, `Target exam set: ${examCommand}. Ab mere answers aur revision priorities isi SSC target ko dhyan mein rakhenge 🎯`));
     return withRequestId(json({ ok: true }), requestId);
   }
 
@@ -934,7 +934,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     // admitted together by the existing Durable Object alarm path.
     if (await isUserSuspended(env, analyticsUser.telegramUserId)) {
       queueAnalytics(ctx, "suspended_user", () => recordEvent(env, "suspended_user_blocked", analyticsUser));
-      await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo. 🙏`, messageId));
+      await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo 🙏`, messageId));
       return withRequestId(json({ ok: true, suspended: true }), requestId);
     }
     const albumFatmanState = await jobStoreRequest<{ ok: true; active: boolean }>(
@@ -960,7 +960,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       await bestEffortTelegram("photo_album_too_many", () => sendTelegramMessage(
         env,
         chatId,
-        `Ek doubt ke saath maximum ${MAX_PHOTO_COUNT} photos bhejo. Photos ka limit paar ho gaya hai; doubt ko 5 ya usse kam photos ke saath bhejo. 🙂`,
+        `Ek doubt ke saath maximum ${MAX_PHOTO_COUNT} photos bhejo. Photos ka limit paar ho gaya hai; doubt ko 5 ya usse kam photos ke saath bhejo 🙂`,
         messageId,
         bot.connectionId,
       ));
@@ -978,7 +978,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   if (photoFileId && !text) {
     if (await isUserSuspended(env, analyticsUser.telegramUserId)) {
       queueAnalytics(ctx, "suspended_user", () => recordEvent(env, "suspended_user_blocked", analyticsUser));
-      await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo. 🙏`, messageId));
+      await bestEffortTelegram("suspended_user", () => sendTelegramMessage(env, chatId, `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo 🙏`, messageId));
       return withRequestId(json({ ok: true, suspended: true }), requestId);
     }
     await bestEffortTelegram("photo_caption_required", () => sendTelegramMessage(
@@ -999,7 +999,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       sendTelegramMessage(
         env,
         chatId,
-        `Ek batch mein maximum ${MAX_QUIZ_BATCH_SIZE} MCQs bhej sakta hoon. 🙂`,
+        `Ek batch mein maximum ${MAX_QUIZ_BATCH_SIZE} MCQs bhej sakta hoon 🙂`,
         messageId,
         bot.connectionId,
       ),
@@ -1132,7 +1132,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       chatId,
       statusMessageId,
       messageId,
-      `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Admin se contact karo. 🙏`,
+      `Abhi tumhara ${BOT_BRAND_NAME} access temporarily paused hai. Please contact Admin 🙏`,
       requestId,
     );
     return withRequestId(json({ ok: true, suspended: true }), requestId);
@@ -1601,7 +1601,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             packet.answer = appendFatmanCitations(packet.answer, citations);
             if (!bookContext.passages.length && !bookContext.pageImages.length) {
               packet.answer = packet.answer.trim() +
-                "\n\n📚 Fatman source note: I couldn't retrieve a matching book passage for this question, so this is a general SSC explanation, not a verified summary of a Fatman page.";
+                "\n\n📖 Fatman source note: I couldn't retrieve a matching book passage for this question.";
             }
             // Fatman questions feed the same student learning profile as normal mode.
             // Preserve the model's explicit confusion/weakness signal for profile QA.
@@ -2240,15 +2240,16 @@ function buildProfileText(profile: StudentProfile, usage: { dayCount: number; da
     .slice(0, 3);
 
   return [
-    `📚 Tumhari ${BOT_BRAND_NAME} Study Profile`,
+    `📚 Tumhari ${BOT_BRAND_NAME} Study Profile:`,
+    "",
     `Target: ${profile.targetExam}`,
     `Questions tracked: ${profile.questionCount}`,
-    `Today: ${usage.unlimited ? "Unlimited AI access" : `${usage.dayCount}/${usage.dailyLimit} questions`}`,
+    `Today: ${usage.unlimited ? "Unlimited AI access" : `${usage.dayCount}/${usage.dailyLimit} questions.`}`,
     "",
-    `Recent focus: ${recent.length ? recent.join(" • ") : "abhi nahi"}`,
-    `Attention areas: ${attention.length ? attention.join(" • ") : "abhi koi clear weak area nahi"}`,
-    `Revision queue: ${revision.length ? revision.join(" → ") : "abhi build ho rahi hai"}`,
-    `Learning signals: ${signals.length ? signals.map((item) => `${item.topic} (${item.confusionCount + item.weakCount})`).join(" • ") : "abhi enough evidence nahi"}`,
+    `Recent focus: ${recent.length ? recent.join(" • ") : "abhi nahi."}`,
+    `Attention areas: ${attention.length ? attention.join(" • ") : "abhi koi clear weak area nahi."}`,
+    `Revision queue: ${revision.length ? revision.join(" → ") : "abhi build ho rahi hai."}`,
+    `Learning signals: ${signals.length ? signals.map((item) => `${item.topic} (${item.confusionCount + item.weakCount})`).join(" • ") : "abhi enough evidence nahi."}`,
     "",
     `Ye profile sirf tumhare ${BOT_BRAND_NAME} questions se banti hai.`,
   ].join("\n");
@@ -2263,7 +2264,7 @@ function buildStudyPlanText(profile: StudentProfile): string {
     ...profile.recentTopics.slice(0, 2),
   ]).slice(0, 5);
 
-  if (!priorities.length) return "Abhi enough signals nahi bane hain. Kuch aur SSC doubts bhejo; main tumhari preparation ke pattern se priority list build karunga. 📚";
+  if (!priorities.length) return "Abhi enough signals nahi bane hain. Kuch aur SSC doubts bhejo; main tumhari preparation ke pattern se priority list build karunga 📚";
 
   return [
     "🎯 SSC ke liye abhi ye padhna sabse useful rahega:",
@@ -2516,8 +2517,8 @@ function isMessageEditTerminalError(error: unknown): boolean {
 function userFacingFailure(error: unknown): string {
   if (error instanceof TelegramMediaError) return "Photo process nahi ho paayi. JPEG, PNG ya WebP bhejo; har photo 7 MB tak aur poora album 12 MB tak ho sakta hai. 🙏";
   if (error instanceof GeminiError) {
-    if (error.status === 401 || error.status === 403) return "AI service ki authentication/configuration mein problem aa gayi hai. Team isse check kar rahi hai. 🙏";
-    if (error.status === 429) return "AI service par abhi bahut load hai. Tumhara doubt save hai; system retry kar raha hai. 🙏";
+    if (error.status === 401 || error.status === 403) return "System ki authentication/configuration mein problem aa gayi hai. Team isse check kar rahi hai. 🙏";
+    if (error.status === 429) return "Backend par abhi bahut load hai. Tumhara doubt save hai; system retry kar raha hai. 🙏";
   }
   return FINAL_FAILURE_TEXT;
 }
