@@ -172,6 +172,7 @@ export async function adminUsers(env: Env, request: Request): Promise<Response> 
   const ownerTelegramUserId = Number(env.BOT_OWNER_TELEGRAM_USER_ID ?? 0) || null;
   const adminTelegramUserIds = Array.from(parseIdSet(env.ADMIN_TELEGRAM_USER_IDS));
   const staticUnlimitedIds = parseIdSet(env.UNLIMITED_AI_TELEGRAM_USER_IDS);
+  const dailyQuestionLimit = getConfig(env).dailyQuestionLimit;
   const users = fetchedUsers.slice(0, limit).map((user) => {
     const id = Number(user.telegram_user_id);
     const isOwner = ownerTelegramUserId === id;
@@ -182,6 +183,7 @@ export async function adminUsers(env: Env, request: Request): Promise<Response> 
       is_owner: isOwner ? 1 : 0,
       is_admin: isAdmin ? 1 : 0,
       unlimited: (isOwner || isAdmin || staticUnlimited || Number(user.unlimited) === 1) ? 1 : 0,
+      daily_limit: dailyQuestionLimit,
     };
   });
   return json({ ok: true, users, hasMore, page, limit, ownerTelegramUserId, adminTelegramUserIds });
@@ -823,7 +825,8 @@ document.getElementById('alerts').innerHTML=(d.alerts||[]).map(a=>\`<div class="
 function renderStudentRow(u){
   const name=u.username?'@'+u.username:[u.first_name,u.last_name].filter(Boolean).join(' ')||u.telegram_user_id;
   const isProtected=Number(u.is_owner)||Number(u.is_admin);
-  const access=Number(u.suspended)?'⛔ Suspended':Number(u.unlimited)?'♾️ Unlimited':'20/day';
+  const dailyLimit = Number(u.daily_limit) || 10;
+  const access=Number(u.suspended)?'⛔ Suspended':Number(u.unlimited)?'♾️ Unlimited':String(dailyLimit)+'/day';
   const accessNote=Number(u.is_owner)?'Owner':Number(u.is_admin)?'Admin':Number(u.unlimited)?'Unlimited access':'Normal quota';
   const accessAction=Number(u.unlimited)?'revoke_unlimited':'grant_unlimited';
   const suspendAction=Number(u.suspended)?'unsuspend':'suspend';
