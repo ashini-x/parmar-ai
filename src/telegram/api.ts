@@ -48,6 +48,17 @@ export function buildFatmanExitMarkup(): TelegramInlineKeyboardMarkup {
   return { inline_keyboard: [[{ text: "Exit Fatman", callback_data: "fatman:exit" }]] };
 }
 
+export function buildHelpMenuMarkup(): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[
+      { text: "Exam", callback_data: "help:exam" },
+      { text: "Profile", callback_data: "help:profile" },
+      { text: "Reset", callback_data: "help:reset" },
+      { text: "Delete", callback_data: "help:delete" },
+    ]],
+  };
+}
+
 function mergeInlineKeyboard(
   custom: TelegramInlineKeyboardMarkup | undefined,
   creator: CreatorContactKeyboardMarkup | undefined,

@@ -15,9 +15,10 @@ import { buildFatmanRetrievalQuery, formatFatmanCitations, isFatmanReady, retrie
 import { logger } from "./core/logger";
 import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./telegram/progress";
 import { loadQuestionContextInParallel, runSuspensionAndModeLookup } from "./telegram/parallel-work";
-import { buildFatmanHelpFooter, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
+import { parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
 import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
 import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isParmarSirCommand } from "./telegram/menu";
+import { parseHelpMenuAction } from "./telegram/help-menu";
 import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
@@ -41,6 +42,7 @@ import {
   buildFatmanModeMarkup,
   buildFatmanStartMarkup,
   buildFatmanExitMarkup,
+  buildHelpMenuMarkup,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, ensureAnalyticsSchema, getLatestFatmanReleaseQaRun, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
@@ -298,6 +300,103 @@ async function handleTelegramBusinessMessage(
   );
 }
 
+async function handleHelpMenuCallback(
+  callback: TelegramCallbackQuery,
+  env: Env,
+  botConnectionId: string,
+  requestId: string,
+): Promise<void> {
+  const callbackId = callback.id?.trim();
+  if (!callbackId) return;
+
+  const answerCallback = async (text: string, showAlert = false) => {
+    await telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callbackId,
+      text,
+      show_alert: showAlert,
+    }, botConnectionId);
+  };
+
+  const chatId = callback.message?.chat?.id;
+  const senderId = callback.from?.id;
+  const action = parseHelpMenuAction(callback.data);
+  if (
+    !action ||
+    !isSafeInteger(chatId) ||
+    callback.message?.chat?.type !== "private" ||
+    !isSafeInteger(senderId) ||
+    senderId !== chatId
+  ) {
+    await answerCallback("This control is only available in your private chat.", true).catch(() => undefined);
+    return;
+  }
+
+  try {
+    await answerCallback("Opening " + action + "…");
+
+    if (action === "exam") {
+      await sendTelegramMessage(
+        env,
+        chatId,
+        "Target exam choose karo:\\n/exam cgl\\n/exam chsl\\n/exam cpo\\n/exam mts\\n/exam gd\\n/exam steno",
+        undefined,
+        botConnectionId,
+      );
+      return;
+    }
+
+    if (action === "profile") {
+      const [profile, usage] = await Promise.all([
+        getStudentProfile(env, chatId),
+        getStudentUsage(env, chatId, senderId),
+      ]);
+      await sendTelegramMessage(env, chatId, buildProfileText(profile, usage), undefined, botConnectionId);
+      return;
+    }
+
+    if (action === "reset") {
+      await jobStoreRequest(env, chatId, { action: "reset_profile", botConnectionId });
+      await sendTelegramMessage(
+        env,
+        chatId,
+        `Theek hai. Tumhari ${BOT_BRAND_NAME} study profile reset kar di. Ab fresh tracking se shuru karte hain. 📚`,
+        undefined,
+        botConnectionId,
+      );
+      return;
+    }
+
+    const deletion = await deleteUserData(env, senderId);
+    const dataChatId = deletion.chatId ?? chatId;
+    const id = env.JOB_DEDUPE.idFromName(String(dataChatId));
+    await env.JOB_DEDUPE.get(id).fetch("https://job-store/internal", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "delete_data" }),
+    });
+    await sendTelegramMessage(
+      env,
+      chatId,
+      `Tumhari ${BOT_BRAND_NAME} ki stored study data aur history delete kar di gayi hai. Ab fresh start hoga. 🗑️`,
+      undefined,
+      botConnectionId,
+    );
+  } catch (error) {
+    logger.warn("help_menu_callback_failed", {
+      requestId,
+      action,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await sendTelegramMessage(
+      env,
+      chatId,
+      "This action could not be completed right now. Please try again.",
+      undefined,
+      botConnectionId,
+    ).catch(() => undefined);
+  }
+}
+
 async function handleFatmanModeCallback(
   callback: TelegramCallbackQuery,
   env: Env,
@@ -449,7 +548,11 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   }
 
   if (update.callback_query) {
-    await handleFatmanModeCallback(update.callback_query, env, bot.connectionId, requestId);
+    if (parseHelpMenuAction(update.callback_query.data)) {
+      await handleHelpMenuCallback(update.callback_query, env, bot.connectionId, requestId);
+    } else {
+      await handleFatmanModeCallback(update.callback_query, env, bot.connectionId, requestId);
+    }
     return withRequestId(json({ ok: true, callbackQuery: true }), requestId);
   }
 
@@ -623,20 +726,31 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (isHelp(text)) {
     queueAnalytics(ctx, "help", () => recordEvent(env, "help", analyticsUser));
-    ctx.waitUntil(bestEffortTelegram("help_menu_sync", () => syncTelegramCommandMenu(env, bot.connectionId, chatId, message?.from?.language_code)));
-    const mode = await jobStoreRequest<{ ok: true; active: boolean }>(env, chatId, { action: "get_fatman_mode", botConnectionId: bot.connectionId }).catch(() => ({ ok: true as const, active: false }));
-    const fatmanReady = await isFatmanReady(env);
-    const callbackWebhookReady = fatmanReady
-      ? await syncTelegramWebhookForCallbacks(request, env, bot, requestId)
-      : false;
-    const markup = fatmanReady && callbackWebhookReady
-      ? (mode.active ? buildFatmanExitMarkup() : buildFatmanModeMarkup(false))
-      : undefined;
-    const helpText = buildHelpText() + "\n\n" + buildFatmanHelpFooter(fatmanReady, callbackWebhookReady);
-    await bestEffortTelegram("help", () => sendTelegramMessage(
-      env, chatId, helpText, undefined, bot.connectionId, !mode.active, markup,
+    ctx.waitUntil(bestEffortTelegram(
+      "help_menu_sync",
+      () => syncTelegramCommandMenu(env, bot.connectionId, chatId, message?.from?.language_code),
     ));
-    return withRequestId(json({ ok: true }), requestId);
+    const callbackWebhookReady = await syncTelegramWebhookForCallbacks(request, env, bot, requestId);
+    if (!callbackWebhookReady) {
+      await bestEffortTelegram("help_unavailable", () => sendTelegramMessage(
+        env,
+        chatId,
+        "Help controls are temporarily unavailable. Please try /help again shortly.",
+        messageId,
+        bot.connectionId,
+      ));
+      return withRequestId(json({ ok: true, helpUnavailable: true }), requestId);
+    }
+    await bestEffortTelegram("help_voice", () =>
+      sendTelegramVoiceWithToken(
+        bot.token,
+        chatId,
+        START_WELCOME_VOICE_URL,
+        false,
+        buildHelpMenuMarkup(),
+      ),
+    );
+    return withRequestId(json({ ok: true, helpVoice: true }), requestId);
   }
 
   const fatmanCommand = parseFatmanModeCommand(text);
@@ -2112,15 +2226,6 @@ function appendFatmanCitations(answer: string, citations: string): string {
     .trim()
     .slice(0, 3_450);
   return citations ? cleanAnswer + "\n\n" + citations : cleanAnswer;
-}
-
-function buildHelpText(): string {
-  return [
-    "Set your SSC target exam /exam",
-    "View your SSC study profile /profile",
-    "Reset your study profile /reset",
-    "Delete your study data /delete_data",
-  ].join("\n\n");
 }
 
 function buildProfileText(profile: StudentProfile, usage: { dayCount: number; dailyLimit: number; unlimited: boolean }): string {
