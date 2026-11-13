@@ -480,11 +480,9 @@ export async function sendTelegramBusinessMessage(
   botConnectionId?: string,
 ): Promise<TelegramMessageResult> {
   const message = limitTelegramMessage(text);
-  const creatorMarkup = creatorContactMarkup(chatId);
   return telegramApi<TelegramMessageResult>(env, "sendMessage", {
     chat_id: chatId,
     business_connection_id: businessConnectionId,
-    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
     reply_parameters: {
       message_id: replyToMessageId,
       allow_sending_without_reply: true,
