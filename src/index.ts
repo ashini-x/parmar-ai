@@ -84,7 +84,7 @@ const STATUS_TEXT = "Thinking…";
 const BOT_BRAND_NAME = "परमार्थAI";
 import { HELP_VOICE_URL, PARMAR_SIR_VOICE_URL, START_WELCOME_VOICE_URL } from "./telegram/voice-assets";
 const RATE_LIMIT_TEXT = "Abhi ek saath kaafi doubts aa rahe hain. Thoda gap dekar phir doubt bhejna 🙂";
-const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara daily question limit complete ho gaya hai. India time ke hisaab se raat 12 baje ke baad phir continue kar lena 🙌";
+const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara 10/10 daily question limit complete ho gaya hai. Yeh limit har din raat 12:00 AM (midnight, India Standard Time) par reset hoti hai. Uske baad phir questions bhejna 🙌";
 const FINAL_FAILURE_TEXT = "Bhai, is waqt answer complete nahi ho paaya. Tumhara sawal retry hua hai; same doubt dobara bhejna 🙏";
 const PREFLIGHT_FAILURE_TEXT = "I couldn't process your question because a required service is temporarily unavailable. Please try again shortly.";
 const PROFILE_EMPTY_TEXT = "Abhi main tumhare questions se tumhari SSC preparation profile bana raha hoon. Thode aur doubts bhejo, phir main bata paunga ki kis topic par revision priority honi chahiye. 📚";

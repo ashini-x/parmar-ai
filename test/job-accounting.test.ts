@@ -21,7 +21,7 @@ function uniqueId(): number {
 }
 
 describe("Phase 2 student accounting", () => {
-  it("serializes concurrent admissions at 20 questions and preserves the count after data deletion", async () => {
+  it("serializes concurrent admissions at 10 questions and preserves the count after data deletion", async () => {
     const chatId = uniqueId();
     const baseUpdateId = uniqueId();
     const results = await Promise.all(
@@ -42,16 +42,16 @@ describe("Phase 2 student accounting", () => {
       ),
     );
 
-    expect(results.filter((result) => result.action === "new")).toHaveLength(20);
-    expect(results.filter((result) => result.action === "rate_limited")).toHaveLength(5);
+    expect(results.filter((result) => result.action === "new")).toHaveLength(10);
+    expect(results.filter((result) => result.action === "rate_limited")).toHaveLength(15);
 
     await jobStoreRequest(chatId, { action: "delete_data" });
     const usage = await jobStoreRequest<{ usage: { dayCount: number; dailyLimit: number } }>(chatId, {
       action: "get_usage",
       telegramUserId: chatId,
     });
-    expect(usage.usage.dayCount).toBe(20);
-    expect(usage.usage.dailyLimit).toBe(20);
+    expect(usage.usage.dayCount).toBe(10);
+    expect(usage.usage.dailyLimit).toBe(10);
 
     const afterDeletion = await jobStoreRequest<{ action: string }>(chatId, {
       action: "begin",

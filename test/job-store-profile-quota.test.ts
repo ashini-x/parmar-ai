@@ -87,7 +87,7 @@ describe("shared per-student question tracking", () => {
   it("preserves the daily question limit after /delete_data clears all study state", async () => {
     const { chatId, botConnectionId, call } = createStudentStore();
 
-    for (let index = 1; index <= 20; index += 1) {
+    for (let index = 1; index <= 10; index += 1) {
       const result = await call<{ action: string }>({
         action: "begin",
         botConnectionId,
@@ -110,7 +110,7 @@ describe("shared per-student question tracking", () => {
     const beforeDeletion = await call<{
       usage: { dayCount: number; dailyLimit: number; unlimited: boolean };
     }>({ action: "get_usage", telegramUserId: chatId });
-    expect(beforeDeletion.usage.dayCount).toBe(20);
+    expect(beforeDeletion.usage.dayCount).toBe(10);
 
     await call({ action: "delete_data" });
 
@@ -133,8 +133,8 @@ describe("shared per-student question tracking", () => {
       usage: { dayCount: number; dailyLimit: number; unlimited: boolean };
     }>({ action: "get_usage", telegramUserId: chatId });
     expect(afterDeletion.usage).toEqual({
-      dayCount: 20,
-      dailyLimit: 20,
+      dayCount: 10,
+      dailyLimit: 10,
       unlimited: false,
     });
 
@@ -144,12 +144,12 @@ describe("shared per-student question tracking", () => {
     }>({
       action: "begin",
       botConnectionId,
-      updateId: 21,
+      updateId: 11,
       chatId,
       telegramUserId: chatId,
       question: "Question after deleting stored data",
-      messageId: 21,
-      requestId: `delete-data-quota-${chatId}-21`,
+      messageId: 11,
+      requestId: `delete-data-quota-${chatId}-11`,
       createdAt: Date.now(),
       requestedQuizCount: 1,
       fatmanModeSnapshot: false,
@@ -160,10 +160,10 @@ describe("shared per-student question tracking", () => {
     });
   });
 
-  it("uses one 20-question daily allowance across Fatman and normal mode", async () => {
+  it("uses one 10-question daily allowance across Fatman and normal mode", async () => {
     const { chatId, botConnectionId, call } = createStudentStore();
 
-    for (let index = 1; index <= 20; index += 1) {
+    for (let index = 1; index <= 10; index += 1) {
       const result = await call<{ action: string }>({
         action: "begin",
         botConnectionId,
@@ -186,8 +186,8 @@ describe("shared per-student question tracking", () => {
     }>({ action: "get_usage", telegramUserId: chatId });
 
     expect(usage.usage).toEqual({
-      dayCount: 20,
-      dailyLimit: 20,
+      dayCount: 10,
+      dailyLimit: 10,
       unlimited: false,
     });
 
@@ -197,12 +197,12 @@ describe("shared per-student question tracking", () => {
     }>({
       action: "begin",
       botConnectionId,
-      updateId: 21,
+      updateId: 11,
       chatId,
       telegramUserId: chatId,
-      question: "Question number twenty-one",
-      messageId: 21,
-      requestId: `daily-quota-${chatId}-21`,
+      question: "Question number eleven",
+      messageId: 11,
+      requestId: `daily-quota-${chatId}-11`,
       createdAt: Date.now(),
       requestedQuizCount: 1,
       fatmanModeSnapshot: true,
@@ -211,6 +211,39 @@ describe("shared per-student question tracking", () => {
     expect(twentyFirst).toMatchObject({
       action: "rate_limited",
       rateLimitReason: "daily",
+    });
+  });
+
+
+  it("keeps the configured owner exempt from the 10-question daily allowance", async () => {
+    const { chatId, botConnectionId, call } = createStudentStore();
+    const ownerTelegramUserId = Number(testEnv.BOT_OWNER_TELEGRAM_USER_ID);
+    expect(ownerTelegramUserId).toBeGreaterThan(0);
+
+    for (let index = 1; index <= 12; index += 1) {
+      const result = await call<{ action: string }>({
+        action: "begin",
+        botConnectionId,
+        updateId: index,
+        chatId,
+        telegramUserId: ownerTelegramUserId,
+        question: `Owner question ${index}`,
+        messageId: index,
+        requestId: `owner-daily-quota-${chatId}-${index}`,
+        createdAt: Date.now(),
+        requestedQuizCount: 1,
+      });
+      expect(result.action).toBe("new");
+    }
+
+    const usage = await call<{
+      usage: { dayCount: number; dailyLimit: number; unlimited: boolean };
+    }>({ action: "get_usage", telegramUserId: ownerTelegramUserId });
+
+    expect(usage.usage).toEqual({
+      dayCount: 0,
+      dailyLimit: 10,
+      unlimited: true,
     });
   });
 

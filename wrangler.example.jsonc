@@ -9,7 +9,7 @@
     "APP_VERSION": "2.8.0",
     "BURST_QUESTION_LIMIT": "5",
     "BURST_WINDOW_SECONDS": "10",
-    "DAILY_QUESTION_LIMIT": "20",
+    "DAILY_QUESTION_LIMIT": "10",
     "ENVIRONMENT": "production",
     "GEMINI_LOCATION": "global",
     "GEMINI_THINKING_LEVEL": "HIGH",

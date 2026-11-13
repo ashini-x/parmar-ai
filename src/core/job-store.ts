@@ -23,8 +23,8 @@ const PENDING_QUIZ_REQUEST_KEY = "pending:quiz-request";
 const PENDING_QUIZ_REQUEST_TTL_MS = 15 * 60 * 1_000;
 const PHOTO_ALBUM_SETTLE_MS = 2_500;
 const PHOTO_STATUS_TEXT = "📸 Photo received…";
-const PHOTO_RATE_LIMIT_TEXT = "Aaj ke liye tumhara question limit complete ho gaya hai. Kal phir continue kar lena. 🙌";
-const PHOTO_BURST_LIMIT_TEXT = "Bhai, ek saath bahut saare doubts aa rahe hain. Thoda sa gap do, phir next doubt bhejo. 🙂";
+const PHOTO_RATE_LIMIT_TEXT = "Aaj ke liye tumhara 10/10 daily question limit complete ho gaya hai. Yeh limit har din raat 12:00 AM (midnight, India Standard Time) par reset hoti hai. Uske baad phir questions bhejna 🙌";
+const PHOTO_BURST_LIMIT_TEXT = "Abhi ek saath kaafi doubts aa rahe hain. Thoda gap dekar phir doubt bhejna 🙂";
 const UNSUPPORTED_VIDEO_NOTICE_KEY = "meta:unsupported-video-notice";
 const UNSUPPORTED_VIDEO_NOTICE_INTERVAL_MS = 10_000;
 
@@ -588,7 +588,7 @@ export class JobDedupe extends DurableObject {
     // D1 access checks stay outside the storage transaction. The student's
     // operational quota and job admission are serialized inside it below.
     const unlimited = await hasUnlimitedAiAccess(this.runtimeEnv, telegramUserId, now);
-    const dailyLimit = positiveEnv(this.runtimeEnv.DAILY_QUESTION_LIMIT, 20);
+    const dailyLimit = positiveEnv(this.runtimeEnv.DAILY_QUESTION_LIMIT, 10);
     const burstLimit = positiveEnv(this.runtimeEnv.BURST_QUESTION_LIMIT, 5);
     const burstWindowMs = positiveEnv(this.runtimeEnv.BURST_WINDOW_SECONDS, 10) * 1_000;
 
@@ -1133,7 +1133,7 @@ export class JobDedupe extends DurableObject {
     const currentDay = indiaDayKey(now);
     return {
       dayCount: rate.dayKey === currentDay ? rate.dayCount : 0,
-      dailyLimit: positiveEnv(this.runtimeEnv.DAILY_QUESTION_LIMIT, 20),
+      dailyLimit: positiveEnv(this.runtimeEnv.DAILY_QUESTION_LIMIT, 10),
       unlimited,
     };
   }
