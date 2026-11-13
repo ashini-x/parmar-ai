@@ -5,7 +5,7 @@ import { getActiveTelegramBot, getTelegramBotApiToken, hasTelegramBotRecords } f
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
 const CREATOR_NAME = "BRɅIN";
-const CREATOR_CONTACT_URL = "https://parmar-ai.thenewtongs.workers.dev/contact";
+const CREATOR_TELEGRAM_URL = "https://t.me/projectbrain";
 function limitTelegramMessage(text: string): { text: string } {
   return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH) };
 }
@@ -21,7 +21,7 @@ export interface TelegramInlineKeyboardMarkup {
 interface CreatorContactKeyboardMarkup {
   inline_keyboard: Array<Array<{
     text: string;
-    web_app: { url: string };
+    url: string;
   }>>;
 }
 
@@ -58,7 +58,7 @@ function creatorContactMarkup(chatId: number, includeCreatorFooter = true): Crea
   return {
     inline_keyboard: [[{
       text: CREATOR_NAME,
-      web_app: { url: CREATOR_CONTACT_URL },
+      url: CREATOR_TELEGRAM_URL,
     }]],
   };
 }
@@ -480,9 +480,11 @@ export async function sendTelegramBusinessMessage(
   botConnectionId?: string,
 ): Promise<TelegramMessageResult> {
   const message = limitTelegramMessage(text);
+  const creatorMarkup = creatorContactMarkup(chatId);
   return telegramApi<TelegramMessageResult>(env, "sendMessage", {
     chat_id: chatId,
     business_connection_id: businessConnectionId,
+    ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
     reply_parameters: {
       message_id: replyToMessageId,
       allow_sending_without_reply: true,
