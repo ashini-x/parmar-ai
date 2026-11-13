@@ -496,6 +496,7 @@ renderAnswer({
   evidence: result.data,
   sourcePages: result.data.map(item => item.page)
 });</pre>
+          <p class="code-note">Conceptual flow only. Production consumers connect through the private Worker Service Binding; BRɅIN does not expose a public retrieval endpoint or ship a generic client SDK.</p>
         </div>
       </div>
     </section>
