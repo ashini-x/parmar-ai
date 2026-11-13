@@ -349,15 +349,17 @@ async function handleFatmanModeCallback(
         : (current.active ? "Fatman mode off." : "Fatman mode is already off."),
     );
 
+    // Clear the button on the message that was clicked. The newest mode-status
+    // message below is the sole place where the next action button should live.
     if (isSafeInteger(callback.message?.message_id)) {
       try {
         await editTelegramMessageReplyMarkup(
           env,
           chatId,
           callback.message!.message_id!,
-          active ? buildFatmanExitMarkup() : { inline_keyboard: [] },
+          { inline_keyboard: [] },
           botConnectionId,
-          !active,
+          false,
         );
       } catch (error) {
         logger.warn("fatman_mode_keyboard_refresh_failed", {
