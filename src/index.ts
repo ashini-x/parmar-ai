@@ -50,6 +50,7 @@ import { completeFatmanUpload, diagnoseFatmanGcsUpload, fatmanUploadStatus, resu
 import { fatmanLibraryBooks, fatmanLibraryImportStatus, startFatmanLibraryUpload } from "./fatman/library-admin";
 import { archiveBrvinBook, assignBrvinBookProjects, assignBrvinProjectCollections, clearBrvinKnowledgeSources, createBrvinApplication, createBrvinApplicationEnvironment, updateBrvinApplicationEnvironment, createBrvinCollection, createBrvinProject, deleteBrvinBook, deleteBrvinVisionOutput, grantBrvinApplicationProject, revokeBrvinApplicationProject, setBrvinApplicationStatus, setBrvinEnvironmentStatus, startBrvinBookUpload, brvinAdminPage, brvinAdminScript, brvinImportStatus, brvinOverview, updateBrvinApplication, updateBrvinProject } from "./brvin/admin";
 import { getBrvinApplicationHandoff } from "./brvin/handoff";
+import { brvinLandingPage } from "./brvin/landing";
 import {
   completeBrvinConnectionVerification,
   handleBrvinConnectionProbe,
@@ -2570,6 +2571,11 @@ const worker = {
     try {
       if (url.pathname === "/brvin/connection-probe") {
         return withRequestId(await handleBrvinConnectionProbe(request, env), requestId);
+      }
+
+      if (url.pathname === "/brvin" || url.pathname === "/brvin/") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        return withRequestId(brvinLandingPage(), requestId);
       }
 
       if (url.pathname === "/contact") {
