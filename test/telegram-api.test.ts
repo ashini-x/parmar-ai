@@ -64,7 +64,7 @@ describe("BRɅIN Telegram button", () => {
     });
   });
 
-  it("keeps the same Telegram profile button on branded business replies", async () => {
+  it("omits the BRɅIN footer button on personal-account business replies", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,
       result: { message_id: 124 },
@@ -80,12 +80,13 @@ describe("BRɅIN Telegram button", () => {
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
-    expect(JSON.parse(String(requestInit.body))).toMatchObject({
+    const payload = JSON.parse(String(requestInit.body));
+    expect(payload).toMatchObject({
       chat_id: 42,
       business_connection_id: "business-connection",
       text: "I am BRɅIN.",
-      reply_markup: creatorKeyboard,
     });
+    expect(payload).not.toHaveProperty("reply_markup");
   });
 });
 

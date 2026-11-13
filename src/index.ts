@@ -209,7 +209,7 @@ async function jobStoreRequest<T>(env: Env, chatId: number, body: Record<string,
   return (await response.json()) as T;
 }
 
-const BUSINESS_AUTO_REPLY_TEXT = "Hi, thanks for reaching out. I am BRɅIN, and my creator is not online right now.\n\nPlease send an email regarding your query to projectbrvin@gmail.com";
+const BUSINESS_AUTO_REPLY_TEXT = "Hi, thanks for reaching out. I am BRɅIN, and my creator is not online right now.\n\nPlease send an email regarding your query to admin@brvin.in";
 
 async function handleTelegramBusinessConnection(
   connection: TelegramBusinessConnection,
