@@ -176,14 +176,20 @@ MN01 still returns three unrelated Qdrant passages: M14 handout page 1, M15 page
 
 **Subgate decision:** post-score-floor paired Core v2 regression **PASSED**. The two-source positive retrieval/provenance subtest passes for this fixed suite. M15 overall remains **IN PROGRESS**.
 
-## Next M15 task — calibrated relevance/no-match gating experiment
+## Initial relevance-gate feasibility check — 14 November 2026
 
-Use the existing 12-positive / four out-of-corpus / exact-symbol near-miss query and owner-waived 109-candidate assessment data together with the new multi-source MS01–MS04/MN01 receipt. Compare:
-1. No relevance gate (current Qdrant baseline).
-2. A feature-based evidence-sufficiency gate using independently evaluated query/passage signals, lexical/symbol agreement, component agreement and candidate separation.
-3. A calibrated reranker/relevance gate, only if the labelled pool supports it and latency/cost are measured.
+The first offline ablation is complete and documented in [BRVIN_M15_RELEVANCE_GATE_ABLATION.md](BRVIN_M15_RELEVANCE_GATE_ABLATION.md). It uses the owner-waived 109-candidate fixture; it does not call a model or provider, change D1, or reserve quota.
 
-Report positive recall and false-abstention rate alongside precision, negative false acceptance, formula/symbol/numerical slices, latency and per-query cost. Keep source/project authorization and physical-page provenance as hard Core checks outside any model. Do not use RRF rank-fusion scores as calibrated probabilities or pick a universal cutoff from MN01 alone. Expand to a broader multi-document set before selecting a policy; distinguish owner-waived AI labels from independent human qrels. Keep the experiment isolated to Core staging and leave production on AI Search.
+- No gate preserves 12/12 positive queries, but Qdrant returns candidates for all 4/4 out-of-corpus questions (20 candidates: 15 grade 0 and 5 grade 1).
+- A fixed RRF cutoff of 0.38 preserves 12/12 positives but clears only 3/4 negative controls; at 0.42 it clears 4/4 but loses P02.
+- A leave-one-query-out lexical coverage proxy clears 4/4 negatives but loses held-out positive P06 (11/12 query-positive recall).
+- Both filters preserve H01's grade-3 source correction, which is not a true abstention case.
+
+**Decision:** no RRF cutoff, lexical gate, evidence-sufficiency policy or reranker is selected. This is a single-subject owner-waived AI-labelled pool, not independent human qrels. Do not alter runtime behavior.
+
+## Next M15 action — broaden independent passage/query evidence
+
+Before calibrating a multi-feature gate, expand the evaluation beyond the one Physics source and obtain independent passage/span labels or record a new explicit owner waiver. Split by query/source family, not by candidate row. Include conceptual paraphrases, formula/symbol variants, numerical questions with changed operands/units, mixed theory+math and genuinely out-of-corpus questions. Retain the current positive and negative suites as frozen regression controls. Only after this evidence exists should Core compare a multi-feature evidence-sufficiency gate and a named reranker under the same candidate budget, reporting positive recall, false abstention, no-match false acceptance, formula/symbol recall, p50/p95 latency and per-query cost. Authorization and physical-page provenance remain hard checks outside all models. Keep production on AI Search.
 
 ## Side-effect boundary
 
