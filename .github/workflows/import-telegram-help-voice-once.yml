@@ -34,7 +34,7 @@ jobs:
       - name: Download the public Drive OGG
         run: |
           set -euo pipefail
-          gdown --fuzzy "https://drive.google.com/file/d/1T5seafoB-RB3AKebibhDQx1CA_VqAb7s/view?usp=drivesdk" -O /tmp/help-source.ogg
+          gdown "https://drive.google.com/file/d/1T5seafoB-RB3AKebibhDQx1CA_VqAb7s/view?usp=drivesdk" -O /tmp/help-source.ogg
           test -s /tmp/help-source.ogg
           ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,duration -of default=noprint_wrappers=1 /tmp/help-source.ogg
 
