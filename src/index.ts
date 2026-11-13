@@ -541,28 +541,22 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       webhookAuthenticationMs: Date.now() - webhookStartedAt,
     });
 
-    // Send the original welcome before starting first-seen/event writes. A
-    // first request in a fresh isolate must not wait behind analytics schema
-    // setup or other non-essential initialization.
-    const welcomeStartedAt = Date.now();
-    const welcomeDelivery = await bestEffortTelegram("start", () =>
-      sendTelegramMessageWithToken(bot.token, chatId, buildStartText()),
-    );
-    logger.info("telegram_start_welcome_delivery", {
-      requestId,
-      botConnectionId: bot.connectionId,
-      deliveryMs: Date.now() - welcomeStartedAt,
-      delivered: Boolean(welcomeDelivery),
-    });
+    /*
+     * Text-only welcome is intentionally disabled. /start now sends only the
+     * prerecorded voice note, without posting the old "So Hello Everyone…"
+     * text message.
+     *
+     * const welcomeStartedAt = Date.now();
+     * await bestEffortTelegram("start", () =>
+     *   sendTelegramMessageWithToken(bot.token, chatId, buildStartText()),
+     * );
+     */
 
-    // Keep the text welcome as the first immediate response. Deliver the
-    // compact prerecorded Opus voice note in the background so media fetching
-    // can never delay the webhook acknowledgement or first visible message.
-    if (welcomeDelivery) {
-      ctx.waitUntil(bestEffortTelegram("start_voice", () =>
-        sendTelegramVoiceWithToken(bot.token, chatId, START_WELCOME_VOICE_URL),
-      ));
-    }
+    // Send the prerecorded voice note as the sole /start welcome response.
+    // Background delivery keeps the webhook acknowledgement fast.
+    ctx.waitUntil(bestEffortTelegram("start_voice", () =>
+      sendTelegramVoiceWithToken(bot.token, chatId, START_WELCOME_VOICE_URL),
+    ));
 
     // Analytics are still recorded, but only after the welcome has been sent.
     queueAnalytics(ctx, "user_seen", () => recordUserSeen(env, analyticsUser));
@@ -2039,13 +2033,6 @@ async function getStudentUsage(env: Env, chatId: number, telegramUserId: number)
   return response.usage;
 }
 
-function buildStartText(): string {
-  return [
-    "So Hello Everyone, umeed karta hoon aap sabhi thik honge!",
-    "",
-    "Chalo, sawaal lao, seedha point pe aate hain!",
-  ].join("\n");
-}
 function makeFatmanNoticePacket(answer: string): AnswerPacket {
   return {
     answer,
