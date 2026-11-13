@@ -133,7 +133,7 @@ Qdrant/Vertex was faster in this small sequential sample, but n=5 is not a repre
 
 **Subgate decision:** two-source authorization, provider completion, source discovery, provenance and quota accounting **PASSED**. Comparative retrieval-quality evidence is mixed: AI Search has higher distinct-page coverage and clean no-match abstention; Qdrant is faster but misses M15 page 2 in MS03 and emits three unrelated candidates on MN01. Do not declare an overall provider winner or authorize production cutover based on this receipt alone.
 
-## Next M15 action — Qdrant component-rank diagnosis
+## Completed M15 action — Qdrant component-rank diagnosis — 13 November 2026
 
 The paired receipt shows a speed/quality trade-off, but it does not expose the separate dense and sparse ranks that produced Qdrant's final RRF list. Do **not** set a fixed RRF score cutoff: RRF values are ranking values, not calibrated relevance probabilities, and a cutoff chosen from one negative query could remove a relevant low-ranked passage.
 
@@ -149,6 +149,14 @@ The protected multi-source operator now includes **Diagnose Qdrant dense/sparse 
 - Does MS02's handout page 3 remain present in component candidates even though AI Search missed it in the paired resolver run?
 
 Use these results to design a bounded feature/weight/rerank change and add regression cases for MS01–MS04 plus the MN01 abstention control. Retest positives and negatives together. Do not introduce an uncalibrated score threshold or claim a quality fix until the receipt demonstrates that positive recall did not regress and no-match candidates are reduced. Keep production on AI Search.
+
+## Next action after PR #247 — rerun the paired Core v2 evaluation — 14 November 2026
+
+The dense/sparse component-rank diagnostic described above is complete. It located the expected M15 page-2 evidence for MS03 at rank 4 in both dense and sparse components. Core PR #247 adds the machine-precision-only tolerance needed for the candidate's mathematical RRF score of 0.2, represented by JavaScript as 0.19999999999999998.
+
+The old paired receipt `18728f63-e13d-4e73-880f-a2b980844d04` predates PR #247 and remains a valid baseline only. It recorded Qdrant 6/7 unique expected page targets, missed MS03 M15 page 2, and returned three MN01 no-match candidates. The staging D1 still has only that single paired-run row; the score-floor fix has not yet been verified through a new Core v2 paired evaluation.
+
+Run **Run paired Core v2 multi-source evaluation** once from the existing [isolated staging operator](https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark/multi-source) after confirming that the worker is on v102 and the two sources remain READY. Enter `BRVIN_M14_ADMIN_TOKEN` only in the operator's local password field; never send it to chat or GitHub. This makes ten isolated project-query reservations. Do not repeat Prepare, upload a source, rerun Vision OCR, or rerun the component diagnostic. Verify that the Qdrant MS03 result contains the expected M15 source physical PDF page 2 and save the new persisted receipt. Review MN01 separately; this five-case run does not calibrate general no-match behavior or establish production readiness.
 
 ## Side-effect boundary
 
