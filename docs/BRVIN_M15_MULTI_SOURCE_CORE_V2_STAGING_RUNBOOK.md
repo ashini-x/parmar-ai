@@ -150,13 +150,40 @@ The protected multi-source operator now includes **Diagnose Qdrant dense/sparse 
 
 Use these results to design a bounded feature/weight/rerank change and add regression cases for MS01–MS04 plus the MN01 abstention control. Retest positives and negatives together. Do not introduce an uncalibrated score threshold or claim a quality fix until the receipt demonstrates that positive recall did not regress and no-match candidates are reduced. Keep production on AI Search.
 
-## Next action after PR #247 — rerun the paired Core v2 evaluation — 14 November 2026
+## Post-fix paired evaluation receipt — 14 November 2026
 
-The dense/sparse component-rank diagnostic described above is complete. It located the expected M15 page-2 evidence for MS03 at rank 4 in both dense and sparse components. Core PR #247 adds the machine-precision-only tolerance needed for the candidate's mathematical RRF score of 0.2, represented by JavaScript as 0.19999999999999998.
+**Persisted receipt:** `fa1b8076-9375-480b-bb4b-e22d1c13d9bb`  
+**Baseline receipt:** `18728f63-e13d-4e73-880f-a2b980844d04`  
+**D1 status:** `passed`; both providers completed all five cases  
+**Quota:** 11 before, 21 after; exactly ten reservations
 
-The old paired receipt `18728f63-e13d-4e73-880f-a2b980844d04` predates PR #247 and remains a valid baseline only. It recorded Qdrant 6/7 unique expected page targets, missed MS03 M15 page 2, and returned three MN01 no-match candidates. The staging D1 still has only that single paired-run row; the score-floor fix has not yet been verified through a new Core v2 paired evaluation.
+All seven structural checks passed: exactly two authorized READY sources; both providers completed every query; both searched both READY sources on every query; zero AI Search provenance violations; zero Qdrant provenance violations; both sources represented in retrieved evidence; and one query reservation per provider query.
 
-Run **Run paired Core v2 multi-source evaluation** once from the existing [isolated staging operator](https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/benchmark/multi-source) after confirming that the worker is on v102 and the two sources remain READY. Enter `BRVIN_M14_ADMIN_TOKEN` only in the operator's local password field; never send it to chat or GitHub. This makes ten isolated project-query reservations. Do not repeat Prepare, upload a source, rerun Vision OCR, or rerun the component diagnostic. Verify that the Qdrant MS03 result contains the expected M15 source physical PDF page 2 and save the new persisted receipt. Review MN01 separately; this five-case run does not calibrate general no-match behavior or establish production readiness.
+| Case / metric | Cloudflare AI Search | Vertex + Qdrant |
+|---|---:|---:|
+| Expected distinct source/page targets | 7/7 | 7/7 |
+| Query-specific target instances | 7/8 | 8/8 |
+| MS03 M15 pages 2 and 3 | 2/2 | 2/2 |
+| MN01 candidates | 0 | 3 |
+| Provenance violations | 0 | 0 |
+| Sequential p50 / p95 | 3,903 / 5,374 ms | 1,180 / 1,326 ms |
+
+The query-specific denominator is eight because M14 handout page 3 is a target in both MS01 and MS02; the distinct source/page denominator is seven. AI Search finds the M14 page 3 during MS01 but misses it for MS02; Qdrant finds both query-specific instances.
+
+The MS03 Qdrant result now includes M15 page 3 (rank 1) and M15 page 2 (returned at the configured score boundary as `0.19999999999999998`), confirming that PR #247 fixed the IEEE-754 comparison defect through the real Core v2 resolver. The score floor remains 0.2; weights, fusion policy, provider selector and private v2 contract did not change.
+
+MN01 still returns three unrelated Qdrant passages: M14 handout page 1, M15 page 8 and M15 page 6. None contains Planck/photon-energy evidence. AI Search returns zero candidates. This is a remaining retrieval-noise issue, not an answer/abstention test. Five sequential samples are not load/SLO proof.
+
+**Subgate decision:** post-score-floor paired Core v2 regression **PASSED**. The two-source positive retrieval/provenance subtest passes for this fixed suite. M15 overall remains **IN PROGRESS**.
+
+## Next M15 task — calibrated relevance/no-match gating experiment
+
+Use the existing 12-positive / four out-of-corpus / exact-symbol near-miss query and owner-waived 109-candidate assessment data together with the new multi-source MS01–MS04/MN01 receipt. Compare:
+1. No relevance gate (current Qdrant baseline).
+2. A feature-based evidence-sufficiency gate using independently evaluated query/passage signals, lexical/symbol agreement, component agreement and candidate separation.
+3. A calibrated reranker/relevance gate, only if the labelled pool supports it and latency/cost are measured.
+
+Report positive recall and false-abstention rate alongside precision, negative false acceptance, formula/symbol/numerical slices, latency and per-query cost. Keep source/project authorization and physical-page provenance as hard Core checks outside any model. Do not use RRF rank-fusion scores as calibrated probabilities or pick a universal cutoff from MN01 alone. Expand to a broader multi-document set before selecting a policy; distinguish owner-waived AI labels from independent human qrels. Keep the experiment isolated to Core staging and leave production on AI Search.
 
 ## Side-effect boundary
 

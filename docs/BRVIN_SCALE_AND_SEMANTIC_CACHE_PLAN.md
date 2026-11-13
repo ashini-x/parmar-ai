@@ -131,8 +131,8 @@ Exact quota values, per-tenant fairness rules and alert thresholds must be teste
 
 Treat the following as required acceptance work within the existing M15–M17 sequence, not as milestones already complete:
 
-- Re-run the protected five-case paired Core v2 staging evaluation after the merged score-floor correction and retain its receipt.
-- Resolve no-match false positives through a calibrated positive/negative set; do not treat RRF scores as calibrated probabilities.
+- **Completed 14 November:** the protected five-case paired Core v2 evaluation after PR #247 is persisted as `fa1b8076-9375-480b-bb4b-e22d1c13d9bb`. Qdrant retrieves 7/7 distinct expected source/page targets and 8/8 query-specific positives, including MS03 pages 2 and 3; AI Search retrieves 7/7 distinct and 7/8 query-specific targets. Both providers have zero provenance violations and the seven structural/authorization/quota checks pass. Qdrant still returns three unrelated MN01 candidates; AI Search returns none.
+- **Next M15 action:** resolve no-match false positives through a calibrated positive/negative relevance-gating ablation. Compare no gate, feature-based evidence sufficiency and calibrated reranking/relevance using the existing positives, four out-of-corpus negatives, exact-symbol near-miss, owner-waived candidate grades and two-source suite. Preserve positive recall and report false-abstention, negative false-acceptance, formula/symbol slices, latency and cost. Do not treat RRF as calibrated probability or choose a universal threshold from MN01 alone.
 - Expand mixed-content, exact-symbol, numerical and claim-to-passage grounding tests; add independent human passage relevance labels for representative evaluation.
 - Verify authorization, grant revocation, source deletion/update invalidation and cache-isolation behavior, including cache-hit requests.
 - Exercise transient retries, provider errors, throttling, backpressure and recovery without duplicate chunks or unnecessary Vision OCR.
@@ -144,15 +144,15 @@ Treat the following as required acceptance work within the existing M15–M17 se
 
 ## 7. Current checkpoint (14 November 2026)
 
-These are planning decisions, not implementation claims:
-
 - M13 is merged; M14 is complete only as the scoped non-production Vertex/Qdrant Physics pilot.
-- M15 remains in progress. Core PR #247 fixed the IEEE-754 exact-score-boundary comparison and is merged/deployed behind the unchanged production selector.
-- The next documented M15 action is the protected five-case paired Core v2 staging evaluation to verify the MS03 page-2 result after the fix. Confirm this against the live repository, PRs, receipts and Cloudflare read-back before acting.
-- MN01 no-match false positives, broader mixed-content/claim grounding, independent qrels, retries/recovery/throttling, HNSW-aware representative load, repeatable latency/throughput/cost and rollback remain open.
-- Production Core still selects Cloudflare AI Search; production Qdrant/Vertex retrieval bindings and a production corpus migration have not been enabled.
-- No semantic answer cache, cache invalidation path, or scale-quota redesign is claimed as implemented by this document update.
-- BRVIN Teachers remains a private v2 consumer with no direct Qdrant/Vertex credentials or runtime dependency. Its Operator Console, five-stage source lifecycle, physical page map, Core-owned READY gate and citations remain unchanged.
+- M15 remains in progress. Core PR #247 fixed the IEEE-754 score-boundary comparison and is merged/deployed behind the unchanged production selector.
+- The protected five-case paired Core v2 evaluation after PR #247 passed under receipt `fa1b8076-9375-480b-bb4b-e22d1c13d9bb`. Qdrant covers all 7/7 distinct expected page locations and all 8/8 query-specific positive target instances, including MS03 M15 pages 2/3; AI Search covers 7/7 distinct locations and 7/8 query-specific instances. Both have zero provenance violations, and all seven structural/authorization/quota checks passed.
+- Qdrant still returned three unrelated candidates for MN01 while AI Search returned none. The immediate M15 action is a calibrated no-match/relevance-gating ablation comparing no gate, feature-based evidence sufficiency and calibrated reranking/relevance across the existing positives, four out-of-corpus negatives, exact-symbol near-miss and the two-source suite. Do not use a universal RRF cutoff or treat rank-fusion scores as probabilities.
+- Five sequential latency samples (Qdrant/Vertex p50/p95 1,180/1,326 ms; AI Search 3,903/5,374 ms) are not a load test, capacity result or production SLO.
+- M15 still requires broader multi-document/formula and claim grounding, independent or clearly owner-waived passage labels, retry/recovery/throttling, HNSW-aware peak-load testing, repeatable latency/throughput/cost, quota redesign and rollback rehearsal.
+- Production Core still selects Cloudflare AI Search; production Qdrant/Vertex retrieval bindings and corpus migration remain disabled.
+- No semantic answer cache, cache invalidation path or scale-quota redesign is claimed as implemented.
+- BRVIN Teachers remains a private v2 consumer without direct Qdrant/Vertex credentials or runtime dependency. Its Operator Console, five-stage source lifecycle, physical page map, Core-owned READY gate and citations remain unchanged.
 
 ## 8. Official provider references
 
