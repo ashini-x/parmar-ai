@@ -1,7 +1,7 @@
 # BRVIN System Reference
 
 **Status:** As-built architecture and operating contract  
-**Last verified against source and production infrastructure:** 14 November 2026 (Cloudflare read-back confirms Core production `parmar-ai` v779 and `brvin-service` v156, isolated M15 staging v102 and Teachers v12 at 100%; production remains on AI Search; post-PR-247 paired Core v2 staging receipt `fa1b8076-9375-480b-bb4b-e22d1c13d9bb` is passed and verifies MS03 pages 2/3; no-match candidate noise remains open)  
+**Last verified against source and production infrastructure:** 14 November 2026 (Cloudflare read-back confirms Core production `parmar-ai` v779 and `brvin-service` v156, isolated M15 staging v102 and Teachers v12 at 100%; production remains on AI Search; post-PR-247 paired Core v2 staging receipt `fa1b8076-9375-480b-bb4b-e22d1c13d9bb` passed; offline relevance-gate feasibility check selected no runtime policy)
 **Owning repository:** `ashini-x/parmar-ai`  
 **Related consumer repository checked:** `ashini-x/brvin-teachers` (separate downstream app); `ashini-x/askmoina-voice` remains an optional consumer
 
@@ -929,3 +929,15 @@ The initial post-merge M14 staging workflow [#43299637193](https://github.com/as
 Read-only D1 verification on 13 November confirms the existing project `890f6317-69f4-4391-aae6-556155ed0d12` is active and has only its original eight-page M15 source READY (8/8). November usage is one query reservation from the passed authorization receipt. `m15_v2_multisource_sources` and `m15_v2_multisource_runs` do not yet exist; they are initialized lazily by the authenticated Prepare/Evaluate actions. This is expected. No second source has been registered or indexed yet.
 
 Operator sequence and pinned manifest details are in [BRVIN_M15_MULTI_SOURCE_CORE_V2_STAGING_RUNBOOK.md](BRVIN_M15_MULTI_SOURCE_CORE_V2_STAGING_RUNBOOK.md). Enter `BRVIN_M14_ADMIN_TOKEN` only into the password field on that staging page; never send it to ChatGPT or GitHub. Do not upload the PDF or rerun Vision OCR. Production Core and BRVIN Teachers are unchanged; no Qdrant/Vertex bindings are present in the Teachers Worker.
+
+## 1.4 Offline relevance-gate feasibility — 14 November 2026
+
+The test-only ablation over the committed 109-candidate owner-waived AI assessment is recorded in `docs/BRVIN_M15_RELEVANCE_GATE_ABLATION.md`. It is not a shipped gate or an as-built runtime feature.
+
+| Exploratory strategy | Held-out positive queries preserved | Held-out out-of-corpus queries cleared | Failure |
+|---|---:|---:|---|
+| Fixed RRF cutoff `>= 0.38` | 12/12 | 3/4 | N04 noise remains |
+| Fixed RRF cutoff `>= 0.42` | 11/12 | 4/4 | P02 false abstention |
+| Leave-one-query-out lexical coverage | 11/12 | 4/4 | P06 false abstention |
+
+The no-gate baseline retains at least one grade-2+ candidate on 12/12 positive queries but returns candidates on all four out-of-corpus controls. The RRF-based cutoff retains H01's source correction, but the lexical proxy suppresses that grade-3 passage. The 109 candidates are owner-waived AI labels; independent reviewer/adjudicated human fields remain blank. The results are single-source/single-subject feasibility evidence, not calibration. No gate, cutoff or reranker was selected; no production/staging retrieval behavior changed. The next evidence requirement is broader multi-document/query-family qrels with source-group held-out evaluation before a real multi-feature or model-based gate can be chosen.

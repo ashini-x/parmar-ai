@@ -7,6 +7,8 @@ type Candidate = {
   reviewerA: { grade: number | null; rationale: string | null };
   reviewerB: { grade: number | null; rationale: string | null };
   adjudicatedGrade: number | null;
+  score?: number;
+  text?: string;
   ownerApprovedAiAssessment?: {
     grade: number;
     rationale: string;
@@ -17,6 +19,7 @@ type Candidate = {
 type Query = {
   queryId: string;
   category: string;
+  query: string;
   providers: Record<string, Candidate[]>;
 };
 type Assessment = {
@@ -100,5 +103,99 @@ describe("M15 owner-waived AI passage assessment", () => {
       expect(stored.meanNdcgAt5).toBeCloseTo(ndcgValues.reduce((a, b) => a + b, 0) / 12, 10);
       expect(stored.meanReciprocalRankGrade2Plus).toBeCloseTo(reciprocalRanks.reduce((a, b) => a + b, 0) / 12, 10);
     }
+  });
+});
+
+type GateFeature = (query: Query, candidate: Candidate) => number;
+const GATE_STOP_WORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "by", "can", "calculate", "does", "do",
+  "for", "from", "how", "if", "in", "is", "it", "its", "may", "of", "on", "or",
+  "show", "that", "the", "their", "then", "this", "to", "use", "what", "when",
+  "which", "with", "would", "explain", "describe", "compare", "difference", "between",
+  "into", "through", "about", "has", "have", "not", "only", "same", "one", "each",
+]);
+function qdrantCandidates(query: Query): Candidate[] { return query.providers["qdrant-vertex"] ?? []; }
+function assessedGrade(candidate: Candidate): number { return candidate.ownerApprovedAiAssessment?.grade ?? -1; }
+function queryTerms(value: string): string[] {
+  const tokens = value.toLowerCase().match(/[a-z]+(?:'[a-z]+)?|[0-9]+(?:\.[0-9]+)?/gu) ?? [];
+  return [...new Set(tokens)].filter((term) => term.length > 1 && !GATE_STOP_WORDS.has(term));
+}
+const rrfScoreFeature: GateFeature = (_query, candidate) => candidate.score ?? 0;
+const lexicalCoverageFeature: GateFeature = (query, candidate) => {
+  const terms = queryTerms(query.query);
+  if (!terms.length || !candidate.text) return 0;
+  const passageTerms = new Set(queryTerms(candidate.text));
+  return terms.filter((term) => passageTerms.has(term)).length / terms.length;
+};
+function fitExploratoryThreshold(training: Query[], feature: GateFeature): number {
+  const positives = training.filter((query) => query.category === "positive");
+  const negatives = training.filter((query) => query.category === "out-of-corpus");
+  const thresholds = [...new Set([0, ...training.flatMap((query) =>
+    qdrantCandidates(query).map((candidate) => feature(query, candidate))
+  )])].filter(Number.isFinite).sort((a, b) => a - b);
+  const feasible = thresholds.filter((threshold) => positives.every((query) =>
+    qdrantCandidates(query).some((candidate) => assessedGrade(candidate) >= 2 && feature(query, candidate) >= threshold)
+  ));
+  if (!feasible.length) throw new Error("No threshold preserves every training positive.");
+  let best: number | null = null, bestCleared = -1;
+  for (const threshold of feasible) {
+    const cleared = negatives.filter((query) =>
+      qdrantCandidates(query).every((candidate) => feature(query, candidate) < threshold)
+    ).length;
+    if (cleared > bestCleared || (cleared === bestCleared && threshold > (best ?? -Infinity))) {
+      best = threshold; bestCleared = cleared;
+    }
+  }
+  if (best === null) throw new Error("The exploratory threshold could not be selected.");
+  return best;
+}
+function leaveOneQueryOut(queries: Query[], feature: GateFeature) {
+  return queries.map((held) => {
+    const threshold = fitExploratoryThreshold(queries.filter((query) => query.queryId !== held.queryId), feature);
+    const kept = qdrantCandidates(held).filter((candidate) => feature(held, candidate) >= threshold);
+    return {
+      queryId: held.queryId, category: held.category,
+      keptGrade2Plus: kept.some((candidate) => assessedGrade(candidate) >= 2),
+      candidateCount: kept.length,
+    };
+  });
+}
+describe("M15 exploratory relevance-gate feasibility (offline only)", () => {
+  const queries = assessment.queries;
+  const summarize = (threshold: number) => ({
+    positiveKept: queries.filter((query) => query.category === "positive" &&
+      qdrantCandidates(query).some((candidate) => assessedGrade(candidate) >= 2 && (candidate.score ?? 0) >= threshold)
+    ).length,
+    negativesCleared: queries.filter((query) => query.category === "out-of-corpus" &&
+      qdrantCandidates(query).every((candidate) => (candidate.score ?? 0) < threshold)
+    ).length,
+    h01Kept: qdrantCandidates(queries.find((query) => query.category === "exact-symbol-near-miss")!)
+      .some((candidate) => assessedGrade(candidate) >= 2 && (candidate.score ?? 0) >= threshold),
+  });
+  it("shows a fixed RRF cutoff trades positive recall against no-match noise", () => {
+    expect(summarize(0.38)).toEqual({ positiveKept: 12, negativesCleared: 3, h01Kept: true });
+    expect(summarize(0.42)).toEqual({ positiveKept: 11, negativesCleared: 4, h01Kept: true });
+  });
+  it("rejects single-feature gates under leave-one-query-out calibration", () => {
+    const score = leaveOneQueryOut(queries, rrfScoreFeature);
+    const lexical = leaveOneQueryOut(queries, lexicalCoverageFeature);
+    const summary = (rows: typeof score) => ({
+      positiveKept: rows.filter((row) => row.category === "positive" && row.keptGrade2Plus).length,
+      negativesCleared: rows.filter((row) => row.category === "out-of-corpus" && row.candidateCount === 0).length,
+      h01Kept: rows.find((row) => row.category === "exact-symbol-near-miss")?.keptGrade2Plus,
+      falseAbstentions: rows.filter((row) => row.category === "positive" && !row.keptGrade2Plus).map((row) => row.queryId),
+    });
+    expect(summary(score)).toEqual({
+      positiveKept: 11, negativesCleared: 3, h01Kept: true, falseAbstentions: ["P02"],
+    });
+    expect(summary(lexical)).toEqual({
+      positiveKept: 11, negativesCleared: 4, h01Kept: false, falseAbstentions: ["P06"],
+    });
+  });
+  it("keeps owner-waived AI grades distinct from independent human qrels", () => {
+    expect(assessment.status).toBe("owner_waived_ai_assessment_complete_not_independent_human_qrels");
+    expect(queries.flatMap((query) => qdrantCandidates(query)).every((candidate) =>
+      candidate.reviewerA.grade === null && candidate.reviewerB.grade === null && candidate.adjudicatedGrade === null
+    )).toBe(true);
   });
 });
