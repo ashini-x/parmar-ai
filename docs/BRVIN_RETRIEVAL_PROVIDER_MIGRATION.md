@@ -817,7 +817,7 @@ The initial Fatman staging run exported all 538 pages and 1,606 chunks, then hit
 
 PR #288 (`0992af5cfe85539c9a2f589309ab40ffed4a7a01`) changed the staging Qdrant page batch to one and the staging AI Search batch to four. Each page's deterministic ID makes interrupted-page retries idempotent; the D1 checkpoint advances only after the complete Qdrant upsert/read-back. Staging Worker v108 is deployed at 100%. Both M14 staging CI and Release Validation passed.
 
-Resume from the current D1 cursor at Qdrant page 12 by refreshing the Fatman operator and clicking Build again. Do not upload the source PDF or rerun Vision OCR. Production remains on Cloudflare AI Search pending the paired Fatman AI assessment.
+**Historical resume instruction — superseded:** this earlier subrequest-fix checkpoint began at Qdrant page 12. Later indexing advanced to page 280, and the subsequent CPU-limit incident stopped further preparation. Do not follow the old page-12 Build instruction. The current cursor is after page 280 (next page 281), and Build remains blocked until the effective staging CPU budget is confirmed and resolved. Do not upload the source PDF or rerun Vision OCR. Production remains on Cloudflare AI Search pending the paired Fatman AI assessment.
 
 
 ## 14 November 2026 — latest Fatman staging continuation read-back
