@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getTelegramRetryDelayMs,
   sendTelegramBusinessMessage,
+  sendTelegramQuiz,
+  sendTelegramMessage,
+  editTelegramMessage,
   sendTelegramMessageWithToken,
   sendTelegramVoiceWithToken,
   editTelegramMessageReplyMarkup,
@@ -82,7 +85,7 @@ describe("BRɅIN Telegram button", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(sendTelegramMessageWithToken("bot-token", 42, "Answer text"))
+    await expect(sendTelegramMessageWithToken("bot-token", 42, "**Answer text**"))
       .resolves.toEqual({ message_id: 123 });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -90,7 +93,7 @@ describe("BRɅIN Telegram button", () => {
     expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
     expect(JSON.parse(String(requestInit.body))).toMatchObject({
       chat_id: 42,
-      text: "Answer text",
+      text: "<b>Answer text</b>",
       parse_mode: "HTML",
       reply_markup: creatorKeyboard,
     });
@@ -177,6 +180,76 @@ describe("Telegram Admin contact buttons", () => {
         ]],
       },
       link_preview_options: { is_disabled: true },
+    });
+  });
+});
+
+
+describe("Telegram HTML rich-text delivery", () => {
+  it("formats bold text on a normal sendMessage payload", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 129 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = { TELEGRAM_BOT_TOKEN: "bot-token" } as unknown as Env;
+    await expect(sendTelegramMessage(env, 42, "**Important** <do not treat as HTML>", undefined, undefined, false))
+      .resolves.toEqual({ message_id: 129 });
+
+    const [, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(requestInit.body))).toMatchObject({
+      text: "<b>Important</b> &lt;do not treat as HTML&gt;",
+      parse_mode: "HTML",
+    });
+  });
+
+  it("formats edits using the same HTML rules", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 130 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = { TELEGRAM_BOT_TOKEN: "bot-token" } as unknown as Env;
+    await expect(editTelegramMessage(env, 42, 777, "**Updated** answer", undefined, false))
+      .resolves.toBeUndefined();
+
+    const [, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(requestInit.body))).toMatchObject({
+      text: "<b>Updated</b> answer",
+      parse_mode: "HTML",
+    });
+  });
+
+  it("formats native quiz explanations and removes unsupported Markdown wrappers from poll labels", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 131, poll: { id: "poll-131" } },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = { TELEGRAM_BOT_TOKEN: "bot-token" } as unknown as Env;
+    await expect(sendTelegramQuiz(
+      env, 42, "**Which Article?**", ["**Article 21**", "Article 23"], [0],
+      "**Correct.** Article 21 protects life and personal liberty.", undefined, undefined, false,
+    )).resolves.toEqual({ message_id: 131, poll_id: "poll-131" });
+
+    const [, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(requestInit.body))).toMatchObject({
+      question: "Which Article?",
+      options: [{ text: "Article 21" }, { text: "Article 23" }],
+      explanation: "<b>Correct.</b> Article 21 protects life and personal liberty.",
+      explanation_parse_mode: "HTML",
     });
   });
 });
