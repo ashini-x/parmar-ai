@@ -15,7 +15,7 @@ import { buildFatmanRetrievalQuery, formatFatmanCitations, isFatmanReady, retrie
 import { logger } from "./core/logger";
 import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./telegram/progress";
 import { loadQuestionContextInParallel, runSuspensionAndModeLookup } from "./telegram/parallel-work";
-import { parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
+import { buildFatmanModeStatusMessage, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
 import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
 import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isAdminCommand, isHelpCommand, isParmarSirCommand, isStartCommand } from "./telegram/menu";
 import { parseHelpMenuAction } from "./telegram/help-menu";
@@ -546,9 +546,7 @@ async function handleFatmanModeCallback(
     await sendTelegramMessage(
       env,
       chatId,
-      active
-        ? "📖 Fatman Mode is ON. New doubts will use the book and page citations."
-        : "👻 Fatman Mode is OFF. New doubts will use the exam-relevant SSC study mode.",
+      buildFatmanModeStatusMessage(active, true),
       undefined,
       botConnectionId,
       !active,
@@ -864,9 +862,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
         chatId,
         !ready
           ? "Fatman Mode is unavailable right now. It is OFF; usual study mode remains available."
-          : active
-            ? "Fatman Mode is ON. New doubts will use the book and page citations."
-            : "Fatman Mode is OFF. New doubts will use the exam-relevant SSC study mode.",
+          : buildFatmanModeStatusMessage(active),
         messageId,
         bot.connectionId,
         !active,
@@ -900,8 +896,8 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       active: desiredActive,
     });
     const commandText = desiredActive
-      ? (current.active ? "Fatman Mode is already ON." : "📖 Fatman Mode is ON. New doubts will use the book and page citations.")
-      : (current.active ? "👻 Fatman Mode is OFF. New doubts will use the exam-relevant SSC study mode." : "Fatman Mode is already OFF.");
+      ? (current.active ? "Fatman Mode is already ON." : buildFatmanModeStatusMessage(true, true))
+      : (current.active ? buildFatmanModeStatusMessage(false, true) : "Fatman Mode is already OFF.");
     await bestEffortTelegram("fatman_command", () => sendTelegramMessage(
       env,
       chatId,

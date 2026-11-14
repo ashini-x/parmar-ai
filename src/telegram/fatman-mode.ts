@@ -26,3 +26,14 @@ export function buildFatmanHelpFooter(ready: boolean, callbackWebhookReady: bool
   if (!callbackWebhookReady) return "Fatman buttons are temporarily unavailable. Please try /help again.";
   return "Use the buttons below to enter and exit the Fatman book to find facts.";
 }
+
+/** Shared status copy for Fatman mode transitions and status replies. */
+export function buildFatmanModeStatusMessage(active: boolean, includeIcon = false): string {
+  const heading = active
+    ? `${includeIcon ? "📖 " : ""}Fatman Mode is ON.`
+    : `${includeIcon ? "👻 " : ""}Fatman Mode is OFF.`;
+  const explanation = active
+    ? "New doubts will use the book and page citations."
+    : "New doubts will use the exam-relevant SSC study mode.";
+  return heading + "\n\n" + explanation;
+}

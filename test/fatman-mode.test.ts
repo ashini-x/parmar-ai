@@ -1,8 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { buildFatmanExitMarkup, buildFatmanStartMarkup } from "../src/telegram/api";
-import { buildFatmanHelpFooter, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "../src/telegram/fatman-mode";
+import { buildFatmanHelpFooter, buildFatmanModeStatusMessage, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "../src/telegram/fatman-mode";
 
 describe("Fatman mode controls", () => {
+  it("adds a blank line between ON and OFF status headings and explanations", () => {
+    expect(buildFatmanModeStatusMessage(true, true)).toBe(
+      "📖 Fatman Mode is ON.\n\nNew doubts will use the book and page citations.",
+    );
+    expect(buildFatmanModeStatusMessage(false, true)).toBe(
+      "👻 Fatman Mode is OFF.\n\nNew doubts will use the exam-relevant SSC study mode.",
+    );
+    expect(buildFatmanModeStatusMessage(true)).toBe(
+      "Fatman Mode is ON.\n\nNew doubts will use the book and page citations.",
+    );
+    expect(buildFatmanModeStatusMessage(false)).toBe(
+      "Fatman Mode is OFF.\n\nNew doubts will use the exam-relevant SSC study mode.",
+    );
+  });
+
   it("shows only the requested button instruction in student-facing help", () => {
     expect(buildFatmanHelpFooter(true, true)).toBe(
       "Use the buttons below to enter and exit the Fatman book to find facts.",
