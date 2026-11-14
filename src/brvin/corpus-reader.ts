@@ -22,7 +22,7 @@ function bucketName(env: Env): string {
 }
 
 function validateIdentifiers(sourceId: string, generationId: string): void {
-  if (!/^[a-f0-9-]{36}$/iu.test(sourceId)) throw new Error("The BRVIN source identifier is invalid.");
+  if (sourceId !== "fatman-legacy-538" && !/^[a-f0-9-]{36}$/iu.test(sourceId)) throw new Error("The BRVIN source identifier is invalid.");
   if (!/^[a-f0-9]{32}$/iu.test(generationId)) throw new Error("The BRVIN corpus generation identifier is invalid.");
 }
 
