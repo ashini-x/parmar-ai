@@ -28,6 +28,7 @@ import {
   editTelegramProgressMessage,
   editTelegramMessageReplyMarkup,
   sendTelegramMessage,
+  sendTelegramAdminContactPhoto,
   sendTelegramChatActionWithToken,
   sendTelegramMessageWithToken,
   sendTelegramVoiceWithToken,
@@ -43,8 +44,6 @@ import {
   buildFatmanStartMarkup,
   buildFatmanExitMarkup,
   buildHelpMenuMarkup,
-  buildAdminContactMarkup,
-  ADMIN_CONTACT_TEXT,
   CREATOR_CONTACT_CALLBACK_DATA,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
@@ -355,15 +354,7 @@ async function handleCreatorContactCallback(
       }
     }
 
-    await sendTelegramMessage(
-      env,
-      chatId,
-      ADMIN_CONTACT_TEXT,
-      undefined,
-      botConnectionId,
-      false,
-      buildAdminContactMarkup(),
-    );
+    await sendTelegramAdminContactPhoto(env, chatId, undefined, botConnectionId);
   } catch (error) {
     logger.warn("creator_contact_callback_failed", {
       requestId,
@@ -749,15 +740,9 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   }
 
   if (isAdminCommand(text)) {
-    await bestEffortTelegram("admin_contact", () => sendTelegramMessage(
-      env,
-      chatId,
-      ADMIN_CONTACT_TEXT,
-      messageId,
-      bot.connectionId,
-      false,
-      buildAdminContactMarkup(),
-    ));
+    await bestEffortTelegram("admin_contact", () =>
+      sendTelegramAdminContactPhoto(env, chatId, messageId, bot.connectionId),
+    );
     return withRequestId(json({ ok: true, adminContact: true }), requestId);
   }
 
