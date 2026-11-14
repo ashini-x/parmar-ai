@@ -1,7 +1,7 @@
 import type { Env, GeminiImageInput } from "../config/env";
 import { MAX_PHOTO_COUNT, MAX_SINGLE_PHOTO_BYTES, MAX_TOTAL_PHOTO_BYTES } from "../config/env";
 import { getActiveTelegramBot, getTelegramBotApiToken, hasTelegramBotRecords } from "./bot-store";
-import { formatTelegramHtml } from "./formatting";
+import { formatTelegramHtml, stripTelegramMarkdownMarkers } from "./formatting";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
@@ -449,8 +449,10 @@ export async function sendTelegramQuiz(
     poll?: { id: string };
   }>(env, "sendPoll", {
     chat_id: chatId,
-    question: question.trim().slice(0, 300),
-    options: options.map((text) => ({ text: text.trim().slice(0, 100) })).slice(0, 12),
+    // Telegram currently supports only custom-emoji entities in native poll questions,
+    // so strip Markdown wrappers without changing the wording.
+    question: stripTelegramMarkdownMarkers(question).trim().slice(0, 300),
+    options: options.map((text) => ({ text: stripTelegramMarkdownMarkers(text).trim().slice(0, 100) })).slice(0, 12),
     is_anonymous: false,
     type: "quiz",
     allows_multiple_answers: false,
