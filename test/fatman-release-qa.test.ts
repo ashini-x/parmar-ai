@@ -3,6 +3,7 @@ import {
   FATMAN_RELEASE_QA_CASES,
   FATMAN_RELEASE_QA_SUITE_VERSION,
   runFatmanReleaseQa,
+  runFatmanReleaseQaCase,
   type FatmanReleaseQaDependencies,
 } from "../src/fatman/release-qa";
 import type { FatmanBookContext } from "../src/fatman/retrieval";
@@ -178,4 +179,21 @@ describe("Fatman real-user release QA", () => {
     expect(outOfBook?.status).toBe("failed");
     expect(outOfBook?.answerStatus).toBe("failed");
   });
+  it("checks answer abstention even when an out-of-book provider returns unrelated candidates", async () => {
+    const outOfBook = FATMAN_RELEASE_QA_CASES.find((item) => item.id === "out-of-book-secret-fingerprint");
+    if (!outOfBook) throw new Error("Pinned out-of-book QA case is missing.");
+    const answer = vi.fn(async () => ({
+      answer: "The exact fingerprint is not found in the retrieved Fatman pages, so I cannot confirm it.",
+    }));
+    const result = await runFatmanReleaseQaCase({
+      retrieve: async () => context([168]),
+      answer,
+    }, outOfBook);
+    expect(result.retrievalStatus).toBe("failed");
+    expect(result.answerStatus).toBe("passed");
+    expect(result.generationAttempts).toBe(1);
+    expect(answer).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("failed");
+  });
+
 });
