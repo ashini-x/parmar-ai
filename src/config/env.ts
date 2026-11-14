@@ -363,6 +363,8 @@ export interface QuizItem {
 }
 
 export interface AnswerPacket {
+  /** True for non-answer notices that should never receive a Final answer heading. */
+  isNotice?: boolean;
   answer: string;
   responseMode: "text" | "quiz";
   sscTakeaway: string;

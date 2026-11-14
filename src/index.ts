@@ -16,6 +16,7 @@ import { logger } from "./core/logger";
 import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./telegram/progress";
 import { loadQuestionContextInParallel, runSuspensionAndModeLookup } from "./telegram/parallel-work";
 import { buildFatmanModeStatusMessage, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
+import { formatSuccessfulQuestionAnswer } from "./telegram/answer-format";
 import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
 import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isAdminCommand, isHelpCommand, isParmarSirCommand, isStartCommand } from "./telegram/menu";
 import { parseHelpMenuAction } from "./telegram/help-menu";
@@ -1932,7 +1933,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
           env,
           job,
           claim.record.statusMessageId,
-          buildAnswerForStudent(packet, latestProfile),
+          formatSuccessfulQuestionAnswer(buildAnswerForStudent(packet, latestProfile), packet),
         );
         statusMessageHandled = true;
       }
@@ -2286,6 +2287,7 @@ async function getStudentUsage(env: Env, chatId: number, telegramUserId: number)
 function makeFatmanNoticePacket(answer: string): AnswerPacket {
   return {
     answer,
+    isNotice: true,
     responseMode: "text",
     sscTakeaway: "",
     answerScope: "ssc_support",
