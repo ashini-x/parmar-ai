@@ -233,6 +233,14 @@ export async function runFatmanReleaseQa(
   };
 }
 
+/** Run one frozen Fatman regression case for an isolated provider benchmark. */
+export async function runFatmanReleaseQaCase(
+  dependencies: FatmanReleaseQaDependencies,
+  qaCase: FatmanReleaseQaCase,
+): Promise<FatmanReleaseQaCaseResult> {
+  return runCase(dependencies, qaCase);
+}
+
 async function runCase(
   dependencies: FatmanReleaseQaDependencies,
   qaCase: FatmanReleaseQaCase,
@@ -265,7 +273,7 @@ async function runCase(
     ? (bookContext.passages.length === 0 ? "passed" : "failed")
     : (includesAllPages(bookContext, qaCase.expectedPages) ? "passed" : "failed");
 
-  if (retrievalStatus === "failed") {
+  if (retrievalStatus === "failed" && !qaCase.expectAbstention) {
     return {
       id: qaCase.id,
       category: qaCase.category,
