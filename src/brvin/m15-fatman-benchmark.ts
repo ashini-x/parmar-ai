@@ -1507,7 +1507,7 @@ export async function finalizeBrvinM15FatmanBenchmark(
       qdrantWinsByBothAssessors,
       aiWinsByBothAssessors,
       adjudicatedQualityScoreDifference: Number((qdrant.adjudicatedCompositeScore - ai.adjudicatedCompositeScore).toFixed(4)),
-      productionCutoverRecommended: qdrantWins,
+      productionCutoverRecommended: winner === "qdrant-vertex",
       humanReviewRequired: false,
       note: "The winner is selected from two blind independent AI assessors plus a separate AI adjudication pass on material disagreements. The deterministic Fatman retrieval/answer QA, critical-error count and out-of-book abstention are guardrails. No human labels or review are required.",
     },
