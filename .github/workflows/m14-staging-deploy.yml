@@ -17,6 +17,8 @@ on:
       - "test/brvin-m15-shadow-benchmark.test.ts"
       - "src/brvin/m14-pilot-runner.ts"
       - "src/brvin/corpus-reader.ts"
+      - "test/brvin-corpus-reader.test.ts"
+      - "test/brvin-corpus-store.test.ts"
       - "src/fatman/release-qa.ts"
       - "test/fatman-release-qa.test.ts"
       - "src/brvin/vertex-embedding.ts"
@@ -51,6 +53,9 @@ on:
       - "test/brvin-m15-v2-multisource.test.ts"
       - "src/brvin/m14-pilot-runner.ts"
       - "src/brvin/corpus-reader.ts"
+      - "test/brvin-corpus-reader.test.ts"
+      - "test/brvin-corpus-store.test.ts"
+      - "test/brvin-qdrant-provider-contract.test.ts"
       - "src/fatman/release-qa.ts"
       - "src/brvin/vertex-embedding.ts"
       - "src/brvin/qdrant-hybrid-pilot.ts"
@@ -85,7 +90,7 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund --legacy-peer-deps
       - run: npm run check
-      - run: npx vitest run test/brvin-m14-staging-worker.test.ts test/brvin-m15-shadow-benchmark.test.ts test/brvin-m15-benchmark-staging.test.ts test/brvin-qdrant-provider-contract.test.ts test/brvin-m15-v2-staging.test.ts test/brvin-m15-v2-multisource.test.ts test/brvin-m15-fatman-benchmark.test.ts test/fatman-release-qa.test.ts
+      - run: npx vitest run test/brvin-m14-staging-worker.test.ts test/brvin-m15-shadow-benchmark.test.ts test/brvin-m15-benchmark-staging.test.ts test/brvin-qdrant-provider-contract.test.ts test/brvin-m15-v2-staging.test.ts test/brvin-m15-v2-multisource.test.ts test/brvin-m15-fatman-benchmark.test.ts test/fatman-release-qa.test.ts test/brvin-corpus-reader.test.ts test/brvin-corpus-store.test.ts
       - name: Verify versioned Vertex and Qdrant settings
         run: node scripts/verify-m14-staging-config.mjs
       - run: npx wrangler deploy --config wrangler.m14-staging.jsonc --dry-run
