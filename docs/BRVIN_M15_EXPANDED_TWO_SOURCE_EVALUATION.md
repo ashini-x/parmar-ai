@@ -1,7 +1,7 @@
 # BRVIN M15 expanded two-source Core v2 evaluation
 
 **Version:** expanded suite v1  
-**Status:** implementation staged for validation; not yet executed  
+**Status:** expanded run completed; operational/page-target subgate passed; comparative quality follow-up open  
 **Environment:** isolated parmar-ai-m14-staging Worker + D1 only  
 **Operator page:** /admin/m15/benchmark/multi-source  
 **Endpoint:** POST /admin/m15/benchmark/multi-source/evaluate-expanded
@@ -63,3 +63,49 @@ Not performed: PDF upload, Vision OCR, source or OCR mutation, GCS corpus regene
 This expands document and query coverage within Physics, but it does not establish cross-subject generalization or independent human passage relevance. Keep it separate from the owner-waived 109-candidate passage assessment and from the original five-case paired receipt.
 
 After the run, review every missing expected page and both negative-control candidate texts. Then add independent passage/span review or explicitly record a further owner waiver before any multi-feature evidence-sufficiency gate or reranker is considered. Keep production on Cloudflare AI Search.
+
+## Expanded two-source Core v2 receipt — 14 November 2026
+
+**Persisted staging receipt:** `0f5f9769-452a-466e-b5ae-735ddba6378a`  
+**Benchmark:** `brvin-m15-core-v2-multisource-expanded-v1`  
+**Environment/project:** isolated staging / `890f6317-69f4-4391-aae6-556155ed0d12`  
+**Pinned sources:** Class IX Force and Laws of Motion (3 pages) and M15 Physics Benchmark (8 pages); both fingerprints matched and both sources were READY.  
+**Suite:** 12 queries (10 positive/source-correction cases and 2 expected no-match controls), executed through both providers using the existing private Core v2 resolver.
+
+### Execution and page-target results
+
+Both providers completed all 12 queries with zero failures, searched both READY sources for every query, returned evidence from both source IDs, and recorded zero provenance violations. All structural, source-pinning, provider-completion, provenance and quota-accounting checks passed.
+
+| Measure | Cloudflare AI Search | Qdrant + Vertex |
+|---|---:|---:|
+| Expected query/page-target instances found | 11/11 | 11/11 |
+| Distinct expected source/page locations found | 7/7 | 7/7 |
+| Positive queries with all expected pages | 10/10 | 10/10 |
+| Expected no-match queries with candidates | 0/2 | 2/2 |
+| Total returned candidates across no-match queries | 0 | 5 |
+
+The 11 target instances represent query-specific targets across seven distinct physical source/page pairs. This is page-target coverage in the returned candidate lists; it is not passage/span relevance precision, rank-sensitive nDCG/MRR, claim entailment or generated-answer correctness. EX10 remains a source-correction near-miss with relevant evidence on M15 page 8, not a no-evidence abstention case.
+
+### No-match review and latency
+
+The two expected no-match questions were manually inspected at passage-text level:
+
+- **EX11 — Planck constant / photon energy:** AI Search returned no candidates. Qdrant returned three unrelated passages from the Class IX handout p. 1 and M15 Physics pp. 8 and 6.
+- **EX12 — Boyle's law / pressure-volume relation:** AI Search returned no candidates. Qdrant returned two unrelated passages from M15 Physics p. 1 and the Class IX handout p. 2.
+
+The five Qdrant passages do not answer either question. Treat this as a confirmed no-match retrieval-precision/abstention problem for this small test set, not proof of answer-generation behavior.
+
+| Provider | p50 | p95 | Samples |
+|---|---:|---:|---:|
+| Cloudflare AI Search | 3,333 ms | 6,762 ms | 12 |
+| Qdrant + Vertex | 1,162 ms | 1,216 ms | 12 |
+
+These are 12 sequential staging observations only. They are not concurrent load measurements, production percentiles, a throughput benchmark or an SLO.
+
+**Quota:** 21 before, 45 after; exactly 24 staging reservations (12 queries × two providers). No PDF upload, Vision OCR, source/OCR mutation, GCS regeneration, provider index writes, production D1 access, production selector change, private v2 contract change or Teachers runtime change was part of this run.
+
+### Subgate decision and next gate
+
+The expanded two-source Physics page-target execution subgate **PASSED**. Comparative provider acceptance remains **OPEN**: page-target coverage is tied, while Qdrant fails both no-match controls and AI Search abstains cleanly. The sequential latency difference is insufficient to choose a provider. Do not declare a provider winner, choose a cutoff, add a runtime evidence gate/reranker or authorize production cutover from this receipt.
+
+M15 remains **IN PROGRESS**. Next evidence must include independently adjudicated passage/span qrels, query-family and source-group holdouts, additional subject/source families beyond this two-source Physics-only corpus, near-miss and true no-match controls, and representative concurrency/throughput/recovery/cost tests. Reuse immutable READY source/OCR artifacts where available; do not re-upload or rerun Vision OCR merely to change retrieval providers. Keep production on Cloudflare AI Search and preserve it as rollback provider.

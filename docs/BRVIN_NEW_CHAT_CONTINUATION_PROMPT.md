@@ -78,3 +78,11 @@ Preserve the Core Admin and BRVIN Teachers Operator Console experience: teacher/
 - Do not lower the student allowance just to hide backend cost or capacity problems. The goal is a reliable, high-quality student experience at the 1,000-DAU planning target.
 
 Start at the exact next unfinished action recorded by the current canonical documents and verified GitHub/Cloudflare state. Update this prompt document whenever the continuation requirements materially change.
+
+## Current handoff — 14 November 2026 (after expanded M15 run)
+
+Latest Core main includes PR #268 (merge `d2bcae3fa9bffaec6b88c9bffaef744897ce2e50`). The expanded 12-query two-source staging run has now completed and persisted as `0f5f9769-452a-466e-b5ae-735ddba6378a` (`brvin-m15-core-v2-multisource-expanded-v1`). Both providers completed 12/12; all 11 query-specific expected page-target instances across seven distinct source/page pairs were found; zero provenance violations; quota 21→45 for 24 reservations. AI Search returned zero candidates for both no-match prompts; Qdrant returned five unrelated candidates (3 for Planck/photon energy, 2 for Boyle's law). Sequential n=12 p50/p95: AI Search 3,333/6,762 ms; Qdrant/Vertex 1,162/1,216 ms. Not load/SLO evidence and not independent human passage/span qrels.
+
+M15 remains IN PROGRESS. Next work: create/obtain independent passage/span qrels; broaden to another subject/source family and hold out query/source groups; explicitly assess no-match/near-miss candidate precision; then perform representative concurrency, throughput, recovery, capacity and cost tests. Reuse immutable source/OCR artifacts where possible. Do not choose an RRF cutoff, evidence gate or reranker, and do not migrate production from Cloudflare AI Search. M16 remains later Teachers/admin parity; M17 remains controlled canary plus 14-day rollback soak.
+
+Teachers remains a private Core v2 consumer only. No Qdrant/Vertex credentials, SDKs, embeddings or provider endpoints belong in Teachers. Preserve the existing Operator Console, upload/index UX and private v2 boundary.
