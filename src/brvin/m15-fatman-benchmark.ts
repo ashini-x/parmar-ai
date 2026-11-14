@@ -175,6 +175,13 @@ function pageKey(page: number): string {
   return SOURCE_PREFIX + "page-" + String(page).padStart(6, "0") + ".txt";
 }
 
+export function hasFatmanLegacyPhysicalPageMarker(text: string, expectedPage: number): boolean {
+  if (!Number.isSafeInteger(expectedPage) || expectedPage < 1 ||
+      expectedPage > BRVIN_M15_FATMAN_SOURCE.pageCount) return false;
+  const match = /PDF\s+page\s*:?\s*(\d+)/iu.exec(text.slice(0, 2_000));
+  return Boolean(match && Number(match[1]) === expectedPage);
+}
+
 export function pageNumberFromLegacyKey(key: string): number | null {
   if (!key.startsWith(LEGACY_PAGE_PREFIX) || !key.endsWith(".txt")) return null;
   const match = /^fatman\/pages\/page-(\d{1,6})\.txt$/u.exec(key);
@@ -414,8 +421,7 @@ async function readLegacyFatmanPage(
   if (!text.trim() || text.length > MAX_LEGACY_PAGE_TEXT_CHARS) {
     throw new Error("The stored Fatman OCR text for physical page " + expectedPage + " is empty or exceeds the safe page-text limit.");
   }
-  const marker = /PDF\s+page\s*:\s*(\d+)/iu.exec(text.slice(0, 2_000));
-  if (!marker || Number(marker[1]) !== expectedPage) {
+  if (!hasFatmanLegacyPhysicalPageMarker(text, expectedPage)) {
     throw new Error("The stored OCR page marker does not match physical Fatman PDF page " + expectedPage + ".");
   }
   return text;
