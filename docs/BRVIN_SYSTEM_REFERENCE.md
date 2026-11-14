@@ -553,7 +553,7 @@ M10 shipped through [PR #99](https://github.com/ashini-x/parmar-ai/pull/99), squ
 M11's initial implementation shipped in [PR #100](https://github.com/ashini-x/parmar-ai/pull/100), squash-merged as `f7801a558d2a0dae82a449a2ebf0196e24da3fee`. PR Release Validation [#764](https://github.com/ashini-x/parmar-ai/actions/runs/42104068272) passed TypeScript, unit tests, Node/browser-script tests and both Worker bundle dry-runs. Main Release Validation [#768](https://github.com/ashini-x/parmar-ai/actions/runs/42104739449) deployed both Workers; root/health/private BRVIN/Fatman smoke and release acceptance passed; artifact `13450708616`.
 
 The deployed Operations view includes:
-- Per-project monthly query use and remaining allowance, driven by the same 800/month bounded helper as retrieval enforcement. App grant views show the associated project counter as shared, not application-attributed usage.
+- Per-project monthly query use and remaining allowance, driven by the same Core limit helper as retrieval enforcement. Live production uses the configured 800/month value; the code maximum is 300,000, deployed only in isolated staging so far. App grant views show the associated project counter as shared, not application-attributed usage.
 - Current environment connection counts, failed/warning event summaries and OCR retention state.
 - Event filters for attention, retention, connections, ingestion and governance.
 - A protected read-only GCS diagnostic that separates core object permissions from optional bucket lifecycle permissions.
