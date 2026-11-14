@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTelegramHtml } from "../src/telegram/formatting";
+import { formatTelegramHtml, stripTelegramMarkdownMarkers } from "../src/telegram/formatting";
 
 describe("Telegram rich-text formatter", () => {
   it("converts common bold and strikethrough markers", () => {
@@ -46,6 +46,13 @@ describe("Telegram rich-text formatter", () => {
 
   it("does not interpret multiplication asterisks without paired emphasis markers", () => {
     expect(formatTelegramHtml("A * B * C")).toBe("A * B * C");
+  });
+
+  it("strips paired Markdown wrappers from native poll labels", () => {
+    expect(stripTelegramMarkdownMarkers("**Article 23** and *forced labour*")).toBe(
+      "Article 23 and forced labour",
+    );
+    expect(stripTelegramMarkdownMarkers("A * B * C")).toBe("A * B * C");
   });
 
   it("preserves ordinary text without adding unnecessary tags", () => {
