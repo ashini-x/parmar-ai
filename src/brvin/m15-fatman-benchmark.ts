@@ -1648,8 +1648,27 @@ const resultBox=document.getElementById("result");
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function auth(){const value=tokenInput.value.trim();if(value.length<32)throw new Error("Enter the existing staging operator token.");return {"authorization":"Bearer "+value,"content-type":"application/json"};}
 async function api(path,method="GET",body){
- const response=await fetch(API+path,{method,headers:auth(),...(body?{body:JSON.stringify(body)}:{})});
- const data=await response.json();
+ const response=await fetch(API+path,{
+  method,
+  headers:{...auth(),"accept":"application/json"},
+  cache:"no-store",
+  redirect:"follow",
+  ...(body?{body:JSON.stringify(body)}:{})
+ });
+ const contentType=response.headers.get("content-type")||"unknown";
+ const raw=await response.text();
+ let data;
+ try{
+  data=JSON.parse(raw);
+ }catch(_error){
+  const preview=raw.replace(/\\s+/gu," ").slice(0,240);
+  throw new Error(
+   "The staging endpoint returned non-JSON (HTTP "+response.status+
+   "; content-type "+contentType+
+   "; redirected "+String(response.redirected)+
+   "; response URL "+response.url+"). Response begins: "+preview
+  );
+ }
  if(!response.ok||data.ok!==true)throw new Error(data.error||("HTTP "+response.status));
  return data;
 }
