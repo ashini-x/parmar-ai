@@ -208,3 +208,14 @@ The first offline ablation is documented in [BRVIN_M15_RELEVANCE_GATE_ABLATION.m
 ## 14 November 2026 — expanded two-source page-target suite prepared, not yet run
 
 Core now has a separately versioned 12-query staging suite against the two existing READY Physics sources. It adds first-law/inertia, Newton's third law, worked numerics, work-energy, inclined planes and momentum/impulse query families, plus two out-of-corpus controls and a spring-sign correction case. The new endpoint reports query-specific page-target coverage and uses 24 staging quota reservations. It does not replace the original five-case receipt or change retrieval runtime/policy. The page-target labels were checked against the original PDFs and are not independent human passage/span qrels. The new endpoint must be deployed to isolated staging, executed once, and reviewed before the next relevance-gate decision.
+
+## 14 November 2026 — M15 expanded two-source Physics evaluation
+
+- [x] Deploy isolated expanded 12-query Core v2 evaluator and persist its staging receipt.
+- [x] Verify both providers complete 12/12 queries, search both READY sources, return all 11 page-target instances across seven distinct source/page locations, and have zero provenance violations.
+- [x] Review both no-match controls: AI Search returns no candidates; Qdrant returns five unrelated candidates (three on Planck/photon energy, two on Boyle's law).
+- [ ] Independent passage/span qrels and rank-sensitive relevance evaluation.
+- [ ] Broader subject/source-family and held-out query evaluation.
+- [ ] Representative concurrent load, throughput, recovery, cost and capacity acceptance.
+
+Receipt: `0f5f9769-452a-466e-b5ae-735ddba6378a`; 24 staging reservations; quota 21→45. M15 remains **IN PROGRESS**. No provider winner, cutoff, runtime evidence gate, reranker or production cutover is approved. Production remains Cloudflare AI Search; M16 consumer parity and M17 controlled canary/soak remain later gates.
