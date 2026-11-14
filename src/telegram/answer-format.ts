@@ -16,5 +16,5 @@ export function formatSuccessfulQuestionAnswer(answer: string, packet: Pick<Answ
 
   const body = answer.trim();
   if (!body) return answer;
-  return \`🟢 Final answer\n\n\${body}\`;
+  return "🟢 Final answer\n\n" + body;
 }
