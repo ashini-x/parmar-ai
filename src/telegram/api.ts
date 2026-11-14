@@ -1,6 +1,7 @@
 import type { Env, GeminiImageInput } from "../config/env";
 import { MAX_PHOTO_COUNT, MAX_SINGLE_PHOTO_BYTES, MAX_TOTAL_PHOTO_BYTES } from "../config/env";
 import { getActiveTelegramBot, getTelegramBotApiToken, hasTelegramBotRecords } from "./bot-store";
+import { formatTelegramHtml, stripTelegramMarkdownMarkers } from "./formatting";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
@@ -8,8 +9,9 @@ const CREATOR_NAME = "BRɅIN";
 const CREATOR_TELEGRAM_URL = "tg://resolve?domain=projectbrain&profile";
 export const CREATOR_CONTACT_CALLBACK_DATA = "creator:contact";
 export const ADMIN_CONTACT_TEXT = "परमार्थAI by BRɅIN.\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in";
-function limitTelegramMessage(text: string): { text: string } {
-  return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH) };
+function limitTelegramMessage(text: string): { text: string; parse_mode: "HTML" } {
+  const boundedText = text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH);
+  return { text: formatTelegramHtml(boundedText), parse_mode: "HTML" };
 }
 
 function limitTelegramPollExplanation(explanation: string): string {
@@ -447,14 +449,17 @@ export async function sendTelegramQuiz(
     poll?: { id: string };
   }>(env, "sendPoll", {
     chat_id: chatId,
-    question: question.trim().slice(0, 300),
-    options: options.map((text) => ({ text: text.trim().slice(0, 100) })).slice(0, 12),
+    // Telegram currently supports only custom-emoji entities in native poll questions,
+    // so strip Markdown wrappers without changing the wording.
+    question: stripTelegramMarkdownMarkers(question).trim().slice(0, 300),
+    options: options.map((text) => ({ text: stripTelegramMarkdownMarkers(text).trim().slice(0, 100) })).slice(0, 12),
     is_anonymous: false,
     type: "quiz",
     allows_multiple_answers: false,
     allows_revoting: false,
     correct_option_ids: [...correctOptionIds].sort((a, b) => a - b),
-    explanation: pollExplanation,
+    explanation: formatTelegramHtml(pollExplanation),
+    explanation_parse_mode: "HTML",
     ...(combinedMarkup ? { reply_markup: combinedMarkup } : {}),
     ...(replyToMessageId ? {
       reply_parameters: {
@@ -521,6 +526,7 @@ export async function sendTelegramBusinessMessage(
       allow_sending_without_reply: true,
     },
     text: message.text,
+    parse_mode: message.parse_mode,
     link_preview_options: { is_disabled: true },
   }, botConnectionId);
 }
@@ -540,6 +546,7 @@ export async function sendTelegramMessage(
   const payload: Record<string, unknown> = {
     chat_id: chatId,
     text: message.text,
+    parse_mode: message.parse_mode,
     ...(combinedMarkup ? { reply_markup: combinedMarkup } : {}),
     link_preview_options: { is_disabled: true },
   };
@@ -594,6 +601,7 @@ export async function editTelegramProgressMessage(
       chat_id: chatId,
       message_id: messageId,
       text: message.text,
+      parse_mode: message.parse_mode,
       link_preview_options: { is_disabled: true },
     }, { timeoutMs: 1_000, maxAttempts: 1 });
   } catch (error) {
@@ -619,6 +627,7 @@ export async function editTelegramMessage(
       chat_id: chatId,
       message_id: messageId,
       text: message.text,
+      parse_mode: message.parse_mode,
       ...(combinedMarkup ? { reply_markup: combinedMarkup } : {}),
       link_preview_options: { is_disabled: true },
     }, botConnectionId);
@@ -697,6 +706,7 @@ export async function sendTelegramMessageWithToken(
   const payload: Record<string, unknown> = {
     chat_id: chatId,
     text: message.text,
+    parse_mode: message.parse_mode,
     ...(combinedMarkup ? { reply_markup: combinedMarkup } : {}),
     link_preview_options: { is_disabled: true },
   };
@@ -723,6 +733,7 @@ export async function editTelegramMessageWithToken(
       chat_id: chatId,
       message_id: messageId,
       text: message.text,
+      parse_mode: message.parse_mode,
       ...(creatorMarkup ? { reply_markup: creatorMarkup } : {}),
       link_preview_options: { is_disabled: true },
     });
