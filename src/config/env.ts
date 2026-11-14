@@ -314,6 +314,7 @@ export interface Env {
   /** Minimum reranking score (0..1) retained in BRVIN evidence. */
   BRVIN_RERANKING_MIN_SCORE?: string;
   BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT?: string;
+  BRVIN_RETRIEVAL_CIRCUIT_BREAKER?: string;
   BRVIN_SERVICE?: BrvinServiceBinding;
 }
 

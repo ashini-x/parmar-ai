@@ -26,6 +26,8 @@
     "GCP_PROJECT_ID": "project-90db7be4-619f-4ed7-89b",
     "FATMAN_GCS_BUCKET": "parmar-fatman-ocr-90db7be4",
     "BRVIN_M14_PILOT_ENABLED": "true",
+    "BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT": "300000",
+    "BRVIN_RETRIEVAL_CIRCUIT_BREAKER": "false",
     "BRVIN_M14_CORPUS_BUCKET": "brvin-m14-physics-90db7be4-a8ca999e",
     "BRVIN_M14_VERTEX_LOCATION": "asia-south1",
     "BRVIN_M14_VERTEX_MODEL": "gemini-embedding-001",
