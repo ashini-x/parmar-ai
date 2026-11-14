@@ -92,7 +92,7 @@ Each agent returns integer scores from 0–5 for:
 | Source grounding | 25% |
 | Citation accuracy | 10% |
 
-The adjudicator is invoked if composite scores differ by at least 0.6 points or the agents disagree on critical-error or abstention flags. Otherwise the two scores are averaged and the conservative flags are retained. A critical unsupported claim is never cancelled by a high score elsewhere.
+The adjudicator is invoked if composite scores differ by at least 0.6 points, any individual scoring dimension differs by at least 2 points, or the agents disagree on critical-error or abstention flags. Otherwise the two scores are averaged and the conservative flags are retained. A critical unsupported claim is never cancelled by a high score elsewhere.
 
 This is an **owner-authorized AI assessment**, not independent human qrels or human inter-rater agreement. Its authority is limited to the project owner's stated M15 staging decision. The owner has explicitly directed that human review is not a prerequisite.
 
