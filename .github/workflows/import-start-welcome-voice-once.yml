@@ -1,0 +1,100 @@
+name: One-time Telegram /start welcome voice import
+
+on:
+  push:
+    branches:
+      - automation/start-welcome-voice-v2-20261114
+    paths:
+      - ".voice-import-trigger"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: telegram-start-voice-import-v2
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the import branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Install audio tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Download and verify the exact supplied recording
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --retry-all-errors \
+            'https://drive.google.com/uc?export=download&id=1xiA4Jdycon2UCjH5987vOJZglSo_3kBM' \
+            --output /tmp/start-welcome-source.ogg
+          test -s /tmp/start-welcome-source.ogg
+          actual="$(sha256sum /tmp/start-welcome-source.ogg | awk '{print $1}')"
+          expected="afc4b3684e1f7c93df130619ce027bbcb852651e8928e993e3da021662e8175d"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "::error::Google Drive download does not match the attached recording. Expected SHA-256 $expected; received $actual."
+            exit 1
+          fi
+          ffprobe -v error -select_streams a:0 \
+            -show_entries stream=codec_name,channels,sample_rate \
+            -show_entries format=duration -of json /tmp/start-welcome-source.ogg
+
+      - name: Convert to Telegram OGG Opus
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          output="assets/telegram-welcome-20261114-v2.ogg"
+          ffmpeg -hide_banner -loglevel error -y \
+            -i /tmp/start-welcome-source.ogg -map 0:a:0 -map_metadata -1 \
+            -af 'asetpts=N/SR/TB' -ac 1 -ar 48000 -c:a libopus -b:a 128k \
+            -vbr on -compression_level 10 -application voip "$output"
+          codec="$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 "$output")"
+          channels="$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$output")"
+          rate="$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate -of csv=p=0 "$output")"
+          duration="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$output")"
+          test "$codec" = "opus"
+          test "$channels" = "1"
+          test "$rate" = "48000"
+          python3 -c 'import sys; d=float(sys.argv[1]); assert 1 < d < 180, d' "$duration"
+          echo "Verified output: codec=$codec channels=$channels sample_rate=$rate duration=$duration size=$(stat -c%s "$output")"
+          ls -lh "$output"
+
+      - name: Update only the /start recording reference and its regression test
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          old = "https://raw.githubusercontent.com/ashini-x/parmar-ai/main/assets/telegram-welcome-20261114.ogg"
+          new = "https://raw.githubusercontent.com/ashini-x/parmar-ai/main/assets/telegram-welcome-20261114-v2.ogg"
+
+          for filename in ("src/telegram/voice-assets.ts", "test/telegram-voice-assets.test.ts"):
+              path = Path(filename)
+              content = path.read_text()
+              count = content.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one old /start URL in {filename}; found {count}")
+              path.write_text(content.replace(old, new))
+          PY
+
+      - name: Remove the one-time importer and commit the final asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/import-start-welcome-voice-once.yml
+          rm -f .voice-import-trigger
+          git add assets/telegram-welcome-20261114-v2.ogg src/telegram/voice-assets.ts test/telegram-voice-assets.test.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Replace Telegram /start welcome voice"
+          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
