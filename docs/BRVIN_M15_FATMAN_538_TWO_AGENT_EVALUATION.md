@@ -153,7 +153,7 @@ The owner attempted the first corpus-build action. The browser reported an HTML-
 
 PR #287 merged as `44571ae900687c2a4bbf836657f91eed929ea20b`; it changes the page API client to expose response status, content type, redirect state, final URL and a bounded body preview for non-JSON results, and adds `Accept: application/json` plus `cache: no-store`. The updated staging operator is deployed as v107 at 100%. The staging D1 still has no Fatman state tables, and no source export or paired evaluation has been confirmed.
 
-Retry by refreshing the operator URL above to load v107, entering the existing staging admin token locally and clicking Build once. If it fails, capture the improved diagnostic text. Do not send the token. Production selectors and quota remain unchanged.
+**Historical instruction, superseded by later staging progress and the CPU incident:** this v107 retry was before the successful 538-page export and later Qdrant indexing. Do not follow it or click Build. Current D1 cursor is page 280 and preparation is blocked until the effective staging CPU budget is verified and resolved. Never send the staging token. Production selectors and quota remain unchanged.
 
 ## 14 November 2026 — subrequest-limit failure and v108 remedy
 
