@@ -1,0 +1,54 @@
+import { describe, expect, it } from "vitest";
+import { formatTelegramHtml } from "../src/telegram/formatting";
+
+describe("Telegram rich-text formatter", () => {
+  it("converts common bold and strikethrough markers", () => {
+    expect(formatTelegramHtml("**Article 23** and *forced labour* ~~incorrect~~")).toBe(
+      "<b>Article 23</b> and <b>forced labour</b> <s>incorrect</s>",
+    );
+  });
+
+  it("formats headings and short labels while preserving blank lines", () => {
+    expect(formatTelegramHtml("🟢 Final answer\n\nArticle 23:\nIt prohibits forced labour.")).toBe(
+      "<b>🟢 Final answer</b>\n\n<b>Article 23:</b>\nIt prohibits forced labour.",
+    );
+    expect(formatTelegramHtml("📌 SSC Focus: Remember Article 23.")).toBe(
+      "<b>📌 SSC Focus:</b> Remember Article 23.",
+    );
+  });
+
+  it("converts Markdown headings and bullet markers", () => {
+    expect(formatTelegramHtml("## Key points\n- First point\n- **Second point**")).toBe(
+      "<b>Key points</b>\n• First point\n• <b>Second point</b>",
+    );
+  });
+
+  it("escapes raw HTML and ampersands instead of trusting model output", () => {
+    expect(formatTelegramHtml("<b>not trusted</b> & pH < 7")).toBe(
+      "&lt;b&gt;not trusted&lt;/b&gt; &amp; pH &lt; 7",
+    );
+  });
+
+  it("supports inline and fenced code without interpreting their contents", () => {
+    expect(formatTelegramHtml("Use \x60A * B\x60.\n\n\x60\x60\x60html\n<b>literal</b>\n\x60\x60\x60")).toBe(
+      "Use <code>A * B</code>.\n\n<pre>&lt;b&gt;literal&lt;/b&gt;</pre>",
+    );
+  });
+
+  it("links only HTTP(S) Markdown URLs", () => {
+    expect(formatTelegramHtml("[official source](https://example.com/a?x=1&y=2)")).toBe(
+      '<a href="https://example.com/a?x=1&amp;y=2">official source</a>',
+    );
+    expect(formatTelegramHtml("[unsafe](javascript:alert(1))")).toBe(
+      "[unsafe](javascript:alert(1))",
+    );
+  });
+
+  it("does not interpret multiplication asterisks without paired emphasis markers", () => {
+    expect(formatTelegramHtml("A * B * C")).toBe("A * B * C");
+  });
+
+  it("preserves ordinary text without adding unnecessary tags", () => {
+    expect(formatTelegramHtml("Hello students.\nNew doubt?")).toBe("Hello students.\nNew doubt?");
+  });
+});
