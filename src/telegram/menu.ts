@@ -60,3 +60,16 @@ export function buildTelegramMenuCommandTargets(
 export function isParmarSirCommand(text: string): boolean {
   return /^\/parmar(?:@\w+)?(?:\s|$)/i.test(text.trim());
 }
+
+/** Menu shortcuts intentionally reuse the existing welcome/help voice flows. */
+export function isStartCommand(text: string): boolean {
+  return /^\/(?:start|rbe)(?:@\w+)?(?:\s|$)/i.test(text.trim());
+}
+
+export function isHelpCommand(text: string): boolean {
+  return /^\/(?:help|commands|radhika)(?:@\w+)?(?:\s|$)/i.test(text.trim());
+}
+
+export function isAdminCommand(text: string): boolean {
+  return /^\/admin(?:@\w+)?(?:\s|$)/i.test(text.trim());
+}
