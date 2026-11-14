@@ -100,13 +100,14 @@ This is an **owner-authorized AI assessment**, not independent human qrels or hu
 
 Qdrant is declared the staging winner only when all of the following are true:
 
-1. Its mean adjudicated composite score exceeds AI Search by more than 0.001.
-2. Its deterministic Fatman QA pass count is not lower than AI Search.
-3. Its AI-assessed critical-error count is not higher than AI Search.
-4. Its AI-assessed out-of-book abstention pass count is not lower than AI Search.
-5. Neither independent assessor's mean Qdrant score is more than 0.05 below that assessor's AI Search score.
+1. Agent A's mean Qdrant composite score is strictly higher than Agent A's AI Search score.
+2. Agent B's mean Qdrant composite score is strictly higher than Agent B's AI Search score.
+3. Qdrant's mean adjudicated composite score exceeds AI Search by more than 0.001.
+4. Its deterministic Fatman QA pass count is not lower than AI Search.
+5. Its AI-assessed critical-error count is not higher than AI Search.
+6. Its AI-assessed out-of-book abstention pass count is not lower than AI Search.
 
-AI Search can win under the mirrored quality guardrails. Otherwise the receipt says `no-clear-winner`; it does not force a provider switch.
+AI Search can win only when both agents independently score it higher, its adjudicated score is higher, and it is not worse on the mirrored guardrails. If the agents split, quality is tied, or guardrails conflict, the receipt says `no-clear-winner`; it does not force a provider switch.
 
 This rule intentionally prevents a faster retrieval system from winning while materially reducing source-grounded accuracy or no-answer safety. The completed report includes each provider's individual A/B scores, adjudicated score, deterministic QA, missing facts, unsupported claims, citation results, candidate passages, answer text, token usage, query count, estimated answer cost, separate retrieval latency, separate Gemini answer-generation latency, separate assessor/adjudicator latency, and end-to-end case latency.
 
