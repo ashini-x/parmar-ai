@@ -370,3 +370,7 @@ The protected expanded Core v2 staging evaluation persisted receipt `0f5f9769-45
 The operational/page-target subgate passed; comparative quality did not. AI Search returned no candidates for either expected no-match query. Qdrant returned five unrelated candidates across Planck/photon-energy and Boyle's-law prompts (3 and 2 respectively). Sequential n=12 latency was AI Search p50/p95 3,333/6,762 ms and Qdrant/Vertex 1,162/1,216 ms; these are not load/SLO evidence. Page-target labels are not independent passage/span qrels.
 
 M15 therefore remains **IN PROGRESS**. Do not choose a provider winner, evidence gate, RRF cutoff or reranker from this run. Next: independent passage/span qrels, held-out query/source families and broader non-Physics evidence, followed by representative load/recovery/cost gates. Production remains on Cloudflare AI Search; the private v2 contract and Teachers runtime are unchanged.
+
+## 14 November 2026 — qrels validation utility added
+
+Core now includes an offline validator for the existing 109-candidate passage-review pack. It checks reviewer attestations against the pack's source fingerprint, grades, rationales and adjudication, and computes provider-local nDCG@5, MRR@5 and precision@5 only after complete annotation. The pack remains blank and no human qrels are claimed. This utility does not select a relevance gate, change runtime retrieval or satisfy cross-subject/load/cost acceptance gates. See [BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md](BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md).
