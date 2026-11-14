@@ -138,3 +138,11 @@ The source-export, destination AI Search, Qdrant collection and two distinct ass
 No manual reviewer, PDF upload, Vision OCR rerun, terminal command or repository update is required. Production remains on Cloudflare AI Search; no selector flip occurs automatically from the staging result.
 
 Latest verified environment: staging v106; production `parmar-ai` v803 and `brvin-service` v164; Teachers v12. Production selectors remain AI Search, Fatman monthly query limit 800, and corpus-manifest writes disabled. Release Validation run #43614178611 passed the paired production deployment and smoke test. The production source index and D1 were not modified by the staging benchmark implementation.
+
+## 14 November 2026 — first operator attempt and diagnostic update
+
+The owner attempted the first corpus-build action. The browser reported an HTML-as-JSON parse error (`Unexpected token '<', "<!DOCTYPE "... is not valid JSON`). The precise interception/error layer has not been identified yet.
+
+PR #287 merged as `44571ae900687c2a4bbf836657f91eed929ea20b`; it changes the page API client to expose response status, content type, redirect state, final URL and a bounded body preview for non-JSON results, and adds `Accept: application/json` plus `cache: no-store`. The updated staging operator is deployed as v107 at 100%. The staging D1 still has no Fatman state tables, and no source export or paired evaluation has been confirmed.
+
+Retry by refreshing the operator URL above to load v107, entering the existing staging admin token locally and clicking Build once. If it fails, capture the improved diagnostic text. Do not send the token. Production selectors and quota remain unchanged.
