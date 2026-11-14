@@ -501,6 +501,19 @@ function exactMetadataSchema(value: unknown): boolean {
 
 async function ensureFatmanStagingSearchSchema(search: AiSearchInstance): Promise<void> {
   const info = await search.info();
+  const indexMethod = info.index_method as { vector?: unknown; keyword?: unknown } | undefined;
+  const retrievalOptions = info.retrieval_options as { keyword_match_mode?: unknown } | undefined;
+  const indexingOptions = info.indexing_options as { keyword_tokenizer?: unknown; use_ocr?: unknown } | undefined;
+  if (info.embedding_model !== "@cf/qwen/qwen3-embedding-0.6b" ||
+      info.chunk !== true || Number(info.chunk_size) !== 256 || Number(info.chunk_overlap) !== 10 ||
+      Number(info.score_threshold) !== 0.3 || Number(info.max_num_results) !== 16 ||
+      info.reranking !== true || info.reranking_model !== "@cf/baai/bge-reranker-base" ||
+      info.fusion_method !== "rrf" || info.cache !== true || info.cache_threshold !== "close_enough" ||
+      indexMethod?.vector !== true || indexMethod.keyword !== true ||
+      retrievalOptions?.keyword_match_mode !== "or" ||
+      indexingOptions?.keyword_tokenizer !== "porter" || indexingOptions.use_ocr !== false) {
+    throw new Error("The isolated Fatman AI Search retrieval settings differ from the pinned production baseline; refusing to index or evaluate.");
+  }
   if (exactMetadataSchema(info.custom_metadata)) return;
   if (Array.isArray(info.custom_metadata) && info.custom_metadata.length > 0) {
     throw new Error("The isolated Fatman AI Search metadata schema differs from the pinned four-field schema; refusing to replace it.");
