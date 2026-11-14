@@ -399,7 +399,13 @@ async function readFatmanInventoryRange(
   }>();
   const result = new Map<number, LegacyPageItem>();
   for (const row of rows.results ?? []) {
-    result.set(Number(row.pdf_page), {
+    const physicalPage = Number(row.pdf_page);
+    if (!Number.isSafeInteger(physicalPage) ||
+        pageNumberFromLegacyKey(row.item_key) !== physicalPage ||
+        row.status !== "completed") {
+      throw new Error("The checkpointed legacy Fatman inventory contains a mismatched page key or non-completed item.");
+    }
+    result.set(physicalPage, {
       id: row.item_id,
       key: row.item_key,
       status: row.status,
@@ -1233,7 +1239,7 @@ export function summarizeProvider(cases: FatmanRunCase[], provider: "cloudflareA
   };
   const timings = rows.map((row) => row.elapsedMs);
   const retrievalTimings = rows.map((row) => row.retrievalElapsedMs);
-  const answerTimings = rows.map((row) => row.answerGenerationElapsedMs);
+  const answerTimings = rows.map((row) => row.answerGenerationElapsedMs).filter((value) => value > 0);
   const assessmentTimings = rows.map((row) => row.assessmentElapsedMs);
   const positive = rows.filter((row) => row.qa.expectedPages.length > 0 && row.qa.category !== "out_of_book");
   const negative = rows.filter((row) => row.qa.category === "out_of_book");
@@ -1273,7 +1279,7 @@ export function summarizeProvider(cases: FatmanRunCase[], provider: "cloudflareA
       sampleCount: answerTimings.length,
       p50: percentile(answerTimings, 0.5),
       p95: percentile(answerTimings, 0.95),
-      note: "Gemini answer generation only, including any bounded QA repair attempt.",
+      note: "Gemini answer generation only, including any bounded QA repair attempt. Cases blocked by deterministic retrieval checks are excluded from the latency sample.",
     },
     observedAssessmentLatencyMs: {
       sampleCount: assessmentTimings.length,
