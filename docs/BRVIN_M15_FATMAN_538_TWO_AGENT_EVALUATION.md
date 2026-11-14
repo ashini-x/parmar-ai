@@ -137,15 +137,15 @@ The source-export, destination AI Search, Qdrant collection and two distinct ass
 
 The subrequest-limit fix in PR #288 changes Qdrant to **one page per Worker invocation** and AI Search to **four pages per invocation**. The first 538-page OCR export and its immutable GCS manifests are already complete. Do not restart export, upload the PDF or rerun Vision OCR.
 
-1. Refresh the operator page so it loads v108.
+1. Refresh the operator page so it loads the currently deployed staging Worker v109.
 2. Enter the existing `BRVIN_M14_ADMIN_TOKEN` in that page's password field only. Never paste it into chat or repository files.
-3. Click **Build the 538-page staging comparison corpus**. It resumes from Qdrant page 281, preserving all existing manifests and the first 854 completed points. Keep the page open while it advances one Qdrant page and four AI Search pages per invocation.
+3. **Do not click Build yet.** First confirm the account Workers plan and effective CPU limit for `parmar-ai-m14-staging` in Cloudflare Dashboard → Workers & Pages → Settings → CPU limits. Resolve a Free 10 ms cap (upgrade to Paid or redesign the staging operation to fit) or an incorrectly low Paid CPU cap, deploy/verify a safe staging CPU configuration, and only then resume. Once verified, Build resumes at Qdrant page 281, preserving all existing manifests and 854 completed points; each invocation indexes one Qdrant page and up to four AI Search pages.
 4. Confirm READY and all counters at 538/538: exported, Qdrant indexed and AI Search indexed.
 5. Click **Run the two-agent, 12-case Fatman comparison**. It runs both provider cases per frozen QA question, two independent assessors and adjudication only for material disagreements. The UI saves the full receipt to isolated staging D1.
 
 No manual reviewer, PDF upload, Vision OCR rerun, terminal command or repository update is required. Human review is explicitly waived for this provider decision. Production remains on Cloudflare AI Search; no selector flip occurs automatically from the staging result.
 
-Latest verified environment: staging v108; production `parmar-ai` v815 and `brvin-service` v170; Teachers v12. Both production Core selectors remain `cloudflare-ai-search`, the Fatman production monthly query limit is 800, and corpus-manifest writes are disabled. Release Validation run #43626659528 passed full validation, paired production deployment and production smoke/release acceptance. The production source index and D1 were not modified by the staging benchmark implementation.
+Latest live read-back on 15 November 2026: staging v109; production `parmar-ai` v817 and `brvin-service` v171; Teachers v12, all at 100%. Core Release Validation [#43632139823](https://github.com/ashini-x/parmar-ai/actions/runs/43632139823) and staging workflow [#43632139797](https://github.com/ashini-x/parmar-ai/actions/runs/43632139797) passed. Both production Core selectors remain `cloudflare-ai-search`, the Fatman production monthly query limit is 800, and corpus-manifest writes are disabled. The latest v109 staging deployment did not change the CPU configuration. The production source index and D1 were not modified by the staging benchmark implementation.
 
 ## 14 November 2026 — first operator attempt and diagnostic update
 
@@ -189,6 +189,28 @@ Cloudflare Workers Observability captured the failed `POST /admin/m15/fatman/pre
 
 The failed request did not advance the durable D1 checkpoint. The verified state remains: 538/538 OCR pages exported; 1,606 chunks; Qdrant 280/538 pages (854 points); AI Search 0/538; source state `qdrant_indexing`; no paired benchmark run. Resume remains after Qdrant page 280 (physical page 281), but **do not click Build again until the effective staging Worker CPU limit is resolved**.
 
-The deployed v108 `wrangler.m14-staging.jsonc` has no explicit `limits.cpu_ms` setting. Cloudflare script settings report `usage_model=standard`, but the connected OAuth identity cannot read account subscriptions: the subscription endpoint returns 403 because Billing Read permission is unavailable. Therefore the actual account plan / effective configured CPU cap is not conclusively visible from this connection. Cloudflare's current [Workers CPU limits documentation](https://developers.cloudflare.com/workers/platform/limits/#cpu-time) states a 10 ms per-request limit on Workers Free, while Workers Paid defaults to 30 seconds and can be configured up to 300,000 ms. The observed 11 ms termination is consistent with a 10 ms effective cap, but the plan still needs confirmation.
+The v108 and current v109 staging deployments use `wrangler.m14-staging.jsonc`, which has no explicit `limits.cpu_ms` setting; v109 is not a CPU-limit fix. Cloudflare script settings report `usage_model=standard`, but the connected OAuth identity cannot read account subscriptions: the subscription endpoint returns 403 because Billing Read permission is unavailable. Therefore the actual account plan / effective configured CPU cap is not conclusively visible from this connection. Cloudflare's current [Workers CPU limits documentation](https://developers.cloudflare.com/workers/platform/limits/#cpu-time) states a 10 ms per-request limit on Workers Free, while Workers Paid defaults to 30 seconds and can be configured up to 300,000 ms. The observed 11 ms termination is consistent with a 10 ms effective cap, but the plan still needs confirmation.
 
 **Required operator resolution:** in Cloudflare Dashboard, inspect Workers & Pages → `parmar-ai-m14-staging` → Settings → CPU limits and confirm the account's Workers plan. If the account is Free, the 10 ms ceiling cannot be raised through Wrangler; use Workers Paid or redesign the staging page operation to stay within the Free limit. If Workers Paid is already active but the script has a low custom CPU cap, set a suitable value (30,000 ms is the normal paid default) in the staging Worker configuration using [Wrangler `limits.cpu_ms`](https://developers.cloudflare.com/workers/wrangler/configuration/#limits), then deploy and verify a new staging version. Do not change production Workers, provider selectors, monthly quotas, corpus manifests or Teachers. Once the new effective limit is verified, refresh the operator and resume at page 281; do not upload the PDF or rerun Vision OCR.
+
+
+## 15 November 2026 — current live read-back and M15 continuation gate
+
+GitHub Core main is `05398fbbde195e1c806ba6590769ccfa96092f1b`. Release Validation run [#43632139823](https://github.com/ashini-x/parmar-ai/actions/runs/43632139823) completed successfully, including typecheck/tests/build, paired Core production deployment, root/BRVIN connectivity and Fatman source-readiness smoke acceptance. The paired M14 staging workflow [#43632139797](https://github.com/ashini-x/parmar-ai/actions/runs/43632139797) also passed validation and deployed the isolated staging operator. The merged Core code change in PR #293 is unrelated Telegram answer formatting; it does not resolve the CPU incident or advance the Fatman index.
+
+Cloudflare's current 100%-traffic read-back is:
+
+| Worker | Environment | Version | Version ID | Deployment ID |
+|---|---|---:|---|---|
+| `parmar-ai` | production | v817 | `e7546e07-c0a6-45f0-b3d5-be1f2098620f` | `0111c946-c34a-4130-b356-b95b2c2a86bc` |
+| `brvin-service` | production | v171 | `6f18206b-599b-44be-8294-1bacb69fe874` | `fb20db5e-43bd-4ce2-bede-428f2c916d22` |
+| `parmar-ai-m14-staging` | isolated staging | v109 | `753462ad-adba-485c-946a-60bc62314580` | `319f13bc-d61e-431b-9b77-f40d351c6f46` |
+| `brvin-teachers` | production | v12 | `68d6694c-6371-4cae-8a25-4af40ca15706` | `31ff2a01-b0f4-4be8-92d3-63e2d91adddf` |
+
+Live version variables confirm both production selectors remain `cloudflare-ai-search`; `parmar-ai` has `BRVIN_CORPUS_MANIFEST_ENABLED=false` and `FATMAN_MONTHLY_QUERY_LIMIT=800`; `brvin-service` has `BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT=800`. Production has no Qdrant/Vertex retrieval binding. Teachers still has only `BRVIN_MANAGEMENT` and `BRVIN_SERVICE` Core service bindings plus its own D1; it has no provider credentials, SDKs or direct provider route.
+
+The staging D1 remains unchanged: source `fatman-legacy-538`, 538/538 OCR exports, 1,606 chunks, Qdrant 280/538 pages (854 points), staging AI Search 0/538, status `qdrant_indexing`; the next physical page is 281. The legacy page inventory has 538 rows (pages 1–538). The paired Fatman run table is empty. No PDF upload or Vision OCR rerun is needed.
+
+The active v109 staging config still has no explicit `limits.cpu_ms`; its version metadata does not expose an effective CPU limit. The Worker settings read-back reports `usage_model=standard`, which is not sufficient evidence of the account billing plan. The Cloudflare account-subscription endpoint still returns 403 because the connected OAuth identity lacks Billing Read. The effective CPU ceiling is therefore **unconfirmed**. The observed 11 ms `exceededCpu` response is consistent with the documented Workers Free 10 ms request ceiling, but do not infer the plan from that alone. **Do not call `POST /admin/m15/fatman/prepare` or click Build again** until the account plan and deployed staging CPU limit have been verified and the effective budget is resolved. Then resume at page 281 without re-exporting or re-OCRing.
+
+M15 human review remains explicitly waived. After both staging indexes reach 538/538, run the frozen 12-case paired benchmark with Agent A `gemini-4-argon`, Agent B `gemini-3.8-flash`, and Argon adjudication on material disagreement. No provider winner, production cutover or capacity proof exists yet.
