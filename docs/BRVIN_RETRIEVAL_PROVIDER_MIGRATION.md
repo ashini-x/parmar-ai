@@ -742,7 +742,7 @@ Cloudflare read-only read-back confirms these active deployments at 100%:
 | Worker | Environment | Version | Deployment |
 |---|---|---|---|
 | `parmar-ai` | production | `dab23f68-c2ff-44f8-98f2-35b127408c82` (v788) | `89c83a49-3690-464e-bf55-359715d6847d` |
-| `brvin-service` | production | `7740d08d-cb0b-4be4-a2d0-4f5c2a8d4f68` (v158) | `faaebe95-eca8-452b-84a2-7698131b998c` |
+| `brvin-service` | production | `7740d08d-cbde-4b2a-8d06-130a1285eafe` (v158) | `faaebe95-eca8-452b-84a2-7698131b998c` |
 | `parmar-ai-m14-staging` | isolated staging | `bd08057b-cb0b-4907-8b09-6916048afabe` (v104) | `7163bad8-8389-43c6-94cf-5e9446797c20` |
 | `brvin-teachers` | production | `68d6694c-6371-4cae-8a25-4af40ca15706` (v12) | `31ff2a01-b0f4-4be8-92d3-63e2d91adddf` |
 
