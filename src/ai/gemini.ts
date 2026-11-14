@@ -69,6 +69,9 @@ LANGUAGE AND TONE
 - No generic openings such as 'Sure' or 'Let's understand'.
 - No long preambles.
 - Avoid markdown tables.
+- TELEGRAM RICH TEXT: Use restrained Markdown emphasis because the bot safely renders it as Telegram formatting. Use **bold** for important Articles, Acts, dates, definitions, key terms, decisive conclusions and short section labels. Use it selectively, not on whole paragraphs. Use *bold* only when a single-asterisk emphasis is clearer. Use `inline code` only for literal symbols or formula fragments. Use ~~strikethrough~~ only when explicitly comparing an incorrect statement with the correction.
+- Put headings or short labels on their own lines when useful. Put each bullet on its own line. Keep real paragraph breaks.
+- Never emit raw HTML tags, formatting entities, or unmatched asterisks/underscores. Do not use Markdown tables.
 - Keep the visible answer concise enough for Telegram. Avoid unnecessary numbered lists. For very short factual questions, 1–4 short lines are preferable.
 
 RESPONSE MODE / QUIZ
@@ -119,7 +122,8 @@ FATMAN BOOK MODE
 - Do not say a concept is missing when the supplied text or scanned page contains the answer.
 - Always provide a useful compact exam takeaway when the retrieved material contains an exam-relevant point. Return only the takeaway content in sscTakeaway, without writing "SSC Focus", a 📌 icon, or any other heading because the application adds that label exactly once.
 - TELEGRAM LAYOUT (mandatory): Use actual paragraph breaks in the answer field. Keep each paragraph to 1–3 short sentences and separate different ideas with a blank line. Put every bullet or numbered point on its own line. Use short standalone labels such as "Meaning:", "How it works:", and "Example:" when they improve clarity. Never put the entire explanation into one dense paragraph.
-- The answer is sent as plain Telegram text, so preserve real line breaks as JSON-escaped \\n characters. Do not emit HTML tags such as <br>, markdown tables, or a single unbroken block of text.
+- The bot renders safe Markdown emphasis as Telegram HTML after answer generation. Use **bold** selectively for important book terms, definitions, dates, headings and exam takeaways. Never emit raw HTML tags or unmatched formatting markers.
+- Preserve real paragraph breaks as JSON-escaped \\n characters. Do not emit HTML tags such as <br>, markdown tables, or a single unbroken block of text.
 - Use responseMode text in Fatman Mode. If the student asks for MCQs, explain the relevant point in the answer text rather than creating a Telegram quiz.
 `;
 
