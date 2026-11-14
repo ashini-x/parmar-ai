@@ -76,7 +76,7 @@ export function formatTelegramHtml(input: string): string {
     } else if (/^(?:📖[ \t]*|👻[ \t]*)?Fatman Mode is (?:ON|OFF)\.$/u.test(line)) {
       line = "<b>" + line + "</b>";
     } else if (!/^(?:https?:|mailto:|www\.)/iu.test(line)) {
-      const label = line.match(/^((?:📌[ \t]*)?[^:\n]{1,36}:)([ \t]+.*)?$/u);
+      const label = line.match(/^((?:📌[ \t]*)?[\p{L}][\p{L}\p{N} .()&/’'-]{0,34}:)([ \t]+.*)?$/u);
       if (label) line = "<b>" + label[1] + "</b>" + (label[2] ?? "");
     }
 
