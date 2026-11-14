@@ -1,0 +1,202 @@
+name: M15 full Fatman benchmark one-time runner
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/m15-fatman-538-one-time-runner.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: brvin-m15-fatman-538-one-time-runner
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: github.event.head_commit.message != 'chore: remove one-time Fatman benchmark runner'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Create a masked temporary staging-only operator credential
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "::error::CLOUDFLARE_API_TOKEN is missing."; exit 1; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "::error::CLOUDFLARE_ACCOUNT_ID is missing."; exit 1; }
+
+          TOKEN="$(openssl rand -hex 32)"
+          echo "::add-mask::$TOKEN"
+          printf 'BRVIN_M15_FATMAN_AUTOMATION_TOKEN=%s\n' "$TOKEN" >> "$GITHUB_ENV"
+
+          BODY="$(jq -n --arg token "$TOKEN" '{name:"BRVIN_M15_FATMAN_AUTOMATION_TOKEN",type:"secret_text",text:$token}')"
+          RESPONSE="$(curl --silent --show-error --fail-with-body \
+            --request PUT \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$BODY" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/parmar-ai-m14-staging/secrets")"
+          echo "$RESPONSE" | jq -e '.success == true' >/dev/null
+          echo "Temporary staging credential created; value masked."
+
+      - name: Prepare the 538-page staging corpus and run the paired two-agent evaluation
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          BASE="https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman"
+
+          api() {
+            local method="$1"
+            local path="$2"
+            local payload="${3:-}"
+            local response code body
+            if [[ "$method" == "GET" ]]; then
+              response="$(curl --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors --max-time 240 \
+                --write-out $'\n%{http_code}' \
+                --header "Authorization: Bearer ${BRVIN_M15_FATMAN_AUTOMATION_TOKEN}" \
+                "$BASE$path")"
+            else
+              response="$(curl --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors --max-time 240 \
+                --write-out $'\n%{http_code}' \
+                --request POST \
+                --header "Authorization: Bearer ${BRVIN_M15_FATMAN_AUTOMATION_TOKEN}" \
+                --header "Content-Type: application/json" \
+                --data "${payload:-{}}" \
+                "$BASE$path")"
+            fi
+            code="${response##*$'\n'}"
+            body="${response%$'\n'*}"
+            if [[ ! "$code" =~ ^2[0-9][0-9]$ ]]; then
+              echo "::error::Fatman staging endpoint $path returned HTTP $code."
+              echo "$body" | jq -c '{ok,error,status}' 2>/dev/null || true
+              return 1
+            fi
+            if ! echo "$body" | jq -e '.ok == true' >/dev/null; then
+              echo "::error::Fatman staging endpoint $path did not return ok=true."
+              echo "$body" | jq -c '{ok,error,status}' 2>/dev/null || true
+              return 1
+            fi
+            printf '%s' "$body"
+          }
+
+          state_json="$(api GET /status)"
+          state="$(echo "$state_json" | jq -r '.status // "not_started"')"
+          if [[ "$state" == "ready" ]]; then
+            echo "The immutable 538-page source is already READY in both staging providers."
+          else
+            ready=0
+            for step in $(seq 1 300); do
+              state_json="$(api POST /prepare '{}')"
+              state="$(echo "$state_json" | jq -r '.status // "unknown"')"
+              exported="$(echo "$state_json" | jq -r '.exportedPages // 0')"
+              qdrant="$(echo "$state_json" | jq -r '.qdrantIndexedPages // 0')"
+              ai_search="$(echo "$state_json" | jq -r '.aiSearchIndexedPages // 0')"
+              chunks="$(echo "$state_json" | jq -r '.chunkCount // 0')"
+              pending="$(echo "$state_json" | jq -r '(.pendingPages // []) | length')"
+              echo "Fatman staging progress $step/300: state=$state exported=$exported/538 qdrant=$qdrant/538 ai_search=$ai_search/538 chunks=$chunks pending_ai_search_pages=$pending"
+              if [[ "$state" == "ready" ]]; then
+                ready=1
+                break
+              fi
+              sleep 2
+            done
+            [[ "$ready" == "1" ]] || { echo "::error::The resumable Fatman staging build did not reach READY within 300 bounded continuations."; exit 1; }
+          fi
+
+          status_json="$(api GET /status)"
+          echo "$status_json" | jq -e '.status == "ready" and .source.pageCount == 538 and .source.exportedPages == 538 and .source.qdrantIndexedPages == 538 and .source.aiSearchIndexedPages == 538' >/dev/null
+          echo "Verified 538/538 exported, 538/538 Qdrant-indexed and 538/538 staging AI Search-indexed."
+
+          started="$(api POST /evaluate/start '{}')"
+          RUN_ID="$(echo "$started" | jq -r '.runId')"
+          [[ "$RUN_ID" =~ ^[a-f0-9-]{36}$ ]] || { echo "::error::The benchmark did not return a valid run ID."; exit 1; }
+          echo "Started the frozen paired Fatman evaluation run (run ID masked)."
+
+          CASES=(
+            exact-plassey-fact
+            concept-president-parliament
+            comparison-equality
+            page-reference-plassey
+            out-of-book-secret-fingerprint
+            difficult-bengal-control
+            short-article-79-lookup
+            abbreviated-fr-dpsp-comparison
+            subsidiary-alliance-natural-question
+            first-governor-general-bengal
+            cornwallis-land-revenue-question
+            plassey-cause-explanation
+          )
+          for index in "${!CASES[@]}"; do
+            case_id="${CASES[$index]}"
+            payload="$(jq -n --arg runId "$RUN_ID" --arg caseId "$case_id" '{runId:$runId,caseId:$caseId}')"
+            result="$(api POST /evaluate/case "$payload")"
+            complete="$(echo "$result" | jq -r '.completedCases // 0')"
+            echo "Fatman paired evaluation case $((index+1))/12 completed: $case_id ($complete/12)."
+          done
+
+          final="$(api POST /evaluate/finalize "$(jq -n --arg runId "$RUN_ID" '{runId:$runId}')")"
+          echo "$final" | jq -c '{
+            winner:.decision.winner,
+            qdrantNotWorseOnGuardrails:.decision.qdrantNotWorseOnGuardrails,
+            qdrantWinsByBothAssessors:.decision.qdrantWinsByBothAssessors,
+            aiWinsByBothAssessors:.decision.aiWinsByBothAssessors,
+            scoreDifference:.decision.adjudicatedQualityScoreDifference,
+            humanReviewRequired:.decision.humanReviewRequired,
+            aiSearch:.providers.cloudflareAiSearch.summary,
+            qdrant:.providers.qdrantVertex.summary,
+            retrievalLatency:.observedRetrievalLatencyMs,
+            answerLatency:.observedAnswerGenerationLatencyMs,
+            assessmentLatency:.observedAssessmentLatencyMs,
+            caseLatency:.observedCaseLatencyMs,
+            sideEffects:.sideEffects,
+            quota:.quota
+          }'
+          echo "Full receipt is durably persisted in the isolated staging D1 database."
+
+      - name: Remove the temporary staging credential
+        if: always()
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${BRVIN_M15_FATMAN_AUTOMATION_TOKEN:-}" ]]; then
+            echo "No temporary staging credential was created."
+            exit 0
+          fi
+          HTTP_CODE="$(curl --silent --show-error --output /tmp/fatman-secret-delete.json --write-out '%{http_code}' \
+            --request DELETE \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/parmar-ai-m14-staging/secrets/BRVIN_M15_FATMAN_AUTOMATION_TOKEN")"
+          if [[ ! "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
+            echo "::error::Failed to delete the temporary Fatman staging credential (HTTP $HTTP_CODE)."
+            exit 1
+          fi
+          jq -e '.success == true' /tmp/fatman-secret-delete.json >/dev/null
+          echo "Temporary staging credential deleted."
+
+      - name: Remove this one-time workflow from the repository
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SHA="$(git ls-tree HEAD .github/workflows/m15-fatman-538-one-time-runner.yml | awk '{print $3}')"
+          if [[ -z "$SHA" ]]; then
+            echo "One-time workflow file is already absent."
+            exit 0
+          fi
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/contents/.github/workflows/m15-fatman-538-one-time-runner.yml" \
+            --field message="chore: remove one-time Fatman benchmark runner" \
+            --field sha="$SHA" \
+            --field branch="main" >/dev/null
+          echo "One-time workflow file removed."
