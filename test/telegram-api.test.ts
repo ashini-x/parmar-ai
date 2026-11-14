@@ -165,7 +165,7 @@ describe("Telegram Admin contact buttons", () => {
     expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
     expect(JSON.parse(String(requestInit.body))).toEqual({
       chat_id: 42,
-      text: "You can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
+      text: "You can contact us via Telegram or Instagram.\n\nFor business queries, please send an email to admin@brvin.in",
       reply_markup: {
         inline_keyboard: [[
           { text: "Telegram", url: "tg://resolve?domain=projectbrain&profile" },
