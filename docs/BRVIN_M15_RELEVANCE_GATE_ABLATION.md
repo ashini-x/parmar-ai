@@ -48,3 +48,12 @@ M15 remains open for broader grounding, recovery/throttling, HNSW-aware represen
 ## Reproduction
 
 The deterministic calculations are in `test/brvin-m15-owner-waived-ai-passage-assessment.test.ts` and run with the normal Core `npm test` suite. They consume the committed fixture and do not call external models/providers, reserve D1 quota or modify source/index/Worker state.
+
+
+## 14 November 2026 — owner decision and superseding evaluation path
+
+The project owner explicitly waived human-review as a prerequisite for the M15 provider decision and directed the team to compare Qdrant directly with the already-running Fatman Cloudflare AI Search baseline. The prepared 109-candidate Physics pack and its blank human-review fields remain preserved as historical/optional artifacts; do not ask the owner to arrange reviewers or treat the pack as a blocker.
+
+The active comparison is the full 538-page Fatman 2nd Edition corpus using two independent AI assessors (Gemini 4 Argon and Gemini 3.8 Flash) plus a separate AI adjudicator for material disagreements. It reuses the original completed Fatman import, stored page-text items, original source SHA-256 and original Vision operation; it does not upload the PDF or rerun OCR. The exact source, provider settings, decision rule and production boundary are documented in [BRVIN_M15_FATMAN_538_TWO_AGENT_EVALUATION.md](BRVIN_M15_FATMAN_538_TWO_AGENT_EVALUATION.md).
+
+No relevance gate, RRF cutoff or reranker is selected by this historical ablation. The new paired end-to-end Fatman receipt is the next decision evidence. If both independent assessors and the adjudicated score select Qdrant without regressing the deterministic QA, critical-error or abstention guardrails, proceed promptly to the production migration with Cloudflare AI Search retained as rollback. This offline ablation remains historical; it does not override the new owner-approved evaluation.
