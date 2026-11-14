@@ -8,6 +8,7 @@ import {
   editTelegramProgressMessage,
   editTelegramMessageWithToken,
   sendTelegramMessageWithToken,
+  sendTelegramAdminContactPhotoWithToken,
   sendTelegramVoiceWithToken,
   editTelegramMessageReplyMarkup,
   buildFatmanStartMarkup,
@@ -154,8 +155,8 @@ describe("BRɅIN Telegram button", () => {
   });
 });
 
-describe("Telegram Admin contact buttons", () => {
-  it("sends the exact two-paragraph Admin contact copy and plain contact buttons", async () => {
+describe("Telegram Admin contact photo message", () => {
+  it("sends the original profile JPEG with the exact existing caption and two buttons in one sendPhoto request", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,
       result: { message_id: 128 },
@@ -165,27 +166,41 @@ describe("Telegram Admin contact buttons", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(sendTelegramMessageWithToken(
-      "bot-token", 42, "परमार्थAI by BRɅIN.\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in", undefined, false, buildAdminContactMarkup(),
-    )).resolves.toEqual({ message_id: 128 });
+    await expect(sendTelegramAdminContactPhotoWithToken("bot-token", 42, 777))
+      .resolves.toEqual({ message_id: 128 });
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
-    expect(JSON.parse(String(requestInit.body))).toEqual({
-      chat_id: 42,
-      text: "<b>परमार्थAI by BRɅIN.</b>\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
-      parse_mode: "HTML",
-      reply_markup: {
-        inline_keyboard: [[
-          { text: "Telegram", url: "tg://resolve?domain=projectbrain&profile" },
-          { text: "Instagram", url: "https://instagram.com/brvin.in" },
-        ]],
-      },
-      link_preview_options: { is_disabled: true },
+    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendPhoto");
+    expect(requestInit.headers).toBeUndefined();
+    expect(requestInit.body).toBeInstanceOf(FormData);
+
+    const form = requestInit.body as FormData;
+    expect(form.get("chat_id")).toBe("42");
+    expect(form.get("caption")).toBe(
+      "<b>परमार्थAI by BRɅIN.</b>\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
+    );
+    expect(form.get("parse_mode")).toBe("HTML");
+    expect(JSON.parse(String(form.get("reply_markup")))).toEqual({
+      inline_keyboard: [[
+        { text: "Telegram", url: "tg://resolve?domain=projectbrain&profile" },
+        { text: "Instagram", url: "https://instagram.com/brvin.in" },
+      ]],
     });
+    expect(JSON.parse(String(form.get("reply_parameters")))).toEqual({
+      message_id: 777,
+      allow_sending_without_reply: true,
+    });
+
+    const photo = form.get("photo") as File;
+    expect(photo.name).toBe("brvin-instagram-profile.jpg");
+    expect(photo.type).toBe("image/jpeg");
+    expect(photo.size).toBe(44_554);
+
+    const digest = await crypto.subtle.digest("SHA-256", await photo.arrayBuffer());
+    const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    expect(sha256).toBe("03f1019fe93d440ce6595d23a4ed02717ad84803ab22206eec3eca23fc0d4823");
   });
 });
-
 
 describe("Telegram HTML rich-text delivery", () => {
   it("formats bold text on a normal sendMessage payload", async () => {
