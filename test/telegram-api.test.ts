@@ -158,14 +158,14 @@ describe("Telegram Admin contact buttons", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(sendTelegramMessageWithToken(
-      "bot-token", 42, "You can contact us via Telegram or Instagram.\n\nFor business queries, please send an email to admin@brvin.in", undefined, false, buildAdminContactMarkup(),
+      "bot-token", 42, "परमार्थAI by BRɅIN.\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in", undefined, false, buildAdminContactMarkup(),
     )).resolves.toEqual({ message_id: 128 });
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
     expect(JSON.parse(String(requestInit.body))).toEqual({
       chat_id: 42,
-      text: "You can contact us via Telegram or Instagram.\n\nFor business queries, please send an email to admin@brvin.in",
+      text: "परमार्थAI by BRɅIN.\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
       reply_markup: {
         inline_keyboard: [[
           { text: "Telegram", url: "tg://resolve?domain=projectbrain&profile" },
