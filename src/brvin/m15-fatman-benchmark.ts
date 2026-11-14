@@ -1389,6 +1389,56 @@ export async function runBrvinM15FatmanBenchmarkCase(
   };
 }
 
+export interface M15FatmanProviderDecisionSummary {
+  deterministicQaPassed: number;
+  criticalErrorCount: number;
+  outOfBookAbstentionPassed: number;
+  agentACompositeScore: number;
+  agentBCompositeScore: number;
+  adjudicatedCompositeScore: number;
+}
+
+export function decideFatmanProviderWinner(
+  ai: M15FatmanProviderDecisionSummary,
+  qdrant: M15FatmanProviderDecisionSummary,
+): {
+  winner: "qdrant-vertex" | "cloudflare-ai-search" | "no-clear-winner";
+  qdrantNotWorseOnGuardrails: boolean;
+  aiNotWorseOnGuardrails: boolean;
+  qdrantWinsByBothAssessors: boolean;
+  aiWinsByBothAssessors: boolean;
+} {
+  const qdrantNotWorseOnGuardrails =
+    qdrant.deterministicQaPassed >= ai.deterministicQaPassed &&
+    qdrant.criticalErrorCount <= ai.criticalErrorCount &&
+    qdrant.outOfBookAbstentionPassed >= ai.outOfBookAbstentionPassed;
+  const aiNotWorseOnGuardrails =
+    ai.deterministicQaPassed >= qdrant.deterministicQaPassed &&
+    ai.criticalErrorCount <= qdrant.criticalErrorCount &&
+    ai.outOfBookAbstentionPassed >= qdrant.outOfBookAbstentionPassed;
+  const qdrantWinsByBothAssessors =
+    qdrant.agentACompositeScore > ai.agentACompositeScore &&
+    qdrant.agentBCompositeScore > ai.agentBCompositeScore;
+  const aiWinsByBothAssessors =
+    ai.agentACompositeScore > qdrant.agentACompositeScore &&
+    ai.agentBCompositeScore > qdrant.agentBCompositeScore;
+  const qdrantWins =
+    qdrantWinsByBothAssessors &&
+    qdrant.adjudicatedCompositeScore > ai.adjudicatedCompositeScore + 0.001 &&
+    qdrantNotWorseOnGuardrails;
+  const aiWins =
+    aiWinsByBothAssessors &&
+    ai.adjudicatedCompositeScore > qdrant.adjudicatedCompositeScore + 0.001 &&
+    aiNotWorseOnGuardrails;
+  return {
+    winner: qdrantWins ? "qdrant-vertex" : aiWins ? "cloudflare-ai-search" : "no-clear-winner",
+    qdrantNotWorseOnGuardrails,
+    aiNotWorseOnGuardrails,
+    qdrantWinsByBothAssessors,
+    aiWinsByBothAssessors,
+  };
+}
+
 export async function finalizeBrvinM15FatmanBenchmark(
   env: M15FatmanBenchmarkEnv,
   runId: string,
@@ -1406,29 +1456,13 @@ export async function finalizeBrvinM15FatmanBenchmark(
   }
   const ai = summarizeProvider(cases, "cloudflareAiSearch");
   const qdrant = summarizeProvider(cases, "qdrantVertex");
-  const qdrantNotWorseOnGuardrails =
-    qdrant.deterministicQaPassed >= ai.deterministicQaPassed &&
-    qdrant.criticalErrorCount <= ai.criticalErrorCount &&
-    qdrant.outOfBookAbstentionPassed >= ai.outOfBookAbstentionPassed;
-  const qdrantWinsByBothAssessors =
-    qdrant.agentACompositeScore > ai.agentACompositeScore &&
-    qdrant.agentBCompositeScore > ai.agentBCompositeScore;
-  const aiWinsByBothAssessors =
-    ai.agentACompositeScore > qdrant.agentACompositeScore &&
-    ai.agentBCompositeScore > qdrant.agentBCompositeScore;
-  const aiNotWorseOnGuardrails =
-    ai.deterministicQaPassed >= qdrant.deterministicQaPassed &&
-    ai.criticalErrorCount <= qdrant.criticalErrorCount &&
-    ai.outOfBookAbstentionPassed >= qdrant.outOfBookAbstentionPassed;
-  const qdrantWins =
-    qdrantWinsByBothAssessors &&
-    qdrant.adjudicatedCompositeScore > ai.adjudicatedCompositeScore + 0.001 &&
-    qdrantNotWorseOnGuardrails;
-  const aiWins =
-    aiWinsByBothAssessors &&
-    ai.adjudicatedCompositeScore > qdrant.adjudicatedCompositeScore + 0.001 &&
-    aiNotWorseOnGuardrails;
-  const winner = qdrantWins ? "qdrant-vertex" : aiWins ? "cloudflare-ai-search" : "no-clear-winner";
+  const decisionResult = decideFatmanProviderWinner(ai, qdrant);
+  const {
+    winner,
+    qdrantNotWorseOnGuardrails,
+    qdrantWinsByBothAssessors,
+    aiWinsByBothAssessors,
+  } = decisionResult;
   const report = {
     ok: true,
     benchmark: "brvin-m15-fatman-538-two-agent-end-to-end-v1",
