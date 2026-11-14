@@ -816,3 +816,11 @@ PR #285 and PR #286 are merged. Latest Cloudflare read-back confirms isolated st
 The staging Fatman source-export binding points read-only to the existing `fatman-2026-8b183803` instance. The dedicated staging AI Search instance and Qdrant collection are configured. However, the protected preparation endpoint has not yet been called: staging D1 contains no `m15_fatman%` tables, so there is no exported 538-page corpus or paired AI comparison receipt. The failed one-time automation runner was removed; it created no temporary secret and made no requests.
 
 Immediate next step: local token entry on [the staging Fatman operator](https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman), click the corpus build, verify READY at 538/538 for exported/Qdrant/AI Search pages, then run the two-agent 12-case evaluation. Do not upload the PDF or rerun Vision OCR. Production cutover remains blocked on review of the actual paired result plus the separately required authorization, rollback, recovery, capacity, latency and cost evidence.
+
+## 14 November 2026 — Fatman Worker subrequest guard
+
+The initial Fatman staging run exported all 538 pages and 1,606 chunks, then hit Cloudflare's per-invocation subrequest ceiling during Qdrant indexing. The persisted checkpoint is Qdrant 11/538 pages (29 points), staging AI Search 0/538. Existing export manifests are retained; do not rerun OCR or re-export.
+
+PR #288 (`0992af5cfe85539c9a2f589309ab40ffed4a7a01`) changed the staging Qdrant page batch to one and the staging AI Search batch to four. Each page's deterministic ID makes interrupted-page retries idempotent; the D1 checkpoint advances only after the complete Qdrant upsert/read-back. Staging Worker v108 is deployed at 100%. Both M14 staging CI and Release Validation passed.
+
+Resume from the current D1 cursor at Qdrant page 12 by refreshing the Fatman operator and clicking Build again. Do not upload the source PDF or rerun Vision OCR. Production remains on Cloudflare AI Search pending the paired Fatman AI assessment.
