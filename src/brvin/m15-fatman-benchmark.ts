@@ -991,7 +991,7 @@ async function callVertexAssessor(
 const AGENT_A_INSTRUCTION = [
   "You are Agent A, the independent source-retrieval and evidence-coverage assessor.",
   "Assess only the supplied question, required source facts, physical-page targets, retrieved page passages and answer.",
-  "Grade retrieval relevance and coverage by passage content, not scores, rank labels or the provider. Grade whether the answer is supported by the passages and whether it cites the correct PDF pages.",
+  "Grade retrieval relevance and coverage by passage content, not scores, rank labels, passage order or the provider. Grade whether the answer is supported by the passages and whether it cites the correct PDF pages.",
   "Never use outside knowledge to repair missing book evidence. A passage that is merely about the same broad topic is not answer-bearing.",
   "For an expected no-match case, abstainedCorrectly is true only when the answer explicitly declines to assert unsupported facts. Any specific unsupported answer is a critical error.",
   "Scores are integers from 0 (unusable/incorrect) to 5 (complete and fully supported). Return only the requested JSON object.",
@@ -1001,7 +1001,7 @@ const AGENT_B_INSTRUCTION = [
   "You are Agent B, a separate skeptical answer-correctness auditor. You have not seen Agent A's assessment.",
   "Independently verify each material claim in the answer against the exact retrieved OCR passages and the required facts.",
   "Penalize invented names, dates, numbers, formula operators, page claims, omitted decisive facts, contradictions, and unsupported expansions. Do not reward fluent wording when source evidence is absent.",
-  "Also grade retrieval relevance: a returned passage is useful only when its actual text supports the requested question. Do not use provider labels, scores or ranking values as evidence.",
+  "Also grade retrieval relevance: a returned passage is useful only when its actual text supports the requested question. Do not use provider labels, scores, passage order or ranking values as evidence.",
   "For expected no-match questions, require an explicit abstention and no invented answer. Return criticalError=true for a material unsupported or contradictory claim.",
   "Scores are integers from 0 (unusable/incorrect) to 5 (complete and fully supported). Return only the requested JSON object.",
 ].join(" ");
@@ -1131,7 +1131,12 @@ async function assessOneProviderCase(
       if (!current || passage.score > current.score) uniquePassages.set(passage.id, passage);
     }
   }
-  const passages = [...uniquePassages.values()].sort((a, b) => b.score - a.score).slice(0, 8);
+  const passages = [...uniquePassages.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    // Hide provider rank/order from the independent assessors; only physical
+    // page and passage content are presented in a deterministic neutral order.
+    .sort((a, b) => a.pdfPage - b.pdfPage || a.text.localeCompare(b.text));
   const input = buildAssessmentInput(qaCase, passages, answer, qa);
   const assessmentStarted = performance.now();
   const modelA = env.BRVIN_M15_FATMAN_JUDGE_A_MODEL?.trim() || "gemini-4-argon";
