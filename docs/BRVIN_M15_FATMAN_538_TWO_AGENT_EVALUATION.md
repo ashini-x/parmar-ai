@@ -13,7 +13,7 @@ Two separate AI assessors grade each provider's evidence and answer independentl
 
 ## Pinned legacy source and safe reuse
 
-The production D1 source record is `fatman-legacy-538` and is marked READY with 538/538 indexed pages. The historical import's PDF SHA-256 is pinned as:
+The production D1 source record is `fatman-legacy-538` and is marked READY with 538/538 indexed pages. The staging benchmark now preserves that exact source ID and `fatman/pages/` item-key namespace rather than assigning a replacement UUID. The historical import's PDF SHA-256 is pinned as:
 
 `8b183803fe8ee53087d731f7319519af9ac5bb62b39b2d3110acc3fe0ab59886`
 
@@ -29,7 +29,7 @@ No source PDF is uploaded. No Google Vision OCR request is submitted. The legacy
 |---|---|
 | Worker | `parmar-ai-m14-staging` |
 | D1 project | `c4ae7ce7-987f-4ae6-8bc4-6bf6d7a1c5f0` |
-| Source UUID | `6e5b6c16-90bd-45f8-a5d7-4ef6c68f4c4e` |
+| Source ID | `fatman-legacy-538` (production legacy ID preserved in staging) |
 | Derived corpus | existing M14/M15 private staging corpus bucket |
 | Cloudflare AI Search | `brvin-m15-fatman-legacy-v1` |
 | Qdrant collection | `brvin_m15_fatman_538_v1` |
