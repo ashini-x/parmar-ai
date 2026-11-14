@@ -27,11 +27,11 @@ export interface M15FatmanBenchmarkEnv extends Env {
 }
 
 export const BRVIN_M15_FATMAN_SOURCE = {
-  sourceId: "6e5b6c16-90bd-45f8-a5d7-4ef6c68f4c4e",
+  sourceId: "fatman-legacy-538",
   projectId: "c4ae7ce7-987f-4ae6-8bc4-6bf6d7a1c5f0",
   grantId: "49a15d12-0e5c-4ea1-a8ce-879ad0b79df3",
   title: "Fatman 2nd Edition",
-  fileName: "Fatman 2nd Edition — legacy AI Search export.pdf",
+  fileName: "Fatman 2nd Edition — existing legacy OCR index export",
   sourcePdfSha256: "8b183803fe8ee53087d731f7319519af9ac5bb62b39b2d3110acc3fe0ab59886",
   pageCount: 538,
   legacyDocumentVersion: "fatman-2026-8b183803",
@@ -43,7 +43,7 @@ export const BRVIN_M15_FATMAN_SOURCE = {
 
 const PROJECT_SLUG = "m15-fatman-538-benchmark";
 const COLLECTION_ID = "m15-fatman-538";
-const SOURCE_PREFIX = "brvin/books/" + BRVIN_M15_FATMAN_SOURCE.sourceId + "/pages/";
+const SOURCE_PREFIX = "fatman/pages/";
 const LEGACY_PAGE_PREFIX = "fatman/pages/page-";
 const MAX_LEGACY_PAGE_TEXT_CHARS = 120_000;
 const EXPORT_BATCH_SIZE = 18;
@@ -527,7 +527,7 @@ async function registerReadyFatmanSource(env: M15FatmanBenchmarkEnv): Promise<vo
   const now = Date.now();
   await db.prepare(
     "INSERT OR IGNORE INTO brvin_books(id,title,source_filename,source_sha256,expected_size,page_count,status,indexed_pages,error_message,collection_id,search_prefix,source_type,created_at,updated_at) " +
-    "VALUES(?,?,?,?,0,?,'ready',?,NULL,?,?,'pdf',?,?)",
+    "VALUES(?,?,?,?,0,?,'ready',?,NULL,?,?,'legacy',?,?)",
   ).bind(
     source.sourceId,
     source.title,
