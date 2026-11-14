@@ -561,12 +561,13 @@ async function registerReadyFatmanSource(env: M15FatmanBenchmarkEnv): Promise<vo
   const now = Date.now();
   await db.prepare(
     "INSERT OR IGNORE INTO brvin_books(id,title,source_filename,source_sha256,expected_size,page_count,status,indexed_pages,error_message,collection_id,search_prefix,source_type,created_at,updated_at) " +
-    "VALUES(?,?,?,?,0,?,'ready',?,NULL,?,?,'legacy',?,?)",
+    "VALUES(?,?,?,?,?,?,'ready',?,NULL,?,?,'legacy',?,?)",
   ).bind(
     source.sourceId,
     source.title,
     source.fileName,
     source.sourcePdfSha256,
+    source.expectedSize,
     source.pageCount,
     source.pageCount,
     COLLECTION_ID,
@@ -575,13 +576,14 @@ async function registerReadyFatmanSource(env: M15FatmanBenchmarkEnv): Promise<vo
     now,
   ).run();
   const book = await db.prepare(
-    "SELECT id,title,source_sha256,page_count,indexed_pages,status,search_prefix FROM brvin_books WHERE id=? LIMIT 1",
+    "SELECT id,title,source_sha256,expected_size,page_count,indexed_pages,status,search_prefix FROM brvin_books WHERE id=? LIMIT 1",
   ).bind(source.sourceId).first<{
-    id: string; title: string; source_sha256: string; page_count: number;
+    id: string; title: string; source_sha256: string; expected_size: number; page_count: number;
     indexed_pages: number; status: string; search_prefix: string;
   }>();
   if (!book || book.title !== source.title ||
       book.source_sha256.toLowerCase() !== source.sourcePdfSha256 ||
+      Number(book.expected_size) !== source.expectedSize ||
       Number(book.page_count) !== source.pageCount ||
       Number(book.indexed_pages) !== source.pageCount ||
       book.status !== "ready" || book.search_prefix !== prefix) {
@@ -1459,7 +1461,15 @@ export async function finalizeBrvinM15FatmanBenchmark(
   const run = await env.DB!.prepare(
     "SELECT id,status,result_json,started_at FROM " + RUN_TABLE + " WHERE id=? LIMIT 1",
   ).bind(runId).first<{ id: string; status: string; result_json: string; started_at: number }>();
-  if (!run || run.status !== "running") throw new Error("The Fatman M15 benchmark run is not active.");
+  if (!run) throw new Error("The Fatman M15 benchmark run was not found.");
+  if (run.status === "completed") {
+    try {
+      return JSON.parse(run.result_json) as Record<string, unknown>;
+    } catch {
+      throw new Error("The completed Fatman benchmark receipt is not valid JSON.");
+    }
+  }
+  if (run.status !== "running") throw new Error("The Fatman M15 benchmark run is not active.");
   const cases = JSON.parse(run.result_json) as FatmanRunCase[];
   if (cases.length !== FATMAN_RELEASE_QA_CASES.length ||
       FATMAN_RELEASE_QA_CASES.some((item) => !cases.some((row) => row.caseId === item.id))) {
