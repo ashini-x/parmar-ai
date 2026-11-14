@@ -31,6 +31,8 @@ function renderTelegramInlineMarkdown(value: string, stash: (html: string) => st
     .replace(/\*\*([^\n*]+)\*\*/gu, "<b>$1</b>")
     .replace(/(?<![\p{L}\p{N}])\*([^\s*\n](?:[^*\n]*[^\s*\n])?)\*(?![\p{L}\p{N}])/gu, "<b>$1</b>")
     .replace(/__([^_\n]+)__/gu, "<b>$1</b>")
+    .replace(/(?<![\p{L}\p{N}])_([^\s_\n](?:[^_\n]*[^\s_\n])?)_(?![\p{L}\p{N}])/gu, "<i>$1</i>")
+    .replace(/\|\|([^|\n]+)\|\|/gu, "<tg-spoiler>$1</tg-spoiler>")
     .replace(/~~([^~\n]+)~~/gu, "<s>$1</s>");
 
   return text;
@@ -53,7 +55,10 @@ export function formatTelegramHtml(input: string): string {
     stash("<pre>" + escapeTelegramHtml(code.replace(/\n+$/u, "")) + "</pre>"),
   );
 
-  const lines = text.split("\n").map((rawLine) => {
+    const quote = rawLine.match(/^ {0,3}>[ \t]?(.*)$/u);
+    let line = quote
+      ? "<blockquote>" + renderTelegramInlineMarkdown(quote[1], stash) + "</blockquote>"
+      : heading ? "<b>" + renderTelegramInlineMarkdown(heading[1], stash) + "</b>" : renderTelegramInlineMarkdown(rawLine, stash);
     const heading = rawLine.match(/^ {0,3}#{1,3}[ \t]+(.+)$/u);
     let line = heading ? "<b>" + renderTelegramInlineMarkdown(heading[1], stash) + "</b>" : renderTelegramInlineMarkdown(rawLine, stash);
 
