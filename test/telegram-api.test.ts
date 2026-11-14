@@ -147,7 +147,7 @@ describe("BRɅIN Telegram button", () => {
 });
 
 describe("Telegram Admin contact buttons", () => {
-  it("sends the exact Admin contact copy with Telegram and Instagram icons and their destinations", async () => {
+  it("sends the exact two-paragraph Admin contact copy and plain contact buttons", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,
       result: { message_id: 128 },
@@ -158,18 +158,18 @@ describe("Telegram Admin contact buttons", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(sendTelegramMessageWithToken(
-      "bot-token", 42, "You can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in", undefined, false, buildAdminContactMarkup(),
+      "bot-token", 42, "You can contact us via Telegram or Instagram.\n\nFor business queries, please send an email to admin@brvin.in", undefined, false, buildAdminContactMarkup(),
     )).resolves.toEqual({ message_id: 128 });
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
     expect(JSON.parse(String(requestInit.body))).toEqual({
       chat_id: 42,
-      text: "You can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
+      text: "You can contact us via Telegram or Instagram.\n\nFor business queries, please send an email to admin@brvin.in",
       reply_markup: {
         inline_keyboard: [[
-          { text: "✈️ Telegram", url: "tg://resolve?domain=projectbrain&profile" },
-          { text: "📷 Instagram", url: "https://instagram.com/brvin.in" },
+          { text: "Telegram", url: "tg://resolve?domain=projectbrain&profile" },
+          { text: "Instagram", url: "https://instagram.com/brvin.in" },
         ]],
       },
       link_preview_options: { is_disabled: true },
