@@ -50,8 +50,21 @@ const SOURCE_PREFIX = "fatman/pages/";
 const LEGACY_PAGE_PREFIX = "fatman/pages/page-";
 const MAX_LEGACY_PAGE_TEXT_CHARS = 120_000;
 const EXPORT_BATCH_SIZE = 18;
-const QDRANT_BATCH_SIZE = 6;
-const AI_SEARCH_BATCH_SIZE = 8;
+
+/**
+ * Keep each provider-indexing invocation comfortably below Cloudflare's
+ * per-Worker subrequest budget. One Qdrant page can issue several serialized
+ * Vertex predict calls (one per chunk), plus GCS manifest reads and Qdrant
+ * upsert/read-back requests. The D1 page checkpoint makes this resumable.
+ */
+export const BRVIN_M15_FATMAN_QDRANT_BATCH_SIZE = 1;
+
+/**
+ * AI Search page replay performs two GCS manifest reads plus an item lookup
+ * and, when missing, an item upload for each page. Four pages leave headroom
+ * for auth and schema requests under the per-invocation subrequest ceiling.
+ */
+export const BRVIN_M15_FATMAN_AI_SEARCH_BATCH_SIZE = 4;
 const RUN_TABLE = "m15_fatman_benchmark_runs";
 const SOURCE_TABLE = "m15_fatman_benchmark_sources";
 const AI_SEARCH_METADATA_SCHEMA = [
@@ -693,7 +706,7 @@ export async function prepareBrvinM15FatmanBenchmarkCorpus(
   if (state.qdrant_indexed_pages < state.page_count) {
     const pilot = createFatmanQdrantPilot(env);
     const start = state.qdrant_indexed_pages + 1;
-    const end = Math.min(state.page_count, start + QDRANT_BATCH_SIZE - 1);
+    const end = Math.min(state.page_count, start + BRVIN_M15_FATMAN_QDRANT_BATCH_SIZE - 1);
     let indexed = state.qdrant_indexed_pages;
     for (let physicalPage = start; physicalPage <= end; physicalPage += 1) {
       const page = await readOneCorpusPage(env, physicalPage, generationId);
@@ -751,7 +764,7 @@ export async function prepareBrvinM15FatmanBenchmarkCorpus(
     const search = env.BRVIN_M15_FATMAN_AI_SEARCH!;
     await ensureFatmanStagingSearchSchema(search);
     const startPage = state.ai_search_indexed_pages + 1;
-    const endPage = Math.min(state.page_count, startPage + AI_SEARCH_BATCH_SIZE - 1);
+    const endPage = Math.min(state.page_count, startPage + BRVIN_M15_FATMAN_AI_SEARCH_BATCH_SIZE - 1);
     const completedPages = new Set<number>();
     const pendingPages: number[] = [];
 

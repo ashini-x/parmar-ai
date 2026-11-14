@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   BRVIN_M15_FATMAN_SOURCE,
+  BRVIN_M15_FATMAN_AI_SEARCH_BATCH_SIZE,
+  BRVIN_M15_FATMAN_QDRANT_BATCH_SIZE,
   compositeScore,
   decideFatmanProviderWinner,
   hasFatmanLegacyPhysicalPageMarker,
@@ -10,6 +12,11 @@ import {
 } from "../src/brvin/m15-fatman-benchmark";
 
 describe("M15 full-corpus Fatman benchmark helpers", () => {
+  it("keeps each provider-indexing invocation below the Worker subrequest budget", () => {
+    expect(BRVIN_M15_FATMAN_QDRANT_BATCH_SIZE).toBe(1);
+    expect(BRVIN_M15_FATMAN_AI_SEARCH_BATCH_SIZE).toBe(4);
+  });
+
   it("pins the benchmark to the 538-page Fatman legacy source fingerprint", () => {
     expect(BRVIN_M15_FATMAN_SOURCE.pageCount).toBe(538);
     expect(BRVIN_M15_FATMAN_SOURCE.sourcePdfSha256).toBe(
