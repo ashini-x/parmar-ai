@@ -44,6 +44,8 @@ import {
   buildFatmanExitMarkup,
   buildHelpMenuMarkup,
   buildAdminContactMarkup,
+  ADMIN_CONTACT_TEXT,
+  CREATOR_CONTACT_CALLBACK_DATA,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, ensureAnalyticsSchema, getLatestFatmanReleaseQaRun, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
@@ -301,6 +303,78 @@ async function handleTelegramBusinessMessage(
   );
 }
 
+async function handleCreatorContactCallback(
+  callback: TelegramCallbackQuery,
+  env: Env,
+  botConnectionId: string,
+  requestId: string,
+): Promise<void> {
+  const callbackId = callback.id?.trim();
+  if (!callbackId) return;
+
+  const answerCallback = async (text: string, showAlert = false) => {
+    await telegramApi(env, "answerCallbackQuery", {
+      callback_query_id: callbackId,
+      text,
+      show_alert: showAlert,
+    }, botConnectionId);
+  };
+
+  const chatId = callback.message?.chat?.id;
+  const senderId = callback.from?.id;
+  if (
+    !isSafeInteger(chatId) ||
+    callback.message?.chat?.type !== "private" ||
+    !isSafeInteger(senderId) ||
+    senderId !== chatId
+  ) {
+    await answerCallback("This contact button is only available in your private chat.", true).catch(() => undefined);
+    return;
+  }
+
+  let answered = false;
+  try {
+    await answerCallback("Opening contact options…");
+    answered = true;
+
+    if (isSafeInteger(callback.message?.message_id)) {
+      try {
+        await editTelegramMessageReplyMarkup(
+          env,
+          chatId,
+          callback.message!.message_id!,
+          { inline_keyboard: [] },
+          botConnectionId,
+          false,
+        );
+      } catch (error) {
+        logger.warn("creator_contact_keyboard_remove_failed", {
+          requestId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    await sendTelegramMessage(
+      env,
+      chatId,
+      ADMIN_CONTACT_TEXT,
+      undefined,
+      botConnectionId,
+      false,
+      buildAdminContactMarkup(),
+    );
+  } catch (error) {
+    logger.warn("creator_contact_callback_failed", {
+      requestId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    if (!answered) {
+      await answerCallback("Could not open contact options. Please try again.", true).catch(() => undefined);
+    }
+  }
+}
+
 async function handleHelpMenuCallback(
   callback: TelegramCallbackQuery,
   env: Env,
@@ -549,7 +623,9 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   }
 
   if (update.callback_query) {
-    if (parseHelpMenuAction(update.callback_query.data)) {
+    if (update.callback_query.data === CREATOR_CONTACT_CALLBACK_DATA) {
+      await handleCreatorContactCallback(update.callback_query, env, bot.connectionId, requestId);
+    } else if (parseHelpMenuAction(update.callback_query.data)) {
       await handleHelpMenuCallback(update.callback_query, env, bot.connectionId, requestId);
     } else {
       await handleFatmanModeCallback(update.callback_query, env, bot.connectionId, requestId);
@@ -678,7 +754,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     await bestEffortTelegram("admin_contact", () => sendTelegramMessage(
       env,
       chatId,
-      "You can contact us via Telegram or Instagram. For a business query, please send an email to admin@brvin.in.",
+      ADMIN_CONTACT_TEXT,
       messageId,
       bot.connectionId,
       false,
