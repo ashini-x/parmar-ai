@@ -146,3 +146,13 @@ The owner attempted the first corpus-build action. The browser reported an HTML-
 PR #287 merged as `44571ae900687c2a4bbf836657f91eed929ea20b`; it changes the page API client to expose response status, content type, redirect state, final URL and a bounded body preview for non-JSON results, and adds `Accept: application/json` plus `cache: no-store`. The updated staging operator is deployed as v107 at 100%. The staging D1 still has no Fatman state tables, and no source export or paired evaluation has been confirmed.
 
 Retry by refreshing the operator URL above to load v107, entering the existing staging admin token locally and clicking Build once. If it fails, capture the improved diagnostic text. Do not send the token. Production selectors and quota remain unchanged.
+
+## 14 November 2026 — subrequest-limit failure and v108 remedy
+
+The first full corpus build reached 538/538 OCR-exported pages and 1,606 chunks, then exceeded Cloudflare's per-Worker subrequest budget during Qdrant indexing. The exact persisted staging D1 state is `qdrant_indexing`, Qdrant 11/538 pages and 29 points, staging AI Search 0/538. All OCR export work is retained in immutable GCS manifests; no PDF upload or Vision OCR rerun is needed.
+
+PR #288 merged as `0992af5cfe85539c9a2f589309ab40ffed4a7a01`. It reduces Qdrant to one page per invocation and the AI Search destination batch to four pages per invocation. Each D1 page checkpoint advances only after Qdrant's deterministic point upsert/read-back succeeds; a retry of an interrupted page uses the same deterministic IDs. The M14 staging workflow and full Release Validation passed.
+
+The updated operator is deployed as staging Worker v108 at 100% (deployment `56e01ad6-2803-4144-8ece-2ad8cb8de3c3`). Latest production read-back after the standard release smoke test: `parmar-ai` v807, `brvin-service` v166, Teachers v12. Production provider selectors and quota are unchanged.
+
+**Resume now:** refresh the operator URL, re-enter the existing staging token locally, and click Build again. It will resume at Qdrant page 12; 538 exported pages and 1,606 chunks are already complete. Wait for Qdrant 538/538 and AI Search 538/538, then run the two-agent 12-case comparison. No human reviewer is required.
