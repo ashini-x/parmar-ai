@@ -19,7 +19,7 @@ function bucketName(env: Env): string {
 }
 
 function validSourceId(value: unknown): value is string {
-  return typeof value === "string" && /^[a-f0-9-]{36}$/iu.test(value);
+  return typeof value === "string" && (value === "fatman-legacy-538" || /^[a-f0-9-]{36}$/iu.test(value));
 }
 
 function objectPrefix(sourceId: string): string {
@@ -86,7 +86,7 @@ export async function persistBrvinPageCorpus(
   rawOcrText: string,
   stableItemKey: string,
   pageConfidence?: number,
-  options: { storageBucket?: string } = {},
+  options: { storageBucket?: string; sourceManifestAlreadyPersisted?: boolean } = {},
 ): Promise<{
   generationId: string;
   chunkCount: number;
@@ -140,7 +140,13 @@ export async function persistBrvinPageCorpus(
   }
   const token = await getGoogleAccessToken(env);
 
-  const sourceWrite = await putImmutableJson(bucket, token, sourceManifestObject, sourceManifest);
+  // Large legacy-source exports persist the immutable source manifest once,
+  // then write page manifests in resumable batches. The caller may skip the
+  // repeated create-only source-manifest check after it has verified the first
+  // write and durably checkpointed that fact in its staging registry.
+  const sourceWrite = options.sourceManifestAlreadyPersisted
+    ? { created: false, sha256: "" }
+    : await putImmutableJson(bucket, token, sourceManifestObject, sourceManifest);
   const pageWrite = await putImmutableJson(bucket, token, pageManifestObject, pageManifest);
 
   return {

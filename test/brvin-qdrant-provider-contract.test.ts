@@ -49,7 +49,7 @@ describe("BRVIN Qdrant query-only retrieval adapter", () => {
     expect(query).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledWith(expect.objectContaining({
       projectId: "project-1",
-      authorizedSourceIds: ["source-1", "source-2"],
+      authorizedSourceIds: ["source-1", "source-2", "fatman-legacy-538"],
       query: "Does static friction adjust?",
       limit: 16,
       prefetchLimit: 48,
@@ -67,6 +67,25 @@ describe("BRVIN Qdrant query-only retrieval adapter", () => {
         contentTypes: ["explanatory_text"],
       },
     })]);
+  });
+
+  it("maps only the exact legacy Fatman prefix to the pinned production source ID", async () => {
+    const { provider, query } = makeProvider();
+    await provider.query({
+      projectId: "fatman-project",
+      query: "Battle of Plassey",
+      sourcePrefixes: [
+        "fatman/pages/",
+        "fatman/pages-extra/",
+        "fatman/other/",
+        "legacy/fatman/pages/",
+      ],
+      maxResults: 16,
+      matchThreshold: 0.3,
+    });
+    expect(query).toHaveBeenCalledWith(expect.objectContaining({
+      authorizedSourceIds: ["fatman-legacy-538"],
+    }));
   });
 
   it("fails closed for all corpus write and delete methods", async () => {

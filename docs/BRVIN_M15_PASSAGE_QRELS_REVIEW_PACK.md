@@ -1,12 +1,14 @@
 # BRVIN M15 passage relevance review pack
 
-**State:** prepared for independent annotation; no grades have been assigned.  
+**State:** archived optional artifact; not a current M15 prerequisite. Human-review dependency explicitly waived by the project owner on 14 November 2026. The pack remains unchanged for historical/audit use; no grades are required to proceed with the Fatman AI comparison.  
 **Prepared:** 11 November 2026  
 **Core issue:** [#144 — M15 shadow benchmark relevance, math fidelity, security, load and cost](https://github.com/ashini-x/parmar-ai/issues/144)
 
 ## Purpose
 
-The next open M15 quality gate is passage-level relevance. The second-source 17-query receipt establishes page coverage and provider behavior, but physical-page labels are not passage qrels. AI Search and Qdrant use different passage boundaries, so each returned passage must be judged independently or mapped to a normalized source span.
+This pack documents the historical 109-candidate Physics review exercise. It was prepared for two independent human reviewers, but the project owner explicitly waived that dependency on 14 November 2026. The active M15 comparative path is now the full 538-page Fatman benchmark with two independent AI assessors and a separate AI adjudicator on material disagreements; see [BRVIN_M15_FATMAN_538_TWO_AGENT_EVALUATION.md](BRVIN_M15_FATMAN_538_TWO_AGENT_EVALUATION.md).
+
+This file and its blank fixture are retained unchanged for auditability. They are optional research material, not a blocker, not a task for the user, and not a production gate. The distinction remains important: page-target labels are not passage qrels, and AI assessments are not independent human qrels.
 
 The machine-readable review pack is [`test/fixtures/brvin-m15-passage-qrels-review-pack.json`](../test/fixtures/brvin-m15-passage-qrels-review-pack.json). It contains **109 exact bounded evidence excerpts** from the completed paired answer-evaluation run, grouped by query and provider. These are the source-provenanced texts passed to the isolated Core staging answer evaluator; the pack does not rewrite, normalize or repair them.
 
@@ -69,4 +71,4 @@ For a complete pack, the script reports macro nDCG@5, MRR@5 and precision@5 (gra
 
 ## Status boundary
 
-This artifact prepares the first incomplete M15 task for independent review. It does **not** close human qrels, prove claim-level entailment, pass formula fidelity, demonstrate authorization isolation, or authorize production cutover. Production remains on Cloudflare AI Search.
+This is an archived optional artifact. The project owner has waived human review as a prerequisite for the current M15 provider comparison. The two-agent Fatman assessment is owner-authorized AI evaluation, not independent human qrels. Neither this pack nor the AI assessment alone proves production capacity; the separate production migration must preserve D1 authorization, monitoring and the immediate Cloudflare AI Search rollback path. Production remains on Cloudflare AI Search until the paired Fatman result is reviewed.

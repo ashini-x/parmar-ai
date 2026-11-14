@@ -280,6 +280,15 @@ export interface Env {
   BRVIN_M15_BENCHMARK_AI_SEARCH?: AiSearchInstance;
   /** Dedicated Qdrant collection for the second-source M15 staging benchmark; never production. */
   BRVIN_M15_BENCHMARK_QDRANT_COLLECTION?: string;
+  /** Read-only item listing/download access to the existing 538-page Fatman legacy index for staging export. */
+  BRVIN_M15_FATMAN_SOURCE_EXPORT?: Pick<AiSearchInstance, "items">;
+  /** Separate upload-capable AI Search instance for the full Fatman staging comparison. */
+  BRVIN_M15_FATMAN_AI_SEARCH?: AiSearchInstance;
+  /** Dedicated non-production Qdrant collection for the 538-page Fatman comparison. */
+  BRVIN_M15_FATMAN_QDRANT_COLLECTION?: string;
+  /** Independent AI assessor model IDs; staging-only, defaults are pinned in the benchmark module. */
+  BRVIN_M15_FATMAN_JUDGE_A_MODEL?: string;
+  BRVIN_M15_FATMAN_JUDGE_B_MODEL?: string;
   BRVIN_SEARCH_INSTANCE?: string;
   /** Server-side provider selector; M13 supports only cloudflare-ai-search. */
   BRVIN_RETRIEVAL_PROVIDER?: string;

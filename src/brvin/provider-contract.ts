@@ -123,6 +123,23 @@ export function createBrvinRetrievalProvider(
   throw new Error("The configured BRVIN retrieval provider is not implemented in this release.");
 }
 
+/**
+ * Map only explicitly registered D1 source-key namespaces to Qdrant source IDs.
+ * The legacy Fatman key prefix is intentionally an exact, single-source
+ * exception; arbitrary legacy-style paths are never converted into IDs.
+ */
+export function brvinQdrantAuthorizedSourceIds(sourcePrefixes: readonly string[]): string[] {
+  return [...new Set(sourcePrefixes.flatMap((prefix) => {
+    const normalized = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
+    if (normalized === "fatman/pages") return ["fatman-legacy-538"];
+    const parts = normalized.split("/");
+    return parts.length === 4 && parts[0] === "brvin" &&
+      parts[1] === "books" && parts[2] && parts[3] === "pages"
+      ? [parts[2]]
+      : [];
+  }))];
+}
+
 export class QdrantVertexReadOnlyRetrievalProvider implements RetrievalProvider {
   readonly providerId = "qdrant-vertex";
 
@@ -143,14 +160,7 @@ export class QdrantVertexReadOnlyRetrievalProvider implements RetrievalProvider 
   }
 
   async query(input: RetrievalQuery): Promise<RetrievalCandidate[]> {
-    const sourceIds = [...new Set(input.sourcePrefixes.flatMap((prefix) => {
-      const normalized = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
-      const parts = normalized.split("/");
-      return parts.length === 4 && parts[0] === "brvin" &&
-        parts[1] === "books" && parts[2] && parts[3] === "pages"
-        ? [parts[2]]
-        : [];
-    }))];
+    const sourceIds = brvinQdrantAuthorizedSourceIds(input.sourcePrefixes);
     // An empty D1 allowlist must stop before Vertex embedding or Qdrant I/O.
     if (!sourceIds.length) return [];
     const limit = Math.max(1, Math.min(50, Math.trunc(input.maxResults)));

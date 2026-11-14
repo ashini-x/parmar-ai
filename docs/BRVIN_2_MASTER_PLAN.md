@@ -374,3 +374,38 @@ M15 therefore remains **IN PROGRESS**. Do not choose a provider winner, evidence
 ## 14 November 2026 — qrels validation utility added
 
 Core now includes an offline validator for the existing 109-candidate passage-review pack. It checks reviewer attestations against the pack's source fingerprint, grades, rationales and adjudication, and computes provider-local nDCG@5, MRR@5 and precision@5 only after complete annotation. The pack remains blank and no human qrels are claimed. This utility does not select a relevance gate, change runtime retrieval or satisfy cross-subject/load/cost acceptance gates. See [BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md](BRVIN_M15_PASSAGE_QRELS_REVIEW_PACK.md).
+
+
+## 14 November 2026 — owner-approved full Fatman two-agent provider comparison
+
+The project owner explicitly directed that M15 must **not wait for human reviewers**. Do not ask the owner to arrange two humans, manually label passages, run scripts or perform repository operations. The previous 109-candidate Physics review pack remains intact for optional historical research only; its blank human fields are not a blocker. The active provider decision uses two separate AI assessors and an AI adjudicator on the actual Fatman corpus. This is owner-authorized AI evaluation, not independent human qrels.
+
+### Verified source and original OCR provenance
+
+The production D1 legacy source is `fatman-legacy-538`, title `Fatman 2nd Edition`, READY with 538/538 indexed pages and key prefix `fatman/pages/`. Its `brvin_books.source_sha256` is blank, so use the completed original import record, not that legacy registry field:
+
+- Original import job: `6b94a848-c642-4be3-8718-3ae5a7d25b35`
+- Source object: `fatman/imports/6b94a848-c642-4be3-8718-3ae5a7d25b35/source.pdf`
+- SHA-256: `8b183803fe8ee53087d731f7319519af9ac5bb62b39b2d3110acc3fe0ab59886`
+- Uploaded/expected bytes: 115,395,596
+- Original Vision operation: `projects/project-90db7be4-619f-4ed7-89b/operations/7358e7d1e97523c3`
+- Original workflow: `6b94a848-c642-4be3-8718-3ae5a7d25b35-c5d09ea1-quality-0-live`
+- Original import status: completed; page count/indexed pages: 538/538
+
+The actual Cloudflare AI Search catalogue has 538 distinct completed text items `fatman/pages/page-000001.txt` through `page-000538.txt`. A separate set of 50 legacy JPG indexing attempts is in error due to the Free image-processing limit; these image errors are not missing OCR text. Page 1, 168 and 538 were downloaded and their physical-page markers verified. Page 168 contains the Plassey, Buxar and Allahabad facts used in the frozen QA suite. The staging build must export only the completed text items, preserve their original page keys and use the original import SHA and Vision operation. It must not upload the PDF, rerun Vision OCR, mutate/delete the production index, or access production D1.
+
+### Active implementation
+
+Core PR [#285 — M15: benchmark Qdrant vs Cloudflare AI Search on full Fatman corpus](https://github.com/ashini-x/parmar-ai/pull/285) adds a staging-only resumable operator at `/admin/m15/fatman`. It uses the real legacy source ID/key prefix, the original import provenance, immutable GCS page/chunk manifests, dedicated Qdrant collection `brvin_m15_fatman_538_v1`, and separately configured Cloudflare AI Search staging instance `brvin-m15-fatman-legacy-v1`. The new AI Search instance is matched to the production Fatman retrieval settings (embedding model, 256/10 chunking, vector+keyword hybrid, RRF, threshold, candidate budget and BGE reranker); its OCR setting is off because it receives existing text. The build checks these settings and fails closed on drift.
+
+The Qdrant legacy authorization mapping accepts only the exact `fatman/pages/` prefix and maps it to `fatman-legacy-538`; all arbitrary look-alike paths remain rejected. Core v2 D1 application/environment/project grant checks still run for both providers. The two staging indexes receive the same 538 OCR page texts and D1 source allowlist. AI Search and Qdrant use provider-native chunk boundaries, so the result is a full-system end-to-end comparison, not a chunk-boundary-controlled experiment.
+
+The fixed 12-case Fatman v4 QA suite covers history/polity facts, concepts, comparisons, page references, difficult multi-step questions and an out-of-book secret-fingerprint control. Gemini generates answers through the same consumer-owned answer path for both providers. Agent A (`gemini-4-argon`) and Agent B (`gemini-3.8-flash`) independently assess identical blinded question/facts/passages/answer/citation-page payloads; a separate Gemini 4 Argon adjudicator resolves material disagreement (composite difference ≥0.6, any dimension difference ≥2, or conflicting critical-error/abstention flags). The score uses retrieval relevance 35%, answer correctness 30%, source grounding 25% and citation accuracy 10%.
+
+Qdrant wins only if both agents independently score it above AI Search, its adjudicated composite is higher, deterministic QA pass count is not lower, AI-assessed critical errors are not higher, and out-of-book abstention passes are not lower. AI Search wins only under the mirrored criteria. Disagreement, tie or guardrail regression is recorded as `no-clear-winner`; there is no forced provider switch. Retrieval latency, Gemini generation latency and AI assessor latency are reported separately; the 12 sequential cases are not a concurrency/load/SLO test.
+
+### Immediate next action
+
+After PR #285 passes its updated CI and merges, deploy/verify only the isolated M14/M15 staging Worker. Open [the Fatman staging operator](https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman), provide the existing staging operator token in the local password field (never paste the token into chat), and run the 538-page build. It inventories the legacy text items once, exports 18 pages per continuation, indexes Qdrant in six-page batches and the matched AI Search instance in eight-page batches, then verifies both complete inventories and marks the staging D1 source READY. The UI resumes from D1 checkpoints and polls queued AI Search pages without duplicate uploads. After READY, run the two-agent 12-case comparison and save the full paired receipt to staging D1.
+
+**No human review is required.** No production provider selector or Worker has been changed by PR #285. If Qdrant wins the defined two-agent/adjudication/guardrail rule, move promptly to the production migration/canary using the legacy source mapping and keep Cloudflare AI Search live as immediate rollback. Do not interpret the staging receipt as load/capacity proof; keep that limitation explicit and avoid another multi-week relevance-labeling loop. M16 Teachers parity, M17 controlled canary and the 14-day AI Search rollback soak remain documented release/rollback controls, not prerequisites for the owner-waived two-agent quality decision.
