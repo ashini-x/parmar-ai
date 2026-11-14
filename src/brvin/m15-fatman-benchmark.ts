@@ -175,7 +175,7 @@ function pageKey(page: number): string {
   return SOURCE_PREFIX + "page-" + String(page).padStart(6, "0") + ".txt";
 }
 
-function pageNumberFromLegacyKey(key: string): number | null {
+export function pageNumberFromLegacyKey(key: string): number | null {
   if (!key.startsWith(LEGACY_PAGE_PREFIX) || !key.endsWith(".txt")) return null;
   const match = /^fatman\/pages\/page-(\d{1,6})\.txt$/u.exec(key);
   if (!match) return null;
@@ -830,7 +830,7 @@ export async function getBrvinM15FatmanBenchmarkStatus(
   };
 }
 
-function compositeScore(value: JudgeAssessment): number {
+export function compositeScore(value: JudgeAssessment): number {
   return Number((
     value.retrievalRelevance * 0.35 +
     value.answerCorrectness * 0.30 +
@@ -839,7 +839,7 @@ function compositeScore(value: JudgeAssessment): number {
   ).toFixed(4));
 }
 
-function validateJudgeAssessment(value: unknown): JudgeAssessment {
+export function validateJudgeAssessment(value: unknown): JudgeAssessment {
   if (!value || typeof value !== "object") throw new Error("The AI assessor returned no structured assessment.");
   const raw = value as Record<string, unknown>;
   const score = (key: string) => {
@@ -1150,7 +1150,7 @@ function average(values: number[]): number {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 }
 
-function summarizeProvider(cases: FatmanRunCase[], provider: "cloudflareAiSearch" | "qdrantVertex") {
+export function summarizeProvider(cases: FatmanRunCase[], provider: "cloudflareAiSearch" | "qdrantVertex") {
   const rows = cases.map((item) => item[provider]);
   const assessment = (row: ProviderCaseReceipt) => row.adjudication.assessment;
   const timings = rows.map((row) => row.elapsedMs).sort((a, b) => a - b);
