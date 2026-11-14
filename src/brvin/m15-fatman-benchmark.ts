@@ -1405,16 +1405,24 @@ export async function finalizeBrvinM15FatmanBenchmark(
     qdrant.deterministicQaPassed >= ai.deterministicQaPassed &&
     qdrant.criticalErrorCount <= ai.criticalErrorCount &&
     qdrant.outOfBookAbstentionPassed >= ai.outOfBookAbstentionPassed;
-  const qdrantWins =
-    qdrant.adjudicatedCompositeScore > ai.adjudicatedCompositeScore + 0.001 &&
-    qdrantNotWorseOnGuardrails &&
-    qdrant.agentACompositeScore >= ai.agentACompositeScore - 0.05 &&
-    qdrant.agentBCompositeScore >= ai.agentBCompositeScore - 0.05;
-  const aiWins =
-    ai.adjudicatedCompositeScore > qdrant.adjudicatedCompositeScore + 0.001 &&
+  const qdrantWinsByBothAssessors =
+    qdrant.agentACompositeScore > ai.agentACompositeScore &&
+    qdrant.agentBCompositeScore > ai.agentBCompositeScore;
+  const aiWinsByBothAssessors =
+    ai.agentACompositeScore > qdrant.agentACompositeScore &&
+    ai.agentBCompositeScore > qdrant.agentBCompositeScore;
+  const aiNotWorseOnGuardrails =
     ai.deterministicQaPassed >= qdrant.deterministicQaPassed &&
     ai.criticalErrorCount <= qdrant.criticalErrorCount &&
     ai.outOfBookAbstentionPassed >= qdrant.outOfBookAbstentionPassed;
+  const qdrantWins =
+    qdrantWinsByBothAssessors &&
+    qdrant.adjudicatedCompositeScore > ai.adjudicatedCompositeScore + 0.001 &&
+    qdrantNotWorseOnGuardrails;
+  const aiWins =
+    aiWinsByBothAssessors &&
+    ai.adjudicatedCompositeScore > qdrant.adjudicatedCompositeScore + 0.001 &&
+    aiNotWorseOnGuardrails;
   const winner = qdrantWins ? "qdrant-vertex" : aiWins ? "cloudflare-ai-search" : "no-clear-winner";
   const report = {
     ok: true,
@@ -1436,8 +1444,8 @@ export async function finalizeBrvinM15FatmanBenchmark(
     decision: {
       winner,
       qdrantNotWorseOnGuardrails,
-      qdrantWinsByBothAssessors: qdrant.agentACompositeScore > ai.agentACompositeScore &&
-        qdrant.agentBCompositeScore > ai.agentBCompositeScore,
+      qdrantWinsByBothAssessors,
+      aiWinsByBothAssessors,
       adjudicatedQualityScoreDifference: Number((qdrant.adjudicatedCompositeScore - ai.adjudicatedCompositeScore).toFixed(4)),
       productionCutoverRecommended: qdrantWins,
       humanReviewRequired: false,
