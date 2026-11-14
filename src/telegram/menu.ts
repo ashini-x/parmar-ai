@@ -14,8 +14,8 @@ export interface TelegramMenuCommandTarget {
 export function buildTelegramMenuCommands(): TelegramMenuCommand[] {
   return [
     // Telegram Bot API command names must be lowercase ASCII.
-    { command: "rbe", description: "Shubham Jain" },
-    { command: "radhika", description: "Radhika Goel" },
+    { command: "rbe", description: "Shubham Jain (RBE)" },
+    { command: "radhika", description: "Radhika Goel (RBE)" },
     { command: "parmar", description: "Parmar SSC" },
     { command: "admin", description: "Admin" },
   ];
