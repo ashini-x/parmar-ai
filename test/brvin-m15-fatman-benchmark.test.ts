@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BRVIN_M15_FATMAN_SOURCE,
   compositeScore,
+  hasFatmanLegacyPhysicalPageMarker,
   pageNumberFromLegacyKey,
   validateJudgeAssessment,
 } from "../src/brvin/m15-fatman-benchmark";
@@ -23,6 +24,16 @@ describe("M15 full-corpus Fatman benchmark helpers", () => {
     expect(pageNumberFromLegacyKey("fatman/pages/page-000000.txt")).toBeNull();
     expect(pageNumberFromLegacyKey("brvin/books/00000000-0000-4000-8000-000000000000/pages/page-000001.txt")).toBeNull();
     expect(pageNumberFromLegacyKey("fatman/pages/../page-000001.txt")).toBeNull();
+  });
+
+  it("recognizes both existing Fatman OCR page header forms without accepting a mismatched page", () => {
+    expect(hasFatmanLegacyPhysicalPageMarker(
+      "Fatman 2nd Edition 2026 | PDF page 168\n\nBattle of Plassey",
+      168,
+    )).toBe(true);
+    expect(hasFatmanLegacyPhysicalPageMarker("Fatman 2nd Edition\nPDF page: 168\nText", 168)).toBe(true);
+    expect(hasFatmanLegacyPhysicalPageMarker("Fatman 2nd Edition\nPDF page 169\nText", 168)).toBe(false);
+    expect(hasFatmanLegacyPhysicalPageMarker("No physical-page marker here", 168)).toBe(false);
   });
 
   it("applies the frozen 35/30/25/10 adjudication weights", () => {
