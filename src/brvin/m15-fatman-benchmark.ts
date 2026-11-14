@@ -54,7 +54,7 @@ const SOURCE_TABLE = "m15_fatman_benchmark_sources";
 const AI_SEARCH_METADATA_SCHEMA = [
   { field_name: "source_id", data_type: "text" },
   { field_name: "project_id", data_type: "text" },
-  { field_name: "pdf_page", data_type: "number" },
+  { field_name: "pdf_page", data_type: "text" },
   { field_name: "benchmark", data_type: "text" },
 ] as const;
 
