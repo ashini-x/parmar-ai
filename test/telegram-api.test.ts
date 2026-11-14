@@ -91,6 +91,7 @@ describe("BRɅIN Telegram button", () => {
     expect(JSON.parse(String(requestInit.body))).toMatchObject({
       chat_id: 42,
       text: "Answer text",
+      parse_mode: "HTML",
       reply_markup: creatorKeyboard,
     });
   });
@@ -114,6 +115,7 @@ describe("BRɅIN Telegram button", () => {
     expect(JSON.parse(String(requestInit.body))).toMatchObject({
       chat_id: 42,
       text: "Fatman answer",
+      parse_mode: "HTML",
       reply_markup: {
         inline_keyboard: [[{ text: "Exit Fatman", callback_data: "fatman:exit" }]],
       },
@@ -141,6 +143,7 @@ describe("BRɅIN Telegram button", () => {
       chat_id: 42,
       business_connection_id: "business-connection",
       text: "I am BRɅIN.",
+      parse_mode: "HTML",
     });
     expect(payload).not.toHaveProperty("reply_markup");
   });
@@ -165,7 +168,8 @@ describe("Telegram Admin contact buttons", () => {
     expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
     expect(JSON.parse(String(requestInit.body))).toEqual({
       chat_id: 42,
-      text: "परमार्थAI by BRɅIN.\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
+      text: "<b>परमार्थAI by BRɅIN.</b>\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
+      parse_mode: "HTML",
       reply_markup: {
         inline_keyboard: [[
           { text: "Telegram", url: "tg://resolve?domain=projectbrain&profile" },
