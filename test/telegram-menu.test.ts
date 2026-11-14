@@ -4,8 +4,8 @@ import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isAdminComm
 describe("Telegram menu commands", () => {
   it("publishes all four named voice and admin menu entries", () => {
     expect(buildTelegramMenuCommands()).toEqual([
-      { command: "rbe", description: "Shubham Jain" },
-      { command: "radhika", description: "Radhika Goel" },
+      { command: "rbe", description: "Shubham Jain (RBE)" },
+      { command: "radhika", description: "Radhika Goel (RBE)" },
       { command: "parmar", description: "Parmar SSC" },
       { command: "admin", description: "Admin" },
     ]);
