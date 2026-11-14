@@ -71,7 +71,7 @@ export function formatTelegramHtml(input: string): string {
       line = renderTelegramInlineMarkdown(rawLine, stash);
     }
 
-    if (/^(?:🟢[ \t]*)?Final answer$/iu.test(line) || /^परमार्थAI by BRɅIN\.$/u.test(line)) {
+    if (/^परमार्थAI by BRɅIN\.$/u.test(line)) {
       line = "<b>" + line + "</b>";
     } else if (/^(?:📖[ \t]*|👻[ \t]*)?Fatman Mode is (?:ON|OFF)\.$/u.test(line)) {
       line = "<b>" + line + "</b>";
