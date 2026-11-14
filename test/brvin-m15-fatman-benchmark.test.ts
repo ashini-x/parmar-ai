@@ -14,6 +14,11 @@ describe("M15 full-corpus Fatman benchmark helpers", () => {
       "8b183803fe8ee53087d731f7319519af9ac5bb62b39b2d3110acc3fe0ab59886",
     );
     expect(BRVIN_M15_FATMAN_SOURCE.sourceId).toBe("fatman-legacy-538");
+    expect(BRVIN_M15_FATMAN_SOURCE.legacyImportJobId).toBe("6b94a848-c642-4be3-8718-3ae5a7d25b35");
+    expect(BRVIN_M15_FATMAN_SOURCE.expectedSize).toBe(115395596);
+    expect(BRVIN_M15_FATMAN_SOURCE.originalVisionOperationId).toBe(
+      "projects/project-90db7be4-619f-4ed7-89b/operations/7358e7d1e97523c3",
+    );
   });
 
   it("accepts only valid legacy physical-page keys within the exact 538-page range", () => {
