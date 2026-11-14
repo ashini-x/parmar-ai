@@ -19,7 +19,7 @@ function bucketName(env: Env): string {
 }
 
 function validSourceId(value: unknown): value is string {
-  return typeof value === "string" && /^[a-f0-9-]{36}$/iu.test(value);
+  return typeof value === "string" && (value === "fatman-legacy-538" || /^[a-f0-9-]{36}$/iu.test(value));
 }
 
 function objectPrefix(sourceId: string): string {
