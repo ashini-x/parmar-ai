@@ -119,6 +119,9 @@ type ProviderCaseReceipt = {
   passages: Array<{ pdfPage: number; text: string }>;
   agentA: AssessorReceipt;
   agentB: AssessorReceipt;
+  retrievalElapsedMs: number;
+  answerGenerationElapsedMs: number;
+  assessmentElapsedMs: number;
   adjudication: {
     method: "independent-agreement-average" | "ai-adjudicator";
     assessment: JudgeAssessment;
@@ -1030,8 +1033,12 @@ async function assessOneProviderCase(
 
   const contexts = new Map<string, FatmanBookContext>();
   let answer = "";
+  let retrievalElapsedMs = 0;
+  let answerGenerationElapsedMs = 0;
   const qa = await runFatmanReleaseQaCase({
     retrieve: async (query) => {
+      const retrievalStarted = performance.now();
+      try {
       const result = await retrieveBrvinForApplicationV2(
         providerEnv,
         BRVIN_M15_STAGING_ENVIRONMENT_ID,
@@ -1058,8 +1065,13 @@ async function assessOneProviderCase(
       };
       contexts.set(query, context);
       return context;
+      } finally {
+        retrievalElapsedMs += performance.now() - retrievalStarted;
+      }
     },
     answer: async (question, context, repairHint) => {
+      const answerStarted = performance.now();
+      try {
       const generation = await generateGeminiAnswer(
         env,
         question,
@@ -1076,6 +1088,9 @@ async function assessOneProviderCase(
           0,
         ),
       };
+      } finally {
+        answerGenerationElapsedMs += performance.now() - answerStarted;
+      }
     },
   }, qaCase);
 
@@ -1088,6 +1103,7 @@ async function assessOneProviderCase(
   }
   const passages = [...uniquePassages.values()].sort((a, b) => b.score - a.score).slice(0, 8);
   const input = buildAssessmentInput(qaCase, passages, answer);
+  const assessmentStarted = performance.now();
   const modelA = env.BRVIN_M15_FATMAN_JUDGE_A_MODEL?.trim() || "gemini-4-argon";
   const modelB = env.BRVIN_M15_FATMAN_JUDGE_B_MODEL?.trim() || "gemini-3.8-flash";
   const [agentA, agentB] = await Promise.all([
@@ -1145,6 +1161,9 @@ async function assessOneProviderCase(
     qa,
     answer: answer.slice(0, 3_900),
     passages: passages.map((passage) => ({ pdfPage: passage.pdfPage, text: passage.text.slice(0, 1_100) })),
+    retrievalElapsedMs: Math.round(retrievalElapsedMs * 100) / 100,
+    answerGenerationElapsedMs: Math.round(answerGenerationElapsedMs * 100) / 100,
+    assessmentElapsedMs: Math.round((performance.now() - assessmentStarted) * 100) / 100,
     agentA,
     agentB,
     adjudication,
@@ -1159,10 +1178,16 @@ function average(values: number[]): number {
 export function summarizeProvider(cases: FatmanRunCase[], provider: "cloudflareAiSearch" | "qdrantVertex") {
   const rows = cases.map((item) => item[provider]);
   const assessment = (row: ProviderCaseReceipt) => row.adjudication.assessment;
-  const timings = rows.map((row) => row.elapsedMs).sort((a, b) => a - b);
-  const percentile = (q: number) => timings.length
-    ? timings[Math.max(0, Math.min(timings.length - 1, Math.ceil(q * timings.length) - 1))]
-    : null;
+  const percentile = (values: number[], q: number) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted.length
+      ? sorted[Math.max(0, Math.min(sorted.length - 1, Math.ceil(q * sorted.length) - 1))]
+      : null;
+  };
+  const timings = rows.map((row) => row.elapsedMs);
+  const retrievalTimings = rows.map((row) => row.retrievalElapsedMs);
+  const answerTimings = rows.map((row) => row.answerGenerationElapsedMs);
+  const assessmentTimings = rows.map((row) => row.assessmentElapsedMs);
   const positive = rows.filter((row) => row.qa.expectedPages.length > 0 && row.qa.category !== "out_of_book");
   const negative = rows.filter((row) => row.qa.category === "out_of_book");
   const agentA = rows.map((row) => compositeScore(row.agentA.assessment));
@@ -1191,11 +1216,29 @@ export function summarizeProvider(cases: FatmanRunCase[], provider: "cloudflareA
     answerCorrectnessScore: average(rows.map((row) => assessment(row).answerCorrectness)),
     sourceGroundingScore: average(rows.map((row) => assessment(row).sourceGrounding)),
     citationAccuracyScore: average(rows.map((row) => assessment(row).citationAccuracy)),
+    observedRetrievalLatencyMs: {
+      sampleCount: retrievalTimings.length,
+      p50: percentile(retrievalTimings, 0.5),
+      p95: percentile(retrievalTimings, 0.95),
+      note: "Includes Core v2 D1 authorization and provider query/embedding/reranking; excludes Gemini answer generation and assessors.",
+    },
+    observedAnswerGenerationLatencyMs: {
+      sampleCount: answerTimings.length,
+      p50: percentile(answerTimings, 0.5),
+      p95: percentile(answerTimings, 0.95),
+      note: "Gemini answer generation only, including any bounded QA repair attempt.",
+    },
+    observedAssessmentLatencyMs: {
+      sampleCount: assessmentTimings.length,
+      p50: percentile(assessmentTimings, 0.5),
+      p95: percentile(assessmentTimings, 0.95),
+      note: "Two independent AI assessors plus the optional adjudicator; not provider retrieval latency.",
+    },
     observedCaseLatencyMs: {
       sampleCount: timings.length,
-      p50: percentile(0.5),
-      p95: percentile(0.95),
-      note: "Sequential per-case staging measurements; not a concurrency load test or production SLO.",
+      p50: percentile(timings, 0.5),
+      p95: percentile(timings, 0.95),
+      note: "End-to-end case time including retrieval, answer generation and AI assessment; sequential case measurements, not a concurrency load test or production SLO.",
     },
     answerGenerationCount: rows.reduce((sum, row) => sum + row.qa.generationAttempts, 0),
     searchRequestCount: rows.reduce((sum, row) => sum + row.qa.queryCount, 0),
