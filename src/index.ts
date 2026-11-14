@@ -43,6 +43,7 @@ import {
   buildFatmanStartMarkup,
   buildFatmanExitMarkup,
   buildHelpMenuMarkup,
+  buildAdminContactMarkup,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, ensureAnalyticsSchema, getLatestFatmanReleaseQaRun, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
@@ -671,6 +672,19 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       ),
     ));
     return withRequestId(json({ ok: true, parmarSir: true }), requestId);
+  }
+
+  if (isAdminCommand(text)) {
+    await bestEffortTelegram("admin_contact", () => sendTelegramMessage(
+      env,
+      chatId,
+      "Contact Admin?",
+      messageId,
+      bot.connectionId,
+      false,
+      buildAdminContactMarkup(),
+    ));
+    return withRequestId(json({ ok: true, adminContact: true }), requestId);
   }
 
   if (isStart(text)) {
@@ -2274,8 +2288,9 @@ function buildStudyPlanText(profile: StudentProfile): string {
   ].join("\n");
 }
 
-function isStart(text: string): boolean { return /^\/start(?:\s|$)/i.test(text); }
-function isHelp(text: string): boolean { return /^\/(?:help|commands)(?:\s|$)/i.test(text); }
+function isStart(text: string): boolean { return /^\/(?:start|rbe)(?:@\w+)?(?:\s|$)/i.test(text.trim()); }
+function isHelp(text: string): boolean { return /^\/(?:help|commands|radhika)(?:@\w+)?(?:\s|$)/i.test(text.trim()); }
+function isAdminCommand(text: string): boolean { return /^\/admin(?:@\w+)?(?:\s|$)/i.test(text.trim()); }
 function isReset(text: string): boolean { return /^\/(?:reset|forget)$/i.test(text); }
 function isDeleteMyData(text: string): boolean { return /^\/(?:delete_data|delete_my_data|delete-my-data)$/i.test(text); }
 function isProfileCommand(text: string): boolean { return /^\/(?:profile|progress|me)$/i.test(text); }
