@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isParmarSirCommand } from "../src/telegram/menu";
+import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isAdminCommand, isHelpCommand, isParmarSirCommand, isStartCommand } from "../src/telegram/menu";
 
 describe("Telegram menu commands", () => {
-  it("puts Parmar Sir above the existing Help and commands entry", () => {
+  it("publishes all four named voice and admin menu entries", () => {
     expect(buildTelegramMenuCommands()).toEqual([
-      { command: "parmar", description: "Parmar Sir" },
-      { command: "help", description: "Help and commands" },
+      { command: "rbe", description: "Shubham Jain" },
+      { command: "radhika", description: "Radhika Goel" },
+      { command: "parmar", description: "Parmar SSC" },
+      { command: "admin", description: "Admin" },
     ]);
   });
 
@@ -26,9 +28,19 @@ describe("Telegram menu commands", () => {
     ]);
   });
 
-  it("recognizes the Parmar Sir command with an optional bot username", () => {
+  it("recognizes all voice shortcuts, legacy aliases, case variants and optional bot usernames", () => {
+    expect(isStartCommand("/start")).toBe(true);
+    expect(isStartCommand("/RBE")).toBe(true);
+    expect(isStartCommand("/rbe@ParmarBot")).toBe(true);
+    expect(isHelpCommand("/help")).toBe(true);
+    expect(isHelpCommand("/RADHIKA")).toBe(true);
+    expect(isHelpCommand("/radhika@ParmarBot")).toBe(true);
     expect(isParmarSirCommand("/parmar")).toBe(true);
     expect(isParmarSirCommand("/parmar@ParmarBot")).toBe(true);
-    expect(isParmarSirCommand("/start")).toBe(false);
+    expect(isAdminCommand("/Admin")).toBe(true);
+    expect(isAdminCommand("/admin@ParmarBot")).toBe(true);
+    expect(isStartCommand("/radhika")).toBe(false);
+    expect(isHelpCommand("/admin")).toBe(false);
+    expect(isAdminCommand("/start")).toBe(false);
   });
 });
