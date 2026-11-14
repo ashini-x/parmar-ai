@@ -37,7 +37,7 @@ No source PDF is uploaded. No Google Vision OCR request is submitted. The legacy
 
 The new Cloudflare staging instance is configured to match the live Fatman AI Search instance's retrieval configuration: Qwen3 embedding, vector + keyword indexing, 256 chunk size, 10 overlap, hybrid RRF, keyword OR, 0.3 score threshold, 16 candidate maximum, and the BGE reranker. The new instance is separately indexed; the original instance remains read-only.
 
-Qdrant uses the same deterministic 256-token BRVIN chunker, Vertex embeddings, BM25 sparse vectors and RRF. Both providers receive the same source pages and D1 project/source allowlist through Core v2.
+Qdrant uses the deterministic BRVIN 256-token chunker with 26-token overlap, Vertex embeddings, BM25 sparse vectors and RRF. Cloudflare AI Search uses its native 256-token chunking with 10-token overlap, matching the live legacy index. Both receive the exact same 538 raw OCR pages and D1 project/source allowlist through Core v2, but the chunk boundaries are provider-pipeline-specific. This is an end-to-end system comparison, not a controlled experiment with identical chunk boundaries; the difference is part of the candidate architecture and must be considered when interpreting quality results.
 
 ## Resumable preparation stages
 
@@ -108,7 +108,7 @@ Qdrant is declared the staging winner only when all of the following are true:
 
 AI Search can win under the mirrored quality guardrails. Otherwise the receipt says `no-clear-winner`; it does not force a provider switch.
 
-This rule intentionally prevents a faster retrieval system from winning while materially reducing source-grounded accuracy or no-answer safety. The completed report includes each provider's individual A/B scores, adjudicated score, deterministic QA, missing facts, unsupported claims, citation results, candidate passages, answer text, token usage, query count, estimated answer cost and observed timings.
+This rule intentionally prevents a faster retrieval system from winning while materially reducing source-grounded accuracy or no-answer safety. The completed report includes each provider's individual A/B scores, adjudicated score, deterministic QA, missing facts, unsupported claims, citation results, candidate passages, answer text, token usage, query count, estimated answer cost, separate retrieval latency, separate Gemini answer-generation latency, separate assessor/adjudicator latency, and end-to-end case latency.
 
 ## Production boundary
 
