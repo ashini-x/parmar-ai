@@ -4,6 +4,7 @@ import {
   compositeScore,
   decideFatmanProviderWinner,
   hasFatmanLegacyPhysicalPageMarker,
+  isBrvinM15FatmanOperatorAuthorized,
   pageNumberFromLegacyKey,
   validateJudgeAssessment,
 } from "../src/brvin/m15-fatman-benchmark";
@@ -20,6 +21,42 @@ describe("M15 full-corpus Fatman benchmark helpers", () => {
     expect(BRVIN_M15_FATMAN_SOURCE.originalVisionOperationId).toBe(
       "projects/project-90db7be4-619f-4ed7-89b/operations/7358e7d1e97523c3",
     );
+  });
+
+  it("accepts either the existing operator token or a separate short-lived staging automation token", () => {
+    const adminToken = "a".repeat(48);
+    const automationToken = "b".repeat(48);
+    expect(isBrvinM15FatmanOperatorAuthorized(
+      new Request("https://staging.example/admin/m15/fatman/status", {
+        headers: { authorization: "Bearer " + adminToken },
+      }),
+      { BRVIN_M14_ADMIN_TOKEN: adminToken, BRVIN_M15_FATMAN_AUTOMATION_TOKEN: automationToken },
+    )).toBe(true);
+    expect(isBrvinM15FatmanOperatorAuthorized(
+      new Request("https://staging.example/admin/m15/fatman/status", {
+        headers: { authorization: "Bearer " + automationToken },
+      }),
+      { BRVIN_M14_ADMIN_TOKEN: adminToken, BRVIN_M15_FATMAN_AUTOMATION_TOKEN: automationToken },
+    )).toBe(true);
+  });
+
+  it("fails closed for missing, short or incorrect staging automation credentials", () => {
+    expect(isBrvinM15FatmanOperatorAuthorized(
+      new Request("https://staging.example/admin/m15/fatman/status"),
+      { BRVIN_M15_FATMAN_AUTOMATION_TOKEN: "c".repeat(48) },
+    )).toBe(false);
+    expect(isBrvinM15FatmanOperatorAuthorized(
+      new Request("https://staging.example/admin/m15/fatman/status", {
+        headers: { authorization: "Bearer short" },
+      }),
+      { BRVIN_M15_FATMAN_AUTOMATION_TOKEN: "c".repeat(48) },
+    )).toBe(false);
+    expect(isBrvinM15FatmanOperatorAuthorized(
+      new Request("https://staging.example/admin/m15/fatman/status", {
+        headers: { authorization: "Bearer " + "d".repeat(48) },
+      }),
+      { BRVIN_M15_FATMAN_AUTOMATION_TOKEN: "c".repeat(48) },
+    )).toBe(false);
   });
 
   it("accepts only valid legacy physical-page keys within the exact 538-page range", () => {
