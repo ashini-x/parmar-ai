@@ -24,6 +24,8 @@ import {
 export interface M15FatmanBenchmarkEnv extends Env {
   BRVIN_M15_FATMAN_SOURCE_EXPORT?: Pick<AiSearchInstance, "items">;
   BRVIN_M15_FATMAN_AI_SEARCH?: AiSearchInstance;
+  /** Short-lived staging-only automation credential; remove after the owner-approved benchmark run. */
+  BRVIN_M15_FATMAN_AUTOMATION_TOKEN?: string;
 }
 
 export const BRVIN_M15_FATMAN_SOURCE = {
@@ -1553,11 +1555,18 @@ function equalSecret(left: string, right: string): boolean {
   return difference === 0;
 }
 
-async function authorized(request: Request, env: M15FatmanBenchmarkEnv): Promise<boolean> {
-  const configured = env.BRVIN_M14_ADMIN_TOKEN?.trim() ?? "";
+export function isBrvinM15FatmanOperatorAuthorized(
+  request: Request,
+  credentials: Pick<M15FatmanBenchmarkEnv, "BRVIN_M14_ADMIN_TOKEN" | "BRVIN_M15_FATMAN_AUTOMATION_TOKEN">,
+): boolean {
   const header = request.headers.get("authorization") ?? "";
   const supplied = header.startsWith("Bearer ") ? header.slice(7) : "";
-  return configured.length >= 32 && equalSecret(configured, supplied);
+  if (supplied.length < 32) return false;
+  const configured = [
+    credentials.BRVIN_M14_ADMIN_TOKEN?.trim() ?? "",
+    credentials.BRVIN_M15_FATMAN_AUTOMATION_TOKEN?.trim() ?? "",
+  ];
+  return configured.some((token) => token.length >= 32 && equalSecret(token, supplied));
 }
 
 async function handleAuthenticatedRequest(
@@ -1568,7 +1577,7 @@ async function handleAuthenticatedRequest(
   if (env.ENVIRONMENT !== "staging" || env.BRVIN_M14_PILOT_ENABLED?.trim().toLowerCase() !== "true") {
     return json({ ok: false, error: "m15_fatman_staging_disabled" }, 404);
   }
-  if (!await authorized(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
+  if (!isBrvinM15FatmanOperatorAuthorized(request, env)) return json({ ok: false, error: "unauthorized" }, 401);
   try {
     if (pathname === "/admin/m15/fatman/status" && request.method === "GET") {
       return json(await getBrvinM15FatmanBenchmarkStatus(env));
