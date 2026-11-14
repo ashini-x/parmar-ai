@@ -145,7 +145,7 @@ The subrequest-limit fix in PR #288 changes Qdrant to **one page per Worker invo
 
 No manual reviewer, PDF upload, Vision OCR rerun, terminal command or repository update is required. Human review is explicitly waived for this provider decision. Production remains on Cloudflare AI Search; no selector flip occurs automatically from the staging result.
 
-Latest verified environment: staging v108; production `parmar-ai` v812 and `brvin-service` v169; Teachers v12. Both production Core selectors remain `cloudflare-ai-search`, the Fatman production monthly query limit is 800, and corpus-manifest writes are disabled. Release Validation run #43625490383 passed full validation, paired production deployment and production smoke/release acceptance. The production source index and D1 were not modified by the staging benchmark implementation.
+Latest verified environment: staging v108; production `parmar-ai` v815 and `brvin-service` v170; Teachers v12. Both production Core selectors remain `cloudflare-ai-search`, the Fatman production monthly query limit is 800, and corpus-manifest writes are disabled. Release Validation run #43626659528 passed full validation, paired production deployment and production smoke/release acceptance. The production source index and D1 were not modified by the staging benchmark implementation.
 
 ## 14 November 2026 — first operator attempt and diagnostic update
 
@@ -161,7 +161,7 @@ The first full corpus build reached 538/538 OCR-exported pages and 1,606 chunks,
 
 PR #288 merged as `0992af5cfe85539c9a2f589309ab40ffed4a7a01`. It reduces Qdrant to one page per invocation and the AI Search destination batch to four pages per invocation. Each D1 page checkpoint advances only after Qdrant's deterministic point upsert/read-back succeeds; a retry of an interrupted page uses the same deterministic IDs. The M14 staging workflow and full Release Validation passed.
 
-The updated operator is deployed as staging Worker v108 at 100% (deployment `56e01ad6-2803-4144-8ece-2ad8cb8de3c3`). Latest production read-back after the standard release smoke test: `parmar-ai` v807, `brvin-service` v166, Teachers v12. Production provider selectors and quota are unchanged.
+The updated operator is deployed as staging Worker v108 at 100% (deployment `56e01ad6-2803-4144-8ece-2ad8cb8de3c3`). Historical production read-back at the first v108 deployment: `parmar-ai` v807, `brvin-service` v166, Teachers v12. Production provider selectors and quota are unchanged.
 
 **Historical resume instruction at the first post-fix checkpoint:** this began at Qdrant page 12. The operator has since progressed further; follow the latest progress section below. Human review remains waived.
 
@@ -178,6 +178,6 @@ Cloudflare read-back still shows staging Worker `parmar-ai-m14-staging` v108 at 
 
 The per-invocation limits remain one Qdrant page and four AI Search pages. A fresh authenticated Build continuation resumes at physical page 281, retaining the 854 points already written. Keep the operator open until Qdrant reaches 538/538; then allow the AI Search stage to reach 538/538 and confirm READY before starting the two-agent 12-case comparison.
 
-Latest production read-back: `parmar-ai` v812 (version `18e47ce3-fb3d-4d24-b674-baed7ed0e06e`, deployment `7ec380b8-478b-403c-9b01-05da49e632b8`) and `brvin-service` v169 (version `573736ca-c65e-4fe3-91f3-6d4fc2284efd`, deployment `5b3174a3-5f84-478d-97b2-f463c3a8434e`), each 100%. Production selectors remain Cloudflare AI Search; Fatman quota remains 800/month; corpus-manifest writes remain disabled; Teachers remains v12. Release Validation run [#43625490383](https://github.com/ashini-x/parmar-ai/actions/runs/43625490383) passed production smoke and release acceptance.
+Latest production read-back: `parmar-ai` v815 (version `cf909f05-f111-42e4-b734-c21134d41ef9`, deployment `55bd7f54-fd5e-49e3-9783-6a01a3a39689`) and `brvin-service` v170 (version `2752700f-2eb7-4c7b-874b-48f8f1893123`, deployment `18bb72d6-686d-40ab-aa5a-2ee5d4eba944`), each 100%. Production selectors remain Cloudflare AI Search; Fatman quota remains 800/month; corpus-manifest writes remain disabled; Teachers remains v12. Release Validation run [#43626659528](https://github.com/ashini-x/parmar-ai/actions/runs/43626659528) passed production smoke and release acceptance.
 
 Human review remains waived. No paired AI assessment receipt has been created yet.
