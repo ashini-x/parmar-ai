@@ -409,3 +409,24 @@ Qdrant wins only if both agents independently score it above AI Search, its adju
 After PR #285 passes its updated CI and merges, deploy/verify only the isolated M14/M15 staging Worker. Open [the Fatman staging operator](https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman), provide the existing staging operator token in the local password field (never paste the token into chat), and run the 538-page build. It inventories the legacy text items once, exports 18 pages per continuation, indexes Qdrant in six-page batches and the matched AI Search instance in eight-page batches, then verifies both complete inventories and marks the staging D1 source READY. The UI resumes from D1 checkpoints and polls queued AI Search pages without duplicate uploads. After READY, run the two-agent 12-case comparison and save the full paired receipt to staging D1.
 
 **No human review is required.** No production provider selector or Worker has been changed by PR #285. If Qdrant wins the defined two-agent/adjudication/guardrail rule, move promptly to the production migration/canary using the legacy source mapping and keep Cloudflare AI Search live as immediate rollback. Do not interpret the staging receipt as load/capacity proof; keep that limitation explicit and avoid another multi-week relevance-labeling loop. M16 Teachers parity, M17 controlled canary and the 14-day AI Search rollback soak remain documented release/rollback controls, not prerequisites for the owner-waived two-agent quality decision.
+
+## 14 November 2026 — Fatman operator deployed; corpus preparation not yet started
+
+Core PR [#285](https://github.com/ashini-x/parmar-ai/pull/285) is merged as `66a087f48cd7a61c4fa2eaa4c39035e41fc5c486`; its Release Validation and staging workflow passed. Core PR [#286](https://github.com/ashini-x/parmar-ai/pull/286) is merged as `81a61eec626996dbb170900d07e0e721678f554c`; it adds an optional second staging-only bearer credential for controlled automation while preserving `BRVIN_M14_ADMIN_TOKEN`. Its Release Validation and M14 staging workflow passed.
+
+**Latest Cloudflare read-back (14 November 2026):**
+
+| Worker | Active version | Version ID | Deployment ID | Traffic |
+|---|---:|---|---|---:|
+| `parmar-ai-m14-staging` | 106 | `c3cad0f7-1c88-4e0a-b9d2-9703f54c044c` | `4dccd27e-63a2-4e9a-b2ab-10ae6fa8412b` | 100% |
+| `parmar-ai` | 803 | `b96e0513-61d4-407f-9c61-4ee3ce6d4de4` | `344608c5-aa40-487a-9e39-5d1e0e6b4102` | 100% |
+| `brvin-service` | 164 | `845dd4fe-44ca-4c97-9134-a8ef82e55ed4` | `03e6f779-7088-4599-ae19-7a6ada171a06` | 100% |
+| `brvin-teachers` | 12 | `68d6694c-6371-4cae-8a25-4af40ca15706` | `31ff2a01-b0f4-4be8-92d3-63e2d91adddf` | 100% |
+
+Release Validation run [#43614178611](https://github.com/ashini-x/parmar-ai/actions/runs/43614178611) passed the full checks, paired Core production deployment and production smoke test. Live settings read-back still shows `cloudflare-ai-search` on both production Core Workers, `BRVIN_CORPUS_MANIFEST_ENABLED=false`, and Fatman production monthly query limit 800. Production `brvin-service` has no Qdrant/Vertex retrieval bindings. Teachers remains v12 with only its private Core bindings. Qdrant/Vertex benchmark resources remain staging-only.
+
+The staging operator is live at [https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman](https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman). The separate Fatman AI Search staging binding, Qdrant collection and two assessor model settings are present on staging v106. The existing `BRVIN_M14_ADMIN_TOKEN` secret remains in place; no `BRVIN_M15_FATMAN_AUTOMATION_TOKEN` secret exists.
+
+**Important execution state:** the 538-page Fatman corpus preparation has **not started**. A read-only staging D1 inspection found no `m15_fatman%` tables, which are created lazily by the first protected `/prepare` request; no Fatman benchmark run or paired receipt exists. A one-time automation-runner attempt was rejected before any job steps ran, its workflow file was removed, and no token or benchmark request was created. Do not describe the corpus as exported/indexed or the evaluation as complete.
+
+**Only remaining immediate operator action:** open the Fatman staging operator above; enter the existing `BRVIN_M14_ADMIN_TOKEN` in its local password field (never paste it into chat); click **Build the 538-page staging comparison corpus**. The page resumes its bounded export/Qdrant/AI Search continuations until it reports all three counters at 538/538 and READY. Then click **Run the two-agent, 12-case Fatman comparison**. The full receipt will be persisted in isolated staging D1. No PDF upload, OCR rerun, terminal command, human review or repository operation is required from the owner. Once the paired receipt is available, inspect the decision and per-provider guardrails before planning any production migration. Sequential case latency is not load/capacity evidence.
