@@ -76,3 +76,16 @@ export function formatTelegramHtml(input: string): string {
     text,
   );
 }
+
+/**
+ * Native Telegram quiz question/option fields do not accept regular rich-text
+ * entities. Remove balanced Markdown wrappers there so literal markers never
+ * leak into the poll UI.
+ */
+export function stripTelegramMarkdownMarkers(input: string): string {
+  return String(input ?? "")
+    .replace(/\*\*([^\n*]+)\*\*/gu, "$1")
+    .replace(/(?<![\p{L}\p{N}])\*([^\s*\n](?:[^*\n]*[^\s*\n])?)\*(?![\p{L}\p{N}])/gu, "$1")
+    .replace(/__([^_\n]+)__/gu, "$1")
+    .replace(/~~([^~\n]+)~~/gu, "$1");
+}
