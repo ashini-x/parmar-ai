@@ -8,6 +8,7 @@ import {
   buildFatmanStartMarkup,
   buildFatmanExitMarkup,
   buildHelpMenuMarkup,
+  buildAdminContactMarkup,
 } from "../src/telegram/api";
 import type { Env } from "../src/config/env";
 
@@ -142,6 +143,37 @@ describe("BRɅIN Telegram button", () => {
       text: "I am BRɅIN.",
     });
     expect(payload).not.toHaveProperty("reply_markup");
+  });
+});
+
+describe("Telegram Admin contact buttons", () => {
+  it("sends Contact Admin with the existing BRAIN Telegram profile and Instagram links", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 128 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(sendTelegramMessageWithToken(
+      "bot-token", 42, "Contact Admin?", undefined, false, buildAdminContactMarkup(),
+    )).resolves.toEqual({ message_id: 128 });
+
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      chat_id: 42,
+      text: "Contact Admin?",
+      reply_markup: {
+        inline_keyboard: [[
+          { text: "Telegram", url: "tg://resolve?domain=projectbrain&profile" },
+          { text: "Instagram", url: "https://instagram.com/brvin.in" },
+        ]],
+      },
+      link_preview_options: { is_disabled: true },
+    });
   });
 });
 
