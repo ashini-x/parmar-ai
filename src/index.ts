@@ -678,7 +678,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     await bestEffortTelegram("admin_contact", () => sendTelegramMessage(
       env,
       chatId,
-      "Contact Admin?",
+      "You can contact us via Telegram or Instagram. For a business query, please send an email to admin@brvin.in.",
       messageId,
       bot.connectionId,
       false,
