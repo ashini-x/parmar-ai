@@ -200,3 +200,11 @@ Not expected: PDF upload, Google Vision OCR request, original M14 GCS/OCR/manife
 ## Continuation after this gate
 
 A green multi-source receipt advances only this staging subtest. M15 still requires independent or explicitly owner-waived claim-to-passage grounding, broader corpus/query coverage, retry/recovery/throttling, HNSW-aware representative load, repeatable Worker-side latency/throughput/cost, and rollback rehearsal. M16 separately verifies UI/consumer parity through the same v2 contract. M17 remains a controlled production canary and must retain AI Search as rollback provider through the required 14-day production soak. No production provider cutover is authorized by this runbook.
+
+## Expanded two-source page-target evaluation v1 — implementation checkpoint 14 November 2026
+
+A separate 12-query page-target suite is defined in [BRVIN_M15_EXPANDED_TWO_SOURCE_EVALUATION.md](BRVIN_M15_EXPANDED_TWO_SOURCE_EVALUATION.md). It reuses the two exact fingerprint-pinned READY sources and their completed provider indexes. It does not change the original five-case suite, re-run the paired receipt, Prepare the sources, upload a PDF or submit Vision OCR.
+
+The new authenticated endpoint is POST /admin/m15/benchmark/multi-source/evaluate-expanded, exposed as a separate button on the same isolated staging operator page. It runs ten positive/near-miss queries and two out-of-corpus controls through both real Core v2 provider paths (24 quota reservations). It records query-specific page-target coverage as well as unique page coverage; those denominators must not be conflated. The operational receipt is stored in m15_v2_multisource_runs with benchmark tag brvin-m15-core-v2-multisource-expanded-v1.
+
+**Not yet executed at this checkpoint.** The query-to-page targets are source-checked against the immutable original PDFs, not independent human passage/span qrels. The report is not cross-subject generalization, generated-answer quality, a load test or production authorization. Do not change a threshold, RRF weight, reranker or production selector based on this expanded page-level run alone. It must be reviewed together with the two no-match passage texts and the per-query expected-page misses.

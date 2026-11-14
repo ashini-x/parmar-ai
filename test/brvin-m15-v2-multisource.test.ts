@@ -8,6 +8,8 @@ import {
   m15MultiSourcePageMetadata,
   prepareBrvinM15MultiSourceCorpus,
   runM15MultiSourceCoreV2Evaluation,
+  runM15MultiSourceExpandedCoreV2Evaluation,
+  M15_MULTI_SOURCE_EXPANDED_QUERY_SUITE,
   summarizeM15MultiSourceProvider,
 } from "../src/brvin/m15-v2-multisource";
 import { BRVIN_M15_STAGING_SOURCE_ID } from "../src/brvin/m15-v2-staging";
@@ -77,6 +79,26 @@ describe("M15 multi-source Core v2 staging evaluation", () => {
         expect(target.pdfPage).toBeLessThanOrEqual(maximumPage);
       }
     }
+  });
+
+
+  it("pins a separate 12-query expanded suite to source-verified physical pages", () => {
+    expect(M15_MULTI_SOURCE_EXPANDED_QUERY_SUITE.map((item) => item.id)).toEqual([
+      "EX01", "EX02", "EX03", "EX04", "EX05", "EX06",
+      "EX07", "EX08", "EX09", "EX10", "EX11", "EX12",
+    ]);
+    expect(M15_MULTI_SOURCE_EXPANDED_QUERY_SUITE.filter((item) => item.expectedLocations.length > 0)).toHaveLength(10);
+    expect(M15_MULTI_SOURCE_EXPANDED_QUERY_SUITE.filter((item) => item.expectedNoMatch === true).map((item) => item.id))
+      .toEqual(["EX11", "EX12"]);
+    const expected = M15_MULTI_SOURCE_EXPANDED_QUERY_SUITE.flatMap((item) => item.expectedLocations);
+    for (const target of expected) {
+      const maxPage = target.sourceId === BRVIN_M15_SECOND_SOURCE.sourceId ? 3 :
+        target.sourceId === BRVIN_M15_STAGING_SOURCE_ID ? 8 : 0;
+      expect(maxPage).toBeGreaterThan(0);
+      expect(target.pdfPage).toBeGreaterThanOrEqual(1);
+      expect(target.pdfPage).toBeLessThanOrEqual(maxPage);
+    }
+    expect(expected).toHaveLength(11);
   });
 
   it("constructs exact source-scoped physical page keys and rejects unsafe identities", () => {
@@ -152,6 +174,8 @@ describe("M15 multi-source Core v2 staging evaluation", () => {
       .rejects.toThrow("restricted to isolated Core staging");
     await expect(runM15MultiSourceCoreV2Evaluation(env))
       .rejects.toThrow("restricted to isolated Core staging");
+    await expect(runM15MultiSourceExpandedCoreV2Evaluation(env))
+      .rejects.toThrow("restricted to isolated Core staging");
   });
 
   it("fails closed when the isolated staging D1 binding is absent", async () => {
@@ -159,6 +183,8 @@ describe("M15 multi-source Core v2 staging evaluation", () => {
     await expect(prepareBrvinM15MultiSourceCorpus(env))
       .rejects.toThrow("isolated M15 staging D1 database is missing");
     await expect(runM15MultiSourceCoreV2Evaluation(env))
+      .rejects.toThrow("isolated M15 staging D1 database is missing");
+    await expect(runM15MultiSourceExpandedCoreV2Evaluation(env))
       .rejects.toThrow("isolated M15 staging D1 database is missing");
   });
   it("sends string-valued metadata accepted by the AI Search Items binding while preserving the numeric schema", () => {

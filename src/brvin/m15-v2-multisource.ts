@@ -89,6 +89,75 @@ export const M15_MULTI_SOURCE_QUERY_SUITE: readonly M15MultiSourceCase[] = [
   },
 ] as const;
 
+
+export const M15_MULTI_SOURCE_EXPANDED_QUERY_SUITE: readonly M15MultiSourceCase[] = [
+  {
+    id: "EX01",
+    query: "A passenger moves forward when a moving bus brakes suddenly. Explain inertia and how a seat belt helps stop the passenger.",
+    expectedLocations: [{ sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 1 }],
+  },
+  {
+    id: "EX02",
+    query: "Can an object keep moving at constant velocity when the net external force is zero? Explain balanced forces and acceleration.",
+    expectedLocations: [
+      { sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 1 },
+      { sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 2 },
+    ],
+  },
+  {
+    id: "EX03",
+    query: "When a swimmer pushes water backward, why does the swimmer move forward? Explain the action-reaction pair and why the forces do not cancel on one object.",
+    expectedLocations: [{ sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 2 }],
+  },
+  {
+    id: "EX04",
+    query: "Is a force needed to keep an object moving at constant velocity, or only to change its velocity? Explain the relevant law.",
+    expectedLocations: [{ sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 2 }],
+  },
+  {
+    id: "EX05",
+    query: "A 4 kg box is pulled to the right by 20 N while friction acts 8 N to the left. Find the resultant force and acceleration.",
+    expectedLocations: [{ sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 3 }],
+  },
+  {
+    id: "EX06",
+    query: "A trolley has 15 N acting to the right and 9 N to the left. What is the net force and its direction?",
+    expectedLocations: [{ sourceId: BRVIN_M15_SECOND_SOURCE.sourceId, pdfPage: 3 }],
+  },
+  {
+    id: "EX07",
+    query: "State the work-energy theorem and use it to find the final speed of a 2 kg object starting from rest after 16 J of net work.",
+    expectedLocations: [{ sourceId: BRVIN_M15_STAGING_SOURCE_ID, pdfPage: 6 }],
+  },
+  {
+    id: "EX08",
+    query: "For a 4 kg block on a frictionless 30 degree incline, calculate the component of weight down the slope and the normal force.",
+    expectedLocations: [{ sourceId: BRVIN_M15_STAGING_SOURCE_ID, pdfPage: 5 }],
+  },
+  {
+    id: "EX09",
+    query: "A 0.15 kg ball reverses velocity from +20 m/s to -10 m/s in 0.05 s. Find its change in momentum and average force, including direction.",
+    expectedLocations: [{ sourceId: BRVIN_M15_STAGING_SOURCE_ID, pdfPage: 7 }],
+  },
+  {
+    id: "EX10",
+    query: "The proposed spring equation is F_s = +k × x. What restoring-force sign does the source actually use, and what elastic energy is stored when k = 200 N/m and x = 0.05 m?",
+    expectedLocations: [{ sourceId: BRVIN_M15_STAGING_SOURCE_ID, pdfPage: 8 }],
+  },
+  {
+    id: "EX11",
+    query: "What is the value of the Planck constant and how does it enter the photon-energy equation?",
+    expectedLocations: [],
+    expectedNoMatch: true,
+  },
+  {
+    id: "EX12",
+    query: "State Boyle's law and give the pressure-volume equation for a fixed amount of gas at constant temperature.",
+    expectedLocations: [],
+    expectedNoMatch: true,
+  },
+] as const;
+
 function assertStaging(env: BrvinM15MultiSourceEnv): void {
   if (env.ENVIRONMENT !== "staging" ||
       env.BRVIN_M14_PILOT_ENABLED?.trim().toLowerCase() !== "true") {
@@ -856,6 +925,195 @@ export async function runM15MultiSourceCoreV2Evaluation(
 }
 
 
+
+
+/**
+ * Expanded, separately versioned source/page evaluation. It reuses the two
+ * fingerprint-pinned READY sources and the real Core v2 resolver; it does not
+ * prepare, upload, OCR, mutate indexes or change the original five-case run.
+ */
+export async function runM15MultiSourceExpandedCoreV2Evaluation(
+  env: BrvinM15MultiSourceEnv,
+): Promise<Record<string, unknown>> {
+  assertStaging(env);
+  await ensureCheckpointSchema(env);
+  const registry = await env.DB!.prepare(
+    "SELECT b.id,b.title,b.source_sha256,b.page_count,b.indexed_pages,b.status,b.search_prefix " +
+    "FROM brvin_books b JOIN brvin_project_books pb ON pb.book_id=b.id " +
+    "WHERE pb.project_id=? ORDER BY b.id",
+  ).bind(BRVIN_M15_STAGING_PROJECT_ID).all<{
+    id: string; title: string; source_sha256: string; page_count: number;
+    indexed_pages: number; status: string; search_prefix: string;
+  }>();
+  const readySources = (registry.results ?? []).filter((source) =>
+    source.status === "ready" && Number(source.indexed_pages) === Number(source.page_count));
+  const expectedIds = new Set([BRVIN_M15_STAGING_SOURCE_ID, BRVIN_M15_SECOND_SOURCE.sourceId]);
+  if (readySources.length !== 2 || readySources.some((source) =>
+      !expectedIds.has(source.id) || !isM15MultiSourceDiagnosticSourcePinned(source))) {
+    throw new Error("The expanded M15 evaluation requires the exact two fingerprint-pinned READY sources.");
+  }
+  const checkpoint = await env.DB!.prepare(
+    "SELECT project_id,source_sha256,generation_id,page_count,chunk_count,qdrant_status,qdrant_point_count,ai_search_status,status " +
+    "FROM m15_v2_multisource_sources WHERE source_id=? LIMIT 1",
+  ).bind(BRVIN_M15_SECOND_SOURCE.sourceId).first<{
+    project_id: string; source_sha256: string; generation_id: string; page_count: number;
+    chunk_count: number; qdrant_status: string; qdrant_point_count: number;
+    ai_search_status: string; status: string;
+  }>();
+  if (!checkpoint || checkpoint.project_id !== BRVIN_M15_STAGING_PROJECT_ID ||
+      checkpoint.source_sha256.toLowerCase() !== BRVIN_M15_SECOND_SOURCE.sourcePdfSha256 ||
+      checkpoint.generation_id !== BRVIN_M15_SECOND_SOURCE.generationId ||
+      Number(checkpoint.page_count) !== 3 || Number(checkpoint.chunk_count) !== 7 ||
+      checkpoint.qdrant_status !== "ready" || Number(checkpoint.qdrant_point_count) !== 7 ||
+      checkpoint.ai_search_status !== "ready" || checkpoint.status !== "ready") {
+    throw new Error("Both provider checkpoints for the immutable three-page source must remain READY.");
+  }
+  if (!env.BRVIN_M15_BENCHMARK_AI_SEARCH) {
+    throw new Error("The dedicated M15 staging AI Search binding is missing.");
+  }
+
+  const runId = crypto.randomUUID();
+  const startedAt = Date.now();
+  const usageBefore = await queryUsage(env);
+  const inserted = await env.DB!.prepare(
+    "INSERT INTO m15_v2_multisource_runs(id,status,result_json,started_at,completed_at) VALUES (?,'running',NULL,?,NULL)",
+  ).bind(runId, startedAt).run();
+  if (!inserted.success || Number(inserted.meta?.changes ?? 0) !== 1) {
+    throw new Error("The expanded M15 evaluation receipt could not be initialized.");
+  }
+
+  type ExpandedRun = {
+    item: M15MultiSourceCase;
+    cloudflareAiSearch: ProviderQueryResult;
+    qdrantVertex: ProviderQueryResult;
+  };
+  const runs: ExpandedRun[] = [];
+  for (const item of M15_MULTI_SOURCE_EXPANDED_QUERY_SUITE) {
+    const [cloudflareAiSearch, qdrantVertex] = await Promise.all([
+      retrieveOne(env, "cloudflare-ai-search", item.query, item.id),
+      retrieveOne(env, "qdrant-vertex", item.query, item.id),
+    ]);
+    runs.push({ item, cloudflareAiSearch, qdrantVertex });
+  }
+
+  const pageTargetSummary = (provider: "cloudflareAiSearch" | "qdrantVertex") => {
+    let expectedPageTargetInstances = 0;
+    let foundPageTargetInstances = 0;
+    let positiveQueriesWithAnyExpectedPage = 0;
+    let positiveQueriesWithAllExpectedPages = 0;
+    const missingByQuery: Array<{ queryId: string; missingLocations: M15ExpectedLocation[] }> = [];
+    for (const run of runs) {
+      if (run.item.expectedLocations.length === 0) continue;
+      expectedPageTargetInstances += run.item.expectedLocations.length;
+      const found = run.item.expectedLocations.filter((target) =>
+        run[provider].passages.some((passage) => passage.provenanceValid &&
+          passage.sourceId === target.sourceId && passage.pdfPage === target.pdfPage));
+      foundPageTargetInstances += found.length;
+      if (found.length > 0) positiveQueriesWithAnyExpectedPage += 1;
+      if (found.length === run.item.expectedLocations.length) positiveQueriesWithAllExpectedPages += 1;
+      else missingByQuery.push({
+        queryId: run.item.id,
+        missingLocations: run.item.expectedLocations.filter((target) => !found.some((hit) =>
+          hit.sourceId === target.sourceId && hit.pdfPage === target.pdfPage)),
+      });
+    }
+    return {
+      expectedPageTargetInstances,
+      foundPageTargetInstances,
+      coverage: expectedPageTargetInstances ? foundPageTargetInstances / expectedPageTargetInstances : 0,
+      positiveQueryCount: runs.filter((run) => run.item.expectedLocations.length > 0).length,
+      positiveQueriesWithAnyExpectedPage,
+      positiveQueriesWithAllExpectedPages,
+      missingByQuery,
+    };
+  };
+
+  const providerCases = (provider: "cloudflareAiSearch" | "qdrantVertex") =>
+    runs.map((run) => ({ expectedLocations: run.item.expectedLocations, result: run[provider] }));
+  const aiSummary = summarizeM15MultiSourceProvider(providerCases("cloudflareAiSearch"));
+  const qdrantSummary = summarizeM15MultiSourceProvider(providerCases("qdrantVertex"));
+  const aiTargets = pageTargetSummary("cloudflareAiSearch");
+  const qdrantTargets = pageTargetSummary("qdrantVertex");
+  const noMatchCases = runs.filter((run) => run.item.expectedNoMatch === true).map((run) => ({
+    id: run.item.id,
+    query: run.item.query,
+    cloudflareAiSearchCandidateCount: run.cloudflareAiSearch.passages.length,
+    qdrantVertexCandidateCount: run.qdrantVertex.passages.length,
+    cloudflareAiSearchPassages: run.cloudflareAiSearch.passages,
+    qdrantVertexPassages: run.qdrantVertex.passages,
+  }));
+
+  const usageAfter = await queryUsage(env);
+  const expectedReservations = M15_MULTI_SOURCE_EXPANDED_QUERY_SUITE.length * 2;
+  const checks = {
+    exactlyTwoFingerprintPinnedReadySources: readySources.length === 2,
+    bothProvidersCompletedEveryQuery: runs.every((run) => run.cloudflareAiSearch.ok && run.qdrantVertex.ok),
+    bothProvidersSearchedBothReadySourcesForEveryQuery: runs.every((run) =>
+      run.cloudflareAiSearch.searchedSources === 2 && run.qdrantVertex.searchedSources === 2),
+    noAiSearchProvenanceViolations: aiSummary.provenanceViolationCount === 0,
+    noQdrantProvenanceViolations: qdrantSummary.provenanceViolationCount === 0,
+    bothProvidersRetrievedEvidenceFromBothSources: aiSummary.bothSourcesRepresented &&
+      qdrantSummary.bothSourcesRepresented,
+    exactlyOneQuotaReservationPerProviderQuery: usageAfter === usageBefore + expectedReservations,
+  };
+  const passed = Object.values(checks).every(Boolean);
+  const report = {
+    ok: passed,
+    receiptId: runId,
+    benchmark: "brvin-m15-core-v2-multisource-expanded-v1",
+    environment: "staging",
+    projectId: BRVIN_M15_STAGING_PROJECT_ID,
+    providerModes: ["cloudflare-ai-search", "qdrant-vertex"],
+    sources: readySources.map((source) => ({
+      sourceId: source.id,
+      title: source.title,
+      sha256: source.source_sha256,
+      pageCount: source.page_count,
+    })),
+    queryCount: runs.length,
+    positiveQueryCount: runs.filter((run) => run.item.expectedLocations.length > 0).length,
+    noMatchQueryCount: noMatchCases.length,
+    providers: {
+      cloudflareAiSearch: { ...aiSummary, pageTargetInstances: aiTargets },
+      qdrantVertex: { ...qdrantSummary, pageTargetInstances: qdrantTargets },
+    },
+    noMatchCases,
+    quota: {
+      before: usageBefore,
+      after: usageAfter,
+      expectedReservations,
+      actualReservations: usageAfter - usageBefore,
+    },
+    checks,
+    results: runs.map((run) => ({
+      id: run.item.id,
+      query: run.item.query,
+      expectedLocations: run.item.expectedLocations,
+      expectedNoMatch: run.item.expectedNoMatch === true,
+      cloudflareAiSearch: run.cloudflareAiSearch,
+      qdrantVertex: run.qdrantVertex,
+    })),
+    sideEffects: {
+      aiSearchItemsUploaded: 0,
+      aiSearchItemsDeleted: 0,
+      qdrantPointsUpserted: 0,
+      qdrantPointsDeleted: 0,
+      sourceOrOcrChanged: false,
+      productionD1Accessed: false,
+      productionProviderChanged: false,
+    },
+    interpretation: "A separately versioned 12-query page-target evaluation using two already READY immutable Physics documents and the real private Core v2 resolver. The page targets were source-checked against the immutable PDFs; they are not independent human passage qrels. Candidate presence on no-match cases is diagnostic and requires text review. This is not a multi-subject benchmark, generated-answer evaluation, load test or production SLO.",
+  };
+
+  const persisted = await env.DB!.prepare(
+    "UPDATE m15_v2_multisource_runs SET status=?,result_json=?,completed_at=? WHERE id=? AND status='running'",
+  ).bind(passed ? "passed" : "failed", JSON.stringify(report), Date.now(), runId).run();
+  if (!persisted.success || Number(persisted.meta?.changes ?? 0) !== 1) {
+    throw new Error("The expanded M15 evaluation result could not be persisted to isolated staging D1.");
+  }
+  return report;
+}
+
 export function brvinM15MultiSourceOperatorPage(): Response {
   const html = String.raw`<!doctype html>
 <html lang="en">
@@ -887,6 +1145,7 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
 <button id="prepare" type="button" disabled>Prepare second source from immutable manifests</button>
 <p class="small">If AI Search returns queued/running, re-enter the same token and repeat this button. Qdrant uses deterministic point IDs and a persisted checkpoint, so completed chunks are not needlessly re-embedded.</p>
 <button id="evaluate" class="secondary" type="button" disabled>Run paired Core v2 multi-source evaluation</button>
+<button id="evaluateExpanded" class="secondary" type="button" disabled>Run expanded 12-query Core v2 evaluation · 24 staging reservations</button>
 <button id="diagnose" class="secondary" type="button" disabled>Diagnose Qdrant dense/sparse component ranks</button>
 <p class="small">Read-only follow-up for the MS01–MS04 positives and MN01 no-match case. It returns the top component ranks and short passage previews, skips Qdrant collection setup, makes no application-query quota reservations, and does not change either index. Vertex embeddings and Qdrant reads still incur provider usage.</p>
 <div id="progress" class="status" role="status" aria-live="polite">No multi-source action has been started.</div>
@@ -895,9 +1154,9 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
 </main>
 <script>
 (() => {
- const token=document.getElementById("token"),prepare=document.getElementById("prepare"),evaluate=document.getElementById("evaluate"),diagnose=document.getElementById("diagnose");
+ const token=document.getElementById("token"),prepare=document.getElementById("prepare"),evaluate=document.getElementById("evaluate"),evaluateExpanded=document.getElementById("evaluateExpanded"),diagnose=document.getElementById("diagnose");
  const progress=document.getElementById("progress");let ready=false;
- function refresh(){const valid=token.value.trim().length>=32;prepare.disabled=!valid;evaluate.disabled=!valid||!ready;diagnose.disabled=!valid;}
+ function refresh(){const valid=token.value.trim().length>=32;prepare.disabled=!valid;evaluate.disabled=!valid||!ready;evaluateExpanded.disabled=!valid||!ready;diagnose.disabled=!valid;}
  token.addEventListener("input",refresh);
  async function call(path){
    let secret=token.value.trim();token.value="";refresh();
@@ -928,6 +1187,20 @@ button.secondary{background:#2a3b52;border:1px solid #526b89}button:disabled{opa
    }catch(error){progress.className="status bad";progress.textContent=error.message;}
    refresh();
  });
+
+ evaluateExpanded.addEventListener("click",async()=>{
+   if(evaluateExpanded.disabled)return;
+   evaluateExpanded.disabled=true;prepare.disabled=true;evaluate.disabled=true;diagnose.disabled=true;
+   progress.className="status";
+   progress.textContent="Running 12 expanded queries through Core v2 for both staging providers. This reserves 24 staging query units; no source upload, OCR or index changes occur…";
+   try{
+     const data=await call("/admin/m15/benchmark/multi-source/evaluate-expanded");
+     progress.className="status "+(data.ok?"good":"bad");
+     progress.textContent=JSON.stringify(data,null,2);
+   }catch(error){progress.className="status bad";progress.textContent=error.message;}
+   refresh();
+ });
+
  diagnose.addEventListener("click",async()=>{
    if(diagnose.disabled)return;diagnose.disabled=true;
    progress.className="status";progress.textContent="Reading separate Qdrant dense/sparse component ranks for the fixed M15 queries. No collection setup or project quota reservation will occur…";
