@@ -8,9 +8,9 @@ describe("Telegram rich-text formatter", () => {
     );
   });
 
-  it("formats headings and short labels while preserving blank lines", () => {
+  it("leaves the removed answer banner undecorated and formats useful labels", () => {
     expect(formatTelegramHtml("🟢 Final answer\n\nArticle 23:\nIt prohibits forced labour.")).toBe(
-      "<b>🟢 Final answer</b>\n\n<b>Article 23:</b>\nIt prohibits forced labour.",
+      "🟢 Final answer\n\n<b>Article 23:</b>\nIt prohibits forced labour.",
     );
     expect(formatTelegramHtml("📌 SSC Focus: Remember Article 23.")).toBe(
       "<b>📌 SSC Focus:</b> Remember Article 23.",
