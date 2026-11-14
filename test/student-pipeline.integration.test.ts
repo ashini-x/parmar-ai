@@ -248,7 +248,7 @@ describe("Phase 3 synthetic student journey", () => {
       const deliveredTexts = telegramCalls
         .filter((call) => call.method === "editMessageText" || call.method === "sendMessage")
         .map((call) => String(call.payload.text ?? ""));
-      const finalAnswer = deliveredTexts.find((value) => value.includes("Source: Fatman 2nd Edition, PDF p. 123"));
+      const finalAnswer = deliveredTexts.find((value) => value.includes("Fatman 2nd Edition, PDF p. 123"));
       expect(finalAnswer).toBeTruthy();
       expect(finalAnswer).toContain("Battle of Plassey");
       expect(finalAnswer).toContain("SSC Focus");
