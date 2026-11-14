@@ -35,10 +35,11 @@ export const BRVIN_M15_FATMAN_SOURCE = {
   sourcePdfSha256: "8b183803fe8ee53087d731f7319519af9ac5bb62b39b2d3110acc3fe0ab59886",
   pageCount: 538,
   legacyDocumentVersion: "fatman-2026-8b183803",
-  // The historic page OCR was produced through the Google Vision flow in
-  // src/fatman/admin.ts. The original per-page Vision operation records were
-  // not retained; this stable marker identifies the text-only index export.
-  legacyExportMarker: "legacy-ai-search-index-export:fatman-2026-8b183803",
+  legacyImportJobId: "6b94a848-c642-4be3-8718-3ae5a7d25b35",
+  legacySourceObject: "fatman/imports/6b94a848-c642-4be3-8718-3ae5a7d25b35/source.pdf",
+  expectedSize: 115395596,
+  originalVisionOperationId: "projects/project-90db7be4-619f-4ed7-89b/operations/7358e7d1e97523c3",
+  originalWorkflowInstanceId: "6b94a848-c642-4be3-8718-3ae5a7d25b35-c5d09ea1-quality-0-live",
 } as const;
 
 const PROJECT_SLUG = "m15-fatman-538-benchmark";
@@ -276,7 +277,7 @@ async function ensureSourceProgress(env: M15FatmanBenchmarkEnv): Promise<SourceP
   const sourceManifest = await buildBrvinSourceManifest({
     sourceId: BRVIN_M15_FATMAN_SOURCE.sourceId,
     sourcePdfSha256: BRVIN_M15_FATMAN_SOURCE.sourcePdfSha256,
-    ocrOperationId: BRVIN_M15_FATMAN_SOURCE.legacyExportMarker,
+    ocrOperationId: BRVIN_M15_FATMAN_SOURCE.originalVisionOperationId,
     pageCount: BRVIN_M15_FATMAN_SOURCE.pageCount,
   });
   const now = Date.now();
@@ -449,14 +450,14 @@ function buildLegacyImportJob(): FatmanImportJob {
     id: BRVIN_M15_FATMAN_SOURCE.sourceId,
     book_id: BRVIN_M15_FATMAN_SOURCE.sourceId,
     book_title: BRVIN_M15_FATMAN_SOURCE.title,
-    source_object: "legacy-ai-search-index-export/" + BRVIN_M15_FATMAN_SOURCE.legacyDocumentVersion,
+    source_object: BRVIN_M15_FATMAN_SOURCE.legacySourceObject,
     source_sha256: BRVIN_M15_FATMAN_SOURCE.sourcePdfSha256,
-    expected_size: 0,
-    uploaded_bytes: 0,
+    expected_size: BRVIN_M15_FATMAN_SOURCE.expectedSize,
+    uploaded_bytes: BRVIN_M15_FATMAN_SOURCE.expectedSize,
     upload_session_uri: null,
     status: "completed",
-    vision_operation: BRVIN_M15_FATMAN_SOURCE.legacyExportMarker,
-    workflow_instance_id: null,
+    vision_operation: BRVIN_M15_FATMAN_SOURCE.originalVisionOperationId,
+    workflow_instance_id: BRVIN_M15_FATMAN_SOURCE.originalWorkflowInstanceId,
     indexed_pages: BRVIN_M15_FATMAN_SOURCE.pageCount,
     error_message: null,
     created_at: now,
