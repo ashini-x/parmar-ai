@@ -942,6 +942,7 @@ function buildQuizFallbackAnswer(options: string[], correctIds: number[], explan
 
 function makeMcqTopicClarificationPacket(requestedQuizCount: number): AnswerPacket {
   return {
+    isNotice: true,
     answer: `${requestedQuizCount > 1 ? `${requestedQuizCount} MCQs` : "MCQ"} kis topic par chahiye? 😊\n\nHistory, Polity, Geography, Economy, Science, Static GK ya Current Affairs me se koi topic batao. Topic likh do; main wahi quiz banaunga.`,
     responseMode: "text",
     quizQuestion: "",
