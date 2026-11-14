@@ -243,3 +243,11 @@ PR #285 and PR #286 are merged. The staging operator is deployed to `parmar-ai-m
 The dedicated Fatman operator and its staging resources are deployed, but the 538-page preparation has not yet been initiated. Staging D1 has no `m15_fatman%` state tables and no paired run receipt. The failed one-time runner attempt did not execute a job step or create a temporary token; the workflow file was removed. The existing M14 admin token is untouched.
 
 The single remaining immediate step is to enter the existing `BRVIN_M14_ADMIN_TOKEN` locally at [the Fatman staging operator](https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman), click **Build the 538-page staging comparison corpus**, wait for READY and 538/538 across export/Qdrant/AI Search, then click **Run the two-agent, 12-case Fatman comparison**. No user-side code, terminal, PDF upload, OCR or manual review is required. Production remains on Cloudflare AI Search until the completed paired receipt and remaining production gates are reviewed.
+
+## 14 November 2026 — M15 Fatman indexing resumed after subrequest fix
+
+The first Fatman staging build exported all 538 OCR pages into immutable manifests and generated 1,606 chunks. It reached Qdrant page 11 (29 points) before Cloudflare reported that one Worker invocation had too many subrequests. The AI Search staging destination remains 0/538. Staging D1 checkpoints are intact; the next run must resume from Qdrant page 12, not repeat export/OCR.
+
+PR #288 merged as `0992af5cfe85539c9a2f589309ab40ffed4a7a01`; staging Worker v108 now indexes one Qdrant page per invocation and four AI Search pages per invocation. M14 staging validation and full Release Validation passed. Production selectors remain Cloudflare AI Search, Fatman allowance 800/month, corpus-manifest writes off; latest production versions are `parmar-ai` v807, `brvin-service` v166, Teachers v12.
+
+Next: refresh the staging Fatman operator, click Build again, verify both indexes reach 538/538 and READY, then run the two-agent 12-case benchmark. No human review, new PDF upload or OCR rerun.
