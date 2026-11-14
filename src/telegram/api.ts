@@ -2,6 +2,7 @@ import type { Env, GeminiImageInput } from "../config/env";
 import { MAX_PHOTO_COUNT, MAX_SINGLE_PHOTO_BYTES, MAX_TOTAL_PHOTO_BYTES } from "../config/env";
 import { getActiveTelegramBot, getTelegramBotApiToken, hasTelegramBotRecords } from "./bot-store";
 import { formatTelegramHtml, stripTelegramMarkdownMarkers } from "./formatting";
+import { ADMIN_CONTACT_IMAGE_BASE64 } from "./admin-contact-image";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
@@ -162,7 +163,7 @@ interface TelegramApiRetryOptions {
 async function telegramApiWithToken<T>(
   token: string,
   method: string,
-  payload: Record<string, unknown>,
+  payload: Record<string, unknown> | FormData,
   options: TelegramApiRetryOptions = {},
 ): Promise<T> {
   let lastError: TelegramError | null = null;
@@ -177,12 +178,13 @@ async function telegramApiWithToken<T>(
     );
 
     try {
+      const isMultipart = payload instanceof FormData;
       const response = await fetch(
         `https://api.telegram.org/bot${token}/${method}`,
         {
           method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload),
+          ...(isMultipart ? {} : { headers: { "content-type": "application/json" } }),
+          body: isMultipart ? payload : JSON.stringify(payload),
           signal: controller.signal,
         },
       );
@@ -559,6 +561,59 @@ export async function sendTelegramMessage(
   }
 
   return telegramApi<TelegramMessageResult>(env, "sendMessage", payload, botConnectionId);
+}
+
+
+
+function decodeAdminContactImage(): ArrayBuffer {
+  const binary = atob(ADMIN_CONTACT_IMAGE_BASE64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
+}
+
+/**
+ * Send the BRVIN Instagram profile image and the existing contact copy and
+ * buttons as one Telegram photo message. The embedded JPEG is decoded without
+ * resizing or re-encoding before upload.
+ */
+export async function sendTelegramAdminContactPhotoWithToken(
+  token: string,
+  chatId: number,
+  replyToMessageId?: number,
+): Promise<TelegramMessageResult> {
+  const message = limitTelegramMessage(ADMIN_CONTACT_TEXT);
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  form.append(
+    "photo",
+    new Blob([decodeAdminContactImage()], { type: "image/jpeg" }),
+    "brvin-instagram-profile.jpg",
+  );
+  form.append("caption", message.text);
+  form.append("parse_mode", message.parse_mode);
+  form.append("reply_markup", JSON.stringify(buildAdminContactMarkup()));
+
+  if (replyToMessageId) {
+    form.append("reply_parameters", JSON.stringify({
+      message_id: replyToMessageId,
+      allow_sending_without_reply: true,
+    }));
+  }
+
+  return telegramApiWithToken<TelegramMessageResult>(token, "sendPhoto", form);
+}
+
+export async function sendTelegramAdminContactPhoto(
+  env: Env,
+  chatId: number,
+  replyToMessageId?: number,
+  botConnectionId?: string,
+): Promise<TelegramMessageResult> {
+  const token = await resolveTelegramToken(env, botConnectionId);
+  return sendTelegramAdminContactPhotoWithToken(token, chatId, replyToMessageId);
 }
 
 export async function editTelegramMessageReplyMarkup(
