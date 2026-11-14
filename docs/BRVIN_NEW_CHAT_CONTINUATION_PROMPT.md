@@ -99,7 +99,7 @@ PR #285 builds separate staging indexes: brvin-m15-fatman-legacy-v1 with setting
 Two agents: Agent A gemini-4-argon; Agent B gemini-3.8-flash; adjudicator gemini-4-argon on material disagreement. The result compares retrieval relevance, answer correctness, source grounding and citation accuracy, with deterministic Fatman QA, critical-error and out-of-book abstention guardrails. Qdrant wins only if both agents score it higher, adjudicated score is higher, and guardrails are not worse. AI Search wins under mirrored criteria; otherwise report no clear winner. Retrieval, answer generation and assessor latency are reported separately. Sequential 12-case timings are not load/SLO evidence.
 
 Production remains on Cloudflare AI Search until the paired comparison is complete. No production provider selector or production Worker has been changed by PR #285. If Qdrant wins, proceed promptly to production migration/canary with D1 authorization and immediate AI Search rollback preserved; do not introduce another human-review or lengthy qrels staging blocker. Preserve the frozen v2 contract and Teachers provider boundary.
-## Latest live handoff — 14 November 2026, after PR #286
+## Historical deployment handoff — PR #285/#286 (superseded by the v108 checkpoint below)
 
 Core PR #285 merged as `66a087f48cd7a61c4fa2eaa4c39035e41fc5c486`; Core PR #286 merged as `81a61eec626996dbb170900d07e0e721678f554c`. Both PR CI workflows passed. PR #285 deployed the isolated Fatman benchmark operator; PR #286 deployed the optional staging-only secondary bearer-token support. Latest Cloudflare read-back: `parmar-ai-m14-staging` v106 (100%), `parmar-ai` v803 (100%), `brvin-service` v164 (100%), Teachers v12 (100%). Release Validation run #43614178611 passed full tests, paired Core production deployment and production smoke test.
 
@@ -107,11 +107,11 @@ Production remains on `cloudflare-ai-search` for both Core Workers. Production F
 
 The 538-page preparation **has not started**: staging D1 has no `m15_fatman%` tables and no Fatman run/receipt. No PDF upload or OCR rerun has happened. The failed one-time automation workflow created no job, token or request and has been removed. No temporary automation secret exists; the existing `BRVIN_M14_ADMIN_TOKEN` remains untouched.
 
-The only remaining immediate operator action is browser-only: open https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman, enter `BRVIN_M14_ADMIN_TOKEN` in the local password field (never share it in chat), and click **Build the 538-page staging comparison corpus**. Wait until the page shows READY with 538/538 exported, Qdrant-indexed and staging AI Search-indexed pages. Then click **Run the two-agent, 12-case Fatman comparison**. It stores the complete result in staging D1. No terminal use, PDF upload, human reviewer, GitHub action or Cloudflare dashboard operation is expected from the owner.
+At the v106 handoff snapshot, the operator action was to open the page and start the build. That snapshot is superseded: the current v108 checkpoint below already has all 538 pages exported and resumes at Qdrant page 12. Follow only the v108 instruction at the end of this prompt.
 
 After the paired receipt completes, compare both independent assessor scores, adjudicated composite scores, deterministic QA, critical errors and out-of-book abstention. A no-clear-winner result does not authorize a provider switch. A Qdrant win advances to production migration preparation, not an automatic selector flip; preserve the immediate AI Search rollback and run the separately required capacity/security/recovery/cost checks.
 
-## Latest continuation — 14 November 2026, Fatman operator diagnostic v107
+## Historical operator diagnostic — v107 (superseded by staging v108)
 
 The owner tried **Build** and received an HTML-as-JSON parse error (`Unexpected token '<', "<!DOCTYPE "... is not valid JSON`). This means the API call returned HTML; the precise source has not yet been established. PR #287 (`44571ae900687c2a4bbf836657f91eed929ea20b`) is merged and updates the Fatman operator to expose HTTP status, content type, redirect flag, final response URL and a bounded response preview when an endpoint returns non-JSON. It sends `Accept: application/json` and uses no-store. Both M14 staging validation and Release Validation passed.
 
