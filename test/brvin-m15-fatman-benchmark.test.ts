@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   BRVIN_M15_FATMAN_SOURCE,
   compositeScore,
+  decideFatmanProviderWinner,
   hasFatmanLegacyPhysicalPageMarker,
   pageNumberFromLegacyKey,
   validateJudgeAssessment,
@@ -53,6 +54,96 @@ describe("M15 full-corpus Fatman benchmark helpers", () => {
       unsupportedClaims: [],
       rationale: "test",
     })).toBe(3.8);
+  });
+
+  it("selects Qdrant only when both independent agents and the adjudicated score prefer it without guardrail regressions", () => {
+    const ai = {
+      deterministicQaPassed: 11,
+      criticalErrorCount: 1,
+      outOfBookAbstentionPassed: 1,
+      agentACompositeScore: 4.1,
+      agentBCompositeScore: 4.0,
+      adjudicatedCompositeScore: 4.05,
+    };
+    const qdrant = {
+      deterministicQaPassed: 12,
+      criticalErrorCount: 0,
+      outOfBookAbstentionPassed: 1,
+      agentACompositeScore: 4.3,
+      agentBCompositeScore: 4.2,
+      adjudicatedCompositeScore: 4.25,
+    };
+    expect(decideFatmanProviderWinner(ai, qdrant)).toMatchObject({
+      winner: "qdrant-vertex",
+      qdrantNotWorseOnGuardrails: true,
+      qdrantWinsByBothAssessors: true,
+    });
+  });
+
+  it("returns no-clear-winner when the independent assessors disagree", () => {
+    const ai = {
+      deterministicQaPassed: 12,
+      criticalErrorCount: 0,
+      outOfBookAbstentionPassed: 1,
+      agentACompositeScore: 4.2,
+      agentBCompositeScore: 4.0,
+      adjudicatedCompositeScore: 4.1,
+    };
+    const qdrant = {
+      deterministicQaPassed: 12,
+      criticalErrorCount: 0,
+      outOfBookAbstentionPassed: 1,
+      agentACompositeScore: 4.3,
+      agentBCompositeScore: 3.9,
+      adjudicatedCompositeScore: 4.25,
+    };
+    expect(decideFatmanProviderWinner(ai, qdrant).winner).toBe("no-clear-winner");
+  });
+
+  it("blocks Qdrant when a deterministic, critical-error or abstention guardrail regresses", () => {
+    const ai = {
+      deterministicQaPassed: 12,
+      criticalErrorCount: 0,
+      outOfBookAbstentionPassed: 1,
+      agentACompositeScore: 4.0,
+      agentBCompositeScore: 4.0,
+      adjudicatedCompositeScore: 4.0,
+    };
+    const qdrant = {
+      deterministicQaPassed: 11,
+      criticalErrorCount: 1,
+      outOfBookAbstentionPassed: 0,
+      agentACompositeScore: 4.8,
+      agentBCompositeScore: 4.8,
+      adjudicatedCompositeScore: 4.8,
+    };
+    const decision = decideFatmanProviderWinner(ai, qdrant);
+    expect(decision.winner).toBe("no-clear-winner");
+    expect(decision.qdrantNotWorseOnGuardrails).toBe(false);
+  });
+
+  it("selects Cloudflare AI Search symmetrically when both agents and adjudication prefer it", () => {
+    const ai = {
+      deterministicQaPassed: 12,
+      criticalErrorCount: 0,
+      outOfBookAbstentionPassed: 1,
+      agentACompositeScore: 4.5,
+      agentBCompositeScore: 4.4,
+      adjudicatedCompositeScore: 4.45,
+    };
+    const qdrant = {
+      deterministicQaPassed: 11,
+      criticalErrorCount: 1,
+      outOfBookAbstentionPassed: 0,
+      agentACompositeScore: 4.2,
+      agentBCompositeScore: 4.1,
+      adjudicatedCompositeScore: 4.15,
+    };
+    expect(decideFatmanProviderWinner(ai, qdrant)).toMatchObject({
+      winner: "cloudflare-ai-search",
+      aiWinsByBothAssessors: true,
+      aiNotWorseOnGuardrails: true,
+    });
   });
 
   it("rejects scores outside 0–5 and missing abstention/error flags", () => {
