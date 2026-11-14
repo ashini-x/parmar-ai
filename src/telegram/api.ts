@@ -59,6 +59,15 @@ export function buildHelpMenuMarkup(): TelegramInlineKeyboardMarkup {
   };
 }
 
+export function buildAdminContactMarkup(): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[
+      { text: "Telegram", url: CREATOR_TELEGRAM_URL },
+      { text: "Instagram", url: "https://instagram.com/brvin.in" },
+    ]],
+  };
+}
+
 function mergeInlineKeyboard(
   custom: TelegramInlineKeyboardMarkup | undefined,
   creator: CreatorContactKeyboardMarkup | undefined,
