@@ -12,6 +12,9 @@ const expected = {
   BRVIN_M14_EMBEDDING_DIMENSIONS: "768",
   BRVIN_M14_QDRANT_COLLECTION: "brvin_m14_physics_pilot_v1",
   BRVIN_M15_BENCHMARK_QDRANT_COLLECTION: "brvin_m15_physics_benchmark_v1",
+  BRVIN_M15_FATMAN_QDRANT_COLLECTION: "brvin_m15_fatman_538_v1",
+  BRVIN_M15_FATMAN_JUDGE_A_MODEL: "gemini-4-argon",
+  BRVIN_M15_FATMAN_JUDGE_B_MODEL: "gemini-3.8-flash",
 };
 
 for (const [name, value] of Object.entries(expected)) {
@@ -36,10 +39,12 @@ const aiSearchBindings = config.ai_search ?? [];
 const expectedBindings = {
   BRVIN_M15_AI_SEARCH: "fatman-2026-8b183803",
   BRVIN_M15_BENCHMARK_AI_SEARCH: "brvin-m15-physics-staging-v1",
+  BRVIN_M15_FATMAN_SOURCE_EXPORT: "fatman-2026-8b183803",
+  BRVIN_M15_FATMAN_AI_SEARCH: "brvin-m15-fatman-legacy-v1",
 };
 for (const [binding, instanceName] of Object.entries(expectedBindings)) {
   if (!aiSearchBindings.some((entry) => entry.binding === binding && entry.instance_name === instanceName)) {
     throw new Error("Missing or incorrect isolated M15 AI Search binding: " + binding);
   }
 }
-console.log("M14/M15 staging config is complete; production AI Search remains a separate baseline binding and Qdrant key is not embedded in plain-text vars.");
+console.log("M14/M15 staging config is complete; the Fatman legacy index is bound for text export only, the Fatman comparison index and Qdrant collection are separate, and Qdrant key is not embedded in plain-text vars.");

@@ -34,6 +34,9 @@
     "BRVIN_M14_EMBEDDING_DIMENSIONS": "768",
     "BRVIN_M14_QDRANT_COLLECTION": "brvin_m14_physics_pilot_v1",
     "BRVIN_M15_BENCHMARK_QDRANT_COLLECTION": "brvin_m15_physics_benchmark_v1",
+    "BRVIN_M15_FATMAN_QDRANT_COLLECTION": "brvin_m15_fatman_538_v1",
+    "BRVIN_M15_FATMAN_JUDGE_A_MODEL": "gemini-4-argon",
+    "BRVIN_M15_FATMAN_JUDGE_B_MODEL": "gemini-3.8-flash",
     "BRVIN_M14_QDRANT_URL": "https://8f8aa8b4-c46c-4453-b3b8-f5d6b2c0b146.australia-southeast1-0.gcp.cloud.qdrant.io"
   },
   "ai_search": [
@@ -44,6 +47,14 @@
     {
       "binding": "BRVIN_M15_BENCHMARK_AI_SEARCH",
       "instance_name": "brvin-m15-physics-staging-v1"
+    },
+    {
+      "binding": "BRVIN_M15_FATMAN_SOURCE_EXPORT",
+      "instance_name": "fatman-2026-8b183803"
+    },
+    {
+      "binding": "BRVIN_M15_FATMAN_AI_SEARCH",
+      "instance_name": "brvin-m15-fatman-legacy-v1"
     }
   ],
   "d1_databases": [

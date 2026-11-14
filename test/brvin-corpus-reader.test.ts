@@ -4,7 +4,7 @@ import {
   buildBrvinPageManifest,
   buildBrvinSourceManifest,
 } from "../src/brvin/corpus";
-import { readBrvinCorpusGeneration } from "../src/brvin/corpus-reader";
+import { readBrvinCorpusGeneration, readBrvinCorpusPage } from "../src/brvin/corpus-reader";
 
 const SOURCE_ID = "00000000-0000-4000-8000-000000000701";
 const PDF_SHA = "a".repeat(64);
@@ -76,6 +76,48 @@ describe("BRVIN immutable corpus replay reader", () => {
       expect(init?.method).toBe("GET");
       expect(init?.headers).toMatchObject({ authorization: "Bearer test-token" });
     }
+  });
+
+  it("reads one page from the exact legacy Fatman source namespace", async () => {
+    const sourceId = "fatman-legacy-538";
+    const source = await buildBrvinSourceManifest({
+      sourceId,
+      sourcePdfSha256: PDF_SHA,
+      ocrOperationId: "legacy-ai-search-index-export:fatman-2026-8b183803",
+      pageCount: 538,
+    });
+    const stableItemKey = "fatman/pages/page-000168.txt";
+    const page = await buildBrvinPageManifest({
+      sourceId,
+      sourcePdfSha256: PDF_SHA,
+      generationId: source.generationId,
+      ocrOperationId: source.ocrOperationId,
+      stableItemKey,
+      pdfPage: 168,
+      rawOcrText: "Fatman page 168\nBattle of Plassey\nRobert Clive and Siraj-ud-Daulah.",
+    });
+    const prefix = "brvin/derived-corpus/" + sourceId + "/" + source.generationId + "/";
+    const objects = new Map<string, unknown>([
+      [prefix + "manifest.json", source],
+      [prefix + "pages/page-000168.json", page],
+    ]);
+    const request = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input instanceof Request ? new URL(input.url) : new URL(String(input));
+      const objectName = decodeURIComponent(url.pathname.split("/o/")[1] ?? "");
+      const value = objects.get(objectName);
+      return value === undefined
+        ? new Response("missing", { status: 404 })
+        : new Response(JSON.stringify(value), { status: 200 });
+    }) as typeof fetch;
+
+    const result = await readBrvinCorpusPage(readerEnv(), sourceId, source.generationId, 168, {
+      request,
+      accessToken: async () => "test-token",
+    });
+    expect(result.sourceManifest.sourceId).toBe(sourceId);
+    expect(result.pageManifest.stableItemKey).toBe(stableItemKey);
+    expect(result.pageManifest.pdfPage).toBe(168);
+    expect(request).toHaveBeenCalledTimes(2);
   });
 
   it("rejects a changed raw OCR payload even when the page file is readable", async () => {

@@ -1,5 +1,6 @@
 import type { AiSearchInstance, Env } from "../config/env";
 import { handleM15BenchmarkStagingRequest } from "./m15-benchmark-staging";
+import { handleM15FatmanBenchmarkRequest } from "./m15-fatman-benchmark";
 import { readBrvinCorpusGeneration } from "./corpus-reader";
 import { indexBrvinCorpusGeneration } from "./m14-pilot-runner";
 import {
@@ -1688,6 +1689,8 @@ export async function handleM14StagingRequest(
   runM15V2AuthCheck: typeof runBrvinM15V2AuthorizationCheck = runBrvinM15V2AuthorizationCheck,
 ): Promise<Response> {
   const url = new URL(request.url);
+  const fatmanBenchmarkResponse = await handleM15FatmanBenchmarkRequest(request, env);
+  if (fatmanBenchmarkResponse) return fatmanBenchmarkResponse;
   if (url.pathname === "/admin/m15/benchmark" ||
       url.pathname.startsWith("/admin/m15/benchmark/")) {
     return handleM15BenchmarkStagingRequest(request, env);
@@ -1721,6 +1724,16 @@ export async function handleM14StagingRequest(
           env.BRVIN_M14_VERTEX_MODEL && env.BRVIN_M14_EMBEDDING_DIMENSIONS &&
           env.BRVIN_M14_QDRANT_URL && env.BRVIN_M14_QDRANT_API_KEY &&
           env.BRVIN_M14_QDRANT_COLLECTION),
+      },
+      m15FatmanConfigured: {
+        legacySourceExportBound: Boolean(env.BRVIN_M15_FATMAN_SOURCE_EXPORT),
+        stagingAiSearchBound: Boolean(env.BRVIN_M15_FATMAN_AI_SEARCH),
+        qdrantCollectionConfigured: Boolean(env.BRVIN_M15_FATMAN_QDRANT_COLLECTION),
+        ready: Boolean(env.DB && env.GCP_PROJECT_ID && env.GCP_CLIENT_EMAIL && env.GCP_PRIVATE_KEY &&
+          env.BRVIN_M14_CORPUS_BUCKET && env.BRVIN_M14_VERTEX_LOCATION && env.BRVIN_M14_VERTEX_MODEL &&
+          env.BRVIN_M14_EMBEDDING_DIMENSIONS && env.BRVIN_M14_QDRANT_URL && env.BRVIN_M14_QDRANT_API_KEY &&
+          env.BRVIN_M15_FATMAN_QDRANT_COLLECTION && env.BRVIN_M15_FATMAN_SOURCE_EXPORT &&
+          env.BRVIN_M15_FATMAN_AI_SEARCH && env.BRVIN_M14_ADMIN_TOKEN),
       },
       m15V2Configured: {
         benchmarkCollection: Boolean(env.BRVIN_M15_BENCHMARK_QDRANT_COLLECTION),

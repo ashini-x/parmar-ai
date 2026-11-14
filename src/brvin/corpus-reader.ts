@@ -22,7 +22,7 @@ function bucketName(env: Env): string {
 }
 
 function validateIdentifiers(sourceId: string, generationId: string): void {
-  if (!/^[a-f0-9-]{36}$/iu.test(sourceId)) throw new Error("The BRVIN source identifier is invalid.");
+  if (sourceId !== "fatman-legacy-538" && !/^[a-f0-9-]{36}$/iu.test(sourceId)) throw new Error("The BRVIN source identifier is invalid.");
   if (!/^[a-f0-9]{32}$/iu.test(generationId)) throw new Error("The BRVIN corpus generation identifier is invalid.");
 }
 
@@ -178,4 +178,53 @@ export async function readBrvinCorpusGeneration(
     pageManifests: pages,
     chunkCount: pages.reduce((total, page) => total + page.chunks.length, 0),
   };
+}
+
+
+/**
+ * Read and fully validate one page from an immutable corpus generation.
+ * Staging rebuilds use this bounded reader so a 538-page source can be
+ * embedded and indexed over multiple Worker invocations without re-reading
+ * every previously completed page on each continuation.
+ */
+export async function readBrvinCorpusPage(
+  env: Env,
+  sourceId: string,
+  generationId: string,
+  pdfPage: number,
+  dependencies: {
+    request?: typeof fetch;
+    accessToken?: (env: Env) => Promise<string>;
+  } = {},
+): Promise<{ sourceManifest: BrvinCorpusSourceManifest; pageManifest: BrvinCorpusPageManifest }> {
+  validateIdentifiers(sourceId, generationId);
+  if (!Number.isSafeInteger(pdfPage) || pdfPage < 1 || pdfPage > MAX_PAGE_COUNT) {
+    throw new Error("The requested BRVIN corpus physical page is invalid.");
+  }
+  const request = dependencies.request ?? fetch;
+  const getToken = dependencies.accessToken ?? getGoogleAccessToken;
+  const bucket = bucketName(env);
+  const token = await getToken(env);
+  const prefix = "brvin/derived-corpus/" + sourceId + "/" + generationId + "/";
+  const sourceManifest = await readObject<BrvinCorpusSourceManifest>(
+    bucket, prefix + "manifest.json", token, request,
+  );
+  validateSourceManifest(sourceManifest, sourceId, generationId);
+  const deterministic = await buildBrvinSourceManifest({
+    sourceId,
+    sourcePdfSha256: sourceManifest.sourcePdfSha256,
+    ocrOperationId: sourceManifest.ocrOperationId,
+    pageCount: sourceManifest.pageCount,
+  });
+  if (deterministic.generationId !== generationId || pdfPage > sourceManifest.pageCount) {
+    throw new Error("The requested BRVIN page does not belong to the verified source generation.");
+  }
+  const pageManifest = await readObject<BrvinCorpusPageManifest>(
+    bucket,
+    prefix + "pages/page-" + String(pdfPage).padStart(6, "0") + ".json",
+    token,
+    request,
+  );
+  await validatePageManifest(pageManifest, sourceManifest, pdfPage);
+  return { sourceManifest, pageManifest };
 }
