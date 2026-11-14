@@ -734,61 +734,74 @@ export async function prepareBrvinM15FatmanBenchmarkCorpus(
   if (state.ai_search_indexed_pages < state.page_count) {
     const search = env.BRVIN_M15_FATMAN_AI_SEARCH!;
     await ensureFatmanStagingSearchSchema(search);
-    const start = state.ai_search_indexed_pages + 1;
-    const end = Math.min(state.page_count, start + AI_SEARCH_BATCH_SIZE - 1);
-    let indexed = state.ai_search_indexed_pages;
-    for (let physicalPage = start; physicalPage <= end; physicalPage += 1) {
+    const startPage = state.ai_search_indexed_pages + 1;
+    const endPage = Math.min(state.page_count, startPage + AI_SEARCH_BATCH_SIZE - 1);
+    const completedPages = new Set<number>();
+    const pendingPages: number[] = [];
+
+    // Inspect and enqueue the entire bounded batch. A queued page does not
+    // prevent later pages in the same batch from being uploaded. The durable
+    // AI Search item key is the poll checkpoint, so retries never duplicate
+    // a queued/running item.
+    for (let physicalPage = startPage; physicalPage <= endPage; physicalPage += 1) {
       const page = await readOneCorpusPage(env, physicalPage, generationId);
       const key = pageKey(physicalPage);
       const existing = await search.items.list({ search: key, per_page: 50, source: "builtin" });
       const exact = (existing.result ?? []).filter((item) => item.key === key);
-      const completed = exact.find((item) => item.status === "completed");
-      if (completed) {
-        indexed = physicalPage;
-      } else if (exact.some((item) => item.status === "queued" || item.status === "running")) {
-        return {
-          ok: true, status: "ai_search_indexing", pendingPage: physicalPage,
-          exportedPages: state.exported_pages, qdrantIndexedPages: state.qdrant_indexed_pages,
-          aiSearchIndexedPages: indexed, continuationRequired: true,
-          note: "Cloudflare AI Search accepted this deterministic page key and is still indexing it. Polling is safe; no duplicate item will be uploaded.",
-        };
-      } else {
-        if (exact.length) {
-          throw new Error("The staging AI Search page " + physicalPage + " has a terminal error or duplicate item; refusing to delete or overwrite it.");
-        }
-        const uploaded = await search.items.upload(key, page.rawOcrText, { metadata: sourceMetadata(physicalPage) });
-        if (uploaded.key !== key) throw new Error("Staging AI Search returned an unexpected Fatman item key.");
-        if (uploaded.status === "queued" || uploaded.status === "running") {
-          return {
-            ok: true, status: "ai_search_indexing", pendingPage: physicalPage,
-            exportedPages: state.exported_pages, qdrantIndexedPages: state.qdrant_indexed_pages,
-            aiSearchIndexedPages: indexed, continuationRequired: true,
-            note: "Cloudflare AI Search accepted this page asynchronously. The next continuation will poll this exact key.",
-          };
-        }
-        if (uploaded.status !== "completed") {
-          throw new Error("Cloudflare AI Search did not confirm indexing completion for Fatman page " + physicalPage + ".");
-        }
-        indexed = physicalPage;
+      if (exact.length > 1) {
+        throw new Error("The staging AI Search page " + physicalPage + " has duplicate exact items; refusing to choose one.");
       }
-      if (indexed > state.ai_search_indexed_pages) {
-        const update = await env.DB!.prepare(
-          "UPDATE " + SOURCE_TABLE + " SET ai_search_indexed_pages=?,status='ai_search_indexing',updated_at=? WHERE source_id=? AND ai_search_indexed_pages=?",
-        ).bind(indexed, Date.now(), state.source_id, indexed - 1).run();
-        if (!update.success || Number(update.meta?.changes ?? 0) !== 1) {
-          throw new Error("The AI Search page-index checkpoint could not advance contiguously at Fatman page " + physicalPage + ".");
-        }
+      const item = exact[0];
+      if (item?.status === "completed") {
+        completedPages.add(physicalPage);
+        continue;
+      }
+      if (item?.status === "queued" || item?.status === "running") {
+        pendingPages.push(physicalPage);
+        continue;
+      }
+      if (item) {
+        throw new Error("The staging AI Search page " + physicalPage + " has a terminal error; refusing to delete or overwrite it.");
+      }
+
+      const uploaded = await search.items.upload(key, page.rawOcrText, { metadata: sourceMetadata(physicalPage) });
+      if (uploaded.key !== key) throw new Error("Staging AI Search returned an unexpected Fatman item key.");
+      if (uploaded.status === "completed") {
+        completedPages.add(physicalPage);
+      } else if (uploaded.status === "queued" || uploaded.status === "running") {
+        pendingPages.push(physicalPage);
+      } else {
+        throw new Error("Cloudflare AI Search did not accept Fatman page " + physicalPage + " for indexing.");
+      }
+    }
+
+    let indexedPages = state.ai_search_indexed_pages;
+    while (completedPages.has(indexedPages + 1)) indexedPages += 1;
+    if (indexedPages > state.ai_search_indexed_pages) {
+      const update = await env.DB!.prepare(
+        "UPDATE " + SOURCE_TABLE + " SET ai_search_indexed_pages=?,status='ai_search_indexing',updated_at=? WHERE source_id=? AND ai_search_indexed_pages=?",
+      ).bind(indexedPages, Date.now(), state.source_id, state.ai_search_indexed_pages).run();
+      if (!update.success || Number(update.meta?.changes ?? 0) !== 1) {
+        throw new Error("The AI Search page-index checkpoint could not advance contiguously through Fatman page " + indexedPages + ".");
       }
     }
     const latest = await getSourceProgress(env);
     if (!latest) throw new Error("The AI Search checkpoint disappeared after a batch.");
     return {
-      ok: true, status: latest.ai_search_indexed_pages === latest.page_count ? "verifying" : "ai_search_indexing",
-      sourceId: state.source_id, pageCount: state.page_count,
-      exportedPages: latest.exported_pages, chunkCount: latest.chunk_count,
-      qdrantIndexedPages: latest.qdrant_indexed_pages, qdrantPointCount: latest.qdrant_point_count,
+      ok: true,
+      status: latest.ai_search_indexed_pages === latest.page_count ? "verifying" : "ai_search_indexing",
+      sourceId: state.source_id,
+      pageCount: state.page_count,
+      exportedPages: latest.exported_pages,
+      chunkCount: latest.chunk_count,
+      qdrantIndexedPages: latest.qdrant_indexed_pages,
+      qdrantPointCount: latest.qdrant_point_count,
       aiSearchIndexedPages: latest.ai_search_indexed_pages,
+      pendingPages,
       continuationRequired: true,
+      note: pendingPages.length
+        ? "Cloudflare AI Search is processing the pending exact page keys. The next continuation polls the whole batch without uploading duplicates."
+        : "The bounded AI Search batch was checked and its contiguous completed-page checkpoint was advanced.",
     };
   }
 
@@ -1580,11 +1593,11 @@ prepareButton.addEventListener("click",async()=>{
     "\nExported: "+Number(source.exportedPages||0)+"/538"+
     "\nQdrant: "+Number(source.qdrantIndexedPages||0)+"/538"+
     "\nAI Search: "+Number(source.aiSearchIndexedPages||0)+"/538"+
-    (source.pendingPage?"\nWaiting for AI Search page "+source.pendingPage:"");
-   if(source.status==="ai_search_indexing"&&source.pendingPage)await sleep(1800);
+    (source.pendingPages?.length?"\nPending AI Search pages: "+source.pendingPages.join(", "):"");
+   if(source.status==="ai_search_indexing"&&source.pendingPages?.length)await sleep(1800);
    else if(iterations%6===0)await sleep(300);
    data=await api("/prepare","POST",{});
-   if(iterations>400)throw new Error("The staging continuation exceeded its safety limit.");
+   if(iterations>1000)throw new Error("The staging continuation exceeded its safety limit.");
   }
   await refreshStatus();
   statusBox.className="status good";
