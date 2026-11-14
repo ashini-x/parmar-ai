@@ -941,3 +941,7 @@ The test-only ablation over the committed 109-candidate owner-waived AI assessme
 | Leave-one-query-out lexical coverage | 11/12 | 4/4 | P06 false abstention |
 
 The no-gate baseline retains at least one grade-2+ candidate on 12/12 positive queries but returns candidates on all four out-of-corpus controls. The RRF-based cutoff retains H01's source correction, but the lexical proxy suppresses that grade-3 passage. The 109 candidates are owner-waived AI labels; independent reviewer/adjudicated human fields remain blank. The results are single-source/single-subject feasibility evidence, not calibration. No gate, cutoff or reranker was selected; no production/staging retrieval behavior changed. The next evidence requirement is broader multi-document/query-family qrels with source-group held-out evaluation before a real multi-feature or model-based gate can be chosen.
+
+## 14 November 2026 — offline M15 qrels validation utility
+
+The repository now includes `scripts/validate-brvin-m15-passage-qrels.mjs` and a Node test for the existing 109-candidate M15 review pack. The utility checks reviewer attestations, grades, rationales and adjudication without printing query or passage text. It computes provider-local nDCG@5, MRR@5 and precision@5 only when the independent annotation is complete. It is offline evaluation tooling; it does not assign labels, run in either Worker, change the private v2 contract or alter the production provider. The review pack remains incomplete and M15 remains in progress.

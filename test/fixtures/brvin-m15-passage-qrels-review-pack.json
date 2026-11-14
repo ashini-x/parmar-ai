@@ -124,8 +124,18 @@
     "resolveDisagreements": true,
     "requiredFields": [
       "reviewerA.grade",
+      "reviewerA.rationale",
       "reviewerB.grade",
-      "adjudicatedGrade"
+      "reviewerB.rationale",
+      "adjudicatedGrade",
+      "adjudicationRationale when reviewer grades differ"
+    ],
+    "reviewerAttestationFields": [
+      "reviewerId (pseudonymous and distinct)",
+      "reviewerType = independent-human",
+      "reviewedSourceSha256 = source.sha256",
+      "submittedAt (ISO timestamp)",
+      "submittedBlindlyBeforeComparison = true"
     ],
     "validGrades": [
       0,
@@ -134,6 +144,23 @@
       3
     ]
   },
+  "reviewerAttestations": {
+    "reviewerA": {
+      "reviewerId": null,
+      "reviewerType": null,
+      "reviewedSourceSha256": null,
+      "submittedAt": null,
+      "submittedBlindlyBeforeComparison": null
+    },
+    "reviewerB": {
+      "reviewerId": null,
+      "reviewerType": null,
+      "reviewedSourceSha256": null,
+      "submittedAt": null,
+      "submittedBlindlyBeforeComparison": null
+    }
+  },
+  "adjudication": null,
   "candidateCount": 109,
   "queries": [
     {

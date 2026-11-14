@@ -47,6 +47,18 @@ For H01, inspect the minus/plus sign and multiplication glyph literally. Keep re
 
 The JSON pack has `reviewerA`, `reviewerB` and `adjudicatedGrade` fields intentionally left blank. It contains **no model-generated relevance labels** and is not an independent human qrels result.
 
+## Validation and scoring
+
+After independent annotation and adjudication, validate the completed file with:
+
+```sh
+node scripts/validate-brvin-m15-passage-qrels.mjs test/fixtures/brvin-m15-passage-qrels-review-pack.json
+```
+
+The validator checks the pack's SHA-256 field and requires both distinct pseudonymous reviewers to attest that they reviewed that same source fingerprint and submitted blindly. It also validates grades, rationales and disagreement adjudication. It does not re-read the PDF or independently verify who completed the annotations. It emits counts and metrics only; it does not emit query or passage text. The current unannotated pack is structurally valid but incomplete, so it produces no relevance scores.
+
+For a complete pack, the script reports macro nDCG@5, MRR@5 and precision@5 (grade 2+) over each provider's returned judged candidates. These provider-local metrics do not estimate full-corpus recall, compare answer correctness, select a provider, choose a gate, or authorize production. Reviewer attestations are self-reported and still require genuine independent human reviewers.
+
 ## Receipt context
 
 - Both providers completed all 17 retrieval queries and covered 12/12 positive expected physical-page targets.
