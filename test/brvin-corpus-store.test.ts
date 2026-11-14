@@ -46,6 +46,13 @@ describe("BRVIN private derived-corpus GCS store", () => {
     vi.restoreAllMocks();
   });
 
+  it("allows the exact legacy Fatman source key namespace without allowing arbitrary slugs", () => {
+    expect(brvinDerivedCorpusPrefix("fatman-legacy-538"))
+      .toBe("brvin/derived-corpus/fatman-legacy-538/");
+    expect(() => brvinDerivedCorpusPrefix("fatman-legacy-539")).toThrow(/source identifier/u);
+    expect(() => brvinDerivedCorpusPrefix("../fatman")).toThrow(/source identifier/u);
+  });
+
   it("writes immutable source/page manifests and accepts only byte-identical replay", async () => {
     const job = {
       id: SOURCE_ID,
