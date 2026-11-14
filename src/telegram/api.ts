@@ -7,7 +7,7 @@ export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 const CREATOR_NAME = "BRɅIN";
 const CREATOR_TELEGRAM_URL = "tg://resolve?domain=projectbrain&profile";
 export const CREATOR_CONTACT_CALLBACK_DATA = "creator:contact";
-export const ADMIN_CONTACT_TEXT = "You can contact us via Telegram or Instagram.\n\nFor business queries, please send an email to admin@brvin.in";
+export const ADMIN_CONTACT_TEXT = "परमार्थAI by BRɅIN.\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in";
 function limitTelegramMessage(text: string): { text: string } {
   return { text: text.trim().slice(0, TELEGRAM_MAX_MESSAGE_LENGTH) };
 }
