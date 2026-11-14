@@ -5,6 +5,8 @@ import {
   sendTelegramQuiz,
   sendTelegramMessage,
   editTelegramMessage,
+  editTelegramProgressMessage,
+  editTelegramMessageWithToken,
   sendTelegramMessageWithToken,
   sendTelegramVoiceWithToken,
   editTelegramMessageReplyMarkup,
@@ -224,6 +226,52 @@ describe("Telegram HTML rich-text delivery", () => {
     const [, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(requestInit.body))).toMatchObject({
       text: "<b>Updated</b> answer",
+      parse_mode: "HTML",
+    });
+  });
+
+  it("formats cosmetic progress edits with HTML parse mode", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 132 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = { TELEGRAM_BOT_TOKEN: "bot-token" } as unknown as Env;
+    await expect(editTelegramProgressMessage(env, 42, 777, "**Checking sources**"))
+      .resolves.toBeUndefined();
+
+    const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/editMessageText");
+    expect(JSON.parse(String(requestInit.body))).toMatchObject({
+      chat_id: 42,
+      message_id: 777,
+      text: "<b>Checking sources</b>",
+      parse_mode: "HTML",
+    });
+  });
+
+  it("formats token-bound message edits with HTML parse mode", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 133 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(editTelegramMessageWithToken("bot-token", 42, 777, "**Final answer**"))
+      .resolves.toBeUndefined();
+
+    const [, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(requestInit.body))).toMatchObject({
+      chat_id: 42,
+      message_id: 777,
+      text: "<b>Final answer</b>",
       parse_mode: "HTML",
     });
   });
