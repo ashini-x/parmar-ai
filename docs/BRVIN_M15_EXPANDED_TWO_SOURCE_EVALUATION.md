@@ -1,7 +1,7 @@
 # BRVIN M15 expanded two-source Core v2 evaluation
 
 **Version:** expanded suite v1  
-**Status:** implementation staged for validation; not yet executed  
+**Status:** deployed to isolated M14 staging v103 at 100%; expanded query run not yet executed  
 **Environment:** isolated parmar-ai-m14-staging Worker + D1 only  
 **Operator page:** /admin/m15/benchmark/multi-source  
 **Endpoint:** POST /admin/m15/benchmark/multi-source/evaluate-expanded
@@ -63,3 +63,9 @@ Not performed: PDF upload, Vision OCR, source or OCR mutation, GCS corpus regene
 This expands document and query coverage within Physics, but it does not establish cross-subject generalization or independent human passage relevance. Keep it separate from the owner-waived 109-candidate passage assessment and from the original five-case paired receipt.
 
 After the run, review every missing expected page and both negative-control candidate texts. Then add independent passage/span review or explicitly record a further owner waiver before any multi-feature evidence-sufficiency gate or reranker is considered. Keep production on Cloudflare AI Search.
+
+## Live deployment read-back
+
+**Live deployment verification — 14 November 2026:** Core PR [#268](https://github.com/ashini-x/parmar-ai/pull/268) merged as `d2bcae3fa9bffaec6b88c9bffaef744897ce2e50`. Post-merge M14 staging deployment workflow [#43533377246](https://github.com/ashini-x/parmar-ai/actions/runs/43533377246) passed and deployed isolated `parmar-ai-m14-staging` Worker v103 (version `8df7d3c4-fcf5-4ead-9e19-b71ed439cfae`, deployment `6aceb081-12ef-49db-b1fe-dbcc4f36ea56`) at 100%. Release validation [#43533377252](https://github.com/ashini-x/parmar-ai/actions/runs/43533377252) passed; its production-scope classifier excluded the change and the production deploy job was skipped. Live deployment read-back confirms `parmar-ai` production remains v779 / deployment `51c90a18-170c-4ae1-8f39-7b6225450581` at 100%, and `brvin-service` remains v156 / deployment `9a3be7e6-33b0-4556-a1c4-da3c66d1c258` at 100%.
+
+**Still pending:** run the new 12-query endpoint once from the staging operator page using the existing token in its local password field. At this checkpoint, staging D1 project query usage remains 21 and the only two multi-source receipts are the original passed five-case runs. The expanded action will consume 24 additional staging quota reservations. Do not send the token in chat or GitHub.

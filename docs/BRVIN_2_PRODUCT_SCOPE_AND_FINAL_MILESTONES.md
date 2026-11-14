@@ -208,3 +208,7 @@ The first offline ablation is documented in [BRVIN_M15_RELEVANCE_GATE_ABLATION.m
 ## 14 November 2026 — expanded two-source page-target suite prepared, not yet run
 
 Core now has a separately versioned 12-query staging suite against the two existing READY Physics sources. It adds first-law/inertia, Newton's third law, worked numerics, work-energy, inclined planes and momentum/impulse query families, plus two out-of-corpus controls and a spring-sign correction case. The new endpoint reports query-specific page-target coverage and uses 24 staging quota reservations. It does not replace the original five-case receipt or change retrieval runtime/policy. The page-target labels were checked against the original PDFs and are not independent human passage/span qrels. The new endpoint must be deployed to isolated staging, executed once, and reviewed before the next relevance-gate decision.
+
+## 14 November 2026 — expanded staging endpoint deployed; run pending
+
+Core PR #268 merged and the expanded 12-query operator endpoint is deployed to isolated staging Worker v103 at 100%. Staging validation and post-merge release validation passed. The production-scope classifier excluded the change; production `parmar-ai` v779 and `brvin-service` v156 remain at 100%. The run itself has not been started: D1 quota remains at 21 and no expanded receipt exists. Next, invoke the new staging operator button once (24 query reservations) and review the per-query page-target misses and two out-of-corpus candidate texts. No production gate was changed.
