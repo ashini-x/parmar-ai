@@ -118,3 +118,22 @@ The owner tried **Build** and received an HTML-as-JSON parse error (`Unexpected 
 The active staging operator is now `parmar-ai-m14-staging` v107 (100%). Current production deployment read-back after the paired release workflow is `parmar-ai` v805 and `brvin-service` v165, both 100%; selectors remain Cloudflare AI Search, Fatman allowance remains 800/month, corpus manifest writes remain false, Teachers v12 is unchanged. No temporary automation secret exists.
 
 The first preparation did not initialise staging D1: there are no `m15_fatman%` tables and no run/receipt. No successful corpus export/index request is confirmed. Next: refresh https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman to load v107, re-enter the existing staging operator token locally (never in chat), click Build once. If HTML is returned again, collect the new diagnostic message with status/type/redirect/final URL and preview; do not paste the token. Once READY at 538/538 across export/Qdrant/AI Search, run the two-agent, 12-case comparison.
+
+## Latest continuation — 14 November 2026, subrequest fix deployed as v108
+
+The owner retried the build and the Worker returned **Too many subrequests by single Worker invocation**. Staging D1 was inspected directly and the actual checkpoint is:
+
+- 538/538 source OCR pages exported
+- 1,606 deterministic chunks
+- Qdrant 11/538 pages, 29 points
+- staging Cloudflare AI Search 0/538
+- source state `qdrant_indexing`
+- no Fatman paired run exists yet
+
+Do not re-export the source, upload the PDF or re-run Vision OCR.
+
+Core PR #288 merged as `0992af5cfe85539c9a2f589309ab40ffed4a7a01`. Qdrant indexing is now one physical page per Worker invocation; AI Search indexing is four pages per invocation. This keeps GCS reads, serialized Vertex-per-chunk embeddings, Qdrant upsert/read-back and AI Search calls below the per-invocation subrequest budget. Both M14 staging CI and full Release Validation passed.
+
+Active staging operator: `parmar-ai-m14-staging` v108, 100% traffic. Production after paired release smoke test: `parmar-ai` v807 and `brvin-service` v166, both 100%; production selectors remain Cloudflare AI Search, Fatman quota 800/month, corpus-manifest writes false; Teachers v12 unchanged.
+
+Next: refresh https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman, re-enter the existing staging admin token locally, click **Build the 538-page staging comparison corpus**. It resumes at Qdrant page 12; already exported pages/manifests remain intact. Keep it open until Qdrant and AI Search both reach 538/538 and READY; then run the two-agent 12-case comparison. Do not ask the owner for manual review.
