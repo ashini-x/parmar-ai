@@ -1138,8 +1138,15 @@ async function assessOneProviderCase(
   ]);
   const scoreA = compositeScore(agentA.assessment);
   const scoreB = compositeScore(agentB.assessment);
+  const dimensionDisagreement = [
+    Math.abs(agentA.assessment.retrievalRelevance - agentB.assessment.retrievalRelevance),
+    Math.abs(agentA.assessment.answerCorrectness - agentB.assessment.answerCorrectness),
+    Math.abs(agentA.assessment.sourceGrounding - agentB.assessment.sourceGrounding),
+    Math.abs(agentA.assessment.citationAccuracy - agentB.assessment.citationAccuracy),
+  ].some((difference) => difference >= 2);
   const disagreement =
     Math.abs(scoreA - scoreB) >= 0.6 ||
+    dimensionDisagreement ||
     agentA.assessment.criticalError !== agentB.assessment.criticalError ||
     agentA.assessment.abstainedCorrectly !== agentB.assessment.abstainedCorrectly;
   let adjudication: ProviderCaseReceipt["adjudication"];
