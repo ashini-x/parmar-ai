@@ -63,6 +63,9 @@ describe("Telegram rich-text formatter", () => {
       "Article 23 and forced labour",
     );
     expect(stripTelegramMarkdownMarkers("A * B * C")).toBe("A * B * C");
+    expect(stripTelegramMarkdownMarkers("_important_ and ||hidden|| ~~wrong~~")).toBe(
+      "important and hidden wrong",
+    );
   });
 
   it("preserves ordinary text without adding unnecessary tags", () => {
