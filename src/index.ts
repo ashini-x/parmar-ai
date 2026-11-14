@@ -1691,7 +1691,7 @@ async function handleQuestionBatch(batch: MessageBatch<QuestionJob>, env: Env, c
             packet.answer = appendFatmanCitations(packet.answer, citations);
             if (!bookContext.passages.length && !bookContext.pageImages.length) {
               packet.answer = packet.answer.trim() +
-                "\n\n📖 Fatman source note: I couldn't find a matching book passage, so this is a general SSC explanation—not a verified Fatman page summary.";
+                "\n\n📖 Fatman source note: I couldn't find a matching book passage inside Fatman for this question.";
             }
             // Fatman questions feed the same student learning profile as normal mode.
             // Preserve the model's explicit confusion/weakness signal for profile QA.
