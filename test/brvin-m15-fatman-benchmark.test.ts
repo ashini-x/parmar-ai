@@ -12,12 +12,13 @@ describe("M15 full-corpus Fatman benchmark helpers", () => {
     expect(BRVIN_M15_FATMAN_SOURCE.sourcePdfSha256).toBe(
       "8b183803fe8ee53087d731f7319519af9ac5bb62b39b2d3110acc3fe0ab59886",
     );
-    expect(BRVIN_M15_FATMAN_SOURCE.sourceId).toMatch(/^[a-f0-9-]{36}$/u);
+    expect(BRVIN_M15_FATMAN_SOURCE.sourceId).toBe("fatman-legacy-538");
   });
 
   it("accepts only valid legacy physical-page keys within the exact 538-page range", () => {
     expect(pageNumberFromLegacyKey("fatman/pages/page-000001.txt")).toBe(1);
     expect(pageNumberFromLegacyKey("fatman/pages/page-000538.txt")).toBe(538);
+    expect(pageNumberFromLegacyKey("fatman/pages/page-000168.txt")).toBe(168);
     expect(pageNumberFromLegacyKey("fatman/pages/page-000539.txt")).toBeNull();
     expect(pageNumberFromLegacyKey("fatman/pages/page-000000.txt")).toBeNull();
     expect(pageNumberFromLegacyKey("brvin/books/00000000-0000-4000-8000-000000000000/pages/page-000001.txt")).toBeNull();
