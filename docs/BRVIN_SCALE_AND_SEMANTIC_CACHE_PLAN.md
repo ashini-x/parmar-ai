@@ -114,7 +114,7 @@ The specific cache store, eviction policy, TTLs and similarity threshold remain 
 
 ## 5. Quota and fair-use policy
 
-The live production `brvin-service` v158 has a shared **800 queries/month per project** allowance, enforced by D1 reservation before retrieval; current production code supports a maximum of 300,000 after PR #272 was deployed by run #43553840291. This is independent of the student-level 10 questions/day allowance. At the approved planning load of 300,000 monthly questions, an 800-query project cap represents only about 0.27% of the monthly target and is not a viable production allowance. Isolated staging v104 is configured with a 300,000 monthly limit and the opt-in emergency breaker disabled. This code and setting do not establish a capacity-aware quota policy or production capacity.
+The live production `brvin-service` v160 has a shared **800 queries/month per project** allowance, enforced by D1 reservation before retrieval; current production code supports a maximum of 300,000 after PR #272 was deployed by run #43553840291. This is independent of the student-level 10 questions/day allowance. At the approved planning load of 300,000 monthly questions, an 800-query project cap represents only about 0.27% of the monthly target and is not a viable production allowance. Isolated staging v104 is configured with a 300,000 monthly limit and the opt-in emergency breaker disabled. This code and setting do not establish a capacity-aware quota policy or production capacity.
 
 Before the production Qdrant cutover:
 
@@ -161,3 +161,7 @@ Treat the following as required acceptance work within the existing M15–M17 se
 - [Cloudflare AI Search limits and pricing](https://developers.cloudflare.com/ai-search/platform/limits-pricing/)
 - [Qdrant Cloud pricing](https://qdrant.tech/pricing/)
 - [Qdrant Cloud cluster types and resource limits](https://qdrant.tech/documentation/cloud/create-cluster/)
+
+
+**Latest production deployment — 14 November 2026:** Release Validation run [#43561006258](https://github.com/ashini-x/parmar-ai/actions/runs/43561006258) completed successfully on Core main commit `cd95d139286321278fea0bdd81cf0bbcdde417d9`. Typecheck, full tests, Node tests, both Worker bundle validations, paired production deployment and post-deploy health/source-readiness acceptance passed. The commit changed Telegram admin-contact copy/tests, not BRVIN retrieval. Cloudflare confirms `parmar-ai` v793 (version `8513e10f-ab14-4680-9eac-2ea071669140`, deployment `5336f1ce-f97c-4dd8-b61d-04609345a75e`) and `brvin-service` v160 (version `bdfde1d3-3c5b-4b33-990f-960f60dd0cb0`, deployment `72df7f10-21af-4f15-86b4-17f6f4353ea5`), each at 100%; staging remains v104 and Teachers v12, each at 100%. Production selectors remain `cloudflare-ai-search`; the 800/month project limit and 0.2 score floor remain configured. Qdrant/Vertex retrieval remains staging-only. This deployment does not advance M15 or constitute a provider cutover.
+The capacity and quota evidence has not changed: production remains configured at 800/month, staging is configured for 300,000/month, and neither value proves the target peak throughput or the completed capacity-aware fair-share policy. No production quota policy or cache implementation changed.

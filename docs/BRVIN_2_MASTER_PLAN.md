@@ -59,12 +59,12 @@ The completed product baseline includes:
 
 ## 4. Verified production snapshot
 
-**Latest live read-back: 14 November 2026.** Core `parmar-ai`, private `brvin-service`, isolated `parmar-ai-m14-staging`, and downstream `brvin-teachers` were independently read back at 100% of their current deployments. Core production remains on Cloudflare AI Search; the newer Worker versions do not constitute a provider cutover.
+**Latest live read-back: 14 November 2026, after Release Validation run #43561006258.** Core `parmar-ai`, private `brvin-service`, isolated `parmar-ai-m14-staging`, and downstream `brvin-teachers` were independently read back at 100% of their current deployments. Core production remains on Cloudflare AI Search; the newer Worker versions do not constitute a provider cutover.
 
 | Worker | Environment | Version at 100% | Deployment |
 |---|---|---|---|
-| `parmar-ai` | production | `dab23f68-c2ff-44f8-98f2-35b127408c82` (v788) | `89c83a49-3690-464e-bf55-359715d6847d` |
-| `brvin-service` | production | `7740d08d-cbde-4b2a-8d06-130a1285eafe` (v158) | `faaebe95-eca8-452b-84a2-7698131b998c` |
+| `parmar-ai` | production | `8513e10f-ab14-4680-9eac-2ea071669140` (v793) | `5336f1ce-f97c-4dd8-b61d-04609345a75e` |
+| `brvin-service` | production | `bdfde1d3-3c5b-4b33-990f-960f60dd0cb0` (v160) | `72df7f10-21af-4f15-86b4-17f6f4353ea5` |
 
 Cloudflare settings read-back confirms:
 
@@ -85,7 +85,7 @@ Teachers remains a private v2 consumer. Its production Worker has only the Core 
 
 Additional production facts remain unchanged: shared D1 `parmar-ai-admin-prod`, private source/GCS and OCR workflow ownership in Core, and the completed M11 teacher Physics source/retrieval/revocation/re-grant acceptance. The current provider-migration acceptance state and evidence are in `BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md`.
 
-**Live deployment/receipt reconciliation — 14 November 2026 (latest read-back after run #43553840291):** Cloudflare confirms `parmar-ai` v788 (version `dab23f68-c2ff-44f8-98f2-35b127408c82`, deployment `89c83a49-3690-464e-bf55-359715d6847d`), `brvin-service` v158 (version `7740d08d-cbde-4b2a-8d06-130a1285eafe`, deployment `faaebe95-eca8-452b-84a2-7698131b998c`), isolated staging v104, and Teachers v12 at 100%. Core PR #276 merged as `6d7e9d0faa0fba85f5baaac1cc841e025c0c23f7`; post-merge Release Validation run [#43553840291](https://github.com/ashini-x/parmar-ai/actions/runs/43553840291) deployed both Core production Workers and its health/acceptance steps passed. Both production selectors remain `cloudflare-ai-search`; the production `brvin-service` project limit remains configured at 800/month, and Qdrant/Vertex retrieval bindings remain staging-only. Production health is healthy with one authorized source through v1 and v2; staging benchmark health is ready; Teachers health returns ok. Staging D1 contains passed receipts 18728f63-e13d-4e73-880f-a2b980844d04, fa1b8076-9375-480b-bb4b-e22d1c13d9bb and 0f5f9769-452a-466e-b5ae-735ddba6378a. The latest expanded run completed 12/12 for both providers, found all 11 page-target instances across seven source/page pairs, had zero provenance violations and moved usage 21→45 for 24 reservations. AI Search returned no candidates for both no-match prompts; Qdrant returned five unrelated candidates. No gate or cutover is approved.
+**Latest deployment-only reconciliation — 14 November 2026:** Release Validation run [#43561006258](https://github.com/ashini-x/parmar-ai/actions/runs/43561006258) completed successfully on Core main commit `cd95d139286321278fea0bdd81cf0bbcdde417d9`. Its typecheck, full tests, Node tests, both Worker bundle validations, paired production deployment and post-deploy health/source-readiness acceptance all passed. The commit itself changes Telegram admin-contact copy and its tests, not BRVIN retrieval behavior. Cloudflare now confirms `parmar-ai` v793 (version `8513e10f-ab14-4680-9eac-2ea071669140`, deployment `5336f1ce-f97c-4dd8-b61d-04609345a75e`) and `brvin-service` v160 (version `bdfde1d3-3c5b-4b33-990f-960f60dd0cb0`, deployment `72df7f10-21af-4f15-86b4-17f6f4353ea5`), each at 100%. Staging remains v104 (version `bd08057b-cb0b-4907-8b09-6916048afabe`, deployment `7163bad8-8389-43c6-94cf-5e9446797c20`) and Teachers remains v12 (version `68d6694c-6371-4cae-8a25-4af40ca15706`, deployment `31ff2a01-b0f4-4be8-92d3-63e2d91adddf`), each at 100%. Both production selectors remain `cloudflare-ai-search`; production's project allowance remains 800/month, `BRVIN_MIN_SCORE=0.2`, `BRVIN_MATCH_THRESHOLD=0.3`, corpus-manifest writes remain disabled, and Qdrant/Vertex retrieval remains staging-only. This deployment does not advance M15 or constitute a provider cutover.
 
 ## 5. Milestone status
 
