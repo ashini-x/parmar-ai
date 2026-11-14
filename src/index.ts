@@ -17,7 +17,7 @@ import { createTelegramProgressUpdater, TELEGRAM_PROGRESS_LABELS } from "./teleg
 import { loadQuestionContextInParallel, runSuspensionAndModeLookup } from "./telegram/parallel-work";
 import { parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
 import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
-import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isParmarSirCommand } from "./telegram/menu";
+import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isAdminCommand, isHelpCommand, isParmarSirCommand, isStartCommand } from "./telegram/menu";
 import { parseHelpMenuAction } from "./telegram/help-menu";
 import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
@@ -595,7 +595,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
   const analyticsUser = buildAnalyticsUser(message!, chatId);
   // Do not start first-contact analytics/schema work before /start delivers its
   // welcome. Other updates retain the same first-seen tracking behavior.
-  if (!isStart(text)) {
+  if (!isStartCommand(text)) {
     queueAnalytics(ctx, "user_seen", () => recordUserSeen(env, analyticsUser));
   }
 
@@ -687,7 +687,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true, adminContact: true }), requestId);
   }
 
-  if (isStart(text)) {
+  if (isStartCommand(text)) {
     logger.info("telegram_start_received", {
       requestId,
       botConnectionId: bot.connectionId,
@@ -738,7 +738,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     return withRequestId(json({ ok: true }), requestId);
   }
 
-  if (isHelp(text)) {
+  if (isHelpCommand(text)) {
     queueAnalytics(ctx, "help", () => recordEvent(env, "help", analyticsUser));
     ctx.waitUntil(bestEffortTelegram(
       "help_menu_sync",
@@ -2288,9 +2288,6 @@ function buildStudyPlanText(profile: StudentProfile): string {
   ].join("\n");
 }
 
-function isStart(text: string): boolean { return /^\/(?:start|rbe)(?:@\w+)?(?:\s|$)/i.test(text.trim()); }
-function isHelp(text: string): boolean { return /^\/(?:help|commands|radhika)(?:@\w+)?(?:\s|$)/i.test(text.trim()); }
-function isAdminCommand(text: string): boolean { return /^\/admin(?:@\w+)?(?:\s|$)/i.test(text.trim()); }
 function isReset(text: string): boolean { return /^\/(?:reset|forget)$/i.test(text); }
 function isDeleteMyData(text: string): boolean { return /^\/(?:delete_data|delete_my_data|delete-my-data)$/i.test(text); }
 function isProfileCommand(text: string): boolean { return /^\/(?:profile|progress|me)$/i.test(text); }
