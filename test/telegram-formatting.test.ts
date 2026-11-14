@@ -17,6 +17,10 @@ describe("Telegram rich-text formatter", () => {
     );
   });
 
+  it("does not bold numeric times as labels", () => {
+    expect(formatTelegramHtml("10:30 PM")).toBe("10:30 PM");
+  });
+
   it("converts Markdown headings and bullet markers", () => {
     expect(formatTelegramHtml("## Key points\n- First point\n- **Second point**")).toBe(
       "<b>Key points</b>\n• First point\n• <b>Second point</b>",
@@ -37,7 +41,7 @@ describe("Telegram rich-text formatter", () => {
 
   it("supports inline and fenced code without interpreting their contents", () => {
     expect(formatTelegramHtml("Use \x60A * B\x60.\n\n\x60\x60\x60html\n<b>literal</b>\n\x60\x60\x60")).toBe(
-      "Use <code>A * B</code>.\n\n<pre>&lt;b&gt;literal&lt;/b&gt;</pre>",
+      "Use <code>A * B</code>.\n\n<pre><code class=\"language-html\">&lt;b&gt;literal&lt;/b&gt;</code></pre>",
     );
   });
 
