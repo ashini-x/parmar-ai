@@ -6,14 +6,14 @@ describe("successful question answer heading", () => {
     expect(formatSuccessfulQuestionAnswer("Article 23 prohibits forced labour.", {
       responseMode: "text",
       answerScope: "ssc_ga_gs",
-    })).toBe("🟢 Final answer\\n\\nArticle 23 prohibits forced labour.");
+    })).toBe("🟢 Final answer\n\nArticle 23 prohibits forced labour.");
   });
 
   it("adds the same heading to a successful Fatman answer", () => {
     expect(formatSuccessfulQuestionAnswer("The book explains Article 23.", {
       responseMode: "text",
       answerScope: "ssc_support",
-    })).toBe("🟢 Final answer\\n\\nThe book explains Article 23.");
+    })).toBe("🟢 Final answer\n\nThe book explains Article 23.");
   });
 
   it("does not add the heading to out-of-scope responses", () => {
