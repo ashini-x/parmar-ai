@@ -1017,11 +1017,14 @@ function buildAssessmentInput(
   qaCase: FatmanReleaseQaCase,
   passages: FatmanPassage[],
   answer: string,
+  qa: FatmanReleaseQaCaseResult,
 ): Record<string, unknown> {
   return {
     caseId: qaCase.id,
     question: qaCase.question,
     expectedPdfPages: qaCase.expectedPages,
+    retrievedPdfPages: qa.retrievedPages,
+    applicationAppendedCitationPdfPages: qa.citedPages,
     requiredFactGroups: qaCase.requiredFactGroups,
     expectedNoMatch: qaCase.expectAbstention === true,
     passages: passages.slice(0, 8).map((passage, index) => ({
@@ -1129,7 +1132,7 @@ async function assessOneProviderCase(
     }
   }
   const passages = [...uniquePassages.values()].sort((a, b) => b.score - a.score).slice(0, 8);
-  const input = buildAssessmentInput(qaCase, passages, answer);
+  const input = buildAssessmentInput(qaCase, passages, answer, qa);
   const assessmentStarted = performance.now();
   const modelA = env.BRVIN_M15_FATMAN_JUDGE_A_MODEL?.trim() || "gemini-4-argon";
   const modelB = env.BRVIN_M15_FATMAN_JUDGE_B_MODEL?.trim() || "gemini-3.8-flash";
