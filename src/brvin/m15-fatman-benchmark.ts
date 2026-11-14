@@ -46,7 +46,7 @@ const COLLECTION_ID = "m15-fatman-538";
 const SOURCE_PREFIX = "brvin/books/" + BRVIN_M15_FATMAN_SOURCE.sourceId + "/pages/";
 const LEGACY_PAGE_PREFIX = "fatman/pages/page-";
 const MAX_LEGACY_PAGE_TEXT_CHARS = 120_000;
-const EXPORT_BATCH_SIZE = 12;
+const EXPORT_BATCH_SIZE = 18;
 const QDRANT_BATCH_SIZE = 6;
 const AI_SEARCH_BATCH_SIZE = 8;
 const RUN_TABLE = "m15_fatman_benchmark_runs";
@@ -163,7 +163,7 @@ function assertStaging(env: M15FatmanBenchmarkEnv): void {
       !env.BRVIN_M14_CORPUS_BUCKET || !env.BRVIN_M14_QDRANT_URL ||
       !env.BRVIN_M14_QDRANT_API_KEY || !env.BRVIN_M14_EMBEDDING_DIMENSIONS ||
       !env.BRVIN_M15_FATMAN_QDRANT_COLLECTION || !env.BRVIN_M15_FATMAN_SOURCE_EXPORT ||
-      !env.BRVIN_M15_FATMAN_AI_SEARCH || env.BRVIN_M15_AI_SEARCH === undefined) {
+      !env.BRVIN_M15_FATMAN_AI_SEARCH) {
     throw new Error("The isolated Fatman source-export, staging AI Search, Vertex, Qdrant or D1 bindings are incomplete.");
   }
 }
@@ -204,6 +204,7 @@ async function ensureSchema(env: M15FatmanBenchmarkEnv): Promise<void> {
     "CREATE TABLE IF NOT EXISTS brvin_application_project_grants (id TEXT PRIMARY KEY,application_id TEXT NOT NULL,project_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'active',created_at INTEGER NOT NULL,created_by TEXT,revoked_at INTEGER,revoked_by TEXT)",
     "CREATE TABLE IF NOT EXISTS brvin_project_search_usage (project_id TEXT NOT NULL,billing_month TEXT NOT NULL,query_count INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL,PRIMARY KEY(project_id,billing_month))",
     "CREATE TABLE IF NOT EXISTS " + SOURCE_TABLE + " (source_id TEXT PRIMARY KEY,project_id TEXT NOT NULL,source_sha256 TEXT NOT NULL,generation_id TEXT NOT NULL,page_count INTEGER NOT NULL,exported_pages INTEGER NOT NULL DEFAULT 0,chunk_count INTEGER NOT NULL DEFAULT 0,qdrant_indexed_pages INTEGER NOT NULL DEFAULT 0,qdrant_point_count INTEGER NOT NULL DEFAULT 0,ai_search_indexed_pages INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'exporting',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS m15_fatman_legacy_items (pdf_page INTEGER PRIMARY KEY,item_id TEXT NOT NULL,item_key TEXT NOT NULL,status TEXT NOT NULL,file_size INTEGER)",
     "CREATE TABLE IF NOT EXISTS " + RUN_TABLE + " (id TEXT PRIMARY KEY,status TEXT NOT NULL CHECK(status IN ('running','completed','failed')),result_json TEXT NOT NULL,started_at INTEGER NOT NULL,completed_at INTEGER)",
     "CREATE INDEX IF NOT EXISTS idx_m15_fatman_runs_started ON " + RUN_TABLE + "(started_at DESC)",
   ];
@@ -334,6 +335,65 @@ async function listLegacyFatmanPages(env: M15FatmanBenchmarkEnv): Promise<Map<nu
     }
   }
   return byPage;
+}
+
+async function ensureFatmanLegacyItemInventory(
+  env: M15FatmanBenchmarkEnv,
+): Promise<void> {
+  const db = env.DB!;
+  const count = await db.prepare(
+    "SELECT COUNT(*) AS count FROM m15_fatman_legacy_items",
+  ).first<{ count: number }>();
+  if (Number(count?.count ?? 0) === BRVIN_M15_FATMAN_SOURCE.pageCount) return;
+
+  // Build the inventory once from the read-only production item catalogue.
+  // Continuations then read small D1 page ranges instead of rescanning all
+  // eleven AI Search listing pages for every export batch.
+  const inventory = await listLegacyFatmanPages(env);
+  await db.prepare("DELETE FROM m15_fatman_legacy_items").run();
+  const rows = [...inventory.entries()].sort((a, b) => a[0] - b[0]);
+  for (let offset = 0; offset < rows.length; offset += 50) {
+    const batch = rows.slice(offset, offset + 50).map(([pdfPage, item]) =>
+      db.prepare(
+        "INSERT INTO m15_fatman_legacy_items(pdf_page,item_id,item_key,status,file_size) VALUES(?,?,?,?,?)",
+      ).bind(pdfPage, item.id, item.key, item.status, item.file_size ?? null)
+    );
+    const results = await db.batch(batch);
+    if (results.some((result) => !result.success)) {
+      throw new Error("The one-time legacy Fatman item inventory could not be saved in isolated staging D1.");
+    }
+  }
+  const verified = await db.prepare(
+    "SELECT COUNT(*) AS count FROM m15_fatman_legacy_items",
+  ).first<{ count: number }>();
+  if (Number(verified?.count ?? 0) !== BRVIN_M15_FATMAN_SOURCE.pageCount) {
+    throw new Error("The legacy Fatman staging item inventory failed its exact 538-page read-back.");
+  }
+}
+
+async function readFatmanInventoryRange(
+  env: M15FatmanBenchmarkEnv,
+  startPage: number,
+  endPage: number,
+): Promise<Map<number, LegacyPageItem>> {
+  const rows = await env.DB!.prepare(
+    "SELECT pdf_page,item_id,item_key,status,file_size FROM m15_fatman_legacy_items WHERE pdf_page BETWEEN ? AND ? ORDER BY pdf_page",
+  ).bind(startPage, endPage).all<{
+    pdf_page: number; item_id: string; item_key: string; status: string; file_size: number | null;
+  }>();
+  const result = new Map<number, LegacyPageItem>();
+  for (const row of rows.results ?? []) {
+    result.set(Number(row.pdf_page), {
+      id: row.item_id,
+      key: row.item_key,
+      status: row.status,
+      ...(row.file_size !== null ? { file_size: Number(row.file_size) } : {}),
+    });
+  }
+  if (result.size !== endPage - startPage + 1) {
+    throw new Error("The checkpointed legacy Fatman page inventory is missing a physical page in the current export batch.");
+  }
+  return result;
 }
 
 async function readLegacyFatmanPage(
@@ -549,11 +609,12 @@ export async function prepareBrvinM15FatmanBenchmarkCorpus(
   }
 
   if (state.exported_pages < state.page_count) {
-    const legacyItems = await listLegacyFatmanPages(env);
+    await ensureFatmanLegacyItemInventory(env);
     const job = buildLegacyImportJob();
     let manifestAlreadyPersisted = state.exported_pages > 0;
     const start = state.exported_pages + 1;
     const end = Math.min(state.page_count, start + EXPORT_BATCH_SIZE - 1);
+    const legacyItems = await readFatmanInventoryRange(env, start, end);
     let exported = state.exported_pages;
     for (let physicalPage = start; physicalPage <= end; physicalPage += 1) {
       const item = legacyItems.get(physicalPage);
@@ -1096,7 +1157,7 @@ function summarizeProvider(cases: FatmanRunCase[], provider: "cloudflareAiSearch
   const percentile = (q: number) => timings.length
     ? timings[Math.max(0, Math.min(timings.length - 1, Math.ceil(q * timings.length) - 1))]
     : null;
-  const positive = rows.filter((row) => !row.qa.expectedPages.length === false && row.qa.category !== "out_of_book");
+  const positive = rows.filter((row) => row.qa.expectedPages.length > 0 && row.qa.category !== "out_of_book");
   const negative = rows.filter((row) => row.qa.category === "out_of_book");
   const agentA = rows.map((row) => compositeScore(row.agentA.assessment));
   const agentB = rows.map((row) => compositeScore(row.agentB.assessment));
