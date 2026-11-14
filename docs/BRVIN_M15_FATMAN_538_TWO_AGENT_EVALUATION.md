@@ -13,7 +13,7 @@ Two separate AI assessors grade each provider's evidence and answer independentl
 
 ## Pinned legacy source and safe reuse
 
-The production D1 source record is `fatman-legacy-538` and is marked READY with 538/538 indexed pages. The staging benchmark now preserves that exact source ID and `fatman/pages/` item-key namespace rather than assigning a replacement UUID. The historical import's PDF SHA-256 is pinned as:
+The production D1 source record is `fatman-legacy-538` and is marked READY with 538/538 indexed pages. Its `brvin_books.source_sha256` field is blank; the source hash is taken from the completed original `fatman_import_jobs` row, not from that legacy BRVIN registry row. The staging benchmark now preserves that exact source ID and `fatman/pages/` item-key namespace rather than assigning a replacement UUID. The historical import's PDF SHA-256 is pinned as:
 
 `8b183803fe8ee53087d731f7319519af9ac5bb62b39b2d3110acc3fe0ab59886`
 
@@ -21,7 +21,7 @@ The legacy index uses deterministic keys `fatman/pages/page-000001.txt` through 
 
 No source PDF is uploaded. No Google Vision OCR request is submitted. The legacy production index items are never uploaded, deleted, replaced, or updated. The export is resumable through a D1 inventory and per-page checkpoint.
 
-**Provenance qualification:** the historic legacy record has no retained per-page Vision long-running-operation ID or PDF object link in its import row. The staging corpus therefore carries a clearly marked synthetic legacy-export operation identifier. The PDF SHA is the previously recorded import fingerprint, not a newly recomputed hash from PDF bytes. This distinction is preserved in the run receipt; it must not be described as a new independent PDF-byte verification.
+**Provenance:** the original completed import job is `6b94a848-c642-4be3-8718-3ae5a7d25b35`. Its D1 record contains the exact source object `fatman/imports/6b94a848-c642-4be3-8718-3ae5a7d25b35/source.pdf`, source SHA-256 above, expected size and uploaded bytes of 115,395,596, page count/indexed pages of 538, status `completed`, original Google Vision operation `projects/project-90db7be4-619f-4ed7-89b/operations/7358e7d1e97523c3`, and its completed workflow instance ID. The immutable staging manifests use that original SHA and Vision operation ID. This reuses the recorded import provenance; the staging export does not independently redownload or recompute the source PDF hash.
 
 ## Isolated resources
 
