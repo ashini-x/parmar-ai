@@ -1,6 +1,6 @@
 # BRVIN M15 — full-corpus Fatman two-agent provider benchmark
 
-**Status:** merged, staging Worker v108 deployed; corpus indexing in progress (280/538 Qdrant pages); paired evaluation pending  
+**Status:** merged, staging Worker v108 deployed; corpus indexing paused at 280/538 Qdrant pages after a CPU-limit 503; paired evaluation pending  
 **Scope:** complete Fatman 2nd Edition legacy corpus, 538 physical PDF pages  
 **Decision owner:** project owner  
 **Human-review policy:** explicitly waived for this staging decision; no manual passage labels, reviewer queue or human sign-off step
@@ -176,8 +176,19 @@ Cloudflare read-back still shows staging Worker `parmar-ai-m14-staging` v108 at 
 - Source state: `qdrant_indexing`
 - Paired Fatman benchmark runs: **none**
 
-The per-invocation limits remain one Qdrant page and four AI Search pages. A fresh authenticated Build continuation resumes at physical page 281, retaining the 854 points already written. Keep the operator open until Qdrant reaches 538/538; then allow the AI Search stage to reach 538/538 and confirm READY before starting the two-agent 12-case comparison.
+The per-invocation limits remain one Qdrant page and four AI Search pages. However, a subsequent authenticated Build continuation returned HTTP 503 because the Worker exceeded its CPU time limit. The checkpoint is still Qdrant 280/538 (854 points), so the next page is 281. Do not retry Build until the effective CPU budget is confirmed and raised or the work is redesigned to fit that budget. See the CPU incident section below.
 
 Latest production read-back: `parmar-ai` v815 (version `cf909f05-f111-42e4-b734-c21134d41ef9`, deployment `55bd7f54-fd5e-49e3-9783-6a01a3a39689`) and `brvin-service` v170 (version `2752700f-2eb7-4c7b-874b-48f8f1893123`, deployment `18bb72d6-686d-40ab-aa5a-2ee5d4eba944`), each 100%. Production selectors remain Cloudflare AI Search; Fatman quota remains 800/month; corpus-manifest writes remain disabled; Teachers remains v12. Release Validation run [#43626659528](https://github.com/ashini-x/parmar-ai/actions/runs/43626659528) passed production smoke and release acceptance.
 
 Human review remains waived. No paired AI assessment receipt has been created yet.
+
+
+## 14 November 2026 — staging continuation stopped by CPU limit
+
+Cloudflare Workers Observability captured the failed `POST /admin/m15/fatman/prepare` at **2026-11-14 18:05:21.768 UTC** (request ID `52925b6fc91bb86d7193ab5f69b08c9c`, Ray ID `a5a7f1939a19fd14`). The Worker returned **HTTP 503** with `outcome=exceededCpu`; the associated exception was `Worker exceeded CPU time limit.` Reported CPU time was **11 ms** and wall time was 2,476 ms. The preceding prepare continuations returned HTTP 200. This is a Worker CPU-budget termination, not an invalid token, source-hash mismatch, OCR failure or evidence that the production Fatman index was modified.
+
+The failed request did not advance the durable D1 checkpoint. The verified state remains: 538/538 OCR pages exported; 1,606 chunks; Qdrant 280/538 pages (854 points); AI Search 0/538; source state `qdrant_indexing`; no paired benchmark run. Resume remains after Qdrant page 280 (physical page 281), but **do not click Build again until the effective staging Worker CPU limit is resolved**.
+
+The deployed v108 `wrangler.m14-staging.jsonc` has no explicit `limits.cpu_ms` setting. Cloudflare script settings report `usage_model=standard`, but the connected OAuth identity cannot read account subscriptions: the subscription endpoint returns 403 because Billing Read permission is unavailable. Therefore the actual account plan / effective configured CPU cap is not conclusively visible from this connection. Cloudflare's current [Workers CPU limits documentation](https://developers.cloudflare.com/workers/platform/limits/#cpu-time) states a 10 ms per-request limit on Workers Free, while Workers Paid defaults to 30 seconds and can be configured up to 300,000 ms. The observed 11 ms termination is consistent with a 10 ms effective cap, but the plan still needs confirmation.
+
+**Required operator resolution:** in Cloudflare Dashboard, inspect Workers & Pages → `parmar-ai-m14-staging` → Settings → CPU limits and confirm the account's Workers plan. If the account is Free, the 10 ms ceiling cannot be raised through Wrangler; use Workers Paid or redesign the staging page operation to stay within the Free limit. If Workers Paid is already active but the script has a low custom CPU cap, set a suitable value (30,000 ms is the normal paid default) in the staging Worker configuration using [Wrangler `limits.cpu_ms`](https://developers.cloudflare.com/workers/wrangler/configuration/#limits), then deploy and verify a new staging version. Do not change production Workers, provider selectors, monthly quotas, corpus manifests or Teachers. Once the new effective limit is verified, refresh the operator and resume at page 281; do not upload the PDF or rerun Vision OCR.
