@@ -25,6 +25,7 @@ export type BrvinServiceEnv = Pick<
   | "BRVIN_RETRIEVAL_PROVIDER"
   | "BRVIN_MIN_SCORE"
   | "BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT"
+  | "BRVIN_RETRIEVAL_CIRCUIT_BREAKER"
   | "GCP_PROJECT_ID"
   | "GCP_CLIENT_EMAIL"
   | "GCP_PRIVATE_KEY"
@@ -37,11 +38,11 @@ export type BrvinServiceEnv = Pick<
   | "BRVIN_M15_BENCHMARK_QDRANT_COLLECTION"
 >;
 
-export const BRVIN_MAX_MONTHLY_QUERY_LIMIT = 800;
+export const BRVIN_MAX_MONTHLY_QUERY_LIMIT = 300_000;
 export const BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT = 800;
 
 export function brvinMonthlyQueryLimit(value: string | undefined): number {
-  const parsed = Number.parseInt(value ?? "", 10);
+  const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0
     ? Math.min(BRVIN_MAX_MONTHLY_QUERY_LIMIT, parsed)
     : BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT;
@@ -81,8 +82,11 @@ async function resolveProjectForClient(
 async function reserveProjectQuery(
   env: BrvinServiceEnv,
   project: BrvinProjectIdentity,
-): Promise<{ allowed: boolean; queryCount: number }> {
+): Promise<{ allowed: boolean; queryCount: number; circuitOpen?: boolean }> {
   if (!env.DB) return { allowed: false, queryCount: 0 };
+  if (env.BRVIN_RETRIEVAL_CIRCUIT_BREAKER?.trim().toLowerCase() === "true") {
+    return { allowed: false, queryCount: 0, circuitOpen: true };
+  }
   const now = Date.now();
   const month = new Date(now).toISOString().slice(0, 7);
   const fatman = project.slug === "fatman";
@@ -166,6 +170,9 @@ export async function retrieveBrvinForClient(
     }
 
     const quota = await reserveProjectQuery(env, resolved.project);
+    if (quota.circuitOpen) {
+      return failure("BRVIN_UNAVAILABLE", "BRVIN is temporarily unavailable.", true);
+    }
     if (!quota.allowed) {
       const userMessage = resolved.project.slug === "fatman"
         ? "Fatman search has reached this month's free usage limit. Use /help to return to usual study mode."
@@ -583,6 +590,14 @@ export async function retrieveBrvinForApplicationV2(
     }
 
     const quota = await reserveProjectQuery(env, projectResult.value);
+    if (quota.circuitOpen) {
+      return logBrvinV2Result(
+        "retrieveProjectContextV2",
+        startedAt,
+        v2Failure("BRVIN_UNAVAILABLE", "BRVIN is temporarily unavailable.", true, undefined, parsed.requestId),
+        { caller, projectId: parsed.projectId, queryCount: parsed.queries.length, sourceCount: sources.length, requestId: parsed.requestId },
+      );
+    }
     if (!quota.allowed) {
       const userMessage = projectResult.value.slug === "fatman"
         ? "Fatman search has reached this month's free usage limit. Use /help to return to usual study mode."

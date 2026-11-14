@@ -114,15 +114,16 @@ The specific cache store, eviction policy, TTLs and similarity threshold remain 
 
 ## 5. Quota and fair-use policy
 
-The last verified Core system reference records a shared **800 queries/month per project** allowance and a code-level maximum of 800, enforced by D1 reservation before retrieval. This is independent of the student-level 10 questions/day allowance. At the approved planning load of 300,000 monthly questions, an 800-query project cap represents only about 0.27% of the monthly target and is not a viable production allowance.
+The live production `brvin-service` v156 has a shared **800 queries/month per project** allowance and an effective code-level maximum of 800, enforced by D1 reservation before retrieval. This is independent of the student-level 10 questions/day allowance. At the approved planning load of 300,000 monthly questions, an 800-query project cap represents only about 0.27% of the monthly target and is not a viable production allowance. A separate staging-scoped Core change in progress raises the source-code maximum to 300,000 and adds an opt-in emergency retrieval breaker; the production variable remains 800, and the change does not itself establish a capacity-aware quota policy or production capacity.
 
 Before the production Qdrant cutover:
 
-- Remove or redesign the hard-coded 800/month default and maximum in Core code. A Cloudflare variable change alone is insufficient while the code maximum remains 800.
+- Keep the production-configured default at 800 until all rollout gates pass. The staging-scoped code change raises the maximum to 300,000 so the configured planning ceiling can be exercised without changing the live production allowance; a Cloudflare variable change alone remains insufficient until the deployed code supports that value.
 - Replace the tiny project-wide ceiling with a capacity-aware project/application policy whose tested headroom supports at least the 300,000-question/month planning target for the intended workload, plus measured burst capacity.
 - Preserve D1 as the source of truth for authorization and usage accounting. Do not remove quota reservation ordering or allow unauthorised cache hits.
 - Keep the student-level 10/day limit and abuse/burst protections. Add fair-share controls so one abusive account or project cannot starve others.
 - Add operational usage visibility, capacity alerts and spend alerts. Use soft warnings and owner-visible escalation for ordinary growth; reserve a separately controlled emergency circuit breaker for genuine runaway traffic or provider incidents.
+- The emergency breaker is an opt-in Core environment setting. When enabled, Core checks current authorization and source readiness first, then returns its existing retryable unavailable response before reserving quota or calling a retrieval provider. It does not replace ordinary fair-share or capacity controls.
 - Do not silently lower a student's allowance to compensate for a backend capacity problem. Any change to the visible student quota is a separate product decision.
 
 Exact quota values, per-tenant fairness rules and alert thresholds must be tested and recorded before release; the capacity target above is the minimum acceptance scenario, not a claim that current production supports it.

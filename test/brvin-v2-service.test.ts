@@ -39,6 +39,7 @@ type Options = {
   sources?: Source[];
   quotaAllowed?: boolean;
   grantStatus?: "active" | "revoked";
+  retrievalCircuitBreaker?: boolean;
 };
 
 const fatman: Project = {
@@ -60,7 +61,9 @@ describe("BRVIN monthly project query limit", () => {
   it("uses the same bounded monthly limit as retrieval enforcement", () => {
     expect(brvinMonthlyQueryLimit("400")).toBe(400);
     expect(brvinMonthlyQueryLimit("800")).toBe(800);
-    expect(brvinMonthlyQueryLimit("1200")).toBe(800);
+    expect(brvinMonthlyQueryLimit("1200")).toBe(1200);
+    expect(brvinMonthlyQueryLimit("300000")).toBe(300000);
+    expect(brvinMonthlyQueryLimit("300001")).toBe(300000);
     expect(brvinMonthlyQueryLimit("0")).toBe(800);
     expect(brvinMonthlyQueryLimit("invalid")).toBe(800);
     expect(brvinMonthlyQueryLimit(undefined)).toBe(800);
@@ -145,6 +148,7 @@ describe("BRVIN private application retrieval RPC v2", () => {
       BRVIN_SEARCH_INSTANCE: "shared-index",
       BRVIN_MIN_SCORE: "0.2",
       BRVIN_DEFAULT_MONTHLY_QUERY_LIMIT: "800",
+      BRVIN_RETRIEVAL_CIRCUIT_BREAKER: options.retrievalCircuitBreaker ? "true" : "false",
     } as any;
   };
 
@@ -294,6 +298,22 @@ describe("BRVIN private application retrieval RPC v2", () => {
     expect(prepare).toHaveBeenCalledWith(expect.stringContaining("brvin_application_project_grants"));
     expect(prepare).not.toHaveBeenCalledWith(expect.stringContaining("INSERT INTO fatman_search_usage"));
     expect(search).not.toHaveBeenCalled();
+  });
+
+  it("honors the owner emergency retrieval breaker after authorization without reserving quota", async () => {
+    const env = makeEnv({ retrievalCircuitBreaker: true });
+    const result = await retrieveBrvinForApplicationV2(env, ENVIRONMENT_ID, {
+      projectId: fatman.id,
+      queries: [],
+      pageNumbers: [1],
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "BRVIN_UNAVAILABLE", retryable: true });
+    expect(search).not.toHaveBeenCalled();
+    expect(prepare.mock.calls.some(([statement]) =>
+      String(statement).includes("INSERT INTO fatman_search_usage") ||
+      String(statement).includes("INSERT INTO brvin_project_search_usage"),
+    )).toBe(false);
   });
 
   it("distinguishes an inactive project only when the application has an active grant", async () => {
