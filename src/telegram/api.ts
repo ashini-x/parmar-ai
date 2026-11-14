@@ -584,6 +584,18 @@ export async function sendTelegramAdminContactPhotoWithToken(
   chatId: number,
   replyToMessageId?: number,
 ): Promise<TelegramMessageResult> {
+  // Keep the original contact message available if the embedded asset is incomplete.
+  if (ADMIN_CONTACT_IMAGE_BASE64.length !== 59_408) {
+    return sendTelegramMessageWithToken(
+      token,
+      chatId,
+      ADMIN_CONTACT_TEXT,
+      replyToMessageId,
+      false,
+      buildAdminContactMarkup(),
+    );
+  }
+
   const message = limitTelegramMessage(ADMIN_CONTACT_TEXT);
   const form = new FormData();
   form.append("chat_id", String(chatId));
