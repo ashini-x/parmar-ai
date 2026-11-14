@@ -1,6 +1,6 @@
 # BRVIN M15 — full-corpus Fatman two-agent provider benchmark
 
-**Status:** implementation branch; staging-only validation and execution pending  
+**Status:** merged, staging Worker v108 deployed; corpus indexing in progress and paired evaluation pending  
 **Scope:** complete Fatman 2nd Edition legacy corpus, 538 physical PDF pages  
 **Decision owner:** project owner  
 **Human-review policy:** explicitly waived for this staging decision; no manual passage labels, reviewer queue or human sign-off step
@@ -119,25 +119,33 @@ A Qdrant win advances the provider decision; it does not bypass the production m
 
 The project owner's direction is clear: do not wait for human reviewers. Use the two independent AI assessors and adjudication, complete the paired evaluation, and move promptly to production preparation if Qdrant wins the defined gates. Keep the production AI Search path available for immediate rollback.
 
-## Operator execution — latest verified state, 14 November 2026
+## Operator execution — current verified state, 14 November 2026
 
-The operator is deployed on `parmar-ai-m14-staging` v106 at 100%:
+The operator is deployed on `parmar-ai-m14-staging` **v108** at 100%:
 
 [Open the Fatman 538-page staging operator](https://parmar-ai-m14-staging.thenewtongs.workers.dev/admin/m15/fatman)
 
 The source-export, destination AI Search, Qdrant collection and two distinct assessor model bindings are present. The existing `BRVIN_M14_ADMIN_TOKEN` secret is unchanged. No temporary automation token exists.
 
-**The preparation has not started.** The staging D1 has no `m15_fatman%` state tables, which are created on the first authenticated prepare request. No run or receipt has been created.
+**Current persisted preparation checkpoint (read from staging D1):**
+- OCR text exported: **538/538 pages**
+- Immutable deterministic chunks: **1,606**
+- Qdrant indexed: **11/538 pages, 29 points**
+- Staging AI Search indexed: **0/538 pages**
+- Source status: `qdrant_indexing`
+- Paired evaluation runs: none
 
-1. Open the operator in a browser.
-2. Enter the existing `BRVIN_M14_ADMIN_TOKEN` in the password field on that page only. Never paste it into chat or repository files.
-3. Click **Build the 538-page staging comparison corpus**. Keep the page open while it exports existing OCR text, writes immutable staging manifests, indexes Qdrant in six-page batches and indexes the matched AI Search instance in eight-page batches. The UI resumes from checkpoints and polls pending AI Search items without duplicate uploads.
+The subrequest-limit fix in PR #288 changes Qdrant to **one page per Worker invocation** and AI Search to **four pages per invocation**. The first 538-page OCR export and its immutable GCS manifests are already complete. Do not restart export, upload the PDF or rerun Vision OCR.
+
+1. Refresh the operator page so it loads v108.
+2. Enter the existing `BRVIN_M14_ADMIN_TOKEN` in that page's password field only. Never paste it into chat or repository files.
+3. Click **Build the 538-page staging comparison corpus**. It resumes from Qdrant page 12, preserving all existing manifests and completed points. Keep the page open while it advances one Qdrant page and four AI Search pages per invocation.
 4. Confirm READY and all counters at 538/538: exported, Qdrant indexed and AI Search indexed.
-5. Click **Run the two-agent, 12-case Fatman comparison**. It runs both provider cases per frozen QA question, two independent assessors and adjudication only for material disagreements. The UI saves the full result to isolated staging D1.
+5. Click **Run the two-agent, 12-case Fatman comparison**. It runs both provider cases per frozen QA question, two independent assessors and adjudication only for material disagreements. The UI saves the full receipt to isolated staging D1.
 
-No manual reviewer, PDF upload, Vision OCR rerun, terminal command or repository update is required. Production remains on Cloudflare AI Search; no selector flip occurs automatically from the staging result.
+No manual reviewer, PDF upload, Vision OCR rerun, terminal command or repository update is required. Human review is explicitly waived for this provider decision. Production remains on Cloudflare AI Search; no selector flip occurs automatically from the staging result.
 
-Latest verified environment: staging v106; production `parmar-ai` v803 and `brvin-service` v164; Teachers v12. Production selectors remain AI Search, Fatman monthly query limit 800, and corpus-manifest writes disabled. Release Validation run #43614178611 passed the paired production deployment and smoke test. The production source index and D1 were not modified by the staging benchmark implementation.
+Latest verified environment: staging v108; production `parmar-ai` v807 and `brvin-service` v166; Teachers v12. Both production Core selectors remain `cloudflare-ai-search`, the Fatman production monthly query limit is 800, and corpus-manifest writes are disabled. Release Validation run #43622238475 passed the paired production deployment and smoke test. The production source index and D1 were not modified by the staging benchmark implementation.
 
 ## 14 November 2026 — first operator attempt and diagnostic update
 
