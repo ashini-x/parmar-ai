@@ -560,7 +560,10 @@ export async function sendTelegramMessage(
     };
   }
 
-  return telegramApi<TelegramMessageRe/**
+  return telegramApi<TelegramMessageResult>(env, "sendMessage", payload, botConnectionId);
+}
+
+/**
  * Send the final BRɅIN Instagram profile image from Telegram's own file store,
  * together with the existing contact copy and buttons as one photo message.
  * The file_id was supplied from the final owner-forwarded Telegram photo.
@@ -586,9 +589,6 @@ export async function sendTelegramAdminContactPhotoWithToken(
   }
 
   return telegramApiWithToken<TelegramMessageResult>(token, "sendPhoto", form);
-}
-
-oken<TelegramMessageResult>(token, "sendPhoto", form);
 }
 
 export async function sendTelegramAdminContactPhoto(
