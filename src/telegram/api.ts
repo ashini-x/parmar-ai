@@ -510,6 +510,14 @@ export async function sendTelegramChatAction(
   }, botConnectionId);
 }
 
+export function buildBusinessAutoReplyMarkup(): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[
+      { text: "Follow us on Instagram", url: "https://instagram.com/brvin.in" },
+    ]],
+  };
+}
+
 export async function sendTelegramBusinessMessage(
   env: Env,
   chatId: number,
@@ -517,6 +525,7 @@ export async function sendTelegramBusinessMessage(
   businessConnectionId: string,
   text: string,
   botConnectionId?: string,
+  replyMarkup?: TelegramInlineKeyboardMarkup,
 ): Promise<TelegramMessageResult> {
   const message = limitTelegramMessage(text);
   return telegramApi<TelegramMessageResult>(env, "sendMessage", {
@@ -529,6 +538,7 @@ export async function sendTelegramBusinessMessage(
     text: message.text,
     parse_mode: message.parse_mode,
     link_preview_options: { is_disabled: true },
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
   }, botConnectionId);
 }
 

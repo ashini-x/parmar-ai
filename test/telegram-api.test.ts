@@ -128,7 +128,7 @@ describe("BRɅIN Telegram button", () => {
     });
   });
 
-  it("omits the BRɅIN footer button on personal-account business replies", async () => {
+  it("sends personal-account business replies with the Instagram follow button", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,
       result: { message_id: 124 },
@@ -139,8 +139,15 @@ describe("BRɅIN Telegram button", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const env = { TELEGRAM_BOT_TOKEN: "bot-token" } as unknown as Env;
-    await expect(sendTelegramBusinessMessage(env, 42, 7, "business-connection", "I am BRɅIN."))
-      .resolves.toEqual({ message_id: 124 });
+    await expect(sendTelegramBusinessMessage(
+      env,
+      42,
+      7,
+      "business-connection",
+      "Hi there, we've received your message.",
+      undefined,
+      { inline_keyboard: [[{ text: "Follow us on Instagram", url: "https://instagram.com/brvin.in" }]] },
+    )).resolves.toEqual({ message_id: 124 });
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
@@ -148,10 +155,20 @@ describe("BRɅIN Telegram button", () => {
     expect(payload).toMatchObject({
       chat_id: 42,
       business_connection_id: "business-connection",
-      text: "I am BRɅIN.",
+      text: "Hi there, we've received your message.",
       parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
+      reply_markup: {
+        inline_keyboard: [[{
+          text: "Follow us on Instagram",
+          url: "https://instagram.com/brvin.in",
+        }]],
+      },
+      reply_parameters: {
+        message_id: 7,
+        allow_sending_without_reply: true,
+      },
     });
-    expect(payload).not.toHaveProperty("reply_markup");
   });
 });
 
