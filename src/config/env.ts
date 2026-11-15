@@ -227,6 +227,8 @@ export interface Env {
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
   TELEGRAM_SETUP_SECRET?: string;
+  /** Temporarily stores one owner-supplied Telegram contact photo in D1; disable after capture. */
+  TELEGRAM_PHOTO_CAPTURE_ENABLED?: string;
   TELEGRAM_BOT_ENCRYPTION_KEY?: string;
 
   GCP_PROJECT_ID?: string;

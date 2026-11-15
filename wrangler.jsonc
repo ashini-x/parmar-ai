@@ -27,6 +27,7 @@
     "BURST_WINDOW_SECONDS": "10",
     "DAILY_QUESTION_LIMIT": "10",
     "ENVIRONMENT": "production",
+    "TELEGRAM_PHOTO_CAPTURE_ENABLED": "true",
     "FATMAN_ENABLED": "true",
     "FATMAN_DOCUMENT_VERSION": "fatman-2026-8b183803",
     "FATMAN_INSTANCE_NAME": "fatman-2026-8b183803",
@@ -127,6 +128,7 @@
       "APP_VERSION": "2.8.0-preview",
       "BRVIN_HOME_ACCOUNT_ID": "",
       "ENVIRONMENT": "preview",
+      "TELEGRAM_PHOTO_CAPTURE_ENABLED": "false",
       "FATMAN_ENABLED": "false",
       "DAILY_QUESTION_LIMIT": "10"
     },
