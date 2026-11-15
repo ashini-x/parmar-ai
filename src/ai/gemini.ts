@@ -13,13 +13,21 @@ const MAX_ANSWER_CHARS = 3_900;
 
 const SYSTEM_INSTRUCTION = `You are परमार्थAI, an SSC-focused exam mentor.
 
-BOT IDENTITY QUESTIONS: ALWAYS ANSWER DIRECTLY
-- Treat questions about your name, identity, builder, owner, creator, development, or training as valid questions about yourself. This is an explicit exception to the SSC-only scope.
-- Your identity facts: You are परमार्थAI, built by a top-100 ranker in SSC, and trained using the knowledge and teaching approaches of ParmarSSC (including Fatman 2nd Edition) and RadhikaGoel from RBE.
-- In every identity answer, include all core facts: your full name, that you were built by a top-100 SSC ranker, and that your training draws on ParmarSSC (including Fatman 2nd Edition) and RadhikaGoel from RBE. Phrase these facts naturally in the student's language; do not repeat a fixed canned paragraph.
-- Tailor the rest of the answer to what they asked. For how-created/how-trained questions, also explain the neural-network learning process and that "feeding the brains" means using their knowledge and teaching approaches.
-- When asked how you were created or trained, explain that you are based on a complex neural network of connected artificial neurons that learns patterns from training examples. Describe the educators' "brains" as their knowledge and teaching approaches used to shape the system; do not claim a literal brain scan or human-brain copy.
-- Never redirect an identity question to SSC GA/GS. Do not mention Google, a model provider, cloud infrastructure, or other implementation vendors in an identity answer.
+BOT AND BRɅIN IDENTITY
+- Product identity: You are परमार्थAI, the student-facing SSC General Awareness / General Studies study companion by BRɅIN.
+- Development: परमार्थAI was developed by a team from the National Institute of Technology using deep learning. Always spell the institution's name in full as "National Institute of Technology". Never abbreviate it.
+- Exam-content foundation: Your exam knowledge draws on open exam content from ParmarSSC and RBE. Do not repeat obsolete identity claims about a top-ranked individual creator or add training sources not stated here.
+- BRɅIN's teacher platform helps educators create secure, teacher-specific digital brains that reflect their subject knowledge, explanations, teaching style and approach to teaching.
+- The phrase "clones your intelligence" is figurative product language. Explain it as representing a teacher's knowledge and teaching approach in a useful digital assistant. Never claim a literal brain copy, brain scan, neural recording, perfect human replica, or transfer of a person's entire intelligence.
+- Teacher-facing BRɅIN use cases include answering student doubts, mocks, PDFs and related teaching workflows. Keep these platform capabilities distinct from the features available in this student-facing परमार्थAI bot; never imply every BRɅIN platform capability is already available in this bot.
+- BRɅIN's value proposition is helping teachers reduce the cost and effort of extending their teaching support and scale faster. Treat "save lakhs" as positioning, not a guaranteed saving or a promise of a specific financial result.
+- Identity, product, development and creation questions are always in scope, even though the bot is primarily an SSC mentor. Do not redirect them to GA/GS.
+- Answer only the aspect the student actually asks about. A simple "Who are you?" should get a brief introduction, not a complete explanation of the developer, training sources, digital-brain product, use cases and business proposition.
+- Mention National Institute of Technology only when development, origin or creator context is relevant. Mention ParmarSSC and RBE only when training or exam-content sources are relevant. Explain BRɅIN's teacher digital-brain offering only when the question asks about BRɅIN, teachers or digital brains.
+- Do not invent individual founders, owners, developer names, campus details, dates, model architecture specifics, certifications or technical processes that are not stated in these instructions.
+- Keep simple identity replies to one or two short sentences. Expand only when the user explicitly asks how something works or requests more detail. Avoid long paragraphs, lists and unsolicited background.
+- Make each reply feel conversational and freshly phrased. Do not use a fixed script, canned introduction, repeated paragraph or mandatory fact dump. Vary wording naturally while keeping the facts consistent.
+- Do not mention Google, model providers, cloud infrastructure or other implementation vendors in identity answers.
 
 IDENTITY AND SCOPE
 - You are NOT a general-purpose chatbot. Your primary job is helping students prepare for SSC General Awareness / General Studies and closely related factual exam preparation. Bot identity and creation questions are always in scope and must be answered directly.
@@ -318,17 +326,24 @@ export async function generateGeminiAnswer(
   const location = env.GEMINI_LOCATION?.trim() || DEFAULT_LOCATION;
   const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model)}:generateContent`;
-  const requestedThinkingLevel = selectThinkingLevel(normalizedQuestion, getConfig(env).maxThinkingLevel);
-  // Retrieved book material already constrains the evidence. Medium thinking
-  // leaves more of the bounded output budget for the actual explanation.
-  const thinkingLevel = bookContext || sourceContext ? minThinking(requestedThinkingLevel, "MEDIUM") : requestedThinkingLevel;
   const identityQuestion = isBotIdentityQuestion(normalizedQuestion);
-  const requiresGrounding = !bookContext && !sourceContext && !identityQuestion && requiresFreshData(normalizedQuestion) && isGroundingEnabled(env);
+  const effectiveBookContext = identityQuestion ? undefined : bookContext;
+  const effectiveSourceContext = identityQuestion ? undefined : sourceContext;
+  const effectiveImages = identityQuestion ? [] : images;
+  const requestedThinkingLevel = selectThinkingLevel(normalizedQuestion, getConfig(env).maxThinkingLevel);
+  // Retrieved source material constrains normal study answers. Identity questions
+  // deliberately bypass that constraint so book/source retrieval cannot suppress
+  // a direct answer about परमार्थAI or BRɅIN.
+  const thinkingLevel = effectiveBookContext || effectiveSourceContext
+    ? minThinking(requestedThinkingLevel, "MEDIUM")
+    : requestedThinkingLevel;
+  const requiresGrounding = !effectiveBookContext && !effectiveSourceContext &&
+    !identityQuestion && requiresFreshData(normalizedQuestion) && isGroundingEnabled(env);
   const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, profile);
 
   // Do not spend an AI call or let the model invent a topic for an underspecified
   // first-turn MCQ request. The student must anchor the quiz to a topic.
-  if (!bookContext && !sourceContext && images.length === 0 && requiresMcqTopicClarification(normalizedQuestion, profile)) {
+  if (!effectiveBookContext && !effectiveSourceContext && effectiveImages.length === 0 && requiresMcqTopicClarification(normalizedQuestion, profile)) {
     return {
       packet: makeMcqTopicClarificationPacket(requestedQuizCount),
       usage: [],
@@ -351,7 +366,7 @@ export async function generateGeminiAnswer(
       // A retry is announced during the backoff after a failed request, not
       // while the next generation is running. Every new attempt returns to a
       // truthful working state before it starts streaming.
-      if (bookContext || sourceContext) {
+      if (effectiveBookContext || effectiveSourceContext) {
         await attemptPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.writingAnswer);
       } else if (requiresGrounding) {
         await attemptPartialAnswer?.setStatus?.(TELEGRAM_PROGRESS_LABELS.checkingSources);
@@ -368,10 +383,10 @@ export async function generateGeminiAnswer(
         requiresGrounding,
         attempt,
         requestedQuizCount,
-        images,
+        effectiveImages,
         attemptPartialAnswer,
-        bookContext,
-        sourceContext,
+        effectiveBookContext,
+        effectiveSourceContext,
       );
       logger.info("gemini_generation_attempt_completed", {
         attempt,
@@ -623,7 +638,7 @@ async function requestVertexGemini(
   }
 }
 
-function isBotIdentityQuestion(question: string): boolean {
+export function isBotIdentityQuestion(question: string): boolean {
   const normalized = question
     .toLowerCase()
     .normalize("NFKC")
@@ -649,7 +664,13 @@ function isBotIdentityQuestion(question: string): boolean {
     "how were you created", "how are you created", "how were you made", "how are you made",
     "how were you built", "how were you trained", "how are you trained",
     "how was this bot created", "how was this bot made", "how was it created", "how was it made",
-    "how was it built", "how was it trained", "how did they create you", "how did they train you", "parmar ai kya hai", "parmar ai kaun hai",
+    "how was it built", "how was it trained", "how did they create you", "how did they train you", "what is brvin", "what is brɅin", "what does brvin do", "what does brɅin do",
+    "what can brvin do", "what can brɅin do", "what is a digital brain", "what is the digital brain",
+    "how does brvin work", "how does brɅin work", "how does the digital brain work",
+    "tell me about brvin", "tell me about brɅin", "tell me about the digital brain",
+    "brvin kya hai", "brɅin kya hai", "digital brain kya hai",
+    "brvin kya karta hai", "brɅin kya karta hai", "digital brain kaise kaam karta",
+    "parmar ai kya hai", "parmar ai kaun hai",
     "parmarathai kya hai", "parmarathai kaun hai", "parmar ai ko kisne",
     "kisne banaya", "kisne bnaya", "kisne create kiya", "kisne develop kiya",
     "kisne train kiya", "tumhe kisne", "tumhen kisne", "aapko kisne", "aap ko kisne",
@@ -664,7 +685,31 @@ function isBotIdentityQuestion(question: string): boolean {
   return markers.some((marker) => normalized.includes(marker));
 }
 
+function buildBotIdentityUserPrompt(question: string, isCompletionRetry: boolean): string {
+  return [
+    "BOT AND BRɅIN IDENTITY QUESTION:",
+    "Answer this directly as a question about परमार्थAI or BRɅIN, not as an SSC study question.",
+    "First identify the exact intent. Give only the information needed to answer that intent; do not turn a narrow question into a full product biography.",
+    "For a simple 'Who are you?' or 'What are you?' question, give a very brief introduction to परमार्थAI by BRɅIN and its student-facing SSC purpose. Do not automatically add the development team, content sources, digital-brain explanation or business value proposition.",
+    "For a development or creator question, say that परमार्थAI was developed by a team from the National Institute of Technology using deep learning. Always spell the institution's full name; never abbreviate it. Do not invent an individual founder or developer.",
+    "For a training or exam-content question, mention that its exam knowledge draws on open exam content from ParmarSSC and RBE. Do not add obsolete claims about a top-ranked individual creator or unlisted training sources.",
+    "For a BRɅIN or teacher digital-brain question, explain that BRɅIN is designed to give teachers a secure, teacher-specific digital brain reflecting their subject knowledge, explanations and teaching approach. Mention doubts, mocks and PDFs only when useful to the question.",
+    "Explain 'cloning intelligence' as a figurative way of representing a teacher's knowledge and teaching approach digitally. Never claim a literal copy of a human brain, a perfect replica or a transfer of a person's entire intelligence.",
+    "For cost or scaling questions, explain the goal of reducing the cost and effort of extending teaching support. Do not guarantee that a particular teacher will save lakhs or promise a specific financial result.",
+    "Keep the answer proportional: normally one or two short sentences for a simple question. Use more detail only when the user asks how something works or requests a fuller explanation. Avoid long paragraphs and unnecessary lists.",
+    "Write each answer naturally and freshly. Do not repeat a stock paragraph or fixed answer template. Vary sentence structure and wording without changing the underlying facts.",
+    "Keep BRɅIN platform capabilities distinct from this student-facing परमार्थAI bot's actual capabilities. Do not imply that every teacher-platform feature is available inside this bot.",
+    "Do not mention Google, model providers, cloud infrastructure or implementation vendors.",
+    "STUDENT'S QUESTION:",
+    question,
+    isCompletionRetry ? "COMPLETION RETRY: Return a complete but still concise answer. Do not refer to an earlier draft." : "",
+  ].filter(Boolean).join("\n");
+}
+
 function buildUserPrompt(question: string, context: ProfileContext, requiresGrounding: boolean, isCompletionRetry: boolean, requestedQuizCount: number, bookContext?: FatmanBookContext, sourceContext?: GroundedGeminiSourceContext): string {
+  if (isBotIdentityQuestion(question)) {
+    return buildBotIdentityUserPrompt(question, isCompletionRetry);
+  }
   if (sourceContext) {
     return buildGroundedSourceUserPrompt(question, sourceContext, isCompletionRetry);
   }
@@ -677,7 +722,6 @@ function buildUserPrompt(question: string, context: ProfileContext, requiresGrou
   const profile = context.profile;
   const latestTurn = context.recentConversation.at(-1);
   const likelyFollowUp = isLikelyFollowUp(question, context.recentConversation);
-  const identityQuestion = isBotIdentityQuestion(question);
   const conversation = context.recentConversation.length
     ? context.recentConversation.map((turn, index) => `${index + 1}. Student: ${turn.question}\n   परमार्थAI (𝘗𝘢𝘳𝘮𝘢𝘳𝘵𝘩𝘈𝘐): ${turn.answer}`).join("\n")
     : "No recent conversation available.";
@@ -712,9 +756,6 @@ function buildUserPrompt(question: string, context: ProfileContext, requiresGrou
     question,
     "",
     "Before answering, decide whether this is genuinely useful for SSC GA/GS unless the message asks about the bot's identity or creation. Keep the final answer proportional to the question. Avoid peripheral numbers, coverage percentages, questionable historical minutiae, and unnecessary lists unless the student asks for them. If the student is confused, teach the specific confusion. Only make a learning-profile update when there is meaningful evidence.",
-    identityQuestion
-      ? "BOT IDENTITY OVERRIDE: Answer directly using every core identity fact in your instructions, even though this is not an SSC study question. Adapt the wording to the exact question and the student's language; do not use a fixed script, redirect to GA/GS, or mention Google or any provider."
-      : "",
   ].filter(Boolean).join("\n");
 }
 
