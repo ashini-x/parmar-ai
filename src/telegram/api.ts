@@ -566,7 +566,7 @@ export async function sendTelegramMessage(
  * Send the existing text-only BRɅIN contact message with its original buttons.
  * Contact delivery intentionally does not attach a photo.
  */
-export async function sendTelegramAdminContactPhotoWithToken(
+export async function sendTelegramAdminContactMessageWithToken(
   token: string,
   chatId: number,
   replyToMessageId?: number,
@@ -581,14 +581,14 @@ export async function sendTelegramAdminContactPhotoWithToken(
   );
 }
 
-export async function sendTelegramAdminContactPhoto(
+export async function sendTelegramAdminContactMessage(
   env: Env,
   chatId: number,
   replyToMessageId?: number,
   botConnectionId?: string,
 ): Promise<TelegramMessageResult> {
   const token = await resolveTelegramToken(env, botConnectionId);
-  return sendTelegramAdminContactPhotoWithToken(token, chatId, replyToMessageId);
+  return sendTelegramAdminContactMessageWithToken(token, chatId, replyToMessageId);
 }
 
 export async function editTelegramMessageReplyMarkup(
