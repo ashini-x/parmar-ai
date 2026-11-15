@@ -8,7 +8,7 @@ import {
   editTelegramProgressMessage,
   editTelegramMessageWithToken,
   sendTelegramMessageWithToken,
-  sendTelegramAdminContactPhotoWithToken,
+  sendTelegramAdminContactMessageWithToken,
   sendTelegramVoiceWithToken,
   editTelegramMessageReplyMarkup,
   buildFatmanStartMarkup,
@@ -166,7 +166,7 @@ describe("Telegram Admin contact message", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(sendTelegramAdminContactPhotoWithToken("bot-token", 42, 777))
+    await expect(sendTelegramAdminContactMessageWithToken("bot-token", 42, 777))
       .resolves.toEqual({ message_id: 128 });
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
