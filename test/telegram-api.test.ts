@@ -156,7 +156,7 @@ describe("BRɅIN Telegram button", () => {
 });
 
 describe("Telegram Admin contact photo message", () => {
-  it("falls back to the existing contact text while the embedded JPEG asset is incomplete", async () => {
+  it("sends the final Telegram-hosted BRɅIN image with the existing contact caption and buttons", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,
       result: { message_id: 128 },
@@ -170,21 +170,21 @@ describe("Telegram Admin contact photo message", () => {
       .resolves.toEqual({ message_id: 128 });
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
-    expect(JSON.parse(String(requestInit.body))).toMatchObject({
-      chat_id: 42,
-      text: "<b>परमार्थAI by BRɅIN.</b>\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
-      parse_mode: "HTML",
-      reply_markup: {
-        inline_keyboard: [[
-          { text: "Telegram", url: "tg://resolve?domain=projectbrain&profile" },
-          { text: "Instagram", url: "https://instagram.com/brvin.in" },
-        ]],
-      },
-      reply_parameters: {
-        message_id: 777,
-        allow_sending_without_reply: true,
-      },
+    expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendPhoto");
+    const form = requestInit.body as FormData;
+    expect(form.get("chat_id")).toBe("42");
+    expect(form.get("photo")).toBe("AgACAgUAAxkBAAEklGBq-P8mpzAt31LAJV3IQd_P95cMWgACLBJrG7iPyFcJkQABIW18DYABAAMCAAN5AAM9BA");
+    expect(form.get("caption")).toBe("<b>परमार्थAI by BRɅIN.</b>\\n\\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in");
+    expect(form.get("parse_mode")).toBe("HTML");
+    expect(JSON.parse(String(form.get("reply_markup")))).toEqual({
+      inline_keyboard: [[
+        { text: "Telegram", url: "tg://resolve?domain=projectbrain&profile" },
+        { text: "Instagram", url: "https://instagram.com/brvin.in" },
+      ]],
+    });
+    expect(JSON.parse(String(form.get("reply_parameters")))).toEqual({
+      message_id: 777,
+      allow_sending_without_reply: true,
     });
   });
 });
