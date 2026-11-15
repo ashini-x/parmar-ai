@@ -28,7 +28,7 @@ import {
   editTelegramProgressMessage,
   editTelegramMessageReplyMarkup,
   sendTelegramMessage,
-  sendTelegramAdminContactPhoto,
+  sendTelegramAdminContactMessage,
   sendTelegramChatActionWithToken,
   sendTelegramMessageWithToken,
   sendTelegramVoiceWithToken,
@@ -217,7 +217,6 @@ async function jobStoreRequest<T>(env: Env, chatId: number, body: Record<string,
 }
 
 import { BUSINESS_AUTO_REPLY_TEXT } from "./telegram/business-reply";
-import { captureBrvinContactPhoto } from "./telegram/photo-capture";
 
 async function handleTelegramBusinessConnection(
   connection: TelegramBusinessConnection,
@@ -355,7 +354,7 @@ async function handleCreatorContactCallback(
       }
     }
 
-    await sendTelegramAdminContactPhoto(env, chatId, undefined, botConnectionId);
+    await sendTelegramAdminContactMessage(env, chatId, undefined, botConnectionId);
   } catch (error) {
     logger.warn("creator_contact_callback_failed", {
       requestId,
@@ -650,18 +649,6 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   const text = (message?.text ?? message?.caption ?? "").trim();
   const photoFileId = getTelegramPhotoFileId(message?.photo);
-  if (await captureBrvinContactPhoto(env, {
-    senderId: message?.from?.id,
-    chatId,
-    chatType,
-    messageId,
-    caption: message?.caption?.trim() ?? "",
-    photos: message?.photo,
-  })) {
-    logger.info("telegram_contact_photo_captured", { requestId, updateId, photoCount: message?.photo?.length ?? 0 });
-    await sendTelegramMessage(env, chatId, "BRɅIN contact photo securely captured. You can return to ChatGPT now.", messageId, bot.connectionId);
-    return withRequestId(json({ ok: true, contactPhotoCaptured: true }), requestId);
-  }
   const questionText = text || (photoFileId ? DEFAULT_PHOTO_QUESTION : "");
   if (chatType && chatType !== "private") {
     await bestEffortTelegram("group_scope", () =>
@@ -754,7 +741,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (isAdminCommand(text)) {
     await bestEffortTelegram("admin_contact", () =>
-      sendTelegramAdminContactPhoto(env, chatId, messageId, bot.connectionId),
+      sendTelegramAdminContactMessage(env, chatId, messageId, bot.connectionId),
     );
     return withRequestId(json({ ok: true, adminContact: true }), requestId);
   }

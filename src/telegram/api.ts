@@ -2,7 +2,6 @@ import type { Env, GeminiImageInput } from "../config/env";
 import { MAX_PHOTO_COUNT, MAX_SINGLE_PHOTO_BYTES, MAX_TOTAL_PHOTO_BYTES } from "../config/env";
 import { getActiveTelegramBot, getTelegramBotApiToken, hasTelegramBotRecords } from "./bot-store";
 import { formatTelegramHtml, stripTelegramMarkdownMarkers } from "./formatting";
-import { ADMIN_CONTACT_IMAGE_BASE64 } from "./admin-contact-image";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
@@ -563,69 +562,33 @@ export async function sendTelegramMessage(
   return telegramApi<TelegramMessageResult>(env, "sendMessage", payload, botConnectionId);
 }
 
-
-
-function decodeAdminContactImage(): ArrayBuffer {
-  const binary = atob(ADMIN_CONTACT_IMAGE_BASE64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes.buffer;
-}
-
 /**
- * Send the BRVIN Instagram profile image and the existing contact copy and
- * buttons as one Telegram photo message. The embedded JPEG is decoded without
- * resizing or re-encoding before upload.
+ * Send the existing text-only BRɅIN contact message with its original buttons.
+ * Contact delivery intentionally does not attach a photo.
  */
-export async function sendTelegramAdminContactPhotoWithToken(
+export async function sendTelegramAdminContactMessageWithToken(
   token: string,
   chatId: number,
   replyToMessageId?: number,
 ): Promise<TelegramMessageResult> {
-  // Keep the original contact message available if the embedded asset is incomplete.
-  if (ADMIN_CONTACT_IMAGE_BASE64.length !== 59_408) {
-    return sendTelegramMessageWithToken(
-      token,
-      chatId,
-      ADMIN_CONTACT_TEXT,
-      replyToMessageId,
-      false,
-      buildAdminContactMarkup(),
-    );
-  }
-
-  const message = limitTelegramMessage(ADMIN_CONTACT_TEXT);
-  const form = new FormData();
-  form.append("chat_id", String(chatId));
-  form.append(
-    "photo",
-    new Blob([decodeAdminContactImage()], { type: "image/jpeg" }),
-    "brvin-instagram-profile.jpg",
+  return sendTelegramMessageWithToken(
+    token,
+    chatId,
+    ADMIN_CONTACT_TEXT,
+    replyToMessageId,
+    false,
+    buildAdminContactMarkup(),
   );
-  form.append("caption", message.text);
-  form.append("parse_mode", message.parse_mode);
-  form.append("reply_markup", JSON.stringify(buildAdminContactMarkup()));
-
-  if (replyToMessageId) {
-    form.append("reply_parameters", JSON.stringify({
-      message_id: replyToMessageId,
-      allow_sending_without_reply: true,
-    }));
-  }
-
-  return telegramApiWithToken<TelegramMessageResult>(token, "sendPhoto", form);
 }
 
-export async function sendTelegramAdminContactPhoto(
+export async function sendTelegramAdminContactMessage(
   env: Env,
   chatId: number,
   replyToMessageId?: number,
   botConnectionId?: string,
 ): Promise<TelegramMessageResult> {
   const token = await resolveTelegramToken(env, botConnectionId);
-  return sendTelegramAdminContactPhotoWithToken(token, chatId, replyToMessageId);
+  return sendTelegramAdminContactMessageWithToken(token, chatId, replyToMessageId);
 }
 
 export async function editTelegramMessageReplyMarkup(

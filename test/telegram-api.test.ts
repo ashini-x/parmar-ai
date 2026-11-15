@@ -8,7 +8,7 @@ import {
   editTelegramProgressMessage,
   editTelegramMessageWithToken,
   sendTelegramMessageWithToken,
-  sendTelegramAdminContactPhotoWithToken,
+  sendTelegramAdminContactMessageWithToken,
   sendTelegramVoiceWithToken,
   editTelegramMessageReplyMarkup,
   buildFatmanStartMarkup,
@@ -155,8 +155,8 @@ describe("BRɅIN Telegram button", () => {
   });
 });
 
-describe("Telegram Admin contact photo message", () => {
-  it("falls back to the existing contact text while the embedded JPEG asset is incomplete", async () => {
+describe("Telegram Admin contact message", () => {
+  it("sends the existing text-only contact message and original buttons without a photo", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       ok: true,
       result: { message_id: 128 },
@@ -166,11 +166,12 @@ describe("Telegram Admin contact photo message", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(sendTelegramAdminContactPhotoWithToken("bot-token", 42, 777))
+    await expect(sendTelegramAdminContactMessageWithToken("bot-token", 42, 777))
       .resolves.toEqual({ message_id: 128 });
 
     const [requestUrl, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
+    expect(requestInit.headers).toMatchObject({ "content-type": "application/json" });
     expect(JSON.parse(String(requestInit.body))).toMatchObject({
       chat_id: 42,
       text: "<b>परमार्थAI by BRɅIN.</b>\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
