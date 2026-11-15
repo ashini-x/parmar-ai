@@ -64,6 +64,8 @@
       "binding": "BRVIN_SERVICE",
       "service": "brvin-service",
       "entrypoint": "BrvinRetrievalApi",
+      // Required by BrvinRetrievalApi.getProjectStatus(): keep the legacy Fatman client identity.
+      // Deploy this binding through Wrangler so the entrypoint props are preserved.
       "props": {
         "clientId": "fatman",
         "applicationEnvironmentId": "00000000-0000-4000-8000-000000000102"
