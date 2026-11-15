@@ -173,7 +173,7 @@ describe("Telegram Admin contact photo message", () => {
     expect(requestUrl).toBe("https://api.telegram.org/botbot-token/sendMessage");
     expect(JSON.parse(String(requestInit.body))).toMatchObject({
       chat_id: 42,
-      text: "<b>परमार्थAI by BRɅIN.</b>\\n\\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
+      text: "<b>परमार्थAI by BRɅIN.</b>\n\nYou can contact us via Telegram or Instagram. For business queries, please send an email to admin@brvin.in",
       parse_mode: "HTML",
       reply_markup: {
         inline_keyboard: [[
