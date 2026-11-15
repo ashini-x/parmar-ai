@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectThinkingLevel, type ThinkingLevel } from "../src/ai/gemini";
+import { isBotIdentityQuestion, selectThinkingLevel, type ThinkingLevel } from "../src/ai/gemini";
 
 describe("Gemini low-latency thinking policy", () => {
   const cap: ThinkingLevel = "HIGH";
@@ -26,5 +26,28 @@ describe("Gemini low-latency thinking policy", () => {
   it("never exceeds the configured thinking ceiling", () => {
     expect(selectThinkingLevel("Derive this equation step by step.", "MEDIUM")).toBe("MEDIUM");
     expect(selectThinkingLevel("Explain this concept.", "LOW")).toBe("LOW");
+  });
+});
+
+
+describe("Parmar AI and BRɅIN identity intent detection", () => {
+  it("recognizes direct identity and development questions", () => {
+    expect(isBotIdentityQuestion("Who are you?")).toBe(true);
+    expect(isBotIdentityQuestion("Who developed you?")).toBe(true);
+    expect(isBotIdentityQuestion("Who created Parmar AI?")).toBe(true);
+    expect(isBotIdentityQuestion("How were you trained?")).toBe(true);
+  });
+
+  it("recognizes BRɅIN and digital-brain questions", () => {
+    expect(isBotIdentityQuestion("What is BRɅIN?")).toBe(true);
+    expect(isBotIdentityQuestion("What does BRVIN do?")).toBe(true);
+    expect(isBotIdentityQuestion("What is a digital brain?")).toBe(true);
+    expect(isBotIdentityQuestion("Digital brain kya hai?")).toBe(true);
+    expect(isBotIdentityQuestion("How does BRɅIN work?")).toBe(true);
+  });
+
+  it("does not misclassify ordinary SSC creator questions as bot identity", () => {
+    expect(isBotIdentityQuestion("Who founded the Indian National Congress?")).toBe(false);
+    expect(isBotIdentityQuestion("Who created the Constitution of India?")).toBe(false);
   });
 });
