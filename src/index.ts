@@ -86,6 +86,7 @@ const QUEUE_MAX_RETRIES = 10;
 const STATUS_TEXT = "Thinking…";
 const BOT_BRAND_NAME = "परमार्थAI";
 import { HELP_VOICE_URL, PARMAR_SIR_VOICE_URL, START_WELCOME_VOICE_URL } from "./telegram/voice-assets";
+import { sendTelegramVoiceWithPrivacyFallback } from "./telegram/voice-fallback";
 const RATE_LIMIT_TEXT = "Abhi ek saath kaafi doubts aa rahe hain. Thoda gap dekar phir doubt bhejna 🙂";
 const DAILY_LIMIT_TEXT = "Aaj ke liye tumhara 10/10 daily question limit complete ho gaya hai. Yeh limit har din raat 12:00 AM (midnight, India Standard Time) par reset hoti hai. Uske baad phir questions bhejna 🙌";
 const FINAL_FAILURE_TEXT = "Bhai, is waqt answer complete nahi ho paaya. Tumhara sawal retry hua hai; same doubt dobara bhejna 🙏";
@@ -730,13 +731,15 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
     queueAnalytics(ctx, "parmar_sir", () => recordEvent(env, "parmar_sir", analyticsUser));
     ctx.waitUntil(bestEffortTelegram("parmar_sir_voice", () =>
-      sendTelegramVoiceWithToken(
-        bot.token,
+      sendTelegramVoiceWithPrivacyFallback({
+        command: "parmar",
+        token: bot.token,
         chatId,
-        PARMAR_SIR_VOICE_URL,
-        false,
-        buildFatmanStartMarkup(),
-      ),
+        voiceUrl: PARMAR_SIR_VOICE_URL,
+        fallbackText: "Parmar Sir's voice could not be delivered, but you can continue with the Start Fatman button below.",
+        includeCreatorFooter: false,
+        replyMarkup: buildFatmanStartMarkup(),
+      }),
     ));
     return withRequestId(json({ ok: true, parmarSir: true }), requestId);
   }
@@ -756,20 +759,21 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     });
 
     /*
-     * Text-only welcome is intentionally disabled. /start now sends only the
-     * prerecorded voice note, without posting the old "So Hello Everyone…"
-     * text message.
-     *
-     * const welcomeStartedAt = Date.now();
-     * await bestEffortTelegram("start", () =>
-     *   sendTelegramMessageWithToken(bot.token, chatId, buildStartText()),
-     * );
+     * /start normally sends only the prerecorded voice note. If Telegram
+     * explicitly blocks voice messages under this user's privacy settings,
+     * send a short text welcome with clear instructions instead.
      */
 
     // Send the prerecorded voice note as the sole /start welcome response.
     // Background delivery keeps the webhook acknowledgement fast.
     ctx.waitUntil(bestEffortTelegram("start_voice", () =>
-      sendTelegramVoiceWithToken(bot.token, chatId, START_WELCOME_VOICE_URL),
+      sendTelegramVoiceWithPrivacyFallback({
+        command: "start",
+        token: bot.token,
+        chatId,
+        voiceUrl: START_WELCOME_VOICE_URL,
+        fallbackText: "Welcome to परमार्थAI by BRɅIN! You can send your questions here even when voice messages are disabled.",
+      }),
     ));
 
     // Analytics are still recorded, but only after the welcome has been sent.
@@ -817,13 +821,15 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       return withRequestId(json({ ok: true, helpUnavailable: true }), requestId);
     }
     await bestEffortTelegram("help_voice", () =>
-      sendTelegramVoiceWithToken(
-        bot.token,
+      sendTelegramVoiceWithPrivacyFallback({
+        command: "help",
+        token: bot.token,
         chatId,
-        HELP_VOICE_URL,
-        false,
-        buildHelpMenuMarkup(),
-      ),
+        voiceUrl: HELP_VOICE_URL,
+        fallbackText: "Here are the help options. You can use the buttons below while voice messages are unavailable.",
+        includeCreatorFooter: false,
+        replyMarkup: buildHelpMenuMarkup(),
+      }),
     );
     return withRequestId(json({ ok: true, helpVoice: true }), requestId);
   }
