@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "brvin-web",
+  "compatibility_date": "2026-11-16",
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "brvin.in", "custom_domain": true }
+  ],
+  "assets": {
+    "directory": "./web/",
+    "html_handling": "auto-trailing-slash"
+  }
+}
