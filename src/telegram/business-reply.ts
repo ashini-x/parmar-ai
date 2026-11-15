@@ -1,7 +1,5 @@
 export const BUSINESS_AUTO_REPLY_TEXT = [
-  "Hi, thanks for reaching out.",
+  "Hi there, we've received your message and our support team will be in touch shortly.",
   "",
-  "I am BRɅIN, a neural engine developed using deep learning.",
-  "",
-  "My creator is not online right now. Please send an email regarding your query to admin@brvin.in",
+  "For business queries, please send an email to partners@brvin.in",
 ].join("\n");
