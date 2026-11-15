@@ -28,7 +28,7 @@ import {
   editTelegramProgressMessage,
   editTelegramMessageReplyMarkup,
   sendTelegramMessage,
-  sendTelegramAdminContactPhoto,
+  sendTelegramAdminContactMessage,
   sendTelegramChatActionWithToken,
   sendTelegramMessageWithToken,
   sendTelegramVoiceWithToken,
@@ -354,7 +354,7 @@ async function handleCreatorContactCallback(
       }
     }
 
-    await sendTelegramAdminContactPhoto(env, chatId, undefined, botConnectionId);
+    await sendTelegramAdminContactMessage(env, chatId, undefined, botConnectionId);
   } catch (error) {
     logger.warn("creator_contact_callback_failed", {
       requestId,
@@ -741,7 +741,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
   if (isAdminCommand(text)) {
     await bestEffortTelegram("admin_contact", () =>
-      sendTelegramAdminContactPhoto(env, chatId, messageId, bot.connectionId),
+      sendTelegramAdminContactMessage(env, chatId, messageId, bot.connectionId),
     );
     return withRequestId(json({ ok: true, adminContact: true }), requestId);
   }
