@@ -34,6 +34,7 @@ import {
   sendTelegramVoiceWithToken,
   editTelegramMessageWithToken,
   sendTelegramBusinessMessage,
+  buildBusinessAutoReplyMarkup,
   sendTelegramQuiz,
   stopTelegramPoll,
   telegramApi,
@@ -299,6 +300,7 @@ async function handleTelegramBusinessMessage(
     businessConnectionId,
     BUSINESS_AUTO_REPLY_TEXT,
     botConnectionId,
+    buildBusinessAutoReplyMarkup(),
   );
 }
 
