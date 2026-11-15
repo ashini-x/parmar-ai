@@ -2,7 +2,6 @@ import type { Env, GeminiImageInput } from "../config/env";
 import { MAX_PHOTO_COUNT, MAX_SINGLE_PHOTO_BYTES, MAX_TOTAL_PHOTO_BYTES } from "../config/env";
 import { getActiveTelegramBot, getTelegramBotApiToken, hasTelegramBotRecords } from "./bot-store";
 import { formatTelegramHtml, stripTelegramMarkdownMarkers } from "./formatting";
-const ADMIN_CONTACT_PHOTO_FILE_ID = "AgACAgUAAxkBAAEklGBq-P8mpzAt31LAJV3IQd_P95cMWgACLBJrG7iPyFcJkQABIW18DYABAAMCAAN5AAM9BA";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
@@ -564,31 +563,22 @@ export async function sendTelegramMessage(
 }
 
 /**
- * Send the final BRɅIN Instagram profile image from Telegram's own file store,
- * together with the existing contact copy and buttons as one photo message.
- * The file_id was supplied from the final owner-forwarded Telegram photo.
+ * Send the existing text-only BRɅIN contact message with its original buttons.
+ * Contact delivery intentionally does not attach a photo.
  */
 export async function sendTelegramAdminContactPhotoWithToken(
   token: string,
   chatId: number,
   replyToMessageId?: number,
 ): Promise<TelegramMessageResult> {
-  const message = limitTelegramMessage(ADMIN_CONTACT_TEXT);
-  const form = new FormData();
-  form.append("chat_id", String(chatId));
-  form.append("photo", ADMIN_CONTACT_PHOTO_FILE_ID);
-  form.append("caption", message.text);
-  form.append("parse_mode", message.parse_mode);
-  form.append("reply_markup", JSON.stringify(buildAdminContactMarkup()));
-
-  if (replyToMessageId) {
-    form.append("reply_parameters", JSON.stringify({
-      message_id: replyToMessageId,
-      allow_sending_without_reply: true,
-    }));
-  }
-
-  return telegramApiWithToken<TelegramMessageResult>(token, "sendPhoto", form);
+  return sendTelegramMessageWithToken(
+    token,
+    chatId,
+    ADMIN_CONTACT_TEXT,
+    replyToMessageId,
+    false,
+    buildAdminContactMarkup(),
+  );
 }
 
 export async function sendTelegramAdminContactPhoto(
