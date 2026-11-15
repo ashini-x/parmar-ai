@@ -730,10 +730,11 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
 
     queueAnalytics(ctx, "parmar_sir", () => recordEvent(env, "parmar_sir", analyticsUser));
     ctx.waitUntil(bestEffortTelegram("parmar_sir_voice", () =>
-      sendTelegramVoiceWithToken(
+      sendTelegramVoiceWithPrivacyFallback(
         bot.token,
         chatId,
         PARMAR_SIR_VOICE_URL,
+        "parmar_sir",
         false,
         buildFatmanStartMarkup(),
       ),
@@ -769,7 +770,7 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
     // Send the prerecorded voice note as the sole /start welcome response.
     // Background delivery keeps the webhook acknowledgement fast.
     ctx.waitUntil(bestEffortTelegram("start_voice", () =>
-      sendTelegramVoiceWithToken(bot.token, chatId, START_WELCOME_VOICE_URL),
+      sendTelegramVoiceWithPrivacyFallback(bot.token, chatId, START_WELCOME_VOICE_URL, "start"),
     ));
 
     // Analytics are still recorded, but only after the welcome has been sent.
@@ -817,10 +818,11 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       return withRequestId(json({ ok: true, helpUnavailable: true }), requestId);
     }
     await bestEffortTelegram("help_voice", () =>
-      sendTelegramVoiceWithToken(
+      sendTelegramVoiceWithPrivacyFallback(
         bot.token,
         chatId,
         HELP_VOICE_URL,
+        "help",
         false,
         buildHelpMenuMarkup(),
       ),
@@ -2572,6 +2574,43 @@ async function bestEffortTelegram<T>(label: string, fn: () => Promise<T>): Promi
   catch (error) {
     logger.warn(`telegram_${label}_failed`, { error: error instanceof Error ? error.message : String(error) });
     return undefined;
+  }
+}
+
+const TELEGRAM_VOICE_PRIVACY_HELP =
+  "Telegram is blocking voice messages because of your privacy settings. To receive voice notes, open Telegram Settings → Privacy and Security → Voice Messages and allow voice messages from everyone (or add this bot to your allowed exceptions, if that option is shown). Then send this command again. You can still use the text options below.";
+
+async function sendTelegramVoiceWithPrivacyFallback(
+  token: string,
+  chatId: number,
+  voiceUrl: string,
+  label: string,
+  includeCreatorFooter = true,
+  replyMarkup?: { inline_keyboard: Array<Array<Record<string, unknown>>> },
+): Promise<void> {
+  try {
+    await sendTelegramVoiceWithToken(token, chatId, voiceUrl, includeCreatorFooter, replyMarkup);
+  } catch (error) {
+    const isVoicePrivacyRejection =
+      error instanceof TelegramError &&
+      error.status === 400 &&
+      error.message.toUpperCase().includes("VOICE_MESSAGES_FORBIDDEN");
+
+    if (!isVoicePrivacyRejection) throw error;
+
+    logger.warn("telegram_voice_privacy_fallback", {
+      label,
+      chatId: String(chatId),
+      error: error.message,
+    });
+    await sendTelegramMessageWithToken(
+      token,
+      chatId,
+      TELEGRAM_VOICE_PRIVACY_HELP,
+      undefined,
+      includeCreatorFooter,
+      replyMarkup,
+    );
   }
 }
 
