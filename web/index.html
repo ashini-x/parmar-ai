@@ -380,6 +380,196 @@ button{font:inherit}
   text-decoration:none;
 }
 
+
+/* Flagship ParmarthAI competitive-exam spotlight */
+.product-surface-grid{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:stretch;
+}
+.product-surface-grid>.parmarth-featured{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);
+  align-items:center;
+  gap:clamp(24px,4vw,52px);
+  padding:clamp(24px,3vw,38px);
+  background:
+    radial-gradient(ellipse 58% 100% at 100% 0%,rgba(216,203,179,.2),transparent 78%),
+    var(--paper);
+}
+.parmarth-featured-copy{display:flex;min-width:0;flex-direction:column;align-items:flex-start}
+.parmarth-featured .flagship-tag{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  margin:0 0 17px;
+  color:#2F6BFF;
+  font-size:8px;
+  font-weight:750;
+  letter-spacing:.13em;
+  line-height:1.5;
+}
+.flagship-tag i{width:3px;height:3px;border-radius:50%;background:#2F6BFF}
+.parmarth-featured h4{
+  margin:0 0 13px;
+  color:var(--ink);
+  font-size:clamp(28px,3.1vw,38px);
+  font-weight:560;
+  letter-spacing:-.06em;
+  line-height:1.08;
+}
+.parmarth-featured p{
+  max-width:540px;
+  margin:0;
+  color:var(--body);
+  font-size:13px;
+  line-height:1.85;
+}
+.product-surface-grid a.parmarth-cta{
+  display:inline-flex;
+  min-height:42px;
+  align-items:center;
+  justify-content:center;
+  align-self:flex-start;
+  gap:10px;
+  margin-top:23px;
+  padding:0 17px;
+  border:1px solid #2F6BFF;
+  border-radius:999px;
+  background:transparent;
+  color:#2F6BFF;
+  font-size:11px;
+  font-weight:630;
+  text-decoration:none;
+  transition:background .18s ease,color .18s ease;
+}
+.product-surface-grid a.parmarth-cta:hover{
+  background:#2F6BFF;
+  color:#fff;
+  text-decoration:none;
+}
+.ssc-preview{
+  min-width:0;
+  padding:clamp(17px,2.1vw,24px);
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#F7F6F2;
+}
+.ssc-preview-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding-bottom:15px;
+  border-bottom:1px solid var(--line);
+  color:var(--muted);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.12em;
+}
+.ssc-preview-indicator{display:inline-flex;align-items:center;gap:6px;color:var(--body);font-size:8px;letter-spacing:.08em}
+.ssc-preview-indicator i{width:5px;height:5px;border-radius:50%;background:#77756E}
+.ssc-query-label{
+  margin:17px 0 7px;
+  color:var(--muted);
+  font-size:8px;
+  font-weight:700;
+  letter-spacing:.13em;
+}
+.ssc-query-bubble{
+  max-width:94%;
+  margin-left:auto;
+  padding:13px 15px;
+  border:1px solid var(--line);
+  border-radius:11px 11px 3px 11px;
+  background:#fff;
+  color:var(--ink);
+  font-size:12px;
+  line-height:1.6;
+}
+.ssc-citation{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  margin-top:15px;
+  padding:12px 13px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:#fff;
+}
+.ssc-citation-icon{
+  display:grid;
+  width:29px;
+  height:29px;
+  flex:0 0 auto;
+  place-items:center;
+  border:1px solid var(--line);
+  border-radius:50%;
+  color:#2F6BFF;
+}
+.ssc-citation>div:last-child{display:flex;min-width:0;flex-direction:column;gap:4px}
+.ssc-citation span{
+  color:var(--muted);
+  font-size:7px;
+  font-weight:750;
+  letter-spacing:.12em;
+}
+.ssc-citation strong{
+  color:var(--ink);
+  font-size:10px;
+  font-weight:620;
+  line-height:1.45;
+}
+.ssc-audio-player{
+  margin-top:13px;
+  padding:13px 14px 10px;
+  border-radius:9px;
+  background:#1E1E1C;
+  color:#D8CBB3;
+}
+.ssc-audio-top{display:flex;align-items:center;gap:11px}
+.ssc-audio-play{
+  display:grid;
+  width:31px;
+  height:31px;
+  flex:0 0 auto;
+  place-items:center;
+  border-radius:50%;
+  background:#2F6BFF;
+  color:#fff;
+}
+.ssc-audio-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:3px}
+.ssc-audio-copy strong{overflow:hidden;color:#F7F6F2;font-size:10px;font-weight:620;text-overflow:ellipsis;white-space:nowrap}
+.ssc-audio-copy span{color:rgba(216,203,179,.7);font-size:8px}
+.ssc-audio-more{color:rgba(216,203,179,.65);font-size:11px;letter-spacing:2px}
+.ssc-waveform{display:block;width:100%;height:30px;margin-top:10px;overflow:visible}
+.ssc-preview-foot{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:13px;
+  color:var(--muted);
+  font-size:7px;
+  font-weight:680;
+  letter-spacing:.1em;
+}
+.ssc-preview-foot i{width:3px;height:3px;border-radius:50%;background:#9B988F}
+.product-surface-grid>article:not(.parmarth-featured){min-height:100%}
+@media(max-width:760px){
+  .product-surface-grid{grid-template-columns:1fr}
+  .product-surface-grid>.parmarth-featured{
+    grid-column:auto;
+    grid-template-columns:1fr;
+    gap:24px;
+    padding:22px;
+  }
+  .parmarth-featured h4{font-size:31px}
+  .parmarth-featured p{font-size:12px}
+  .ssc-preview{padding:17px}
+  .product-surface-grid>article:not(.parmarth-featured){min-height:0}
+}
+
 </style>
 </head>
 <body>
@@ -418,12 +608,73 @@ button{font:inherit}
 </dl>
 <div class="provider-note"><div><span class="provider-state">IN EVALUATION</span><strong>Vertex AI embeddings with Qdrant Cloud</strong></div><p>The next retrieval provider is being evaluated in isolated staging. Production still uses Cloudflare AI Search. No provider cutover will occur until relevance, authorisation, load, cost, recovery and rollback checks pass.</p></div>
 </section>
-<section class="voice-layer" aria-label="Voice AI roadmap"><div class="voice-layer-copy"><span class="voice-layer-kicker">VOICE INTERFACE LAYER / IN DEVELOPMENT</span><h3>Speak to the same verified knowledge.</h3><p>We are developing an ElevenLabs Voice AI layer for natural spoken explanations, real-time conversational delivery and voice-assisted workflows. BRɅIN remains responsible for source permissions, retrieval and page provenance; each connected application owns its conversation and response experience.</p></div><div class="voice-layer-state"><span class="state-dot"></span><div><strong>ElevenLabs integration</strong><small>Planned voice provider · not yet live in production</small></div></div></section><section class="product-surfaces" aria-labelledby="products-title"><div class="stack-heading"><h3 id="products-title">Products using the platform</h3><span>CORE AND CONSUMERS</span></div>
-<div class="product-surface-grid">
-<article><span>KNOWLEDGE INFRASTRUCTURE</span><h4>BRɅIN Core</h4><p>Shared document ingestion, knowledge governance, permissioned retrieval and source-page provenance for connected software products.</p><a href="https://github.com/ashini-x/parmar-ai" target="_blank" rel="noopener noreferrer">Core repository <span aria-hidden="true">↗</span></a></article>
-<article><span>TELEGRAM PRODUCT</span><h4>परमार्थAI</h4><p>A Telegram-based voice and text learning MVP for adult learners and exam aspirants (18+), designed to deliver page-cited answers and natural audio explanations. ElevenLabs Voice AI integration is in development.</p><a href="https://t.me/parmarthbot" target="_blank" rel="noopener noreferrer">Open Telegram MVP <span aria-hidden="true">↗</span></a></article>
-<article><span>PROFESSIONAL WORKSPACES</span><h4>BRɅIN Voice and Knowledge Workspaces</h4><p>Tenant-isolated document workspaces for adult professionals, researchers and enterprise teams, with governed access, page-cited retrieval and planned voice-assisted workflows.</p><a href="https://github.com/ashini-x" target="_blank" rel="noopener noreferrer">BRɅIN on GitHub <span aria-hidden="true">↗</span></a></article>
-</div></section>
+<section class="voice-layer" aria-label="Voice AI roadmap"><div class="voice-layer-copy"><span class="voice-layer-kicker">VOICE INTERFACE LAYER / IN DEVELOPMENT</span><h3>Speak to the same verified knowledge.</h3><p>We are developing an ElevenLabs Voice AI layer for natural spoken explanations, real-time conversational delivery and voice-assisted workflows. BRɅIN remains responsible for source permissions, retrieval and page provenance; each connected application owns its conversation and response experience.</p></div><div class="voice-layer-state"><span class="state-dot"></span><div><strong>ElevenLabs integration</strong><small>Planned voice provider · not yet live in production</small></div></div></section><section class="product-surfaces" aria-labelledby="products-title">
+  <div class="stack-heading">
+    <h3 id="products-title">Products using the platform</h3>
+    <span>CORE AND CONSUMERS</span>
+  </div>
+  <div class="product-surface-grid">
+    <article class="parmarth-featured">
+      <div class="parmarth-featured-copy">
+        <span class="flagship-tag">FLAGSHIP DEPLOYMENT <i aria-hidden="true"></i> COMPETITIVE EXAMS</span>
+        <h4>परमार्थAI</h4>
+        <p>Our live consumer MVP built for graduate-level competitive exam aspirants (including SSC CGL, CHSL, and public service exams). परमार्थAI turns dense General Studies and Quantitative reference PDFs into instant, page-cited answers and natural spoken audio explanations via Telegram.</p>
+        <a class="parmarth-cta" href="https://t.me/parmarthbot" target="_blank" rel="noopener noreferrer">Open Telegram MVP <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="ssc-preview" aria-label="Illustrative SSC-style query and spoken revision preview">
+        <div class="ssc-preview-heading">
+          <span>PARMARTHAI / QUERY PREVIEW</span>
+          <span class="ssc-preview-indicator"><i aria-hidden="true"></i> SAMPLE</span>
+        </div>
+        <div class="ssc-query-label">YOUR QUESTION</div>
+        <div class="ssc-query-bubble">Explain Article 356 and cite the exact reference page.</div>
+        <div class="ssc-citation">
+          <div class="ssc-citation-icon" aria-hidden="true">
+            <svg viewBox="0 0 20 20" width="17" height="17" fill="none">
+              <path d="m4 10.3 3.7 3.6L16 5.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <span>VERIFIED CITATION</span>
+            <strong>Source: Indian Polity Reference • Page 248</strong>
+          </div>
+        </div>
+        <div class="ssc-audio-player" aria-label="Illustrative audio player: 42-second spoken revision explanation">
+          <div class="ssc-audio-top">
+            <span class="ssc-audio-play" aria-hidden="true">
+              <svg viewBox="0 0 20 20" width="15" height="15" fill="none">
+                <path d="M7 4.5v11l8.5-5.5L7 4.5Z" fill="currentColor"/>
+              </svg>
+            </span>
+            <div class="ssc-audio-copy">
+              <strong>Spoken Revision Explanation</strong>
+              <span>0:42 · Audio preview</span>
+            </div>
+            <span class="ssc-audio-more" aria-hidden="true">•••</span>
+          </div>
+          <svg class="ssc-waveform" viewBox="0 0 420 38" preserveAspectRatio="none" role="img" aria-label="Static audio waveform">
+            <g fill="none" stroke="#D8CBB3" stroke-width="3" stroke-linecap="round">
+              <path d="M3 19V17 M15 19V11 M27 19V22 M39 19V7 M51 19V14 M63 19V25 M75 19V10 M87 19V5 M99 19V15 M111 19V27 M123 19V12 M135 19V8 M147 19V23 M159 19V13 M171 19V4 M183 19V16 M195 19V26 M207 19V10 M219 19V6 M231 19V18 M243 19V28 M255 19V13 M267 19V8 M279 19V22 M291 19V15 M303 19V5 M315 19V17 M327 19V25 M339 19V12 M351 19V7 M363 19V21 M375 19V14 M387 19V4 M399 19V17 M411 19V10"/>
+            </g>
+          </svg>
+        </div>
+        <div class="ssc-preview-foot">PAGE-CITED KNOWLEDGE <i aria-hidden="true"></i> VOICE-ASSISTED REVISION</div>
+      </div>
+    </article>
+    <article>
+      <span>KNOWLEDGE INFRASTRUCTURE</span>
+      <h4>BRɅIN Core</h4>
+      <p>Shared document ingestion, knowledge governance, permissioned retrieval and source-page provenance for connected software products.</p>
+      <a href="https://github.com/ashini-x/parmar-ai" target="_blank" rel="noopener noreferrer">Core repository <span aria-hidden="true">↗</span></a>
+    </article>
+    <article>
+      <span>PROFESSIONAL WORKSPACES</span>
+      <h4>BRɅIN Voice and Knowledge Workspaces</h4>
+      <p>Built for EdTech academies, exam publishers, and institutional teams deploying private, zero-hallucination voice and text tutors on proprietary study material.</p>
+      <a href="https://github.com/ashini-x" target="_blank" rel="noopener noreferrer">BRɅIN on GitHub <span aria-hidden="true">↗</span></a>
+    </article>
+  </div>
+</section>
 <div class="platform-links"><a href="https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_SYSTEM_REFERENCE.md" target="_blank" rel="noopener noreferrer">Read the system reference <span aria-hidden="true">↗</span></a><a href="mailto:partners@brvin.in">Discuss the architecture <span aria-hidden="true">→</span></a></div>
 </section>
 <section class="plans shell" id="plans" aria-labelledby="plans-title"><div class="plans-intro"><span class="plans-kicker">ACCESS AND PLANS</span><h2 id="plans-title">Start small. Scale with confidence.</h2><p>An indicative SaaS model for individual builders, professional research teams and enterprise deployments. Features and limits are confirmed in each plan agreement.</p></div>
