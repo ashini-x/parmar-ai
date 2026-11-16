@@ -39,8 +39,8 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 .hero-content{display:flex;flex-direction:column;align-items:center;gap:22px;text-align:center}
 .hero h1{max-width:1080px;margin:0;font-size:clamp(54px,7.6vw,100px);font-weight:660;letter-spacing:-.085em;line-height:.98;text-wrap:balance}
 .hero h1 span{color:var(--blue)}
-.hero-copy{max-width:650px;margin:0;color:#a9a9b1;font-size:clamp(16px,1.5vw,19px);line-height:1.65;text-wrap:balance}
-.demo{padding:0 0 112px}
+.hero-copy{max-width:700px;margin:0;color:#a9a9b1;font-size:clamp(16px,1.5vw,19px);line-height:1.65;text-wrap:balance}
+.demo{padding:0 0 90px}
 .demo-stage{position:relative;display:flex;min-height:0;align-items:center;justify-content:center;margin:0;padding:22px 0 28px;overflow:visible;border:0;border-radius:0;background:radial-gradient(ellipse 440px 520px at 50% 48%,rgba(39,120,255,.11),rgba(39,120,255,.035) 44%,transparent 75%)}
 .stage-note{display:none}
 .video-device{position:relative;z-index:1;width:clamp(270px,27vw,340px);max-width:340px;justify-self:center;margin:0;padding:7px;overflow:hidden;border:1px solid rgba(255,255,255,.22);border-radius:32px;background:#050505;box-shadow:0 28px 90px rgba(0,0,0,.58),0 0 0 1px rgba(255,255,255,.035);aspect-ratio:1/2}
@@ -50,27 +50,65 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 .video-actions{display:flex;align-items:center;justify-content:center;margin-top:26px}
 .primary-telegram{display:inline-flex;min-height:54px;align-items:center;justify-content:center;gap:13px;padding:0 25px;border:1px solid var(--blue);border-radius:999px;background:var(--blue);color:#fff;font-size:14px;font-weight:620;letter-spacing:-.02em;box-shadow:0 8px 30px rgba(39,120,255,.14);transition:background .18s ease,transform .18s ease,box-shadow .18s ease}
 .primary-telegram:hover{transform:translateY(-2px);background:#4288ff;box-shadow:0 12px 38px rgba(39,120,255,.22)}
-.principles{padding:34px 0 96px;border-top:1px solid var(--line)}
-.principles-head{display:flex;align-items:center;justify-content:center;margin-bottom:30px;text-align:center}
-.principles-head h2{margin:0;font-size:clamp(27px,3vw,38px);font-weight:590;letter-spacing:-.065em;line-height:1.08}
-.principles-head span{display:none}
-.principle-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.principle{min-height:132px;padding:28px 28px 26px;text-align:center}
-.principle+.principle{border-left:1px solid var(--line)}
-.principle .principle-num{display:none}
-.principle h3{margin:0;color:#e9e9eb;font-size:18px;font-weight:570;letter-spacing:-.035em}
-.principle p{max-width:260px;margin:8px auto 0;color:#85858d;font-size:13px;line-height:1.65}
+.platform{padding:36px 0 92px;border-top:1px solid var(--line)}
+.platform-intro{max-width:760px;margin:0 auto 42px;text-align:center}
+.platform-kicker{margin-bottom:15px;color:#8e8e98;font-size:10px;font-weight:650;letter-spacing:.16em;text-transform:uppercase}
+.platform-intro h2{margin:0;font-size:clamp(32px,4.3vw,54px);font-weight:610;letter-spacing:-.068em;line-height:1.04;text-wrap:balance}
+.platform-intro h2 span{color:var(--blue)}
+.platform-intro p{max-width:650px;margin:17px auto 0;color:#a3a3ab;font-size:15px;line-height:1.75}
+.architecture-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.architecture-step{min-width:0;padding:25px 23px 24px 0}
+.architecture-step+.architecture-step{padding-left:23px;border-left:1px solid var(--line)}
+.architecture-label{display:flex;align-items:center;justify-content:space-between;color:#777780;font-size:9px;font-weight:680;letter-spacing:.14em}
+.architecture-label span:first-child{color:var(--blue)}
+.architecture-step h3{margin:28px 0 10px;color:#f0f0f2;font-size:20px;font-weight:590;letter-spacing:-.045em;line-height:1.12}
+.architecture-step p{min-height:144px;margin:0;color:#9999a2;font-size:12px;line-height:1.75}
+.architecture-tech{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:18px;color:#b3c9ed;font-size:8px;font-weight:650;letter-spacing:.085em;line-height:1.5}
+.architecture-tech i{width:3px;height:3px;border-radius:50%;background:var(--blue)}
+.stack-panel{margin-top:54px}
+.stack-heading{display:flex;align-items:baseline;justify-content:space-between;gap:20px;margin-bottom:20px}
+.stack-heading h3{margin:0;font-size:clamp(23px,2.5vw,30px);font-weight:590;letter-spacing:-.055em}
+.stack-heading>span{color:#777780;font-size:9px;font-weight:650;letter-spacing:.13em}
+.stack-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:0;border-top:1px solid var(--line)}
+.stack-grid>div{display:grid;grid-template-columns:minmax(150px,.72fr) 1fr;gap:18px;padding:14px 18px 14px 0;border-bottom:1px solid var(--line)}
+.stack-grid>div:nth-child(odd){padding-right:28px}
+.stack-grid>div:nth-child(even){padding-left:28px;border-left:1px solid var(--line)}
+.stack-grid dt{color:#777780;font-size:11px}
+.stack-grid dd{margin:0;color:#e4e4e8;font-size:12px;font-weight:540;line-height:1.55}
+.provider-note{display:grid;grid-template-columns:minmax(190px,.55fr) 1fr;gap:26px;align-items:start;margin-top:22px;padding:18px 20px;border:1px solid var(--line);border-radius:13px;background:#090909}
+.provider-note>div{display:flex;flex-direction:column;gap:7px}
+.provider-state{color:#8fb5ff;font-size:8px;font-weight:700;letter-spacing:.14em}
+.provider-note strong{color:#f0f0f2;font-size:13px;font-weight:590}
+.provider-note p{margin:0;color:#92929b;font-size:11px;line-height:1.7}
+.product-surfaces{margin-top:62px}
+.product-surface-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.product-surface-grid article{padding:22px 22px 24px 0;min-width:0}
+.product-surface-grid article+article{padding-left:22px;border-left:1px solid var(--line)}
+.product-surface-grid article>span{color:#777780;font-size:8px;font-weight:680;letter-spacing:.13em}
+.product-surface-grid h4{margin:13px 0 7px;color:#f0f0f2;font-size:20px;font-weight:590;letter-spacing:-.045em}
+.product-surface-grid p{min-height:75px;margin:0;color:#9999a2;font-size:11px;line-height:1.7}
+.product-surface-grid a,.platform-links a{display:inline-flex;align-items:center;gap:7px;margin-top:15px;color:#a9c7ff;font-size:11px;font-weight:570}
+.platform-links{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;margin-top:23px}
+.platform-links a{margin-top:0}
+.platform a:hover{color:#fff}
 .footer{border-top:1px solid var(--line);padding:24px 0 30px}
 .footer-inner{display:flex;align-items:center;justify-content:space-between;gap:22px}
 .copyright{color:#85858d;font-size:11px}
 .footer-links{display:flex;flex-wrap:wrap;align-items:center;gap:18px}
 .footer-links a{color:#9898a0;font-size:11px;transition:color .18s ease}
 .footer-links a:hover{color:#fff}
+@media(max-width:920px){
+.architecture-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.architecture-step{padding:23px 22px 24px 0}
+.architecture-step:nth-child(3){padding-left:0;border-left:0}
+.architecture-step:nth-child(2n){padding-left:22px;border-left:1px solid var(--line)}
+.architecture-step p{min-height:112px}
+}
 @media(max-width:860px){
 .shell{width:min(calc(100% - 48px),var(--max))}
 .hero{padding:82px 0 45px}
 .hero h1{font-size:clamp(52px,8.5vw,76px)}
-.demo{padding-bottom:88px}
+.demo{padding-bottom:68px}
 .video-device{width:clamp(270px,38vw,330px)}
 }
 @media(max-width:620px){
@@ -91,14 +129,31 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 .video-device video{border-radius:21px}
 .video-actions{margin-top:17px}
 .primary-telegram{width:min(100%,340px);min-height:53px;font-size:13px}
-.principles{padding:26px 0 64px}
-.principles-head{margin-bottom:20px}
-.principles-head h2{font-size:27px}
-.principle-grid{grid-template-columns:1fr}
-.principle{min-height:0;padding:20px 10px}
-.principle+.principle{border-top:1px solid var(--line);border-left:0}
-.principle h3{font-size:16px}
-.principle p{margin-top:5px;font-size:12px}
+.platform{padding:27px 0 65px}
+.platform-intro{margin-bottom:27px;text-align:left}
+.platform-kicker{font-size:9px}
+.platform-intro h2{font-size:34px}
+.platform-intro p{margin-top:12px;font-size:13px;line-height:1.7}
+.architecture-grid{grid-template-columns:1fr}
+.architecture-step,.architecture-step+.architecture-step,.architecture-step:nth-child(2n),.architecture-step:nth-child(3){padding:19px 0 20px;border-left:0}
+.architecture-step+.architecture-step{border-top:1px solid var(--line)}
+.architecture-step h3{margin:16px 0 7px;font-size:19px}
+.architecture-step p{min-height:0;font-size:12px}
+.architecture-tech{margin-top:12px}
+.stack-panel{margin-top:38px}
+.stack-heading{align-items:flex-start;flex-direction:column;gap:7px}
+.stack-grid{grid-template-columns:1fr}
+.stack-grid>div,.stack-grid>div:nth-child(odd),.stack-grid>div:nth-child(even){grid-template-columns:125px 1fr;gap:12px;padding:12px 0;border-left:0}
+.stack-grid dt{font-size:10px}
+.stack-grid dd{font-size:11px}
+.provider-note{grid-template-columns:1fr;gap:12px;padding:15px}
+.provider-note p{font-size:11px}
+.product-surfaces{margin-top:40px}
+.product-surface-grid{grid-template-columns:1fr}
+.product-surface-grid article,.product-surface-grid article+article{padding:17px 0;border-left:0}
+.product-surface-grid article+article{border-top:1px solid var(--line)}
+.product-surface-grid p{min-height:0}
+.platform-links{justify-content:flex-start;flex-direction:column;gap:13px}
 .footer-inner{align-items:flex-start;flex-direction:column;gap:15px}
 .footer-links{gap:13px}
 .copyright{font-size:10px}
@@ -110,13 +165,13 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 <header class="site-nav"><div class="nav-inner shell">
 <a class="brand" href="/" aria-label="BRɅIN home">BR<span class="brand-mark">Ʌ</span>IN</a>
 <nav class="nav-items" aria-label="Main navigation">
-<a href="#principles">Platform</a><a href="#demo">Live product</a><a href="/privacy">Privacy</a><a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
+<a href="#platform">Platform</a><a href="#demo">Live product</a><a href="/privacy">Privacy</a><a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
 </nav></div></header>
 <main>
 <section class="hero shell">
 <div class="hero-content">
 <h1>Intelligence with <span>proof.</span></h1>
-<p class="hero-copy">Private knowledge systems for grounded answers and real learning.</p>
+<p class="hero-copy">BRɅIN is a shared knowledge layer for AI applications. It turns private documents into governed, page-cited evidence that connected products can use to deliver grounded answers and learning.</p>
 </div></section>
 <section class="demo shell" id="demo" aria-label="ParmarthAI live product demonstration">
 <div class="demo-stage">
@@ -129,13 +184,27 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 <a class="primary-telegram" href="https://t.me" target="_blank" rel="noopener" aria-label="Try Live MVP on Telegram">Try Live MVP on Telegram <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10h13"></path><path d="m10.5 4 6 6-6 6"></path></svg></a>
 </div>
 </section>
-<section class="principles shell" id="principles" aria-labelledby="principles-title">
-<div class="principles-head"><h2 id="principles-title">Three principles.</h2></div>
-<div class="principle-grid">
-<article class="principle"><span class="principle-num">01</span><h3>Private by design</h3><p>Isolated workspaces and controlled access.</p></article>
-<article class="principle"><span class="principle-num">02</span><h3>Grounded retrieval</h3><p>Answers connected to trusted source material.</p></article>
-<article class="principle"><span class="principle-num">03</span><h3>Made for learning</h3><p>From doubt resolution to active practice.</p></article>
+<section class="platform shell" id="platform" aria-labelledby="platform-title">
+<header class="platform-intro"><div class="platform-kicker">BRVIN / PLATFORM ARCHITECTURE</div><h2 id="platform-title">From private documents to <span>verified context.</span></h2><p>BRVIN separates knowledge operations from the applications that use them. One shared platform manages documents, permissions and retrieval. Each connected product keeps control of its users, model and experience.</p></header>
+<div class="architecture-grid">
+<article class="architecture-step"><div class="architecture-label"><span>01</span><span>INGEST</span></div><h3>Secure document intake</h3><p>PDFs are uploaded resumably to private Google Cloud Storage. SHA-256 verification checks the source file, and Google Cloud Vision extracts text while preserving physical PDF page identity.</p><div class="architecture-tech">GOOGLE CLOUD STORAGE <i></i> VISION OCR</div></article>
+<article class="architecture-step"><div class="architecture-label"><span>02</span><span>PROCESS</span></div><h3>Page-aware processing</h3><p>Cloudflare Workers and Workflows coordinate indexing, retrieval checks, retries and recovery. D1 records progress. A source becomes available only when its expected pages are indexed and checks pass.</p><div class="architecture-tech">WORKERS <i></i> WORKFLOWS <i></i> D1</div></article>
+<article class="architecture-step"><div class="architecture-label"><span>03</span><span>GOVERN</span></div><h3>Permissioned retrieval</h3><p>D1 is the authority for application identity, projects, source grants, readiness and quotas. The private retrieval service searches only authorised sources and validates page provenance before returning evidence.</p><div class="architecture-tech">PRIVATE BRVIN SERVICE <i></i> AI SEARCH</div></article>
+<article class="architecture-step"><div class="architecture-label"><span>04</span><span>CONNECT</span></div><h3>Applications own the answer</h3><p>Trusted applications connect through private Cloudflare Service Bindings. BRVIN returns bounded passages and PDF page citations. The application owns end-user authentication, prompts, model generation and conversation state.</p><div class="architecture-tech">SERVICE BINDINGS <i></i> CONSUMER-OWNED AI</div></article>
 </div>
+<section class="stack-panel" aria-labelledby="stack-title"><div class="stack-heading"><h3 id="stack-title">Production infrastructure</h3><span>WHAT RUNS TODAY</span></div>
+<dl class="stack-grid">
+<div><dt>Compute and APIs</dt><dd>Cloudflare Workers</dd></div><div><dt>Registry and access control</dt><dd>Cloudflare D1</dd></div><div><dt>Background orchestration</dt><dd>Cloudflare Workflows</dd></div><div><dt>Private documents and OCR</dt><dd>Google Cloud Storage and Vision</dd></div><div><dt>Production retrieval</dt><dd>Cloudflare AI Search — hybrid vector and BM25, RRF fusion, BGE reranking</dd></div><div><dt>Application connection</dt><dd>Private Cloudflare Service Bindings</dd></div><div><dt>Release validation</dt><dd>GitHub Actions — tests, Worker dry-runs and deployment checks</dd></div>
+</dl>
+<div class="provider-note"><div><span class="provider-state">IN EVALUATION</span><strong>Vertex AI embeddings with Qdrant Cloud</strong></div><p>The next retrieval provider is being evaluated in isolated staging. Production still uses Cloudflare AI Search. No provider cutover will occur until relevance, authorisation, load, cost, recovery and rollback checks pass.</p></div>
+</section>
+<section class="product-surfaces" aria-labelledby="products-title"><div class="stack-heading"><h3 id="products-title">Products using the platform</h3><span>CORE AND CONSUMERS</span></div>
+<div class="product-surface-grid">
+<article><span>KNOWLEDGE INFRASTRUCTURE</span><h4>BRVIN Core</h4><p>Shared document ingestion, knowledge governance and private retrieval for independently operated applications.</p><a href="https://github.com/ashini-x/parmar-ai" target="_blank" rel="noopener">Core repository <span aria-hidden="true">↗</span></a></article>
+<article><span>LEARNING APPLICATION</span><h4>ParmarthAI</h4><p>A Telegram-based learning MVP. The walkthrough above shows the end-user experience.</p><a href="#demo">Watch product walkthrough <span aria-hidden="true">→</span></a></article>
+<article><span>MULTI-TENANT CONSUMER</span><h4>BRVIN Teachers</h4><p>A teacher workspace with an operator console, source management and verified private retrieval. Student-facing channel workflows are still in development.</p><a href="https://github.com/ashini-x/brvin-teachers" target="_blank" rel="noopener">Teachers repository <span aria-hidden="true">↗</span></a></article>
+</div></section>
+<div class="platform-links"><a href="https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_SYSTEM_REFERENCE.md" target="_blank" rel="noopener">Read the system reference <span aria-hidden="true">↗</span></a><a href="mailto:partners@brvin.in">Discuss the architecture <span aria-hidden="true">→</span></a></div>
 </section>
 </main>
 <footer class="footer"><div class="shell footer-inner"><span class="copyright">© 2026 BRɅIN · Guwahati, Assam, India</span>
