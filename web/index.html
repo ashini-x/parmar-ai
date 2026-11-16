@@ -29,30 +29,21 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 .site-nav{position:sticky;top:10px;z-index:30;padding-top:10px;pointer-events:none}
 .nav-inner{display:flex;min-height:62px;align-items:center;justify-content:space-between;gap:24px;padding:0 21px;border:1px solid var(--line);border-radius:16px;background:rgba(9,9,10,.88);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);pointer-events:auto}
 .brand{display:inline-flex;align-items:center;font-size:20px;font-weight:760;letter-spacing:-.075em}
-.brand-mark{color:var(--blue);font-weight:760}
+.brand-mark{color:#fff;font-weight:760}
 .nav-items{display:flex;align-items:center;gap:clamp(16px,2.8vw,34px)}
 .nav-items a{color:#a5a5ac;font-size:12px;font-weight:550;transition:color .18s ease}
 .nav-items a:hover{color:#fff}
 .nav-items .nav-cta{padding:9px 14px;border:1px solid rgba(255,255,255,.18);border-radius:999px;color:#fff}
 .nav-items .nav-cta:hover{border-color:rgba(255,255,255,.5)}
-.eyebrow{display:inline-flex;align-items:center;gap:10px;color:#aaaab2;font-size:10px;font-weight:680;letter-spacing:.15em;text-transform:uppercase}
 .eyebrow:before{width:6px;height:6px;border-radius:50%;background:var(--blue);content:""}
 .hero{padding:clamp(92px,11vw,146px) 0 72px}
 .hero-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(240px,.55fr);gap:clamp(36px,8vw,120px);align-items:end}
-.hero h1{max-width:880px;margin:23px 0 0;font-size:clamp(4rem,9.1vw,8.3rem);font-weight:660;letter-spacing:-.085em;line-height:.88;text-wrap:balance}
+.hero h1{max-width:880px;margin:0;font-size:clamp(4rem,9.1vw,8.3rem);font-weight:660;letter-spacing:-.085em;line-height:.88;text-wrap:balance}
 .hero h1 span{color:var(--blue)}
 .hero-aside{max-width:340px;margin:0 0 6px;padding:0 0 3px 20px;border-left:1px solid rgba(255,255,255,.25)}
 .hero-aside p{margin:0;color:#b2b2b9;font-size:14px;line-height:1.8}
 .hero-aside strong{color:#fff;font-weight:620}
-.hero-foot{display:flex;align-items:center;gap:18px;margin-top:34px;padding-top:16px;border-top:1px solid var(--line)}
-.hero-foot span{color:#7f7f87;font-size:9px;font-weight:650;letter-spacing:.13em;text-transform:uppercase}
-.hero-foot i{width:3px;height:3px;border-radius:50%;background:#4c83da}
 .demo{padding:16px 0 100px}
-.demo-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 0 18px;border-bottom:1px solid var(--line)}
-.demo-heading .demo-title{display:flex;align-items:center;gap:14px}
-.demo-number{color:var(--blue);font-size:10px;font-weight:700;letter-spacing:.12em}
-.demo-heading h2{margin:0;color:#f0f0f1;font-size:13px;font-weight:620;letter-spacing:-.01em}
-.demo-heading .demo-meta{color:#777780;font-size:10px;letter-spacing:.11em;text-transform:uppercase}
 .demo-stage{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,360px) minmax(0,1fr);align-items:center;gap:clamp(20px,4vw,58px);min-height:735px;margin-top:14px;overflow:hidden;border:1px solid rgba(255,255,255,.09);border-radius:25px;background:linear-gradient(180deg,#0a0a0b 0%,#070708 100%)}
 .demo-stage:before{position:absolute;inset:0;background:linear-gradient(90deg,transparent 49.9%,rgba(255,255,255,.035) 50%,transparent 50.1%),linear-gradient(0deg,transparent 49.9%,rgba(255,255,255,.025) 50%,transparent 50.1%);background-size:100% 100%;content:"";pointer-events:none}
 .demo-stage:after{position:absolute;top:11%;left:50%;width:450px;height:450px;transform:translateX(-50%);border-radius:50%;background:radial-gradient(circle,rgba(39,120,255,.12),rgba(39,120,255,.035) 42%,transparent 72%);content:"";pointer-events:none}
@@ -69,10 +60,6 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 .video-actions{display:flex;align-items:center;justify-content:center;gap:22px;margin-top:22px}
 .primary-telegram{display:inline-flex;min-height:57px;align-items:center;justify-content:center;gap:13px;padding:0 25px;border:1px solid var(--blue);border-radius:999px;background:var(--blue);color:#fff;font-size:14px;font-weight:680;letter-spacing:-.02em;box-shadow:0 8px 30px rgba(39,120,255,.15);transition:background .18s ease,transform .18s ease,box-shadow .18s ease}
 .primary-telegram:hover{transform:translateY(-2px);background:#4288ff;box-shadow:0 12px 38px rgba(39,120,255,.25)}
-.educator-link{display:inline-flex;align-items:center;gap:8px;padding:12px 2px;color:#b8b8bf;font-size:12px;font-weight:570;transition:color .18s ease}
-.educator-link:hover{color:#fff}
-.product-credit{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:19px;color:#777780;font-size:11px;letter-spacing:.02em}
-.product-credit strong{color:#e6e6e9;font-weight:630}.product-credit .credit-blue{color:#8bb5ff}
 .principles{padding:22px 0 94px;border-top:1px solid var(--line)}
 .principles-head{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:22px}
 .principles-head h2{margin:0;font-size:clamp(24px,3.6vw,42px);font-weight:590;letter-spacing:-.065em;line-height:1.05}
@@ -90,7 +77,7 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 .footer-links a{color:#9898a0;font-size:10px;transition:color .18s ease}
 .footer-links a:hover{color:#fff}
 @media(max-width:860px){.hero-grid{grid-template-columns:1fr;gap:27px}.hero-aside{max-width:530px}.demo-stage{grid-template-columns:minmax(0,1fr) minmax(230px,320px) minmax(0,1fr);min-height:680px}.stage-note{padding-inline:22px}.stage-note .note-title{font-size:19px}.stage-note .note-sub{font-size:10px}}
-@media(max-width:620px){.shell{width:min(calc(100% - 30px),var(--max))}.site-nav{top:6px;padding-top:6px}.nav-inner{min-height:55px;padding:0 14px;border-radius:14px}.brand{font-size:18px}.nav-items{gap:13px}.nav-items a{font-size:10px}.nav-items .nav-cta{padding:7px 10px}.hero{padding:82px 0 49px}.hero h1{font-size:clamp(3.5rem,16vw,5.6rem)}.hero-aside{padding-left:15px}.hero-aside p{font-size:13px}.hero-foot{gap:10px;flex-wrap:wrap;margin-top:25px}.hero-foot span{font-size:8px}.demo{padding:6px 0 70px}.demo-heading{padding-bottom:13px}.demo-heading .demo-meta{font-size:8px}.demo-stage{display:flex;min-height:0;flex-direction:column;gap:0;padding:28px 12px 25px;border-radius:18px}.demo-stage:after{top:14%;width:300px;height:300px}.stage-note{display:none}.video-device{width:min(74vw,310px);max-width:none;flex:none}.video-device video{object-fit:contain}.video-actions{flex-direction:column;gap:5px;margin-top:16px}.primary-telegram{width:min(100%,360px);min-height:56px;font-size:13px}.educator-link{padding:9px}.product-credit{flex-wrap:wrap;font-size:10px}.principles{padding:22px 0 65px}.principles-head{align-items:flex-start;flex-direction:column;gap:10px}.principle-grid{grid-template-columns:1fr}.principle{min-height:0;padding:17px 0}.principle+.principle{padding-left:0;border-top:1px solid var(--line);border-left:0}.principle h3{margin-top:8px}.footer-inner{align-items:flex-start;flex-direction:column;gap:16px}.footer-links{gap:13px}.copyright{font-size:10px}}
+@media(max-width:620px){.shell{width:min(calc(100% - 30px),var(--max))}.site-nav{top:6px;padding-top:6px}.nav-inner{min-height:55px;padding:0 14px;border-radius:14px}.brand{font-size:18px}.nav-items{gap:13px}.nav-items a{font-size:10px}.nav-items .nav-cta{padding:7px 10px}.hero{padding:82px 0 30px}.hero h1{font-size:clamp(3.5rem,16vw,5.6rem)}.hero-aside{padding-left:15px}.hero-aside p{font-size:13px}.demo{padding:0 0 70px}.demo-stage{display:flex;min-height:0;flex-direction:column;gap:0;padding:28px 12px 25px;border-radius:18px}.demo-stage:after{top:14%;width:300px;height:300px}.stage-note{display:none}.video-device{width:min(74vw,310px);max-width:none;flex:none}.video-device video{object-fit:contain}.video-actions{flex-direction:column;gap:5px;margin-top:16px}.primary-telegram{width:min(100%,360px);min-height:56px;font-size:13px}.principles{padding:22px 0 65px}.principles-head{align-items:flex-start;flex-direction:column;gap:10px}.principle-grid{grid-template-columns:1fr}.principle{min-height:0;padding:17px 0}.principle+.principle{padding-left:0;border-top:1px solid var(--line);border-left:0}.principle h3{margin-top:8px}.footer-inner{align-items:flex-start;flex-direction:column;gap:16px}.footer-links{gap:13px}.copyright{font-size:10px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}
 </style>
 </head>
@@ -103,12 +90,11 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 <main>
 <section class="hero shell">
 <div class="hero-grid">
-<div><div class="eyebrow">BRɅIN / INTELLIGENCE SYSTEMS</div><h1>Intelligence<br>with <span>proof.</span></h1>
-<div class="hero-foot"><span>Private by design</span><i></i><span>Grounded in knowledge</span><i></i><span>Built for learning</span></div></div>
+<div><h1>Intelligence<br>with <span>proof.</span></h1>
+</div>
 <aside class="hero-aside"><p><strong>Knowledge should be useful, not just searchable.</strong> BRɅIN builds private systems that turn trusted material into grounded answers and learning experiences.</p></aside>
 </div></section>
 <section class="demo shell" id="demo" aria-labelledby="demo-heading">
-<div class="demo-heading"><div class="demo-title"><span class="demo-number">01 /</span><h2 id="demo-heading">ParmarthAI in action</h2></div><span class="demo-meta">Live product preview · 00:41</span></div>
 <div class="demo-stage">
 <div class="stage-note"><span class="note-index">01 — ASK</span><p class="note-title">Start with a question.</p><p class="note-sub">A natural conversation, right inside Telegram.</p><span class="note-rule"></span></div>
 <figure class="video-device" aria-label="ParmarthAI product demonstration">
@@ -118,10 +104,8 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 <div class="stage-note right"><span class="note-index">02 — LEARN</span><p class="note-title">Turn answers into practice.</p><p class="note-sub">Explanations and interactive assessments in one flow.</p><span class="note-rule"></span></div>
 </div>
 <div class="video-actions">
-<a class="primary-telegram" href="https://t.me" target="_blank" rel="noopener">Try Live MVP in Telegram <span aria-hidden="true">↗</span></a>
-<a class="educator-link" href="https://t.me" target="_blank" rel="noopener">Educator Access <span aria-hidden="true">↗</span></a>
+<a class="primary-telegram" href="https://t.me" target="_blank" rel="noopener" aria-label="Try Live MVP on Telegram">Try Live MVP on Telegram <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10h13"></path><path d="m10.5 4 6 6-6 6"></path></svg></a>
 </div>
-<div class="product-credit"><span>Live MVP:</span><strong>ParmarthAI (परमार्थAI)</strong><span>by</span><strong class="credit-blue">BRɅIN</strong></div>
 </section>
 <section class="principles shell" id="principles" aria-labelledby="principles-title">
 <div class="principles-head"><h2 id="principles-title">Built on three principles.</h2><span>THE BRɅIN PLATFORM</span></div>
