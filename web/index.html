@@ -19,65 +19,90 @@
 <meta name="twitter:title" content="BRɅIN — Intelligence with proof">
 <meta name="twitter:description" content="Private knowledge systems for grounded answers and real learning.">
 <style>
-:root{color-scheme:dark;--bg:#050505;--surface:#0b0b0c;--ink:#f6f6f7;--muted:#a2a2a8;--soft:#6f6f77;--line:rgba(255,255,255,.12);--blue:#2778ff;--max:1180px}
+:root{color-scheme:dark;--bg:#050505;--ink:#f6f6f7;--muted:#a2a2a8;--line:rgba(255,255,255,.12);--blue:#2778ff;--max:1120px}
 *{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:100px;background:var(--bg)}
+html{scroll-behavior:smooth;scroll-padding-top:90px;background:var(--bg)}
 body{margin:0;min-width:320px;overflow-x:hidden;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Display","Inter","Helvetica Neue",Arial,sans-serif;letter-spacing:-.018em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 a{color:inherit;text-decoration:none}
 a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset:4px}
-.shell{width:min(calc(100% - 56px),var(--max));margin-inline:auto}
-.site-nav{position:sticky;top:10px;z-index:30;padding-top:10px;pointer-events:none}
-.nav-inner{display:flex;min-height:62px;align-items:center;justify-content:space-between;gap:24px;padding:0 21px;border:1px solid var(--line);border-radius:16px;background:rgba(9,9,10,.88);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);pointer-events:auto}
-.brand{display:inline-flex;align-items:center;font-size:20px;font-weight:760;letter-spacing:-.075em}
+.shell{width:min(calc(100% - 64px),var(--max));margin-inline:auto}
+.site-nav{position:sticky;top:0;z-index:30;padding-top:14px;background:linear-gradient(180deg,rgba(5,5,5,.96),rgba(5,5,5,.72));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.nav-inner{display:flex;min-height:58px;align-items:center;justify-content:space-between;gap:24px;padding:0 0 14px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+.brand{display:inline-flex;align-items:center;font-size:21px;font-weight:760;letter-spacing:-.075em}
 .brand-mark{color:#fff;font-weight:760}
-.nav-items{display:flex;align-items:center;gap:clamp(16px,2.8vw,34px)}
-.nav-items a{color:#a5a5ac;font-size:12px;font-weight:550;transition:color .18s ease}
+.nav-items{display:flex;align-items:center;gap:clamp(16px,2.6vw,32px)}
+.nav-items a{color:#a5a5ac;font-size:13px;font-weight:520;transition:color .18s ease}
 .nav-items a:hover{color:#fff}
-.nav-items .nav-cta{padding:9px 14px;border:1px solid rgba(255,255,255,.18);border-radius:999px;color:#fff}
+.nav-items .nav-cta{padding:8px 14px;border:1px solid rgba(255,255,255,.2);border-radius:999px;color:#fff}
 .nav-items .nav-cta:hover{border-color:rgba(255,255,255,.5)}
-.eyebrow:before{width:6px;height:6px;border-radius:50%;background:var(--blue);content:""}
-.hero{padding:clamp(92px,11vw,146px) 0 72px}
-.hero-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(240px,.55fr);gap:clamp(36px,8vw,120px);align-items:end}
-.hero h1{max-width:880px;margin:0;font-size:clamp(4rem,9.1vw,8.3rem);font-weight:660;letter-spacing:-.085em;line-height:.88;text-wrap:balance}
+.hero{padding:clamp(88px,10vw,132px) 0 60px}
+.hero-content{display:flex;flex-direction:column;align-items:center;gap:22px;text-align:center}
+.hero h1{max-width:1080px;margin:0;font-size:clamp(54px,7.6vw,100px);font-weight:660;letter-spacing:-.085em;line-height:.98;text-wrap:balance}
 .hero h1 span{color:var(--blue)}
-.hero-aside{max-width:340px;margin:0 0 6px;padding:0 0 3px 20px;border-left:1px solid rgba(255,255,255,.25)}
-.hero-aside p{margin:0;color:#b2b2b9;font-size:14px;line-height:1.8}
-.hero-aside strong{color:#fff;font-weight:620}
-.demo{padding:16px 0 100px}
-.demo-stage{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,360px) minmax(0,1fr);align-items:center;gap:clamp(20px,4vw,58px);min-height:735px;margin-top:14px;overflow:hidden;border:1px solid rgba(255,255,255,.09);border-radius:25px;background:linear-gradient(180deg,#0a0a0b 0%,#070708 100%)}
-.demo-stage:before{position:absolute;inset:0;background:linear-gradient(90deg,transparent 49.9%,rgba(255,255,255,.035) 50%,transparent 50.1%),linear-gradient(0deg,transparent 49.9%,rgba(255,255,255,.025) 50%,transparent 50.1%);background-size:100% 100%;content:"";pointer-events:none}
-.demo-stage:after{position:absolute;top:11%;left:50%;width:450px;height:450px;transform:translateX(-50%);border-radius:50%;background:radial-gradient(circle,rgba(39,120,255,.12),rgba(39,120,255,.035) 42%,transparent 72%);content:"";pointer-events:none}
-.stage-note{position:relative;z-index:1;display:flex;flex-direction:column;gap:13px;padding:0 clamp(23px,4.2vw,58px)}
-.stage-note.right{align-items:flex-end;text-align:right}
-.stage-note .note-index{color:#777780;font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
-.stage-note .note-title{max-width:205px;margin:0;color:#e9e9eb;font-size:clamp(17px,2vw,25px);font-weight:570;letter-spacing:-.045em;line-height:1.15}
-.stage-note .note-sub{max-width:180px;margin:0;color:#76767f;font-size:11px;line-height:1.7}
-.stage-note .note-rule{width:34px;height:1px;margin-top:8px;background:rgba(255,255,255,.25)}
-.video-device{position:relative;z-index:2;width:100%;max-width:360px;justify-self:center;margin:0;padding:7px;border:1px solid rgba(255,255,255,.24);border-radius:29px;background:#050505;box-shadow:0 32px 100px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.035);aspect-ratio:1/2}
+.hero-copy{max-width:650px;margin:0;color:#a9a9b1;font-size:clamp(16px,1.5vw,19px);line-height:1.65;text-wrap:balance}
+.demo{padding:0 0 112px}
+.demo-stage{position:relative;display:flex;min-height:0;align-items:center;justify-content:center;margin:0;padding:22px 0 28px;overflow:visible;border:0;border-radius:0;background:radial-gradient(ellipse 440px 520px at 50% 48%,rgba(39,120,255,.11),rgba(39,120,255,.035) 44%,transparent 75%)}
+.stage-note{display:none}
+.video-device{position:relative;z-index:1;width:clamp(270px,27vw,340px);max-width:340px;justify-self:center;margin:0;padding:7px;overflow:hidden;border:1px solid rgba(255,255,255,.22);border-radius:32px;background:#050505;box-shadow:0 28px 90px rgba(0,0,0,.58),0 0 0 1px rgba(255,255,255,.035);aspect-ratio:1/2}
 .video-device:before{position:absolute;top:11px;left:50%;z-index:3;width:38px;height:4px;transform:translateX(-50%);border-radius:10px;background:rgba(255,255,255,.18);content:"";pointer-events:none}
-.video-device video{display:block;width:100%;height:100%;border-radius:22px;background:#111;object-fit:contain}
+.video-device video{display:block;width:100%;height:100%;border-radius:25px;background:#111;object-fit:contain}
 .video-error{position:absolute;right:18px;bottom:17px;left:18px;z-index:4;padding:10px 13px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(5,5,5,.88);color:#ddd;font-size:11px;text-align:center}
-.video-actions{display:flex;align-items:center;justify-content:center;gap:22px;margin-top:22px}
-.primary-telegram{display:inline-flex;min-height:57px;align-items:center;justify-content:center;gap:13px;padding:0 25px;border:1px solid var(--blue);border-radius:999px;background:var(--blue);color:#fff;font-size:14px;font-weight:680;letter-spacing:-.02em;box-shadow:0 8px 30px rgba(39,120,255,.15);transition:background .18s ease,transform .18s ease,box-shadow .18s ease}
-.primary-telegram:hover{transform:translateY(-2px);background:#4288ff;box-shadow:0 12px 38px rgba(39,120,255,.25)}
-.principles{padding:22px 0 94px;border-top:1px solid var(--line)}
-.principles-head{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:22px}
-.principles-head h2{margin:0;font-size:clamp(24px,3.6vw,42px);font-weight:590;letter-spacing:-.065em;line-height:1.05}
-.principles-head span{color:#777780;font-size:9px;font-weight:650;letter-spacing:.14em;text-transform:uppercase}
-.principle-grid{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-.principle{min-height:118px;padding:22px 25px 20px 0}
-.principle+.principle{padding-left:25px;border-left:1px solid var(--line)}
-.principle .principle-num{color:var(--blue);font-size:9px;font-weight:700;letter-spacing:.12em}
-.principle h3{margin:12px 0 0;color:#e9e9eb;font-size:17px;font-weight:570;letter-spacing:-.035em}
-.principle p{margin:5px 0 0;color:#777780;font-size:11px;line-height:1.6}
+.video-actions{display:flex;align-items:center;justify-content:center;margin-top:26px}
+.primary-telegram{display:inline-flex;min-height:54px;align-items:center;justify-content:center;gap:13px;padding:0 25px;border:1px solid var(--blue);border-radius:999px;background:var(--blue);color:#fff;font-size:14px;font-weight:620;letter-spacing:-.02em;box-shadow:0 8px 30px rgba(39,120,255,.14);transition:background .18s ease,transform .18s ease,box-shadow .18s ease}
+.primary-telegram:hover{transform:translateY(-2px);background:#4288ff;box-shadow:0 12px 38px rgba(39,120,255,.22)}
+.principles{padding:34px 0 96px;border-top:1px solid var(--line)}
+.principles-head{display:flex;align-items:center;justify-content:center;margin-bottom:30px;text-align:center}
+.principles-head h2{margin:0;font-size:clamp(27px,3vw,38px);font-weight:590;letter-spacing:-.065em;line-height:1.08}
+.principles-head span{display:none}
+.principle-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.principle{min-height:132px;padding:28px 28px 26px;text-align:center}
+.principle+.principle{border-left:1px solid var(--line)}
+.principle .principle-num{display:none}
+.principle h3{margin:0;color:#e9e9eb;font-size:18px;font-weight:570;letter-spacing:-.035em}
+.principle p{max-width:260px;margin:8px auto 0;color:#85858d;font-size:13px;line-height:1.65}
 .footer{border-top:1px solid var(--line);padding:24px 0 30px}
 .footer-inner{display:flex;align-items:center;justify-content:space-between;gap:22px}
-.copyright{color:#85858d;font-size:10px}
+.copyright{color:#85858d;font-size:11px}
 .footer-links{display:flex;flex-wrap:wrap;align-items:center;gap:18px}
-.footer-links a{color:#9898a0;font-size:10px;transition:color .18s ease}
+.footer-links a{color:#9898a0;font-size:11px;transition:color .18s ease}
 .footer-links a:hover{color:#fff}
-@media(max-width:860px){.hero-grid{grid-template-columns:1fr;gap:27px}.hero-aside{max-width:530px}.demo-stage{grid-template-columns:minmax(0,1fr) minmax(230px,320px) minmax(0,1fr);min-height:680px}.stage-note{padding-inline:22px}.stage-note .note-title{font-size:19px}.stage-note .note-sub{font-size:10px}}
-@media(max-width:620px){.shell{width:min(calc(100% - 30px),var(--max))}.site-nav{top:6px;padding-top:6px}.nav-inner{min-height:55px;padding:0 14px;border-radius:14px}.brand{font-size:18px}.nav-items{gap:13px}.nav-items a{font-size:10px}.nav-items .nav-cta{padding:7px 10px}.hero{padding:82px 0 30px}.hero h1{font-size:clamp(3.5rem,16vw,5.6rem)}.hero-aside{padding-left:15px}.hero-aside p{font-size:13px}.demo{padding:0 0 70px}.demo-stage{display:flex;min-height:0;flex-direction:column;gap:0;padding:28px 12px 25px;border-radius:18px}.demo-stage:after{top:14%;width:300px;height:300px}.stage-note{display:none}.video-device{width:min(74vw,310px);max-width:none;flex:none}.video-device video{object-fit:contain}.video-actions{flex-direction:column;gap:5px;margin-top:16px}.primary-telegram{width:min(100%,360px);min-height:56px;font-size:13px}.principles{padding:22px 0 65px}.principles-head{align-items:flex-start;flex-direction:column;gap:10px}.principle-grid{grid-template-columns:1fr}.principle{min-height:0;padding:17px 0}.principle+.principle{padding-left:0;border-top:1px solid var(--line);border-left:0}.principle h3{margin-top:8px}.footer-inner{align-items:flex-start;flex-direction:column;gap:16px}.footer-links{gap:13px}.copyright{font-size:10px}}
+@media(max-width:860px){
+.shell{width:min(calc(100% - 48px),var(--max))}
+.hero{padding:82px 0 45px}
+.hero h1{font-size:clamp(52px,8.5vw,76px)}
+.demo{padding-bottom:88px}
+.video-device{width:clamp(270px,38vw,330px)}
+}
+@media(max-width:620px){
+.shell{width:min(calc(100% - 30px),var(--max))}
+.site-nav{padding-top:7px}
+.nav-inner{min-height:52px;padding-bottom:11px;gap:12px}
+.brand{font-size:18px}
+.nav-items{gap:clamp(9px,2.5vw,14px)}
+.nav-items a{font-size:10px}
+.nav-items .nav-cta{padding:7px 10px}
+.hero{padding:76px 0 35px}
+.hero-content{gap:17px}
+.hero h1{font-size:clamp(43px,11.5vw,62px);line-height:1}
+.hero-copy{max-width:440px;font-size:14px;line-height:1.6}
+.demo{padding:0 0 68px}
+.demo-stage{padding:18px 0 20px}
+.video-device{width:min(78vw,300px);max-width:300px;border-radius:28px}
+.video-device video{border-radius:21px}
+.video-actions{margin-top:17px}
+.primary-telegram{width:min(100%,340px);min-height:53px;font-size:13px}
+.principles{padding:26px 0 64px}
+.principles-head{margin-bottom:20px}
+.principles-head h2{font-size:27px}
+.principle-grid{grid-template-columns:1fr}
+.principle{min-height:0;padding:20px 10px}
+.principle+.principle{border-top:1px solid var(--line);border-left:0}
+.principle h3{font-size:16px}
+.principle p{margin-top:5px;font-size:12px}
+.footer-inner{align-items:flex-start;flex-direction:column;gap:15px}
+.footer-links{gap:13px}
+.copyright{font-size:10px}
+}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}
 </style>
 </head>
@@ -89,26 +114,23 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 </nav></div></header>
 <main>
 <section class="hero shell">
-<div class="hero-grid">
-<div><h1>Intelligence<br>with <span>proof.</span></h1>
-</div>
-<aside class="hero-aside"><p><strong>Knowledge should be useful, not just searchable.</strong> BRɅIN builds private systems that turn trusted material into grounded answers and learning experiences.</p></aside>
+<div class="hero-content">
+<h1>Intelligence with <span>proof.</span></h1>
+<p class="hero-copy">Private knowledge systems for grounded answers and real learning.</p>
 </div></section>
-<section class="demo shell" id="demo" aria-labelledby="demo-heading">
+<section class="demo shell" id="demo" aria-label="ParmarthAI live product demonstration">
 <div class="demo-stage">
-<div class="stage-note"><span class="note-index">01 — ASK</span><p class="note-title">Start with a question.</p><p class="note-sub">A natural conversation, right inside Telegram.</p><span class="note-rule"></span></div>
 <figure class="video-device" aria-label="ParmarthAI product demonstration">
 <video id="product-video" src="demo.mp4" poster="demo-poster.webp" controls autoplay muted loop playsinline preload="metadata" aria-label="ParmarthAI Telegram product walkthrough">Your browser does not support HTML video.</video>
 <div class="video-error" id="video-error" hidden>Preview unavailable. Open the live product below.</div>
 </figure>
-<div class="stage-note right"><span class="note-index">02 — LEARN</span><p class="note-title">Turn answers into practice.</p><p class="note-sub">Explanations and interactive assessments in one flow.</p><span class="note-rule"></span></div>
 </div>
 <div class="video-actions">
 <a class="primary-telegram" href="https://t.me" target="_blank" rel="noopener" aria-label="Try Live MVP on Telegram">Try Live MVP on Telegram <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10h13"></path><path d="m10.5 4 6 6-6 6"></path></svg></a>
 </div>
 </section>
 <section class="principles shell" id="principles" aria-labelledby="principles-title">
-<div class="principles-head"><h2 id="principles-title">Built on three principles.</h2><span>THE BRɅIN PLATFORM</span></div>
+<div class="principles-head"><h2 id="principles-title">Three principles.</h2></div>
 <div class="principle-grid">
 <article class="principle"><span class="principle-num">01</span><h3>Private by design</h3><p>Isolated workspaces and controlled access.</p></article>
 <article class="principle"><span class="principle-num">02</span><h3>Grounded retrieval</h3><p>Answers connected to trusted source material.</p></article>
