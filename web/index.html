@@ -4,22 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#050505">
+<meta name="theme-color" content="#1E1E1C">
 <meta name="robots" content="index, follow">
-<title>BRɅIN — Intelligence with proof</title>
-<meta name="description" content="BRɅIN builds private knowledge systems for grounded answers and real learning. Meet ParmarthAI, the live MVP.">
+<title>BRɅIN — Private Knowledge and Voice Infrastructure</title>
+<meta name="description" content="BRɅIN builds private, page-cited knowledge infrastructure and voice workflows for adult professionals, researchers and enterprise teams.">
 <link rel="canonical" href="https://brvin.in/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="BRɅIN">
-<meta property="og:title" content="BRɅIN — Intelligence with proof">
-<meta property="og:description" content="Private knowledge systems for grounded answers and real learning.">
+<meta property="og:title" content="BRɅIN — Private Knowledge and Voice Infrastructure">
+<meta property="og:description" content="Private, page-cited knowledge infrastructure and voice workflows for adult professionals, researchers and enterprise teams.">
 <meta property="og:url" content="https://brvin.in/">
 <meta property="og:locale" content="en_IN">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="BRɅIN — Intelligence with proof">
-<meta name="twitter:description" content="Private knowledge systems for grounded answers and real learning.">
+<meta name="twitter:title" content="BRɅIN — Private Knowledge and Voice Infrastructure">
+<meta name="twitter:description" content="Private, page-cited knowledge infrastructure and voice workflows for adult professionals, researchers and enterprise teams.">
 <style>
-:root{color-scheme:dark;--bg:#050505;--ink:#f6f6f7;--muted:#a2a2a8;--line:rgba(255,255,255,.12);--blue:#2778ff;--max:1120px}
+:root{color-scheme:dark;--bg:#1E1E1C;--surface:#272724;--surface-2:#222220;--ink:#D8CBB3;--muted:#b7ac98;--line:rgba(216,203,179,.17);--blue:#2F6BFF;--max:1120px}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:90px;background:var(--bg)}
 body{margin:0;min-width:320px;overflow-x:hidden;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Display","Inter","Helvetica Neue",Arial,sans-serif;letter-spacing:-.018em;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
@@ -159,30 +159,75 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 .copyright{font-size:10px}
 }
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}
+
+body{background:var(--bg);color:var(--ink)}
+.hero h1,.principles-head h2,.platform-intro h2,.architecture-step h3,.stack-heading h3,.product-surface-grid h4{color:var(--ink)}
+.nav-inner{border-color:var(--line)}.nav-items a{color:rgba(216,203,179,.78)}.nav-items .nav-cta{border-color:rgba(216,203,179,.32);color:var(--ink)}
+.hero-copy,.platform-intro p,.architecture-step p,.stack-grid dt,.product-surface-grid p{color:rgba(216,203,179,.72)}
+.hero h1 span,.platform-intro h2 span{color:var(--blue)}
+.demo{padding-bottom:86px}
+.voice-demo-card{overflow:hidden;border:1px solid rgba(216,203,179,.22);border-radius:22px;background:linear-gradient(145deg,#282825,#222220);box-shadow:0 28px 80px rgba(0,0,0,.22)}
+.voice-demo-topline{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 23px;border-bottom:1px solid var(--line);color:rgba(216,203,179,.62);font-size:9px;font-weight:680;letter-spacing:.14em}
+.demo-status{display:inline-flex;align-items:center;gap:8px;color:#b8c9ad}.demo-status i,.state-dot{width:6px;height:6px;border-radius:50%;background:#86b77d;box-shadow:0 0 0 4px rgba(134,183,125,.12)}
+.voice-demo-grid{display:grid;grid-template-columns:1fr 1fr}.evidence-card,.spoken-card{min-width:0;padding:clamp(22px,3.8vw,38px)}.evidence-card{border-right:1px solid var(--line)}
+.card-overline,.voice-layer-kicker{color:rgba(216,203,179,.56);font-size:9px;font-weight:700;letter-spacing:.16em}
+.source-file{display:flex;align-items:center;gap:14px;margin:26px 0 20px}.source-file>svg{flex:0 0 auto;color:var(--ink)}.source-file div{display:flex;flex-direction:column;gap:3px}.source-file strong{color:var(--ink);font-size:15px;font-weight:620}.source-file span{color:rgba(216,203,179,.56);font-size:10px}
+.citation-row{display:flex;align-items:center;gap:10px}.citation-chip{padding:6px 9px;border-radius:6px;background:rgba(47,107,255,.15);color:#a9c2ff;font-size:8px;font-weight:750;letter-spacing:.12em}.citation-section{color:rgba(216,203,179,.5);font-size:8px;font-weight:650;letter-spacing:.12em}
+.evidence-card blockquote{margin:18px 0 21px;padding-left:15px;border-left:2px solid var(--blue);color:rgba(216,203,179,.9);font-size:clamp(14px,1.55vw,17px);line-height:1.7}
+.source-verified{display:flex;align-items:center;gap:8px;color:#a9c49d;font-size:10px;font-weight:560}.spoken-card{display:flex;flex-direction:column}
+.spoken-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:24px}.spoken-title-row h2{margin:0;color:var(--ink);font-size:clamp(20px,2.3vw,27px);font-weight:590;letter-spacing:-.045em}
+.voice-live-pill{padding:5px 8px;border:1px solid rgba(47,107,255,.4);border-radius:999px;color:#a9c2ff;font-size:8px;font-weight:700;letter-spacing:.1em}
+.spoken-copy{max-width:490px;margin:14px 0 0;color:rgba(216,203,179,.78);font-size:13px;line-height:1.8}
+.waveform{display:flex;min-height:62px;align-items:center;justify-content:center;gap:3px;margin:22px 0 17px;padding:9px 12px;border:1px solid rgba(216,203,179,.12);border-radius:10px;background:rgba(0,0,0,.12)}
+.waveform span{display:block;width:3px;height:var(--bar-height);max-height:46px;border-radius:4px;background:rgba(47,107,255,.58);transform-origin:center;opacity:.8}
+.voice-demo-card.is-playing .waveform span{animation:voice-bars .68s ease-in-out infinite alternate;animation-delay:var(--bar-delay)}
+@keyframes voice-bars{from{transform:scaleY(.34);opacity:.45}to{transform:scaleY(1);opacity:1}}
+.voice-play-button{display:inline-flex;align-items:center;align-self:flex-start;gap:10px;min-height:42px;padding:0 16px;border:1px solid rgba(216,203,179,.2);border-radius:999px;background:rgba(216,203,179,.06);color:var(--ink);font:inherit;font-size:11px;font-weight:620;cursor:pointer;transition:background .18s ease,border-color .18s ease}
+.voice-play-button:hover{border-color:rgba(216,203,179,.48);background:rgba(216,203,179,.1)}.voice-play-button svg{color:#a9c2ff}
+.voice-status{min-height:16px;margin:10px 0 0;color:rgba(216,203,179,.5);font-size:9px}
+.voice-demo-foot{display:flex;justify-content:space-between;gap:18px;padding:13px 23px;border-top:1px solid var(--line);color:rgba(216,203,179,.55);font-size:8px;font-weight:650;letter-spacing:.11em}.voice-demo-foot span:first-child{color:#a9c2ff}
+.voice-layer{display:grid;grid-template-columns:1fr auto;gap:30px;align-items:center;margin:56px 0 0;padding:24px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.voice-layer-copy{max-width:690px}.voice-layer-copy h3{margin:10px 0 7px;color:var(--ink);font-size:clamp(22px,3vw,32px);font-weight:590;letter-spacing:-.055em}.voice-layer-copy p{margin:0;color:rgba(216,203,179,.72);font-size:12px;line-height:1.8}
+.voice-layer-state{display:flex;align-items:center;gap:12px;min-width:220px;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.08)}.voice-layer-state>div{display:flex;flex-direction:column;gap:3px}.voice-layer-state strong{color:var(--ink);font-size:11px;font-weight:620}.voice-layer-state small{color:rgba(216,203,179,.55);font-size:9px}
+.product-surface-grid article>span{color:rgba(216,203,179,.54)}.product-surface-grid a,.platform-links a{color:#9eb9ff}.product-surface-grid a:hover,.platform-links a:hover{color:var(--ink)}
+.plans{padding:68px 0 78px;border-top:1px solid var(--line)}.plans-intro{max-width:720px;margin:0 auto 30px;text-align:center}.plans-kicker{color:rgba(216,203,179,.56);font-size:9px;font-weight:700;letter-spacing:.16em}
+.plans-intro h2{margin:12px 0 0;color:var(--ink);font-size:clamp(30px,4vw,46px);font-weight:610;letter-spacing:-.065em;line-height:1.04}.plans-intro p{max-width:570px;margin:13px auto 0;color:rgba(216,203,179,.68);font-size:13px;line-height:1.7}
+.plans-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.plan-card{display:flex;min-width:0;flex-direction:column;padding:22px 21px 20px;border:1px solid var(--line);border-radius:15px;background:rgba(216,203,179,.025)}
+.plan-featured{border-color:rgba(47,107,255,.55);background:linear-gradient(160deg,rgba(47,107,255,.1),rgba(216,203,179,.025))}.plan-number{color:rgba(216,203,179,.52);font-size:8px;font-weight:700;letter-spacing:.14em}
+.plan-card h3{min-height:48px;margin:17px 0 7px;color:var(--ink);font-size:18px;font-weight:600;letter-spacing:-.04em;line-height:1.2}.plan-price{color:#9eb9ff;font-size:24px;font-weight:640;letter-spacing:-.04em}
+.plan-card>p{min-height:65px;margin:10px 0 0;color:rgba(216,203,179,.68);font-size:11px;line-height:1.7}.plan-card ul{display:flex;flex:1;flex-direction:column;gap:9px;margin:19px 0 20px;padding:16px 0 0;border-top:1px solid var(--line);list-style:none}
+.plan-card li{position:relative;padding-left:15px;color:rgba(216,203,179,.78);font-size:10px;line-height:1.55}.plan-card li:before{position:absolute;top:7px;left:0;width:5px;height:5px;border-radius:50%;background:var(--blue);content:""}
+.plan-card>a{display:inline-flex;align-items:center;gap:8px;color:#a9c2ff;font-size:11px;font-weight:620}.plan-card>a:hover{color:var(--ink)}.plans-note{max-width:800px;margin:18px auto 0;color:rgba(216,203,179,.46);font-size:9px;line-height:1.6;text-align:center}
+.footer{padding:24px 0 28px;border-top:1px solid var(--line);background:#1b1b19}.footer-top{display:flex;align-items:flex-start;justify-content:space-between;gap:28px}
+.footer-right{display:flex;align-items:center;justify-content:flex-end;gap:18px;flex-wrap:wrap}.footer-links{display:flex;align-items:center;justify-content:flex-end;gap:16px;flex-wrap:wrap}.footer-links a{color:rgba(216,203,179,.7);font-size:10px}.footer-links a:hover{color:var(--ink)}
+.copyright{color:rgba(216,203,179,.56);font-size:10px}.age-note{max-width:850px;margin:17px 0 0;color:rgba(216,203,179,.5);font-size:9px;line-height:1.6}
+.partner-slot{display:flex;min-width:26px;min-height:24px;align-items:center;justify-content:flex-end}.partner-badge{align-items:center;gap:7px;padding:7px 10px;border:1px solid rgba(216,203,179,.25);border-radius:7px;color:var(--ink);font-size:9px;font-weight:650}.partner-badge[hidden]{display:none}
+@media(max-width:920px){.plans-grid{grid-template-columns:1fr 1fr}.plan-card:last-child{grid-column:1/-1}.plan-card h3,.plan-card>p{min-height:0}}
+@media(max-width:700px){.voice-demo-grid{grid-template-columns:1fr}.evidence-card{border-right:0;border-bottom:1px solid var(--line)}.voice-demo-topline{padding:14px 16px;font-size:7px}.voice-demo-foot{flex-direction:column;gap:6px;padding:12px 16px;font-size:7px}.voice-layer{grid-template-columns:1fr;gap:15px;margin-top:34px}.voice-layer-state{min-width:0;justify-self:start}.plans{padding:43px 0 60px}.plans-intro{text-align:left}.plans-intro p{margin-left:0}.plans-grid{grid-template-columns:1fr}.plan-card:last-child{grid-column:auto}.plan-card h3,.plan-card>p{min-height:0}.footer-top{flex-direction:column;gap:16px}.footer-right{justify-content:flex-start}.footer-links{justify-content:flex-start;gap:12px}.age-note{margin-top:17px}}
+@media(prefers-reduced-motion:reduce){.voice-demo-card.is-playing .waveform span{animation:none}}
 </style>
 </head>
 <body>
 <header class="site-nav"><div class="nav-inner shell">
 <a class="brand" href="/" aria-label="BRɅIN home">BR<span class="brand-mark">Ʌ</span>IN</a>
 <nav class="nav-items" aria-label="Main navigation">
-<a href="#platform">Platform</a><a href="#demo">Live product</a><a href="/privacy">Privacy</a><a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
+<a href="#platform">Platform</a><a href="#demo">Voice demo</a><a href="#plans">Plans</a><a href="/privacy">Privacy</a><a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
 </nav></div></header>
 <main>
 <section class="hero shell">
 <div class="hero-content">
 <h1>Intelligence with <span>proof.</span></h1>
-<p class="hero-copy">BRɅIN is a shared knowledge layer for AI applications. It turns private documents into governed, page-cited evidence that connected products can use to deliver grounded answers and learning.</p>
+<p class="hero-copy">BRɅIN is a private knowledge infrastructure layer for adult professionals, researchers and enterprise teams. It turns trusted documents into governed, page-cited context for text and voice interfaces.</p>
 </div></section>
-<section class="demo shell" id="demo" aria-label="ParmarthAI live product demonstration">
-<div class="demo-stage">
-<figure class="video-device" aria-label="ParmarthAI product demonstration">
-<video id="product-video" src="demo.mp4" poster="demo-poster.webp" controls autoplay muted loop playsinline preload="metadata" aria-label="ParmarthAI Telegram product walkthrough">Your browser does not support HTML video.</video>
-<div class="video-error" id="video-error" hidden>Preview unavailable. Open the live product below.</div>
-</figure>
-</div>
-<div class="video-actions">
-<a class="primary-telegram" href="https://t.me" target="_blank" rel="noopener" aria-label="Try Live MVP on Telegram">Try Live MVP on Telegram <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10h13"></path><path d="m10.5 4 6 6-6 6"></path></svg></a>
-</div>
+<section class="demo shell" id="demo" aria-label="Interactive BRɅIN evidence and voice preview">
+<div class="voice-demo-card" id="voice-demo"><div class="voice-demo-topline"><span>RETRIEVAL SESSION / EXAMPLE 001</span><span class="demo-status"><i></i> EVIDENCE LINKED</span></div>
+<div class="voice-demo-grid">
+<article class="evidence-card"><div class="card-overline">ILLUSTRATIVE SOURCE RECORD</div><div class="source-file"><svg viewBox="0 0 32 32" width="30" height="30" fill="none" aria-hidden="true"><path d="M8 3.5h10l7 7V28H8a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.5"/><path d="M18 3.5v7h7M11 17h11M11 21h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><div><strong>Research Brief.pdf</strong><span>Source document · PDF</span></div></div>
+<div class="citation-row"><span class="citation-chip">PDF PAGE 12</span><span class="citation-section">SECTION 3.2</span></div><blockquote>“The retrieved passage remains connected to its original document and physical page reference.”</blockquote><div class="source-verified"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true"><path d="m3.2 8.2 3.1 3.1 6.5-6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg> Source and page reference attached</div></article>
+<article class="spoken-card"><div class="card-overline">VOICE RESPONSE / INTERACTIVE PREVIEW</div><div class="spoken-title-row"><h2>Spoken explanation</h2><span class="voice-live-pill">VOICE AI</span></div><p class="spoken-copy">“The relevant passage is on page twelve. Its citation stays attached, so you can return to the original document and verify the context.”</p>
+<div class="waveform" id="voice-waveform" aria-label="Illustrative audio waveform"><span style="--bar-height:12px;--bar-delay:0ms"></span><span style="--bar-height:22px;--bar-delay:55ms"></span><span style="--bar-height:15px;--bar-delay:110ms"></span><span style="--bar-height:31px;--bar-delay:165ms"></span><span style="--bar-height:20px;--bar-delay:220ms"></span><span style="--bar-height:39px;--bar-delay:275ms"></span><span style="--bar-height:17px;--bar-delay:330ms"></span><span style="--bar-height:26px;--bar-delay:385ms"></span><span style="--bar-height:43px;--bar-delay:440ms"></span><span style="--bar-height:18px;--bar-delay:0ms"></span><span style="--bar-height:34px;--bar-delay:55ms"></span><span style="--bar-height:22px;--bar-delay:110ms"></span><span style="--bar-height:47px;--bar-delay:165ms"></span><span style="--bar-height:27px;--bar-delay:220ms"></span><span style="--bar-height:16px;--bar-delay:275ms"></span><span style="--bar-height:37px;--bar-delay:330ms"></span><span style="--bar-height:23px;--bar-delay:385ms"></span><span style="--bar-height:42px;--bar-delay:440ms"></span><span style="--bar-height:18px;--bar-delay:0ms"></span><span style="--bar-height:32px;--bar-delay:55ms"></span><span style="--bar-height:49px;--bar-delay:110ms"></span><span style="--bar-height:21px;--bar-delay:165ms"></span><span style="--bar-height:35px;--bar-delay:220ms"></span><span style="--bar-height:15px;--bar-delay:275ms"></span><span style="--bar-height:28px;--bar-delay:330ms"></span><span style="--bar-height:41px;--bar-delay:385ms"></span><span style="--bar-height:19px;--bar-delay:440ms"></span><span style="--bar-height:33px;--bar-delay:0ms"></span><span style="--bar-height:46px;--bar-delay:55ms"></span><span style="--bar-height:21px;--bar-delay:110ms"></span><span style="--bar-height:14px;--bar-delay:165ms"></span><span style="--bar-height:36px;--bar-delay:220ms"></span><span style="--bar-height:24px;--bar-delay:275ms"></span><span style="--bar-height:40px;--bar-delay:330ms"></span><span style="--bar-height:18px;--bar-delay:385ms"></span><span style="--bar-height:30px;--bar-delay:440ms"></span></div><button class="voice-play-button" id="play-voice-preview" type="button" aria-pressed="false"><svg viewBox="0 0 20 20" width="17" height="17" fill="none" aria-hidden="true"><path d="M6 4.5v11l9-5.5-9-5.5Z" fill="currentColor"/></svg><span>Play spoken preview</span></button><p class="voice-status" id="voice-preview-status" role="status" aria-live="polite">Browser voice preview · sample content</p></article>
+</div><div class="voice-demo-foot"><span>ELEVENLABS VOICE AI</span><span>Integration in development · production retrieval remains source-grounded</span></div></div>
+<div class="video-actions"><a class="primary-telegram" href="https://t.me/parmarthbot" target="_blank" rel="noopener noreferrer" aria-label="Try Live MVP on Telegram">Try Live MVP on Telegram <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10h13"></path><path d="m10.5 4 6 6-6 6"></path></svg></a></div>
 </section>
 <section class="platform shell" id="platform" aria-labelledby="platform-title">
 <header class="platform-intro"><div class="platform-kicker">BRVIN / PLATFORM ARCHITECTURE</div><h2 id="platform-title">From private documents to <span>verified context.</span></h2><p>BRVIN separates knowledge operations from the applications that use them. One shared platform manages documents, permissions and retrieval. Each connected product keeps control of its users, model and experience.</p></header>
@@ -198,26 +243,39 @@ a:focus-visible,video:focus-visible{outline:2px solid var(--blue);outline-offset
 </dl>
 <div class="provider-note"><div><span class="provider-state">IN EVALUATION</span><strong>Vertex AI embeddings with Qdrant Cloud</strong></div><p>The next retrieval provider is being evaluated in isolated staging. Production still uses Cloudflare AI Search. No provider cutover will occur until relevance, authorisation, load, cost, recovery and rollback checks pass.</p></div>
 </section>
-<section class="product-surfaces" aria-labelledby="products-title"><div class="stack-heading"><h3 id="products-title">Products using the platform</h3><span>CORE AND CONSUMERS</span></div>
+<section class="voice-layer" aria-label="Voice AI roadmap"><div class="voice-layer-copy"><span class="voice-layer-kicker">VOICE INTERFACE LAYER / IN DEVELOPMENT</span><h3>Speak to the same verified knowledge.</h3><p>We are developing an ElevenLabs Voice AI layer for natural spoken explanations, real-time conversational delivery and voice-assisted workflows. BRɅIN remains responsible for source permissions, retrieval and page provenance; each connected application owns its conversation and response experience.</p></div><div class="voice-layer-state"><span class="state-dot"></span><div><strong>ElevenLabs integration</strong><small>Planned voice provider · not yet live in production</small></div></div></section><section class="product-surfaces" aria-labelledby="products-title"><div class="stack-heading"><h3 id="products-title">Products using the platform</h3><span>CORE AND CONSUMERS</span></div>
 <div class="product-surface-grid">
-<article><span>KNOWLEDGE INFRASTRUCTURE</span><h4>BRVIN Core</h4><p>Shared document ingestion, knowledge governance and private retrieval for independently operated applications.</p><a href="https://github.com/ashini-x/parmar-ai" target="_blank" rel="noopener">Core repository <span aria-hidden="true">↗</span></a></article>
-<article><span>LEARNING APPLICATION</span><h4>ParmarthAI</h4><p>A Telegram-based learning MVP. The walkthrough above shows the end-user experience.</p><a href="#demo">Watch product walkthrough <span aria-hidden="true">→</span></a></article>
-<article><span>MULTI-TENANT CONSUMER</span><h4>BRVIN Teachers</h4><p>A teacher workspace with an operator console, source management and verified private retrieval. Student-facing channel workflows are still in development.</p><a href="https://github.com/ashini-x/brvin-teachers" target="_blank" rel="noopener">Teachers repository <span aria-hidden="true">↗</span></a></article>
+<article><span>KNOWLEDGE INFRASTRUCTURE</span><h4>BRVIN Core</h4><p>Shared document ingestion, knowledge governance, permissioned retrieval and source-page provenance for connected software products.</p><a href="https://github.com/ashini-x/parmar-ai" target="_blank" rel="noopener noreferrer">Core repository <span aria-hidden="true">↗</span></a></article>
+<article><span>TELEGRAM PRODUCT</span><h4>ParmarthAI</h4><p>A Telegram-based voice and text learning MVP for adult learners and exam aspirants (18+), designed to deliver page-cited answers and natural audio explanations. ElevenLabs Voice AI integration is in development.</p><a href="https://t.me/parmarthbot" target="_blank" rel="noopener noreferrer">Open Telegram MVP <span aria-hidden="true">↗</span></a></article>
+<article><span>PROFESSIONAL WORKSPACES</span><h4>BRVIN Voice and Knowledge Workspaces</h4><p>Tenant-isolated document workspaces for adult professionals, researchers and enterprise teams, with governed access, page-cited retrieval and planned voice-assisted workflows.</p><a href="https://github.com/ashini-x" target="_blank" rel="noopener noreferrer">BRɅIN on GitHub <span aria-hidden="true">↗</span></a></article>
 </div></section>
-<div class="platform-links"><a href="https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_SYSTEM_REFERENCE.md" target="_blank" rel="noopener">Read the system reference <span aria-hidden="true">↗</span></a><a href="mailto:partners@brvin.in">Discuss the architecture <span aria-hidden="true">→</span></a></div>
+<div class="platform-links"><a href="https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_SYSTEM_REFERENCE.md" target="_blank" rel="noopener noreferrer">Read the system reference <span aria-hidden="true">↗</span></a><a href="mailto:partners@brvin.in">Discuss the architecture <span aria-hidden="true">→</span></a></div>
 </section>
+<section class="plans shell" id="plans" aria-labelledby="plans-title"><div class="plans-intro"><span class="plans-kicker">ACCESS AND PLANS</span><h2 id="plans-title">Start small. Scale with confidence.</h2><p>An indicative SaaS model for individual builders, professional research teams and enterprise deployments. Features and limits are confirmed in each plan agreement.</p></div>
+<div class="plans-grid">
+<article class="plan-card"><span class="plan-number">01 / DEVELOPER</span><h3>Developer and MVP Sandbox</h3><div class="plan-price">Free</div><p>Explore the public Telegram MVP and experience basic source-grounded retrieval.</p><ul><li>Public ParmarthAI access</li><li>Basic retrieval experience</li><li>Developer evaluation workflow</li></ul><a href="https://t.me/parmarthbot" target="_blank" rel="noopener noreferrer">Try the MVP <span aria-hidden="true">→</span></a></article>
+<article class="plan-card plan-featured"><span class="plan-number">02 / PROFESSIONAL</span><h3>Pro and Research Workspaces</h3><div class="plan-price">Paid</div><p>Private knowledge workspaces for adult professionals, analysts and research teams.</p><ul><li>Tenant-isolated document vaults</li><li>Higher retrieval quotas</li><li>Voice synthesis as the integration becomes available</li></ul><a href="mailto:partners@brvin.in">Discuss a workspace <span aria-hidden="true">→</span></a></article>
+<article class="plan-card"><span class="plan-number">03 / ENTERPRISE</span><h3>Enterprise API</h3><div class="plan-price">Custom</div><p>Governed knowledge infrastructure for applications with defined security and operational requirements.</p><ul><li>Private Cloudflare Service Bindings</li><li>Governed multi-tenant workspaces</li><li>Custom support and SLA options by agreement</li></ul><a href="mailto:partners@brvin.in">Discuss enterprise access <span aria-hidden="true">→</span></a></article>
+</div><p class="plans-note">Commercial packaging is evolving. Paid availability, quotas, voice entitlements and service levels are subject to a written plan or enterprise agreement.</p></section>
 </main>
-<footer class="footer"><div class="shell footer-inner"><span class="copyright">© 2026 BRɅIN · Guwahati, Assam, India</span>
-<nav class="footer-links" aria-label="Footer links">
-<a href="https://t.me" target="_blank" rel="noopener">ParmarthAI MVP</a><a href="https://t.me" target="_blank" rel="noopener">Educator Access</a><a href="https://instagram.com" target="_blank" rel="noopener">Instagram</a><a href="https://github.com" target="_blank" rel="noopener">GitHub</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="mailto:partners@brvin.in">partners@brvin.in</a>
-</nav></div></footer>
+<footer class="footer"><div class="shell"><div class="footer-top"><span class="copyright">© 2026 BRɅIN · Guwahati, Assam, India</span><div class="footer-right"><nav class="footer-links" aria-label="Footer links">
+<a href="https://t.me/parmarthbot" target="_blank" rel="noopener noreferrer">Telegram MVP</a><a href="https://linkedin.com/in/ashinigogoi" target="_blank" rel="noopener noreferrer">LinkedIn</a><a href="https://github.com/ashini-x" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://instagram.com/brvin.in" target="_blank" rel="noopener noreferrer">Instagram</a><a href="mailto:partners@brvin.in" rel="noopener noreferrer">Business</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav><div class="partner-slot" aria-label="ElevenLabs Grants partner badge slot"><!-- After written grant approval, add official artwork, remove hidden and retain the linked badge for at least 12 months. --><a id="elevenlabs-grants-badge" class="partner-badge" href="https://elevenlabs.io/startup-grants" target="_blank" rel="noopener noreferrer" hidden>ElevenLabs Grants Partner</a></div></div></div><p class="age-note">BRɅIN platforms and voice interfaces are designed exclusively for adult professionals, researchers, and enterprise users aged 18 and older.</p></div></footer>
 <script>
 (() => {
- const video=document.getElementById("product-video");
- const error=document.getElementById("video-error");
- if(!video||!error)return;
- video.addEventListener("error",()=>{error.hidden=false;});
- video.addEventListener("loadeddata",()=>{error.hidden=true;});
+ const button=document.getElementById("play-voice-preview"),panel=document.getElementById("voice-demo"),status=document.getElementById("voice-preview-status");
+ if(!button||!panel||!status)return;
+ const speech=window.speechSynthesis;
+ const spokenText="This is an illustrative BRVIN voice response. The relevant passage is on page twelve. Its citation stays attached, so you can return to the original document and verify the context.";
+ const reset=(message)=>{panel.classList.remove("is-playing");button.setAttribute("aria-pressed","false");button.querySelector("span").textContent="Play spoken preview";status.textContent=message||"Browser voice preview · sample content";};
+ button.addEventListener("click",()=>{
+  if(!speech||typeof window.SpeechSynthesisUtterance!=="function"){reset("Spoken preview is not supported in this browser.");return;}
+  if(speech.speaking&&!speech.paused){speech.pause();panel.classList.remove("is-playing");button.querySelector("span").textContent="Resume spoken preview";button.setAttribute("aria-pressed","false");status.textContent="Preview paused";return;}
+  if(speech.paused){speech.resume();panel.classList.add("is-playing");button.querySelector("span").textContent="Pause spoken preview";button.setAttribute("aria-pressed","true");status.textContent="Playing browser voice preview";return;}
+  speech.cancel();const utterance=new SpeechSynthesisUtterance(spokenText);utterance.rate=.96;utterance.pitch=1;
+  utterance.onstart=()=>{panel.classList.add("is-playing");button.setAttribute("aria-pressed","true");button.querySelector("span").textContent="Pause spoken preview";status.textContent="Playing browser voice preview";};
+  utterance.onend=()=>reset("Preview complete · browser voice");utterance.onerror=()=>reset("Browser voice preview could not be played.");speech.speak(utterance);
+ });
+ window.addEventListener("pagehide",()=>{if(speech&&speech.speaking)speech.cancel();},{once:true});
 })();
 </script>
 </body></html>
