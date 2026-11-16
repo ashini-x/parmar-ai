@@ -14,6 +14,7 @@ on:
       - "packages/**"
       - "scripts/**"
       - "web/**"
+      - ".github/workflows/release-validation.yml"
       - "wrangler.web.jsonc"
       - "test/**"
       - "wrangler*.jsonc"
@@ -275,19 +276,24 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
         run: npm run deploy:web
-      - name: Verify homepage and separate legal pages
+      - name: Verify navigation, legal pages, footer and 404 status
         shell: bash
         run: |
           set -euo pipefail
-          response_file="$(mktemp)"
-          trap 'rm -f "$response_file"' EXIT
-          check_page() {
+          home_file="$(mktemp)"
+          privacy_file="$(mktemp)"
+          terms_file="$(mktemp)"
+          not_found_file="$(mktemp)"
+          trap 'rm -f "$home_file" "$privacy_file" "$terms_file" "$not_found_file"' EXIT
+
+          fetch_page() {
             local path="$1"
-            local expected="$2"
+            local output="$2"
+            local expected="$3"
             local passed=false
             for attempt in $(seq 1 24); do
-              http_code="$(curl --silent --show-error --location --max-time 15 --output "$response_file" --write-out '%{http_code}' "https://brvin.in$path" || true)"
-              if [[ "$http_code" == "200" ]] && grep -Fq "$expected" "$response_file"; then
+              http_code="$(curl --silent --show-error --location --max-time 15 --output "$output" --write-out '%{http_code}' "https://brvin.in$path" || true)"
+              if [[ "$http_code" == "200" ]] && grep -Fq "$expected" "$output"; then
                 echo "Verified https://brvin.in$path"
                 passed=true
                 break
@@ -299,9 +305,63 @@ jobs:
               exit 1
             fi
           }
-          check_page "/" "Intelligence"
-          check_page "/privacy" "Privacy Policy"
-          check_page "/terms" "Terms of Service"
+
+          fetch_page "/" "$home_file" "Intelligence with"
+          fetch_page "/privacy" "$privacy_file" "Privacy Policy"
+          fetch_page "/terms" "$terms_file" "Terms of Service"
+
+          # Verify every homepage navigation target exists and its anchor scrolls smoothly.
+          for expected in 'href="#platform"' 'href="#demo"' 'href="#plans"' 'href="/privacy"' 'href="mailto:partners@brvin.in"'; do
+            grep -Fq "$expected" "$home_file" || { echo "::error::Homepage navigation target missing: $expected"; exit 1; }
+          done
+          for expected in 'id="platform"' 'id="demo"' 'id="plans"'; do
+            grep -Fq "$expected" "$home_file" || { echo "::error::Homepage section target missing: $expected"; exit 1; }
+          done
+          grep -Fq 'scroll-behavior:smooth' "$home_file" || { echo "::error::Smooth scrolling is not enabled."; exit 1; }
+
+          # Verify the legal documents contain their substantive sections, not just a title shell.
+          for expected in 'Information processed' 'Voice and audio data' 'Retention and deletion' 'Privacy questions'; do
+            grep -Fq "$expected" "$privacy_file" || { echo "::error::Privacy page is missing: $expected"; exit 1; }
+          done
+          for expected in '18+ access only' 'Scope of the service' 'Acceptable use' 'Governing law'; do
+            grep -Fq "$expected" "$terms_file" || { echo "::error::Terms page is missing: $expected"; exit 1; }
+          done
+
+          # Verify the footer label, exact Business mailto, policy links and unchanged age notice.
+          check_footer() {
+            local page_file="$1"
+            for expected in \
+              'Voice AI powered by ElevenLabs (Integration in development)' \
+              'href="mailto:partners@brvin.in" rel="noopener noreferrer">Business</a>' \
+              'href="/privacy">Privacy</a>' \
+              'href="/terms">Terms</a>' \
+              'BRɅIN platforms and voice interfaces are designed exclusively for adult professionals, researchers, and enterprise users aged 18 and older.'; do
+              grep -Fq "$expected" "$page_file" || { echo "::error::Footer check failed: $expected"; exit 1; }
+            done
+          }
+          check_footer "$home_file"
+          check_footer "$privacy_file"
+          check_footer "$terms_file"
+
+          # Unknown routes must return the custom page with an actual HTTP 404.
+          unknown_path="/__brvin_not_found_check_${GITHUB_SHA}__"
+          http_code="$(curl --silent --show-error --max-time 20 --output "$not_found_file" --write-out '%{http_code}' "https://brvin.in$unknown_path" || true)"
+          if [[ "$http_code" != "404" ]]; then
+            echo "::error::Unknown route returned HTTP $http_code instead of HTTP 404."
+            exit 1
+          fi
+          for expected in \
+            '404 • UNVERIFIED ROUTE' \
+            'This page could not be found.' \
+            'The route you requested does not exist in our index or has been moved.' \
+            'href="/#platform"' \
+            'href="https://t.me/parmarthbot" target="_blank" rel="noopener noreferrer"' \
+            'href="mailto:partners@brvin.in"'; do
+            grep -Fq "$expected" "$not_found_file" || { echo "::error::Custom 404 page is missing: $expected"; exit 1; }
+          done
+          check_footer "$not_found_file"
+          echo "Verified navigation anchors, policy pages, footer links and custom HTTP 404 response."
+
 
   deploy-production:
     name: Deploy and smoke-test production
