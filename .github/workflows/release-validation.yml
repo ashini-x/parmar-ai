@@ -275,22 +275,33 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
         run: npm run deploy:web
-      - name: Verify the brvin.in website response
+      - name: Verify homepage and separate legal pages
         shell: bash
         run: |
           set -euo pipefail
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
-          for attempt in $(seq 1 24); do
-            http_code="$(curl --silent --show-error --location --max-time 15 --output "$response_file" --write-out '%{http_code}' https://brvin.in/ || true)"
-            if [[ "$http_code" == "200" ]] && grep -Fq "Citation-Grounded Intelligence for Modern Learning Systems." "$response_file"; then
-              echo "brvin.in is serving the standalone BRɅIN website."
-              exit 0
+          check_page() {
+            local path="$1"
+            local expected="$2"
+            local passed=false
+            for attempt in $(seq 1 24); do
+              http_code="$(curl --silent --show-error --location --max-time 15 --output "$response_file" --write-out '%{http_code}' "https://brvin.in$path" || true)"
+              if [[ "$http_code" == "200" ]] && grep -Fq "$expected" "$response_file"; then
+                echo "Verified https://brvin.in$path"
+                passed=true
+                break
+              fi
+              sleep 5
+            done
+            if [[ "$passed" != "true" ]]; then
+              echo "::error::https://brvin.in$path did not return the expected page."
+              exit 1
             fi
-            sleep 5
-          done
-          echo "::error::brvin.in did not return the expected website HTML after deployment."
-          exit 1
+          }
+          check_page "/" "Intelligence"
+          check_page "/privacy" "Privacy Policy"
+          check_page "/terms" "Terms of Service"
 
   deploy-production:
     name: Deploy and smoke-test production
