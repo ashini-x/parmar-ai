@@ -56,6 +56,35 @@ a:focus-visible{outline:2px solid var(--blue);outline-offset:4px}
 .footer-right{justify-content:flex-start}
 .footer-links{justify-content:flex-start;gap:12px}
 }
+
+
+/* Shared BRɅIN alignment system */
+:root{--max:1160px;--card-pad:clamp(22px,3vw,38px)}
+.shell{width:min(calc(100% - 80px),var(--max))}
+.site-nav{background:rgba(30,30,28,.94)}
+.nav-inner{min-height:66px;padding-bottom:15px}
+.legal-hero{padding:clamp(82px,9vw,116px) 0 38px;text-align:left}
+.legal-kicker{display:block;text-align:left}
+.legal-hero h1,.legal-hero p{text-align:left}
+.legal-hero p{margin-left:0}
+.legal-wrap{padding-bottom:72px}
+.legal-document{width:100%;max-width:920px;margin:0;padding:var(--card-pad);border-radius:13px;text-align:left}
+.legal-document h2,.legal-document h3,.legal-document p{text-align:left}
+.legal-document h3{margin-top:30px}
+.legal-callout{padding:16px 19px;text-align:left}
+.footer-top{align-items:flex-start}
+.footer-links{justify-content:flex-end}
+@media(max-width:920px){.shell{width:calc(100% - 48px)}}
+@media(max-width:620px){
+.shell{width:calc(100% - 30px)}
+.site-nav{padding-top:7px}
+.nav-inner{min-height:52px;padding-bottom:11px}
+.legal-hero{padding:70px 0 28px}
+.legal-document{padding:22px 19px}
+.footer-top{flex-direction:column;gap:15px}
+.footer-right,.footer-links{justify-content:flex-start}
+}
+
 </style></head><body><header class="site-nav"><div class="nav-inner shell"><a class="brand" href="/" aria-label="BRɅIN home">BRɅIN</a><nav class="nav-items" aria-label="Main navigation"><a href="/">Home</a><a href="/#platform">Platform</a><a href="/#demo">Voice demo</a><a href="/#plans">Plans</a><a class="nav-cta" href="mailto:partners@brvin.in">Contact</a></nav></div></header>
 <main><section class="legal-hero shell"><span class="legal-kicker">BRɅIN / PLATFORM TERMS</span><h1>Terms of Service</h1><p>Terms governing access to BRɅIN's private knowledge infrastructure, document retrieval and professional voice interfaces.</p></section>
 <section class="legal-wrap shell"><article class="legal-document"><h2>Terms of Service</h2>
