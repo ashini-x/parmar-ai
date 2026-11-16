@@ -61,6 +61,33 @@ a:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
 .nav-items .nav-cta{padding:7px 10px}
 .legal-document{padding:21px}
 }
+
+
+/* Refined legal-page rhythm and warm ambient surface */
+body{
+  background:
+    radial-gradient(ellipse 68% 38% at 88% 0%,rgba(216,203,179,.2),transparent 78%),
+    var(--page);
+}
+.legal-hero{padding:clamp(66px,7vw,92px) 0 30px}
+.legal-wrap{padding-bottom:clamp(54px,6vw,76px)}
+.legal-document{
+  background:
+    radial-gradient(ellipse 75% 38% at 100% 0%,rgba(216,203,179,.12),transparent 78%),
+    var(--paper);
+}
+.legal-document h3{margin-top:25px}
+.legal-callout{
+  background:linear-gradient(110deg,#F0EFEA 0%,#F7F6F2 100%);
+}
+.footer{padding:24px 0 28px}
+@media(max-width:760px){
+  .legal-hero{padding:60px 0 25px}
+  .legal-wrap{padding-bottom:48px}
+  .legal-document h3{margin-top:23px}
+  .footer{padding:22px 0 25px}
+}
+
 </style></head><body><header class="site-nav"><div class="nav-inner shell"><a class="brand" href="/" aria-label="BRɅIN home">BRɅIN</a><nav class="nav-items" aria-label="Main navigation"><a href="/">Home</a><a href="/#platform">Platform</a><a href="/#demo">Voice demo</a><a href="/#plans">Plans</a><a class="nav-cta" href="mailto:partners@brvin.in">Contact</a></nav></div></header>
 <main><section class="legal-hero shell"><span class="legal-kicker">BRɅIN / PLATFORM TERMS</span><h1>Terms of Service</h1><p>Terms governing access to BRɅIN's private knowledge infrastructure, document retrieval and professional voice interfaces.</p></section>
 <section class="legal-wrap shell"><article class="legal-document"><h2>Terms of Service</h2>
