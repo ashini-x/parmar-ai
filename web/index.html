@@ -571,23 +571,24 @@ button{font:inherit}
 }
 
 
-/* Subtle electric-blue voice accent for the featured परमार्थAI spotlight */
-.product-surface-grid>.parmarth-featured{
-  border-color:rgba(47,107,255,.16);
+/* Subtle electric-blue tone reserved for the retrieval session voice preview */
+.voice-demo-card{
+  border-color:rgba(47,107,255,.11);
   background:
-    radial-gradient(ellipse 46% 82% at 94% 48%,rgba(47,107,255,.075),transparent 78%),
-    linear-gradient(112deg,#FFFFFF 0%,#FFFFFF 58%,#F8F9FC 100%);
-  box-shadow:0 10px 34px rgba(47,107,255,.035);
+    radial-gradient(ellipse 44% 66% at 96% 28%,rgba(47,107,255,.04),transparent 78%),
+    radial-gradient(ellipse 48% 62% at 0% 100%,rgba(216,203,179,.16),transparent 76%),
+    var(--paper);
 }
-.ssc-preview{
+.waveform{
   border-color:rgba(47,107,255,.12);
-  background:
-    radial-gradient(ellipse 80% 35% at 100% 0%,rgba(47,107,255,.055),transparent 80%),
-    #F7F6F2;
+  background:linear-gradient(112deg,#FAF9F6 0%,#F8F9FC 100%);
 }
-.ssc-audio-player{
-  background:linear-gradient(112deg,#1E1E1C 0%,#20222A 100%);
-  box-shadow:inset 2px 0 0 rgba(47,107,255,.45),0 4px 16px rgba(47,107,255,.045);
+.waveform span:nth-child(14),
+.waveform span:nth-child(15),
+.waveform span:nth-child(16),
+.waveform span:nth-child(17),
+.waveform span:nth-child(18){
+  background:rgba(47,107,255,.34);
 }
 
 </style>
