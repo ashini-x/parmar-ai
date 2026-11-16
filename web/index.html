@@ -353,6 +353,33 @@ button{font:inherit}
   outline-offset:4px;
 }
 
+
+/* Compact primary action for the Free MVP plan */
+.plan-card>a.plan-mvp-cta{
+  display:inline-flex;
+  min-height:38px;
+  align-items:center;
+  justify-content:center;
+  align-self:flex-start;
+  gap:10px;
+  padding:0 16px;
+  border:1px solid var(--ink);
+  border-radius:999px;
+  background:var(--ink);
+  color:#fff;
+  font-size:10px;
+  font-weight:600;
+  line-height:1;
+  text-decoration:none;
+  transition:background .18s ease,color .18s ease,transform .18s ease;
+}
+.plan-card>a.plan-mvp-cta:hover{
+  transform:translateY(-1px);
+  background:transparent;
+  color:var(--ink);
+  text-decoration:none;
+}
+
 </style>
 </head>
 <body>
@@ -401,7 +428,7 @@ button{font:inherit}
 </section>
 <section class="plans shell" id="plans" aria-labelledby="plans-title"><div class="plans-intro"><span class="plans-kicker">ACCESS AND PLANS</span><h2 id="plans-title">Start small. Scale with confidence.</h2><p>An indicative SaaS model for individual builders, professional research teams and enterprise deployments. Features and limits are confirmed in each plan agreement.</p></div>
 <div class="plans-grid">
-<article class="plan-card"><span class="plan-number">01 / DEVELOPER</span><h3>Developer and MVP Sandbox</h3><div class="plan-price">Free</div><p>Explore the public Telegram MVP and experience basic source-grounded retrieval.</p><ul><li>Public परमार्थAI access</li><li>Basic retrieval experience</li><li>Developer evaluation workflow</li></ul><a href="https://t.me/parmarthbot" target="_blank" rel="noopener noreferrer">Try the MVP <span aria-hidden="true">→</span></a></article>
+<article class="plan-card"><span class="plan-number">01 / DEVELOPER</span><h3>Developer and MVP Sandbox</h3><div class="plan-price">Free</div><p>Explore the public Telegram MVP and experience basic source-grounded retrieval.</p><ul><li>Public परमार्थAI access</li><li>Basic retrieval experience</li><li>Developer evaluation workflow</li></ul><a class="plan-mvp-cta" href="https://t.me/parmarthbot" target="_blank" rel="noopener noreferrer">Try the MVP <span aria-hidden="true">→</span></a></article>
 <article class="plan-card plan-featured"><span class="plan-number">02 / PROFESSIONAL</span><h3>Pro and Research Workspaces</h3><div class="plan-price">Paid</div><p>Private knowledge workspaces for adult professionals, analysts and research teams.</p><ul><li>Tenant-isolated document vaults</li><li>Higher retrieval quotas</li><li>Voice synthesis as the integration becomes available</li></ul><a href="mailto:partners@brvin.in">Discuss a workspace <span aria-hidden="true">→</span></a></article>
 <article class="plan-card"><span class="plan-number">03 / ENTERPRISE</span><h3>Enterprise API</h3><div class="plan-price">Custom</div><p>Governed knowledge infrastructure for applications with defined security and operational requirements.</p><ul><li>Private Cloudflare Service Bindings</li><li>Governed multi-tenant workspaces</li><li>Custom support and SLA options by agreement</li></ul><a href="mailto:partners@brvin.in">Discuss enterprise access <span aria-hidden="true">→</span></a></article>
 </div><p class="plans-note">Commercial packaging is evolving. Paid availability, quotas, voice entitlements and service levels are subject to a written plan or enterprise agreement.</p></section>
