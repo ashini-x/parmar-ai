@@ -355,7 +355,7 @@ jobs:
             'This page could not be found.' \
             'The route you requested does not exist in our index or has been moved.' \
             'href="/#platform"' \
-            'href="https://t.me/parmarthbot" target="_blank" rel="noopener noreferrer"' \
+            'href="https://telegram.me/parmarthbot" target="_blank" rel="noopener noreferrer"' \
             'href="mailto:partners@brvin.in"'; do
             grep -Fq "$expected" "$not_found_file" || { echo "::error::Custom 404 page is missing: $expected"; exit 1; }
           done
