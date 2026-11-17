@@ -1,3 +1,13 @@
+## 2026-11-18: Owner Gemini chat activity, completion cards and selected-model verification performance
+
+- Refresh the Owner workspace with familiar chat conventions: right-aligned user bubbles, bordered assistant response cards, model/thinking-level badges and green Completed status tags.
+- Show a compact activity card for observable phases: sending request, Vertex accepted/waiting for the first visible response token, response streaming, stopped or failed.
+- Show response time and token usage when returned by the provider and persisted with the response.
+- Do not expose provider thought parts or private chain-of-thought; the activity card reports request/stream state only.
+- Reduce latency after catalogue-cache expiry: acquire one access token, re-verify only the selected model if needed, reuse the token for generation and cache that model's successful verification.
+- Merged as `dff54f783d660c7ac397b6f6670b7eee92ecaf98` (PR [#327](https://github.com/ashini-x/parmar-ai/pull/327)). Validation [44188012230](https://github.com/ashini-x/parmar-ai/actions/runs/44188012230) passed TypeScript, 485 Vitest tests, 62 Node tests and all three Worker dry-runs. Production workflow [44188273089](https://github.com/ashini-x/parmar-ai/actions/runs/44188273089) passed paired deployment and release acceptance.
+- Deployed versions: `brvin-service` `1ce188ed-f48c-4e08-8318-095959aa8f4d`; `parmar-ai` `ca6b3b66-3aa0-4991-8ad3-8bab8646dbdf`. Manifest artifact `14375891872`.
+
 ## 2026-11-18: Owner Intelligence frontend startup and conversation loading fix
 
 - Move the Owner workspace application JavaScript out of the HTML inline script and serve it from `/admin/intelligence.js`.
