@@ -1,4 +1,4 @@
-## Unreleased: BRɅIN Intelligence M4 Owner Gemini chat
+## 2026-11-18: BRɅIN Intelligence M4 Owner Gemini chat
 
 - Add a model-aware thinking selector populated from the project/location-verified Owner Gemini registry and bind the selected level to Vertex `generationConfig.thinkingConfig.thinkingLevel`; unsupported levels are rejected instead of downgraded.
 - Add an Owner-only SSE generation endpoint using the selected model, with user-facing text deltas, sanitized errors, usage metadata and filtering of provider thought parts.
