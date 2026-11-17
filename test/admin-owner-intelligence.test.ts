@@ -266,6 +266,9 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain("Your conversations");
     expect(html).toContain('id="modelSelect"');
     expect(html).toContain("/admin/api/intelligence/models");
+    expect(html).toContain('id="modelRetry"');
+    expect(html).toContain("Model check timed out");
+    expect(html).toContain("signal:controller.signal");
     expect(html).toContain('id="thinkingSelect"');
     expect(html).toContain("Responses stream from your selected model.");
   });
