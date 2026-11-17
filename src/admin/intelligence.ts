@@ -677,7 +677,7 @@ function workspaceHtml(): string {
 .side-footer{border-top:1px solid #303030;padding:12px 5px 2px}.owner-note{display:flex;align-items:center;gap:8px;padding:7px 7px 10px;font-size:11px;color:#a1a1a1}.owner-dot{width:7px;height:7px;border-radius:50%;background:#4dba87}.logout{width:100%;border:0;background:transparent;color:#aaa;text-align:left;padding:9px 8px;border-radius:8px;font-size:12px}.logout:hover{background:#292929;color:#fff}
 .main{display:flex;flex:1;min-width:0;flex-direction:column;position:relative}.topbar{height:60px;flex:0 0 60px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:12px}.top-left{display:flex;align-items:center;gap:11px;min-width:0}.mobile-menu{display:none;border:0;background:transparent;font-size:19px;padding:7px}.page-title{font-size:14px;font-weight:600;white-space:nowrap}.private-tag{font-size:10px;color:#9b9b9b;border:1px solid #404040;border-radius:20px;padding:5px 8px}.top-right{display:flex;align-items:center;gap:9px}.model-retry{border:1px solid #555;background:#303030;color:#e5e5e5;border-radius:8px;padding:7px 9px;font-size:10px;cursor:pointer}.model-retry:hover{background:#414141}.model-retry:disabled{opacity:.55;cursor:wait}.model-retry[hidden]{display:none}.model-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.model-label{font-size:9px;color:#888;letter-spacing:.1em}.model-picker select{max-width:178px;min-width:112px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.model-picker select:disabled,.thinking-picker select:disabled{opacity:.65;cursor:default}.thinking-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.thinking-picker select{max-width:110px;min-width:80px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.avatar{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#3d3d3d;color:#f0f0f0;font-size:11px;font-weight:700}
 .content{flex:1;overflow:auto;display:flex;justify-content:center;padding:36px 22px 18px}.stage{width:min(820px,100%);min-height:100%;display:flex;flex-direction:column}.conversation-heading{font-size:12px;color:#999;margin:0 0 22px;min-height:18px}.messages{flex:1;display:flex;flex-direction:column;gap:22px;padding-bottom:30px}.welcome{margin:auto auto 50px;width:min(600px,100%);text-align:center}.welcome-mark{width:56px;height:56px;border:1px solid #565656;border-radius:18px;display:grid;place-items:center;margin:0 auto 22px;font-size:22px;font-weight:700;letter-spacing:-2px;background:#282828}.welcome h1{font-size:27px;letter-spacing:-.04em;font-weight:600;margin:0 0 12px}.welcome p{font-size:13px;color:#a0a0a0;line-height:1.7;margin:0 auto;max-width:480px}.next-step{display:inline-flex;margin-top:22px;border:1px solid #464646;border-radius:20px;padding:7px 11px;font-size:10px;color:#aaa;letter-spacing:.02em}
-.message{display:flex;gap:14px;align-items:flex-start;max-width:100%;padding:0 5px}.message-avatar{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#383838;font-size:10px;font-weight:700}.message-body{min-width:0;flex:1;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:#e4e4e4}.message-role{font-size:10px;color:#929292;margin:0 0 5px;text-transform:uppercase;letter-spacing:.08em}.message-actions{display:flex;gap:7px;margin-top:8px}.message-action{border:1px solid #444;background:transparent;color:#aaa;border-radius:7px;padding:4px 8px;font-size:10px}.message-action:hover{background:#333;color:#fff}.message-status{font-size:10px;color:#a0a0a0;margin-top:6px}
+.message{display:flex;gap:14px;align-items:flex-start;max-width:100%;padding:0 5px}.message-avatar{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#383838;font-size:10px;font-weight:700}.message-body{min-width:0;flex:1;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:#e4e4e4}.message-user{justify-content:flex-end}.message-user .message-avatar{order:2;background:#343434}.message-user .message-body{flex:0 1 auto;max-width:min(78%,660px);background:#303030;border:1px solid #3b3b3b;border-radius:19px;padding:12px 16px}.message-assistant .message-body{background:linear-gradient(145deg,#252525,#222);border:1px solid #383838;border-radius:17px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,.13)}.message-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}.message-role{font-size:10px;color:#b7b7b7;text-transform:uppercase;letter-spacing:.08em;font-weight:650}.meta-pill,.status-pill{display:inline-flex;align-items:center;gap:5px;border:1px solid #464646;border-radius:999px;padding:3px 8px;font-size:10px;line-height:1.35;color:#c7c7c7;background:#2a2a2a;white-space:nowrap}.meta-pill.level{color:#d0c8ff;border-color:#534c78;background:#302c45}.status-pill.done{color:#a8edc5;border-color:#286447;background:#173b2b}.status-pill.partial{color:#f0d49b;border-color:#755b2c;background:#3b3020}.status-pill.failed{color:#f1aaaa;border-color:#714141;background:#3c2525}.message-detail{font-size:10px;color:#8f8f8f;margin-top:8px}.message-actions{display:flex;gap:7px;margin-top:10px}.message-action{border:1px solid #444;background:transparent;color:#aaa;border-radius:8px;padding:5px 9px;font-size:10px}.message-action:hover{background:#333;color:#fff}.message-status{font-size:10px;color:#a0a0a0;margin-top:6px}.activity-card{display:flex;flex-direction:column;gap:10px;margin:12px 0 2px;padding:12px 13px;border:1px solid #444;border-radius:13px;background:linear-gradient(135deg,#2b2b2b,#252525)}.activity-heading{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:650;color:#e8e8e8}.activity-spinner{width:14px;height:14px;border:2px solid #555;border-top-color:#c4b5fd;border-radius:50%;animation:activity-spin .85s linear infinite;flex:0 0 14px}.activity-card.streaming .activity-spinner{border-color:#397a59;border-top-color:#a8edc5}.activity-card.error .activity-spinner,.activity-card.stopped .activity-spinner{display:none}.activity-copy{font-size:11px;color:#aaa;line-height:1.5}.activity-chips{display:flex;gap:6px;flex-wrap:wrap}.activity-step{font-size:9px;color:#858585;border:1px solid #414141;border-radius:999px;padding:3px 7px}.activity-step.active{color:#d4caff;border-color:#635994;background:#342f49}.activity-step.done{color:#a8edc5;border-color:#286447;background:#173b2b}.activity-card .activity-error{font-size:11px;color:#f1aaaa;line-height:1.5}@keyframes activity-spin{to{transform:rotate(360deg)}}
 .composer-wrap{padding:12px 0 5px}.composer{border:1px solid #484848;background:#2b2b2b;border-radius:17px;padding:12px 13px 9px;box-shadow:0 8px 30px rgba(0,0,0,.12)}.composer textarea{display:block;width:100%;resize:none;min-height:42px;max-height:130px;outline:none;border:0;background:transparent;color:#aaa;font-size:13px;line-height:1.5}.composer textarea::placeholder{color:#858585}.composer-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px}.composer-hint{font-size:10px;color:#848484}.send-action{border:0;background:#ececec;color:#171717;border-radius:10px;width:30px;height:30px;font-size:17px;font-weight:700;cursor:pointer}.send-action:disabled{background:#444;color:#8b8b8b;cursor:not-allowed}.send-action.stop{background:#d7d7d7;color:#171717}.send-action:not(:disabled):hover{background:#fff}.disclaimer{text-align:center;color:#777;font-size:10px;padding:10px 5px 0;line-height:1.5}
 .loading{color:#999;font-size:12px;padding:12px 8px}.error{color:#f2a4a4;font-size:12px;padding:12px 8px}.history-failure{padding:10px 8px;display:flex;flex-direction:column;gap:8px}.history-failure-title{font-size:12px;color:#e5b0b0}.history-failure-message{font-size:11px;line-height:1.5;color:#aaa;overflow-wrap:anywhere}.history-retry{align-self:flex-start;border:1px solid #555;background:#303030;color:#eee;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer}.history-retry:hover{background:#414141}.history-retry:disabled,.new-chat:disabled{opacity:.55;cursor:wait}
 @media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.topbar{padding:0 13px}.content{padding:28px 16px 12px}.welcome h1{font-size:24px}.model-picker,.thinking-picker{padding:6px 7px;gap:4px}.model-label{display:none}.model-picker select{max-width:122px;min-width:80px}.thinking-picker select{max-width:90px;min-width:64px}.private-tag{display:none}.composer-wrap{padding-top:18px}}
@@ -739,6 +739,7 @@ export function ownerIntelligenceClientScript(): Response {
   var sending=false;
   var activeAbortController=null;
   var editingMessageId=null;
+  var generationActivity=null;
   function node(tag,className,text){var el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;}
   function errorText(error){return error&&error.message?error.message:"Something went wrong. Please retry.";}
   async function request(path,options){
@@ -883,23 +884,84 @@ export function ownerIntelligenceClientScript(): Response {
     messages.appendChild(welcome);
     updateComposer();
   }
+  function appendActivityCard(parent,activity){
+    if(!activity)return;
+    var card=node("div","activity-card "+activity.phase);
+    var heading=node("div","activity-heading");
+    if(activity.phase==="preparing"||activity.phase==="waiting"||activity.phase==="streaming"){
+      heading.appendChild(node("span","activity-spinner"));
+    }else{
+      heading.appendChild(node("span","status-pill "+(activity.phase==="stopped"?"partial":"failed"),activity.phase==="stopped"?"Stopped":"Needs attention"));
+    }
+    var title=activity.phase==="preparing"?"Sending your request":
+      activity.phase==="waiting"?"Gemini is working":
+      activity.phase==="streaming"?"Response is streaming":
+      activity.phase==="stopped"?"Generation stopped":"Generation interrupted";
+    heading.appendChild(node("span","",title));
+    card.appendChild(heading);
+    var copy=activity.phase==="preparing"
+      ?"Connecting to "+activity.modelLabel+" · "+activity.thinkingLevel+" thinking."
+      :activity.phase==="waiting"
+        ?"The model request has started. Waiting for the first visible response token; pre-response time can vary by model, thinking level and prompt."
+        :activity.phase==="streaming"
+          ?"The model is sending response text. You can stop generation at any time."
+          :activity.phase==="stopped"
+            ?"The response received so far is being saved as a partial answer."
+            :(activity.detail||"The request could not be completed. Your conversation remains available.");
+    card.appendChild(node("div",activity.phase==="error"?"activity-error":"activity-copy",copy));
+    if(activity.phase==="preparing"||activity.phase==="waiting"||activity.phase==="streaming"){
+      var steps=node("div","activity-chips");
+      var labels=["Request sent","Model working","Streaming"];
+      labels.forEach(function(label,index){
+        var status=index===0?"done":
+          (activity.phase==="waiting"&&index===1)||(activity.phase==="streaming"&&index===2)?"active":
+          activity.phase==="streaming"&&index===1?"done":"";
+        steps.appendChild(node("span","activity-step "+status,label));
+      });
+      card.appendChild(steps);
+    }
+    parent.appendChild(card);
+  }
+  function formatDuration(ms){
+    if(!Number.isFinite(ms)||ms<0)return "";
+    var seconds=Math.max(1,Math.round(ms/1000));
+    return seconds<60?seconds+"s":Math.floor(seconds/60)+"m "+(seconds%60)+"s";
+  }
   function renderMessages(items){
     messages.replaceChildren();
-    if(!items.length){showWelcome();return;}
+    if(!items.length&&!generationActivity){showWelcome();return;}
+    var pendingActivityRendered=false;
     items.forEach(function(item,index){
-      var wrap=node("article","message");
+      var wrap=node("article","message "+(item.role==="user"?"message-user":"message-assistant"));
       wrap.appendChild(node("div","message-avatar",item.role==="assistant"?"BɅ":item.role==="system"?"·":"O"));
       var body=node("div","message-body");
       var roleLabel=item.role;
+      var model=state.models.find(function(entry){return entry.id===item.model_id;});
+      if(item.role==="assistant"&&item.model_id)roleLabel=model?model.label:item.model_id;
+      var meta=node("div","message-meta");
+      meta.appendChild(node("span","message-role",roleLabel));
       if(item.role==="assistant"&&item.model_id){
-        var model=state.models.find(function(entry){return entry.id===item.model_id;});
-        roleLabel=(model?model.label:item.model_id)+" · "+String(item.thinking_level||"");
+        meta.appendChild(node("span","meta-pill",item.model_id));
+        if(item.thinking_level)meta.appendChild(node("span","meta-pill level",item.thinking_level+" thinking"));
       }
-      body.appendChild(node("div","message-role",roleLabel));
-      body.appendChild(node("div","",item.content|| (item.status==="pending"?"Generating…":"")));
-      if(item.status==="pending")body.appendChild(node("div","message-status","Generating response…"));
-      else if(item.status==="partial")body.appendChild(node("div","message-status","Stopped · partial response saved"));
-      else if(item.status==="error")body.appendChild(node("div","message-status","Generation failed"));
+      if(item.role==="assistant"&&item.status==="complete")meta.appendChild(node("span","status-pill done","✓ Completed"));
+      else if(item.role==="assistant"&&item.status==="partial")meta.appendChild(node("span","status-pill partial","Partial · saved"));
+      else if(item.role==="assistant"&&item.status==="error")meta.appendChild(node("span","status-pill failed","Failed"));
+      body.appendChild(meta);
+      body.appendChild(node("div","message-content",item.content||""));
+      if(item.role==="assistant"&&item.status==="pending"){
+        var activity=generationActivity||{phase:"waiting",modelLabel:roleLabel,thinkingLevel:item.thinking_level||"default"};
+        appendActivityCard(body,activity);pendingActivityRendered=true;
+      }else if(item.role==="assistant"&&item.status==="partial"){
+        body.appendChild(node("div","message-detail","The partial response was saved. You can regenerate it."));
+      }else if(item.role==="assistant"&&item.status==="complete"){
+        var details=[];
+        if(item.elapsed_ms)details.push(formatDuration(item.elapsed_ms)+" response time");
+        if(item.total_tokens)details.push(item.total_tokens.toLocaleString()+" tokens");
+        if(details.length)body.appendChild(node("div","message-detail",details.join(" · ")));
+      }else if(item.role==="assistant"&&item.status==="error"){
+        body.appendChild(node("div","message-detail","The request failed before a complete answer was produced."));
+      }
       if(item.role==="user"&&!sending){
         var edit=node("button","message-action","Edit");
         edit.type="button";edit.addEventListener("click",function(){
@@ -913,6 +975,13 @@ export function ownerIntelligenceClientScript(): Response {
       }
       wrap.appendChild(body);messages.appendChild(wrap);
     });
+    if(generationActivity&&!pendingActivityRendered){
+      var shell=node("article","message message-assistant");
+      shell.appendChild(node("div","message-avatar","BɅ"));
+      var statusBody=node("div","message-body");
+      appendActivityCard(statusBody,generationActivity);
+      shell.appendChild(statusBody);messages.appendChild(shell);
+    }
   }
   function showHistoryError(error){
     history.replaceChildren();
@@ -979,6 +1048,7 @@ export function ownerIntelligenceClientScript(): Response {
   }
 
   function stopGeneration(){
+    if(generationActivity){generationActivity.phase="stopped";renderMessages(state.messages);}
     if(activeAbortController)activeAbortController.abort();
   }
 
@@ -1002,12 +1072,18 @@ export function ownerIntelligenceClientScript(): Response {
     if(eventName==="meta"){
       if(data.message)updateStreamingMessage(data.message.id,data.message);
     }else if(eventName==="delta"){
+      if(generationActivity&&generationActivity.phase!=="streaming"){
+        generationActivity.phase="streaming";
+      }
       var item=state.messages.find(function(entry){return entry.id===messageId;})||
         state.messages.slice().reverse().find(function(entry){return entry.role==="assistant"&&entry.status==="pending";});
       if(item){item.content=(item.content||"")+String(data.text||"");renderMessages(state.messages);}
     }else if(eventName==="done"){
+      generationActivity=null;
       if(data.message)updateStreamingMessage(data.message.id,data.message);
     }else if(eventName==="error"){
+      if(generationActivity){generationActivity.phase="error";generationActivity.detail=data.message||"The response stream failed.";}
+
       var target=state.messages.find(function(entry){return entry.id===messageId;});
       if(target){target.status=data.partial?"partial":"error";renderMessages(state.messages);}
       throw new Error(data.message||"Generation failed.");
@@ -1026,7 +1102,9 @@ export function ownerIntelligenceClientScript(): Response {
       requestBody.content=content;
       if(editingMessageId)requestBody.editMessageId=editingMessageId;
     }
-    sending=true;activeAbortController=new AbortController();updateComposer();
+    sending=true;activeAbortController=new AbortController();
+    generationActivity={phase:"preparing",startedAt:Date.now(),modelId:state.selectedModelId,modelLabel:(state.models.find(function(model){return model.id===state.selectedModelId;})||{}).label||state.selectedModelId,thinkingLevel:state.selectedThinkingLevel};
+    updateComposer();renderMessages(state.messages);
     var assistantId=null;
     try{
       var response=await fetch(api+"/"+encodeURIComponent(conversationId)+"/generate",{
@@ -1041,6 +1119,7 @@ export function ownerIntelligenceClientScript(): Response {
         var failure={};try{failure=await response.json();}catch(_error){}
         throw new Error(failure.message||failure.error||("Generation request failed ("+response.status+")"));
       }
+      if(generationActivity){generationActivity.phase="waiting";renderMessages(state.messages);}
       await openConversation(conversationId);
       var pending=state.messages.slice().reverse().find(function(item){return item.role==="assistant"&&item.status==="pending";});
       assistantId=pending?pending.id:null;
@@ -1062,13 +1141,16 @@ export function ownerIntelligenceClientScript(): Response {
       if(buffer.trim())consume(buffer);
       await reader.cancel().catch(function(){});
     }catch(error){
-      if(!(error&&error.name==="AbortError")){
-        if(error&&error.message)showError(error);
-      }
+      if(generationActivity){
+        if(error&&error.name==="AbortError")generationActivity.phase="stopped";
+        else{generationActivity.phase="error";generationActivity.detail=errorText(error);}
+        renderMessages(state.messages);
+      }else if(!(error&&error.name==="AbortError")&&error&&error.message){showError(error);}
     }finally{
       sending=false;activeAbortController=null;editingMessageId=null;
       messageInput.value="";
       try{await refreshList(conversationId);}catch(_error){}
+      generationActivity=null;
       updateComposer();
     }
   }
