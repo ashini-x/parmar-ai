@@ -963,18 +963,19 @@ export function ownerIntelligenceClientScript(): Response {
   }
   function updateComposer(){
     var hasText=messageInput.value.trim().length>0;
-    var canGenerate=Boolean(state.activeId&&state.selectedModelId&&state.selectedThinkingLevel);
+    var canGenerate=Boolean(state.selectedModelId&&state.selectedThinkingLevel);
     sendButton.disabled=sending?false:(!canGenerate||!hasText);
     sendButton.textContent=sending?"■":"↑";
     sendButton.classList.toggle("stop",sending);
     sendButton.setAttribute("aria-label",sending?"Stop generation":"Send message");
-    messageInput.disabled=!state.activeId||sending;
+    messageInput.disabled=!canGenerate||sending;
     modelSelect.disabled=sending||!state.models.length;
     thinkingSelect.disabled=sending||!state.selectedThinkingLevel;
     composerHint.textContent=sending
       ?"Generating with "+state.selectedModelId+" · "+state.selectedThinkingLevel+" · select Stop to keep the partial answer"
       :modelLoadMessage?modelLoadMessage
       :editingMessageId?"Editing a previous message · sending will replace it and remove later turns"
+      :!state.activeId?"Type a message and send to start a new conversation."
       :"Your selected model and thinking level will be used for this response.";
   }
 
@@ -1014,9 +1015,15 @@ export function ownerIntelligenceClientScript(): Response {
     }
   }
 
+  async function ensureActiveConversation(){
+    if(state.activeId)return state.activeId;
+    var result=await request(api,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:"New chat"})});
+    await refreshList(result.conversation.id);
+    return result.conversation.id;
+  }
   async function generateMessage(options){
     options=options||{};
-    if(sending||!state.activeId||!state.selectedModelId||!state.selectedThinkingLevel)return;
+    if(sending||!state.selectedModelId||!state.selectedThinkingLevel)return;
     var content=messageInput.value.trim();
     if(!options.action&&!content)return;
     var conversationId=state.activeId;
@@ -1029,6 +1036,7 @@ export function ownerIntelligenceClientScript(): Response {
     sending=true;activeAbortController=new AbortController();updateComposer();
     var assistantId=null;
     try{
+      conversationId=await ensureActiveConversation();
       var response=await fetch(api+"/"+encodeURIComponent(conversationId)+"/generate",{
         method:"POST",
         credentials:"same-origin",
