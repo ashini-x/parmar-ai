@@ -897,7 +897,7 @@ export function ownerIntelligenceClientScript(): Response {
       state.selectedModelId=preferred.id;
       populateThinkingLevels(preferred.id);
       modelSelect.disabled=false;
-      modelSelect.title="Project/location verified · "+available.length+" available model(s) · "+String(result.location||"configured location");
+      modelSelect.title="Count Tokens check passed for "+available.length+" model(s) in "+String(result.location||"configured location")+". Actual GenerateContent permission is checked when you send.";
       modelRetry.hidden=true;
       modelLoadMessage=null;
       updateComposer();
