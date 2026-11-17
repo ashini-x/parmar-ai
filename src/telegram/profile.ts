@@ -51,6 +51,6 @@ export function buildProfileText(profile: StudentProfile, usage: StudentProfileU
       ? signals.map((item) => item.topic).join(" · ")
       : "More practice will help identify learning patterns.",
     "",
-    "_Based on your study questions to परमार्थAI._",
+    "_Note: परमार्थAI is learning and creating your profile based on your doubts._",
   ].join("\n");
 }

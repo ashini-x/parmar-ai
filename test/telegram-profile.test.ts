@@ -28,6 +28,7 @@ describe("Telegram study profile formatting", () => {
     const text = buildProfileText(baseProfile, { dayCount: 0, dailyLimit: 10, unlimited: false });
 
     expect(text).toContain("**YOUR STUDY PROFILE**");
+    expect(text).toContain("_Note: परमार्थAI is learning and creating your profile based on your doubts._");
     expect(text).toContain("Target exam: **SSC CGL**");
     expect(text).toContain("Questions tracked: **6**");
     expect(text).toContain("Today: **0/10** questions");
