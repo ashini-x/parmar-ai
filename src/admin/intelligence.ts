@@ -98,7 +98,7 @@ function ownerPrincipal(env: Env): string {
 
 function normalizedTitle(value: unknown): string {
   if (typeof value !== "string") throw new Error("A conversation title is required.");
-  const title = value.replace(/\\s+/gu, " ").trim();
+  const title = value.replace(/\s+/gu, " ").trim();
   if (!title) throw new Error("A conversation title cannot be empty.");
   if (title.length > MAX_TITLE_LENGTH) throw new Error("Conversation titles must be 80 characters or fewer.");
   return title;
@@ -344,7 +344,7 @@ async function prepareOwnerPrompt(
     });
     if (!message) return null;
     if (conversation.title === "New chat") {
-      const title = input.content.trim().replace(/\\s+/gu, " ").slice(0, MAX_TITLE_LENGTH);
+      const title = input.content.trim().replace(/\s+/gu, " ").slice(0, MAX_TITLE_LENGTH);
       await env.DB!.prepare(
         "UPDATE owner_intelligence_conversations SET title = ?, updated_at = ? WHERE id = ? AND owner_id = ?",
       ).bind(title, message.created_at, conversationId, ownerId).run();
@@ -391,7 +391,7 @@ function validConversationId(value: string): boolean {
 
 
 function streamEvent(controller: ReadableStreamDefaultController<Uint8Array>, type: string, value: unknown): void {
-  controller.enqueue(new TextEncoder().encode("event: " + type + "\\ndata: " + JSON.stringify(value) + "\\n\\n"));
+  controller.enqueue(new TextEncoder().encode("event: " + type + "\ndata: " + JSON.stringify(value) + "\n\n"));
 }
 
 async function handleOwnerGeneration(
@@ -580,7 +580,7 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
     return ownerIntelligenceModelsResponse(env);
   }
 
-  const generationMatch = url.pathname.match(/^\\/admin\\/api\\/intelligence\\/conversations\\/([0-9a-f-]{36})\\/generate$/iu);
+  const generationMatch = url.pathname.match(/^\/admin\/api\/intelligence\/conversations\/([0-9a-f-]{36})\/generate$/iu);
   if (generationMatch && validConversationId(generationMatch[1])) {
     return handleOwnerGeneration(request, env, generationMatch[1]);
   }
@@ -921,13 +921,13 @@ function workspaceHtml(nonce: string): string {
   function handleStreamBlock(block,messageId){
     var eventName="message";
     var dataLines=[];
-    block.split(/\\r?\\n/u).forEach(function(line){
+    block.split(/\r?\n/u).forEach(function(line){
       if(line.indexOf("event:")===0)eventName=line.slice(6).trim();
       else if(line.indexOf("data:")===0)dataLines.push(line.slice(5).trim());
     });
     if(!dataLines.length)return;
     var data;
-    try{data=JSON.parse(dataLines.join("\\n"));}catch(_error){throw new Error("The response stream returned invalid data.");}
+    try{data=JSON.parse(dataLines.join("\n"));}catch(_error){throw new Error("The response stream returned invalid data.");}
     if(eventName==="meta"){
       if(data.message)updateStreamingMessage(data.message.id,data.message);
     }else if(eventName==="delta"){
@@ -980,11 +980,11 @@ function workspaceHtml(nonce: string): string {
       function consume(block){handleStreamBlock(block,assistantId);}
       while(true){
         var next=await reader.read();
-        buffer+=decoder.decode(next.value,{stream:!next.done}).replace(/\\r\\n/gu,"\\n");
-        var boundary=buffer.indexOf("\\n\\n");
+        buffer+=decoder.decode(next.value,{stream:!next.done}).replace(/\r\n/gu,"\n");
+        var boundary=buffer.indexOf("\n\n");
         while(boundary>=0){
           var block=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);consume(block);
-          boundary=buffer.indexOf("\\n\\n");
+          boundary=buffer.indexOf("\n\n");
         }
         if(next.done)break;
       }
