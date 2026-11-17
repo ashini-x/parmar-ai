@@ -902,7 +902,7 @@ export function ownerIntelligenceClientScript(): Response {
     var copy=activity.phase==="preparing"
       ?"Connecting to "+activity.modelLabel+" · "+activity.thinkingLevel+" thinking."
       :activity.phase==="waiting"
-        ?"The model request has started. Waiting for the first visible response token; pre-response time can vary by model, thinking level and prompt."
+        ?"Vertex AI has accepted the request. Waiting for its first visible response token; pre-response time can vary by model, thinking level and prompt."
         :activity.phase==="streaming"
           ?"The model is sending response text. You can stop generation at any time."
           :activity.phase==="stopped"
