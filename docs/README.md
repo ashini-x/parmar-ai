@@ -69,6 +69,10 @@ The active architecture is the shared `parmar-ai` admin/ingestion plane plus pri
 
 The BRVIN retrieval-provider modernization is coordinated across both repositories: Core owns Vertex AI/Qdrant ingestion and retrieval; Teachers preserves the same Operator Console and student-facing contract without direct provider access. See [BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md](BRVIN_RETRIEVAL_PROVIDER_MIGRATION.md) and the consumer's [provider compatibility plan](https://github.com/ashini-x/brvin-teachers/blob/main/docs/BRVIN_RETRIEVAL_PROVIDER_COMPATIBILITY.md). The existing Parmar AI SSC application remains standalone; no code or production-data transfer is part of this project.
 
+## Owner Intelligence — private Owner workspace (planned)
+
+The separate owner-only BRɅIN Intelligence workspace is planned inside the existing protected Admin Control Center. Start every implementation chat with [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md); it is the live milestone, architecture, decision, test and task ledger. Copy the current handoff from [OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md](OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md). M0 documentation baseline is complete; M1 Owner identity and authorization is next. No Owner Intelligence application code is implemented at this checkpoint.
+
 ## Current feature documentation
 
 The v2.8.0 implementation includes:
