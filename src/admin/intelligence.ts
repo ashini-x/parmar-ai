@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
+import { ownerIntelligenceModelsResponse } from "./intelligence-provider";
 
 export interface OwnerIntelligenceConversation {
   id: string;
@@ -238,6 +239,11 @@ function validConversationId(value: string): boolean {
 }
 
 export async function handleOwnerIntelligenceApi(request: Request, env: Env, url: URL): Promise<Response> {
+  if (url.pathname === "/admin/api/intelligence/models") {
+    if (request.method !== "GET") return methodNotAllowed(["GET"]);
+    return ownerIntelligenceModelsResponse(env);
+  }
+
   const root = "/admin/api/intelligence/conversations";
   if (url.pathname === root) {
     if (request.method === "GET") {

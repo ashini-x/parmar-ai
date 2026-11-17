@@ -301,4 +301,26 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     const missing = await call(env, "/admin/api/intelligence/conversations/not-a-uuid", ownerCookie);
     expect(missing.status).toBe(404);
   });
+
+  it("protects the project-aware Gemini model catalogue and returns a safe unconfigured state to Owner", async () => {
+    const env = appEnv();
+    const adminCookie = await login("admin", "admin-test-password", env);
+    const ownerCookie = await login("owner", "owner-test-password", env);
+
+    expect((await call(env, "/admin/api/intelligence/models")).status).toBe(401);
+    expect((await call(env, "/admin/api/intelligence/models", adminCookie)).status).toBe(403);
+    const response = await call(env, "/admin/api/intelligence/models", ownerCookie);
+    const body = await response.json() as {
+      ok: boolean;
+      configured: boolean;
+      error: string;
+      models: Array<{ selectable: boolean; availability: string }>;
+    };
+    expect(response.status).toBe(503);
+    expect(body.ok).toBe(false);
+    expect(body.configured).toBe(false);
+    expect(body.error).toBe("vertex_not_configured");
+    expect(body.models.length).toBeGreaterThan(0);
+    expect(body.models.every((model) => !model.selectable && model.availability === "unverified")).toBe(true);
+  });
 });
