@@ -85,3 +85,22 @@ These controls do not remove the five-question/10-second burst safeguard.
 ## Error conventions
 
 JSON APIs use HTTP status codes plus a machine-readable `error` field. Request IDs may be attached for operational correlation. Internal stack traces and provider credentials are not exposed to students.
+
+
+## Owner Intelligence API (Owner session only)
+
+All routes below require a valid `requireOwner` session. They do not accept an owner ID from the browser. JSON responses use `{ ok: true, ... }` on success and a machine-readable `error` on failure.
+
+| Method | Route | Behavior |
+|---|---|---|
+| `GET` | `/admin/api/intelligence/conversations` | List up to the latest 100 conversations for the signed-in Owner. |
+| `POST` | `/admin/api/intelligence/conversations` | Create a conversation. Optional `title`; defaults to `New chat`. Title maximum 80 characters. |
+| `GET` | `/admin/api/intelligence/conversations/:id` | Reopen a conversation and return its messages in creation order. |
+| `PATCH` | `/admin/api/intelligence/conversations/:id` | Rename with JSON body `{ "title": "..." }`. |
+| `DELETE` | `/admin/api/intelligence/conversations/:id` | Delete the conversation and its saved messages. |
+| `POST` | `/admin/api/intelligence/conversations/:id/messages` | Save an Owner-authored message with JSON body `{ "content": "..." }`. Maximum content length: 50,000 JavaScript characters. |
+
+All mutations require a matching same-origin `Origin` header and reject cross-site fetch metadata. Conversation identifiers must be UUIDs. Every database operation is scoped to the normalized configured Owner username. A missing conversation or one owned by another principal returns 404 rather than disclosing its existence.
+
+M2 only persists user-authored messages. It does not call Gemini, return assistant answers, stream output, expose model/thinking selectors or accept files. Those capabilities belong to later milestones.
+

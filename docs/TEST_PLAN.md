@@ -89,3 +89,23 @@ Test the exact source revision intended for deployment, then record the resultin
 - In production, Telegram bot credential encryption requires TELEGRAM_BOT_ENCRYPTION_KEY; ADMIN_SESSION_SECRET is not used for new encryption.
 - Legacy Telegram ciphertext can still be read during key migration when a dedicated production encryption key is present.
 - Raw analytics retention defaults to 30 days when no override is configured.
+
+
+## Owner Intelligence workspace — M2
+
+- Anonymous GET of `/admin/intelligence` and the Owner API is rejected with 401.
+- A valid ordinary admin session receives 403 on the Owner page and APIs.
+- A valid Owner session can load the responsive dark workspace; response is `no-store`, has `nosniff`, and applies nonce-based script CSP.
+- Owner can create a conversation, list it, reopen it after refresh, rename it and delete it.
+- Owner-authored messages persist in `owner_intelligence_messages` and reappear when the conversation is reopened.
+- Another configured Owner principal cannot list or read the first Owner's conversation.
+- Mutations without the same-origin Origin header are rejected.
+- Invalid titles and malformed conversation IDs are rejected.
+- Deleting a conversation removes all associated message rows.
+- The composer is disabled when no conversation is selected, enabled for an active conversation and saves on button click or Enter; Shift+Enter remains a newline.
+- Do not expect Gemini assistant responses in M2; the UI identifies model generation as a later milestone.
+
+### M2 production release evidence
+
+Workflow [44145644996](https://github.com/ashini-x/parmar-ai/actions/runs/44145644996), source commit `dd5d1ec6b0f9ccbe61facf0ed0cfa4c11ef21d25): `npm run check` passed; `npm test` passed 470 tests across 71 files; `npm run test:node` passed 62 tests across 9 files; private BRVIN, Parmar AI and standalone BRɅIN web Worker dry-runs passed. Both production Workers deployed; root, health, BRVIN service binding and Fatman readiness checks passed; production release acceptance passed. No rollback was needed. The release did not perform a manual authenticated browser walkthrough of the private Owner page.
+
