@@ -109,9 +109,8 @@ async function probeModel(
   dependencies: OwnerProviderDependencies,
 ): Promise<OwnerGeminiModel> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
-    const response = await dependencies.fetch(
+    const response = await withTimeout(dependencies.fetch(
       `${vertexBase(location)}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model.id)}:countTokens`,
       {
         method: "POST",
@@ -119,15 +118,13 @@ async function probeModel(
         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Owner model availability check." }] }] }),
         signal: controller.signal,
       },
-    );
+    ), PROBE_TIMEOUT_MS, () => controller.abort());
     if (response.ok) {
       return { ...model, availability: "available", selectable: true, availabilityReason: "project_location_probe_passed" };
     }
     return { ...model, availability: response.status === 400 || response.status === 404 ? "unavailable" : "unverified", selectable: false, availabilityReason: failureReason(response.status) };
   } catch {
     return { ...model, availability: "unverified", selectable: false, availabilityReason: "provider_temporarily_unavailable" };
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
