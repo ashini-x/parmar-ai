@@ -62,6 +62,7 @@ const defaultDependencies: OwnerProviderDependencies = {
 };
 const PROBE_TIMEOUT_MS = 8_000;
 const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
+const MAX_CONVERSATION_CONTEXT_CHARS = 300_000;
 const GENERATION_TIMEOUT_MS = 35_000;
 const CATALOGUE_CACHE_MS = 90_000;
 const catalogueCache = new Map<string, { expiresAt: number; value: OwnerModelCatalogue }>();
@@ -230,8 +231,10 @@ export interface OwnerGeminiGenerationResult {
 }
 
 function providerStatusMessage(status: number): string {
-  if (status === 400) return "Vertex AI rejected the request. Check the selected model and request configuration.";
-  if (status === 401 || status === 403) return "Vertex AI denied access to this model or project.";
+  if (status === 400) return "Vertex AI rejected the request. The conversation format or size may not be supported.";
+  if (status === 401 || status === 403) {
+    return "Vertex AI denied GenerateContent access for this model or project. A successful Count Tokens check does not guarantee generation permission; check the service account's Vertex AI access and this model's project/location eligibility.";
+  }
   if (status === 404) return "The selected model is not available at the configured location.";
   if (status === 429) return "Vertex AI is temporarily rate limiting requests for this project or model.";
   if (status >= 500) return "Vertex AI is temporarily unavailable.";
@@ -255,10 +258,15 @@ export async function generateOwnerGeminiContent(
   if (!project || !env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim()) {
     throw new OwnerGeminiProviderError("Vertex AI is not configured for the Owner workspace.");
   }
-  if (!Array.isArray(input.contents) || input.contents.length < 1 || input.contents.length > 50 ||
-      input.contents.some((item) => !item || (item.role !== "user" && item.role !== "model") ||
-        typeof item.text !== "string" || !item.text.trim() || item.text.length > 50_000)) {
-    throw new OwnerGeminiProviderError("The conversation content is invalid or exceeds the supported request size.");
+  const contents = Array.isArray(input.contents) ? input.contents : [];
+  const validTurnShape = contents.length >= 1 && contents.length <= 50 &&
+    contents[0]?.role === "user" && contents[contents.length - 1]?.role === "user" &&
+    contents.every((item, index) => item && (item.role === "user" || item.role === "model") &&
+      typeof item.text === "string" && Boolean(item.text.trim()) && item.text.length <= 50_000 &&
+      (index === 0 || item.role !== contents[index - 1]?.role));
+  const contextChars = contents.reduce((total, item) => total + (typeof item?.text === "string" ? item.text.length : 0), 0);
+  if (!validTurnShape || contextChars > MAX_CONVERSATION_CONTEXT_CHARS) {
+    throw new OwnerGeminiProviderError("The conversation context is invalid or too large. BRɅIN keeps your full history, but only a clean recent section can be sent to this model.");
   }
   if (input.systemInstruction !== undefined &&
       (typeof input.systemInstruction !== "string" || input.systemInstruction.length > 20_000)) {
@@ -393,7 +401,7 @@ async function getVerifiedModelAccessToken(
   if (!verified.selectable) {
     throw new OwnerGeminiProviderError(
       verified.availabilityReason === "provider_access_denied"
-        ? "Vertex AI denied access to the selected model or project."
+        ? "Vertex AI denied GenerateContent access for this model or project. A Count Tokens check does not guarantee generation permission; check the service account and model access."
         : "The selected Gemini model is not currently verified for this project and location.",
       undefined,
       true,
@@ -427,10 +435,15 @@ export async function openOwnerGeminiStream(
   if (!definition.thinkingLevels.includes(input.thinkingLevel)) {
     throw new OwnerGeminiProviderError("The selected thinking level is not supported by this model.");
   }
-  if (!Array.isArray(input.contents) || input.contents.length < 1 || input.contents.length > 50 ||
-      input.contents.some((item) => !item || (item.role !== "user" && item.role !== "model") ||
-        typeof item.text !== "string" || !item.text.trim() || item.text.length > 50_000)) {
-    throw new OwnerGeminiProviderError("The conversation content is invalid or exceeds the supported request size.");
+  const contents = Array.isArray(input.contents) ? input.contents : [];
+  const validTurnShape = contents.length >= 1 && contents.length <= 50 &&
+    contents[0]?.role === "user" && contents[contents.length - 1]?.role === "user" &&
+    contents.every((item, index) => item && (item.role === "user" || item.role === "model") &&
+      typeof item.text === "string" && Boolean(item.text.trim()) && item.text.length <= 50_000 &&
+      (index === 0 || item.role !== contents[index - 1]?.role));
+  const contextChars = contents.reduce((total, item) => total + (typeof item?.text === "string" ? item.text.length : 0), 0);
+  if (!validTurnShape || contextChars > MAX_CONVERSATION_CONTEXT_CHARS) {
+    throw new OwnerGeminiProviderError("The conversation context is invalid or too large. BRɅIN keeps your full history, but only a clean recent section can be sent to this model.");
   }
   if (input.systemInstruction !== undefined &&
       (typeof input.systemInstruction !== "string" || input.systemInstruction.length > 20_000)) {

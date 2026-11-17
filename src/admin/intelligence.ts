@@ -36,6 +36,8 @@ interface OwnerMessageRow extends OwnerIntelligenceMessage {
 const readyDatabases = new WeakSet<object>();
 const MAX_TITLE_LENGTH = 80;
 const MAX_MESSAGE_LENGTH = 50_000;
+const MAX_OWNER_GEMINI_CONTEXT_CHARS = 300_000;
+const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
 const MAX_CONVERSATIONS = 100;
 
 /**
@@ -360,6 +362,57 @@ async function prepareOwnerPrompt(
   return (result.results ?? []).map(mapMessage);
 }
 
+/**
+ * Build a clean, bounded Gemini context from the durable Owner transcript.
+ * Failed/pending/empty assistant rows are UI state, not conversation turns.
+ * Adjacent turns with the same role are coalesced after those rows are removed,
+ * because GenerateContent requires a valid alternating user/model sequence.
+ * The full transcript remains in D1; only a recent suffix is sent to Vertex.
+ */
+export function buildOwnerGeminiConversationContents(
+  messages: readonly OwnerIntelligenceMessage[],
+): Array<{ role: "user" | "model"; text: string }> {
+  const turns: Array<{ role: "user" | "model"; text: string }> = [];
+  for (const message of messages) {
+    if (message.role !== "user" && message.role !== "assistant") continue;
+    if (message.status !== "complete" && message.status !== "partial") continue;
+    const text = message.content.trim();
+    if (!text) continue;
+    const role = message.role === "assistant" ? "model" as const : "user" as const;
+    const previous = turns[turns.length - 1];
+    if (previous?.role === role) previous.text += "\n\n" + text;
+    else turns.push({ role, text });
+  }
+
+  const normalized = turns
+    .slice(-MAX_OWNER_GEMINI_CONTEXT_TURNS)
+    .map((turn) => ({
+      role: turn.role,
+      // Each Vertex text part is independently bounded; preserve the newest
+      // part of a coalesced run (which includes the current user prompt).
+      text: turn.text.length > MAX_MESSAGE_LENGTH ? turn.text.slice(-MAX_MESSAGE_LENGTH) : turn.text,
+    }));
+
+  const selected: Array<{ role: "user" | "model"; text: string }> = [];
+  let usedChars = 0;
+  for (let index = normalized.length - 1; index >= 0; index -= 1) {
+    const turn = normalized[index];
+    const addedChars = turn.text.length + (selected.length ? 2 : 0);
+    if (selected.length && usedChars + addedChars > MAX_OWNER_GEMINI_CONTEXT_CHARS) break;
+    if (!selected.length && turn.text.length > MAX_OWNER_GEMINI_CONTEXT_CHARS) {
+      selected.unshift({ role: turn.role, text: turn.text.slice(-MAX_OWNER_GEMINI_CONTEXT_CHARS) });
+      break;
+    }
+    selected.unshift(turn);
+    usedChars += addedChars;
+  }
+
+  // A truncated suffix must start with a user turn. Never send an orphaned
+  // model response without the user prompt that preceded it.
+  if (selected[0]?.role === "model") selected.shift();
+  return selected;
+}
+
 function isSameOriginMutation(request: Request): boolean {
   const origin = request.headers.get("Origin");
   if (!origin) return false;
@@ -435,10 +488,7 @@ async function handleOwnerGeneration(
   }
   if (!messages) return notFound();
 
-  const contents = messages
-    .filter((message) => message.role === "user" || message.role === "assistant")
-    .slice(-49)
-    .map((message) => ({ role: message.role === "assistant" ? "model" as const : "user" as const, text: message.content }));
+  const contents = buildOwnerGeminiConversationContents(messages);
   if (!contents.length || contents[contents.length - 1].role !== "user") {
     return json({ ok: false, error: "latest_message_missing" }, 409);
   }
@@ -847,7 +897,7 @@ export function ownerIntelligenceClientScript(): Response {
       state.selectedModelId=preferred.id;
       populateThinkingLevels(preferred.id);
       modelSelect.disabled=false;
-      modelSelect.title="Project/location verified · "+available.length+" available model(s) · "+String(result.location||"configured location");
+      modelSelect.title="Count Tokens check passed for "+available.length+" model(s) in "+String(result.location||"configured location")+". Actual GenerateContent permission is checked when you send.";
       modelRetry.hidden=true;
       modelLoadMessage=null;
       updateComposer();

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Env } from "../src/config/env";
 import worker from "../src";
 import { handleAdminLogin } from "../src/admin/auth";
+import { buildOwnerGeminiConversationContents, type OwnerIntelligenceMessage } from "../src/admin/intelligence";
 
 type ConversationRow = {
   id: string;
@@ -234,6 +235,51 @@ async function call(
   await waitOnExecutionContext(context);
   return response;
 }
+
+describe("Owner Gemini conversation context builder", () => {
+  it("omits failed and empty assistant rows and merges adjacent user turns after a failed generation", () => {
+    const messages: OwnerIntelligenceMessage[] = [
+      { id: "1", conversation_id: "c", role: "user", content: "Earlier question", status: "complete", created_at: 1 },
+      { id: "2", conversation_id: "c", role: "assistant", content: "Earlier answer", status: "complete", created_at: 2 },
+      { id: "3", conversation_id: "c", role: "user", content: "Can you see what we were discussing?", status: "complete", created_at: 3 },
+      { id: "4", conversation_id: "c", role: "assistant", content: "", status: "error", created_at: 4 },
+      { id: "5", conversation_id: "c", role: "user", content: "I am retrying with another model.", status: "complete", created_at: 5 },
+      { id: "6", conversation_id: "c", role: "assistant", content: "", status: "pending", created_at: 6 },
+    ];
+
+    expect(buildOwnerGeminiConversationContents(messages)).toEqual([
+      { role: "user", text: "Earlier question" },
+      { role: "model", text: "Earlier answer" },
+      { role: "user", text: "Can you see what we were discussing?\n\nI am retrying with another model." },
+    ]);
+  });
+
+  it("keeps the newest valid user-led suffix within the context budget without deleting stored history", () => {
+    const messages: OwnerIntelligenceMessage[] = [];
+    for (let index = 0; index < 20; index += 1) {
+      messages.push({
+        id: "u" + index, conversation_id: "c", role: "user",
+        content: "U".repeat(25_000) + index, status: "complete", created_at: index * 2 + 1,
+      });
+      messages.push({
+        id: "a" + index, conversation_id: "c", role: "assistant",
+        content: "A".repeat(25_000) + index, status: "complete", created_at: index * 2 + 2,
+      });
+    }
+    messages.push({
+      id: "latest", conversation_id: "c", role: "user",
+      content: "Newest prompt must remain.", status: "complete", created_at: 99,
+    });
+    const contents = buildOwnerGeminiConversationContents(messages);
+    expect(contents[0]?.role).toBe("user");
+    expect(contents[contents.length - 1]).toEqual({ role: "user", text: "Newest prompt must remain." });
+    expect(contents.length).toBeLessThanOrEqual(49);
+    expect(contents.every((turn, index) => turn.text.length > 0 && turn.text.length <= 50_000 &&
+      (index === 0 || turn.role !== contents[index - 1].role))).toBe(true);
+    expect(contents.reduce((total, turn) => total + turn.text.length, 0)).toBeLessThanOrEqual(300_000);
+    expect(messages).toHaveLength(41);
+  });
+});
 
 describe("Owner Intelligence workspace and conversation persistence", () => {
   it("denies anonymous and ordinary admin sessions on the workspace page and API", async () => {
