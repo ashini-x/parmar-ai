@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
-import { openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerThinkingLevel } from "./intelligence-provider";
+import { openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
 
 export interface OwnerIntelligenceConversation {
   id: string;
@@ -457,7 +457,7 @@ async function handleOwnerGeneration(
   if (request.signal.aborted) abortController.abort();
   else request.signal.addEventListener("abort", abortFromRequest, { once: true });
 
-  let upstream: AsyncGenerator<Awaited<ReturnType<typeof openOwnerGeminiStream>> extends AsyncGenerator<infer E> ? E : never>;
+  let upstream: AsyncGenerator<OwnerGeminiStreamEvent>;
   try {
     upstream = await openOwnerGeminiStream(env, {
       modelId: definition.id,
@@ -474,8 +474,6 @@ async function handleOwnerGeneration(
     return json({ ok: false, error: "generation_start_failed", message }, status);
   }
 
-  const encoder = new TextEncoder();
-  let responseController: ReadableStreamDefaultController<Uint8Array> | null = null;
   let generatedText = "";
   let lastPersistedLength = 0;
   let lastPersistedAt = Date.now();
@@ -495,7 +493,6 @@ async function handleOwnerGeneration(
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      responseController = controller;
       const safeEvent = (type: string, value: unknown) => {
         try { streamEvent(controller, type, value); return true; }
         catch { return false; }
