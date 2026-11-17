@@ -911,12 +911,12 @@ export function ownerIntelligenceClientScript(): Response {
     card.appendChild(node("div",activity.phase==="error"?"activity-error":"activity-copy",copy));
     if(activity.phase==="preparing"||activity.phase==="waiting"||activity.phase==="streaming"){
       var steps=node("div","activity-chips");
-      var labels=["Request sent","Model working","Streaming"];
+      var labels=["Sending request","Model working","Streaming"];
+      var statuses=activity.phase==="preparing"?["active","",""]:
+        activity.phase==="waiting"?["done","active",""]:
+        ["done","done","active"];
       labels.forEach(function(label,index){
-        var status=index===0?"done":
-          (activity.phase==="waiting"&&index===1)||(activity.phase==="streaming"&&index===2)?"active":
-          activity.phase==="streaming"&&index===1?"done":"";
-        steps.appendChild(node("span","activity-step "+status,label));
+        steps.appendChild(node("span","activity-step "+statuses[index],label));
       });
       card.appendChild(steps);
     }
