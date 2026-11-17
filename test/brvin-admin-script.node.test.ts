@@ -117,7 +117,9 @@ describe("BRVIN browser script contract", () => {
     expect(adminSource).toContain('Type exactly DELETE ALL BRVIN BOOKS');
     expect(adminSource).toContain('The built-in 538-page Fatman reference');
     expect(adminSource).toContain('candidate.vision_output_deleted_at');
-    expect(analyticsSource).toContain('ALTER TABLE brvin_books ADD COLUMN vision_output_deleted_at INTEGER');
+    expect(analyticsSource).toContain('await ensureSqliteColumn(db, "brvin_books", "vision_output_deleted_at", "INTEGER");');
+    expect(analyticsSource).toContain('await ensureSqliteColumn(db, "brvin_books", "vision_output_deletion_started_at", "INTEGER");');
+    expect(analyticsSource).toContain('"ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition');
     expect(analyticsSource).toContain('2026-11-04-brvin-vision-output-deleted-at-v1');
     expect(workflowSource).toContain('params.task === "delete_book"');
     expect(workflowSource).toContain('params.task === "delete_vision_output"');
