@@ -19,23 +19,25 @@ The Owner should be able to use Gemini models that the configured Vertex AI proj
 
 Do not describe this as unlimited provider capacity. Do not apply student daily/burst caps to the Owner workspace, but clearly respect Google Cloud quotas, regional/model availability, billing, context and API limits. Never silently downgrade a model or thinking level.
 
-## Current checkpoint (latest verified: 2026-11-17)
+## Current checkpoint (latest source inspected: 2026-11-18)
 
 - M0 — product/architecture/security/milestone baseline: **complete**.
-- M1 — Owner identity and authorization: **complete and deployed**.
-- M2 — responsive Owner workspace and chat persistence: **complete and deployed**.
-- Latest deployed source: `dd5d1ec6b0f9ccbe61facf0ed0cfa4c11ef21d25`; workflow [44145644996](https://github.com/ashini-x/parmar-ai/actions/runs/44145644996) succeeded.
-- Production Worker versions: `brvin-service` = `742f4710-799c-444e-97a6-780cd2873e7a`; `parmar-ai` = `33969d3d-52f8-402d-be89-ce83f8495e35`. Root, health, BRVIN service binding and Fatman readiness checks passed; no rollback was needed.
-- M2 added responsive dark `/admin/intelligence`, conversation history, New chat, reopen, rename and delete. The composer saves Owner-authored messages and reloads them from D1.
-- Dedicated D1 tables: `owner_intelligence_conversations` and `owner_intelligence_messages`. All queries are scoped to the normalized configured Owner username. Deleting a conversation deletes its messages. No automatic retention cleanup or bulk-delete facility exists yet.
-- Owner-only APIs: `GET/POST /admin/api/intelligence/conversations`; `GET/PATCH/DELETE /admin/api/intelligence/conversations/:id`; `POST /admin/api/intelligence/conversations/:id/messages`. Mutations require a same-origin Origin header.
-- The composer persists user messages only. Gemini answers, model catalogue, thinking levels, streaming, stop/regenerate/edit, uploads and optional BRɅIN retrieval are **not implemented**. Do not imply that this workspace already generates AI replies.
-- Verification: `npm run check`; `npm test` (71 files / 470 tests); `npm run test:node` (9 files / 62 tests); three Worker dry-runs; paired production deployment; smoke test and release acceptance — all passed.
-- Production maps the existing single admin principal to Owner with `OWNER_DASHBOARD_USER=admin`; sign out and sign back in if using a pre-M1 session. A real-credential browser walkthrough was not performed.
-- Known M2 limitations: Owner chats remain until individually deleted. Changing `OWNER_DASHBOARD_USER` requires a deliberate `owner_id` migration; password rotation does not change that scope.
-- **Next milestone: M3 — Vertex AI model registry and general-purpose Owner provider adapter.** Inspect existing Vertex authentication utilities and verify model IDs against the configured project's actual access/location. Do not reuse the student answer pipeline or prompt.
+- M1 — explicit Owner identity and authorization: **complete and deployed**.
+- M2 — responsive Owner workspace and isolated D1 chat persistence: **complete and deployed**.
+- M3 — server-side Vertex Gemini model registry, project/location Count Tokens availability probes, Owner model picker and general-purpose provider adapter: **implemented; follow-up deployment is being verified**.
+- Initial M3 provider deployment: commit `75be2818b1688f7e70745cb3560ed8c7c56ec6b2`; workflow [44153429958](https://github.com/ashini-x/parmar-ai/actions/runs/44153429958) succeeded and deployed both production Workers.
+- Follow-up M3 source commit: `fc2e3488f4508da6298bdbcfcd134500cf2ccdfc`. It adds the visible model dropdown, Gemini 3.6 Flash, explicit token-window/output-limit metadata, model-specific non-streaming output caps, and a requirement that a model pass a recent project/location probe before provider generation. Its release workflow is [44157348057](https://github.com/ashini-x/parmar-ai/actions/runs/44157348057); typecheck, 478 Vitest tests, 62 Node tests and all three Worker dry-runs have passed. Paired production deployment/release acceptance is the remaining workflow gate at the time this handoff is written.
+- Model catalogue endpoint: `GET /admin/api/intelligence/models` (Owner-only). The server reads the configured project/location and obtains a Google Cloud token using the existing server-side service-account utility. Each centrally allowlisted Gemini model is checked using Vertex `countTokens`; only 2xx makes it selectable. The completed catalogue cache is 90 seconds; maximum concurrency is 3 and per-model timeout is 8 seconds.
+- Registry candidates: Gemini 4 Hydrogen, Carbon and Argon; Gemini 3.8, 3.7 and 3.6 Flash; Gemini 3.5 Flash and Flash-Lite. The UI only lists `selectable: true` models. It initially prefers Hydrogen, then 3.8 Flash, then the first available candidate. Selection is page-local until M4 binds it to actual generation.
+- Provider module: `src/admin/intelligence-provider.ts`. It has a plain general-purpose Owner adapter, no SSC/student `AnswerPacket` pipeline, no student profile/quota, no automatic grounding, no BRɅIN/Fatman retrieval, and no automatic fallback. It refuses unverified or unlisted models and sanitizes provider failures.
+- Thinking and API documentation checked 2026-11-18: [thinking levels](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking), [Gemini 4 limits](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/get-started-with-gemini-4), [Gemini 3.8 Flash guide](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-3-8-flash), [Gemini 4 Argon guide](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-argon). Thinking metadata is in the registry, but M4 will wire the setting to generation.
+- **Live project check still required:** a real authenticated Owner browser session has not loaded `/admin/api/intelligence/models` from production yet. Do not claim a particular candidate is actually enabled for the production project until the picker renders it as verified. Sign in through `/admin/login`, then open `/admin/intelligence`.
+- M3 does not yet invoke the provider from the chat composer. Real assistant responses, per-model thinking controls, streaming, stop/regenerate/edit are M4; private files are M5; optional BRɅIN retrieval is M6.
+- Production currently maps the existing principal `OWNER_DASHBOARD_USER=admin` to Owner. Sign out and sign in again if using a legacy pre-M1 session. Owner messages remain in dedicated D1 tables and are not mixed with student rows.
 
-Re-read the roadmap for the full acceptance ledger and implementation history before changing code.
+**Next action:** complete a real Owner sign-in and inspect the model dropdown's project/location results. Then proceed to M4 — bind the chosen model and its supported thinking level to general-purpose response generation and implement safe streaming/stop/regenerate/edit controls.
+
+Re-read the roadmap for the full acceptance ledger, completed tasks and production deployment revisions before making further changes.
 
 ## Non-negotiable implementation discipline
 

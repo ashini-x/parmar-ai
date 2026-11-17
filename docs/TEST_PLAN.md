@@ -109,3 +109,20 @@ Test the exact source revision intended for deployment, then record the resultin
 
 Workflow [44145644996](https://github.com/ashini-x/parmar-ai/actions/runs/44145644996), source commit `dd5d1ec6b0f9ccbe61facf0ed0cfa4c11ef21d25): `npm run check` passed; `npm test` passed 470 tests across 71 files; `npm run test:node` passed 62 tests across 9 files; private BRVIN, Parmar AI and standalone BRɅIN web Worker dry-runs passed. Both production Workers deployed; root, health, BRVIN service binding and Fatman readiness checks passed; production release acceptance passed. No rollback was needed. The release did not perform a manual authenticated browser walkthrough of the private Owner page.
 
+
+
+## Owner Intelligence — M3 Vertex catalogue and provider adapter
+
+- Anonymous and authenticated non-Owner administrators cannot access `GET /admin/api/intelligence/models`; a valid Owner with missing Vertex configuration receives a sanitized unconfigured catalogue.
+- Registry tests assert the centrally allowlisted candidates, per-model context/output ceilings, single-request caps and thinking metadata.
+- Project/location Count Tokens probes use the configured server-side project/location and Google service-account token; only successful responses make a model selectable.
+- 400/404, 401/403, 429/5xx and timeouts do not produce selectable entries.
+- Probes are concurrency-limited, use per-model timeouts and successful catalogues are cached for 90 seconds.
+- Provider adapter rejects unlisted and unverified models without calling GenerateContent, clamps output to the model's single-request API limit, parses text/usage metadata and sanitizes provider errors.
+- Provider request contains only general-purpose Owner messages/system instruction; no SSC prompt, AnswerPacket, student profile/quota or automatic BRɅIN/Fatman context.
+- Owner workspace model picker only displays server-returned `selectable: true` entries and shows a safe disabled state when the catalogue is unavailable or no candidate passes.
+- M3 does not generate replies in the chat composer. Thinking settings, streaming, cancellation, regenerate and edit/resubmit belong to M4.
+
+### M3 release evidence
+
+Initial server-side provider deployment: commit `75be2818b1688f7e70745cb3560ed8c7c56ec6b2`; paired production workflow [44153429958](https://github.com/ashini-x/parmar-ai/actions/runs/44153429958) succeeded. Follow-up source commit `fc2e3488f4508da6298bdbcfcd134500cf2ccdfc` adds the in-workspace picker, model-specific token limits and a server-side selectable-model gate. Workflow [44157348057](https://github.com/ashini-x/parmar-ai/actions/runs/44157348057) passed typecheck, 478 Vitest tests, 62 Node tests and all three Worker dry-runs; paired production deployment/release acceptance remained in progress at the time this documentation snapshot was written. No real authenticated Owner browser session has yet verified the production project's selectable model list.

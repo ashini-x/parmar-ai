@@ -104,3 +104,10 @@ All mutations require a matching same-origin `Origin` header and reject cross-si
 
 M2 only persists user-authored messages. It does not call Gemini, return assistant answers, stream output, expose model/thinking selectors or accept files. Those capabilities belong to later milestones.
 
+
+
+### `GET /admin/api/intelligence/models`
+
+Owner-only model catalogue. Reads the project/location from Worker environment bindings and probes the centrally maintained Gemini candidate allowlist using the Vertex AI Count Tokens endpoint. The response contains sanitized model IDs, labels, API version, adapter modalities, context/output limits, supported/default thinking metadata, availability and `selectable`. Only a successful project/location probe produces `selectable: true`. No credentials are returned and the caller cannot supply model ID, project, location or endpoint. A successful catalogue is cached for 90 seconds. This endpoint does not generate an assistant response.
+
+A 400/404 candidate is reported unavailable; 401/403 is denied; transient provider failures/timeouts remain unverified. These states are not selectable. Availability may change after the probe because provider quotas, billing, regional eligibility and capacity remain external constraints.

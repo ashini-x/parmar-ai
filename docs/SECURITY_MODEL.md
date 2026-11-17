@@ -38,3 +38,12 @@ Rotate credentials, disable compromised access, inspect logs/audit events, asses
 
 The M2 page is served with `no-store`, `noindex,nofollow`, a per-response nonce-based script Content Security Policy, `nosniff` and `no-referrer`. The browser sends conversation IDs and message/title content only; the server resolves Owner identity from the signed session and configured Owner principal. Conversation IDs are UUID-validated and every D1 query includes the Owner scope. The production Owner scope currently maps to `OWNER_DASHBOARD_USER=admin`; changing that username requires an explicit data migration to preserve existing conversations.
 
+
+
+## Owner Vertex AI model registry and provider boundary
+
+The Owner model catalogue is served only below the `/admin/api/intelligence/*` namespace and inherits the route's `requireOwner` guard. It never accepts a project, location, Owner ID, provider URL or credential from browser input. Project/location are read from Worker configuration; candidate model IDs, API versions, modality scope, thinking metadata and token limits are maintained server-side. Google service-account credentials and access tokens remain server-side.
+
+For every centrally allowlisted candidate, the Worker calls Vertex AI Count Tokens using the configured project/location. Only a successful response marks the model selectable. 400/404 means unavailable; 401/403 means access denied; transient failures/timeouts remain unverified. The cached catalogue lasts 90 seconds, probes are limited to three concurrently and each probe times out after 8 seconds. The UI renders only entries with `selectable: true`.
+
+The general-purpose Owner adapter requires a recently selectable model and rejects unverified or unlisted IDs. It does not accept a browser-selected provider endpoint, use the student's SSC prompt/AnswerPacket/profile/quota, or inject BRɅIN/Fatman context. It never silently switches models. M3 does not yet invoke this adapter from the chat composer; that is M4.

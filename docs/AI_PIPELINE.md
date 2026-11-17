@@ -135,6 +135,16 @@ When the model requires an internal retry, each genuine model attempt is recorde
 The usage ledger is asynchronous and isolated from answer delivery; analytics failure must not prevent a valid answer from reaching Telegram.
 
 
+
+## Separate BRɅIN Intelligence Owner provider
+
+The Owner workspace has an independent general-purpose request path. Its provider adapter accepts plain multi-turn text content and an optional Owner system instruction, calls the selected Vertex publisher model with the server-side service account and normalizes response text and usage metadata. It does not call the student question classifier, SSC system prompt, `AnswerPacket` parser, student profile context, student queue/quota, student usage ledger, Google Search grounding, Fatman or BRɅIN retrieval. BRɅIN context remains a future explicit opt-in and is not attached in M3.
+
+The server-side candidate registry contains Gemini 4 Hydrogen, Carbon and Argon; Gemini 3.8, 3.7 and 3.6 Flash; and Gemini 3.5 Flash and Flash-Lite. These are candidates, not a claim that the production project is entitled to all of them. The catalogue probes each candidate at the configured project/location with Vertex Count Tokens; only a successful response marks it selectable. It caches successful catalogue results for 90 seconds, limits probes to three concurrent calls and applies an 8-second per-model timeout.
+
+Model token limits and thinking metadata are recorded per model. Gemini 4 has a unified 1,048,576-token input/output budget; this direct, non-streaming v1 adapter caps single-request output at 65,536 for Hydrogen and 32,768 for Carbon/Argon. Gemini 3.8/3.7/3.6/3.5 candidates use separate 1,048,576 input and 65,536 output limits. The adapter rejects models which have not passed the recent project/location check, clamps requested output to the model's single-request API limit, and never falls back to another model. M4 will send the model-specific thinking setting and wire the adapter to the composer with streaming and cancellation.
+
+
 ## BRVIN central knowledge
 
 BRVIN is the platform-level knowledge service. A PDF is ingested once into the central repository, assigned to a collection, OCR-processed, indexed by page and made eligible for retrieval only after page-grounded QA succeeds. The original Fatman 2nd Edition remains in its reviewed legacy namespace; no source is re-uploaded or silently re-keyed during the compatibility migration. In Fatman Mode, an explicit request such as "explain page 200" is resolved to the exact authorised page item when available, including its scanned image when the source is image-based.
