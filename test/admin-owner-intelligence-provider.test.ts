@@ -168,7 +168,16 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       const value = String(url);
       calls.push({ url: value, body: String(init?.body ?? "") });
       if (value.endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 2 }), { status: 200 });
-      return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
+      const encoded = new TextEncoder().encode(sse);
+      const splitAt = sse.indexOf("\\r\\n\\r\\n") + 1;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoded.slice(0, splitAt));
+          controller.enqueue(encoded.slice(splitAt));
+          controller.close();
+        },
+      });
+      return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
     };
     const stream = await openOwnerGeminiStream(
       { ...configuredEnv, GEMINI_LOCATION: "australia-southeast2" } as Env,
