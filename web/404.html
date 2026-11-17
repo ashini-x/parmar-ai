@@ -150,6 +150,12 @@ main{
 @media(prefers-reduced-motion:reduce){
   *,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}
 }
+
+@media(max-width:600px){
+  .nav-items a[href="#demo"],
+  .nav-items a[href="/#demo"]{display:none}
+}
+
 </style>
 </head>
 <body>
@@ -160,6 +166,7 @@ main{
       <a href="/#platform">Platform</a>
       <a href="/#demo">Voice demo</a>
       <a href="/#plans">Plans</a>
+      <a href="/founder">Founder</a>
       <a href="/privacy">Privacy</a>
       <a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
     </nav>

@@ -283,8 +283,9 @@ jobs:
           home_file="$(mktemp)"
           privacy_file="$(mktemp)"
           terms_file="$(mktemp)"
+          founder_file="$(mktemp)"
           not_found_file="$(mktemp)"
-          trap 'rm -f "$home_file" "$privacy_file" "$terms_file" "$not_found_file"' EXIT
+          trap 'rm -f "$home_file" "$privacy_file" "$terms_file" "$founder_file" "$not_found_file"' EXIT
 
           fetch_page() {
             local path="$1"
@@ -309,15 +310,26 @@ jobs:
           fetch_page "/" "$home_file" "Intelligence with"
           fetch_page "/privacy" "$privacy_file" "Privacy Policy"
           fetch_page "/terms" "$terms_file" "Terms of Service"
+          fetch_page "/founder" "$founder_file" "Ashini Gogoi"
 
           # Verify every homepage navigation target exists and its anchor scrolls smoothly.
-          for expected in 'href="#platform"' 'href="#demo"' 'href="#plans"' 'href="/privacy"' 'href="mailto:partners@brvin.in"'; do
+          for expected in 'href="#platform"' 'href="#demo"' 'href="#plans"' 'href="/founder">Founder</a>' 'href="/privacy"' 'href="mailto:partners@brvin.in"'; do
             grep -Fq "$expected" "$home_file" || { echo "::error::Homepage navigation target missing: $expected"; exit 1; }
           done
           for expected in 'id="platform"' 'id="demo"' 'id="plans"'; do
             grep -Fq "$expected" "$home_file" || { echo "::error::Homepage section target missing: $expected"; exit 1; }
           done
           grep -Fq 'scroll-behavior:smooth' "$home_file" || { echo "::error::Smooth scrolling is not enabled."; exit 1; }
+          for page_file in "$privacy_file" "$terms_file" "$founder_file"; do
+            grep -Fq 'href="/founder">Founder</a>' "$page_file" || { echo "::error::Founder navigation link missing from a secondary page."; exit 1; }
+          done
+          grep -Fq 'Founder, BRɅIN' "$founder_file" || { echo "::error::Founder role missing."; exit 1; }
+          grep -Fq 'mailto:founder@brvin.in' "$founder_file" || { echo "::error::Founder contact missing."; exit 1; }
+          grep -Fq 'https://github.com/ashini-x/parmar-ai' "$founder_file" || { echo "::error::Core repository link missing."; exit 1; }
+          grep -Fq 'https://github.com/ashini-x/brvin-teachers' "$founder_file" || { echo "::error::Teachers repository link missing."; exit 1; }
+          for page_file in "$privacy_file" "$terms_file"; do
+            grep -Fq 'mailto:founder@brvin.in' "$page_file" || { echo "::error::Founder legal contact missing."; exit 1; }
+          done
 
           # Verify the legal documents contain their substantive sections, not just a title shell.
           for expected in 'Information processed' 'Voice and audio data' 'Retention and deletion' 'Privacy questions'; do
@@ -342,6 +354,7 @@ jobs:
           check_footer "$home_file"
           check_footer "$privacy_file"
           check_footer "$terms_file"
+          check_footer "$founder_file"
 
           # Unknown routes must return the custom page with an actual HTTP 404.
           unknown_path="/__brvin_not_found_check_${GITHUB_SHA}__"
@@ -355,12 +368,13 @@ jobs:
             'This page could not be found.' \
             'The route you requested does not exist in our index or has been moved.' \
             'href="/#platform"' \
+            'href="/founder">Founder</a>' \
             'href="https://telegram.me/parmarthbot" target="_blank" rel="noopener noreferrer"' \
             'href="mailto:partners@brvin.in"'; do
             grep -Fq "$expected" "$not_found_file" || { echo "::error::Custom 404 page is missing: $expected"; exit 1; }
           done
           check_footer "$not_found_file"
-          echo "Verified navigation anchors, policy pages, footer links and custom HTTP 404 response."
+          echo "Verified navigation anchors, founder page, legal pages, footer links and custom HTTP 404 response."
 
 
   deploy-production:
