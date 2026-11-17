@@ -295,7 +295,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("Response is streaming");
     expect(script).toContain("✓ Completed");
     expect(script).toContain("The model is sending response text.");
-    expect(script).toContain("The request reached Vertex AI");
+    expect(script).toContain("Vertex AI has accepted the request");
     expect(script).toContain("meta-pill level");
   });
 
