@@ -1,3 +1,14 @@
+## 2026-11-18: Owner Gemini provider-stage diagnostics for Carbon
+
+- Distinguish a failed Vertex `:countTokens` availability probe from a failed `:streamGenerateContent` call. The old generic 401/403 message could incorrectly imply that GenerateContent had been reached.
+- Preserve only safe Google diagnostic fields (HTTP status, Google status, reason code and IAM permission name). Raw provider messages, resource paths, project identifiers and credential data are not returned.
+- Add regression tests covering both provider stages, prove a failed probe does not proceed to GenerateContent, and prove resource-path redaction.
+- Confirm the existing service-account OAuth scope remains `https://www.googleapis.com/auth/cloud-platform`; no OAuth or IAM changes were made.
+- Google documents `aiplatform.endpoints.predict` for GenerateContent/StreamGenerateContent and includes it in Agent Platform User (`roles/aiplatform.user`). Do not grant permissions based on the previous generic error; first inspect the new stage/reason. [Operation IAM](https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/rpc/google.cloud.aiplatform.v1) · [Role permissions](https://docs.cloud.google.com/iam/docs/roles-permissions/aiplatform).
+- PR [#331](https://github.com/ashini-x/parmar-ai/pull/331), merged as `9acd131b48336f0584cd9173837017651741a4e6`. Validation [44200420616](https://github.com/ashini-x/parmar-ai/actions/runs/44200420616) passed TypeScript, 490 Vitest tests, 62 Node tests and all three Worker dry-runs. Production [44200720507](https://github.com/ashini-x/parmar-ai/actions/runs/44200720507) passed paired deployment and release acceptance.
+- Deployed versions: `brvin-service` `a1c5a9c9-7710-4310-885f-6252bdbbd053`; `parmar-ai` `b3be9246-5fab-485a-9bb5-ffe7f019e2c1`. Manifest artifact `14380957337`.
+- Production validation: Hydrogen HIGH and two XHIGH requests completed in the same conversation after the earlier Carbon HIGH failure; the failed assistant row did not poison context. Retest Carbon after the diagnostic release remains pending.
+
 ## 2026-11-18: Owner Gemini cross-model conversation continuity fix
 
 - Exclude pending, failed and empty assistant rows from the prompt sent to Gemini. These rows remain in the UI transcript but are not valid model turns.
