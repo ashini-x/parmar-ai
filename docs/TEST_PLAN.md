@@ -140,6 +140,14 @@ Initial server-side provider deployment: commit `75be2818b1688f7e70745cb3560ed8c
 - Assistant messages record model ID, thinking level, input/output/total token counts when returned, and elapsed time in the separate Owner generation metadata table.
 - Reopening a conversation shows persisted partial/final messages. Automatic in-place stream reconnection is not part of this M4 slice.
 - The provider and route tests use controlled fake Vertex responses; they do not make a live billed Gemini request. A real Owner browser generation check remains a separate production acceptance step.
+- Model-catalogue liveness is bounded at each layer: Google access-token acquisition has a 12-second deadline; each Count Tokens probe has an 8-second Promise-level deadline and abort; the browser model-list request has a 45-second AbortController deadline.
+- A probe that never settles is returned as unverified rather than holding the catalogue response open; a token request that never settles returns a safe `google_auth_unavailable` state.
+- The workspace replaces the initial loading placeholder with a specific unavailable/no-verified/timed-out state and a Retry control where retry is meaningful. Model/thinking change listeners are registered once, and composer state is refreshed after catalogue success or failure.
+- Regression tests cover never-settling Count Tokens and Google token lookups; the workspace response test asserts the retry control and browser abort signal.
+
+### M4 model-catalogue liveness fix evidence
+
+PR [#322](https://github.com/ashini-x/parmar-ai/pull/322), merge commit `15c2de6c484af03e0ca1a06d34d1f81ce5f04c58`. PR validation workflow [44175582649](https://github.com/ashini-x/parmar-ai/actions/runs/44175582649) passed `npm run check`, 484 Vitest tests across 72 files, 62 Node tests across 9 files and all three Worker dry-runs. Production workflow [44175875966](https://github.com/ashini-x/parmar-ai/actions/runs/44175875966) passed paired deployment, root/health smoke checks, BRVIN service binding, Fatman readiness and release acceptance. Deployed versions: `brvin-service` `b9008a5e-3181-4345-9cbd-c06fb0a75ea2`; `parmar-ai` `aec54709-e501-4f6d-b1d2-e7887f3e42b6`. Manifest artifact `14368709148`. No rollback. The automated acceptance verifies the timeout/error/retry behaviour; a fresh authenticated Owner browser check after deployment remains to be done.
 
 ### M4 automated evidence
 
