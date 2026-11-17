@@ -78,6 +78,39 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(auth).not.toHaveBeenCalled();
   });
 
+  it("returns a bounded unavailable catalogue when a Count Tokens probe never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const env = { ...configuredEnv, GCP_PROJECT_ID: "project-probe-timeout-123" } as Env;
+      const fetcher: typeof fetch = async () => new Promise<Response>(() => undefined);
+      const pending = listOwnerGeminiModels(env, dependencies(fetcher));
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(result.ok).toBe(true);
+      expect(result.models).toHaveLength(OWNER_GEMINI_MODEL_REGISTRY.length);
+      expect(result.models.every((model) => !model.selectable && model.availabilityReason === "provider_temporarily_unavailable")).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns an authentication-unavailable state when access-token acquisition never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const env = { ...configuredEnv, GCP_PROJECT_ID: "project-auth-timeout-123" } as Env;
+      const fetcher = vi.fn();
+      const getAccessToken = vi.fn(() => new Promise<string>(() => undefined));
+      const pending = listOwnerGeminiModels(env, { fetch: fetcher, getAccessToken });
+      await vi.advanceTimersByTimeAsync(12_000);
+      const result = await pending;
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("google_auth_unavailable");
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("builds a plain general-purpose GenerateContent request with the selected model-specific thinking level", async () => {
     const calls: Array<{ url: RequestInfo | URL; init?: RequestInit }> = [];
     const fetcher: typeof fetch = async (url, init) => {
