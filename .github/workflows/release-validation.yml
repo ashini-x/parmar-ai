@@ -320,8 +320,12 @@ jobs:
             grep -Fq "$expected" "$home_file" || { echo "::error::Homepage section target missing: $expected"; exit 1; }
           done
           grep -Fq 'scroll-behavior:smooth' "$home_file" || { echo "::error::Smooth scrolling is not enabled."; exit 1; }
-          for page_file in "$privacy_file" "$terms_file" "$founder_file"; do
-            grep -Fq 'href="/founder">Founder</a>' "$page_file" || { echo "::error::Founder navigation link missing from a secondary page."; exit 1; }
+          for page_file in "$home_file" "$privacy_file" "$terms_file" "$founder_file"; do
+            nav_count="$(grep -oF 'href="/founder">Founder</a>' "$page_file" | wc -l | tr -d '[:space:]')"
+            if [[ "$nav_count" != "1" ]]; then
+              echo "::error::Expected exactly one Founder navigation link; found $nav_count."
+              exit 1
+            fi
           done
           grep -Fq 'Founder, BRɅIN' "$founder_file" || { echo "::error::Founder role missing."; exit 1; }
           grep -Fq 'mailto:founder@brvin.in' "$founder_file" || { echo "::error::Founder contact missing."; exit 1; }
@@ -374,6 +378,11 @@ jobs:
             grep -Fq "$expected" "$not_found_file" || { echo "::error::Custom 404 page is missing: $expected"; exit 1; }
           done
           check_footer "$not_found_file"
+          nav_count="$(grep -oF 'href="/founder">Founder</a>' "$not_found_file" | wc -l | tr -d '[:space:]')"
+          if [[ "$nav_count" != "1" ]]; then
+            echo "::error::Expected exactly one Founder link on the 404 page; found $nav_count."
+            exit 1
+          fi
           echo "Verified navigation anchors, founder page, legal pages, footer links and custom HTTP 404 response."
 
 
