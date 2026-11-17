@@ -12,5 +12,6 @@ describe("study profile topic filtering", () => {
     expect(isStudyProfileTopic("Sunlight & Vitamin D Synthesis")).toBe(true);
     expect(isStudyProfileTopic("Fundamental Rights and Sources of Constitution")).toBe(true);
     expect(isStudyProfileTopic("Hi-tech Industry")).toBe(true);
+    expect(isStudyProfileTopic("General   SSC doubt")).toBe(false);
   });
 });
