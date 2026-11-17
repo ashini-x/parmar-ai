@@ -104,11 +104,11 @@ function mergeInlineKeyboard(
   };
 }
 
-function creatorContactMarkup(chatId: number, includeCreatorFooter = true): CreatorContactKeyboardMarkup | undefined {
+function creatorContactMarkup(chatId: number, includeCreatorFooter = true, label = CREATOR_NAME): CreatorContactKeyboardMarkup | undefined {
   if (!includeCreatorFooter || chatId <= 0) return undefined;
   return {
     inline_keyboard: [[{
-      text: CREATOR_NAME,
+      text: label,
       callback_data: CREATOR_CONTACT_CALLBACK_DATA,
     }]],
   };
@@ -569,9 +569,10 @@ export async function sendTelegramMessage(
   botConnectionId?: string,
   includeCreatorFooter = true,
   replyMarkup?: TelegramInlineKeyboardMarkup,
+  creatorFooterLabel?: string,
 ): Promise<TelegramMessageResult> {
   const message = limitTelegramMessage(text);
-  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter);
+  const creatorMarkup = creatorContactMarkup(chatId, includeCreatorFooter, creatorFooterLabel);
   const combinedMarkup = mergeInlineKeyboard(replyMarkup, creatorMarkup);
   const payload: Record<string, unknown> = {
     chat_id: chatId,

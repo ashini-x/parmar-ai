@@ -6,6 +6,7 @@ import { sendTelegramChatActionWithToken, sendTelegramMessage } from "../telegra
 import { hasUnlimitedAiAccess } from "../analytics/db";
 import { LEGACY_TELEGRAM_BOT_CONNECTION_ID, getTelegramTypingToken, isTelegramBotConnectionActive } from "../telegram/bot-store";
 import { getCaptionedPhotoQuestion, PHOTO_CAPTION_REQUIRED_TEXT } from "../telegram/photo-intent";
+import { isStudyProfileTopic } from "./profile-topics";
 
 const TYPING_HEARTBEAT_MS = 4_000;
 const TYPING_WAIT_HEARTBEAT_MS = 2_500;
@@ -979,7 +980,7 @@ export class JobDedupe extends DurableObject {
       if (answerScope !== "out_of_scope") {
         if (detectedExam) profile.targetExam = detectedExam;
 
-        const validTopic = Boolean(topic && topic !== "General SSC doubt");
+        const validTopic = isStudyProfileTopic(topic);
         if (validTopic) {
           profile.recentTopics = [topic, ...profile.recentTopics.filter((item) => item.toLowerCase() !== topic.toLowerCase())].slice(0, 10);
         }

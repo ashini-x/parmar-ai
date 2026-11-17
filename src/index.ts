@@ -20,6 +20,7 @@ import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
 import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isAdminCommand, isHelpCommand, isParmarSirCommand, isStartCommand } from "./telegram/menu";
 import { parseExamSelectionAction, parseHelpMenuAction, SSC_EXAM_OPTIONS } from "./telegram/help-menu";
 import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
+import { buildProfileText } from "./telegram/profile";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
   deleteTelegramMessage,
@@ -422,7 +423,7 @@ async function handleHelpMenuCallback(
         getStudentProfile(env, chatId),
         getStudentUsage(env, chatId, senderId),
       ]);
-      await sendTelegramMessage(env, chatId, buildProfileText(profile, usage), undefined, botConnectionId);
+      await sendTelegramMessage(env, chatId, buildProfileText(profile, usage), undefined, botConnectionId, true, undefined, "Contact BRɅIN");
       return;
     }
 
@@ -2430,33 +2431,6 @@ function appendFatmanCitations(answer: string, citations: string): string {
     .trim()
     .slice(0, 3_450);
   return citations ? cleanAnswer + "\n\n" + citations : cleanAnswer;
-}
-
-function buildProfileText(profile: StudentProfile, usage: { dayCount: number; dailyLimit: number; unlimited: boolean }): string {
-  if (profile.questionCount === 0) return PROFILE_EMPTY_TEXT;
-
-  const recent = profile.recentTopics.slice(0, 5);
-  const attention = profile.attentionTopics.slice(0, 5);
-  const revision = profile.revisionQueue.slice(0, 5);
-  const signals = profile.learningSignals
-    .filter((item) => item.confusionCount + item.weakCount > 0)
-    .sort((a, b) => (b.confusionCount + b.weakCount) - (a.confusionCount + a.weakCount))
-    .slice(0, 3);
-
-  return [
-    `📚 Tumhari ${BOT_BRAND_NAME} Study Profile:`,
-    "",
-    `Target: ${profile.targetExam}`,
-    `Questions tracked: ${profile.questionCount}`,
-    `Today: ${usage.unlimited ? "Unlimited AI access" : `${usage.dayCount}/${usage.dailyLimit} questions.`}`,
-    "",
-    `Recent focus: ${recent.length ? recent.join(" • ") : "abhi nahi."}`,
-    `Attention areas: ${attention.length ? attention.join(" • ") : "abhi koi clear weak area nahi."}`,
-    `Revision queue: ${revision.length ? revision.join(" → ") : "abhi build ho rahi hai."}`,
-    `Learning signals: ${signals.length ? signals.map((item) => `${item.topic} (${item.confusionCount + item.weakCount})`).join(" • ") : "abhi enough evidence nahi."}`,
-    "",
-    `Ye profile sirf tumhare ${BOT_BRAND_NAME} questions se banti hai.`,
-  ].join("\n");
 }
 
 function buildStudyPlanText(profile: StudentProfile): string {

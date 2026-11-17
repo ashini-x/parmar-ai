@@ -236,6 +236,32 @@ describe("Telegram Admin contact message", () => {
   });
 });
 
+describe("Telegram profile contact footer", () => {
+  it("uses a clear contact label without changing the default footer used elsewhere", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: { message_id: 134 },
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const env = { TELEGRAM_BOT_TOKEN: "bot-token" } as unknown as Env;
+    await expect(sendTelegramMessage(
+      env, 42, "Study profile", undefined, undefined, true, undefined, "Contact BRɅIN",
+    )).resolves.toEqual({ message_id: 134 });
+
+    const [, requestInit] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(requestInit.body)).reply_markup).toEqual({
+      inline_keyboard: [[{
+        text: "Contact BRɅIN",
+        callback_data: "creator:contact",
+      }]],
+    });
+  });
+});
+
 describe("Telegram HTML rich-text delivery", () => {
   it("formats bold text on a normal sendMessage payload", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
