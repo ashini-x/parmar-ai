@@ -232,5 +232,8 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     const streamRequest = calls.find((value) => value.url.includes(":streamGenerateContent"));
     expect(streamRequest?.url).toContain("?alt=sse");
     expect(JSON.parse(streamRequest?.body ?? "{}").generationConfig.thinkingConfig).toEqual({ thinkingLevel: "HIGH" });
+    const availabilityProbes = calls.filter((call) => call.url.endsWith(":countTokens"));
+    expect(availabilityProbes).toHaveLength(1);
+    expect(availabilityProbes[0].url).toContain("/models/gemini-4-argon:countTokens");
   });
 
