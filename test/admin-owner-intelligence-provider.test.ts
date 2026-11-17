@@ -23,17 +23,21 @@ describe("Owner Vertex AI provider registry and adapter", () => {
   beforeEach(() => vi.restoreAllMocks());
 
   it("probes only centrally allowlisted models with the project-scoped countTokens API", async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ totalTokens: 8 }), { status: 200 }));
-    const result = await listOwnerGeminiModels(configuredEnv, dependencies(fetcher as unknown as typeof fetch));
+    const calls: Array<{ url: RequestInfo | URL; init?: RequestInit }> = [];
+    const fetcher: typeof fetch = async (url, init) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ totalTokens: 8 }), { status: 200 });
+    };
+    const result = await listOwnerGeminiModels(configuredEnv, dependencies(fetcher));
     expect(result.ok).toBe(true);
     expect(result.models).toHaveLength(OWNER_GEMINI_MODEL_REGISTRY.length);
     expect(result.models.every((model) => model.selectable && model.availability === "available")).toBe(true);
-    expect(fetcher).toHaveBeenCalledTimes(OWNER_GEMINI_MODEL_REGISTRY.length);
-    const first = fetcher.mock.calls[0][0] as string;
+    expect(calls).toHaveLength(OWNER_GEMINI_MODEL_REGISTRY.length);
+    const first = String(calls[0]?.url);
     expect(first).toContain("/v1/projects/project-90db7be4-619f-4ed7-89b/locations/global/publishers/google/models/");
     expect(first).toContain(":countTokens");
-    const init = fetcher.mock.calls[0][1] as RequestInit;
-    expect(JSON.parse(String(init.body))).toEqual({
+    const init = calls[0]?.init;
+    expect(JSON.parse(String(init?.body))).toEqual({
       contents: [{ role: "user", parts: [{ text: "Owner model availability check." }] }],
     });
   });
@@ -70,10 +74,14 @@ describe("Owner Vertex AI provider registry and adapter", () => {
   });
 
   it("builds a plain general-purpose GenerateContent request without student contracts or implicit thinking settings", async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({
-      candidates: [{ content: { role: "model", parts: [{ text: "Hello from Gemini." }] } }],
-      usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 4, totalTokenCount: 9 },
-    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const calls: Array<{ url: RequestInfo | URL; init?: RequestInit }> = [];
+    const fetcher: typeof fetch = async (url, init) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({
+        candidates: [{ content: { role: "model", parts: [{ text: "Hello from Gemini." }] } }],
+        usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 4, totalTokenCount: 9 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    };
     const result = await generateOwnerGeminiContent(configuredEnv, {
       modelId: "gemini-4-hydrogen",
       contents: [{ role: "user", text: "What is a black hole?" }],
@@ -82,8 +90,8 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(result.text).toBe("Hello from Gemini.");
     expect(result.modelId).toBe("gemini-4-hydrogen");
     expect(result.usage.totalTokens).toBe(9);
-    expect(String(fetcher.mock.calls[0][0])).toContain("/models/gemini-4-hydrogen:generateContent");
-    const body = JSON.parse(String((fetcher.mock.calls[0][1] as RequestInit).body));
+    expect(String(calls[0]?.url)).toContain("/models/gemini-4-hydrogen:generateContent");
+    const body = JSON.parse(String(calls[0]?.init?.body));
     expect(body.contents).toEqual([{ role: "user", parts: [{ text: "What is a black hole?" }] }]);
     expect(body.systemInstruction.parts[0].text).toBe("You are a general-purpose assistant.");
     expect(body.generationConfig.thinkingConfig).toBeUndefined();
