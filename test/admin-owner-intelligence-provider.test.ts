@@ -138,6 +138,45 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(JSON.stringify(body)).not.toContain("SSC");
   });
 
+  it("preserves the provider permission detail when GenerateContent returns 403", async () => {
+    const calls: string[] = [];
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "permission-detail-test-project" } as Env;
+    const fetcher: typeof fetch = async (url) => {
+      const value = String(url);
+      calls.push(value);
+      if (value.endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      return new Response(JSON.stringify({
+        error: { code: 403, status: "PERMISSION_DENIED", message: "Permission 'aiplatform.endpoints.predict' denied on resource project." },
+      }), { status: 403, headers: { "content-type": "application/json" } });
+    };
+    await expect(openOwnerGeminiStream(
+      env,
+      { modelId: "gemini-4-carbon", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Continue our conversation." }] },
+      new AbortController().signal,
+      dependencies(fetcher),
+    )).rejects.toMatchObject({
+      status: 403,
+      message: expect.stringContaining("aiplatform.endpoints.predict"),
+    });
+    expect(calls.some((url) => url.endsWith(":countTokens"))).toBe(true);
+    expect(calls.some((url) => url.includes(":streamGenerateContent"))).toBe(true);
+  });
+
+  it("rejects unpaired, repeated-role or oversized conversation turns before provider access", async () => {
+    const fetcher = vi.fn();
+    await expect(openOwnerGeminiStream(configuredEnv, {
+      modelId: "gemini-4-hydrogen",
+      thinkingLevel: "HIGH",
+      contents: [
+        { role: "user", text: "Question one" },
+        { role: "user", text: "Question two" },
+      ],
+    }, new AbortController().signal, dependencies(fetcher as unknown as typeof fetch))).rejects.toMatchObject({
+      message: expect.stringContaining("conversation context is invalid or too large"),
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("rejects unlisted model IDs without a fetch or automatic fallback", async () => {
     const fetcher = vi.fn();
     await expect(generateOwnerGeminiContent(configuredEnv, {
