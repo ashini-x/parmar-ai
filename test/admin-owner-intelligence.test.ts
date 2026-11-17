@@ -1,5 +1,4 @@
-import { env as cloudflareEnv } from "cloudflare:workers";
-import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env as cloudflareEnv, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { Env } from "../src/config/env";
 import worker from "../src";
