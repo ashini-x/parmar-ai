@@ -254,6 +254,10 @@ export interface Env {
   ADMIN_DASHBOARD_USER?: string;
   ADMIN_DASHBOARD_PASSWORD?: string;
   ADMIN_SESSION_SECRET?: string;
+  /** Separate web Owner identity; must never reuse the administrator username. */
+  OWNER_DASHBOARD_USER?: string;
+  /** Owner password is a Worker secret, never a checked-in variable. */
+  OWNER_DASHBOARD_PASSWORD?: string;
   /** Cloudflare account that hosts the private BRVIN retrieval Worker. */
   BRVIN_HOME_ACCOUNT_ID?: string;
   BOT_OWNER_TELEGRAM_USER_ID?: string;

@@ -54,7 +54,7 @@ import {
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, ensureAnalyticsSchema, getLatestFatmanReleaseQaRun, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
-import { clearAdminSession, handleAdminLogin, loginHtml, requireAdmin } from "./admin/auth";
+import { clearAdminSession, getAdminSessionRole, handleAdminLogin, loginHtml, requireAdmin, requireOwner } from "./admin/auth";
 import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, testFatmanVision, uploadFatmanPage } from "./fatman/admin";
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
@@ -3102,6 +3102,23 @@ const worker = {
         return clearAdminSession();
       }
 
+      // M1: the Owner route is protected by a distinct Owner session.
+      // M2 replaces this safe placeholder with the conversational workspace.
+      if (url.pathname === "/admin/intelligence") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        if (!(await requireOwner(request, env))) {
+          const status = (await requireAdmin(request, env)) ? 403 : 401;
+          return withRequestId(new Response(
+            status === 403 ? "Owner access required." : loginHtml(),
+            { status, headers: { "content-type": status === 403 ? "text/plain; charset=utf-8" : "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } },
+          ), requestId);
+        }
+        return withRequestId(new Response(
+          "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex,nofollow\"><title>BRɅIN Intelligence</title></head><body><main><h1>BRɅIN Intelligence</h1><p>Owner access verified. The workspace interface is scheduled for milestone M2.</p></main></body></html>",
+          { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" } },
+        ), requestId);
+      }
+
       if (url.pathname === "/admin/fatman") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -3155,6 +3172,16 @@ const worker = {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         if (!(await requireAdmin(request, env))) return new Response(loginHtml(), { status: 401, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
         return adminDashboard(env);
+      }
+
+      // Reserve the Intelligence API namespace for Owner sessions before the
+      // general admin API guard. M2 adds handlers under this protected boundary.
+      if (url.pathname === "/admin/api/intelligence" || url.pathname.startsWith("/admin/api/intelligence/")) {
+        if (!(await requireOwner(request, env))) {
+          const status = (await requireAdmin(request, env)) ? 403 : 401;
+          return withRequestId(json({ ok: false, error: status === 403 ? "owner_access_required" : "unauthorized" }, status), requestId);
+        }
+        return withRequestId(notFound(), requestId);
       }
 
       const adminApiPath = url.pathname.replace(/^\/admin\/api\/vrain(?=\/|$)/u, "/admin/api/brvin");

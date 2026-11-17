@@ -31,32 +31,91 @@ async function hmac(secret: string, message: string): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message)));
 }
 
-export async function requireAdmin(request: Request, env: Env): Promise<boolean> {
-  const password = env.ADMIN_DASHBOARD_PASSWORD?.trim();
+type AdminRole = "admin" | "owner";
+
+function configuredAdminUsername(env: Env): string {
+  return env.ADMIN_DASHBOARD_USER?.trim() || "admin";
+}
+
+function ownerCredentialsAreUsable(env: Env): boolean {
+  const ownerUser = env.OWNER_DASHBOARD_USER?.trim();
+  const ownerPassword = env.OWNER_DASHBOARD_PASSWORD?.trim();
+  const adminUser = configuredAdminUsername(env);
+  return Boolean(ownerUser && ownerPassword && ownerUser.toLowerCase() !== adminUser.toLowerCase());
+}
+
+function safeSignatureEqual(expected: Uint8Array, actual: Uint8Array): boolean {
+  if (actual.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i += 1) diff |= expected[i] ^ actual[i];
+  return diff === 0;
+}
+
+function sessionSignatureSecret(env: Env, role: AdminRole): string | undefined {
   const sessionSecret = env.ADMIN_SESSION_SECRET?.trim();
-  if (!password || !sessionSecret) return false;
+  if (!sessionSecret) return undefined;
+  if (role === "admin") return sessionSecret;
+  const ownerPassword = env.OWNER_DASHBOARD_PASSWORD?.trim();
+  if (!ownerCredentialsAreUsable(env) || !ownerPassword) return undefined;
+  // Rotating the Owner password revokes all existing Owner sessions without
+  // invalidating ordinary administrator sessions.
+  return `${sessionSecret}:owner:${ownerPassword}`;
+}
+
+export async function getAdminSessionRole(request: Request, env: Env): Promise<AdminRole | null> {
+  if (!env.ADMIN_SESSION_SECRET?.trim()) return null;
 
   const cookieHeader = request.headers.get("Cookie") ?? "";
   const cookie = cookieHeader.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${COOKIE_NAME}=`));
-  if (!cookie) return false;
+  if (!cookie) return null;
 
   const token = cookie.slice(COOKIE_NAME.length + 1);
-  const [payload, signature] = token.split(".");
-  if (!payload || !signature) return false;
+  const [payload, signature, extra] = token.split(".");
+  if (!payload || !signature || extra !== undefined) return null;
 
   try {
     const decoded = new TextDecoder().decode(base64UrlDecode(payload));
-    const [username, expires] = decoded.split("|");
-    if (!username || !expires || Number(expires) < Math.floor(Date.now() / 1000)) return false;
-    const expected = await hmac(sessionSecret, payload);
+    const parts = decoded.split("|");
+    let username = "";
+    let role: AdminRole = "admin";
+    let expiresText = "";
+
+    if (parts.length === 2) {
+      // Existing sessions created before role claims remain admin-only.
+      [username, expiresText] = parts;
+    } else if (parts.length === 3 && (parts[1] === "admin" || parts[1] === "owner")) {
+      username = parts[0];
+      role = parts[1];
+      expiresText = parts[2];
+    } else {
+      return null;
+    }
+
+    const expires = Number(expiresText);
+    if (!username || !Number.isSafeInteger(expires) || expires <= Math.floor(Date.now() / 1000)) return null;
+
+    if (role === "admin") {
+      if (username !== configuredAdminUsername(env) || !env.ADMIN_DASHBOARD_PASSWORD?.trim()) return null;
+    } else if (!ownerCredentialsAreUsable(env) || username !== env.OWNER_DASHBOARD_USER?.trim()) {
+      return null;
+    }
+
+    const signingSecret = sessionSignatureSecret(env, role);
+    if (!signingSecret) return null;
+    const expected = await hmac(signingSecret, payload);
     const actual = base64UrlDecode(signature);
-    if (actual.length !== expected.length) return false;
-    let diff = 0;
-    for (let i = 0; i < expected.length; i += 1) diff |= expected[i] ^ actual[i];
-    return diff === 0 && username === (env.ADMIN_DASHBOARD_USER?.trim() || "admin");
+    return safeSignatureEqual(expected, actual) ? role : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+export async function requireAdmin(request: Request, env: Env): Promise<boolean> {
+  return (await getAdminSessionRole(request, env)) !== null;
+}
+
+export async function requireOwner(request: Request, env: Env): Promise<boolean> {
+  return (await getAdminSessionRole(request, env)) === "owner";
 }
 
 async function loginRateLimitState(env: Env, clientKey: string, now: number): Promise<{ locked: boolean }> {
@@ -116,11 +175,18 @@ export async function handleAdminLogin(request: Request, env: Env): Promise<Resp
   const body = await request.formData();
   const username = String(body.get("username") ?? "").trim();
   const password = String(body.get("password") ?? "");
-  const expectedUser = env.ADMIN_DASHBOARD_USER?.trim() || "admin";
-  const expectedPassword = env.ADMIN_DASHBOARD_PASSWORD?.trim();
+  const expectedAdminUser = configuredAdminUsername(env);
+  const expectedAdminPassword = env.ADMIN_DASHBOARD_PASSWORD?.trim();
   const sessionSecret = env.ADMIN_SESSION_SECRET?.trim();
+  const ownerUser = env.OWNER_DASHBOARD_USER?.trim();
+  const ownerPassword = env.OWNER_DASHBOARD_PASSWORD?.trim();
+  const ownerConfigured = ownerCredentialsAreUsable(env);
 
-  if (!expectedPassword || !sessionSecret || username !== expectedUser || password !== expectedPassword) {
+  const isOwnerLogin = Boolean(ownerConfigured && ownerUser && ownerPassword && username === ownerUser && password === ownerPassword);
+  const isAdminLogin = Boolean(expectedAdminPassword && username === expectedAdminUser && password === expectedAdminPassword);
+  const role: AdminRole | null = isOwnerLogin ? "owner" : isAdminLogin ? "admin" : null;
+
+  if (!role || !sessionSecret) {
     await recordLoginFailure(env, clientKey, now);
     return new Response(loginHtml("Invalid admin credentials."), {
       status: 401,
@@ -130,13 +196,14 @@ export async function handleAdminLogin(request: Request, env: Env): Promise<Resp
 
   await clearLoginFailures(env, clientKey);
   const expires = Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS;
-  const payload = base64UrlEncode(new TextEncoder().encode(`${expectedUser}|${expires}`));
-  const signature = base64UrlEncode(await hmac(sessionSecret, payload));
+  const payload = base64UrlEncode(new TextEncoder().encode(`${username}|${role}|${expires}`));
+  const signingSecret = role === "owner" ? `${sessionSecret}:owner:${ownerPassword}` : sessionSecret;
+  const signature = base64UrlEncode(await hmac(signingSecret, payload));
   const token = `${payload}.${signature}`;
   return new Response(null, {
     status: 302,
     headers: {
-      location: "/admin",
+      location: role === "owner" ? "/admin/intelligence" : "/admin",
       "set-cookie": `${COOKIE_NAME}=${token}; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}; HttpOnly; Secure; SameSite=Strict`,
       "cache-control": "no-store",
     },
