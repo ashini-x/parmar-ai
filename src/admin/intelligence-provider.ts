@@ -455,10 +455,10 @@ export async function openOwnerGeminiStream(
     let finished = false;
 
     async function* parseBlock(block: string): AsyncGenerator<OwnerGeminiStreamEvent> {
-      const data = block.split(/\\r?\\n/u)
+      const data = block.split(/\r?\n/u)
         .filter((line) => line.startsWith("data:"))
         .map((line) => line.slice(5).trim())
-        .join("\\n");
+        .join("\n");
       if (!data || data === "[DONE]") return;
       let parsed: Record<string, unknown>;
       try { parsed = JSON.parse(data) as Record<string, unknown>; }
@@ -487,13 +487,13 @@ export async function openOwnerGeminiStream(
     try {
       while (true) {
         const next = await reader.read();
-        buffer += decoder.decode(next.value, { stream: !next.done }).replace(/\\r\\n/gu, "\\n");
-        let boundary = buffer.indexOf("\\n\\n");
+        buffer += decoder.decode(next.value, { stream: !next.done }).replace(/\r\n/gu, "\n");
+        let boundary = buffer.indexOf("\n\n");
         while (boundary >= 0) {
           const block = buffer.slice(0, boundary);
           buffer = buffer.slice(boundary + 2);
           yield* parseBlock(block);
-          boundary = buffer.indexOf("\\n\\n");
+          boundary = buffer.indexOf("\n\n");
         }
         if (next.done) break;
       }
