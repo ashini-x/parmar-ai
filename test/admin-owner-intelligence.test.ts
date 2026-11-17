@@ -290,6 +290,13 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain('document.getElementById("newChat").addEventListener');
     expect(script).toContain("The Owner workspace request timed out");
     expect(script).toContain("Could not load conversations");
+    expect(script).toContain("appendActivityCard");
+    expect(script).toContain("Gemini is working");
+    expect(script).toContain("Response is streaming");
+    expect(script).toContain("✓ Completed");
+    expect(script).toContain("The model is sending response text.");
+    expect(script).toContain("The request reached Vertex AI");
+    expect(script).toContain("meta-pill level");
   });
 
   it("creates, lists, reopens, renames and deletes only the Owner's conversations and messages", async () => {
