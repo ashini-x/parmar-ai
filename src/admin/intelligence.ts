@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
-import { ownerIntelligenceModelsResponse } from "./intelligence-provider";
+import { openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerThinkingLevel } from "./intelligence-provider";
 
 export interface OwnerIntelligenceConversation {
   id: string;
@@ -17,6 +17,12 @@ export interface OwnerIntelligenceMessage {
   content: string;
   status: "pending" | "complete" | "partial" | "error";
   created_at: number;
+  model_id?: string | null;
+  thinking_level?: OwnerThinkingLevel | null;
+  prompt_tokens?: number | null;
+  output_tokens?: number | null;
+  total_tokens?: number | null;
+  elapsed_ms?: number | null;
 }
 
 interface OwnerConversationRow extends OwnerIntelligenceConversation {
@@ -64,6 +70,19 @@ export async function ensureOwnerIntelligenceSchema(env: Env): Promise<void> {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_messages_conversation_created
       ON owner_intelligence_messages(owner_id, conversation_id, created_at ASC)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_generation_metadata (
+      message_id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      model_id TEXT NOT NULL,
+      thinking_level TEXT NOT NULL,
+      prompt_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      total_tokens INTEGER NOT NULL DEFAULT 0,
+      elapsed_ms INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (message_id) REFERENCES owner_intelligence_messages(id) ON DELETE CASCADE
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_generation_owner
+      ON owner_intelligence_generation_metadata(owner_id, model_id)`),
   ]);
   if (results.some((result) => !result.success)) {
     throw new Error("D1 did not confirm the Owner Intelligence schema.");
@@ -97,6 +116,12 @@ function mapMessage(row: OwnerMessageRow): OwnerIntelligenceMessage {
     content: row.content,
     status: row.status,
     created_at: Number(row.created_at),
+    ...(row.model_id ? { model_id: row.model_id } : {}),
+    ...(row.thinking_level ? { thinking_level: row.thinking_level } : {}),
+    ...(row.prompt_tokens !== undefined && row.prompt_tokens !== null ? { prompt_tokens: Number(row.prompt_tokens) } : {}),
+    ...(row.output_tokens !== undefined && row.output_tokens !== null ? { output_tokens: Number(row.output_tokens) } : {}),
+    ...(row.total_tokens !== undefined && row.total_tokens !== null ? { total_tokens: Number(row.total_tokens) } : {}),
+    ...(row.elapsed_ms !== undefined && row.elapsed_ms !== null ? { elapsed_ms: Number(row.elapsed_ms) } : {}),
   };
 }
 
@@ -135,7 +160,13 @@ export async function getOwnerIntelligenceConversation(
   if (!row) return null;
 
   const result = await env.DB!.prepare(
-    "SELECT id, conversation_id, owner_id, role, content, status, created_at FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ? ORDER BY created_at ASC, id ASC",
+    `SELECT m.id, m.conversation_id, m.owner_id, m.role, m.content, m.status, m.created_at,
+      g.model_id, g.thinking_level, g.prompt_tokens, g.output_tokens, g.total_tokens, g.elapsed_ms
+     FROM owner_intelligence_messages m
+     LEFT JOIN owner_intelligence_generation_metadata g
+       ON g.message_id = m.id AND g.owner_id = m.owner_id
+     WHERE m.conversation_id = ? AND m.owner_id = ?
+     ORDER BY m.created_at ASC, m.id ASC`,
   ).bind(id, ownerId).all<OwnerMessageRow>();
   return { conversation: mapConversation(row), messages: (result.results ?? []).map(mapMessage) };
 }
@@ -177,11 +208,23 @@ export async function deleteOwnerIntelligenceConversation(env: Env, id: string):
 /** Store a future model turn without mixing it into student Telegram records. */
 export async function appendOwnerIntelligenceMessage(
   env: Env,
-  input: { conversationId: string; role: OwnerIntelligenceMessage["role"]; content: string; status?: OwnerIntelligenceMessage["status"] },
+  input: {
+    conversationId: string;
+    role: OwnerIntelligenceMessage["role"];
+    content: string;
+    status?: OwnerIntelligenceMessage["status"];
+    modelId?: string;
+    thinkingLevel?: OwnerThinkingLevel;
+  },
 ): Promise<OwnerIntelligenceMessage | null> {
   await ensureOwnerIntelligenceSchema(env);
-  if (typeof input.content !== "string" || input.content.length === 0 || input.content.length > MAX_MESSAGE_LENGTH) {
+  const status = input.status ?? "complete";
+  if (typeof input.content !== "string" || input.content.length > MAX_MESSAGE_LENGTH ||
+      (input.content.length === 0 && !(input.role === "assistant" && status === "pending"))) {
     throw new Error("Message content must contain between 1 and 50,000 characters.");
+  }
+  if ((input.modelId && !input.thinkingLevel) || (!input.modelId && input.thinkingLevel)) {
+    throw new Error("Generation metadata is incomplete.");
   }
   const ownerId = ownerPrincipal(env);
   const conversation = await env.DB!.prepare(
@@ -189,24 +232,132 @@ export async function appendOwnerIntelligenceMessage(
   ).bind(input.conversationId, ownerId).first<{ id: string }>();
   if (!conversation) return null;
 
+  const latest = await env.DB!.prepare(
+    "SELECT MAX(created_at) AS latest FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ?",
+  ).bind(input.conversationId, ownerId).first<{ latest: number | null }>();
+  const createdAt = Math.max(Date.now(), Number(latest?.latest ?? 0) + 1);
   const message: OwnerIntelligenceMessage = {
     id: crypto.randomUUID(),
     conversation_id: input.conversationId,
     role: input.role,
     content: input.content,
-    status: input.status ?? "complete",
-    created_at: Date.now(),
+    status,
+    created_at: createdAt,
+    ...(input.modelId ? { model_id: input.modelId } : {}),
+    ...(input.thinkingLevel ? { thinking_level: input.thinkingLevel } : {}),
   };
-  const results = await env.DB!.batch([
+  const statements = [
     env.DB!.prepare(
       "INSERT INTO owner_intelligence_messages (id, conversation_id, owner_id, role, content, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     ).bind(message.id, message.conversation_id, ownerId, message.role, message.content, message.status, message.created_at),
     env.DB!.prepare(
       "UPDATE owner_intelligence_conversations SET updated_at = ? WHERE id = ? AND owner_id = ?",
     ).bind(message.created_at, input.conversationId, ownerId),
-  ]);
+  ];
+  if (input.modelId && input.thinkingLevel) {
+    statements.push(env.DB!.prepare(
+      "INSERT INTO owner_intelligence_generation_metadata (message_id, owner_id, model_id, thinking_level) VALUES (?, ?, ?, ?)",
+    ).bind(message.id, ownerId, input.modelId, input.thinkingLevel));
+  }
+  const results = await env.DB!.batch(statements);
   if (results.some((result) => !result.success)) throw new Error("D1 did not confirm the message save.");
   return message;
+}
+
+async function updateOwnerAssistantMessage(
+  env: Env,
+  messageId: string,
+  content: string,
+  status: OwnerIntelligenceMessage["status"],
+  usage?: { promptTokens: number; outputTokens: number; totalTokens: number; elapsedMs: number },
+): Promise<OwnerIntelligenceMessage | null> {
+  await ensureOwnerIntelligenceSchema(env);
+  if (content.length > MAX_MESSAGE_LENGTH) throw new Error("The generated response exceeded the supported message size.");
+  const ownerId = ownerPrincipal(env);
+  const results = await env.DB!.batch([
+    env.DB!.prepare(
+      "UPDATE owner_intelligence_messages SET content = ?, status = ? WHERE id = ? AND owner_id = ? AND role = 'assistant'",
+    ).bind(content, status, messageId, ownerId),
+    ...(usage ? [env.DB!.prepare(
+      `UPDATE owner_intelligence_generation_metadata
+       SET prompt_tokens = ?, output_tokens = ?, total_tokens = ?, elapsed_ms = ?
+       WHERE message_id = ? AND owner_id = ?`,
+    ).bind(usage.promptTokens, usage.outputTokens, usage.totalTokens, usage.elapsedMs, messageId, ownerId)] : []),
+  ]);
+  if (results.some((result) => !result.success)) throw new Error("D1 did not confirm the assistant response update.");
+  const row = await env.DB!.prepare(
+    `SELECT m.id, m.conversation_id, m.owner_id, m.role, m.content, m.status, m.created_at,
+      g.model_id, g.thinking_level, g.prompt_tokens, g.output_tokens, g.total_tokens, g.elapsed_ms
+     FROM owner_intelligence_messages m
+     LEFT JOIN owner_intelligence_generation_metadata g
+       ON g.message_id = m.id AND g.owner_id = m.owner_id
+     WHERE m.id = ? AND m.owner_id = ? AND m.role = 'assistant'`,
+  ).bind(messageId, ownerId).first<OwnerMessageRow>();
+  return row ? mapMessage(row) : null;
+}
+
+async function prepareOwnerPrompt(
+  env: Env,
+  conversationId: string,
+  input: { content?: string; editMessageId?: string; action?: "regenerate" },
+): Promise<OwnerIntelligenceMessage[] | null> {
+  await ensureOwnerIntelligenceSchema(env);
+  const ownerId = ownerPrincipal(env);
+  const conversation = await env.DB!.prepare(
+    "SELECT id, title FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
+  ).bind(conversationId, ownerId).first<{ id: string; title: string }>();
+  if (!conversation) return null;
+  const existing = await env.DB!.prepare(
+    "SELECT id, conversation_id, owner_id, role, content, status, created_at FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ? ORDER BY created_at ASC, id ASC",
+  ).bind(conversationId, ownerId).all<OwnerMessageRow>();
+  const ordered = existing.results ?? [];
+  const statements: D1PreparedStatement[] = [];
+
+  if (input.action === "regenerate") {
+    let targetIndex = -1;
+    for (let i = ordered.length - 1; i >= 0; i -= 1) {
+      if (ordered[i].role === "user") { targetIndex = i; break; }
+    }
+    if (targetIndex < 0) throw new Error("There is no user message to regenerate.");
+    for (const row of ordered.slice(targetIndex + 1)) {
+      statements.push(env.DB!.prepare("DELETE FROM owner_intelligence_messages WHERE id = ? AND owner_id = ?").bind(row.id, ownerId));
+    }
+  } else if (input.editMessageId) {
+    if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
+      throw new Error("Enter a message between 1 and 50,000 characters.");
+    }
+    const targetIndex = ordered.findIndex((row) => row.id === input.editMessageId && row.role === "user");
+    if (targetIndex < 0) throw new Error("The user message to edit was not found.");
+    const target = ordered[targetIndex];
+    statements.push(env.DB!.prepare(
+      "UPDATE owner_intelligence_messages SET content = ?, status = 'complete' WHERE id = ? AND owner_id = ? AND role = 'user'",
+    ).bind(input.content.trim(), target.id, ownerId));
+    for (const row of ordered.slice(targetIndex + 1)) {
+      statements.push(env.DB!.prepare("DELETE FROM owner_intelligence_messages WHERE id = ? AND owner_id = ?").bind(row.id, ownerId));
+    }
+  } else {
+    if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
+      throw new Error("Enter a message between 1 and 50,000 characters.");
+    }
+    const message = await appendOwnerIntelligenceMessage(env, {
+      conversationId, role: "user", content: input.content.trim(),
+    });
+    if (!message) return null;
+    if (conversation.title === "New chat") {
+      const title = input.content.trim().replace(/\\s+/gu, " ").slice(0, MAX_TITLE_LENGTH);
+      await env.DB!.prepare(
+        "UPDATE owner_intelligence_conversations SET title = ?, updated_at = ? WHERE id = ? AND owner_id = ?",
+      ).bind(title, message.created_at, conversationId, ownerId).run();
+    }
+  }
+  if (statements.length) {
+    const result = await env.DB!.batch(statements);
+    if (result.some((item) => !item.success)) throw new Error("D1 did not confirm the prompt edit or regeneration reset.");
+  }
+  const result = await env.DB!.prepare(
+    "SELECT id, conversation_id, owner_id, role, content, status, created_at FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ? ORDER BY created_at ASC, id ASC",
+  ).bind(conversationId, ownerId).all<OwnerMessageRow>();
+  return (result.results ?? []).map(mapMessage);
 }
 
 function isSameOriginMutation(request: Request): boolean {
