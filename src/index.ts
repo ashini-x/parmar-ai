@@ -55,6 +55,7 @@ import { internalServerError, json, methodNotAllowed, notFound } from "./http/re
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, ensureAnalyticsSchema, getLatestFatmanReleaseQaRun, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, getAdminSessionRole, handleAdminLogin, loginHtml, requireAdmin, requireOwner } from "./admin/auth";
+import { handleOwnerIntelligenceApi, ownerIntelligencePage } from "./admin/intelligence";
 import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, testFatmanVision, uploadFatmanPage } from "./fatman/admin";
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
@@ -3102,8 +3103,8 @@ const worker = {
         return clearAdminSession();
       }
 
-      // M1: the Owner route is protected by a distinct Owner session.
-      // M2 replaces this safe placeholder with the conversational workspace.
+      // M1 established the explicit Owner session; M2 replaces the placeholder
+      // with the responsive private workspace and its isolated conversation store.
       if (url.pathname === "/admin/intelligence") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         if (!(await requireOwner(request, env))) {
@@ -3113,10 +3114,7 @@ const worker = {
             { status, headers: { "content-type": status === 403 ? "text/plain; charset=utf-8" : "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" } },
           ), requestId);
         }
-        return withRequestId(new Response(
-          "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"robots\" content=\"noindex,nofollow\"><title>BRɅIN Intelligence</title></head><body><main><h1>BRɅIN Intelligence</h1><p>Owner access verified. The workspace interface is scheduled for milestone M2.</p></main></body></html>",
-          { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff", "referrer-policy": "no-referrer" } },
-        ), requestId);
+        return withRequestId(await ownerIntelligencePage(env), requestId);
       }
 
       if (url.pathname === "/admin/fatman") {
@@ -3174,14 +3172,14 @@ const worker = {
         return adminDashboard(env);
       }
 
-      // Reserve the Intelligence API namespace for Owner sessions before the
-      // general admin API guard. M2 adds handlers under this protected boundary.
+      // Owner Intelligence APIs are checked before the generic admin API guard.
+      // Every handler also scopes each D1 query to the configured Owner principal.
       if (url.pathname === "/admin/api/intelligence" || url.pathname.startsWith("/admin/api/intelligence/")) {
         if (!(await requireOwner(request, env))) {
           const status = (await requireAdmin(request, env)) ? 403 : 401;
           return withRequestId(json({ ok: false, error: status === 403 ? "owner_access_required" : "unauthorized" }, status), requestId);
         }
-        return withRequestId(notFound(), requestId);
+        return withRequestId(await handleOwnerIntelligenceApi(request, env, url), requestId);
       }
 
       const adminApiPath = url.pathname.replace(/^\/admin\/api\/vrain(?=\/|$)/u, "/admin/api/brvin");
