@@ -679,7 +679,7 @@ function workspaceHtml(): string {
 .content{flex:1;overflow:auto;display:flex;justify-content:center;padding:36px 22px 18px}.stage{width:min(820px,100%);min-height:100%;display:flex;flex-direction:column}.conversation-heading{font-size:12px;color:#999;margin:0 0 22px;min-height:18px}.messages{flex:1;display:flex;flex-direction:column;gap:22px;padding-bottom:30px}.welcome{margin:auto auto 50px;width:min(600px,100%);text-align:center}.welcome-mark{width:56px;height:56px;border:1px solid #565656;border-radius:18px;display:grid;place-items:center;margin:0 auto 22px;font-size:22px;font-weight:700;letter-spacing:-2px;background:#282828}.welcome h1{font-size:27px;letter-spacing:-.04em;font-weight:600;margin:0 0 12px}.welcome p{font-size:13px;color:#a0a0a0;line-height:1.7;margin:0 auto;max-width:480px}.next-step{display:inline-flex;margin-top:22px;border:1px solid #464646;border-radius:20px;padding:7px 11px;font-size:10px;color:#aaa;letter-spacing:.02em}
 .message{display:flex;gap:14px;align-items:flex-start;max-width:100%;padding:0 5px}.message-avatar{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#383838;font-size:10px;font-weight:700}.message-body{min-width:0;flex:1;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:#e4e4e4}.message-role{font-size:10px;color:#929292;margin:0 0 5px;text-transform:uppercase;letter-spacing:.08em}.message-actions{display:flex;gap:7px;margin-top:8px}.message-action{border:1px solid #444;background:transparent;color:#aaa;border-radius:7px;padding:4px 8px;font-size:10px}.message-action:hover{background:#333;color:#fff}.message-status{font-size:10px;color:#a0a0a0;margin-top:6px}
 .composer-wrap{padding:12px 0 5px}.composer{border:1px solid #484848;background:#2b2b2b;border-radius:17px;padding:12px 13px 9px;box-shadow:0 8px 30px rgba(0,0,0,.12)}.composer textarea{display:block;width:100%;resize:none;min-height:42px;max-height:130px;outline:none;border:0;background:transparent;color:#aaa;font-size:13px;line-height:1.5}.composer textarea::placeholder{color:#858585}.composer-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px}.composer-hint{font-size:10px;color:#848484}.send-action{border:0;background:#ececec;color:#171717;border-radius:10px;width:30px;height:30px;font-size:17px;font-weight:700;cursor:pointer}.send-action:disabled{background:#444;color:#8b8b8b;cursor:not-allowed}.send-action.stop{background:#d7d7d7;color:#171717}.send-action:not(:disabled):hover{background:#fff}.disclaimer{text-align:center;color:#777;font-size:10px;padding:10px 5px 0;line-height:1.5}
-.loading{color:#999;font-size:12px;padding:12px 8px}.error{color:#f2a4a4;font-size:12px;padding:12px 8px}
+.loading{color:#999;font-size:12px;padding:12px 8px}.error{color:#f2a4a4;font-size:12px;padding:12px 8px}.history-failure{padding:10px 8px;display:flex;flex-direction:column;gap:8px}.history-failure-title{font-size:12px;color:#e5b0b0}.history-failure-message{font-size:11px;line-height:1.5;color:#aaa;overflow-wrap:anywhere}.history-retry{align-self:flex-start;border:1px solid #555;background:#303030;color:#eee;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer}.history-retry:hover{background:#414141}.history-retry:disabled,.new-chat:disabled{opacity:.55;cursor:wait}
 @media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.topbar{padding:0 13px}.content{padding:28px 16px 12px}.welcome h1{font-size:24px}.model-picker,.thinking-picker{padding:6px 7px;gap:4px}.model-label{display:none}.model-picker select{max-width:122px;min-width:80px}.thinking-picker select{max-width:90px;min-width:64px}.private-tag{display:none}.composer-wrap{padding-top:18px}}
 @media(max-width:390px){.model-picker{max-width:122px}.model-picker select{max-width:94px;min-width:0}.thinking-picker{max-width:94px}.thinking-picker select{max-width:70px;min-width:0}.page-title{font-size:13px}.avatar{display:none}}
 </style>
@@ -742,11 +742,24 @@ export function ownerIntelligenceClientScript(): Response {
   function node(tag,className,text){var el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;}
   function errorText(error){return error&&error.message?error.message:"Something went wrong. Please retry.";}
   async function request(path,options){
-    var response=await fetch(path,Object.assign({credentials:"same-origin",cache:"no-store"},options||{}));
-    var body={};
-    try{body=await response.json();}catch(_error){}
-    if(!response.ok||body.ok===false){throw new Error(body.message||body.error||("Request failed ("+response.status+")"));}
-    return body;
+    var controller=new AbortController();
+    var timeoutId=window.setTimeout(function(){controller.abort();},15000);
+    try{
+      var requestOptions=Object.assign({credentials:"same-origin",cache:"no-store"},options||{});
+      requestOptions.signal=controller.signal;
+      var response=await fetch(path,requestOptions);
+      var body={};
+      try{body=await response.json();}catch(_error){}
+      if(!response.ok||body.ok===false){throw new Error(body.message||body.error||("Request failed ("+response.status+")"));}
+      return body;
+    }catch(error){
+      if(controller.signal.aborted||(error&&error.name==="AbortError")){
+        throw new Error("The Owner workspace request timed out. Check your connection and retry.");
+      }
+      throw error;
+    }finally{
+      window.clearTimeout(timeoutId);
+    }
   }
   function populateThinkingLevels(modelId){
     var model=state.models.find(function(item){return item.id===modelId;});
@@ -901,6 +914,20 @@ export function ownerIntelligenceClientScript(): Response {
       wrap.appendChild(body);messages.appendChild(wrap);
     });
   }
+  function showHistoryError(error){
+    history.replaceChildren();
+    var panel=node("div","history-failure");
+    panel.appendChild(node("div","history-failure-title","Could not load conversations"));
+    panel.appendChild(node("div","history-failure-message",errorText(error)));
+    var retry=node("button","history-retry","Retry");
+    retry.type="button";
+    retry.addEventListener("click",function(){
+      retry.disabled=true;
+      refreshList().catch(showHistoryError).finally(function(){retry.disabled=false;});
+    });
+    panel.appendChild(retry);
+    history.appendChild(panel);
+  }
   function renderHistory(){
     history.replaceChildren();
     if(!state.conversations.length){history.appendChild(node("div","history-empty","Your saved conversations will appear here."));return;}
@@ -1049,11 +1076,19 @@ export function ownerIntelligenceClientScript(): Response {
   function saveMessage(){return generateMessage({});}
 
   async function newConversation(){
+    var button=document.getElementById("newChat");
+    if(button.disabled)return;
+    button.disabled=true;
+    button.setAttribute("aria-busy","true");
     try{
       var result=await request(api,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:"New chat"})});
       await refreshList(result.conversation.id);
       sidebar.classList.remove("open");
-    }catch(error){showError(error);}
+    }catch(error){showHistoryError(error);}
+    finally{
+      button.disabled=false;
+      button.removeAttribute("aria-busy");
+    }
   }
   async function renameConversation(conversation){
     var title=window.prompt("Rename conversation",conversation.title);
@@ -1093,7 +1128,7 @@ export function ownerIntelligenceClientScript(): Response {
   });
   modelRetry.addEventListener("click",function(){loadModels();});
   loadModels();
-  refreshList().catch(showError);
+  refreshList().catch(showHistoryError);
 })();
 `;
   return new Response(source, {
