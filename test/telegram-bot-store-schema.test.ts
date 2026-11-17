@@ -31,7 +31,7 @@ describe("Telegram bot schema initialization", () => {
 
 
 describe("Telegram runtime analytics schema initialization", () => {
-  it("creates only the tables needed by Telegram runtime paths and deduplicates concurrent setup", async () => {
+  it("creates only the Telegram runtime tables and allows safe concurrent first-use setup", async () => {
     const preparedSql: string[] = [];
     const db = {
       prepare: vi.fn((sql: string) => {
@@ -48,7 +48,12 @@ describe("Telegram runtime analytics schema initialization", () => {
       ensureRuntimeAnalyticsSchema(env),
     ]);
 
-    expect(db.batch).toHaveBeenCalledTimes(1);
+    // Requests must not await a module-global in-flight Promise created by
+    // another request context. CREATE IF NOT EXISTS makes each concurrent
+    // first-use batch safe; completed setup is cached for later requests.
+    expect(db.batch).toHaveBeenCalledTimes(3);
+    await ensureRuntimeAnalyticsSchema(env);
+    expect(db.batch).toHaveBeenCalledTimes(3);
     const sql = preparedSql.join("\n");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS users");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS events");
