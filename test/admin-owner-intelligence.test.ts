@@ -1,27 +1,135 @@
-import { env as cloudflareEnv, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import type { Env } from "../src/config/env";
 import worker from "../src";
 import { handleAdminLogin } from "../src/admin/auth";
 import { appendOwnerIntelligenceMessage } from "../src/admin/intelligence";
 
-const baseEnv = cloudflareEnv as unknown as Env;
+type ConversationRow = {
+  id: string;
+  owner_id: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
+};
+type MessageRow = {
+  id: string;
+  conversation_id: string;
+  owner_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  status: "pending" | "complete" | "partial" | "error";
+  created_at: number;
+};
 
-function appEnv(overrides: Partial<Env> = {}): Env {
-  return Object.assign(Object.create(baseEnv), {
-    DB: baseEnv.DB,
+class FakeOwnerStatement {
+  private values: unknown[] = [];
+  constructor(private readonly db: FakeOwnerD1, private readonly sql: string) {}
+  bind(...values: unknown[]): this { this.values = values; return this; }
+  async run(): Promise<{ success: boolean }> { this.db.execute(this.sql, this.values); return { success: true }; }
+  async first<T>(): Promise<T | null> { return (this.db.read(this.sql, this.values)[0] as T | undefined) ?? null; }
+  async all<T>(): Promise<{ results: T[]; success: boolean }> {
+    return { results: this.db.read(this.sql, this.values) as T[], success: true };
+  }
+}
+
+class FakeOwnerD1 {
+  readonly conversations = new Map<string, ConversationRow>();
+  readonly messages = new Map<string, MessageRow>();
+  prepare(sql: string): D1PreparedStatement {
+    return new FakeOwnerStatement(this, sql) as unknown as D1PreparedStatement;
+  }
+  async batch(statements: D1PreparedStatement[]): Promise<Array<{ success: boolean }>> {
+    for (const statement of statements as unknown as FakeOwnerStatement[]) {
+      const internal = statement as unknown as { sql: string; values: unknown[] };
+      this.execute(internal.sql, internal.values);
+    }
+    return statements.map(() => ({ success: true }));
+  }
+  read(sql: string, values: unknown[]): Array<Record<string, unknown>> {
+    if (sql.includes("FROM owner_intelligence_conversations")) {
+      if (sql.includes("WHERE id = ? AND owner_id = ?")) {
+        const row = this.conversations.get(String(values[0]));
+        return row && row.owner_id === String(values[1]) ? [{ ...row }] : [];
+      }
+      if (sql.includes("WHERE owner_id = ?")) {
+        return [...this.conversations.values()]
+          .filter((row) => row.owner_id === String(values[0]))
+          .sort((a, b) => b.updated_at - a.updated_at || b.created_at - a.created_at)
+          .slice(0, Number(values[1] ?? 100))
+          .map((row) => ({ ...row }));
+      }
+    }
+    if (sql.includes("FROM owner_intelligence_messages")) {
+      return [...this.messages.values()]
+        .filter((row) => row.conversation_id === String(values[0]) && row.owner_id === String(values[1]))
+        .sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id))
+        .map((row) => ({ ...row }));
+    }
+    throw new Error("Unexpected Owner D1 read: " + sql);
+  }
+  execute(sql: string, values: unknown[]): void {
+    if (sql.startsWith("CREATE TABLE") || sql.startsWith("CREATE INDEX")) return;
+    if (sql.startsWith("INSERT INTO owner_intelligence_conversations")) {
+      const [id, owner_id, title, created_at, updated_at] = values;
+      this.conversations.set(String(id), {
+        id: String(id), owner_id: String(owner_id), title: String(title),
+        created_at: Number(created_at), updated_at: Number(updated_at),
+      });
+      return;
+    }
+    if (sql.startsWith("UPDATE owner_intelligence_conversations SET title")) {
+      const [title, updated_at, id, owner_id] = values;
+      const row = this.conversations.get(String(id));
+      if (row && row.owner_id === String(owner_id)) {
+        row.title = String(title); row.updated_at = Number(updated_at);
+      }
+      return;
+    }
+    if (sql.startsWith("UPDATE owner_intelligence_conversations SET updated_at")) {
+      const [updated_at, id, owner_id] = values;
+      const row = this.conversations.get(String(id));
+      if (row && row.owner_id === String(owner_id)) row.updated_at = Number(updated_at);
+      return;
+    }
+    if (sql.startsWith("INSERT INTO owner_intelligence_messages")) {
+      const [id, conversation_id, owner_id, role, content, status, created_at] = values;
+      this.messages.set(String(id), {
+        id: String(id), conversation_id: String(conversation_id), owner_id: String(owner_id),
+        role: role as MessageRow["role"], content: String(content), status: status as MessageRow["status"],
+        created_at: Number(created_at),
+      });
+      return;
+    }
+    if (sql.startsWith("DELETE FROM owner_intelligence_messages")) {
+      const [conversation_id, owner_id] = values;
+      for (const [id, row] of this.messages) {
+        if (row.conversation_id === String(conversation_id) && row.owner_id === String(owner_id)) this.messages.delete(id);
+      }
+      return;
+    }
+    if (sql.startsWith("DELETE FROM owner_intelligence_conversations")) {
+      const [id, owner_id] = values;
+      const row = this.conversations.get(String(id));
+      if (row && row.owner_id === String(owner_id)) this.conversations.delete(String(id));
+      return;
+    }
+    throw new Error("Unexpected Owner D1 write: " + sql);
+  }
+}
+
+function appEnv(overrides: Partial<Env> = {}, database = new FakeOwnerD1()): Env {
+  return Object.assign({}, {
+    DB: database as unknown as Env["DB"],
     ADMIN_DASHBOARD_USER: "admin",
     ADMIN_DASHBOARD_PASSWORD: "admin-test-password",
     OWNER_DASHBOARD_USER: "owner",
     OWNER_DASHBOARD_PASSWORD: "owner-test-password",
     ADMIN_SESSION_SECRET: "owner-intelligence-test-signing-secret",
-    ...overrides,
-  }) as Env;
+  }, overrides) as Env;
 }
 
 async function login(username: string, password: string, env: Env): Promise<string> {
-  // Login does not need D1 for session signing; keep this focused on the Owner
-  // workspace database and avoid invoking unrelated application migrations.
   const loginEnv = appEnv({
     ADMIN_DASHBOARD_USER: env.ADMIN_DASHBOARD_USER,
     ADMIN_DASHBOARD_PASSWORD: env.ADMIN_DASHBOARD_PASSWORD,
@@ -150,7 +258,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     const otherOwnerEnv = appEnv({
       OWNER_DASHBOARD_USER: "different-owner",
       OWNER_DASHBOARD_PASSWORD: "different-owner-password",
-    });
+    }, env.DB as unknown as FakeOwnerD1);
     const otherOwnerCookie = await login("different-owner", "different-owner-password", otherOwnerEnv);
     const otherOwnerList = await call(otherOwnerEnv, "/admin/api/intelligence/conversations", otherOwnerCookie);
     const otherOwnerListBody = await otherOwnerList.json() as { conversations: Array<{ id: string }> };
