@@ -11,6 +11,9 @@ export interface OwnerGeminiModelDefinition {
   apiVersion: "v1";
   inputModalities: readonly ["text"];
   outputModalities: readonly ["text"];
+  contextWindowTokens: number;
+  modelMaxOutputTokens: number;
+  singleRequestOutputTokens: number;
   thinkingLevels: readonly OwnerThinkingLevel[];
   defaultThinkingLevel: OwnerThinkingLevel;
 }
@@ -21,13 +24,14 @@ export interface OwnerGeminiModelDefinition {
  * project/location passes the live countTokens capability probe.
  */
 export const OWNER_GEMINI_MODEL_REGISTRY: readonly OwnerGeminiModelDefinition[] = [
-  { id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], thinkingLevels: ["LOW", "MEDIUM", "HIGH", "XHIGH"], defaultThinkingLevel: "HIGH" },
-  { id: "gemini-4-carbon", label: "Gemini 4 Carbon", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-4-argon", label: "Gemini 4 Argon", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MINIMAL" },
+  { id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 65_536, thinkingLevels: ["LOW", "MEDIUM", "HIGH", "XHIGH"], defaultThinkingLevel: "HIGH" },
+  { id: "gemini-4-carbon", label: "Gemini 4 Carbon", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 32_768, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-4-argon", label: "Gemini 4 Argon", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 32_768, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-3.6-flash", label: "Gemini 3.6 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MINIMAL" },
 ] as const;
 
 export type OwnerModelAvailability = "available" | "unavailable" | "unverified";
@@ -239,9 +243,23 @@ export async function generateOwnerGeminiContent(
       (typeof input.systemInstruction !== "string" || input.systemInstruction.length > 20_000)) {
     throw new OwnerGeminiProviderError("The system instruction is invalid or too long.");
   }
+  // Public catalogue membership does not establish project entitlement.
+  // Require a recent successful project/location capability probe before generation.
+  const catalogue = await listOwnerGeminiModels(env, dependencies);
+  const confirmedModel = catalogue.models.find((model) => model.id === definition.id && model.selectable);
+  if (!catalogue.ok || !confirmedModel) {
+    throw new OwnerGeminiProviderError(
+      catalogue.ok
+        ? "This model has not been confirmed for the configured Vertex AI project and location."
+        : "Vertex AI model availability could not be verified for the Owner workspace.",
+      undefined,
+      true,
+    );
+  }
+
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
-    ? Math.min(32_768, Math.max(1, input.maxOutputTokens!))
-    : 8_192;
+    ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
+    : Math.min(definition.singleRequestOutputTokens, 8_192);
 
   let token: string;
   try {

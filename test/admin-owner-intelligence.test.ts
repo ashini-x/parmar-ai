@@ -200,8 +200,9 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain("BRɅIN Intelligence");
     expect(html).toContain("New chat");
     expect(html).toContain("Your conversations");
-    expect(html).toContain("Gemini setup · M3");
-    expect(html).toContain("Messages are saved privately. Gemini replies arrive in the next model milestones.");
+    expect(html).toContain('id="modelSelect"');
+    expect(html).toContain("/admin/api/intelligence/models");
+    expect(html).toContain("Models appear only after the configured Vertex AI project and location pass a live capability check.");
   });
 
   it("creates, lists, reopens, renames and deletes only the Owner's conversations and messages", async () => {

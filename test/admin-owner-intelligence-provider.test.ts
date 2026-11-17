@@ -32,6 +32,10 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(result.ok).toBe(true);
     expect(result.models).toHaveLength(OWNER_GEMINI_MODEL_REGISTRY.length);
     expect(result.models.every((model) => model.selectable && model.availability === "available")).toBe(true);
+    expect(result.models.every((model) => model.contextWindowTokens === 1_048_576 && model.modelMaxOutputTokens > 0 && model.singleRequestOutputTokens > 0)).toBe(true);
+    expect(result.models.find((model) => model.id === "gemini-4-hydrogen")?.singleRequestOutputTokens).toBe(65_536);
+    expect(result.models.find((model) => model.id === "gemini-4-argon")?.singleRequestOutputTokens).toBe(32_768);
+    expect(result.models.some((model) => model.id === "gemini-3.6-flash")).toBe(true);
     expect(calls).toHaveLength(OWNER_GEMINI_MODEL_REGISTRY.length);
     const first = String(calls[0]?.url);
     expect(first).toContain("/v1/projects/project-90db7be4-619f-4ed7-89b/locations/global/publishers/google/models/");
@@ -95,6 +99,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(body.contents).toEqual([{ role: "user", parts: [{ text: "What is a black hole?" }] }]);
     expect(body.systemInstruction.parts[0].text).toBe("You are a general-purpose assistant.");
     expect(body.generationConfig.thinkingConfig).toBeUndefined();
+    expect(body.generationConfig.maxOutputTokens).toBe(8_192);
     expect(JSON.stringify(body)).not.toContain("AnswerPacket");
     expect(JSON.stringify(body)).not.toContain("SSC");
   });
@@ -108,13 +113,29 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("does not generate when the model has not passed the project/location check", async () => {
+    const calls: string[] = [];
+    const fetcher: typeof fetch = async (url) => {
+      calls.push(String(url));
+      return new Response("redacted provider error", { status: 403 });
+    };
+    await expect(generateOwnerGeminiContent(
+      { ...configuredEnv, GEMINI_LOCATION: "asia-south1" } as Env,
+      { modelId: "gemini-3.8-flash", contents: [{ role: "user", text: "Hi" }] },
+      dependencies(fetcher),
+    )).rejects.toMatchObject({ retryable: true, message: "This model has not been confirmed for the configured Vertex AI project and location." });
+    expect(calls.some((url) => url.endsWith(":generateContent"))).toBe(false);
+  });
+
   it("sanitizes provider errors and marks only transient failures retryable", async () => {
-    const fetcher = vi.fn(async () => new Response("service account private key leaked in raw error", { status: 429 }));
-    await expect(generateOwnerGeminiContent(configuredEnv, {
-      modelId: "gemini-3.8-flash",
-      contents: [{ role: "user", text: "Hi" }],
-    }, dependencies(fetcher as unknown as typeof fetch))).rejects.toMatchObject({
-      status: 429, retryable: true, message: "Vertex AI is temporarily rate limiting requests for this project or model.",
-    });
+    const fetcher: typeof fetch = async (url) => {
+      if (String(url).endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      return new Response("service account private key leaked in raw error", { status: 429 });
+    };
+    await expect(generateOwnerGeminiContent(
+      { ...configuredEnv, GEMINI_LOCATION: "asia-southeast1" } as Env,
+      { modelId: "gemini-3.8-flash", contents: [{ role: "user", text: "Hi" }] },
+      dependencies(fetcher),
+    )).rejects.toMatchObject({ status: 429, retryable: true, message: "Vertex AI is temporarily rate limiting requests for this project or model." });
   });
 });
