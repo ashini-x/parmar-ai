@@ -602,6 +602,101 @@ button{font:inherit}
 
 
 .venture-note{margin:7px 0 0;color:#8b8b8b;font-size:11px;line-height:1.55}
+
+/* Interactive evidence playground */
+.playground-card{width:min(100%,1120px);margin-inline:auto;overflow:hidden;border:1px solid var(--line-strong);border-radius:16px;background:var(--paper);box-shadow:0 12px 34px rgba(23,23,21,.055),0 2px 7px rgba(23,23,21,.025)}
+.playground-topline,.playground-appbar{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:13px 20px;border-bottom:1px solid var(--line)}
+.playground-topline-copy{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.playground-topline-copy>span,.pane-kicker,.app-context-label,.prompt-label,.passage-kind,.passage-source,.visual-kicker,.pdf-page-header,.pdf-highlight-block>span,.pdf-page-footer,.pdf-viewer-foot,.playground-foot>span{color:var(--muted);font-size:8px;font-weight:720;letter-spacing:.13em}
+.playground-topline-copy small{color:var(--muted);font-size:9px;letter-spacing:0}
+.playground-appbar{padding-top:11px;padding-bottom:11px;background:#FCFBF8}
+.app-context{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.app-context-label{margin-right:2px}.app-context strong{color:var(--ink);font-size:12px;font-weight:630}
+.app-live-tag{padding:4px 7px;border:1px solid rgba(47,107,255,.25);border-radius:999px;color:#2F6BFF;font-size:8px;font-weight:720;letter-spacing:.08em}
+.permission-pill,.hash-verified{display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid #CFE6D7;border-radius:999px;background:#F0F7F2;color:#276A45;font-size:9px;font-weight:670;white-space:nowrap}
+.permission-pill>i,.hash-verified>i{width:6px;height:6px;border-radius:50%;background:#4E9A68}.permission-pill small,.hash-verified small{color:#5C8068;font-size:8px;font-weight:500}
+.playground-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch}
+.query-pane{min-width:0;padding:clamp(19px,2.3vw,27px);border-right:1px solid var(--line)}
+.pane-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px}
+.pane-heading h2{margin:5px 0 0;color:var(--ink);font-size:clamp(21px,2vw,27px);font-weight:560;letter-spacing:-.055em;line-height:1.1}
+.sample-chip{padding:5px 7px;border:1px solid var(--line);border-radius:5px;color:var(--muted);font-size:8px;font-weight:700;letter-spacing:.1em}
+.prompt-label{display:block;margin-bottom:9px}.prompt-pills{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:18px}
+.prompt-pill{min-height:34px;padding:7px 11px;border:1px solid var(--line);border-radius:999px;background:var(--paper);color:var(--body);font-size:10px;font-weight:530;line-height:1.35;text-align:left;cursor:pointer;transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease}
+.prompt-pill:hover{border-color:var(--line-strong);background:#FAF9F6;color:var(--ink)}.prompt-pill.is-active{border-color:var(--ink);background:var(--ink);color:#fff}.prompt-pill:active{transform:translateY(1px)}
+.passage-card{padding:15px 15px 13px;border:1px solid var(--line);border-radius:10px;background:#FAF9F6;transition:border-color .2s ease,background .2s ease}
+.passage-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.passage-source,.passage-kind{font-size:7px;letter-spacing:.1em}
+.passage-text{min-height:105px;margin:13px 0 14px;color:#373631;font-size:13px;line-height:1.75;transition:opacity .18s ease}
+.passage-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.citation-button{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:5px 9px;border:1px solid #D8CBB3;border-radius:6px;background:#F4EBDD;color:#55452F;font-size:9px;font-weight:720;cursor:pointer}.citation-mark{font-size:12px}.citation-context{color:var(--muted);font-size:9px}
+.developer-trace{margin-top:12px;border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.developer-trace summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:38px;padding:0 11px;color:var(--ink);font-size:10px;font-weight:600;cursor:pointer;list-style:none}
+.developer-trace summary::-webkit-details-marker{display:none}.trace-summary-action{display:inline-flex;align-items:center;gap:7px;color:var(--muted);font-size:8px;font-weight:700;letter-spacing:.1em}.trace-summary-action span{font-size:13px;line-height:1}.developer-trace[open] .trace-summary-action span{transform:rotate(45deg)}
+.developer-trace pre{max-height:245px;overflow:auto;margin:0;padding:12px;border-top:1px solid var(--line);background:#F7F6F2;color:#46443E;font:10px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}
+.trace-note{margin:0;padding:9px 11px;border-top:1px solid var(--line);color:var(--muted);font-size:9px;line-height:1.55}
+.listen-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}.voice-play-button{min-height:34px;padding:0 11px;font-size:10px}.voice-play-button svg{flex:0 0 auto}.voice-status{min-height:0;margin:0;font-size:9px}
+.pdf-panel{display:flex;min-width:0;flex-direction:column;background:#F2F1ED}
+.pdf-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:13px 15px;border-bottom:1px solid var(--line);background:#FAF9F6}
+.pdf-file-meta{display:flex;min-width:140px;flex-direction:column;gap:3px}.pdf-file-meta strong{overflow-wrap:anywhere;color:var(--ink);font-size:10px;font-weight:650}.pdf-file-meta span{color:var(--muted);font-size:7px;font-weight:680;letter-spacing:.11em}
+.hash-verified{padding:5px 7px;font-size:8px}.hash-verified small{font-size:7px}.pdf-page-count{color:var(--muted);font-size:9px;white-space:nowrap}.pdf-page-count strong{color:var(--ink);font-size:10px}
+.pdf-canvas{display:grid;min-height:405px;place-items:center;padding:20px 22px}
+.pdf-page{position:relative;display:flex;width:min(100%,390px);min-height:365px;flex-direction:column;padding:23px 25px 17px;border:1px solid #E5E0D6;background:#FFFEFA;box-shadow:0 5px 16px rgba(23,23,21,.08);transition:box-shadow .2s ease}
+.pdf-page.is-focused{box-shadow:0 0 0 2px rgba(216,203,179,.8),0 8px 22px rgba(23,23,21,.11)}
+.pdf-page-header,.pdf-page-footer{display:flex;justify-content:space-between;gap:10px;font-size:7px;letter-spacing:.1em}
+.pdf-document-title{margin:27px 0 15px;color:#3D3A34;font-family:Georgia,"Times New Roman",serif;font-size:17px;font-weight:600;letter-spacing:-.025em}
+.pdf-paragraph-lines{display:flex;flex-direction:column;gap:7px;margin-bottom:15px}.pdf-paragraph-lines i{display:block;width:100%;height:4px;border-radius:3px;background:#E8E5DD}.pdf-paragraph-lines i:nth-child(2){width:94%}.pdf-paragraph-lines i:nth-child(3){width:98%}.pdf-paragraph-lines i.short{width:63%}.pdf-paragraph-lines i.medium{width:78%}
+.pdf-subheading{margin:5px 0 11px;color:#5B554A;font-family:Georgia,"Times New Roman",serif;font-size:10px;font-weight:700;line-height:1.5}
+.pdf-highlight-block{margin:1px 0 15px;padding:12px 13px;border:1px solid #E6D49E;border-left:3px solid #C7A85F;border-radius:3px;background:#FBF3D9;box-shadow:0 1px 2px rgba(70,54,21,.04);transition:background .2s ease,border-color .2s ease}
+.pdf-highlight-block>span{color:#806A39;font-size:7px;letter-spacing:.1em}.pdf-highlight-block p{margin:8px 0 0;color:#49402F;font-family:Georgia,"Times New Roman",serif;font-size:10px;line-height:1.65}
+.lower-lines{margin-top:2px}.pdf-page-footer{margin-top:auto;padding-top:13px;border-top:1px solid #E9E5DC;color:#A29C90}
+.pdf-viewer-foot{display:flex;justify-content:space-between;gap:10px;padding:10px 14px;border-top:1px solid var(--line);background:#FAF9F6;font-size:7px}.pdf-viewer-foot span:last-child{color:var(--muted);font-size:8px;font-weight:500;letter-spacing:0}
+.playground-foot{display:flex;align-items:flex-start;gap:12px;padding:11px 19px;border-top:1px solid var(--line);background:#FCFBF8}.playground-foot>span{flex:0 0 auto;padding-top:2px;color:var(--muted);font-size:7px}.playground-foot p{margin:0;color:var(--muted);font-size:9px;line-height:1.55}
+.playground-card.is-updating .passage-card{border-color:var(--line-strong)}
+@media(max-width:767px){.playground-topline,.playground-appbar{padding-right:15px;padding-left:15px}.playground-topline{align-items:flex-start}.playground-topline-copy{gap:5px;flex-direction:column;align-items:flex-start}.playground-appbar{align-items:flex-start;flex-direction:column;gap:9px}.playground-grid{grid-template-columns:1fr}.query-pane{order:1;border-right:0;border-bottom:1px solid var(--line)}.pdf-panel{order:2}.pdf-canvas{min-height:0;padding:16px}.pdf-page{min-height:350px}.playground-foot{padding:10px 14px}}
+@media(max-width:430px){.playground-card{border-radius:12px}.permission-pill{font-size:8px}.query-pane{padding:17px}.pdf-toolbar{align-items:flex-start}.pdf-viewer-foot{flex-direction:column;gap:4px}.passage-text{min-height:0}}
+
+/* Four-stage architecture tab switcher */
+.architecture-switcher{width:100%}.architecture-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.architecture-tab{display:flex;min-height:44px;align-items:center;justify-content:center;gap:9px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:var(--paper);color:var(--body);font-size:11px;font-weight:570;cursor:pointer;transition:background .18s ease,border-color .18s ease,color .18s ease}
+.architecture-tab span{color:var(--muted);font-size:9px;font-weight:700}.architecture-tab:hover{border-color:var(--line-strong);color:var(--ink)}.architecture-tab.is-active{border-color:var(--ink);background:var(--ink);color:#fff}.architecture-tab.is-active span{color:#D9D7D1}
+.architecture-panel{display:grid;min-height:370px;grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:clamp(22px,3.2vw,42px);align-items:center;padding:clamp(21px,3vw,34px);border:1px solid var(--line);border-radius:12px;background:var(--paper)}
+.architecture-copy{display:flex;min-width:0;flex-direction:column;align-items:flex-start}.architecture-copy .architecture-label{width:100%}
+.architecture-copy h3{margin:29px 0 12px;color:var(--ink);font-size:clamp(20px,2.1vw,26px);font-weight:550;letter-spacing:-.05em;line-height:1.14}.architecture-copy p{margin:0;color:var(--body);font-size:13px;line-height:1.8}
+.architecture-tech-pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:22px}.architecture-tech-pills span{padding:6px 9px;border:1px solid var(--line);border-radius:999px;background:#FAF9F6;color:var(--muted);font-size:8px;font-weight:650;letter-spacing:.02em}
+.architecture-visual{display:flex;min-width:0;min-height:285px;align-items:stretch;justify-content:center;padding:17px;border:1px solid var(--line);border-radius:10px;background:#F7F6F2}
+.arch-visual-state{display:flex;width:100%;min-width:0;flex-direction:column;justify-content:center;gap:17px;animation:arch-visual-enter .2s ease}.arch-visual-state[hidden]{display:none}
+@keyframes arch-visual-enter{from{opacity:.55;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.visual-kicker{color:var(--muted);font-size:7px}.ingest-flow{display:grid;grid-template-columns:1fr 30px 1fr 30px 1fr;align-items:center;gap:5px}
+.flow-node{display:flex;min-width:0;min-height:118px;flex-direction:column;align-items:flex-start;justify-content:center;gap:7px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.mini-file-icon{display:grid;width:27px;height:32px;place-items:center;border:1px solid var(--line-strong);border-radius:4px;color:#6D695F;font-size:7px;font-weight:800}.flow-node strong{color:var(--ink);font-size:9px;font-weight:650;line-height:1.35}.flow-node small{color:var(--muted);font-size:7px;line-height:1.4}
+.flow-connector{display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--muted);font-size:6px;font-weight:700;letter-spacing:.04em}.flow-connector i{width:100%;height:1px;background:var(--line-strong)}
+.node-check{display:grid;width:26px;height:26px;place-items:center;border:1px solid #CFE6D7;border-radius:50%;background:#F0F7F2;color:#276A45;font-size:12px;font-weight:800}.node-pages{color:#2F6BFF;font-size:8px;font-weight:760}
+.visual-caption{margin-top:2px;color:var(--muted);font-size:8px;line-height:1.55}.workflow-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.workflow-step{position:relative;display:flex;min-width:0;min-height:85px;flex-direction:column;justify-content:center;gap:5px;padding:12px 34px 12px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.workflow-step-index{color:var(--muted);font-size:7px;font-weight:700;letter-spacing:.1em}.workflow-step strong{color:var(--ink);font-size:10px;font-weight:650}.workflow-step small{color:var(--muted);font-size:8px;line-height:1.45}
+.workflow-step-check{position:absolute;top:12px;right:12px;color:#43845B;font-size:12px;font-style:normal}.workflow-ready{display:flex;grid-column:1/-1;align-items:center;gap:10px;padding:13px 14px;border:1px solid #CFE6D7;border-radius:8px;background:#F0F7F2}
+.ready-indicator{width:7px;height:7px;flex:0 0 auto;border-radius:50%;background:#4E9A68}.workflow-ready>div{display:flex;flex-direction:column;gap:3px}.workflow-ready strong{color:#276A45;font-size:10px}.workflow-ready small{color:#5C8068;font-size:8px}
+.govern-table-wrap{overflow:hidden;border:1px solid var(--line);border-radius:8px;background:var(--paper)}.govern-table{width:100%;border-collapse:collapse;text-align:left}
+.govern-table th,.govern-table td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:8px}.govern-table th{background:#FAF9F6;color:var(--muted);font-size:7px;letter-spacing:.1em}.govern-table td{color:var(--body)}.govern-table td:last-child{text-align:right}.govern-table tr:last-child td{border-bottom:0}
+.table-state{color:var(--muted);font-size:7px;font-weight:750;letter-spacing:.07em}.table-allow{padding:4px 7px;border:1px solid #CFE6D7;border-radius:5px;background:#F0F7F2;color:#276A45}
+.govern-flow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border:1px solid var(--line);border-radius:8px;background:#FAF9F6}.govern-flow span{color:var(--body);font-size:8px}.govern-flow i{color:var(--muted);font-style:normal}.govern-flow strong{color:var(--ink);font-size:9px}
+.binding-code{overflow:auto;max-width:100%;margin:0;padding:16px;border:1px solid #E2E0DA;border-radius:8px;background:#1E1E1C;color:#F4F2EC;font:9px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}
+.code-muted{color:#B8B3A8}.code-keyword{color:#9BB9FF}.consumer-ownership{display:flex;flex-direction:column;gap:4px;padding:11px 13px;border:1px solid var(--line);border-radius:8px;background:var(--paper)}
+.consumer-ownership span{color:var(--muted);font-size:8px}.consumer-ownership strong{color:var(--ink);font-size:9px;font-weight:610;line-height:1.55}
+@media(max-width:1020px){.architecture-panel{grid-template-columns:minmax(0,.78fr) minmax(0,1.22fr);gap:20px;padding:22px}.ingest-flow{grid-template-columns:1fr 18px 1fr 18px 1fr;gap:3px}.flow-node{padding:8px}}
+@media(max-width:767px){.architecture-tabs{display:flex;overflow-x:auto;gap:7px;padding:1px 1px 7px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}.architecture-tab{min-width:132px;flex:1 0 132px;min-height:43px}.architecture-panel{grid-template-columns:1fr;min-height:0;gap:20px;padding:19px}.architecture-copy h3{margin:17px 0 9px}.architecture-visual{min-height:250px;padding:13px}.ingest-flow{grid-template-columns:1fr;gap:7px}.flow-node{min-height:66px;flex-direction:row;align-items:center;gap:10px}.flow-connector{flex-direction:row;justify-content:center}.flow-connector i{width:24px}}
+@media(max-width:430px){.workflow-steps{grid-template-columns:1fr}.workflow-ready{grid-column:auto}.govern-flow{align-items:flex-start;flex-direction:column;gap:6px}.binding-code{font-size:8px}}
+
+/* Balanced three-card product grid */
+.product-card-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
+.product-card{display:flex;min-width:0;flex-direction:column;padding:clamp(20px,2.5vw,29px);border:1px solid var(--line);border-radius:12px;background:var(--paper)}
+.product-card-head{display:flex;min-height:27px;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.product-status{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid var(--line-strong);border-radius:999px;color:var(--body);font-size:7px;font-weight:760;letter-spacing:.09em}
+.product-status-live{border-color:#CFE6D7;background:#F0F7F2;color:#276A45}.product-category{color:var(--muted);font-size:7px;font-weight:700;letter-spacing:.1em}
+.product-card h4{margin:25px 0 11px;color:var(--ink);font-size:clamp(21px,2vw,27px);font-weight:560;letter-spacing:-.05em}
+.product-card p{flex:1;margin:0;color:var(--body);font-size:12px;line-height:1.8}
+.product-card-link{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;margin-top:25px;color:#2F6BFF;font-size:11px;font-weight:620}.product-card-link:hover{text-decoration:underline;text-underline-offset:4px}
+@media(max-width:1020px){.product-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.product-card:last-child{grid-column:1/-1}}
+@media(max-width:767px){.product-card-grid{grid-template-columns:1fr;gap:9px}.product-card:last-child{grid-column:auto}.product-card{padding:22px}.product-card h4{margin:18px 0 9px}}
+
 </style>
 </head>
 <body>
@@ -619,23 +714,140 @@ button{font:inherit}
 
 
 
-<section class="demo shell" id="demo" aria-label="Interactive BRɅIN evidence and voice preview">
-<div class="voice-demo-card" id="voice-demo"><div class="voice-demo-topline"><span>WORKED EXAMPLE / NOT A LIVE CUSTOMER RECORD</span><span class="demo-status"><i></i> EVIDENCE LINKED</span></div>
-<div class="voice-demo-grid">
-<article class="evidence-card"><div class="card-overline">SAMPLE SOURCE</div><div class="source-file"><svg viewBox="0 0 32 32" width="30" height="30" fill="none" aria-hidden="true"><path d="M8 3.5h10l7 7V28H8a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.5"/><path d="M18 3.5v7h7M11 17h11M11 21h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><div><strong>Example source.pdf</strong><span>Source document · PDF</span></div></div>
-<div class="citation-row"><span class="citation-chip">PDF PAGE 12</span><span class="citation-section">SECTION 3.2</span></div><blockquote>This example shows how a passage can stay linked to the PDF page it came from.</blockquote><div class="source-verified"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true"><path d="m3.2 8.2 3.1 3.1 6.5-6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg> Source and page reference attached</div></article>
-<article class="spoken-card"><div class="card-overline">BROWSER SPEECH / SAMPLE</div><div class="spoken-title-row"><h2>Spoken explanation</h2><span class="voice-live-pill">BROWSER AUDIO</span></div><p class="spoken-copy">“This is a sample of how an app could read a retrieved passage aloud. The page reference stays available so you can check the original document.”</p>
-<div class="waveform" id="voice-waveform" aria-label="Illustrative audio waveform"><span style="--bar-height:12px;--bar-delay:0ms"></span><span style="--bar-height:22px;--bar-delay:55ms"></span><span style="--bar-height:15px;--bar-delay:110ms"></span><span style="--bar-height:31px;--bar-delay:165ms"></span><span style="--bar-height:20px;--bar-delay:220ms"></span><span style="--bar-height:39px;--bar-delay:275ms"></span><span style="--bar-height:17px;--bar-delay:330ms"></span><span style="--bar-height:26px;--bar-delay:385ms"></span><span style="--bar-height:43px;--bar-delay:440ms"></span><span style="--bar-height:18px;--bar-delay:0ms"></span><span style="--bar-height:34px;--bar-delay:55ms"></span><span style="--bar-height:22px;--bar-delay:110ms"></span><span style="--bar-height:47px;--bar-delay:165ms"></span><span style="--bar-height:27px;--bar-delay:220ms"></span><span style="--bar-height:16px;--bar-delay:275ms"></span><span style="--bar-height:37px;--bar-delay:330ms"></span><span style="--bar-height:23px;--bar-delay:385ms"></span><span style="--bar-height:42px;--bar-delay:440ms"></span><span style="--bar-height:18px;--bar-delay:0ms"></span><span style="--bar-height:32px;--bar-delay:55ms"></span><span style="--bar-height:49px;--bar-delay:110ms"></span><span style="--bar-height:21px;--bar-delay:165ms"></span><span style="--bar-height:35px;--bar-delay:220ms"></span><span style="--bar-height:15px;--bar-delay:275ms"></span><span style="--bar-height:28px;--bar-delay:330ms"></span><span style="--bar-height:41px;--bar-delay:385ms"></span><span style="--bar-height:19px;--bar-delay:440ms"></span><span style="--bar-height:33px;--bar-delay:0ms"></span><span style="--bar-height:46px;--bar-delay:55ms"></span><span style="--bar-height:21px;--bar-delay:110ms"></span><span style="--bar-height:14px;--bar-delay:165ms"></span><span style="--bar-height:36px;--bar-delay:220ms"></span><span style="--bar-height:24px;--bar-delay:275ms"></span><span style="--bar-height:40px;--bar-delay:330ms"></span><span style="--bar-height:18px;--bar-delay:385ms"></span><span style="--bar-height:30px;--bar-delay:440ms"></span></div><button class="voice-play-button" id="play-voice-preview" type="button" aria-pressed="false"><svg viewBox="0 0 20 20" width="17" height="17" fill="none" aria-hidden="true"><path d="M6 4.5v11l9-5.5-9-5.5Z" fill="currentColor"/></svg><span>Play spoken preview</span></button><p class="voice-status" id="voice-preview-status" role="status" aria-live="polite">Browser voice preview · sample content</p></article>
-</div><div class="voice-demo-foot"><span>BROWSER SPEECH SYNTHESIS</span><span>This preview uses your browser. The planned voice-provider integration is separate and is not live yet.</span></div></div>
+<section class="demo shell" id="demo" aria-label="Interactive BRɅIN prompt and PDF evidence playground">
+<div class="playground-card" id="evidence-playground">
+  <div class="playground-topline"><div class="playground-topline-copy"><span>INTERACTIVE WORKED EXAMPLE</span><small>Illustrative sample · not a live customer retrieval</small></div><span class="demo-status"><i></i> EVIDENCE LINKED</span></div>
+  <div class="playground-appbar">
+    <div class="app-context"><span class="app-context-label">APP CONTEXT</span><strong>App: परमार्थAI</strong><span class="app-live-tag">LIVE MVP</span></div>
+    <span class="permission-pill"><i aria-hidden="true"></i><span>D1 Permission: Verified</span><small>sample state</small></span>
+  </div>
+  <div class="playground-grid">
+    <section class="query-pane" aria-labelledby="playground-query-title">
+      <div class="pane-heading"><div><span class="pane-kicker">PERMISSIONED RETRIEVAL</span><h2 id="playground-query-title">Ask from a source.</h2></div><span class="sample-chip">SAMPLE</span></div>
+      <div class="prompt-label">CHOOSE A PRE-LOADED QUESTION</div>
+      <div class="prompt-pills" role="group" aria-label="Example questions">
+        <button class="prompt-pill is-active" type="button" data-prompt="article356" aria-pressed="true">Explain Article 356 and cite the exact page</button>
+        <button class="prompt-pill" type="button" data-prompt="presidents-rule" aria-pressed="false">What are the grounds for President's Rule?</button>
+        <button class="prompt-pill" type="button" data-prompt="parliamentary-approval" aria-pressed="false">Show conditions for parliamentary approval</button>
+      </div>
+      <div class="passage-card" aria-live="polite" aria-atomic="true">
+        <div class="passage-meta"><span class="passage-source">SAMPLE REFERENCE · Indian_Polity_Sample.pdf</span><span class="passage-kind">ILLUSTRATIVE PARAPHRASE</span></div>
+        <p class="passage-text" id="passage-text">Article 356 permits a Proclamation when the President is satisfied that the government of a State cannot be carried on in accordance with the Constitution. That satisfaction may be based on a report from the Governor or otherwise.</p>
+        <div class="passage-actions"><button class="citation-button" id="citation-jump" type="button" aria-label="Show PDF page 248 in the document viewer"><span class="citation-mark">↗</span><span id="citation-page">PDF Page 248</span></button><span class="citation-context" id="citation-section">Article 356 · Emergency provisions</span></div>
+      </div>
+      <details class="developer-trace" id="developer-trace">
+        <summary><span class="trace-summary-title">Developer JSON Trace</span><span class="trace-summary-action">INSPECT <span aria-hidden="true">＋</span></span></summary>
+        <pre><code id="trace-json">{
+  "ok": true,
+  "data": {
+    "passages": [{
+      "id": "sample-passage-248",
+      "bookId": "sample-source-001",
+      "bookTitle": "Indian_Polity_Sample.pdf",
+      "pdfPage": 248,
+      "score": 0.93
+    }],
+    "searchedSources": 1,
+    "searchCount": 1
+  }
+}</code></pre>
+        <p class="trace-note">The trace follows the BRɅIN v2 response shape. D1 authorization and source SHA-256 verification are shown separately because they are not fields in the retrieval response. The displayed values are illustrative.</p>
+      </details>
+      <div class="listen-row"><button class="voice-play-button" id="play-voice-preview" type="button" aria-pressed="false"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" aria-hidden="true"><path d="M3.5 8v4h3l4 3.5v-11L6.5 8h-3Z" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round"/><path d="M13 7.2a4 4 0 0 1 0 5.6M15.4 5a7.1 7.1 0 0 1 0 10" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/></svg><span>Listen to passage preview</span></button><span class="voice-status" id="voice-preview-status" role="status" aria-live="polite">Browser speech · sample text</span></div>
+    </section>
+    <section class="pdf-panel" aria-label="Simulated PDF evidence viewer">
+      <div class="pdf-toolbar">
+        <div class="pdf-file-meta"><strong id="pdf-file-name">Indian_Polity_Sample.pdf</strong><span>ILLUSTRATIVE SOURCE DOCUMENT</span></div>
+        <span class="hash-verified"><i aria-hidden="true"></i> SHA-256 Verified <small>sample</small></span>
+        <span class="pdf-page-count">Page <strong id="pdf-current-page">248</strong> of 412</span>
+      </div>
+      <div class="pdf-canvas"><article class="pdf-page" id="pdf-page" tabindex="-1" aria-label="Simulated PDF page">
+        <div class="pdf-page-header"><span>INDIAN POLITY · PART XVIII</span><span id="pdf-page-number">248</span></div>
+        <div class="pdf-document-title" id="pdf-section-title">Emergency Provisions</div>
+        <div class="pdf-paragraph-lines" aria-hidden="true"><i></i><i></i><i></i><i class="short"></i></div>
+        <div class="pdf-subheading" id="pdf-subheading">Article 356 — Provisions in case of failure of constitutional machinery</div>
+        <div class="pdf-paragraph-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="pdf-highlight-block"><span id="pdf-highlight-label">REFERENCE EXCERPT · PAGE 248</span><p id="pdf-highlight-text">A Proclamation may be issued when the President is satisfied that the government of a State cannot be carried on in accordance with the Constitution.</p></div>
+        <div class="pdf-paragraph-lines lower-lines" aria-hidden="true"><i></i><i></i><i></i><i class="medium"></i><i></i></div>
+        <div class="pdf-page-footer"><span>INDIAN POLITY · SAMPLE LAYOUT</span><span id="pdf-footer-page">248</span></div>
+      </article></div>
+      <div class="pdf-viewer-foot"><span>SIMULATED PDF VIEWER</span><span>Prompt selection updates the page reference and highlighted passage.</span></div>
+    </section>
+  </div>
+  <div class="playground-foot"><span>DEMO DATA ONLY</span><p>This interaction illustrates how a passage can remain attached to its physical PDF page. It does not make a live D1 or BRɅIN retrieval request and is not a customer document.</p></div>
+</div>
 <div class="video-actions"><a class="primary-telegram" href="https://telegram.me/parmarthbot" target="_blank" rel="noopener noreferrer" aria-label="Try Live MVP on Telegram">Try Live MVP on Telegram <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10h13"></path><path d="m10.5 4 6 6-6 6"></path></svg></a></div>
 </section>
+
 <section class="platform shell" id="platform" aria-labelledby="platform-title">
 <header class="platform-intro"><div class="platform-kicker">BRɅIN / PLATFORM ARCHITECTURE</div><h2 id="platform-title">From documents to <span>evidence.</span></h2><p>BRɅIN handles the document and retrieval work shared by connected products. Each product keeps its own users, prompts, model and conversation experience.</p></header>
-<div class="architecture-grid">
-<article class="architecture-step"><div class="architecture-label"><span>01</span><span>INGEST</span></div><h3>Secure document intake</h3><p>A PDF is uploaded to private Google Cloud Storage and checked against its SHA-256 fingerprint. Google Cloud Vision extracts the text while BRɅIN keeps the original PDF page numbers.</p><div class="architecture-tech">GOOGLE CLOUD STORAGE <i></i> VISION OCR</div></article>
-<article class="architecture-step"><div class="architecture-label"><span>02</span><span>PROCESS</span></div><h3>Page-aware processing</h3><p>Cloudflare Workers and Workflows run the processing steps and handle retries. D1 records each source’s progress. A source is marked ready only after its expected pages are indexed and the required checks pass.</p><div class="architecture-tech">WORKERS <i></i> WORKFLOWS <i></i> D1</div></article>
-<article class="architecture-step"><div class="architecture-label"><span>03</span><span>GOVERN</span></div><h3>Permissioned retrieval</h3><p>D1 keeps the records for application identity, projects, source permissions, readiness and usage limits. Before returning passages, the private service checks that the requesting application is allowed to access the source.</p><div class="architecture-tech">PRIVATE BRɅIN SERVICE <i></i> AI SEARCH</div></article>
-<article class="architecture-step"><div class="architecture-label"><span>04</span><span>CONNECT</span></div><h3>Applications own the answer</h3><p>Connected applications call BRɅIN over private Cloudflare Service Bindings. BRɅIN returns selected passages and their PDF page numbers. The application handles sign-in, prompts, answer generation and conversation history.</p><div class="architecture-tech">SERVICE BINDINGS <i></i> CONSUMER-OWNED AI</div></article>
+<div class="architecture-switcher" id="architecture-switcher">
+<div class="architecture-tabs" role="tablist" aria-label="BRɅIN architecture stages">
+  <button class="architecture-tab is-active" type="button" role="tab" id="architecture-tab-ingest" aria-selected="true" aria-controls="architecture-panel" tabindex="0" data-architecture-tab="ingest"><span>01</span> Ingest</button>
+  <button class="architecture-tab" type="button" role="tab" id="architecture-tab-process" aria-selected="false" aria-controls="architecture-panel" tabindex="-1" data-architecture-tab="process"><span>02</span> Process</button>
+  <button class="architecture-tab" type="button" role="tab" id="architecture-tab-govern" aria-selected="false" aria-controls="architecture-panel" tabindex="-1" data-architecture-tab="govern"><span>03</span> Govern</button>
+  <button class="architecture-tab" type="button" role="tab" id="architecture-tab-connect" aria-selected="false" aria-controls="architecture-panel" tabindex="-1" data-architecture-tab="connect"><span>04</span> Connect</button>
+</div>
+<div class="architecture-panel" id="architecture-panel" role="tabpanel" aria-labelledby="architecture-tab-ingest">
+  <div class="architecture-copy" aria-live="polite" aria-atomic="true">
+    <div class="architecture-label"><span id="architecture-step-number">01</span><span id="architecture-step-name">INGEST</span></div>
+    <h3 id="architecture-step-title">Secure document intake</h3>
+    <p id="architecture-step-description">A PDF is uploaded to private Google Cloud Storage and checked against its SHA-256 fingerprint. Google Cloud Vision extracts the text while BRɅIN keeps the original PDF page numbers.</p>
+    <div class="architecture-tech-pills" id="architecture-tech-pills"><span>Google Cloud Storage</span><span>SHA-256</span><span>Vision OCR</span></div>
+  </div>
+  <div class="architecture-visual" id="architecture-visual" aria-label="Simplified architecture illustration">
+    <div class="arch-visual-state is-visible" data-architecture-visual="ingest">
+      <div class="visual-kicker">DOCUMENT INTAKE · SIMPLIFIED</div>
+      <div class="ingest-flow">
+        <div class="flow-node document-node"><span class="mini-file-icon">PDF</span><strong>Upload source</strong><small>Private GCS bucket</small></div>
+        <div class="flow-connector"><span>SHA-256</span><i></i></div>
+        <div class="flow-node fingerprint-node"><span class="node-check">✓</span><strong>Fingerprint checked</strong><small>Source integrity</small></div>
+        <div class="flow-connector"><span>Vision OCR</span><i></i></div>
+        <div class="flow-node ocr-node"><span class="node-pages">1 · 2 · 3 · … · N</span><strong>Page-level text</strong><small>Physical PDF page map</small></div>
+      </div>
+      <div class="visual-caption">The original PDF remains the source of truth for physical page references.</div>
+    </div>
+    <div class="arch-visual-state" data-architecture-visual="process" hidden>
+      <div class="visual-kicker">CLOUDFLARE WORKFLOWS · SIMPLIFIED STATE FLOW</div>
+      <div class="workflow-steps">
+        <div class="workflow-step"><span class="workflow-step-index">01</span><strong>OCR Extracted</strong><small>Page text and provenance captured</small><i class="workflow-step-check">✓</i></div>
+        <div class="workflow-step"><span class="workflow-step-index">02</span><strong>Chunked</strong><small>Page-aware passages prepared</small><i class="workflow-step-check">✓</i></div>
+        <div class="workflow-step"><span class="workflow-step-index">03</span><strong>D1 Indexed</strong><small>Progress and readiness recorded</small><i class="workflow-step-check">✓</i></div>
+        <div class="workflow-ready"><span class="ready-indicator"></span><div><strong>Status: READY</strong><small>Expected pages indexed and checks passed</small></div></div>
+      </div>
+      <div class="visual-caption">Retries and recovery are handled by the workflow; readiness is not inferred from upload completion.</div>
+    </div>
+    <div class="arch-visual-state" data-architecture-visual="govern" hidden>
+      <div class="visual-kicker">D1 AUTHORIZATION BEFORE SEARCH · ILLUSTRATIVE</div>
+      <div class="govern-table-wrap"><table class="govern-table" aria-label="Illustrative D1 permission lookup">
+        <thead><tr><th>CHECK</th><th>STATE</th></tr></thead>
+        <tbody><tr><td>Trusted app environment</td><td><span class="table-state">ACTIVE</span></td></tr><tr><td>Application → project grant</td><td><span class="table-state">ACTIVE</span></td></tr><tr><td>Project → source grant</td><td><span class="table-state table-allow">ALLOW</span></td></tr></tbody>
+      </table></div>
+      <div class="govern-flow"><span>D1-authorised source filters</span><i aria-hidden="true">→</i><strong>AI Search hybrid retrieval</strong></div>
+      <div class="visual-caption">D1 is the authorization authority. Returned page keys are validated against the same authorised source set.</div>
+    </div>
+    <div class="arch-visual-state" data-architecture-visual="connect" hidden>
+      <div class="visual-kicker">PRIVATE SERVICE BINDING · CONSUMER-SIDE EXAMPLE</div>
+      <pre class="binding-code"><code><span class="code-muted">const</span> result = <span class="code-muted">await</span> env.BRVIN_SERVICE
+  .retrieveProjectContextV2({
+    projectId,
+    queries: [prompt]
+  });
+
+<span class="code-keyword">if</span> (!result.ok) {
+  <span class="code-keyword">throw new</span> Error(result.code);
+}
+
+<span class="code-muted">const</span> evidence = result.data.passages.map(p =&gt; ({
+  passage: p.text,
+  pdf_page: p.pdfPage,
+  source_id: p.bookId
+}));</code></pre>
+      <div class="consumer-ownership"><span>BRɅIN returns authorised evidence.</span><strong>The consumer owns sign-in, prompts, LLM generation and the final answer.</strong></div>
+      <div class="visual-caption">Illustrative mapping from the private v2 response contract; no public retrieval endpoint is exposed.</div>
+    </div>
+  </div>
+</div>
 </div>
 <section class="stack-panel" aria-labelledby="stack-title"><div class="stack-heading"><h3 id="stack-title">Production infrastructure</h3><span>WHAT RUNS TODAY</span></div>
 <dl class="stack-grid">
@@ -644,71 +856,27 @@ button{font:inherit}
 <div class="provider-note"><div><span class="provider-state">IN EVALUATION</span><strong>Vertex AI embeddings with Qdrant Cloud</strong></div><p>We are testing Vertex AI embeddings with Qdrant Cloud in a separate staging environment. The live service still uses Cloudflare AI Search. A change will happen only after the new setup passes retrieval, access-control, load, cost, recovery and rollback checks.</p></div>
 </section>
 <section class="voice-layer" aria-label="Voice AI roadmap"><div class="voice-layer-copy"><span class="voice-layer-kicker">VOICE INTERFACE LAYER / IN DEVELOPMENT</span><h3>Voice, grounded in evidence.</h3><p>We are working on a voice layer that can use the same retrieved material. It is not part of the live production service yet. Source permissions and page references will remain part of BRɅIN Core; the connected app will still own the conversation and final response.</p></div><div class="voice-layer-state"><span class="state-dot"></span><div><strong>ElevenLabs integration</strong><small>Planned voice provider · not yet live in production</small></div></div></section><section class="product-surfaces" aria-labelledby="products-title">
-  <div class="stack-heading">
-    <h3 id="products-title">Products built on Core.</h3>
-    <span>CORE AND CONSUMERS</span>
-  </div>
-  <div class="product-surface-grid">
-    <article class="parmarth-featured">
-      <div class="parmarth-featured-copy">
-        <span class="flagship-tag">LIVE TELEGRAM MVP <i aria-hidden="true"></i> COMPETITIVE EXAMS</span>
-        <h4>परमार्थAI</h4>
-        <p>परमार्थAI is a live Telegram MVP for competitive-exam preparation. It supports follow-up questions and quizzes inside Telegram. When a configured study source provides a verifiable reference, an answer can include its page citation.</p>
-        <a class="parmarth-cta" href="https://telegram.me/parmarthbot" target="_blank" rel="noopener noreferrer">Open Telegram MVP <span aria-hidden="true">→</span></a>
-      </div>
-      <div class="ssc-preview" aria-label="Illustrative SSC-style query and spoken revision preview">
-        <div class="ssc-preview-heading">
-          <span>परमार्थAI / QUERY PREVIEW</span>
-          <span class="ssc-preview-indicator"><i aria-hidden="true"></i> SAMPLE</span>
-        </div>
-        <div class="ssc-query-label">YOUR QUESTION</div>
-        <div class="ssc-query-bubble">Explain Article 356 and cite the exact reference page.</div>
-        <div class="ssc-citation">
-          <div class="ssc-citation-icon" aria-hidden="true">
-            <svg viewBox="0 0 20 20" width="17" height="17" fill="none">
-              <path d="m4 10.3 3.7 3.6L16 5.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <div>
-            <span>VERIFIED CITATION</span>
-            <strong>Example source • PDF page 248</strong>
-          </div>
-        </div>
-        <div class="ssc-audio-player" aria-label="Illustrative audio player: 42-second spoken revision explanation">
-          <div class="ssc-audio-top">
-            <span class="ssc-audio-play" aria-hidden="true">
-              <svg viewBox="0 0 20 20" width="15" height="15" fill="none">
-                <path d="M7 4.5v11l8.5-5.5L7 4.5Z" fill="currentColor"/>
-              </svg>
-            </span>
-            <div class="ssc-audio-copy">
-              <strong>Spoken Revision Explanation</strong>
-              <span>0:42 · Audio preview</span>
-            </div>
-            <span class="ssc-audio-more" aria-hidden="true">•••</span>
-          </div>
-          <svg class="ssc-waveform" viewBox="0 0 420 38" preserveAspectRatio="none" role="img" aria-label="Static audio waveform">
-            <g fill="none" stroke="#D8CBB3" stroke-width="3" stroke-linecap="round">
-              <path d="M3 19V17 M15 19V11 M27 19V22 M39 19V7 M51 19V14 M63 19V25 M75 19V10 M87 19V5 M99 19V15 M111 19V27 M123 19V12 M135 19V8 M147 19V23 M159 19V13 M171 19V4 M183 19V16 M195 19V26 M207 19V10 M219 19V6 M231 19V18 M243 19V28 M255 19V13 M267 19V8 M279 19V22 M291 19V15 M303 19V5 M315 19V17 M327 19V25 M339 19V12 M351 19V7 M363 19V21 M375 19V14 M387 19V4 M399 19V17 M411 19V10"/>
-            </g>
-          </svg>
-        </div>
-        <div class="ssc-preview-foot">PAGE-CITED KNOWLEDGE <i aria-hidden="true"></i> VOICE-ASSISTED REVISION</div>
-      </div>
-    </article>
-    <article>
-      <span>KNOWLEDGE INFRASTRUCTURE</span>
-      <h4>BRɅIN Core</h4>
-      <p>The shared service that receives documents, manages access and returns passages with their original page references.</p>
-      <a href="https://github.com/ashini-x/parmar-ai" target="_blank" rel="noopener noreferrer">Core repository <span aria-hidden="true">↗</span></a>
-    </article>
-    <article>
-      <span>CONNECTED WORKSPACE APPLICATION</span>
-      <h4>BRɅIN Teachers</h4>
-      <p>BRɅIN Teachers is a separate workspace app. Its deployed Operator Console manages teachers, projects, collections and study PDFs, and connects to Core for retrieval. The student-facing rollout is still in development.</p>
-      <a href="https://github.com/ashini-x/brvin-teachers" target="_blank" rel="noopener noreferrer">BRɅIN Teachers repository <span aria-hidden="true">↗</span></a>
-    </article>
-  </div>
+<div class="stack-heading"><h3 id="products-title">Products built on Core.</h3><span>CORE AND CONSUMERS</span></div>
+<div class="product-card-grid">
+  <article class="product-card">
+    <div class="product-card-head"><span class="product-status product-status-live">LIVE MVP</span><span class="product-category">COMPETITIVE EXAMS</span></div>
+    <h4>परमार्थAI</h4>
+    <p>परमार्थAI is a live Telegram MVP for competitive-exam preparation. It supports follow-up questions and quizzes inside Telegram. When a configured study source provides a verifiable reference, an answer can include its page citation.</p>
+    <a class="product-card-link" href="https://telegram.me/parmarthbot" target="_blank" rel="noopener noreferrer">Open Telegram MVP <span aria-hidden="true">↗</span></a>
+  </article>
+  <article class="product-card">
+    <div class="product-card-head"><span class="product-status">CORE API</span><span class="product-category">KNOWLEDGE INFRASTRUCTURE</span></div>
+    <h4>BRɅIN Core</h4>
+    <p>The private knowledge service behind connected products. Core manages document ingestion, OCR, source permissions and retrieval, returning selected passages with their original PDF page references. Production retrieval currently uses Cloudflare AI Search.</p>
+    <a class="product-card-link" href="https://github.com/ashini-x/parmar-ai" target="_blank" rel="noopener noreferrer">Explore Core repository <span aria-hidden="true">↗</span></a>
+  </article>
+  <article class="product-card">
+    <div class="product-card-head"><span class="product-status product-status-live">OPERATOR CONSOLE LIVE</span><span class="product-category">WORKSPACE APPLICATION</span></div>
+    <h4>BRɅIN Teachers</h4>
+    <p>BRɅIN Teachers is a separate workspace app. Its deployed Operator Console manages teachers, projects, collections and study PDFs, and connects to Core for retrieval. The student-facing rollout is still in development.</p>
+    <a class="product-card-link" href="https://github.com/ashini-x/brvin-teachers" target="_blank" rel="noopener noreferrer">Explore Teachers repository <span aria-hidden="true">↗</span></a>
+  </article>
+</div>
 </section>
 <div class="platform-links"><a href="https://github.com/ashini-x/parmar-ai/blob/main/docs/BRVIN_SYSTEM_REFERENCE.md" target="_blank" rel="noopener noreferrer">Read the system reference <span aria-hidden="true">↗</span></a><a href="mailto:partners@brvin.in">Discuss the architecture <span aria-hidden="true">→</span></a></div>
 </section>
@@ -725,20 +893,126 @@ button{font:inherit}
 <p class="venture-note">BRɅIN is the technology venture and brand of BRVIN TECHNOLOGIES, an Indian sole proprietorship.</p></div></footer>
 <script>
 (() => {
- const button=document.getElementById("play-voice-preview"),panel=document.getElementById("voice-demo"),status=document.getElementById("voice-preview-status");
- if(!button||!panel||!status)return;
- const speech=window.speechSynthesis;
- const spokenText="This is a sample of how an app could read a retrieved passage aloud. The page reference stays available so you can check the original document.";
- const reset=(message)=>{panel.classList.remove("is-playing");button.setAttribute("aria-pressed","false");button.querySelector("span").textContent="Play spoken preview";status.textContent=message||"Browser voice preview · sample content";};
- button.addEventListener("click",()=>{
-  if(!speech||typeof window.SpeechSynthesisUtterance!=="function"){reset("Spoken preview is not supported in this browser.");return;}
-  if(speech.speaking&&!speech.paused){speech.pause();panel.classList.remove("is-playing");button.querySelector("span").textContent="Resume spoken preview";button.setAttribute("aria-pressed","false");status.textContent="Preview paused";return;}
-  if(speech.paused){speech.resume();panel.classList.add("is-playing");button.querySelector("span").textContent="Pause spoken preview";button.setAttribute("aria-pressed","true");status.textContent="Playing browser voice preview";return;}
-  speech.cancel();const utterance=new SpeechSynthesisUtterance(spokenText);utterance.rate=.96;utterance.pitch=1;
-  utterance.onstart=()=>{panel.classList.add("is-playing");button.setAttribute("aria-pressed","true");button.querySelector("span").textContent="Pause spoken preview";status.textContent="Playing browser voice preview";};
-  utterance.onend=()=>reset("Preview complete · browser voice");utterance.onerror=()=>reset("Browser voice preview could not be played.");speech.speak(utterance);
- });
- window.addEventListener("pagehide",()=>{if(speech&&speech.speaking)speech.cancel();},{once:true});
+  const reducedMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const prompts=[
+    {key:"article356",page:248,section:"Article 356 · Emergency provisions",subheading:"Article 356 — Provisions in case of failure of constitutional machinery",passage:"Article 356 permits a Proclamation when the President is satisfied that the government of a State cannot be carried on in accordance with the Constitution. That satisfaction may be based on a report from the Governor or otherwise.",score:0.93},
+    {key:"presidents-rule",page:249,section:"Grounds · Constitutional machinery",subheading:"When a State Government cannot function constitutionally",passage:"The constitutional ground is a failure of the State's government to be carried on in accordance with the Constitution. The President's satisfaction may follow a Governor's report or arise from other information.",score:0.89},
+    {key:"parliamentary-approval",page:250,section:"Parliament · Approval of Proclamation",subheading:"Approval by both Houses of Parliament",passage:"A Proclamation must be laid before both Houses of Parliament. It ordinarily ceases to operate after two months unless both Houses approve it within that period, subject to the Constitution's special rule when the Lok Sabha is dissolved.",score:0.91}
+  ];
+  const playground=document.getElementById("evidence-playground");
+  const promptButtons=[...document.querySelectorAll("[data-prompt]")];
+  const passageText=document.getElementById("passage-text");
+  const citationPage=document.getElementById("citation-page");
+  const citationSection=document.getElementById("citation-section");
+  const pdfPage=document.getElementById("pdf-page");
+  const pdfCurrentPage=document.getElementById("pdf-current-page");
+  const pdfPageNumber=document.getElementById("pdf-page-number");
+  const pdfFooterPage=document.getElementById("pdf-footer-page");
+  const pdfSubheading=document.getElementById("pdf-subheading");
+  const pdfHighlightText=document.getElementById("pdf-highlight-text");
+  const pdfHighlightLabel=document.getElementById("pdf-highlight-label");
+  const traceJson=document.getElementById("trace-json");
+  const traceDetails=document.getElementById("developer-trace");
+  const citationJump=document.getElementById("citation-jump");
+  let activePassage=prompts[0].passage;
+
+  function resetSpeech(message){
+    const button=document.getElementById("play-voice-preview");
+    const status=document.getElementById("voice-preview-status");
+    if(button){button.setAttribute("aria-pressed","false");const label=button.querySelector("span");if(label)label.textContent="Listen to passage preview";}
+    if(status&&message)status.textContent=message;
+  }
+
+  function setPrompt(prompt){
+    if(!prompt||!passageText)return;
+    activePassage=prompt.passage;
+    promptButtons.forEach(button=>{
+      const active=button.dataset.prompt===prompt.key;
+      button.classList.toggle("is-active",active);
+      button.setAttribute("aria-pressed",String(active));
+    });
+    passageText.textContent=prompt.passage;
+    citationPage.textContent=`PDF Page ${prompt.page}`;
+    citationJump.setAttribute("aria-label",`Show PDF page ${prompt.page} in the document viewer`);
+    citationSection.textContent=prompt.section;
+    pdfCurrentPage.textContent=String(prompt.page);
+    pdfPageNumber.textContent=String(prompt.page);
+    pdfFooterPage.textContent=String(prompt.page);
+    pdfSubheading.textContent=prompt.subheading;
+    pdfHighlightText.textContent=prompt.passage;
+    pdfHighlightLabel.textContent=`REFERENCE EXCERPT · PAGE ${prompt.page}`;
+    const trace={
+      ok:true,
+      data:{passages:[{id:`sample-passage-${prompt.page}`,bookId:"sample-source-001",bookTitle:"Indian_Polity_Sample.pdf",pdfPage:prompt.page,section:prompt.section,text:prompt.passage,score:prompt.score}],searchedSources:1,searchCount:1},
+      demoNotes:{d1Authorization:"GRANTED · illustrative UI state; checked before retrieval",sourceIntegrity:"SHA-256 verified · illustrative document metadata, not part of the v2 retrieval response"}
+    };
+    traceJson.textContent=JSON.stringify(trace,null,2);
+    if(traceDetails)traceDetails.open=false;
+    if(playground){playground.classList.add("is-updating");if(!reducedMotion)window.setTimeout(()=>playground.classList.remove("is-updating"),220);}
+    if(window.speechSynthesis)window.speechSynthesis.cancel();
+    resetSpeech("Browser speech · sample text");
+  }
+
+  promptButtons.forEach(button=>button.addEventListener("click",()=>setPrompt(prompts.find(prompt=>prompt.key===button.dataset.prompt))));
+  citationJump?.addEventListener("click",()=>{if(!pdfPage)return;pdfPage.classList.add("is-focused");pdfPage.focus({preventScroll:true});});
+
+  const tabButtons=[...document.querySelectorAll("[data-architecture-tab]")];
+  const architectureDescription={
+    ingest:{number:"01",name:"INGEST",title:"Secure document intake",description:"A PDF is uploaded to private Google Cloud Storage and checked against its SHA-256 fingerprint. Google Cloud Vision extracts the text while BRɅIN keeps the original PDF page numbers.",stack:["Google Cloud Storage","SHA-256","Vision OCR"]},
+    process:{number:"02",name:"PROCESS",title:"Page-aware processing",description:"Cloudflare Workers and Workflows run the processing steps and handle retries. D1 records each source’s progress. A source is marked ready only after its expected pages are indexed and the required checks pass.",stack:["Cloudflare Workers","Cloudflare Workflows","D1"]},
+    govern:{number:"03",name:"GOVERN",title:"Permissioned retrieval",description:"D1 keeps the records for application identity, projects, source permissions, readiness and usage limits. Before returning passages, the private service checks that the requesting application is allowed to access the source.",stack:["D1","Cloudflare AI Search","Hybrid retrieval"]},
+    connect:{number:"04",name:"CONNECT",title:"Applications own the answer",description:"Connected applications call BRɅIN over private Cloudflare Service Bindings. BRɅIN returns selected passages and their PDF page numbers. The application handles sign-in, prompts, answer generation and conversation history.",stack:["Cloudflare Service Bindings","Private v2 RPC","Consumer-owned AI"]}
+  };
+  const stepNumber=document.getElementById("architecture-step-number");
+  const stepName=document.getElementById("architecture-step-name");
+  const stepTitle=document.getElementById("architecture-step-title");
+  const stepDescription=document.getElementById("architecture-step-description");
+  const stackPills=document.getElementById("architecture-tech-pills");
+  const architecturePanel=document.getElementById("architecture-panel");
+  const visualStates=[...document.querySelectorAll("[data-architecture-visual]")];
+
+  function setArchitectureTab(key,moveFocus=false){
+    const item=architectureDescription[key];if(!item)return;
+    tabButtons.forEach(button=>{
+      const active=button.dataset.architectureTab===key;
+      button.classList.toggle("is-active",active);button.setAttribute("aria-selected",String(active));button.tabIndex=active?0:-1;
+      if(active&&moveFocus)button.focus();
+    });
+    stepNumber.textContent=item.number;stepName.textContent=item.name;stepTitle.textContent=item.title;stepDescription.textContent=item.description;
+    stackPills.replaceChildren(...item.stack.map(label=>{const pill=document.createElement("span");pill.textContent=label;return pill;}));
+    visualStates.forEach(visual=>{const active=visual.dataset.architectureVisual===key;visual.hidden=!active;visual.classList.toggle("is-visible",active);});
+    architecturePanel.setAttribute("aria-labelledby",`architecture-tab-${key}`);
+  }
+
+  tabButtons.forEach((button,index)=>{
+    button.addEventListener("click",()=>setArchitectureTab(button.dataset.architectureTab));
+    button.addEventListener("keydown",event=>{
+      let next=index;
+      if(event.key==="ArrowRight")next=(index+1)%tabButtons.length;
+      else if(event.key==="ArrowLeft")next=(index-1+tabButtons.length)%tabButtons.length;
+      else if(event.key==="Home")next=0;
+      else if(event.key==="End")next=tabButtons.length-1;
+      else return;
+      event.preventDefault();setArchitectureTab(tabButtons[next].dataset.architectureTab,true);
+    });
+  });
+
+  const listenButton=document.getElementById("play-voice-preview");
+  const voiceStatus=document.getElementById("voice-preview-status");
+  const speech=window.speechSynthesis;
+  if(listenButton){
+    listenButton.addEventListener("click",()=>{
+      if(!speech||typeof window.SpeechSynthesisUtterance!=="function"){resetSpeech("Spoken preview is not supported in this browser.");return;}
+      if(speech.speaking&&!speech.paused){speech.pause();resetSpeech("Preview paused");return;}
+      if(speech.paused){speech.resume();listenButton.setAttribute("aria-pressed","true");listenButton.querySelector("span").textContent="Pause passage preview";if(voiceStatus)voiceStatus.textContent="Playing browser speech preview";return;}
+      speech.cancel();const utterance=new SpeechSynthesisUtterance(activePassage);utterance.rate=.96;utterance.pitch=1;
+      utterance.onstart=()=>{listenButton.setAttribute("aria-pressed","true");listenButton.querySelector("span").textContent="Pause passage preview";if(voiceStatus)voiceStatus.textContent="Playing browser speech preview";};
+      utterance.onend=()=>resetSpeech("Preview complete · browser speech");utterance.onerror=()=>resetSpeech("Browser speech preview could not be played.");speech.speak(utterance);
+    });
+  }
+  window.addEventListener("pagehide",()=>{if(speech&&speech.speaking)speech.cancel();},{once:true});
+  setPrompt(prompts[0]);setArchitectureTab("ingest");
 })();
 </script>
+
 </body></html>
