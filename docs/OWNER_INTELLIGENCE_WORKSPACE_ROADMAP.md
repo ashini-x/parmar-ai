@@ -1,6 +1,6 @@
 # BRɅIN Intelligence — Owner Workspace Roadmap
 
-**Status:** Planning baseline documented; implementation not started  
+**Status:** M0 and M1 complete; M1 Owner authorization is deployed  
 **Last updated:** 2026-11-17  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
@@ -38,13 +38,15 @@ The existing app already provides a suitable protected admin surface:
 - `src/admin/dashboard.ts` renders the existing Admin Control Center and reads operational data from D1.
 - `src/config/env.ts` defines the Vertex AI project/model configuration and the admin credential bindings.
 
-### Important security gap to close before building the workspace
+### M1 implementation: explicit web Owner identity
 
-The current signed session identifies the configured admin username, but it does **not** encode or enforce an Owner role. All users who pass the existing `requireAdmin` check are currently treated as administrators. A hidden navigation link or a front-end-only check would not provide owner-only security.
+M1 adds a signed `admin` / `owner` role claim to the existing 12-hour admin session. `requireAdmin` accepts either valid role for the existing admin surface; `requireOwner` accepts only the Owner role. The role is derived from server-side credential configuration and the session HMAC. A role value supplied by the browser cannot elevate access.
 
-The feature must introduce explicit Owner authorization on the server. The Owner check must be enforced on the workspace HTML route, every workspace API route, conversation/file access, and any streaming or cancellation endpoint. Direct requests that bypass the UI must still be denied.
+Production currently has one configured web-admin principal. `wrangler.jsonc` explicitly sets `OWNER_DASHBOARD_USER` to the existing `ADMIN_DASHBOARD_USER` (`admin`), so the current admin credentials are deliberately assigned the Owner role without introducing a second shared account or requiring another password secret. If a distinct Owner login is introduced later, configure a different `OWNER_DASHBOARD_USER` and store `OWNER_DASHBOARD_PASSWORD` as a Cloudflare Worker secret. A different admin username/session remains `admin` and is not implicitly Owner.
 
-The Telegram identity setting `BOT_OWNER_TELEGRAM_USER_ID` is not a substitute for web-admin Owner authentication.
+Sessions minted before M1 keep their legacy two-part format and remain admin-only. The Owner must sign in again after deployment to receive the Owner role claim. New Owner sessions are signed using a key derived from `ADMIN_SESSION_SECRET` and the credential currently assigned to the Owner principal; rotating that credential revokes existing Owner sessions. Existing 12-hour expiry, HttpOnly, Secure, SameSite=Strict cookie attributes and logout clearing are preserved.
+
+`/admin/intelligence` is now a protected Owner-only placeholder page. `/admin/api/intelligence` and its subpaths are reserved behind the same Owner check and intentionally return 404 to an authenticated Owner until M2 adds handlers. Anonymous requests receive 401; authenticated non-Owner admins receive 403. The `BOT_OWNER_TELEGRAM_USER_ID` setting remains unrelated to web-admin Owner identity.
 
 ### Existing student boundary to preserve
 
@@ -67,10 +69,8 @@ Do not assume the source files or deployment configuration remain unchanged. Re-
 The workspace should be reachable from an Owner-only entry in the existing admin panel, for example:
 
 - Admin sign-in: `/admin/login` (existing)
-- Owner workspace: proposed `/admin/intelligence`
-- Owner APIs: proposed `/admin/api/intelligence/*`
-
-These paths are proposed, not implemented or reserved.
+- Owner workspace: `/admin/intelligence` (M1 protected placeholder; M2 replaces it with the chat interface)
+- Owner APIs: `/admin/api/intelligence/*` (M1 Owner-only reserved namespace; no feature handlers yet)
 
 ### Core interface
 
@@ -190,7 +190,7 @@ Milestones are ordered. Do not skip a security or persistence prerequisite to bu
 | Milestone | Scope | Acceptance criteria | Status |
 |---|---|---|---|
 | **M0 — Product and architecture baseline** | Define owner-only scope, existing admin baseline, trust boundaries, target UX, model/thinking registry, data boundaries, delivery workflow and continuation prompt. | Roadmap and continuation prompt committed; current implementation clearly marked as not started; docs index updated. | **Complete — documentation only** |
-| **M1 — Owner identity and authorization** | Add explicit Owner identity/role to the existing admin sign-in/session flow. Keep regular admin access distinct. Protect the Owner route and all APIs server-side. | Anonymous users, ordinary admins and forged browser role values are denied; configured Owner is allowed; session expiry/logout/revocation behave correctly; every endpoint rechecks Owner; same-origin protections cover mutations; authorization tests pass. | Not started |
+| **M1 — Owner identity and authorization** | Add explicit Owner identity/role to the existing admin sign-in/session flow. Keep regular admin access distinct. Protect the Owner route and reserved API namespace server-side. | Configured Owner signs in through `/admin/login`; admin-only sessions and forged role claims are denied; sessions expire/logout; credential rotation revokes Owner sessions; route/API guards enforce Owner authorization; authorization tests pass; production deploy and smoke/acceptance succeed. | **Complete — deployed** |
 | **M2 — Workspace shell and owner chat persistence** | Add Owner-only entry and responsive chat UI; create separate conversations/messages storage; implement new chat/history/reopen/rename/delete. | Direct non-owner route/API access is denied; Owner conversation data is isolated from student tables/state; refresh/reopen works; deletion removes the owned conversation data; UI works at mobile and desktop widths. | Not started |
 | **M3 — Vertex AI model registry and provider adapter** | Build server-side model catalogue, project/location capability checks, explicit allowlist/eligibility, and a separate general-purpose Gemini request adapter. | The catalogue reflects models usable by the configured project/location; model IDs and API versions are server-controlled; no unsupported or retired model is selectable; owner requests bypass SSC-only parsing and student answer contracts; provider failures are explicit; model selection is tested end to end. | Not started |
 | **M4 — Model-specific thinking and live response controls** | Map each model to its supported thinking settings; stream output; support stop, regenerate and edit/resubmit; persist partial/final status safely. | Model change updates valid choices; request payload matches the model/API contract; no invalid thinking fields are sent; streaming, cancellation, retries and reconnection are tested; the UI reports which model/level actually ran. | Not started |
@@ -222,28 +222,31 @@ This section is the current source of truth for this feature's progress. Update 
 
 ### Current checkpoint
 
-- **Completed:** M0 — separate feature roadmap, architecture/security boundaries, milestone acceptance criteria and continuation workflow documented.
+- **Completed:** M0 documentation baseline; M1 Owner identity and authorization (implemented, tested and deployed).
 - **In progress:** None.
-- **Next:** M1 — Owner identity and authorization.
-- **Implementation state:** No Owner Intelligence application code, routes, schema, model registry or UI has been implemented by this documentation task.
-- **Deployment state:** Documentation only; no feature deployment requested or performed.
+- **Next:** M2 — workspace shell and owner chat persistence.
+- **Implementation state:** Owner role claims, `requireOwner`, the protected `/admin/intelligence` placeholder and an Owner-only reserved API namespace are implemented. No chat UI, conversation schema, message persistence, Gemini owner pipeline or file upload exists yet.
+- **Production identity:** `OWNER_DASHBOARD_USER=admin` is explicitly configured in `wrangler.jsonc`, assigning the existing single production admin principal to the Owner role. The same existing admin username/password is used at `/admin/login`. A separate Owner password is not required for this current single-principal deployment. Legacy pre-M1 sessions remain admin-only; sign out and sign in again to mint an Owner session.
+- **Deployment:** Production deployed at commit `f672177761c1f933186eb143aadba91fa123158c`; release workflow [44131054109](https://github.com/ashini-x/parmar-ai/actions/runs/44131054109) completed successfully. The paired `brvin-service` and `parmar-ai` deployments, production smoke test and acceptance manifest succeeded. An authenticated browser sign-in was not manually exercised from this chat session; automated login/role tests and production deployment gates passed.
 
 ### Decisions recorded
 
 | ID | Decision | Rationale | Status |
 |---|---|---|---|
 | OIW-ADR-001 | Build Owner Intelligence inside the existing protected Admin Control Center. | Reuses the existing admin entry/sign-in rather than introducing an unrelated public product surface. | Accepted |
-| OIW-ADR-002 | Add an explicit Owner role; do not equate every authenticated admin with the Owner. | Existing `requireAdmin` does not currently distinguish Owner from other admin principals. | Accepted |
+| OIW-ADR-002 | Add an explicit Owner role claim; only the server-configured Owner username receives it. | Authenticated admin status alone is insufficient. Production explicitly maps the current single admin principal to Owner; a distinct Owner credential can be configured when separate principals are introduced. | Accepted |
 | OIW-ADR-003 | Keep Owner chat data and request pipeline separate from student Telegram state and schema. | Prevents SSC rules, quotas, profiles and student records from leaking into the owner assistant. | Accepted |
 | OIW-ADR-004 | Use a server-authoritative model catalogue with model-specific thinking metadata. | Model availability and thinking support vary by model, API version, project and location. | Accepted |
 | OIW-ADR-005 | Do not apply student daily/burst question caps to Owner chats; surface provider quotas and cost instead. | Owner has no student-style app cap, but Vertex AI remains subject to provider, account and billing limits. | Accepted |
 | OIW-ADR-006 | BRɅIN retrieval is opt-in and off by default for general chats. | Prevents unrelated knowledge context from silently shaping answers. | Accepted |
+| OIW-ADR-007 | Include the role in the signed session; sign Owner sessions using a key derived from the configured Owner credential. | Client role tampering fails HMAC validation, and credential rotation revokes active Owner sessions. | Implemented |
 
 ### Completed task log
 
 | Date | Task | Files updated | Evidence / result |
 |---|---|---|---|
 | 2026-11-17 | M0 documentation baseline created and verified. | `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md`, `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md`, `docs/README.md` | Commits: `aa29d00787d06d5a60da31b450c4b6f1a9dbe02f` (roadmap), `b1e1a24c8c1f613cfed44fa8e63fc62b7e1c6fbf` (prompt), `482569563aae6539652fa99ad563bbb9c60cea11` (index). All three documents fetched back from `main` and their cross-links verified. Tests: not run (documentation-only). Deployment: none. |
+| 2026-11-17 | M1 Owner identity and authorization implemented and deployed. | `src/admin/auth.ts`, `src/config/env.ts`, `src/index.ts`, `wrangler.jsonc`, `test/admin-owner-auth.test.ts`, `docs/SECURITY_MODEL.md`, both Owner workspace docs and `docs/README.md` | Code commits: `fa1285b027b5debcc072818d20e5df7f82947bbd` and `f672177761c1f933186eb143aadba91fa123158c`. Release workflow [44131054109](https://github.com/ashini-x/parmar-ai/actions/runs/44131054109): success. Passed `npm run check`, `npm test`, `npm run test:node`, three Worker dry-runs, paired production deploy, production smoke test and release acceptance. Rollback was not needed. Authenticated browser login was not manually smoke-tested from this session. |
 
 ### Required update after every feature task
 
