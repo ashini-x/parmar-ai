@@ -22,12 +22,14 @@ Do not describe this as unlimited provider capacity. Do not apply student daily/
 ## Current checkpoint (latest verified: 2026-11-17)
 
 - M0 — product/architecture/security/milestone baseline: **complete**.
-- M1 — Owner identity and authorization: **complete and deployed** at `f672177761c1f933186eb143aadba91fa123158c`.
-- Production release workflow: [44131054109](https://github.com/ashini-x/parmar-ai/actions/runs/44131054109), conclusion `success`. Typecheck, full Vitest, Node tests, all three Worker dry-runs, paired production Worker deployment, smoke test and release acceptance passed.
-- The existing admin login now issues signed `admin` or `owner` session claims. Owner sessions are HMAC-bound to the configured Owner credential, so rotating that credential revokes active Owner sessions. Legacy pre-M1 cookies remain admin-only.
-- Production currently has one configured web-admin principal. `wrangler.jsonc` explicitly sets `OWNER_DASHBOARD_USER=admin`, so the current existing admin username/password is also the Owner credential. There is no separate Owner password secret in this deployment. Sign out and sign in again after deployment to receive a new Owner session.
-- `/admin/intelligence` is a protected placeholder route; the real workspace UI is not built. `/admin/api/intelligence/*` is an Owner-only reserved namespace with no application handlers yet.
-- No conversation database, chat history, Gemini owner pipeline, model catalogue, thinking selector, uploads or BRɅIN context integration is implemented yet.
+- M1 — Owner identity and authorization: **complete and deployed**.
+- Latest production correction: commit `8253a1dafc6fbc919324423f7c7bd79e360b5df7`; workflow [44139900378](https://github.com/ashini-x/parmar-ai/actions/runs/44139900378), conclusion `success`.
+- The production screenshot error (Cloudflare 1101, Ray `a5c06d999bd6cc0f`) was traced to an in-flight module-global analytics schema Promise being awaited across Worker request contexts during `POST /admin/login`. The fix removes both in-flight Promise caches, records only completed schema initialization in WeakSets, makes column migrations re-check after concurrent DDL races, and awaits the login handler in the Worker route error boundary.
+- Added a concurrent Owner login integration regression test. Updated runtime schema concurrency and Node source-contract tests for the safer schema initialization behaviour.
+- Verified gates: `npm run check`, `npm test` (466 tests), `npm run test:node` (62 tests), three Worker dry-runs, paired production Worker deployment, production smoke test and acceptance manifest all passed. No rollback was required.
+- Production currently has one configured web-admin principal. `wrangler.jsonc` explicitly sets `OWNER_DASHBOARD_USER=admin`, so the existing admin username/password is also the Owner credential. Sign out and sign in again after deployment to receive a new Owner session.
+- `/admin/intelligence` is a protected placeholder route; the actual chat UI is not built. `/admin/api/intelligence/*` is an Owner-only reserved namespace with no application handlers yet. No conversation database, Gemini owner pipeline, model catalogue, thinking selector or uploads are implemented.
+- A real-credential browser login was not manually performed from this session. The concurrent login regression test and production smoke/acceptance checks passed; the browser URL itself could not be directly fetched from this execution environment after deployment.
 - **Next milestone: M2 — workspace shell and owner chat persistence.**
 
 Re-read the roadmap for the precise implementation log, acceptance evidence and any changes since this checkpoint.

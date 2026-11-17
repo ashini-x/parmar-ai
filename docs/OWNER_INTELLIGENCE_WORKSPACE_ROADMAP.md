@@ -1,6 +1,6 @@
 # BRɅIN Intelligence — Owner Workspace Roadmap
 
-**Status:** M0 and M1 complete; M1 Owner authorization is deployed  
+**Status:** M0 and M1 complete; Owner authorization and login initialization fix are deployed  
 **Last updated:** 2026-11-17  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
@@ -222,12 +222,14 @@ This section is the current source of truth for this feature's progress. Update 
 
 ### Current checkpoint
 
-- **Completed:** M0 documentation baseline; M1 Owner identity and authorization (implemented, tested and deployed).
+- **Completed:** M0 documentation baseline; M1 Owner identity and authorization, including the production login initialization fix.
 - **In progress:** None.
 - **Next:** M2 — workspace shell and owner chat persistence.
 - **Implementation state:** Owner role claims, `requireOwner`, the protected `/admin/intelligence` placeholder and an Owner-only reserved API namespace are implemented. No chat UI, conversation schema, message persistence, Gemini owner pipeline or file upload exists yet.
 - **Production identity:** `OWNER_DASHBOARD_USER=admin` is explicitly configured in `wrangler.jsonc`, assigning the existing single production admin principal to the Owner role. The same existing admin username/password is used at `/admin/login`. A separate Owner password is not required for this current single-principal deployment. Legacy pre-M1 sessions remain admin-only; sign out and sign in again to mint an Owner session.
-- **Deployment:** Production deployed at commit `f672177761c1f933186eb143aadba91fa123158c`; release workflow [44131054109](https://github.com/ashini-x/parmar-ai/actions/runs/44131054109) completed successfully. The paired `brvin-service` and `parmar-ai` deployments, production smoke test and acceptance manifest succeeded. An authenticated browser sign-in was not manually exercised from this chat session; automated login/role tests and production deployment gates passed.
+- **Latest corrective release:** commit `8253a1dafc6fbc919324423f7c7bd79e360b5df7`; production workflow [44139900378](https://github.com/ashini-x/parmar-ai/actions/runs/44139900378) completed successfully. Both `brvin-service` and `parmar-ai` deployed; production smoke test and release acceptance passed. Validation: `npm run check`, `npm test`, `npm run test:node`, and all three Worker dry-runs passed.
+- **Incident resolved:** the screenshot Ray ID `a5c06d999bd6cc0f` was traced to a cross-request pending Promise in `ensureAnalyticsSchema()` during `POST /admin/login`. The fix removes module-global in-flight schema Promise caches, uses completed-state WeakSets and idempotent/race-safe column migration helpers, and awaits the login handler inside the Worker route try/catch. Added a concurrent Owner login regression test. The full login was not manually performed with the user's real credential from this session; automated concurrent login tests and the production release gate passed.
+- **Deployment:** no rollback was required. The browser route could not be directly fetched from this execution environment after deployment; Cloudflare's production smoke/acceptance pipeline and the concurrent Worker login integration test passed.
 
 ### Decisions recorded
 
@@ -247,6 +249,7 @@ This section is the current source of truth for this feature's progress. Update 
 |---|---|---|---|
 | 2026-11-17 | M0 documentation baseline created and verified. | `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md`, `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md`, `docs/README.md` | Commits: `aa29d00787d06d5a60da31b450c4b6f1a9dbe02f` (roadmap), `b1e1a24c8c1f613cfed44fa8e63fc62b7e1c6fbf` (prompt), `482569563aae6539652fa99ad563bbb9c60cea11` (index). All three documents fetched back from `main` and their cross-links verified. Tests: not run (documentation-only). Deployment: none. |
 | 2026-11-17 | M1 Owner identity and authorization implemented and deployed. | `src/admin/auth.ts`, `src/config/env.ts`, `src/index.ts`, `wrangler.jsonc`, `test/admin-owner-auth.test.ts`, `docs/SECURITY_MODEL.md`, both Owner workspace docs and `docs/README.md` | Code commits: `fa1285b027b5debcc072818d20e5df7f82947bbd` and `f672177761c1f933186eb143aadba91fa123158c`. Release workflow [44131054109](https://github.com/ashini-x/parmar-ai/actions/runs/44131054109): success. Passed `npm run check`, `npm test`, `npm run test:node`, three Worker dry-runs, paired production deploy, production smoke test and release acceptance. Rollback was not needed. Authenticated browser login was not manually smoke-tested from this session. |
+| 2026-11-17 | Resolved production Error 1101 on the Owner login path and deployed the fix. | `src/analytics/db.ts`, `src/index.ts`, `test/worker.test.ts`, `test/telegram-bot-store-schema.test.ts`, `test/brvin-admin-script.node.test.ts`, both Owner workspace docs, `docs/SECURITY_MODEL.md` and `docs/README.md` | Cloudflare Ray `a5c06d999bd6cc0f` identified `POST /admin/login` failing because an in-flight module-global schema Promise crossed Worker request contexts. Fix commits: `4762f014f2352aa0799c85c9fb4899235b7bbfb8`, `09e0eb600bd79b4e8ad827bd4aae527493e7b028`, `fb7bbb101d422939a4cc074564a96faf82cda34c`, `8253a1dafc6fbc919324423f7c7bd79e360b5df7`. Final workflow [44139900378](https://github.com/ashini-x/parmar-ai/actions/runs/44139900378): success. Passed typecheck, 466 Vitest tests, Node-specific tests (62 tests), all three Worker dry-runs, paired production deploy, production smoke test and release acceptance. No rollback. A real-credential browser sign-in was not manually executed from this session. |
 
 ### Required update after every feature task
 

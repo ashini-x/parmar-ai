@@ -10,6 +10,8 @@ Telegram webhook requests require the configured secret header. `/telegram/setup
 
 The web session carries a server-signed `admin` or `owner` role. The role is never accepted from browser input. Legacy pre-role session payloads remain valid as admin-only and do not acquire Owner privileges. Owner sessions use a signature key derived from `ADMIN_SESSION_SECRET` and the currently configured Owner credential, so rotating the Owner credential invalidates existing Owner sessions.
 
+Analytics/BRɅIN schema initialization must not cache unresolved module-global Promises across Worker requests. The deployed implementation records only completed initialization per D1 binding and makes additive SQLite column migrations re-check after concurrent DDL races. The Owner login handler is awaited inside the Worker route error boundary so initialization failures are logged through the standard request error handler rather than escaping as an uncaught Worker exception.
+
 Production currently configures `OWNER_DASHBOARD_USER=admin` in `wrangler.jsonc`, explicitly assigning the single existing admin account to the Owner role. It reuses the existing admin login credential; no additional Owner password is stored in source. A future distinct Owner principal must use a different username and the `OWNER_DASHBOARD_PASSWORD` Cloudflare Worker secret. The Telegram `BOT_OWNER_TELEGRAM_USER_ID` is not a web-admin identity.
 
 ## Authorization

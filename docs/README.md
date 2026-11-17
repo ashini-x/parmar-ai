@@ -71,7 +71,7 @@ The BRVIN retrieval-provider modernization is coordinated across both repositori
 
 ## Owner Intelligence — private Owner workspace (in development)
 
-The owner-only BRɅIN Intelligence workspace is being built inside the existing protected Admin Control Center. Start every implementation chat with [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md); it is the live milestone, architecture, decision, test and task ledger. Copy the current handoff from [OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md](OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md). M0 and M1 are complete; the Owner session gate and protected placeholder route are deployed. M2 — workspace shell and owner chat persistence — is next. The actual chat interface and AI pipeline are not yet implemented.
+The owner-only BRɅIN Intelligence workspace is being built inside the existing protected Admin Control Center. Start every implementation chat with [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md); it is the live milestone, architecture, decision, test and task ledger. Copy the current handoff from [OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md](OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md). M0 and M1 are complete; Owner session authorization and the production login initialization fix are deployed. The M1 corrective release passed typecheck, full Vitest, Node tests, all three Worker dry-runs, paired production deployment, smoke test and release acceptance. M2 — workspace shell and owner chat persistence — is next. The actual chat interface and AI pipeline are not yet implemented.
 
 ## Current feature documentation
 
