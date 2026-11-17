@@ -221,7 +221,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       stage: "count_tokens_probe",
       message: expect.stringContaining("Count Tokens availability probe"),
     });
-    expect((failure as Error).message).not.toContain("GenerateContent request");
+    expect((failure as Error).message).not.toContain("denied the GenerateContent request");
   });
 
   it("rejects unpaired, repeated-role or oversized conversation turns before provider access", async () => {
@@ -271,7 +271,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       { ...configuredEnv, GEMINI_LOCATION: "asia-southeast1" } as Env,
       { modelId: "gemini-3.8-flash", contents: [{ role: "user", text: "Hi" }] },
       dependencies(fetcher),
-    )).rejects.toMatchObject({ status: 429, retryable: true, message: "Vertex AI is temporarily rate limiting requests for this project or model." });
+    )).rejects.toMatchObject({ status: 429, retryable: true, message: "Vertex AI rate-limited the GenerateContent request." });
   });
 });
 
