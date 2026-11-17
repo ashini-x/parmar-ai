@@ -21,6 +21,17 @@ type MessageRow = {
   created_at: number;
 };
 
+type GenerationMetadataRow = {
+  message_id: string;
+  owner_id: string;
+  model_id: string;
+  thinking_level: string;
+  prompt_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  elapsed_ms: number;
+};
+
 class FakeOwnerStatement {
   private values: unknown[] = [];
   constructor(private readonly db: FakeOwnerD1, private readonly sql: string) {}
@@ -35,6 +46,7 @@ class FakeOwnerStatement {
 class FakeOwnerD1 {
   readonly conversations = new Map<string, ConversationRow>();
   readonly messages = new Map<string, MessageRow>();
+  readonly generationMetadata = new Map<string, GenerationMetadataRow>();
   prepare(sql: string): D1PreparedStatement {
     return new FakeOwnerStatement(this, sql) as unknown as D1PreparedStatement;
   }
@@ -46,6 +58,12 @@ class FakeOwnerD1 {
     return statements.map(() => ({ success: true }));
   }
   read(sql: string, values: unknown[]): Array<Record<string, unknown>> {
+    if (sql.includes("MAX(created_at)")) {
+      const latest = [...this.messages.values()]
+        .filter((row) => row.conversation_id === String(values[0]) && row.owner_id === String(values[1]))
+        .reduce((max, row) => Math.max(max, row.created_at), 0);
+      return [{ latest: latest || null }];
+    }
     if (sql.includes("FROM owner_intelligence_conversations")) {
       if (sql.includes("WHERE id = ? AND owner_id = ?")) {
         const row = this.conversations.get(String(values[0]));
@@ -60,15 +78,50 @@ class FakeOwnerD1 {
       }
     }
     if (sql.includes("FROM owner_intelligence_messages")) {
-      return [...this.messages.values()]
-        .filter((row) => row.conversation_id === String(values[0]) && row.owner_id === String(values[1]))
+      const source = sql.includes("WHERE m.id = ?")
+        ? [...this.messages.values()].filter((row) => row.id === String(values[0]) && row.owner_id === String(values[1]))
+        : [...this.messages.values()].filter((row) => row.conversation_id === String(values[0]) && row.owner_id === String(values[1]));
+      return source
         .sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id))
-        .map((row) => ({ ...row }));
+        .map((row) => ({ ...row, ...(this.generationMetadata.get(row.id) ?? {}) }));
     }
     throw new Error("Unexpected Owner D1 read: " + sql);
   }
   execute(sql: string, values: unknown[]): void {
     if (sql.startsWith("CREATE TABLE") || sql.startsWith("CREATE INDEX")) return;
+    if (sql.startsWith("INSERT INTO owner_intelligence_generation_metadata")) {
+      const [message_id, owner_id, model_id, thinking_level] = values;
+      this.generationMetadata.set(String(message_id), {
+        message_id: String(message_id), owner_id: String(owner_id), model_id: String(model_id),
+        thinking_level: String(thinking_level), prompt_tokens: 0, output_tokens: 0, total_tokens: 0, elapsed_ms: 0,
+      });
+      return;
+    }
+    if (sql.startsWith("UPDATE owner_intelligence_generation_metadata")) {
+      const [prompt_tokens, output_tokens, total_tokens, elapsed_ms, message_id, owner_id] = values;
+      const row = this.generationMetadata.get(String(message_id));
+      if (row && row.owner_id === String(owner_id)) {
+        row.prompt_tokens = Number(prompt_tokens); row.output_tokens = Number(output_tokens);
+        row.total_tokens = Number(total_tokens); row.elapsed_ms = Number(elapsed_ms);
+      }
+      return;
+    }
+    if (sql.startsWith("UPDATE owner_intelligence_messages SET content = ?, status = ?")) {
+      const [content, status, id, owner_id] = values;
+      const row = this.messages.get(String(id));
+      if (row && row.owner_id === String(owner_id) && row.role === "assistant") {
+        row.content = String(content); row.status = status as MessageRow["status"];
+      }
+      return;
+    }
+    if (sql.startsWith("UPDATE owner_intelligence_messages SET content = ?, status = 'complete'")) {
+      const [content, id, owner_id] = values;
+      const row = this.messages.get(String(id));
+      if (row && row.owner_id === String(owner_id) && row.role === "user") {
+        row.content = String(content); row.status = "complete";
+      }
+      return;
+    }
     if (sql.startsWith("INSERT INTO owner_intelligence_conversations")) {
       const [id, owner_id, title, created_at, updated_at] = values;
       this.conversations.set(String(id), {
@@ -100,10 +153,21 @@ class FakeOwnerD1 {
       });
       return;
     }
+    if (sql.startsWith("DELETE FROM owner_intelligence_messages WHERE id = ?")) {
+      const [id, owner_id] = values;
+      const row = this.messages.get(String(id));
+      if (row && row.owner_id === String(owner_id)) {
+        this.messages.delete(String(id));
+        this.generationMetadata.delete(String(id));
+      }
+      return;
+    }
     if (sql.startsWith("DELETE FROM owner_intelligence_messages")) {
       const [conversation_id, owner_id] = values;
       for (const [id, row] of this.messages) {
-        if (row.conversation_id === String(conversation_id) && row.owner_id === String(owner_id)) this.messages.delete(id);
+        if (row.conversation_id === String(conversation_id) && row.owner_id === String(owner_id)) {
+          this.messages.delete(id); this.generationMetadata.delete(id);
+        }
       }
       return;
     }
@@ -202,7 +266,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain("Your conversations");
     expect(html).toContain('id="modelSelect"');
     expect(html).toContain("/admin/api/intelligence/models");
-    expect(html).toContain("Models appear only after the configured Vertex AI project and location pass a live capability check.");
+    expect(html).toContain('id="thinkingSelect"');
+    expect(html).toContain("Responses stream from your selected model.");
   });
 
   it("creates, lists, reopens, renames and deletes only the Owner's conversations and messages", async () => {
@@ -285,6 +350,75 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
 
     const actualDb = env.DB as unknown as FakeOwnerD1;
     expect([...actualDb.messages.values()].filter((message) => message.conversation_id === id)).toHaveLength(0);
+  });
+
+
+  it("keeps the streaming generation endpoint Owner-only and rejects unsupported model thinking levels", async () => {
+    const env = appEnv();
+    const adminCookie = await login("admin", "admin-test-password", env);
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Generation guard test" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const path = "/admin/api/intelligence/conversations/" + createdBody.conversation.id + "/generate";
+
+    expect((await call(env, path, "")).status).toBe(401);
+    expect((await call(env, path, adminCookie, { method: "POST", origin, body: {} })).status).toBe(403);
+    const unsupported = await call(env, path, ownerCookie, {
+      method: "POST",
+      origin,
+      body: { content: "Test", modelId: "gemini-4-argon", thinkingLevel: "XHIGH" },
+    });
+    const unsupportedBody = await unsupported.json() as { error: string };
+    expect(unsupported.status).toBe(400);
+    expect(unsupportedBody.error).toBe("thinking_level_not_supported");
+    expect((env.DB as unknown as FakeOwnerD1).messages.size).toBe(0);
+  });
+
+  it("edits and regenerates the stored prompt without retaining obsolete later turns", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Edit and regenerate" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const saved = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+      method: "POST", origin, body: { content: "Original question" },
+    });
+    const savedBody = await saved.json() as { message: { id: string } };
+    const db = env.DB as unknown as FakeOwnerD1;
+    db.messages.set("obsolete-assistant", {
+      id: "obsolete-assistant", conversation_id: id, owner_id: "owner",
+      role: "assistant", content: "Obsolete answer", status: "complete", created_at: Date.now() + 1,
+    });
+
+    const editPath = "/admin/api/intelligence/conversations/" + id + "/generate";
+    const edited = await call(env, editPath, ownerCookie, {
+      method: "POST", origin,
+      body: {
+        content: "Corrected question",
+        editMessageId: savedBody.message.id,
+        modelId: "gemini-4-argon",
+        thinkingLevel: "MEDIUM",
+      },
+    });
+    expect(edited.status).toBe(503); // Expected: this unit fixture deliberately has no Vertex credentials.
+    expect(db.messages.has("obsolete-assistant")).toBe(false);
+    expect(db.messages.get(savedBody.message.id)?.content).toBe("Corrected question");
+    expect([...db.messages.values()].some((row) => row.role === "assistant" && row.status === "error")).toBe(true);
+    expect([...db.generationMetadata.values()].some((row) => row.model_id === "gemini-4-argon" && row.thinking_level === "MEDIUM")).toBe(true);
+
+    const regenerated = await call(env, editPath, ownerCookie, {
+      method: "POST", origin,
+      body: { action: "regenerate", modelId: "gemini-4-argon", thinkingLevel: "MEDIUM" },
+    });
+    expect(regenerated.status).toBe(503);
+    expect([...db.messages.values()].filter((row) => row.role === "assistant")).toHaveLength(1);
+    expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
   });
 
   it("rejects invalid titles and does not reveal conversations owned by another principal", async () => {

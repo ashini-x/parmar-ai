@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/config/env";
 import {
   generateOwnerGeminiContent,
+  openOwnerGeminiStream,
   listOwnerGeminiModels,
   OwnerGeminiProviderError,
   OWNER_GEMINI_MODEL_REGISTRY,
@@ -77,7 +78,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(auth).not.toHaveBeenCalled();
   });
 
-  it("builds a plain general-purpose GenerateContent request without student contracts or implicit thinking settings", async () => {
+  it("builds a plain general-purpose GenerateContent request with the selected model-specific thinking level", async () => {
     const calls: Array<{ url: RequestInfo | URL; init?: RequestInit }> = [];
     const fetcher: typeof fetch = async (url, init) => {
       calls.push({ url, init });
@@ -98,7 +99,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     const body = JSON.parse(String(calls[0]?.init?.body));
     expect(body.contents).toEqual([{ role: "user", parts: [{ text: "What is a black hole?" }] }]);
     expect(body.systemInstruction.parts[0].text).toBe("You are a general-purpose assistant.");
-    expect(body.generationConfig.thinkingConfig).toBeUndefined();
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "HIGH" });
     expect(body.generationConfig.maxOutputTokens).toBe(8_192);
     expect(JSON.stringify(body)).not.toContain("AnswerPacket");
     expect(JSON.stringify(body)).not.toContain("SSC");
@@ -139,3 +140,64 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     )).rejects.toMatchObject({ status: 429, retryable: true, message: "Vertex AI is temporarily rate limiting requests for this project or model." });
   });
 });
+
+
+  it("rejects a thinking level that the selected model does not support", async () => {
+    const fetcher = vi.fn();
+    await expect(generateOwnerGeminiContent(configuredEnv, {
+      modelId: "gemini-4-argon",
+      thinkingLevel: "XHIGH",
+      contents: [{ role: "user", text: "Hi" }],
+    }, dependencies(fetcher as unknown as typeof fetch))).rejects.toMatchObject({
+      message: "The selected thinking level is not supported by this model.",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("streams text deltas, excludes thought parts and returns usage with the selected thinking level", async () => {
+    const sse = [
+      { candidates: [{ content: { role: "model", parts: [
+        { text: "private thought", thought: true },
+        { text: "Hello " },
+      ] } }] },
+      { candidates: [{ content: { role: "model", parts: [{ text: "world." }] } }],
+        usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 5, totalTokenCount: 13 } },
+    ].map((chunk) => "data: " + JSON.stringify(chunk) + "\r\n\r\n").join("");
+    const calls: Array<{ url: string; body?: string }> = [];
+    const fetcher: typeof fetch = async (url, init) => {
+      const value = String(url);
+      calls.push({ url: value, body: String(init?.body ?? "") });
+      if (value.endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 2 }), { status: 200 });
+      const encoded = new TextEncoder().encode(sse);
+      const splitAt = sse.indexOf("\r\n\r\n") + 1;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoded.slice(0, splitAt));
+          controller.enqueue(encoded.slice(splitAt));
+          controller.close();
+        },
+      });
+      return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+    };
+    const stream = await openOwnerGeminiStream(
+      { ...configuredEnv, GEMINI_LOCATION: "australia-southeast2" } as Env,
+      {
+        modelId: "gemini-4-argon",
+        thinkingLevel: "HIGH",
+        contents: [{ role: "user", text: "Say hello." }],
+      },
+      new AbortController().signal,
+      dependencies(fetcher),
+    );
+    const events = [];
+    for await (const event of stream) events.push(event);
+    expect(events.filter((event) => event.type === "delta").map((event) => event.type === "delta" ? event.text : "")).toEqual(["Hello ", "world."]);
+    expect(events[events.length - 1]).toMatchObject({
+      type: "done",
+      usage: { promptTokens: 8, outputTokens: 5, totalTokens: 13 },
+    });
+    const streamRequest = calls.find((value) => value.url.includes(":streamGenerateContent"));
+    expect(streamRequest?.url).toContain("?alt=sse");
+    expect(JSON.parse(streamRequest?.body ?? "{}").generationConfig.thinkingConfig).toEqual({ thinkingLevel: "HIGH" });
+  });
+

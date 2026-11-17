@@ -43,9 +43,9 @@ Any new persistent store must define its deletion behavior before release. Nativ
 
 ### Owner Intelligence workspace
 
-M2 stores conversation titles and Owner-authored message text in the dedicated `owner_intelligence_conversations` and `owner_intelligence_messages` D1 tables. Each row carries an `owner_id` derived from the configured web Owner username; all query paths filter on that value. Owner chat records are not student questions, profiles, quizzes, Durable Object state or BRɅIN retrieval content. The student `/delete-my-data` workflow does not operate on Owner conversations.
+M4 stores Owner conversations and both user/assistant message text in the dedicated `owner_intelligence_conversations` and `owner_intelligence_messages` D1 tables. Each row carries an `owner_id` derived from the configured web Owner username; every query path filters on that value. Response model, thinking level, returned token counts and elapsed time are stored separately in `owner_intelligence_generation_metadata`, also scoped by `owner_id`. Owner chat records and generation metadata are not student questions, profiles, quizzes, student AI usage, Durable Object state or BRɅIN retrieval content. The student `/delete-my-data` workflow does not operate on Owner conversations.
 
-The Owner can delete a conversation from the workspace; that action deletes the conversation and associated message rows. M2 has no automatic retention cleanup, bulk-delete facility or Owner-account deletion endpoint. Until a separate retention control is implemented, conversations remain stored until the Owner deletes them individually. M2 persists user-authored text only; Gemini generation is not enabled.
+The Owner can delete a conversation from the workspace; that action deletes its associated messages, and generation metadata is tied to assistant message deletion. There is no automatic retention cleanup, bulk-delete facility or Owner-account deletion endpoint. Until a separate retention control is implemented, conversations remain stored until the Owner deletes them individually. A stopped or disconnected stream may leave a saved partial assistant answer; the UI marks its status and does not silently treat it as a completed response.
 
 ### Imported knowledge books
 

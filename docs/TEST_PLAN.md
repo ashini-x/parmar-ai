@@ -125,4 +125,22 @@ Workflow [44145644996](https://github.com/ashini-x/parmar-ai/actions/runs/441456
 
 ### M3 release evidence
 
-Initial server-side provider deployment: commit `75be2818b1688f7e70745cb3560ed8c7c56ec6b2`; paired production workflow [44153429958](https://github.com/ashini-x/parmar-ai/actions/runs/44153429958) succeeded. Follow-up source commit `fc2e3488f4508da6298bdbcfcd134500cf2ccdfc` adds the in-workspace picker, model-specific token limits and a server-side selectable-model gate. Workflow [44157348057](https://github.com/ashini-x/parmar-ai/actions/runs/44157348057) succeeded: typecheck, 478 Vitest tests, 62 Node tests and all three Worker dry-runs passed; paired production deployment, root/health smoke checks, BRVIN service binding, Fatman retrieval readiness and production release acceptance passed. Deployed versions: `brvin-service` `ad04c1ac-98b8-43ef-92c1-bef8dbead2ac`; `parmar-ai` `add293a6-6489-400b-996f-168034203058`. No rollback was needed. A real authenticated Owner browser session has not yet verified the production project's selectable model list.
+Initial server-side provider deployment: commit `75be2818b1688f7e70745cb3560ed8c7c56ec6b2`; paired production workflow [44153429958](https://github.com/ashini-x/parmar-ai/actions/runs/44153429958) succeeded. Follow-up source commit `fc2e3488f4508da6298bdbcfcd134500cf2ccdfc` adds the in-workspace picker, model-specific token limits and a server-side selectable-model gate. Workflow [44157348057](https://github.com/ashini-x/parmar-ai/actions/runs/44157348057) succeeded: typecheck, 478 Vitest tests, 62 Node tests and all three Worker dry-runs passed; paired production deployment, root/health smoke checks, BRVIN service binding, Fatman retrieval readiness and production release acceptance passed. Deployed versions: `brvin-service` `ad04c1ac-98b8-43ef-92c1-bef8dbead2ac`; `parmar-ai` `add293a6-6489-400b-996f-168034203058`. No rollback was needed. On 2026-11-18, the Owner supplied a production screenshot showing the model picker populated with the project/location-probed selectable candidates; a real Owner generation request is still pending.
+
+
+## Owner Intelligence — M4 thinking and streamed generation
+
+- Model picker populates thinking choices and default from the selected server registry entry; changing models replaces the choices.
+- Gemini 4 Hydrogen supports LOW/MEDIUM/HIGH/XHIGH; Gemini 4 Carbon and Argon support LOW/MEDIUM/HIGH; Gemini 3.8/3.7 support LOW/MEDIUM/HIGH; Gemini 3.6 and 3.5 Flash/Flash-Lite support MINIMAL/LOW/MEDIUM/HIGH, subject to registry metadata and live availability.
+- Generation rejects unlisted/unverified models and thinking levels unsupported by the chosen model; the Vertex payload contains `generationConfig.thinkingConfig.thinkingLevel`.
+- Owner generation is inaccessible to anonymous users and ordinary admin sessions; same-origin mutation checks and Owner-scoped D1 reads/writes remain enforced.
+- SSE parsing emits only user-facing text; provider parts marked `thought` are not rendered.
+- Stop/request cancellation aborts the upstream Vertex stream; received partial text is persisted with `partial` status, while success/failure is persisted as `complete`/`error`.
+- Regenerate reuses the latest user turn and removes subsequent turns; Edit replaces the selected user turn and removes subsequent turns.
+- Assistant messages record model ID, thinking level, input/output/total token counts when returned, and elapsed time in the separate Owner generation metadata table.
+- Reopening a conversation shows persisted partial/final messages. Automatic in-place stream reconnection is not part of this M4 slice.
+- The provider and route tests use controlled fake Vertex responses; they do not make a live billed Gemini request. A real Owner browser generation check remains a separate production acceptance step.
+
+### M4 automated evidence
+
+Pending PR #320 CI and paired production release workflow. Do not mark M4 complete or deployed until workflow test/build/deploy/release-acceptance jobs pass and production behavior is verified.

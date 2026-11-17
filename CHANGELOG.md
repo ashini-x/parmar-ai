@@ -1,3 +1,12 @@
+## Unreleased: BRɅIN Intelligence M4 Owner Gemini chat
+
+- Add a model-aware thinking selector populated from the project/location-verified Owner Gemini registry and bind the selected level to Vertex `generationConfig.thinkingConfig.thinkingLevel`; unsupported levels are rejected instead of downgraded.
+- Add an Owner-only SSE generation endpoint using the selected model, with user-facing text deltas, sanitized errors, usage metadata and filtering of provider thought parts.
+- Add Stop/request cancellation, incremental partial-response persistence, Edit/resubmit and Regenerate while retaining Owner-scoped conversation order.
+- Store response model, thinking level, returned token counts and elapsed time in the separate Owner generation metadata table.
+- Keep Owner prompts, assistant responses and generation metadata outside student analytics, profiles, quiz records, quotas and Durable Object state.
+- Automatic in-place stream reconnection is not included; saved partial text remains available after reopening the conversation.
+
 ## Unreleased: Locked reusable Telegram runtime architecture
 
 - Lock the as-built production Telegram runtime as the reusable baseline for future bots, with code-level documentation for webhook authentication, the immediate `/start` path, per-chat Durable Object admission/recovery, Queue hand-off, Gemini streaming, progress recovery, D1 schema separation and latency telemetry.
