@@ -656,7 +656,7 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
   return methodNotAllowed(["GET", "PATCH", "DELETE"]);
 }
 
-function workspaceHtml(nonce: string): string {
+function workspaceHtml(): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -712,7 +712,13 @@ function workspaceHtml(nonce: string): string {
   </section>
 </main>
 </div>
-<script nonce="${nonce}">
+<script src="/admin/intelligence.js" defer></script>
+</body>
+</html>`;
+}
+
+export function ownerIntelligenceClientScript(): Response {
+  const source = String.raw`
 (function(){
   "use strict";
   var api="/admin/api/intelligence/conversations";
@@ -1089,23 +1095,25 @@ function workspaceHtml(nonce: string): string {
   loadModels();
   refreshList().catch(showError);
 })();
-</script>
-</body>
-</html>`;
+`;
+  return new Response(source, {
+    headers: {
+      "content-type": "application/javascript; charset=utf-8",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+    },
+  });
 }
-
 export async function ownerIntelligencePage(env: Env): Promise<Response> {
   await ensureOwnerIntelligenceSchema(env);
-  const nonceBytes = crypto.getRandomValues(new Uint8Array(18));
-  const nonce = Array.from(nonceBytes).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  const content = workspaceHtml(nonce);
+  const content = workspaceHtml();
   return new Response(content, {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
-      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-" + nonce + "'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
     },
   });
 }
