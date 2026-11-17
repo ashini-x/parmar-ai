@@ -96,7 +96,59 @@ body{
 }
 
 .venture-note{margin:7px 0 0;color:#8b8b8b;font-size:11px;line-height:1.55}
-</style></head><body><header class="site-nav"><div class="nav-inner shell"><a class="brand" href="/" aria-label="BRɅIN home">BRɅIN</a><nav class="nav-items" aria-label="Main navigation"><a href="/">Home</a><a href="/why">Why BRɅIN</a><a href="/#platform">Platform</a><a href="/#demo">Voice demo</a><a href="/#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a><a class="nav-cta" href="mailto:partners@brvin.in">Contact</a></nav></div></header>
+
+/* Shared BRɅIN homepage navigation and responsive header */
+.nav-inner{position:relative}
+.nav-controls{display:flex;min-width:0;align-items:center;gap:clamp(14px,2vw,26px)}
+.nav-items{display:flex;align-items:center;gap:clamp(18px,2.5vw,34px)}
+.nav-items a{color:var(--body);font-size:13px;font-weight:500;transition:color .18s ease}
+.nav-items a:hover{color:var(--ink)}
+.nav-cta{display:inline-flex;min-height:40px;align-items:center;justify-content:center;padding:0 16px;border:1px solid var(--line-strong);border-radius:999px;background:var(--paper);color:var(--ink);font-size:13px;font-weight:520;white-space:nowrap;transition:background .18s ease,color .18s ease,border-color .18s ease}
+.nav-cta:hover{border-color:var(--ink);background:var(--ink);color:#fff}
+.nav-toggle{display:none;width:40px;height:40px;flex:0 0 auto;align-items:center;justify-content:center;flex-direction:column;gap:4px;padding:0;border:1px solid var(--line-strong);border-radius:50%;background:var(--paper);color:var(--ink);cursor:pointer}
+.nav-toggle span{display:block;width:15px;height:1.5px;border-radius:2px;background:currentColor;transition:transform .18s ease,opacity .18s ease}
+@media(max-width:860px){
+ .nav-inner{min-height:64px;gap:12px}
+ .nav-controls{gap:8px}
+ .nav-items{display:none;position:absolute;z-index:35;top:calc(100% + 1px);right:0;left:0;flex-direction:column;align-items:stretch;gap:2px;padding:8px;border:1px solid var(--line);border-top:0;border-radius:0 0 13px 13px;background:rgba(247,246,242,.985);box-shadow:0 12px 28px rgba(23,23,21,.09);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+ .site-nav.is-menu-open .nav-items{display:flex}
+ .nav-items a{display:flex;min-height:44px;align-items:center;padding:0 12px;border-radius:8px;color:var(--body);font-size:14px}
+ .nav-items a:hover{background:var(--soft);color:var(--ink)}
+ .nav-cta{min-height:40px;padding:0 14px;font-size:12px}
+ .nav-toggle{display:inline-flex}
+ .site-nav.is-menu-open .nav-toggle span:nth-child(1){transform:translateY(5.5px) rotate(45deg)}
+ .site-nav.is-menu-open .nav-toggle span:nth-child(2){opacity:0}
+ .site-nav.is-menu-open .nav-toggle span:nth-child(3){transform:translateY(-5.5px) rotate(-45deg)}
+}
+@media(max-width:430px){.nav-inner{min-height:60px}.brand{font-size:19px}.nav-cta,.nav-toggle{min-height:38px;height:38px}.nav-cta{padding:0 13px}.nav-toggle{width:38px}}
+@media(prefers-reduced-motion:reduce){.nav-toggle span{transition:none}}
+
+
+/* Terms page — homepage surfaces with document-first readability */
+body{background:radial-gradient(ellipse 68% 34% at 86% 0%,rgba(216,203,179,.2),transparent 78%),var(--page)}
+.legal-hero{padding:clamp(72px,8vw,104px) 0 38px}
+.legal-hero h1{font-size:clamp(52px,6.8vw,80px);font-weight:520;letter-spacing:-.078em;line-height:.99}
+.legal-hero p{font-size:clamp(15px,1.4vw,18px);line-height:1.75}
+.legal-wrap{padding-bottom:clamp(58px,7vw,88px)}
+.legal-document{max-width:960px;padding:clamp(26px,4vw,48px);border-radius:16px;background:radial-gradient(ellipse 72% 26% at 100% 0%,rgba(216,203,179,.12),transparent 80%),var(--paper);box-shadow:0 2px 10px rgba(23,23,21,.025)}
+.legal-document h2{font-size:clamp(26px,3vw,34px);font-weight:520;letter-spacing:-.06em}
+.legal-document h3{margin-top:29px;padding-top:19px;border-top:1px solid var(--line);font-size:16px;font-weight:590}
+.legal-document p{font-size:13px;line-height:1.9}
+.legal-callout{border-radius:11px;background:linear-gradient(110deg,#F0EFEA,#F7F6F2)}
+@media(max-width:760px){.legal-hero{padding:60px 0 28px}.legal-hero h1{font-size:clamp(44px,9vw,62px)}.legal-document{padding:23px}.legal-document h3{margin-top:24px;padding-top:16px}}
+
+</style></head><body><header class="site-nav"><div class="nav-inner shell">
+<a class="brand" href="/" aria-label="BRɅIN home">BR<span class="brand-mark">Ʌ</span>IN</a>
+<div class="nav-controls">
+  <nav class="nav-items" id="primary-navigation" aria-label="Main navigation">
+    <a href="/why">Why BRɅIN</a><a href="#platform">Platform</a><a href="#demo">Voice demo</a><a href="#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a>
+  </nav>
+  <a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
+  <button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="primary-navigation">
+    <span></span><span></span><span></span>
+  </button>
+</div>
+</div></header>
 <main><section class="legal-hero shell"><span class="legal-kicker">BRɅIN / PLATFORM TERMS</span><h1>Terms of Service</h1><p>The terms that apply when you or your organization use BRɅIN software and connected applications.</p></section>
 <section class="legal-wrap shell"><article class="legal-document"><h2>Terms of Service</h2>
 <p><strong>Effective date: 17 November 2026 (IST).</strong> These terms apply to access to BRɅIN software, workspaces, document processing, retrieval and any voice features that are made available.</p>
@@ -121,4 +173,29 @@ body{
 <a href="mailto:partners@brvin.in" rel="noopener noreferrer">Business</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
 <div class="partner-slot" aria-label="Voice AI provider status"><span class="partner-badge">Voice AI powered by ElevenLabs (Integration in development)</span></div>
 </div></div><p class="age-note">BRɅIN platforms and voice interfaces are designed exclusively for adult professionals, researchers, and enterprise users aged 18 and older.</p>
-</div></footer></body></html>
+</div></footer>
+<script>
+(()=> {
+ const siteNav=document.querySelector(".site-nav");
+ const navToggle=document.querySelector(".nav-toggle");
+ const primaryNavigation=document.getElementById("primary-navigation");
+ if(!siteNav||!navToggle||!primaryNavigation)return;
+ function closeMenu(restoreFocus=false){
+   const wasOpen=siteNav.classList.contains("is-menu-open");
+   siteNav.classList.remove("is-menu-open");
+   navToggle.setAttribute("aria-expanded","false");
+   navToggle.setAttribute("aria-label","Open navigation");
+   if(restoreFocus&&wasOpen)navToggle.focus();
+ }
+ navToggle.addEventListener("click",()=>{
+   const open=siteNav.classList.toggle("is-menu-open");
+   navToggle.setAttribute("aria-expanded",String(open));
+   navToggle.setAttribute("aria-label",open?"Close navigation":"Open navigation");
+ });
+ primaryNavigation.querySelectorAll("a").forEach(link=>link.addEventListener("click",()=>closeMenu()));
+ document.addEventListener("keydown",event=>{if(event.key==="Escape")closeMenu(true)});
+ document.addEventListener("click",event=>{if(!siteNav.contains(event.target))closeMenu()});
+ window.matchMedia("(min-width: 861px)").addEventListener?.("change",event=>{if(event.matches)closeMenu()});
+})();
+</script>
+</body></html>
