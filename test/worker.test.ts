@@ -109,6 +109,43 @@ describe("Parmar AI production worker", () => {
   });
 
 
+  it("handles concurrent Owner login requests without sharing an in-flight D1 schema promise", async () => {
+    const loginEnv = Object.assign(Object.create(testEnv), {
+      ADMIN_DASHBOARD_USER: "admin",
+      ADMIN_DASHBOARD_PASSWORD: "test-admin-password",
+      OWNER_DASHBOARD_USER: "admin",
+      ADMIN_SESSION_SECRET: "test-session-secret",
+    }) as Env;
+
+    const makeLoginRequest = () => {
+      const form = new FormData();
+      form.set("username", "admin");
+      form.set("password", "test-admin-password");
+      return new IncomingRequest("http://example.com/admin/login", {
+        method: "POST",
+        body: form,
+      });
+    };
+
+    const firstContext = createExecutionContext();
+    const secondContext = createExecutionContext();
+    const [first, second] = await Promise.all([
+      worker.fetch(makeLoginRequest(), loginEnv, firstContext),
+      worker.fetch(makeLoginRequest(), loginEnv, secondContext),
+    ]);
+    await Promise.all([
+      waitOnExecutionContext(firstContext),
+      waitOnExecutionContext(secondContext),
+    ]);
+
+    expect(first.status).toBe(302);
+    expect(first.headers.get("location")).toBe("/admin/intelligence");
+    expect(second.status).toBe(302);
+    expect(second.headers.get("location")).toBe("/admin/intelligence");
+    expect(first.headers.get("set-cookie")).toContain("HttpOnly");
+    expect(second.headers.get("set-cookie")).toContain("HttpOnly");
+  });
+
   it("returns 404 for unknown routes", async () => {
     const request = new IncomingRequest("http://example.com/not-a-route");
     const ctx = createExecutionContext();

@@ -3093,7 +3093,7 @@ const worker = {
 
       if (url.pathname === "/admin/login") {
         if (request.method === "GET") return new Response(loginHtml(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
-        if (request.method === "POST") return handleAdminLogin(request, env);
+        if (request.method === "POST") return await handleAdminLogin(request, env);
         return withRequestId(methodNotAllowed(["GET", "POST"]), requestId);
       }
 

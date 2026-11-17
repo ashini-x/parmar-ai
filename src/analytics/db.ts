@@ -499,7 +499,10 @@ CREATE INDEX IF NOT EXISTS idx_brvin_connection_events_created
 
 `;
 
-let schemaPromise: Promise<void> | null = null;
+// Cache only completed initialization, never an in-flight Promise. Cloudflare may
+// serve concurrent requests in different request contexts within one isolate;
+// awaiting a Promise created by another request can throw a cross-request promise error.
+const analyticsSchemaReady = new WeakSet<object>();
 
 
 /**
@@ -507,11 +510,11 @@ let schemaPromise: Promise<void> | null = null;
  * migration chain. These six tables are the only D1 tables needed by the
  * latency-sensitive Telegram request, admission, and question-result paths.
  *
- * The full ensureAnalyticsSchema() remains available for admin/BRVIN surfaces
- * and scheduled migrations. A per-binding promise prevents duplicate setup
- * during concurrent cold-start requests in one Worker isolate.
+ * DDL uses CREATE IF NOT EXISTS, so concurrent cold requests can safely run it.
+ * Store only completed bindings; never share an unresolved Promise between
+ * Cloudflare request contexts.
  */
-const runtimeAnalyticsSchemaPromises = new WeakMap<object, Promise<void>>();
+const runtimeAnalyticsSchemaReady = new WeakSet<object>();
 
 const RUNTIME_ANALYTICS_SCHEMA_SQL = [
   `CREATE TABLE IF NOT EXISTS users (
@@ -611,20 +614,10 @@ const RUNTIME_ANALYTICS_SCHEMA_SQL = [
 
 export async function ensureRuntimeAnalyticsSchema(env: Env): Promise<void> {
   const db = env.DB;
-  if (!db) return;
+  if (!db || runtimeAnalyticsSchemaReady.has(db)) return;
 
-  let schemaPromise = runtimeAnalyticsSchemaPromises.get(db);
-  if (!schemaPromise) {
-    schemaPromise = db.batch(
-      RUNTIME_ANALYTICS_SCHEMA_SQL.map((sql) => db.prepare(sql)),
-    ).then(() => undefined).catch((error) => {
-      runtimeAnalyticsSchemaPromises.delete(db);
-      throw error;
-    });
-    runtimeAnalyticsSchemaPromises.set(db, schemaPromise);
-  }
-
-  await schemaPromise;
+  await db.batch(RUNTIME_ANALYTICS_SCHEMA_SQL.map((sql) => db.prepare(sql)));
+  runtimeAnalyticsSchemaReady.add(db);
 }
 
 function analyticsUpdateId(env: Env, updateId: number, botConnectionId = "legacy-env"): number {
@@ -792,20 +785,39 @@ export interface AiUsageAnalyticsInput {
   usage: AiUsageRecord[];
 }
 
+async function ensureSqliteColumn(
+  db: D1Database,
+  table: string,
+  column: string,
+  definition: string,
+): Promise<void> {
+  const readColumns = async () =>
+    db.prepare("PRAGMA table_info(" + table + ")").all<{ name: string }>();
+  const before = await readColumns();
+  if ((before.results ?? []).some((item) => item.name === column)) return;
+
+  try {
+    await db.prepare("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition).run();
+  } catch (error) {
+    // Another request may have completed the same idempotent migration after
+    // our PRAGMA read. Accept only when the requested column now exists.
+    const after = await readColumns();
+    if (!(after.results ?? []).some((item) => item.name === column)) throw error;
+  }
+}
+
 async function ensureQuizSessionSchema(env: Env): Promise<void> {
   if (!env.DB) return;
 
   // quiz_sessions existed before bot-aware quiz correlation was introduced.
   // CREATE TABLE IF NOT EXISTS does not add the new column to an existing D1
-  // table, so migrate that legacy shape in place.
-  const columns = await env.DB.prepare("SELECT name FROM pragma_table_info('quiz_sessions')").all<{ name: string }>();
-  const hasBotConnectionId = (columns.results ?? []).some((column) => column.name === "bot_connection_id");
-
-  if (!hasBotConnectionId) {
-    await env.DB.prepare(
-      "ALTER TABLE quiz_sessions ADD COLUMN bot_connection_id TEXT NOT NULL DEFAULT 'legacy-env'"
-    ).run();
-  }
+  // table, so migrate the legacy shape in place.
+  await ensureSqliteColumn(
+    env.DB,
+    "quiz_sessions",
+    "bot_connection_id",
+    "TEXT NOT NULL DEFAULT 'legacy-env'",
+  );
 }
 
 export const BRVIN_OWNER_METADATA_MIGRATION_KEY = "2026-11-05-brvin-owner-label-v1";
@@ -928,8 +940,6 @@ async function ensureFatmanImportJobSchema(env: Env): Promise<void> {
   if (!env.DB) return;
   // Existing installations have the single-book import table already. Add the
   // optional metadata in place so the original 538-page import remains valid.
-  const columns = await env.DB.prepare("SELECT name FROM pragma_table_info('fatman_import_jobs')").all<{ name: string }>();
-  const names = new Set((columns.results ?? []).map((column) => column.name));
   const additions: Array<[string, string]> = [
     ["book_id", "TEXT"],
     ["book_title", "TEXT"],
@@ -937,9 +947,7 @@ async function ensureFatmanImportJobSchema(env: Env): Promise<void> {
     ["dedupe_scope", "TEXT NOT NULL DEFAULT 'legacy'"],
   ];
   for (const [name, definition] of additions) {
-    if (!names.has(name)) {
-      await env.DB.prepare("ALTER TABLE fatman_import_jobs ADD COLUMN " + name + " " + definition).run();
-    }
+    await ensureSqliteColumn(env.DB, "fatman_import_jobs", name, definition);
   }
 }
 
@@ -1025,13 +1033,8 @@ async function ensureBrvinCompatibilitySchema(env: Env): Promise<void> {
 
   // Records whether Vision OCR JSON was explicitly removed while the
   // original PDF and indexed page set remain available.
-  const bookColumns = await db.prepare("PRAGMA table_info(brvin_books)").all<{ name: string }>();
-  if (!(bookColumns.results ?? []).some(column => column.name === "vision_output_deleted_at")) {
-    await db.prepare("ALTER TABLE brvin_books ADD COLUMN vision_output_deleted_at INTEGER").run();
-  }
-  if (!(bookColumns.results ?? []).some(column => column.name === "vision_output_deletion_started_at")) {
-    await db.prepare("ALTER TABLE brvin_books ADD COLUMN vision_output_deletion_started_at INTEGER").run();
-  }
+  await ensureSqliteColumn(db, "brvin_books", "vision_output_deleted_at", "INTEGER");
+  await ensureSqliteColumn(db, "brvin_books", "vision_output_deletion_started_at", "INTEGER");
   await db.prepare(
     "INSERT OR IGNORE INTO brvin_migrations (migration_key, applied_at) VALUES (?, ?)"
   ).bind("2026-11-04-brvin-vision-output-deleted-at-v1", Date.now()).run();
@@ -1079,27 +1082,25 @@ async function ensureBrvinCompatibilitySchema(env: Env): Promise<void> {
 }
 
 export async function ensureAnalyticsSchema(env: Env): Promise<void> {
-  if (!env.DB) return;
-  if (!schemaPromise) {
-    schemaPromise = (async () => {
-      await migrateLegacyBrvinTables(env);
-      await env.DB!.batch(splitSchemaStatements().map((sql) => env.DB!.prepare(sql)));
-      await ensureQuizSessionSchema(env);
-      await ensureFatmanImportJobSchema(env);
-      await ensureBrvinCompatibilitySchema(env);
-      await ensureBrvinOwnerMetadataSchema(env.DB!);
-      await ensureBrvinConnectionMetadataSchema(env.DB!);
-      await ensureBrvinTeacherManagementMetadataSchema(env.DB!);
-      await ensureBrvin2ApplicationIdentities(env.DB!);
-      await ensureBrvin2AskMoinaIdentities(env.DB!);
-    })()
-      .then(() => undefined)
-      .catch((error) => {
-        schemaPromise = null;
-        throw error;
-      });
-  }
-  await schemaPromise;
+  const db = env.DB;
+  if (!db || analyticsSchemaReady.has(db)) return;
+
+  // Do not cache an in-flight Promise at module scope. Cloudflare request
+  // contexts cannot safely await Promises created by a different request.
+  // The schema DDL and migrations below are idempotent and tolerate concurrent
+  // first-use requests; only mark the binding ready after every step succeeds.
+  await migrateLegacyBrvinTables(env);
+  await db.batch(splitSchemaStatements().map((sql) => db.prepare(sql)));
+  await ensureQuizSessionSchema(env);
+  await ensureFatmanImportJobSchema(env);
+  await ensureBrvinCompatibilitySchema(env);
+  await ensureBrvinOwnerMetadataSchema(db);
+  await ensureBrvinConnectionMetadataSchema(db);
+  await ensureBrvinTeacherManagementMetadataSchema(db);
+  await ensureBrvin2ApplicationIdentities(db);
+  await ensureBrvin2AskMoinaIdentities(db);
+
+  analyticsSchemaReady.add(db);
 }
 
 export interface FatmanBookState {
