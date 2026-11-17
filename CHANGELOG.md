@@ -1,3 +1,14 @@
+## 2026-11-18: Owner Intelligence frontend startup and conversation loading fix
+
+- Move the Owner workspace application JavaScript out of the HTML inline script and serve it from `/admin/intelligence.js`.
+- Protect the JavaScript route with the existing Owner role check; anonymous access is 401 and non-Owner admin access is 403.
+- Replace nonce-based inline application script execution with a same-origin-only script policy (`script-src 'self'`).
+- Add 15-second deadlines for conversation list/create/reopen requests.
+- Replace the perpetual sidebar loading placeholder with a clear error and Retry control; make New chat failures visible and restore the button after the request settles.
+- Add regression tests for the protected script route, CSP, client request deadline and retry UI.
+- PR [#324](https://github.com/ashini-x/parmar-ai/pull/324), merged as `df48b707cfc953b68cc6e099818b5c68965e6c58`. Workflow [44179978046](https://github.com/ashini-x/parmar-ai/actions/runs/44179978046) passed 485 Vitest tests across 72 files, 62 Node tests across 9 files and all three Worker dry-runs. Paired production deployment and release acceptance passed.
+- Deployed versions: `brvin-service` `863531a6-add5-44f0-94d1-5753ade79c96`; `parmar-ai` `cebd3677-458f-4860-b191-7c6c18d26bc3`. Manifest artifact `14372720383`.
+
 ## 2026-11-18: Owner Gemini model picker liveness fix
 
 - Bound Google access-token acquisition to 12 seconds and every Vertex Count Tokens capability probe to 8 seconds with a Promise-level timeout; abort the underlying probe when it times out.
