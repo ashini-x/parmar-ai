@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { Env } from "../src/config/env";
 import worker from "../src";
 import { handleAdminLogin } from "../src/admin/auth";
-import { appendOwnerIntelligenceMessage } from "../src/admin/intelligence";
 
 type ConversationRow = {
   id: string;
@@ -227,12 +226,21 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(createdBody.conversation.title).toBe("Research notes");
 
     const id = createdBody.conversation.id;
-    const savedMessage = await appendOwnerIntelligenceMessage(env, {
-      conversationId: id,
-      role: "user",
-      content: "Explain the relationship between eigenvalues and stability.",
+    const noOriginMessage = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+      method: "POST",
+      body: { content: "This must be rejected without an Origin header." },
     });
-    expect(savedMessage?.role).toBe("user");
+    expect(noOriginMessage.status).toBe(403);
+
+    const saved = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+      method: "POST",
+      origin,
+      body: { content: "Explain the relationship between eigenvalues and stability." },
+    });
+    const savedBody = await saved.json() as { message: { role: string; content: string } };
+    expect(saved.status).toBe(201);
+    expect(savedBody.message.role).toBe("user");
+    expect(savedBody.message.content).toBe("Explain the relationship between eigenvalues and stability.");
 
     const list = await call(env, "/admin/api/intelligence/conversations", ownerCookie);
     const listBody = await list.json() as { conversations: Array<{ id: string; title: string }> };
@@ -274,10 +282,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     const afterDelete = await call(env, "/admin/api/intelligence/conversations/" + id, ownerCookie);
     expect(afterDelete.status).toBe(404);
 
-    const messageRows = await env.DB!.prepare(
-      "SELECT id FROM owner_intelligence_messages WHERE conversation_id = ?",
-    ).bind(id).all<{ id: string }>();
-    expect(messageRows.results ?? []).toHaveLength(0);
+    const actualDb = env.DB as unknown as FakeOwnerD1;
+    expect([...actualDb.messages.values()].filter((message) => message.conversation_id === id)).toHaveLength(0);
   });
 
   it("rejects invalid titles and does not reveal conversations owned by another principal", async () => {
