@@ -309,7 +309,7 @@ jobs:
             fi
           }
 
-          fetch_page "/" "$home_file" "Intelligence with"
+          fetch_page "/" "$home_file" "Answers should lead back to the source."
           fetch_page "/privacy" "$privacy_file" "Privacy Policy"
           fetch_page "/terms" "$terms_file" "Terms of Service"
           fetch_page "/founder" "$founder_file" "Ashini Gogoi"
@@ -341,7 +341,7 @@ jobs:
               exit 1
             fi
           done
-          grep -Fq 'Founder, BRɅIN' "$founder_file" || { echo "::error::Founder role missing."; exit 1; }
+          grep -Fq 'I’m the founder of BRɅIN' "$founder_file" || { echo "::error::Founder role missing."; exit 1; }
           grep -Fq 'mailto:founder@brvin.in' "$founder_file" || { echo "::error::Founder contact missing."; exit 1; }
           grep -Fq 'https://github.com/ashini-x/parmar-ai' "$founder_file" || { echo "::error::Core repository link missing."; exit 1; }
           grep -Fq 'https://github.com/ashini-x/brvin-teachers' "$founder_file" || { echo "::error::Teachers repository link missing."; exit 1; }
