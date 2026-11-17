@@ -151,11 +151,7 @@ main{
   *,*:before,*:after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}
 }
 
-@media(max-width:600px){
-  .nav-items a[href="#demo"],
-  .nav-items a[href="/#demo"],
-  .nav-items a[href="/#why"]{display:none}
-}
+
 
 .venture-note{margin:7px 0 0;color:#8b8b8b;font-size:11px;line-height:1.55}
 
@@ -196,6 +192,16 @@ body{background:radial-gradient(ellipse 55% 46% at 50% 30%,rgba(216,203,179,.2),
 .quick-links a:hover{border-color:var(--line-strong);background:var(--paper)}
 @media(max-width:760px){.not-found{padding:72px 0}.not-found h1{font-size:clamp(40px,9vw,58px)}}
 
+
+.nav-inner{position:relative}
+.nav-controls{display:flex;min-width:0;align-items:center;gap:clamp(14px,2vw,26px)}
+.nav-cta{display:inline-flex;min-height:40px;align-items:center;justify-content:center;padding:0 16px;border:1px solid var(--line-strong);border-radius:999px;background:var(--paper);color:var(--ink);font-size:13px;font-weight:520;white-space:nowrap}
+.nav-toggle{display:none;width:40px;height:40px;flex:0 0 auto;align-items:center;justify-content:center;flex-direction:column;gap:4px;padding:0;border:1px solid var(--line-strong);border-radius:50%;background:var(--paper);color:var(--ink);cursor:pointer}
+.nav-toggle span{display:block;width:15px;height:1.5px;border-radius:2px;background:currentColor}
+@media(max-width:860px){.nav-inner{min-height:64px;gap:12px}.nav-controls{gap:8px}.nav-items{display:none;position:absolute;z-index:35;top:calc(100% + 1px);right:0;left:0;flex-direction:column;align-items:stretch;gap:2px;padding:8px;border:1px solid var(--line);border-top:0;border-radius:0 0 13px 13px;background:rgba(247,246,242,.985);box-shadow:0 12px 28px rgba(23,23,21,.09)}.site-nav.is-menu-open .nav-items{display:flex}.nav-items a{display:flex;min-height:44px;align-items:center;padding:0 12px;border-radius:8px;font-size:14px}.nav-toggle{display:inline-flex}}
+@media(max-width:430px){.brand{font-size:19px}.nav-inner{min-height:60px}.nav-cta,.nav-toggle{height:38px;min-height:38px}.nav-toggle{width:38px}}
+@media(prefers-reduced-motion:reduce){.nav-toggle span{transition:none}}
+
 </style>
 </head>
 <body>
@@ -203,7 +209,7 @@ body{background:radial-gradient(ellipse 55% 46% at 50% 30%,rgba(216,203,179,.2),
 <a class="brand" href="/" aria-label="BRɅIN home">BR<span class="brand-mark">Ʌ</span>IN</a>
 <div class="nav-controls">
   <nav class="nav-items" id="primary-navigation" aria-label="Main navigation">
-    <a href="/why">Why BRɅIN</a><a href="#platform">Platform</a><a href="#demo">Voice demo</a><a href="#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a>
+    <a href="/why">Why BRɅIN</a><a href="/#platform">Platform</a><a href="/#demo">Voice demo</a><a href="/#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a>
   </nav>
   <a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
   <button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="primary-navigation">

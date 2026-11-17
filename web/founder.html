@@ -89,11 +89,7 @@ body{
 }
 
 
-@media(max-width:600px){
-  .nav-items a[href="#demo"],
-  .nav-items a[href="/#demo"],
-  .nav-items a[href="/#why"]{display:none}
-}
+
 
 
 .legal-document h2:not(:first-child){margin-top:36px}
@@ -141,11 +137,39 @@ body{background:radial-gradient(ellipse 68% 34% at 86% 0%,rgba(216,203,179,.22),
 .legal-callout a{color:#2F6BFF}
 @media(max-width:760px){.legal-hero{padding:60px 0 32px}.legal-hero h1{font-size:clamp(46px,10vw,64px)}.legal-document{padding:24px}.legal-document h3{margin-top:27px;padding-top:20px}}
 
+
+.page-section-nav{display:flex;align-items:center;gap:7px;overflow-x:auto;margin:0 auto 34px;padding:8px 0;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.page-section-nav .page-nav-label{flex:0 0 auto;margin-right:5px;color:var(--muted);font-size:8px;font-weight:750;letter-spacing:.12em}
+.page-section-nav a{display:inline-flex;min-height:34px;flex:0 0 auto;align-items:center;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.68);color:var(--body);font-size:10px;white-space:nowrap}
+.page-section-nav a:hover{border-color:var(--line-strong);background:#fff;color:var(--ink)}
+.page-switcher{margin:22px 0 26px;padding:13px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.78)}
+.page-switcher-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 11px}
+.page-switcher-heading strong{color:var(--ink);font-size:12px;font-weight:640}.page-switcher-heading span{color:var(--muted);font-size:8px;font-weight:680;letter-spacing:.1em}
+.page-switcher-tabs{display:flex;gap:5px;overflow-x:auto;padding:4px;border:1px solid var(--line);border-radius:999px;background:var(--soft);scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.page-switcher-tab{display:flex;min-height:39px;flex:1 0 auto;align-items:center;justify-content:center;gap:7px;padding:0 14px;border:1px solid transparent;border-radius:999px;background:transparent;color:var(--muted);font-size:10px;font-weight:580;white-space:nowrap;cursor:pointer}
+.page-switcher-tab:hover{color:var(--ink);background:rgba(255,255,255,.55)}
+.page-switcher-tab[aria-selected="true"]{border-color:var(--line);background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(23,23,21,.07)}
+.page-switcher-tab .tab-index{color:#2F6BFF;font-size:8px;font-weight:750}
+.page-switcher-panel{min-height:108px;margin-top:11px;padding:19px 20px;border:1px solid var(--line);border-radius:10px;background:#fff;animation:page-panel-in .18s ease}
+.page-switcher-panel[hidden]{display:none}
+.page-switcher-panel .panel-kicker{display:block;margin-bottom:7px;color:var(--muted);font-size:8px;font-weight:740;letter-spacing:.12em}
+.page-switcher-panel h4{margin:0 0 7px;color:var(--ink);font-size:18px;font-weight:560;letter-spacing:-.045em}
+.page-switcher-panel p{margin:0;color:var(--body);font-size:12px;line-height:1.75}
+@keyframes page-panel-in{from{opacity:.55;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.page-switcher button:focus-visible,.page-section-nav a:focus-visible{outline:2px solid #2F6BFF;outline-offset:3px}
+.legal-hero{padding:clamp(78px,8.5vw,108px) 0 36px}.legal-hero h1{font-size:clamp(58px,7.6vw,88px);line-height:.96;letter-spacing:-.085em}
+.legal-hero p{max-width:650px;font-size:clamp(15px,1.45vw,18px);line-height:1.8}
+.legal-document{max-width:1040px;padding:clamp(26px,4.2vw,52px);background:radial-gradient(ellipse 76% 22% at 100% 0%,rgba(216,203,179,.14),transparent 80%),#fff}
+.legal-document>h3{margin-top:39px;padding-top:22px;border-top:1px solid var(--line);font-size:19px;letter-spacing:-.04em}
+.legal-document>p{font-size:14px;line-height:1.9}
+@media(max-width:760px){.page-section-nav{margin-bottom:26px;padding:7px 0}.page-switcher{margin:19px 0 23px;padding:10px}.page-switcher-heading{align-items:flex-start;flex-direction:column;gap:4px}.page-switcher-panel{min-height:0;padding:16px}.page-switcher-tab{min-height:38px;padding:0 12px}.legal-hero{padding:60px 0 27px}.legal-hero h1{font-size:clamp(48px,10vw,66px)}.legal-document{padding:23px}.legal-document>h3{margin-top:30px;padding-top:19px}}
+@media(prefers-reduced-motion:reduce){.page-switcher-panel{animation:none}}
+
 </style></head><body><header class="site-nav"><div class="nav-inner shell">
 <a class="brand" href="/" aria-label="BRɅIN home">BR<span class="brand-mark">Ʌ</span>IN</a>
 <div class="nav-controls">
   <nav class="nav-items" id="primary-navigation" aria-label="Main navigation">
-    <a href="/why">Why BRɅIN</a><a href="#platform">Platform</a><a href="#demo">Voice demo</a><a href="#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a>
+    <a href="/why">Why BRɅIN</a><a href="/#platform">Platform</a><a href="/#demo">Voice demo</a><a href="/#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a>
   </nav>
   <a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
   <button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="primary-navigation">
@@ -160,28 +184,47 @@ body{background:radial-gradient(ellipse 68% 34% at 86% 0%,rgba(216,203,179,.22),
   <p>I’m the founder of BRɅIN. My work is focused on building software that can use private documents while keeping access permissions and source-page references intact.</p>
 </section>
 <section class="legal-wrap shell">
+  <nav class="page-section-nav" aria-label="Founder page sections"><span class="page-nav-label">ON THIS PAGE</span><a href="#founder-origin">Origin</a><a href="#founder-venture">Business and venture</a><a href="#founder-gap">The gap</a><a href="#founder-products">What I’m building</a><a href="#founder-open">Open source</a><a href="#founder-status">Status</a></nav>
   <article class="legal-document">
-    <h2>Why I started BRɅIN</h2>
+    <h2 id="founder-origin">Why I started BRɅIN</h2>
     <p>I started working on BRɅIN while building applications that needed to answer from real study material. With परमार्थAI, I saw that producing a response was only one part of the job: a learner also needed to trace it to the source and the original PDF page. As I thought about other products and workspaces, the same foundation kept coming up — document intake, OCR, page mapping, indexing, access checks and retrieval.</p>
     <p>Rebuilding that foundation inside each application would repeat the same work and tie the knowledge system too closely to one product. I wanted a shared layer that could process documents, enforce the relevant access rules and return evidence, while each application kept control of its own users, model, prompts and final answer. That is the idea behind BRɅIN.</p>
 
-    <h3>BRɅIN and BRVIN TECHNOLOGIES</h3>
-    <p>BRɅIN is the technology venture and brand I am developing under BRVIN TECHNOLOGIES, an Indian sole proprietorship. The existing sole-proprietor business has a Udyam registration that was first issued around 2021 under an earlier business name. That existing registration record was later updated to reflect BRVIN TECHNOLOGIES as the legal business name and BRɅIN as the current venture and brand.</p>
-    <p>This was an update to the existing sole-proprietorship record, not the creation of a separate incorporated company. The BRɅIN concept and product direction itself emerged in 2026. The Udyam registration history and the start of the BRɅIN venture are different timelines and should not be treated as interchangeable founding dates.</p>
+    <h3 id="founder-venture">BRɅIN and BRVIN TECHNOLOGIES</h3>
+<div class="page-switcher founder-timeline" id="founder-timeline">
+ <div class="page-switcher-heading"><strong>Two related, different timelines</strong><span>SELECT A TIMELINE</span></div>
+ <div class="page-switcher-tabs" role="tablist" aria-label="Business and BRɅIN timeline">
+  <button class="page-switcher-tab" type="button" role="tab" id="founder-timeline-business-tab" aria-selected="false" aria-controls="founder-timeline-business-panel" tabindex="-1" data-page-tab="founder-timeline"><span class="tab-index">01</span> Existing business · c. 2021</button>
+  <button class="page-switcher-tab" type="button" role="tab" id="founder-timeline-brain-tab" aria-selected="true" aria-controls="founder-timeline-brain-panel" tabindex="0" data-page-tab="founder-timeline"><span class="tab-index">02</span> BRɅIN venture · 2026</button>
+ </div>
+ <section class="page-switcher-panel" id="founder-timeline-business-panel" role="tabpanel" aria-labelledby="founder-timeline-business-tab" hidden>
+  <span class="panel-kicker">EXISTING SOLE-PROPRIETOR RECORD</span><h4>The underlying business history</h4>
+  <p>The existing sole-proprietor business has a Udyam registration that was first issued around 2021 under an earlier business name. That same registration record was later updated to reflect BRVIN TECHNOLOGIES as the legal business name and BRɅIN as the current venture and brand. This was an update to the existing sole-proprietorship record, not the creation of a separate incorporated company.</p>
+ </section>
+ <section class="page-switcher-panel" id="founder-timeline-brain-panel" role="tabpanel" aria-labelledby="founder-timeline-brain-tab">
+  <span class="panel-kicker">BRɅIN PRODUCT AND BRAND DIRECTION</span><h4>The venture began taking shape in 2026</h4>
+  <p>The BRɅIN concept and product direction itself emerged in 2026. The Udyam registration history and the start of the BRɅIN venture are different timelines and should not be treated as interchangeable founding dates.</p>
+ </section>
+</div>
 
-    <h3>The gap I'm working on</h3>
+    <h3 id="founder-gap">The gap I'm working on</h3>
     <p>I'm not trying to build another general-purpose chatbot. The problem I'm focused on is underneath the user experience: how a specialised application or private workspace can use its own documents, apply its own access rules and receive traceable evidence without having to assemble every part of document processing and retrieval itself. The initial use cases are our own learning products and workspaces; the broader direction is a reusable service that other applications can integrate.</p>
 
-    <h3>What I'm building</h3>
-    <p>BRɅIN Core handles document processing, permissions and retrieval. It returns selected passages with their original PDF page references; the connected application creates the final answer.</p>
+    <h3 id="founder-products">What I'm building</h3>
+<p>BRɅIN Core handles document processing, permissions and retrieval. It returns selected passages with their original PDF page references; the connected application creates the final answer.</p>
+<div class="page-switcher founder-products" id="founder-products-switcher">
+ <div class="page-switcher-heading"><strong>Products and shared foundation</strong><span>SELECT A PRODUCT</span></div>
+ <div class="page-switcher-tabs" role="tablist" aria-label="BRɅIN products">
+  <button class="page-switcher-tab" type="button" role="tab" id="founder-product-core-tab" aria-selected="true" aria-controls="founder-product-core-panel" tabindex="0" data-page-tab="founder-products"><span class="tab-index">01</span> BRɅIN Core</button>
+  <button class="page-switcher-tab" type="button" role="tab" id="founder-product-parmarth-tab" aria-selected="false" aria-controls="founder-product-parmarth-panel" tabindex="-1" data-page-tab="founder-products">परमार्थAI</button>
+  <button class="page-switcher-tab" type="button" role="tab" id="founder-product-teachers-tab" aria-selected="false" aria-controls="founder-product-teachers-panel" tabindex="-1" data-page-tab="founder-products">BRɅIN Teachers</button>
+ </div>
+ <section class="page-switcher-panel" id="founder-product-core-panel" role="tabpanel" aria-labelledby="founder-product-core-tab"><span class="panel-kicker">SHARED KNOWLEDGE INFRASTRUCTURE · CORE API</span><h4>Document processing, permissions and retrieval</h4><p>Core currently uses private Google Cloud Storage, Google Cloud Vision OCR, Cloudflare Workers and Workflows, D1 and Cloudflare AI Search. The live retrieval service checks application and project permissions before returning evidence.</p></section>
+ <section class="page-switcher-panel" id="founder-product-parmarth-panel" role="tabpanel" aria-labelledby="founder-product-parmarth-tab" hidden><span class="panel-kicker">LIVE TELEGRAM MVP</span><h4>परमार्थAI</h4><p>परमार्थAI is a live Telegram MVP for competitive-exam preparation, with follow-up questions and quizzes inside Telegram.</p></section>
+ <section class="page-switcher-panel" id="founder-product-teachers-panel" role="tabpanel" aria-labelledby="founder-product-teachers-tab" hidden><span class="panel-kicker">OPERATOR CONSOLE LIVE</span><h4>BRɅIN Teachers</h4><p>BRɅIN Teachers is a separate workspace app with a deployed Operator Console for teachers, projects, collections and study PDFs. Its student-facing rollout is still in development.</p></section>
+</div>
 
-    <h3>BRɅIN Core</h3>
-    <p>Core currently uses private Google Cloud Storage, Google Cloud Vision OCR, Cloudflare Workers and Workflows, D1 and Cloudflare AI Search. The live retrieval service checks application and project permissions before returning evidence.</p>
-
-    <h3>Connected applications</h3>
-    <p><strong>परमार्थAI</strong> is a live Telegram MVP for competitive-exam preparation, with follow-up questions and quizzes inside Telegram. <strong>BRɅIN Teachers</strong> is a separate workspace app with a deployed Operator Console for teachers, projects, collections and study PDFs. Its student-facing rollout is still in development.</p>
-
-    <h3>Building in the open</h3>
+    <h3 id="founder-open">Building in the open</h3>
     <p>I keep the two repositories public so the implementation and current development status can be inspected. Core lives in <strong>parmar-ai</strong>; Teachers is a separate consumer in <strong>brvin-teachers</strong>. The repositories are the best place to check what is implemented and what is still being worked on.</p>
     <div class="legal-callout">
       <strong>Explore the work</strong><br>
@@ -190,10 +233,10 @@ body{background:radial-gradient(ellipse 68% 34% at 86% 0%,rgba(216,203,179,.22),
       <a href="https://linkedin.com/in/ashinigogoi" target="_blank" rel="noopener noreferrer">LinkedIn profile ↗</a>
     </div>
 
-    <h3>Where the product stands</h3>
+    <h3 id="founder-status">Where the product stands</h3>
     <p>The production retrieval provider is Cloudflare AI Search. Vertex AI embeddings and Qdrant Cloud are being evaluated separately and are not the production provider today. The voice-provider integration is also in development, not a shipped production feature.</p>
 
-    <h3>Contact</h3>
+    <h3 id="founder-contact">Contact</h3>
     <p>For founder, product or partnership enquiries, email <a href="mailto:founder@brvin.in">founder@brvin.in</a>. For general business enquiries, contact <a href="mailto:partners@brvin.in">partners@brvin.in</a>.</p>
   </article>
 </section>
@@ -228,6 +271,25 @@ body{background:radial-gradient(ellipse 68% 34% at 86% 0%,rgba(216,203,179,.22),
  document.addEventListener("keydown",event=>{if(event.key==="Escape")closeMenu(true)});
  document.addEventListener("click",event=>{if(!siteNav.contains(event.target))closeMenu()});
  window.matchMedia("(min-width: 861px)").addEventListener?.("change",event=>{if(event.matches)closeMenu()});
+})();
+</script>
+<script>
+(()=> {
+ function activate(button){
+  const group=button.dataset.pageTab;
+  document.querySelectorAll('[data-page-tab="'+group+'"]').forEach(tab=>{
+   const active=tab===button;tab.setAttribute("aria-selected",String(active));tab.tabIndex=active?0:-1;
+   const panel=document.getElementById(tab.getAttribute("aria-controls"));if(panel)panel.hidden=!active;
+  });
+ }
+ document.querySelectorAll("[data-page-tab][aria-controls]").forEach(button=>{
+  button.addEventListener("click",()=>activate(button));
+  button.addEventListener("keydown",event=>{
+   const group=[...document.querySelectorAll('[data-page-tab="'+button.dataset.pageTab+'"]')],index=group.indexOf(button);let next=index;
+   if(event.key==="ArrowRight")next=(index+1)%group.length;else if(event.key==="ArrowLeft")next=(index-1+group.length)%group.length;else if(event.key==="Home")next=0;else if(event.key==="End")next=group.length-1;else return;
+   event.preventDefault();group[next].click();group[next].focus();
+  });
+ });
 })();
 </script>
 </body></html>

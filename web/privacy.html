@@ -89,11 +89,7 @@ body{
 }
 
 
-@media(max-width:600px){
-  .nav-items a[href="#demo"],
-  .nav-items a[href="/#demo"],
-  .nav-items a[href="/#why"]{display:none}
-}
+
 
 .venture-note{margin:7px 0 0;color:#8b8b8b;font-size:11px;line-height:1.55}
 
@@ -137,11 +133,29 @@ body{background:radial-gradient(ellipse 68% 34% at 86% 0%,rgba(216,203,179,.2),t
 .legal-callout{border-radius:11px;background:linear-gradient(110deg,#F0EFEA,#F7F6F2)}
 @media(max-width:760px){.legal-hero{padding:60px 0 28px}.legal-hero h1{font-size:clamp(44px,9vw,62px)}.legal-document{padding:23px}.legal-document h3{margin-top:24px;padding-top:16px}}
 
+
+.legal-toc{position:sticky;top:78px;z-index:5;display:flex;align-items:center;gap:6px;overflow-x:auto;margin:0 0 23px;padding:8px;border:1px solid rgba(226,224,218,.92);border-radius:11px;background:rgba(247,246,242,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.legal-toc-label{flex:0 0 auto;padding:0 7px;color:var(--muted);font-size:8px;font-weight:750;letter-spacing:.1em}
+.legal-toc a{display:inline-flex;min-height:30px;flex:0 0 auto;align-items:center;padding:0 10px;border:1px solid transparent;border-radius:999px;color:var(--body);font-size:9px;font-weight:560;white-space:nowrap;transition:background .18s ease,border-color .18s ease,color .18s ease}
+.legal-toc a:hover{border-color:var(--line);background:#fff;color:var(--ink)}
+.legal-document h3[id]{scroll-margin-top:130px}
+@media(max-width:760px){.legal-toc{top:65px;margin-bottom:18px}.legal-toc-label{display:none}.legal-toc a{min-height:32px;padding:0 11px}}
+
+.legal-hero{padding:clamp(76px,8.5vw,104px) 0 34px}
+.legal-hero h1{font-size:clamp(54px,7vw,82px);font-weight:520;letter-spacing:-.08em;line-height:.97}
+.legal-hero p{font-size:clamp(15px,1.4vw,18px);line-height:1.8}
+.legal-document{max-width:980px;padding:clamp(25px,4vw,48px);border-radius:16px;background:radial-gradient(ellipse 76% 18% at 100% 0%,rgba(216,203,179,.12),transparent 80%),#fff;box-shadow:0 2px 10px rgba(23,23,21,.025)}
+.legal-document h2{font-size:clamp(27px,3.2vw,36px);font-weight:520;letter-spacing:-.06em}
+.legal-document h3{margin-top:31px;padding-top:20px;border-top:1px solid var(--line);font-size:16px;font-weight:600;letter-spacing:-.025em}
+.legal-document p{font-size:13px;line-height:1.9}
+.legal-callout{border-radius:11px;background:linear-gradient(110deg,#F0EFEA,#F7F6F2)}
+@media(max-width:760px){.legal-hero{padding:58px 0 25px}.legal-hero h1{font-size:clamp(45px,9.5vw,62px)}.legal-document{padding:22px}.legal-document h3{margin-top:25px;padding-top:16px}}
+
 </style></head><body><header class="site-nav"><div class="nav-inner shell">
 <a class="brand" href="/" aria-label="BRɅIN home">BR<span class="brand-mark">Ʌ</span>IN</a>
 <div class="nav-controls">
   <nav class="nav-items" id="primary-navigation" aria-label="Main navigation">
-    <a href="/why">Why BRɅIN</a><a href="#platform">Platform</a><a href="#demo">Voice demo</a><a href="#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a>
+    <a href="/why">Why BRɅIN</a><a href="/#platform">Platform</a><a href="/#demo">Voice demo</a><a href="/#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a>
   </nav>
   <a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
   <button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="primary-navigation">
@@ -154,14 +168,15 @@ body{background:radial-gradient(ellipse 68% 34% at 86% 0%,rgba(216,203,179,.2),t
 <p><strong>Effective date: 17 November 2026 (IST).</strong> This policy describes how BRɅIN processes information when organizations and their authorized adult users access the platform.</p>
 <p>BRɅIN is the technology venture and brand of BRVIN TECHNOLOGIES, an Indian sole proprietorship. In this document, “BRɅIN”, “we” and “us” refer to BRVIN TECHNOLOGIES acting through the BRɅIN platform.</p>
 <div class="legal-callout">BRɅIN platforms and voice interfaces are designed exclusively for adult professionals, researchers, and enterprise users aged 18 and older.</div>
-<h3>Information processed</h3><p>The information processed depends on which features an organization uses. It may include account and organization details, details about authorized users, uploaded files, prompts, retrieved passages, PDF page references, generated responses, usage records, technical logs and support messages. The organization submitting a document must have the right to use and share it for this purpose.</p>
-<h3>Voice and audio data</h3><p>The voice preview on this website uses your browser’s built-in speech feature, where supported. It does not send audio to ElevenLabs. BRɅIN’s planned voice-provider integration is still in development and is not a live production feature. If a voice feature is released, the relevant product notice will identify the provider and explain what data it processes.</p>
+<nav class="legal-toc" aria-label="On this page"><span class="legal-toc-label">ON THIS PAGE</span><a href="#privacy-information">Information processed</a><a href="#privacy-voice">Voice and audio data</a><a href="#privacy-access">Workspace separation and access</a><a href="#privacy-use">How information is used</a><a href="#privacy-retention">Retention and deletion</a><a href="#privacy-security">Security and changes</a><a href="#privacy-contact">Contact</a></nav>
+<h3 id="privacy-information">Information processed</h3><p>The information processed depends on which features an organization uses. It may include account and organization details, details about authorized users, uploaded files, prompts, retrieved passages, PDF page references, generated responses, usage records, technical logs and support messages. The organization submitting a document must have the right to use and share it for this purpose.</p>
+<h3 id="privacy-voice">Voice and audio data</h3><p>The voice preview on this website uses your browser’s built-in speech feature, where supported. It does not send audio to ElevenLabs. BRɅIN’s planned voice-provider integration is still in development and is not a live production feature. If a voice feature is released, the relevant product notice will identify the provider and explain what data it processes.</p>
 <p>Do not upload or submit voice recordings, personal information or other content belonging to anyone under 18.</p>
-<h3>Workspace separation and access</h3><p>Access to documents and retrieved passages is controlled through application identity, project access and source permissions. The private retrieval service checks those permissions before it returns evidence.</p>
-<h3>How information is used</h3><p>We use this information to run document uploads, indexing and retrieval; show source references; operate any enabled features; protect the service; apply usage limits; troubleshoot issues; and provide support. Our infrastructure providers may process information as needed to run the service. BRɅIN does not sell customer documents or personal information.</p>
-<h3>Retention and deletion</h3><p>We keep information for as long as it is needed to provide the service, meet agreed operational needs, protect the platform or comply with the law. An authorized representative of the organization may request deletion or help with a data request by emailing <a href="mailto:founder@brvin.in">founder@brvin.in</a>. Requests are subject to identity and authority verification, technical feasibility and applicable legal retention requirements.</p>
-<h3>Security and changes</h3><p>We use access controls and operational safeguards appropriate to the service. No online service can guarantee complete security. If this policy changes in a material way, we will publish the revised version and update its effective date.</p>
-<h3>Contact</h3><p>Privacy questions and authorized data requests may be sent to <a href="mailto:founder@brvin.in">founder@brvin.in</a>.</p>
+<h3 id="privacy-access">Workspace separation and access</h3><p>Access to documents and retrieved passages is controlled through application identity, project access and source permissions. The private retrieval service checks those permissions before it returns evidence.</p>
+<h3 id="privacy-use">How information is used</h3><p>We use this information to run document uploads, indexing and retrieval; show source references; operate any enabled features; protect the service; apply usage limits; troubleshoot issues; and provide support. Our infrastructure providers may process information as needed to run the service. BRɅIN does not sell customer documents or personal information.</p>
+<h3 id="privacy-retention">Retention and deletion</h3><p>We keep information for as long as it is needed to provide the service, meet agreed operational needs, protect the platform or comply with the law. An authorized representative of the organization may request deletion or help with a data request by emailing <a href="mailto:founder@brvin.in">founder@brvin.in</a>. Requests are subject to identity and authority verification, technical feasibility and applicable legal retention requirements.</p>
+<h3 id="privacy-security">Security and changes</h3><p>We use access controls and operational safeguards appropriate to the service. No online service can guarantee complete security. If this policy changes in a material way, we will publish the revised version and update its effective date.</p>
+<h3 id="privacy-contact">Contact</h3><p>Privacy questions and authorized data requests may be sent to <a href="mailto:founder@brvin.in">founder@brvin.in</a>.</p>
 </article></section></main><footer class="footer"><div class="shell"><div class="footer-top"><span class="copyright">© 2026 BRɅIN · India</span><div class="footer-right"><nav class="footer-links" aria-label="Footer links">
 <a href="https://telegram.me/parmarthbot" target="_blank" rel="noopener noreferrer">Telegram MVP</a>
 <a href="https://linkedin.com/in/ashinigogoi" target="_blank" rel="noopener noreferrer">LinkedIn</a>
