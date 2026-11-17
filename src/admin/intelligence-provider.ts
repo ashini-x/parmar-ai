@@ -184,6 +184,25 @@ async function probeModel(
   }
 }
 
+
+async function mapLimited<T, R>(
+  items: readonly T[],
+  limit: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const index = next++;
+      if (index >= items.length) return;
+      results[index] = await mapper(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export async function listOwnerGeminiModels(
   env: Env,
   dependencies: OwnerProviderDependencies = defaultDependencies,
