@@ -389,10 +389,200 @@ function validConversationId(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value);
 }
 
+
+function streamEvent(controller: ReadableStreamDefaultController<Uint8Array>, type: string, value: unknown): void {
+  controller.enqueue(new TextEncoder().encode("event: " + type + "\\ndata: " + JSON.stringify(value) + "\\n\\n"));
+}
+
+async function handleOwnerGeneration(
+  request: Request,
+  env: Env,
+  conversationId: string,
+): Promise<Response> {
+  if (request.method !== "POST") return methodNotAllowed(["POST"]);
+  if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+  const body = await readJsonBody(request);
+  const allowedKeys = new Set(["content", "modelId", "thinkingLevel", "editMessageId", "action"]);
+  if (!body || Object.keys(body).some((key) => !allowedKeys.has(key)) ||
+      typeof body.modelId !== "string" || typeof body.thinkingLevel !== "string" ||
+      (body.action !== undefined && body.action !== "regenerate") ||
+      (body.editMessageId !== undefined && typeof body.editMessageId !== "string") ||
+      (body.content !== undefined && typeof body.content !== "string")) {
+    return json({ ok: false, error: "invalid_request" }, 400);
+  }
+  const definition = OWNER_GEMINI_MODEL_REGISTRY.find((item) => item.id === body.modelId);
+  if (!definition) return json({ ok: false, error: "model_not_supported" }, 400);
+  const thinkingLevel = body.thinkingLevel as OwnerThinkingLevel;
+  if (!definition.thinkingLevels.includes(thinkingLevel)) {
+    return json({ ok: false, error: "thinking_level_not_supported", message: "Choose a thinking level supported by the selected model." }, 400);
+  }
+  if (body.action === "regenerate" && (body.content !== undefined || body.editMessageId !== undefined)) {
+    return json({ ok: false, error: "invalid_request" }, 400);
+  }
+  if (body.editMessageId && body.action) return json({ ok: false, error: "invalid_request" }, 400);
+  if (!body.action && typeof body.content !== "string") return json({ ok: false, error: "message_required" }, 400);
+
+  let messages: OwnerIntelligenceMessage[] | null;
+  try {
+    messages = await prepareOwnerPrompt(env, conversationId, {
+      content: body.content as string | undefined,
+      editMessageId: body.editMessageId as string | undefined,
+      action: body.action as "regenerate" | undefined,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The prompt could not be prepared.";
+    return json({ ok: false, error: "prompt_update_failed", message }, 400);
+  }
+  if (!messages) return notFound();
+
+  const contents = messages
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .slice(-49)
+    .map((message) => ({ role: message.role === "assistant" ? "model" as const : "user" as const, text: message.content }));
+  if (!contents.length || contents[contents.length - 1].role !== "user") {
+    return json({ ok: false, error: "latest_message_missing" }, 409);
+  }
+  const assistantMessage = await appendOwnerIntelligenceMessage(env, {
+    conversationId,
+    role: "assistant",
+    content: "",
+    status: "pending",
+    modelId: definition.id,
+    thinkingLevel,
+  });
+  if (!assistantMessage) return notFound();
+
+  const abortController = new AbortController();
+  const abortFromRequest = () => abortController.abort();
+  if (request.signal.aborted) abortController.abort();
+  else request.signal.addEventListener("abort", abortFromRequest, { once: true });
+
+  let upstream: AsyncGenerator<Awaited<ReturnType<typeof openOwnerGeminiStream>> extends AsyncGenerator<infer E> ? E : never>;
+  try {
+    upstream = await openOwnerGeminiStream(env, {
+      modelId: definition.id,
+      thinkingLevel,
+      contents,
+      maxOutputTokens: 8_192,
+    }, abortController.signal);
+  } catch (error) {
+    request.signal.removeEventListener("abort", abortFromRequest);
+    const providerError = error instanceof OwnerGeminiProviderError ? error : null;
+    const status = providerError?.status === 400 ? 400 : providerError?.status === 401 || providerError?.status === 403 ? 502 : 503;
+    const message = providerError?.message ?? "The model request could not be started.";
+    await updateOwnerAssistantMessage(env, assistantMessage.id, "", "error");
+    return json({ ok: false, error: "generation_start_failed", message }, status);
+  }
+
+  const encoder = new TextEncoder();
+  let responseController: ReadableStreamDefaultController<Uint8Array> | null = null;
+  let generatedText = "";
+  let lastPersistedLength = 0;
+  let lastPersistedAt = Date.now();
+  let finalMessage: OwnerIntelligenceMessage | null = null;
+  let finalizePromise: Promise<OwnerIntelligenceMessage | null> | null = null;
+
+  const finalize = (
+    status: OwnerIntelligenceMessage["status"],
+    usage?: { promptTokens: number; outputTokens: number; totalTokens: number; elapsedMs: number },
+  ): Promise<OwnerIntelligenceMessage | null> => {
+    if (!finalizePromise) {
+      finalizePromise = updateOwnerAssistantMessage(env, assistantMessage.id, generatedText, status, usage)
+        .then((message) => { finalMessage = message; return message; });
+    }
+    return finalizePromise;
+  };
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      responseController = controller;
+      const safeEvent = (type: string, value: unknown) => {
+        try { streamEvent(controller, type, value); return true; }
+        catch { return false; }
+      };
+      safeEvent("meta", {
+        message: assistantMessage,
+        model: definition.label,
+        thinkingLevel,
+      });
+      void (async () => {
+        let completed = false;
+        try {
+          for await (const event of upstream) {
+            if (event.type === "delta") {
+              generatedText += event.text;
+              if (generatedText.length > MAX_MESSAGE_LENGTH) {
+                throw new OwnerGeminiProviderError("The response exceeded the supported 50,000-character message size.");
+              }
+              if (generatedText.length - lastPersistedLength >= 1_024 || Date.now() - lastPersistedAt >= 1_000) {
+                await updateOwnerAssistantMessage(env, assistantMessage.id, generatedText, "partial");
+                lastPersistedLength = generatedText.length;
+                lastPersistedAt = Date.now();
+              }
+              if (!safeEvent("delta", { text: event.text })) {
+                abortController.abort();
+                break;
+              }
+            } else {
+              finalMessage = await finalize("complete", {
+                promptTokens: event.usage.promptTokens,
+                outputTokens: event.usage.outputTokens,
+                totalTokens: event.usage.totalTokens,
+                elapsedMs: event.elapsedMs,
+              });
+              safeEvent("done", { message: finalMessage, usage: event.usage, elapsedMs: event.elapsedMs });
+              completed = true;
+              break;
+            }
+          }
+        } catch (error) {
+          const stopped = abortController.signal.aborted ||
+            (error instanceof OwnerGeminiProviderError && error.message === "Generation was stopped.");
+          const status: OwnerIntelligenceMessage["status"] = generatedText ? "partial" : "error";
+          finalMessage = await finalize(status);
+          if (!stopped) {
+            const message = error instanceof OwnerGeminiProviderError
+              ? error.message : "The response stream failed. Any received text has been retained.";
+            safeEvent("error", { message, partial: Boolean(generatedText) });
+          }
+        } finally {
+          if (!completed && !finalizePromise) {
+            finalMessage = await finalize(generatedText ? "partial" : "error");
+          }
+          request.signal.removeEventListener("abort", abortFromRequest);
+          try { controller.close(); } catch { /* the client may have cancelled the stream */ }
+        }
+      })();
+    },
+    async cancel() {
+      abortController.abort();
+      try {
+        await finalize(generatedText ? "partial" : "error");
+      } finally {
+        request.signal.removeEventListener("abort", abortFromRequest);
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-store, no-transform",
+      "x-content-type-options": "nosniff",
+      "x-accel-buffering": "no",
+    },
+  });
+}
+
 export async function handleOwnerIntelligenceApi(request: Request, env: Env, url: URL): Promise<Response> {
   if (url.pathname === "/admin/api/intelligence/models") {
     if (request.method !== "GET") return methodNotAllowed(["GET"]);
     return ownerIntelligenceModelsResponse(env);
+  }
+
+  const generationMatch = url.pathname.match(/^\\/admin\\/api\\/intelligence\\/conversations\\/([0-9a-f-]{36})\\/generate$/iu);
+  if (generationMatch && validConversationId(generationMatch[1])) {
+    return handleOwnerGeneration(request, env, generationMatch[1]);
   }
 
   const root = "/admin/api/intelligence/conversations";
