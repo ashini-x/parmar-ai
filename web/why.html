@@ -183,23 +183,68 @@ a:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 .venture-note{margin:7px 0 0;color:#8b8b8b;font-size:11px;line-height:1.55}
+
+/* Shared BRɅIN homepage navigation and responsive header */
+.nav-inner{position:relative}
+.nav-controls{display:flex;min-width:0;align-items:center;gap:clamp(14px,2vw,26px)}
+.nav-items{display:flex;align-items:center;gap:clamp(18px,2.5vw,34px)}
+.nav-items a{color:var(--body);font-size:13px;font-weight:500;transition:color .18s ease}
+.nav-items a:hover{color:var(--ink)}
+.nav-cta{display:inline-flex;min-height:40px;align-items:center;justify-content:center;padding:0 16px;border:1px solid var(--line-strong);border-radius:999px;background:var(--paper);color:var(--ink);font-size:13px;font-weight:520;white-space:nowrap;transition:background .18s ease,color .18s ease,border-color .18s ease}
+.nav-cta:hover{border-color:var(--ink);background:var(--ink);color:#fff}
+.nav-toggle{display:none;width:40px;height:40px;flex:0 0 auto;align-items:center;justify-content:center;flex-direction:column;gap:4px;padding:0;border:1px solid var(--line-strong);border-radius:50%;background:var(--paper);color:var(--ink);cursor:pointer}
+.nav-toggle span{display:block;width:15px;height:1.5px;border-radius:2px;background:currentColor;transition:transform .18s ease,opacity .18s ease}
+@media(max-width:860px){
+ .nav-inner{min-height:64px;gap:12px}
+ .nav-controls{gap:8px}
+ .nav-items{display:none;position:absolute;z-index:35;top:calc(100% + 1px);right:0;left:0;flex-direction:column;align-items:stretch;gap:2px;padding:8px;border:1px solid var(--line);border-top:0;border-radius:0 0 13px 13px;background:rgba(247,246,242,.985);box-shadow:0 12px 28px rgba(23,23,21,.09);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+ .site-nav.is-menu-open .nav-items{display:flex}
+ .nav-items a{display:flex;min-height:44px;align-items:center;padding:0 12px;border-radius:8px;color:var(--body);font-size:14px}
+ .nav-items a:hover{background:var(--soft);color:var(--ink)}
+ .nav-cta{min-height:40px;padding:0 14px;font-size:12px}
+ .nav-toggle{display:inline-flex}
+ .site-nav.is-menu-open .nav-toggle span:nth-child(1){transform:translateY(5.5px) rotate(45deg)}
+ .site-nav.is-menu-open .nav-toggle span:nth-child(2){opacity:0}
+ .site-nav.is-menu-open .nav-toggle span:nth-child(3){transform:translateY(-5.5px) rotate(-45deg)}
+}
+@media(max-width:430px){.nav-inner{min-height:60px}.brand{font-size:19px}.nav-cta,.nav-toggle{min-height:38px;height:38px}.nav-cta{padding:0 13px}.nav-toggle{width:38px}}
+@media(prefers-reduced-motion:reduce){.nav-toggle span{transition:none}}
+
+
+/* Why page — align editorial storytelling with the homepage */
+body{background:radial-gradient(ellipse 70% 32% at 84% 0%,rgba(216,203,179,.2),transparent 78%),var(--page)}
+.story{padding-top:clamp(64px,7.5vw,92px);padding-bottom:clamp(48px,6vw,72px)}
+.story+.story{padding-top:clamp(48px,5.5vw,66px);border-top:1px solid var(--line)}
+.story-heading{font-size:clamp(38px,5.2vw,64px);font-weight:520;letter-spacing:-.075em;line-height:1.02;text-wrap:balance}
+.story-copy p,.market-copy p,.wedge-intro>p{font-size:14px;line-height:1.85;color:var(--body)}
+.principles{gap:12px}
+.principle,.stage{padding:22px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.76)}
+.principle span,.stage span,.market-thesis>span,.current-state>span{font-size:9px;letter-spacing:.14em;color:var(--muted)}
+.principle h3,.stage strong{font-weight:560;letter-spacing:-.035em}
+.platform-model{padding:clamp(22px,3vw,32px);border:1px solid var(--line);border-radius:15px;background:var(--paper)}
+.model-node{border:1px solid var(--line);border-radius:10px;background:#fff}
+.model-node.core{background:#F0EFEA;border-color:var(--line-strong)}
+.market-thesis,.current-state{padding:22px 24px;border:1px solid var(--line);border-radius:13px;background:var(--soft)}
+.next-step{padding:clamp(24px,3.5vw,38px);border:1px solid var(--line);border-radius:15px;background:var(--paper)}
+.primary-link{display:inline-flex;align-items:center;gap:12px;padding:11px 16px;border-radius:999px;background:var(--ink);color:white;font-size:12px;font-weight:600}
+.primary-link:hover{background:#33332f}
+@media(max-width:760px){.story{padding-top:48px;padding-bottom:42px}.story-heading{font-size:clamp(36px,9vw,48px)}.principles{gap:9px}.principle,.stage{padding:18px}.next-step{gap:20px}}
+
 </style>
 </head>
 <body>
-<header class="site-nav">
-  <div class="nav-inner shell">
-    <a class="brand" href="/" aria-label="BRɅIN home">BRɅIN</a>
-    <nav class="nav-items" aria-label="Main navigation">
-      <a href="/why">Why BRɅIN</a>
-      <a href="/#platform">Platform</a>
-      <a href="/#demo">Voice demo</a>
-      <a href="/#plans">Plans</a>
-      <a href="/founder">Founder</a>
-      <a href="/privacy">Privacy</a>
-      <a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
-    </nav>
-  </div>
-</header>
+<header class="site-nav"><div class="nav-inner shell">
+<a class="brand" href="/" aria-label="BRɅIN home">BR<span class="brand-mark">Ʌ</span>IN</a>
+<div class="nav-controls">
+  <nav class="nav-items" id="primary-navigation" aria-label="Main navigation">
+    <a href="/why">Why BRɅIN</a><a href="#platform">Platform</a><a href="#demo">Voice demo</a><a href="#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a>
+  </nav>
+  <a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
+  <button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="primary-navigation">
+    <span></span><span></span><span></span>
+  </button>
+</div>
+</div></header>
 <main>
   <section class="story shell" aria-labelledby="origin-title">
     <div class="story-grid">
@@ -329,5 +374,30 @@ a:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
 
   </div>
 </footer>
+
+<script>
+(()=> {
+ const siteNav=document.querySelector(".site-nav");
+ const navToggle=document.querySelector(".nav-toggle");
+ const primaryNavigation=document.getElementById("primary-navigation");
+ if(!siteNav||!navToggle||!primaryNavigation)return;
+ function closeMenu(restoreFocus=false){
+   const wasOpen=siteNav.classList.contains("is-menu-open");
+   siteNav.classList.remove("is-menu-open");
+   navToggle.setAttribute("aria-expanded","false");
+   navToggle.setAttribute("aria-label","Open navigation");
+   if(restoreFocus&&wasOpen)navToggle.focus();
+ }
+ navToggle.addEventListener("click",()=>{
+   const open=siteNav.classList.toggle("is-menu-open");
+   navToggle.setAttribute("aria-expanded",String(open));
+   navToggle.setAttribute("aria-label",open?"Close navigation":"Open navigation");
+ });
+ primaryNavigation.querySelectorAll("a").forEach(link=>link.addEventListener("click",()=>closeMenu()));
+ document.addEventListener("keydown",event=>{if(event.key==="Escape")closeMenu(true)});
+ document.addEventListener("click",event=>{if(!siteNav.contains(event.target))closeMenu()});
+ window.matchMedia("(min-width: 861px)").addEventListener?.("change",event=>{if(event.matches)closeMenu()});
+})();
+</script>
 </body>
 </html>
