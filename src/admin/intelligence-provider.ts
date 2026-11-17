@@ -487,13 +487,13 @@ export async function openOwnerGeminiStream(
     try {
       while (true) {
         const next = await reader.read();
-        buffer += decoder.decode(next.value, { stream: !next.done }).replace(/\r\n/gu, "\n");
-        let boundary = buffer.indexOf("\n\n");
-        while (boundary >= 0) {
-          const block = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
+        buffer += decoder.decode(next.value, { stream: !next.done });
+        let boundary = /\r?\n\r?\n/u.exec(buffer);
+        while (boundary) {
+          const block = buffer.slice(0, boundary.index);
+          buffer = buffer.slice(boundary.index + boundary[0].length);
           yield* parseBlock(block);
-          boundary = buffer.indexOf("\n\n");
+          boundary = /\r?\n\r?\n/u.exec(buffer);
         }
         if (next.done) break;
       }
