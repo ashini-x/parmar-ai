@@ -290,6 +290,10 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain('document.getElementById("newChat").addEventListener');
     expect(script).toContain("The Owner workspace request timed out");
     expect(script).toContain("Could not load conversations");
+    expect(script).toContain("messageInput.disabled=!canGenerate||sending");
+    expect(script).toContain("async function ensureActiveConversation()");
+    expect(script).toContain('conversationId=await ensureActiveConversation()');
+    expect(script).toContain('Type a message and send to start a new conversation.');
   });
 
   it("creates, lists, reopens, renames and deletes only the Owner's conversations and messages", async () => {
