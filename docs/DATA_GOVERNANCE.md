@@ -41,6 +41,12 @@ The /delete-my-data workflow is the product-level deletion path for centralized 
 
 Any new persistent store must define its deletion behavior before release. Native quiz sessions are deleted by /delete-my-data and follow the same configured raw-data retention lifecycle. Photo album staging and retry file IDs live in the student's Durable Object, so `/delete-my-data` clears them with the rest of that object's state; completed jobs clear their photo IDs and abandoned job state follows the 48-hour cleanup.
 
+### Owner Intelligence workspace
+
+M2 stores conversation titles and Owner-authored message text in the dedicated `owner_intelligence_conversations` and `owner_intelligence_messages` D1 tables. Each row carries an `owner_id` derived from the configured web Owner username; all query paths filter on that value. Owner chat records are not student questions, profiles, quizzes, Durable Object state or BRɅIN retrieval content. The student `/delete-my-data` workflow does not operate on Owner conversations.
+
+The Owner can delete a conversation from the workspace; that action deletes the conversation and associated message rows. M2 has no automatic retention cleanup, bulk-delete facility or Owner-account deletion endpoint. Until a separate retention control is implemented, conversations remain stored until the Owner deletes them individually. M2 persists user-authored text only; Gemini generation is not enabled.
+
 ### Imported knowledge books
 
 Imported BRVIN PDF books keep durable knowledge separate from temporary OCR processing output:

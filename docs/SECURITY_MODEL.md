@@ -15,12 +15,12 @@ Analytics/BRɅIN schema initialization must not cache unresolved module-global P
 Production currently configures `OWNER_DASHBOARD_USER=admin` in `wrangler.jsonc`, explicitly assigning the single existing admin account to the Owner role. It reuses the existing admin login credential; no additional Owner password is stored in source. A future distinct Owner principal must use a different username and the `OWNER_DASHBOARD_PASSWORD` Cloudflare Worker secret. The Telegram `BOT_OWNER_TELEGRAM_USER_ID` is not a web-admin identity.
 
 ## Authorization
-`requireAdmin` permits valid admin and Owner sessions for the existing admin application. `requireOwner` permits only the Owner claim. M1 protects `/admin/intelligence` and reserves `/admin/api/intelligence/*` behind that Owner guard. Anonymous requests are rejected, authenticated non-Owner admins receive forbidden responses, and an Owner-only reserved API path remains unhandled (404) until M2 implements it. Every future workspace route and API must independently enforce Owner authorization and same-origin checks for mutations.
+`requireAdmin` permits valid admin and Owner sessions for the existing admin application. `requireOwner` permits only the Owner claim. The M2 `/admin/intelligence` page and `/admin/api/intelligence/*` handlers are guarded by `requireOwner`. Anonymous requests receive 401 and authenticated non-Owner admins receive 403. Conversation/message queries also filter by the normalized configured Owner principal, rather than trusting a browser-supplied owner identifier. Mutations require a matching same-origin Origin header and reject cross-site fetches. Owner sessions use a signature key derived from the configured Owner credential; password rotation revokes existing Owner sessions.
 
 Dashboard access mutations are server-side, same-origin protected, and verified against D1. Protected administrator identities cannot be suspended through ordinary student controls.
 
 ## Data separation
-Durable Object holds private-chat operational state, profile, conversation, rate metadata, and job lifecycle. D1 holds analytics, AI usage, access overrides, audit entries, and Telegram bot metadata. Queue is transport for asynchronous processing.
+Durable Object holds student private-chat operational state, profile, rate metadata and job lifecycle. D1 holds student analytics, AI usage, access overrides, audit entries and Telegram bot metadata. Queue is transport for asynchronous student processing. Owner Intelligence has separate D1 tables `owner_intelligence_conversations` and `owner_intelligence_messages`; Owner prompts are not written into student `questions` or student Durable Object state.
 
 ## Secrets
 Credentials must remain in secure deployment configuration. Never log tokens, private keys, cookies, authorization headers, or secret environment values.
@@ -33,3 +33,8 @@ Use bounded conversation/profile context and validate structured model output be
 
 ## Incident response
 Rotate credentials, disable compromised access, inspect logs/audit events, assess impact, deploy the verified fix, and preserve an internal incident record.
+
+## Owner Intelligence workspace controls
+
+The M2 page is served with `no-store`, `noindex,nofollow`, a per-response nonce-based script Content Security Policy, `nosniff` and `no-referrer`. The browser sends conversation IDs and message/title content only; the server resolves Owner identity from the signed session and configured Owner principal. Conversation IDs are UUID-validated and every D1 query includes the Owner scope. The production Owner scope currently maps to `OWNER_DASHBOARD_USER=admin`; changing that username requires an explicit data migration to preserve existing conversations.
+

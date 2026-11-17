@@ -23,22 +23,25 @@ Do not describe this as unlimited provider capacity. Do not apply student daily/
 
 - M0 — product/architecture/security/milestone baseline: **complete**.
 - M1 — Owner identity and authorization: **complete and deployed**.
-- Latest production correction: commit `8253a1dafc6fbc919324423f7c7bd79e360b5df7`; workflow [44139900378](https://github.com/ashini-x/parmar-ai/actions/runs/44139900378), conclusion `success`.
-- The production screenshot error (Cloudflare 1101, Ray `a5c06d999bd6cc0f`) was traced to an in-flight module-global analytics schema Promise being awaited across Worker request contexts during `POST /admin/login`. The fix removes both in-flight Promise caches, records only completed schema initialization in WeakSets, makes column migrations re-check after concurrent DDL races, and awaits the login handler in the Worker route error boundary.
-- Added a concurrent Owner login integration regression test. Updated runtime schema concurrency and Node source-contract tests for the safer schema initialization behaviour.
-- Verified gates: `npm run check`, `npm test` (466 tests), `npm run test:node` (62 tests), three Worker dry-runs, paired production Worker deployment, production smoke test and acceptance manifest all passed. No rollback was required.
-- Production currently has one configured web-admin principal. `wrangler.jsonc` explicitly sets `OWNER_DASHBOARD_USER=admin`, so the existing admin username/password is also the Owner credential. Sign out and sign in again after deployment to receive a new Owner session.
-- `/admin/intelligence` is a protected placeholder route; the actual chat UI is not built. `/admin/api/intelligence/*` is an Owner-only reserved namespace with no application handlers yet. No conversation database, Gemini owner pipeline, model catalogue, thinking selector or uploads are implemented.
-- A real-credential browser login was not manually performed from this session. The concurrent login regression test and production smoke/acceptance checks passed; the browser URL itself could not be directly fetched from this execution environment after deployment.
-- **Next milestone: M2 — workspace shell and owner chat persistence.**
+- M2 — responsive Owner workspace and chat persistence: **complete and deployed**.
+- Latest deployed source: `dd5d1ec6b0f9ccbe61facf0ed0cfa4c11ef21d25`; workflow [44145644996](https://github.com/ashini-x/parmar-ai/actions/runs/44145644996) succeeded.
+- Production Worker versions: `brvin-service` = `742f4710-799c-444e-97a6-780cd2873e7a`; `parmar-ai` = `33969d3d-52f8-402d-be89-ce83f8495e35`. Root, health, BRVIN service binding and Fatman readiness checks passed; no rollback was needed.
+- M2 added responsive dark `/admin/intelligence`, conversation history, New chat, reopen, rename and delete. The composer saves Owner-authored messages and reloads them from D1.
+- Dedicated D1 tables: `owner_intelligence_conversations` and `owner_intelligence_messages`. All queries are scoped to the normalized configured Owner username. Deleting a conversation deletes its messages. No automatic retention cleanup or bulk-delete facility exists yet.
+- Owner-only APIs: `GET/POST /admin/api/intelligence/conversations`; `GET/PATCH/DELETE /admin/api/intelligence/conversations/:id`; `POST /admin/api/intelligence/conversations/:id/messages`. Mutations require a same-origin Origin header.
+- The composer persists user messages only. Gemini answers, model catalogue, thinking levels, streaming, stop/regenerate/edit, uploads and optional BRɅIN retrieval are **not implemented**. Do not imply that this workspace already generates AI replies.
+- Verification: `npm run check`; `npm test` (71 files / 470 tests); `npm run test:node` (9 files / 62 tests); three Worker dry-runs; paired production deployment; smoke test and release acceptance — all passed.
+- Production maps the existing single admin principal to Owner with `OWNER_DASHBOARD_USER=admin`; sign out and sign back in if using a pre-M1 session. A real-credential browser walkthrough was not performed.
+- Known M2 limitations: Owner chats remain until individually deleted. Changing `OWNER_DASHBOARD_USER` requires a deliberate `owner_id` migration; password rotation does not change that scope.
+- **Next milestone: M3 — Vertex AI model registry and general-purpose Owner provider adapter.** Inspect existing Vertex authentication utilities and verify model IDs against the configured project's actual access/location. Do not reuse the student answer pipeline or prompt.
 
-Re-read the roadmap for the precise implementation log, acceptance evidence and any changes since this checkpoint.
+Re-read the roadmap for the full acceptance ledger and implementation history before changing code.
 
 ## Non-negotiable implementation discipline
 
 - Before every task, inspect the latest default branch and relevant source files. At minimum, understand `src/admin/auth.ts`, `src/index.ts`, `src/admin/dashboard.ts`, `src/config/env.ts`, `src/ai/gemini.ts`, `src/analytics/db.ts`, plus the security/data/AI/test documents as relevant. For M2, begin from the deployed M1 role gate; do not rewrite or bypass it.
-- The current code has `requireAdmin` and a separate `requireOwner`. Do not rely on a hidden UI link or client-supplied role. Preserve server-side Owner authorization on the page and every future API, stream, stop, file and conversation endpoint. M1 guards `/admin/intelligence` and the reserved `/admin/api/intelligence/*` namespace; M2 must keep those checks when adding handlers.
-- Keep Owner conversations, messages, file references and usage separate from student records, Durable Object state, profiles, quiz history and student quota accounting.
+- The current code has `requireAdmin` and a separate `requireOwner`. Do not rely on a hidden UI link or client-supplied role. The deployed M2 page and conversation APIs already enforce `requireOwner`; preserve that guard on all M3+ model, generation, stream, stop, file and retrieval endpoints. Every data operation must remain scoped to the configured Owner principal, and mutations must retain same-origin checks.
+- M2 stores Owner conversations/messages in dedicated `owner_intelligence_conversations` and `owner_intelligence_messages` tables. Keep later file references, model usage and generations separate too; never write Owner prompts to student analytics, profiles, quiz history or Durable Object state.
 - Use server-side credentials only. Never expose service-account keys, Vertex access tokens, session secrets or uploaded-object credentials to the browser.
 - Make model availability and thinking compatibility server-authoritative and project/location-aware. Verify current Google documentation and the actual configured project before enabling a model. Do not hardcode a stale model catalogue or present a global model list as guaranteed access.
 - Do not use student SSC prompts, `AnswerPacket`, student classification, Fatman context or automatic BRɅIN retrieval for general Owner messages.

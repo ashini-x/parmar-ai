@@ -152,3 +152,33 @@ Stores per-student operational suspension state and administrator notes.
 ### `app_settings`
 
 Reserved for safe, future runtime settings. Dangerous infrastructure configuration remains deployment configuration rather than mutable application state.
+
+
+## Owner Intelligence workspace (M2)
+
+The Owner-only general-purpose workspace uses two dedicated D1 tables. These records are not part of the student Telegram data model.
+
+### `owner_intelligence_conversations`
+
+| Column | Purpose |
+|---|---|
+| `id` | UUID primary key for the conversation. |
+| `owner_id` | Normalized configured web Owner username used to scope access. |
+| `title` | Owner-visible title; defaults to `New chat`, maximum 80 characters. |
+| `created_at` | Creation time in Unix milliseconds. |
+| `updated_at` | Last conversation/message update time in Unix milliseconds. |
+
+### `owner_intelligence_messages`
+
+| Column | Purpose |
+|---|---|
+| `id` | UUID primary key for the message. |
+| `conversation_id` | Parent conversation UUID; foreign key with cascade-delete semantics. |
+| `owner_id` | Normalized configured web Owner username; every read/write is scoped by it. |
+| `role` | `user`, `assistant` or `system`; M2's public composer endpoint writes only `user`. |
+| `content` | Message text, up to 50,000 JavaScript characters. |
+| `status` | `pending`, `complete`, `partial` or `error`; M2 user messages default to `complete`. |
+| `created_at` | Creation time in Unix milliseconds. |
+
+Conversation list queries are limited to the latest 100 rows for the Owner principal. Deleting a conversation removes its messages and the conversation row. Changing `OWNER_DASHBOARD_USER` changes the owner scope and requires a deliberate migration if conversations must be retained. Password rotation does not change the scope.
+
