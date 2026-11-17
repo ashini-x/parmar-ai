@@ -7,6 +7,14 @@
 - Keep Owner prompts, assistant responses and generation metadata outside student analytics, profiles, quiz records, quotas and Durable Object state.
 - Automatic in-place stream reconnection is not included; saved partial text remains available after reopening the conversation.
 
+## 2026-11-18: Owner Gemini Intelligence product scope clarified
+
+- Define the Owner workspace as a private, general-purpose Gemini text chat where the Owner chooses a verified model and supported thinking level.
+- Support voice as dictation only: transcribe speech into editable text and submit it through the same selected-model chat pipeline used by typed prompts.
+- Keep Gemini Live, real-time audio/video, speech-to-speech, assistant voice output, media generation and broad Google-product parity outside the approved scope.
+- Evaluate only useful native Gemini API tools after validating compatibility with the selected model, API surface, project and location; keep BRɅIN retrieval a separate opt-in add-on.
+- Update the Owner roadmap, ADRs, continuation prompt and engineering index. This is a documentation-only scope clarification; no code, tests or deployment changed.
+
 ## Unreleased: Locked reusable Telegram runtime architecture
 
 - Lock the as-built production Telegram runtime as the reusable baseline for future bots, with code-level documentation for webhook authentication, the immediate `/start` path, per-chat Durable Object admission/recovery, Queue hand-off, Gemini streaming, progress recovery, D1 schema separation and latency telemetry.
