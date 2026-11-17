@@ -99,10 +99,13 @@ All routes below require a valid `requireOwner` session. They do not accept an o
 | `PATCH` | `/admin/api/intelligence/conversations/:id` | Rename with JSON body `{ "title": "..." }`. |
 | `DELETE` | `/admin/api/intelligence/conversations/:id` | Delete the conversation and its saved messages. |
 | `POST` | `/admin/api/intelligence/conversations/:id/messages` | Save an Owner-authored message with JSON body `{ "content": "..." }`. Maximum content length: 50,000 JavaScript characters. |
+| `POST` | `/admin/api/intelligence/conversations/:id/generate` | Generate an assistant response using `{ "content": "...", "modelId": "...", "thinkingLevel": "..." }`. Optional `editMessageId` edits a prior user prompt; `{ "action": "regenerate", ... }` regenerates the latest user prompt. Returns server-sent events. |
 
 All mutations require a matching same-origin `Origin` header and reject cross-site fetch metadata. Conversation identifiers must be UUIDs. Every database operation is scoped to the normalized configured Owner username. A missing conversation or one owned by another principal returns 404 rather than disclosing its existence.
 
-M2 only persists user-authored messages. It does not call Gemini, return assistant answers, stream output, expose model/thinking selectors or accept files. Those capabilities belong to later milestones.
+The conversation/message APIs remain Owner-scoped and use the existing dedicated D1 tables. Generation is a separate Owner-only endpoint. Every mutating request requires a matching same-origin `Origin` header and rejects cross-site fetch metadata. The generation endpoint validates the selected model and thinking level against the server registry; it does not accept a browser-selected project, location, endpoint or credential.
+
+The generation endpoint returns `text/event-stream` events: `meta` identifies the pending assistant message and selected model/level, `delta` carries user-facing text, `done` reports the saved final message and usage, and `error` reports a sanitized failure. The browser can stop by aborting the request; request cancellation is forwarded to Vertex. Partial output is periodically saved with `partial` status. Editing a user message replaces it and deletes later turns; regeneration retains the latest user prompt and removes later turns before creating a new assistant response. A disconnected stream can be reopened from the saved conversation, but automatic in-place stream reconnection is not implemented.
 
 
 
