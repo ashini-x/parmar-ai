@@ -175,10 +175,23 @@ The Owner-only general-purpose workspace uses two dedicated D1 tables. These rec
 | `id` | UUID primary key for the message. |
 | `conversation_id` | Parent conversation UUID; foreign key with cascade-delete semantics. |
 | `owner_id` | Normalized configured web Owner username; every read/write is scoped by it. |
-| `role` | `user`, `assistant` or `system`; M2's public composer endpoint writes only `user`. |
-| `content` | Message text, up to 50,000 JavaScript characters. |
-| `status` | `pending`, `complete`, `partial` or `error`; M2 user messages default to `complete`. |
+| `role` | `user`, `assistant` or `system`; the public composer writes user prompts and the generation route writes assistant turns. |
+| `content` | Message text, up to 50,000 JavaScript characters. Assistant text is incrementally updated while a response streams. |
+| `status` | `pending`, `complete`, `partial` or `error`; a stopped/disconnected generation with received text is retained as `partial`. |
 | `created_at` | Creation time in Unix milliseconds. |
 
-Conversation list queries are limited to the latest 100 rows for the Owner principal. Deleting a conversation removes its messages and the conversation row. Changing `OWNER_DASHBOARD_USER` changes the owner scope and requires a deliberate migration if conversations must be retained. Password rotation does not change the scope.
+### `owner_intelligence_generation_metadata`
+
+| Column | Purpose |
+|---|---|
+| `message_id` | Assistant message primary key and foreign key to `owner_intelligence_messages`; metadata is deleted with its message. |
+| `owner_id` | Normalized configured web Owner username; every read/write is scoped by it. |
+| `model_id` | Server-allowlisted Vertex publisher model used for the response. |
+| `thinking_level` | Model-specific thinking level sent to Vertex. |
+| `prompt_tokens` | Input token count returned by Vertex, or zero when absent. |
+| `output_tokens` | Candidate/output token count returned by Vertex, or zero when absent. |
+| `total_tokens` | Total token count returned by Vertex, or zero when absent. |
+| `elapsed_ms` | Server-measured elapsed generation time in milliseconds. |
+
+Conversation list queries are limited to the latest 100 rows for the Owner principal. Deleting a conversation removes its messages and the conversation row; the generation metadata foreign key cascades with its assistant message. Changing `OWNER_DASHBOARD_USER` changes the owner scope and requires a deliberate migration if conversations must be retained. Password rotation does not change the scope.
 
