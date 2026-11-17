@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#1E1E1C"><meta name="robots" content="index, follow">
-<title>Ashini Gogoi — Founder of BRɅIN</title><meta name="description" content="Meet Ashini Gogoi, founder of BRɅIN, building source-grounded AI knowledge infrastructure and connected applications."><link rel="canonical" href="https://brvin.in/founder">
-<meta property="og:type" content="website"><meta property="og:site_name" content="BRɅIN"><meta property="og:title" content="Ashini Gogoi — Founder of BRɅIN"><meta property="og:description" content="Meet Ashini Gogoi, founder of BRɅIN, building source-grounded AI knowledge infrastructure and connected applications."><meta property="og:url" content="https://brvin.in/founder">
+<title>Ashini Gogoi — Founder of BRɅIN</title><meta name="description" content="Ashini Gogoi is building BRɅIN, a document and retrieval platform with connected applications."><link rel="canonical" href="https://brvin.in/founder">
+<meta property="og:type" content="website"><meta property="og:site_name" content="BRɅIN"><meta property="og:title" content="Ashini Gogoi — Founder of BRɅIN"><meta property="og:description" content="Ashini Gogoi is building BRɅIN, a document and retrieval platform with connected applications."><meta property="og:url" content="https://brvin.in/founder">
 <style>
 :root{color-scheme:light;--page:#F7F6F2;--paper:#FFFFFF;--soft:#F0EFEA;--ink:#171715;--body:#4F4E49;--muted:#77756E;--line:#E2E0DA;--line-strong:#D2CFC7;--max:1180px}
 *{box-sizing:border-box}
@@ -99,27 +99,30 @@ body{
 <section class="legal-hero shell">
   <span class="legal-kicker">BRɅIN / FOUNDER</span>
   <h1>Ashini Gogoi</h1>
-  <p>Founder, BRɅIN. Building applied AI systems across document ingestion, OCR, access-controlled retrieval and conversational interfaces.</p>
+  <p>I’m the founder of BRɅIN. My work is focused on building software that can use private documents while keeping access permissions and source-page references intact.</p>
 </section>
 <section class="legal-wrap shell">
   <article class="legal-document">
     <h2>What I'm building</h2>
-    <p>BRɅIN is developing a source-grounded knowledge platform that connects private documents with governed retrieval and connected applications. The focus is practical infrastructure: preserving document and page provenance, enforcing source permissions, and returning bounded evidence that an application can use to produce its own answer.</p>
+    <p>The problem we are working on is straightforward: when an application answers from a private document, people should be able to check where the information came from, and the application should only see material it is allowed to access. BRɅIN Core handles document processing, permissions and retrieval. It returns selected passages with their original PDF page references; the connected application creates the final answer.</p>
 
     <h3>BRɅIN Core</h3>
-    <p>The core platform brings together secure document intake, page-aware processing, private storage, access control and source-grounded retrieval. It is designed to keep knowledge operations separate from the applications that use them, with authorization and source readiness enforced centrally.</p>
+    <p>Core currently uses private Google Cloud Storage, Google Cloud Vision OCR, Cloudflare Workers and Workflows, D1 and Cloudflare AI Search. The live retrieval service checks application and project permissions before returning evidence.</p>
 
     <h3>Connected applications</h3>
-    <p><strong>परमार्थAI</strong> is a live Telegram MVP for competitive-exam preparation, with contextual follow-ups and native quiz interactions. <strong>BRɅIN Teachers</strong> is a separate multi-tenant workspace and Operator Console for managing teachers, projects, collections and approved study sources; its student-facing channel rollout remains in development.</p>
+    <p><strong>परमार्थAI</strong> is a live Telegram MVP for competitive-exam preparation, with follow-up questions and quizzes inside Telegram. <strong>BRɅIN Teachers</strong> is a separate workspace app with a deployed Operator Console for teachers, projects, collections and study PDFs. Its student-facing rollout is still in development.</p>
 
     <h3>Building in the open</h3>
-    <p>The public repositories document the implementation, architecture and current development status. They are provided for technical inspection; public visibility does not grant permission to reuse proprietary code or branding.</p>
+    <p>I keep the two repositories public so the implementation and current development status can be inspected. Core lives in <strong>parmar-ai</strong>; Teachers is a separate consumer in <strong>brvin-teachers</strong>. The repositories are the best place to check what is implemented and what is still being worked on.</p>
     <div class="legal-callout">
       <strong>Explore the work</strong><br>
       <a href="https://github.com/ashini-x/parmar-ai" target="_blank" rel="noopener noreferrer">BRɅIN Core and परमार्थAI repository ↗</a><br>
       <a href="https://github.com/ashini-x/brvin-teachers" target="_blank" rel="noopener noreferrer">BRɅIN Teachers repository ↗</a><br>
       <a href="https://linkedin.com/in/ashinigogoi" target="_blank" rel="noopener noreferrer">LinkedIn profile ↗</a>
     </div>
+
+    <h3>Where the product stands</h3>
+    <p>The production retrieval provider is Cloudflare AI Search. Vertex AI embeddings and Qdrant Cloud are being evaluated separately and are not the production provider today. The voice-provider integration is also in development, not a shipped production feature.</p>
 
     <h3>Contact</h3>
     <p>For founder, product or partnership enquiries, email <a href="mailto:founder@brvin.in">founder@brvin.in</a>. For general business enquiries, contact <a href="mailto:partners@brvin.in">partners@brvin.in</a>.</p>
