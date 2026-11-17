@@ -1,6 +1,6 @@
 # BRɅIN Intelligence — Owner Workspace Roadmap
 
-**Status:** M0 and M1 complete; Owner authorization and login initialization fix are deployed  
+**Status:** M0–M3 implementation complete and deployed; first live Owner-session model availability check pending  
 **Last updated:** 2026-11-18  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
