@@ -250,7 +250,7 @@ describe("Owner Gemini conversation context builder", () => {
     expect(buildOwnerGeminiConversationContents(messages)).toEqual([
       { role: "user", text: "Earlier question" },
       { role: "model", text: "Earlier answer" },
-      { role: "user", text: "Can you see what we were discussing?\\n\\nI am retrying with another model." },
+      { role: "user", text: "Can you see what we were discussing?\n\nI am retrying with another model." },
     ]);
   });
 
