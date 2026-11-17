@@ -20,7 +20,7 @@ Production currently configures `OWNER_DASHBOARD_USER=admin` in `wrangler.jsonc`
 Dashboard access mutations are server-side, same-origin protected, and verified against D1. Protected administrator identities cannot be suspended through ordinary student controls.
 
 ## Data separation
-Durable Object holds student private-chat operational state, profile, rate metadata and job lifecycle. D1 holds student analytics, AI usage, access overrides, audit entries and Telegram bot metadata. Queue is transport for asynchronous student processing. Owner Intelligence has separate D1 tables `owner_intelligence_conversations` and `owner_intelligence_messages`; Owner prompts are not written into student `questions` or student Durable Object state.
+Durable Object holds student private-chat operational state, profile, rate metadata and job lifecycle. D1 holds student analytics, AI usage, access overrides, audit entries and Telegram bot metadata. Queue is transport for asynchronous student processing. Owner Intelligence has separate D1 tables `owner_intelligence_conversations`, `owner_intelligence_messages` and `owner_intelligence_generation_metadata`; Owner prompts, assistant responses and generation metadata are not written into student `questions`, student AI usage, profiles or student Durable Object state.
 
 ## Secrets
 Credentials must remain in secure deployment configuration. Never log tokens, private keys, cookies, authorization headers, or secret environment values.
@@ -36,7 +36,7 @@ Rotate credentials, disable compromised access, inspect logs/audit events, asses
 
 ## Owner Intelligence workspace controls
 
-The M2 page is served with `no-store`, `noindex,nofollow`, a per-response nonce-based script Content Security Policy, `nosniff` and `no-referrer`. The browser sends conversation IDs and message/title content only; the server resolves Owner identity from the signed session and configured Owner principal. Conversation IDs are UUID-validated and every D1 query includes the Owner scope. The production Owner scope currently maps to `OWNER_DASHBOARD_USER=admin`; changing that username requires an explicit data migration to preserve existing conversations.
+The Owner workspace is served with `no-store`, `noindex,nofollow`, a per-response nonce-based script Content Security Policy, `nosniff` and `no-referrer`. The browser sends conversation IDs and message/title content only; the server resolves Owner identity from the signed session and configured Owner principal. Conversation IDs are UUID-validated and every D1 query includes the Owner scope. The production Owner scope currently maps to `OWNER_DASHBOARD_USER=admin`; changing that username requires an explicit data migration to preserve existing conversations.
 
 
 
@@ -46,4 +46,6 @@ The Owner model catalogue is served only below the `/admin/api/intelligence/*` n
 
 For every centrally allowlisted candidate, the Worker calls Vertex AI Count Tokens using the configured project/location. Only a successful response marks the model selectable. 400/404 means unavailable; 401/403 means access denied; transient failures/timeouts remain unverified. The cached catalogue lasts 90 seconds, probes are limited to three concurrently and each probe times out after 8 seconds. The UI renders only entries with `selectable: true`.
 
-The general-purpose Owner adapter requires a recently selectable model and rejects unverified or unlisted IDs. It does not accept a browser-selected provider endpoint, use the student's SSC prompt/AnswerPacket/profile/quota, or inject BRɅIN/Fatman context. It never silently switches models. M3 does not yet invoke this adapter from the chat composer; that is M4.
+The general-purpose Owner adapter and stream handler require a recently selectable model and reject unverified or unlisted IDs. Both validate the thinking level against that model's server registry entry and never silently switch models or thinking levels. The Owner generation endpoint remains under the existing `requireOwner` route guard, requires same-origin mutation checks, scopes every conversation/message/metadata operation to the configured Owner principal and accepts no project, location, provider endpoint or credential from the browser. Google service-account credentials remain server-side.
+
+The Vertex SSE reader emits only user-facing candidate text and ignores parts marked as thought. Stop/request disconnect aborts the upstream stream, and partial assistant text remains persisted in Owner D1 with a truthful status. Regenerate/edit operations remove later turns before the new request to prevent stale replies from being presented as current conversation context. The generation pipeline does not use the student's SSC prompt, `AnswerPacket`, profile, quota, or automatic BRɅIN/Fatman context.
