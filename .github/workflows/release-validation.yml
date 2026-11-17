@@ -317,12 +317,17 @@ jobs:
           fetch_page "/founder" "$founder_file" "Ashini Gogoi"
           grep -Fq 'WORKED EXAMPLE / NOT A LIVE CUSTOMER RECORD' "$home_file" || { echo "::error::Homepage sample is not clearly labelled."; exit 1; }
           grep -Fq 'BROWSER SPEECH SYNTHESIS' "$home_file" || { echo "::error::Browser voice preview disclosure is missing."; exit 1; }
-          grep -Fq 'The answer is only half the job.' "$why_file" || { echo "::error::Why page problem statement is missing."; exit 1; }
-          grep -Fq 'The market already solves parts of this.' "$why_file" || { echo "::error::Why page market context is missing."; exit 1; }
-          grep -Fq 'Start with teacher-owned knowledge.' "$why_file" || { echo "::error::Why page education wedge is missing."; exit 1; }
-          grep -Fq 'One knowledge layer. Multiple experiences.' "$why_file" || { echo "::error::Why page product model is missing."; exit 1; }
-          grep -Fq 'This is the growth hypothesis, not a claim of achieved scale.' "$why_file" || { echo "::error::Why page growth caveat is missing."; exit 1; }
-          grep -Fq 'Vertex AI embeddings with Qdrant Cloud' "$why_file" || { echo "::error::Why page production/evaluation disclosure is missing."; exit 1; }
+          grep -Fq 'The answer was only one part of the problem.' "$why_file" || { echo "::error::Why page origin story is missing."; exit 1; }
+          grep -Fq 'The opportunity is in the layer between knowledge and applications.' "$why_file" || { echo "::error::Why page market thesis is missing."; exit 1; }
+          grep -Fq 'One knowledge layer. Different learning experiences.' "$why_file" || { echo "::error::Why page product model is missing."; exit 1; }
+          grep -Fq 'Start with learning. Earn the right to expand.' "$why_file" || { echo "::error::Why page growth path is missing."; exit 1; }
+          grep -Fq 'BRɅIN Core is in production with Cloudflare AI Search.' "$why_file" || { echo "::error::Why page production status is missing."; exit 1; }
+          grep -Fq 'Vertex AI embeddings with Qdrant Cloud remain a separate staging evaluation' "$why_file" || { echo "::error::Why page production/evaluation disclosure is missing."; exit 1; }
+          story_sections="$(grep -oF 'class="story shell"' "$why_file" | wc -l | tr -d '[:space:]')"
+          if [[ "$story_sections" != "3" ]]; then
+            echo "::error::Why page should use three main narrative sections; found $story_sections."
+            exit 1
+          fi
 
           # Legal dates come from each policy file's latest Git change, rendered in India time.
           for legal_file in "$privacy_file" "$terms_file"; do
