@@ -10,6 +10,7 @@ const baseEnv = cloudflareEnv as unknown as Env;
 
 function appEnv(overrides: Partial<Env> = {}): Env {
   return Object.assign(Object.create(baseEnv), {
+    DB: baseEnv.DB,
     ADMIN_DASHBOARD_USER: "admin",
     ADMIN_DASHBOARD_PASSWORD: "admin-test-password",
     OWNER_DASHBOARD_USER: "owner",
