@@ -230,6 +230,39 @@ body{background:radial-gradient(ellipse 70% 32% at 84% 0%,rgba(216,203,179,.2),t
 .primary-link:hover{background:#33332f}
 @media(max-width:760px){.story{padding-top:48px;padding-bottom:42px}.story-heading{font-size:clamp(36px,9vw,48px)}.principles{gap:9px}.principle,.stage{padding:18px}.next-step{gap:20px}}
 
+
+.page-section-nav{display:flex;align-items:center;gap:7px;overflow-x:auto;margin:0 auto 34px;padding:8px 0;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.page-section-nav .page-nav-label{flex:0 0 auto;margin-right:5px;color:var(--muted);font-size:8px;font-weight:750;letter-spacing:.12em}
+.page-section-nav a{display:inline-flex;min-height:34px;flex:0 0 auto;align-items:center;padding:0 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.68);color:var(--body);font-size:10px;font-weight:560;white-space:nowrap}
+.page-section-nav a:hover{border-color:var(--line-strong);background:#fff;color:var(--ink)}
+.page-switcher-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin:0 0 11px}
+.page-switcher-heading strong{color:var(--ink);font-size:12px;font-weight:640}.page-switcher-heading span{color:var(--muted);font-size:8px;font-weight:680;letter-spacing:.1em}
+.page-switcher-tabs{display:flex;gap:5px;overflow-x:auto;padding:4px;border:1px solid var(--line);border-radius:999px;background:var(--soft);scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.page-switcher-tab{display:flex;min-height:39px;flex:1 0 auto;align-items:center;justify-content:center;gap:7px;padding:0 14px;border:1px solid transparent;border-radius:999px;background:transparent;color:var(--muted);font-size:10px;font-weight:580;white-space:nowrap;cursor:pointer}
+.page-switcher-tab:hover{color:var(--ink);background:rgba(255,255,255,.55)}
+.page-switcher-tab[aria-selected="true"]{border-color:var(--line);background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(23,23,21,.07)}
+.page-switcher-tab .tab-index{color:#2F6BFF;font-size:8px;font-weight:750}
+.page-switcher button:focus-visible,.page-section-nav a:focus-visible{outline:2px solid #2F6BFF;outline-offset:3px}
+.story-heading{font-weight:520;letter-spacing:-.075em;line-height:1.02}
+.story-copy p,.market-copy p,.wedge-intro>p{font-size:14px;line-height:1.85}
+.principles{gap:12px}.principle{padding:22px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.78)}
+.principle h3{font-weight:560;letter-spacing:-.035em}
+.platform-model{padding:clamp(20px,3vw,30px);border:1px solid var(--line);border-radius:15px;background:rgba(255,255,255,.86)}
+.model-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.model-step{display:flex;min-width:0;min-height:128px;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px;padding:14px;border:1px solid var(--line);border-radius:10px;background:#fff;text-align:left;cursor:pointer;transition:border-color .18s ease,background .18s ease,box-shadow .18s ease}
+.model-step:hover{border-color:var(--line-strong)}.model-step[aria-selected="true"]{border-color:#C9D8F9;background:#F7F9FF;box-shadow:inset 0 0 0 1px rgba(47,107,255,.08)}
+.model-step span{color:var(--muted);font-size:7px;font-weight:740;letter-spacing:.12em}.model-step strong{color:var(--ink);font-size:13px;font-weight:630;letter-spacing:-.025em}.model-step small{color:var(--muted);font-size:9px;line-height:1.5}
+.model-step-panel{margin-top:10px;padding:16px 18px;border:1px solid var(--line);border-radius:10px;background:#F7F6F2}
+.model-step-panel .panel-kicker{color:var(--muted);font-size:8px;font-weight:740;letter-spacing:.12em}.model-step-panel h4{margin:6px 0;color:var(--ink);font-size:17px;font-weight:570;letter-spacing:-.04em}.model-step-panel p{margin:0;color:var(--body);font-size:11px;line-height:1.75}
+.stages-switcher{padding:13px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.8)}
+.stage-detail{min-height:120px;margin-top:10px;padding:19px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.stage-detail[hidden]{display:none}.stage-detail .panel-kicker{color:var(--muted);font-size:8px;font-weight:740;letter-spacing:.12em}.stage-detail h3{margin:7px 0;color:var(--ink);font-size:20px;font-weight:560;letter-spacing:-.045em}.stage-detail p{margin:0;color:var(--body);font-size:12px;line-height:1.75}
+.current-state,.market-thesis{padding:22px 24px;border:1px solid var(--line);border-radius:13px;background:var(--soft)}
+.next-step{padding:clamp(24px,3.5vw,38px);border:1px solid var(--line);border-radius:15px;background:#fff}
+.primary-link{display:inline-flex;min-height:42px;align-items:center;gap:12px;padding:0 17px;border-radius:999px;background:var(--ink);color:white;font-size:11px;font-weight:600}
+.primary-link:hover{background:#33332f}
+@media(max-width:760px){.page-section-nav{margin-bottom:26px;padding:7px 0}.model-flow{grid-template-columns:1fr}.model-step{min-height:82px}.stage-detail{min-height:0;padding:16px}.principle{padding:18px}.story{padding-top:48px;padding-bottom:42px}.next-step{gap:18px}}
+
 </style>
 </head>
 <body>
@@ -237,7 +270,7 @@ body{background:radial-gradient(ellipse 70% 32% at 84% 0%,rgba(216,203,179,.2),t
 <a class="brand" href="/" aria-label="BRɅIN home">BR<span class="brand-mark">Ʌ</span>IN</a>
 <div class="nav-controls">
   <nav class="nav-items" id="primary-navigation" aria-label="Main navigation">
-    <a href="/why">Why BRɅIN</a><a href="#platform">Platform</a><a href="#demo">Voice demo</a><a href="#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a>
+    <a href="/why">Why BRɅIN</a><a href="/#platform">Platform</a><a href="/#demo">Voice demo</a><a href="/#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a>
   </nav>
   <a class="nav-cta" href="mailto:partners@brvin.in">Contact</a>
   <button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="primary-navigation">
@@ -248,7 +281,7 @@ body{background:radial-gradient(ellipse 70% 32% at 84% 0%,rgba(216,203,179,.2),t
 <main>
   <section class="story shell" aria-labelledby="origin-title">
     <div class="story-grid">
-      <h2 class="story-heading" id="origin-title">The answer was only one part of the problem.</h2>
+      <h1 class="story-heading" id="origin-title">The answer was only one part of the problem.</h1>
       <div class="story-copy">
         <p>While building परमार्थAI around real exam material, we found that getting a model to respond was not enough. A learner needed to check the passage behind an answer and return to the original page. A teacher needed to know that their material stayed within the right workspace. And every new product was facing the same document-processing work.</p>
         <p>That meant handling uploads, OCR, page mapping, indexing, permissions, retrieval and recovery again and again. We began building BRɅIN to make that foundation reusable — so an application could work with knowledge it was authorised to use, while remaining responsible for its own users and final answers.</p>
@@ -273,8 +306,8 @@ body{background:radial-gradient(ellipse 70% 32% at 84% 0%,rgba(216,203,179,.2),t
       </article>
     </div>
   </section>
-
-  <section class="story shell" aria-labelledby="market-title">
+<nav class="page-section-nav shell" aria-label="Why BRɅIN page sections"><span class="page-nav-label">EXPLORE</span><a href="#origin-title">The problem</a><a href="#market-title">The market</a><a href="#growth-title">Where we start</a><a href="#pilot-discussion">Institutional pilot</a></nav>
+<section class="story shell" aria-labelledby="market-title">
     <div class="market-grid">
       <div class="market-copy">
         <span class="kicker">THE MARKET</span>
@@ -284,25 +317,16 @@ body{background:radial-gradient(ellipse 70% 32% at 84% 0%,rgba(216,203,179,.2),t
       </div>
       <div class="platform-model">
         <h3 class="model-heading">One knowledge layer. Different learning experiences.</h3>
-        <div class="model-flow" role="img" aria-label="A teacher or academy owns its study material. BRɅIN Core organises projects and collections, processes documents, checks permissions and retrieves source-linked passages. Connected learning applications use that evidence to create their own experiences and answers.">
-          <div class="model-node">
-            <span>KNOWLEDGE OWNER</span>
-            <strong>Teacher or academy</strong>
-            <p>Subjects, notes and study PDFs</p>
-          </div>
-          <span class="model-arrow" aria-hidden="true">→</span>
-          <div class="model-node core">
-            <span>SHARED FOUNDATION</span>
-            <strong>BRɅIN Core</strong>
-            <p>Ingestion, organisation, access and retrieval</p>
-          </div>
-          <span class="model-arrow" aria-hidden="true">→</span>
-          <div class="model-node">
-            <span>CONNECTED PRODUCTS</span>
-            <strong>Learning applications</strong>
-            <p>Own the user experience and final answer</p>
-          </div>
-        </div>
+        <div class="model-flow" role="tablist" aria-label="Explore the knowledge flow">
+ <button class="model-step" type="button" role="tab" id="model-step-owner" aria-selected="true" aria-controls="model-step-panel" tabindex="0" data-model-step="owner"><span>01 · KNOWLEDGE OWNER</span><strong>Teacher or academy</strong><small>Subjects, notes and study PDFs</small></button>
+ <button class="model-step" type="button" role="tab" id="model-step-core" aria-selected="false" aria-controls="model-step-panel" tabindex="-1" data-model-step="core"><span>02 · SHARED FOUNDATION</span><strong>BRɅIN Core</strong><small>Ingestion, organisation, access and retrieval</small></button>
+ <button class="model-step" type="button" role="tab" id="model-step-apps" aria-selected="false" aria-controls="model-step-panel" tabindex="-1" data-model-step="apps"><span>03 · CONNECTED PRODUCTS</span><strong>Learning applications</strong><small>Own the user experience and final answer</small></button>
+</div>
+<div class="model-step-panel" id="model-step-panel" role="tabpanel" aria-labelledby="model-step-owner" aria-live="polite">
+ <span class="panel-kicker" id="model-step-kicker">01 / SOURCE OWNER</span>
+ <h4 id="model-step-title">Teacher or academy</h4>
+ <p id="model-step-copy">A teacher or academy owns its study material: subjects, notes and study PDFs. The knowledge starts with the people who create or organise it.</p>
+</div>
         <p class="model-note">Core returns selected passages with their source-page references. The connected application owns end-user authentication, prompts, model generation and conversation state.</p>
       </div>
     </div>
@@ -321,30 +345,24 @@ body{background:radial-gradient(ellipse 70% 32% at 84% 0%,rgba(216,203,179,.2),t
       <p>Our first focus is India-based independent teachers and tutors working with dense, subject-specific material for exam preparation and classroom teaching. From there, the same model could support coaching centres and academies managing knowledge across teachers and subjects, then publishers and learning platforms serving multiple products. That is a growth path to validate, not a list of customers already using BRɅIN.</p>
     </div>
 
-    <div class="stages" aria-label="Potential market expansion">
-      <div class="stage">
-        <span>START</span>
-        <strong>Teachers and tutors</strong>
-        <p>Build and prove a reliable subject knowledge space around material they own.</p>
-      </div>
-      <div class="stage">
-        <span>NEXT</span>
-        <strong>Coaching centres and academies</strong>
-        <p>Validate separate projects, subjects and access boundaries across an institution.</p>
-      </div>
-      <div class="stage">
-        <span>OVER TIME</span>
-        <strong>Publishers and learning platforms</strong>
-        <p>Explore approved knowledge shared across more than one learning experience.</p>
-      </div>
-    </div>
+    <div class="stages-switcher" id="market-pathway">
+ <div class="page-switcher-heading"><strong>A focused path to expansion</strong><span>SELECT A STAGE</span></div>
+ <div class="page-switcher-tabs" role="tablist" aria-label="Potential market expansion">
+  <button class="page-switcher-tab" type="button" role="tab" id="market-stage-start-tab" aria-selected="true" aria-controls="market-stage-start-panel" tabindex="0" data-market-stage="start"><span class="tab-index">01</span> Start</button>
+  <button class="page-switcher-tab" type="button" role="tab" id="market-stage-next-tab" aria-selected="false" aria-controls="market-stage-next-panel" tabindex="-1" data-market-stage="next"><span class="tab-index">02</span> Next</button>
+  <button class="page-switcher-tab" type="button" role="tab" id="market-stage-over-time-tab" aria-selected="false" aria-controls="market-stage-over-time-panel" tabindex="-1" data-market-stage="over-time"><span class="tab-index">03</span> Over time</button>
+ </div>
+ <section class="stage-detail" id="market-stage-start-panel" role="tabpanel" aria-labelledby="market-stage-start-tab"><span class="panel-kicker">START · FIRST CUSTOMER PROFILE</span><h3>Teachers and tutors</h3><p>Build and prove a reliable subject knowledge space around material they own.</p></section>
+ <section class="stage-detail" id="market-stage-next-panel" role="tabpanel" aria-labelledby="market-stage-next-tab" hidden><span class="panel-kicker">NEXT · INSTITUTIONAL VALIDATION</span><h3>Coaching centres and academies</h3><p>Validate separate projects, subjects and access boundaries across an institution.</p></section>
+ <section class="stage-detail" id="market-stage-over-time-panel" role="tabpanel" aria-labelledby="market-stage-over-time-tab" hidden><span class="panel-kicker">OVER TIME · POTENTIAL EXPANSION</span><h3>Publishers and learning platforms</h3><p>Explore approved knowledge shared across more than one learning experience.</p></section>
+</div>
 
     <div class="current-state">
       <span>WHERE WE ARE TODAY</span>
       <p>BRɅIN Core is in production with Cloudflare AI Search. परमार्थAI is a live Telegram MVP. BRɅIN Teachers has a deployed Operator Console; its student-facing rollout is still in development. Vertex AI embeddings with Qdrant Cloud remain a separate staging evaluation, not the production retrieval provider.</p>
     </div>
 
-    <div class="next-step">
+    <div class="next-step" id="pilot-discussion">
       <div>
         <h2>The next step is proof with an institution.</h2>
         <p>We are looking to work with educators and academies on a paid, measurable pilot using real study material and real access requirements. The goal is to prove one repeatable institutional workflow before making broader claims about scale.</p>
@@ -397,6 +415,42 @@ body{background:radial-gradient(ellipse 70% 32% at 84% 0%,rgba(216,203,179,.2),t
  document.addEventListener("keydown",event=>{if(event.key==="Escape")closeMenu(true)});
  document.addEventListener("click",event=>{if(!siteNav.contains(event.target))closeMenu()});
  window.matchMedia("(min-width: 861px)").addEventListener?.("change",event=>{if(event.matches)closeMenu()});
+})();
+</script>
+<script>
+(()=> {
+ const modelData={
+  owner:{kicker:"01 / SOURCE OWNER",title:"Teacher or academy",copy:"A teacher or academy owns its study material: subjects, notes and study PDFs. The knowledge starts with the people who create or organise it."},
+  core:{kicker:"02 / SHARED FOUNDATION",title:"BRɅIN Core",copy:"BRɅIN Core organises projects and collections, processes documents, checks permissions and retrieves source-linked passages."},
+  apps:{kicker:"03 / CONNECTED PRODUCTS",title:"Learning applications",copy:"Connected learning applications use that evidence to create their own experiences and answers. Each application remains responsible for its own users and final answer."}
+ };
+ const modelTabs=[...document.querySelectorAll("[data-model-step]")],modelPanel=document.getElementById("model-step-panel");
+ modelTabs.forEach((button,index)=>{
+  const activate=()=>{
+   modelTabs.forEach(tab=>{const active=tab===button;tab.setAttribute("aria-selected",String(active));tab.tabIndex=active?0:-1;});
+   const item=modelData[button.dataset.modelStep];
+   document.getElementById("model-step-kicker").textContent=item.kicker;
+   document.getElementById("model-step-title").textContent=item.title;
+   document.getElementById("model-step-copy").textContent=item.copy;
+   modelPanel.setAttribute("aria-labelledby",button.id);
+  };
+  button.addEventListener("click",activate);
+  button.addEventListener("keydown",event=>{
+   let next=index;if(event.key==="ArrowRight")next=(index+1)%modelTabs.length;else if(event.key==="ArrowLeft")next=(index-1+modelTabs.length)%modelTabs.length;else if(event.key==="Home")next=0;else if(event.key==="End")next=modelTabs.length-1;else return;
+   event.preventDefault();modelTabs[next].click();modelTabs[next].focus();
+  });
+ });
+ const stageTabs=[...document.querySelectorAll("[data-market-stage]")];
+ stageTabs.forEach((button,index)=>{
+  const activate=()=>{
+   stageTabs.forEach(tab=>{const active=tab===button;tab.setAttribute("aria-selected",String(active));tab.tabIndex=active?0:-1;const panel=document.getElementById(tab.getAttribute("aria-controls"));if(panel)panel.hidden=!active;});
+  };
+  button.addEventListener("click",activate);
+  button.addEventListener("keydown",event=>{
+   let next=index;if(event.key==="ArrowRight")next=(index+1)%stageTabs.length;else if(event.key==="ArrowLeft")next=(index-1+stageTabs.length)%stageTabs.length;else if(event.key==="Home")next=0;else if(event.key==="End")next=stageTabs.length-1;else return;
+   event.preventDefault();stageTabs[next].click();stageTabs[next].focus();
+  });
+ });
 })();
 </script>
 </body>
