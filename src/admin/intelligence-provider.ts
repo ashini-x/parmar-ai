@@ -65,6 +65,7 @@ const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
 const GENERATION_TIMEOUT_MS = 35_000;
 const CATALOGUE_CACHE_MS = 90_000;
 const catalogueCache = new Map<string, { expiresAt: number; value: OwnerModelCatalogue }>();
+const verifiedModelCache = new Map<string, { expiresAt: number; model: OwnerGeminiModel }>();
 
 function configuredProject(env: Env): string | null {
   const project = env.GCP_PROJECT_ID?.trim();
@@ -173,7 +174,13 @@ export async function listOwnerGeminiModels(
   const models = await mapLimited(OWNER_GEMINI_MODEL_REGISTRY, 3, (model) =>
     probeModel(env, model, project, location, token, dependencies));
   const value: OwnerModelCatalogue = { ok: true, configured: true, location, checkedAt, models };
-  catalogueCache.set(cacheKey, { expiresAt: checkedAt + CATALOGUE_CACHE_MS, value });
+  const expiresAt = checkedAt + CATALOGUE_CACHE_MS;
+  catalogueCache.set(cacheKey, { expiresAt, value });
+  for (const model of models) {
+    if (model.selectable) {
+      verifiedModelCache.set(`${cacheKey}:${model.id}`, { expiresAt, model });
+    }
+  }
   return value;
 }
 
@@ -348,6 +355,54 @@ export async function generateOwnerGeminiContent(
 }
 
 
+async function getVerifiedModelAccessToken(
+  env: Env,
+  model: OwnerGeminiModelDefinition,
+  dependencies: OwnerProviderDependencies,
+): Promise<string> {
+  const project = configuredProject(env);
+  const location = configuredLocation(env);
+  if (!project || !env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim()) {
+    throw new OwnerGeminiProviderError("Vertex AI is not configured for the Owner workspace.");
+  }
+
+  let token: string;
+  try {
+    token = await withTimeout(dependencies.getAccessToken(env), ACCESS_TOKEN_TIMEOUT_MS);
+  } catch {
+    throw new OwnerGeminiProviderError("Google authentication for Vertex AI is currently unavailable.", undefined, true);
+  }
+
+  const cacheKey = `${project}:${location}:${model.id}`;
+  const cached = verifiedModelCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now() && cached.model.selectable) return token;
+
+  // A fresh full catalogue result is also a valid server-side verification.
+  const catalogue = catalogueCache.get(`${project}:${location}`);
+  const listed = catalogue?.expiresAt && catalogue.expiresAt > Date.now()
+    ? catalogue.value.models.find((candidate) => candidate.id === model.id && candidate.selectable)
+    : undefined;
+  if (listed) {
+    verifiedModelCache.set(cacheKey, { expiresAt: catalogue!.expiresAt, model: listed });
+    return token;
+  }
+
+  // The catalogue cache has expired. Recheck only the model the Owner selected,
+  // not every model in the registry, then reuse this token for the generation call.
+  const verified = await probeModel(env, model, project, location, token, dependencies);
+  if (!verified.selectable) {
+    throw new OwnerGeminiProviderError(
+      verified.availabilityReason === "provider_access_denied"
+        ? "Vertex AI denied access to the selected model or project."
+        : "The selected Gemini model is not currently verified for this project and location.",
+      undefined,
+      true,
+    );
+  }
+  verifiedModelCache.set(cacheKey, { expiresAt: Date.now() + CATALOGUE_CACHE_MS, model: verified });
+  return token;
+}
+
 export type OwnerGeminiStreamEvent =
   | { type: "delta"; text: string }
   | { type: "done"; usage: OwnerGeminiGenerationResult["usage"]; elapsedMs: number };
@@ -382,33 +437,12 @@ export async function openOwnerGeminiStream(
     throw new OwnerGeminiProviderError("The system instruction is invalid or too long.");
   }
 
-  const project = configuredProject(env);
   const location = configuredLocation(env);
-  if (!project || !env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim()) {
-    throw new OwnerGeminiProviderError("Vertex AI is not configured for the Owner workspace.");
-  }
-  const catalogue = await listOwnerGeminiModels(env, dependencies);
-  const confirmedModel = catalogue.models.find((model) => model.id === definition.id && model.selectable);
-  if (!catalogue.ok || !confirmedModel) {
-    throw new OwnerGeminiProviderError(
-      catalogue.ok
-        ? "This model has not been confirmed for the configured Vertex AI project and location."
-        : "Vertex AI model availability could not be verified for the Owner workspace.",
-      undefined,
-      true,
-    );
-  }
-
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
     ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
     : Math.min(definition.singleRequestOutputTokens, 8_192);
 
-  let token: string;
-  try {
-    token = await dependencies.getAccessToken(env);
-  } catch {
-    throw new OwnerGeminiProviderError("Google authentication for Vertex AI is currently unavailable.", undefined, true);
-  }
+  const token = await getVerifiedModelAccessToken(env, definition, dependencies);
 
   const controller = new AbortController();
   const abortFromCaller = () => controller.abort();
