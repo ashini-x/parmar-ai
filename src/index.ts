@@ -429,7 +429,14 @@ async function handleHelpMenuCallback(
 
   try {
     const isConfirmedAction = action === "reset_confirm" || action === "delete_confirm";
-    await answerCallback(isConfirmedAction ? "Please wait…" : "Opening " + action.replace(/_/gu, " ") + "…");
+    const callbackAck = action === "reset_cancel"
+      ? "Reset cancelled."
+      : action === "delete_cancel"
+        ? "Deletion cancelled."
+        : isConfirmedAction
+          ? "Please wait…"
+          : "Opening " + action + "…";
+    await answerCallback(callbackAck);
 
     if (action === "exam") {
       await sendTelegramMessage(
@@ -486,7 +493,6 @@ async function handleHelpMenuCallback(
 
     if (action === "reset_cancel" || action === "delete_cancel") {
       const isReset = action === "reset_cancel";
-      await answerCallback(isReset ? "Reset cancelled." : "Deletion cancelled.");
       await updateHelpActionMessage(
         env,
         chatId,
