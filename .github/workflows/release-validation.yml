@@ -313,6 +313,8 @@ jobs:
           fetch_page "/privacy" "$privacy_file" "Privacy Policy"
           fetch_page "/terms" "$terms_file" "Terms of Service"
           fetch_page "/founder" "$founder_file" "Ashini Gogoi"
+          grep -Fq 'WORKED EXAMPLE / NOT A LIVE CUSTOMER RECORD' "$home_file" || { echo "::error::Homepage sample is not clearly labelled."; exit 1; }
+          grep -Fq 'BROWSER SPEECH SYNTHESIS' "$home_file" || { echo "::error::Browser voice preview disclosure is missing."; exit 1; }
 
           # Legal dates come from each policy file's latest Git change, rendered in India time.
           for legal_file in "$privacy_file" "$terms_file"; do
