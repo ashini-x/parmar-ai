@@ -154,7 +154,7 @@ Stores per-student operational suspension state and administrator notes.
 Reserved for safe, future runtime settings. Dangerous infrastructure configuration remains deployment configuration rather than mutable application state.
 
 
-## Owner Intelligence workspace (M2)
+## Owner Intelligence workspace
 
 The Owner-only general-purpose workspace uses two dedicated D1 tables. These records are not part of the student Telegram data model.
 
