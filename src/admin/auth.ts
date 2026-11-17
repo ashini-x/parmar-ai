@@ -37,11 +37,16 @@ function configuredAdminUsername(env: Env): string {
   return env.ADMIN_DASHBOARD_USER?.trim() || "admin";
 }
 
+function ownerUsesAdminCredentials(env: Env): boolean {
+  const ownerUser = env.OWNER_DASHBOARD_USER?.trim();
+  return Boolean(ownerUser && ownerUser.toLowerCase() === configuredAdminUsername(env).toLowerCase());
+}
+
 function ownerCredentialsAreUsable(env: Env): boolean {
   const ownerUser = env.OWNER_DASHBOARD_USER?.trim();
-  const ownerPassword = env.OWNER_DASHBOARD_PASSWORD?.trim();
-  const adminUser = configuredAdminUsername(env);
-  return Boolean(ownerUser && ownerPassword && ownerUser.toLowerCase() !== adminUser.toLowerCase());
+  if (!ownerUser) return false;
+  if (ownerUsesAdminCredentials(env)) return Boolean(env.ADMIN_DASHBOARD_PASSWORD?.trim());
+  return Boolean(env.OWNER_DASHBOARD_PASSWORD?.trim());
 }
 
 function safeSignatureEqual(expected: Uint8Array, actual: Uint8Array): boolean {
@@ -55,10 +60,12 @@ function sessionSignatureSecret(env: Env, role: AdminRole): string | undefined {
   const sessionSecret = env.ADMIN_SESSION_SECRET?.trim();
   if (!sessionSecret) return undefined;
   if (role === "admin") return sessionSecret;
-  const ownerPassword = env.OWNER_DASHBOARD_PASSWORD?.trim();
+  const ownerPassword = ownerUsesAdminCredentials(env)
+    ? env.ADMIN_DASHBOARD_PASSWORD?.trim()
+    : env.OWNER_DASHBOARD_PASSWORD?.trim();
   if (!ownerCredentialsAreUsable(env) || !ownerPassword) return undefined;
-  // Rotating the Owner password revokes all existing Owner sessions without
-  // invalidating ordinary administrator sessions.
+  // Rotating the credential assigned to the Owner principal revokes existing
+  // Owner sessions without invalidating unrelated administrator sessions.
   return `${sessionSecret}:owner:${ownerPassword}`;
 }
 
@@ -179,10 +186,17 @@ export async function handleAdminLogin(request: Request, env: Env): Promise<Resp
   const expectedAdminPassword = env.ADMIN_DASHBOARD_PASSWORD?.trim();
   const sessionSecret = env.ADMIN_SESSION_SECRET?.trim();
   const ownerUser = env.OWNER_DASHBOARD_USER?.trim();
-  const ownerPassword = env.OWNER_DASHBOARD_PASSWORD?.trim();
+  const ownerUsesAdmin = ownerUsesAdminCredentials(env);
+  const ownerPassword = ownerUsesAdmin ? expectedAdminPassword : env.OWNER_DASHBOARD_PASSWORD?.trim();
   const ownerConfigured = ownerCredentialsAreUsable(env);
 
-  const isOwnerLogin = Boolean(ownerConfigured && ownerUser && ownerPassword && username === ownerUser && password === ownerPassword);
+  const isOwnerLogin = Boolean(
+    ownerConfigured &&
+    ownerUser &&
+    ownerPassword &&
+    username === (ownerUsesAdmin ? expectedAdminUser : ownerUser) &&
+    password === ownerPassword
+  );
   const isAdminLogin = Boolean(expectedAdminPassword && username === expectedAdminUser && password === expectedAdminPassword);
   const role: AdminRole | null = isOwnerLogin ? "owner" : isAdminLogin ? "admin" : null;
 

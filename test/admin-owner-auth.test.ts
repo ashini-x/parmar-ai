@@ -84,16 +84,19 @@ describe("admin and Owner web identity", () => {
     expect(await requireOwner(request, rotated)).toBe(false);
   });
 
-  it("does not allow the Owner username to collide with the admin username", async () => {
+  it("can explicitly assign the existing single admin principal as Owner without adding another shared account", async () => {
     const env = testEnv({
-      OWNER_DASHBOARD_USER: "ADMIN",
-      OWNER_DASHBOARD_PASSWORD: "separate-owner-password",
+      OWNER_DASHBOARD_USER: "admin",
+      OWNER_DASHBOARD_PASSWORD: undefined,
     });
-    const owner = await login("ADMIN", "separate-owner-password", env);
-    expect(owner.response.status).toBe(401);
-    expect(await requireOwner(new Request("https://parmar-ai.test/admin/intelligence", {
+    const owner = await login("admin", "admin-test-password", env);
+    const request = new Request("https://parmar-ai.test/admin/intelligence", {
       headers: { Cookie: owner.cookie },
-    }), env)).toBe(false);
+    });
+
+    expect(owner.response.status).toBe(302);
+    expect(owner.response.headers.get("location")).toBe("/admin/intelligence");
+    expect(await requireOwner(request, env)).toBe(true);
   });
 
   it("does not allow a browser-edited role claim to become Owner", async () => {
