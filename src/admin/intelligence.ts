@@ -977,11 +977,11 @@ function workspaceHtml(nonce: string): string {
       function consume(block){handleStreamBlock(block,assistantId);}
       while(true){
         var next=await reader.read();
-        buffer+=decoder.decode(next.value,{stream:!next.done}).replace(/\r\n/gu,"\n");
-        var boundary=buffer.indexOf("\n\n");
-        while(boundary>=0){
-          var block=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);consume(block);
-          boundary=buffer.indexOf("\n\n");
+        buffer+=decoder.decode(next.value,{stream:!next.done});
+        var boundary=/\r?\n\r?\n/u.exec(buffer);
+        while(boundary){
+          var block=buffer.slice(0,boundary.index);buffer=buffer.slice(boundary.index+boundary[0].length);consume(block);
+          boundary=/\r?\n\r?\n/u.exec(buffer);
         }
         if(next.done)break;
       }
