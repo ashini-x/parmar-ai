@@ -391,7 +391,7 @@ function workspaceHtml(nonce: string): string {
     return body;
   }
   function showWelcome(){
-    heading.textContent="";
+    if(!state.activeId)heading.textContent="";
     messages.replaceChildren();
     var welcome=node("div","welcome");
     welcome.appendChild(node("div","welcome-mark","BɅ"));
