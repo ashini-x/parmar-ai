@@ -403,6 +403,7 @@ jobs:
             '404 • UNVERIFIED ROUTE' \
             'This page could not be found.' \
             'The route you requested does not exist in our index or has been moved.' \
+            'href="/why">Why BRɅIN</a>' \
             'href="/#platform"' \
             'href="/founder">Founder</a>' \
             'href="https://telegram.me/parmarthbot" target="_blank" rel="noopener noreferrer"' \
