@@ -1,32 +1,40 @@
-# BRɅIN Intelligence — Owner Workspace Roadmap
+# Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M3 complete; M4 implementation deployed; authenticated Owner generation acceptance pending; automatic stream reconnection deferred  
 **Last updated:** 2026-11-18  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
-**Working name:** BRɅIN Intelligence
+**Working name:** Owner Gemini Intelligence
 
 > This is a separate owner-only feature. It does not replace or broaden the student-facing परमार्थAI Telegram tutor.
 
 ## 1. Product goal
 
-Build a ChatGPT-like AI workspace for the BRɅIN owner, accessible only after signing in through the existing Admin Control Center login.
+Build a private, general-purpose Gemini workspace for the Owner inside the existing protected Admin Control Center. The Owner signs in once, chooses a Gemini model that is actually available to the configured Google Cloud / Vertex AI project and location, and asks open-ended questions without going to Google Cloud Console, AI Studio or a separate Gemini chat interface.
 
-The owner should be able to ask open-ended questions across subjects and professional domains, including mathematics, reasoning, science, coding, software architecture, research, writing and general knowledge. The workspace should use Gemini models available to the configured Google Cloud / Vertex AI project and expose each model's supported reasoning/thinking settings.
+There are two input routes to the same text conversation:
 
-The owner chooses the model and its supported thinking level. The interface must not show settings that the selected model or API does not support.
+1. **Text chat:** the Owner types into the message box and sends the prompt.
+2. **Voice dictation:** the Owner speaks into a microphone control; speech is transcribed into editable text in the message box. The Owner can review, correct, cancel or send that transcript. Once sent, it is an ordinary text message and uses the exact same selected model, thinking setting, conversation history and generation endpoint as typed text.
+
+The product is a direct, model-aware workspace over the Gemini capabilities exposed by the selected model and chosen API surface. It is not a copy of every Google product or the consumer Gemini app. “Full Gemini capability” means the Owner can ask general questions and use applicable model/API features without student-specific restrictions; it does not mean every public model, tool, modality, entitlement or Google product feature is automatically available in this project.
+
+The selected model is the Owner's choice. The application must not silently replace it, downgrade its thinking level, route it to another provider, or force a request into a BRɅIN/SSC workflow. A capability may be offered only when it is useful for the task and verified for the selected model, API version, project and location.
 
 ### Product principles
 
 1. **Owner-only:** available only to an explicitly authenticated Owner principal.
-2. **Separate from students:** no changes to student Telegram scope, prompts, quotas, profiles, or answer contracts.
-3. **Model choice belongs to the owner:** expose the Gemini models the configured Vertex AI project can actually use, not an invented or globally assumed catalogue.
-4. **Thinking settings are model-aware:** show the provider-supported levels for the selected model, and send only valid parameters.
-5. **No student-style application cap:** do not apply the student's daily question quota or student burst policy to owner conversations. This does not override Google Cloud quotas, model availability, context limits, billing, or account/project restrictions.
-6. **Private by default:** owner conversations and uploads are separate from student records and BRɅIN retrieval data.
-7. **Documentation is part of delivery:** every completed implementation task must update this roadmap and the continuation prompt before that task is considered complete.
+2. **Separate from students:** no changes to student Telegram scope, prompts, quotas, profiles, data or answer contracts.
+3. **General-purpose:** the Owner can ask about any subject or task; do not impose SSC topics, subject classification, a fixed answer schema or BRɅIN-first retrieval.
+4. **Owner chooses the model:** show the project/location-verified Gemini model catalogue and make the chosen model explicit for each generation.
+5. **Model-aware settings:** thinking levels, context limits, input types and optional tools are determined by the selected model and API, not by a universal front-end assumption.
+6. **One text-generation path:** typed prompts and reviewed voice transcripts become the same text message and use the same conversation/generation pipeline.
+7. **Voice means dictation, not a live voice assistant:** transcribe speech to editable text before sending. Real-time Gemini Live sessions, speech-to-speech conversation and assistant voice output are not part of this product scope.
+8. **No student-style application cap:** do not apply student daily-question or burst limits to Owner chats. Google Cloud quotas, model availability, billing, context and API limits still apply.
+9. **Private by default:** Owner conversations and their metadata remain separate from student records and BRɅIN retrieval data.
+10. **Documentation is part of delivery:** every completed task updates this roadmap and the continuation prompt before it is considered complete.
 
-## 2. Current repository baseline (verified 2026-11-17)
+## 2. Current repository baseline (verified 2026-11-18)
 
 The existing app already provides a suitable protected admin surface:
 
@@ -64,140 +72,140 @@ The Telegram product is intentionally SSC GA/GS-focused and runs through its own
 
 Do not assume the source files or deployment configuration remain unchanged. Re-read the latest default branch before each implementation task.
 
-## 3. Target owner experience
+## 3. Target Owner experience
 
-The workspace should be reachable from an Owner-only entry in the existing admin panel, for example:
+The workspace is reachable from an Owner-only entry in the existing admin panel:
 
-- Admin sign-in: `/admin/login` (existing)
-- Owner workspace: `/admin/intelligence` (M1 protected placeholder; M2 replaces it with the chat interface)
-- Owner APIs: `/admin/api/intelligence/*` (M1 Owner-only reserved namespace; no feature handlers yet)
+- Admin sign-in: `/admin/login`
+- Owner workspace: `/admin/intelligence`
+- Owner APIs: `/admin/api/intelligence/*`
 
 ### Core interface
 
-- ChatGPT-like conversation layout that fits the existing admin product and works on desktop and mobile.
-- New chat, conversation history, reopen and rename conversations.
-- Message composer with multiline input.
-- Stream responses into the current conversation.
-- Stop generation, regenerate, edit/resubmit a prompt, and copy response.
-- Clear rendering for formatted text, code, tables, equations and long responses.
-- Show the active model and thinking level on each conversation/response.
-- Model and thinking selectors in the composer/settings area.
-- Useful loading, retry, provider error, quota and upload states. Provider errors must be understandable and must not silently switch models.
-- Accessible keyboard behaviour and responsive layout.
+- A responsive dark chat workspace inside the existing Admin Control Center.
+- New chat, conversation history, reopen, rename and delete.
+- Multiline text composer with a clear send action.
+- Optional microphone/dictation control beside the composer.
+- Voice capture produces a transcript in the composer; the Owner can review and edit it before sending. It must not auto-submit an unreviewed transcript.
+- Typed and transcribed messages share the same conversation, model selection, thinking setting, request path, response stream and persistence rules.
+- Stream assistant text; support Stop, Regenerate and Edit/resubmit.
+- Render ordinary Gemini text responses well, including Markdown, code, tables, maths and long answers.
+- Show the selected model and supported thinking level used for each response.
+- Surface provider errors, unsupported settings, quota/limit failures and cancellation honestly. Never silently switch models.
+- Keep keyboard access, mobile layout and accessible recording/transcription states.
 
-### Broad owner assistant
+### General-purpose Gemini behaviour
 
-The owner assistant must not use the student SSC-only system prompt or student answer schema. It should support open-ended questions, and must not force every request into SSC subject/topic/exam fields.
-
-The assistant can generate explanatory derivations, summaries of its approach, assumptions, verification steps and citations where available. It must not claim to reveal private internal chain-of-thought tokens or hidden reasoning traces.
+- Do not use the student SSC-only prompt, student classifier, `AnswerPacket`, student profile context, student usage admission or SSC post-processing.
+- Let the chosen Gemini model answer open-ended questions in its normal supported request format. Do not require the Owner to choose an academic subject, exam, task category or rigid response schema.
+- Keep any minimal Owner system instruction neutral and task-agnostic; do not inject BRɅIN/Fatman context, tool instructions or unrelated project data by default.
+- Where the selected API supports useful capabilities such as web grounding, URL context or code execution, evaluate and expose only the capabilities that materially help the Owner's request. Tool use must be transparent, model/API compatible and permission-aware; do not add every available Google tool merely because it exists.
+- Do not claim to expose hidden chain-of-thought or private internal reasoning tokens. User-facing explanations, concise reasoning summaries, citations and results are appropriate where supported.
 
 ### Gemini model catalogue and thinking selector
 
-The catalogue must be maintained as provider-aware metadata, not as a permanently hardcoded list in the front end.
-
-For every candidate model, track at least:
+Maintain provider-aware metadata on the server rather than a fixed front-end list. For every selectable model, track:
 
 - Provider model ID and display label.
-- API surface/version and supported request format.
+- API surface/version and request format used by this workspace.
 - Project/location availability and eligibility.
-- Lifecycle state (GA, preview, deprecated, retired), where the provider documents it.
-- Supported input/output modalities and relevant capabilities.
+- Lifecycle state (GA, preview, deprecated, retired), where documented.
+- Supported text input/output and any other input modalities deliberately enabled for this workspace.
 - Supported thinking/reasoning levels and defaults.
 - Context/output limits relevant to the chosen API.
-- Any required request fields, incompatible fields or migration notes.
+- Optional tool compatibility and request-field constraints.
 
-The server is authoritative. The browser receives only the allowed catalogue for this deployment. If a model is unavailable, retired, unsupported in the configured region, or rejected by the project, it must not be presented as selectable.
+The server is authoritative. The browser receives only the catalogue approved for this deployment. A public model listing is not proof that this project can invoke that model. Re-check availability and compatibility before enabling new models or API features.
 
-The UI should update the thinking selector whenever the model changes. It must submit only the selected model's supported configuration. Do not assume that every model supports the same values. For example, current Google documentation describes Gemini 4 Hydrogen with `LOW`, `MEDIUM`, `HIGH`, and `XHIGH`, while Gemini 4 Carbon and Argon support `LOW`, `MEDIUM`, and `HIGH`; `MINIMAL` and the older `thinking_budget` parameter are not valid for Gemini 4. These are examples of why the catalogue must be model-specific, not a permanent exhaustive list.
+### Voice transcription
 
-Official provider references checked on 2026-11-17:
+Voice is an input convenience only. M5 must select a transcription approach based on actual browser support, quality for the Owner's languages, privacy, latency, cost and Worker-compatible integration. Do not assume that Gemini Live is needed, and do not stream raw microphone audio into the chat-generation endpoint.
 
-- [Thinking levels and supported-model matrix](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking)
-- [Get started with Gemini 4](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/get-started-with-gemini-4)
-- [Gemini 4 Hydrogen developer guide](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-hydrogen)
-- [Gemini inference API reference](https://docs.cloud.google.com/gemini-enterprise-agent-platform/reference/models/inference)
+The transcript is ordinary text. It must be visible and editable before the Owner sends it. Unless separately approved, do not retain raw audio after transcription; retain the sent transcript as the conversation's user message under the existing Owner data policy.
 
-The live project/location must be checked before enabling a model. Public documentation does not prove that the current BRɅIN Google Cloud project is entitled to every listed model.
+### Owner usage and resource policy
 
-### Owner-only usage and resource policy
-
-- Do not apply the student daily question limit, student burst limit, SSC subject scope, or adaptive student-only thinking ceiling to owner workspace requests.
-- Do not present this as technically unlimited. Vertex AI remains subject to project/model quotas, regional availability, service limits, billing, context limits and temporary provider capacity.
-- Record owner usage independently: model, thinking level, token counts where returned, latency, status and estimated cost.
-- Provide clear usage/cost visibility and configurable billing alerts or owner notifications. A budget alert is not a hidden per-day student-style question cap.
-- Never silently downgrade a model or thinking level after an error. Explain the failure and let the owner choose a supported alternative.
-
-### Files and multimodal input
-
-Planned support includes PDF, common image formats and supported document/file types. Before implementation, verify the selected Vertex API/model's current file support and choose a private storage path.
-
-Uploads must be owner-authorized, type/size-validated, isolated from student and BRɅIN source storage, retained only under a documented policy, and deleted when the associated conversation/file is deleted. Do not expose public object URLs.
+- Do not apply the student daily question limit, student burst limit, SSC subject scope or student-only thinking ceiling to Owner requests.
+- Do not describe the service as technically unlimited. Vertex AI remains subject to project/model quotas, region availability, context limits, billing and provider capacity.
+- Record Owner generation usage independently: model, thinking level, returned token counts, latency and status; add cost estimates only where they can be grounded in pricing and usage data.
+- Provide understandable usage/cost visibility and configurable budget alerts if useful. An alert is not a hidden student-style per-day cap.
+- Never silently downgrade a model, thinking level, provider or API version after an error.
 
 ### Optional BRɅIN knowledge context
 
-BRɅIN retrieval may be offered as an explicit, opt-in context source for the owner. It must be off by default for general-purpose chats and must not automatically force BRɅIN/Fatman passages into every prompt.
-
-When enabled, use the approved private BRɅIN service contract and its source/project authorization rules. Keep general Vertex chat generation separate from the retrieval provider. An owner question should still work without BRɅIN context.
+BRɅIN retrieval is a separate, optional add-on—not the purpose or default context of Owner Gemini Intelligence. Keep it off for ordinary chats. When explicitly enabled, use the approved private BRɅIN service contract, project/source authorization and provenance rules. The general-purpose chat must work fully without BRɅIN retrieval.
 
 ## 4. Target architecture and boundaries
 
-```text
-Owner browser
-    |
-    v
-Existing /admin/login
-    |
-    v
-Signed admin session + explicit Owner role check
-    |
-    +---- Existing Admin Control Center (unchanged)
-    |
-    +---- Owner-only /admin/intelligence
-                |
-                v
-         Owner Intelligence API
-         (Owner authorization on every request)
-                |
-          +-----+-----------------------+
-          |                             |
-          v                             v
-     Owner chat store             Vertex AI / Gemini
-     (separate D1 records)        (selected model + valid
-          |                        model-specific thinking)
-          v                             |
-     Private uploads                    v
-     (isolated object storage)     streamed response
-          |
-          +---- optional, explicitly enabled BRɅIN context
-```
+`text/voice input
+      |
+      +-- typed text -------------------------+
+      |                                       |
+      +-- microphone -> transcription -> review/edit
+                                              |
+                                              v
+                                  Owner text conversation
+                                              |
+                                  Owner-only API + D1 store
+                                              |
+                                  selected Gemini model/API
+                                  + selected thinking level
+                                              |
+                                streamed text response
+                                              |
+                                Owner D1 response/metadata
 
-Implementation must preserve these boundaries:
+                     optional, explicit BRɅIN context
+                     (separate add-on; off by default)
 
-- **Identity:** role/owner principal is established and verified server-side from the signed admin session. Never trust a role value supplied by the browser.
-- **Authorization:** every read, write, stream, stop, regenerate, upload and delete operation rechecks Owner access.
-- **Storage:** use separate owner conversation/message/upload records. Do not store Owner prompts in the student `questions`, profile, Durable Object or quiz records.
-- **Model credentials:** use the existing server-side Google service-account/Vertex authentication path where compatible. Never send private keys, access tokens or provider credentials to the browser.
-- **Request path:** build a dedicated general-purpose assistant pipeline. Reuse low-level safe Vertex transport utilities only after reviewing their assumptions; do not reuse the student-specific prompt, `AnswerPacket`, answer classifier or SSC post-processing.
-- **BRɅIN retrieval:** separate, optional, explicitly selected context. No implicit student or unrelated tenant data access.
-- **Audit:** record security-relevant owner actions without storing secrets or unnecessary prompt contents in audit logs.
-- **Failure handling:** handle Vertex 429/5xx, model unavailability, timeouts, disconnects, cancellation and partial streams without losing previously saved turns or showing a false success.
-- **Privacy:** apply retention and deletion to conversations and uploaded source files. Keep data out of Git and ordinary application logs.
+                     optional Gemini API tools
+                     (only when relevant and verified)`
+
+Preserve these boundaries:
+
+- **Identity:** establish the Owner principal server-side from the signed admin session. Never trust a browser-supplied role.
+- **Authorization:** every conversation read/write, model-list, generation, stop, transcription, tool and delete operation must recheck Owner authorization. Mutations retain same-origin protections.
+- **Storage:** Owner conversations/messages and generation metadata remain in dedicated Owner records. Do not store Owner prompts in student questions, profiles, Durable Object state or quiz records.
+- **Transcription:** protect mic capture and transcription with Owner authorization, input-size/time limits and clear browser permission states. Do not store raw audio unless a separate retention requirement is explicitly approved.
+- **Model credentials:** keep Google service-account credentials and access tokens server-side.
+- **Request path:** use one general-purpose Owner text-generation path for typed text and reviewed transcripts. Reuse only low-level safe Vertex transport utilities; never reuse the student-specific prompt, `AnswerPacket`, answer classifier or SSC post-processing.
+- **Model selection:** send the exact verified model selected by the Owner and its supported thinking setting. No automatic model/provider fallback.
+- **Tools:** treat native Gemini tools as optional request capabilities, not mandatory global middleware. Validate tool/model/API compatibility server-side. Any tool that performs an external or sensitive action requires a separate explicit authorization/confirmation design.
+- **BRɅIN retrieval:** separate, opt-in and provenance-preserving. No implicit student or unrelated tenant data access.
+- **Audit:** record security-relevant actions without logging secrets, raw audio or unnecessary prompt content.
+- **Failure handling:** handle provider 429/5xx, model unavailability, timeouts, disconnects, cancellation and partial streams without losing already-saved turns or showing false success.
+- **Privacy:** define retention/deletion for conversations and transcripts. Keep data out of Git and ordinary application logs.
 
 ## 5. Milestones and acceptance criteria
 
-Milestones are ordered. Do not skip a security or persistence prerequisite to build a visually complete chat page.
+M0–M4 preserve the verified implementation history. The forward plan is intentionally focused on a powerful text-first Owner assistant rather than cloning every Google product surface.
 
 | Milestone | Scope | Acceptance criteria | Status |
 |---|---|---|---|
-| **M0 — Product and architecture baseline** | Define owner-only scope, existing admin baseline, trust boundaries, target UX, model/thinking registry, data boundaries, delivery workflow and continuation prompt. | Roadmap and continuation prompt committed; current implementation clearly marked as not started; docs index updated. | **Complete — documentation only** |
-| **M1 — Owner identity and authorization** | Add explicit Owner identity/role to the existing admin sign-in/session flow. Keep regular admin access distinct. Protect the Owner route and reserved API namespace server-side. | Configured Owner signs in through `/admin/login`; admin-only sessions and forged role claims are denied; sessions expire/logout; credential rotation revokes Owner sessions; route/API guards enforce Owner authorization; authorization tests pass; production deploy and smoke/acceptance succeed. | **Complete — deployed** |
-| **M2 — Workspace shell and owner chat persistence** | Deploy the Owner-only responsive BRɅIN Intelligence workspace; create isolated D1 conversations/messages; implement new chat, history, reopen, rename, delete and user-message persistence. | Owner-only route/API guards; separate D1 tables scoped by configured Owner principal; create/list/reopen/rename/delete; saved user messages survive reload; same-origin mutation protection; responsive dark workspace; student flows unchanged. | **Complete — deployed** |
-| **M3 — Vertex AI model registry and provider adapter** | Build the server-side Gemini allowlist/catalogue, project/location capability checks, Owner-facing model selector and a separate general-purpose Gemini provider adapter. | Model metadata is server-controlled; only a model with a successful Count Tokens probe at the configured project/location is selectable; provider failures remain explicit; unverified models are rejected by the adapter; no student prompt/contract or silent model fallback is used. | **Complete — deployed and live picker observed** |
-| **M4 — Model-specific thinking and live response controls** | Map each model to its supported thinking settings; stream output; support stop, regenerate and edit/resubmit; persist partial/final status and generation metadata safely. | Model change updates valid choices; server validates the model/API-specific thinking value; Vertex request uses the selected level; SSE streams only user-facing text; Stop/request cancellation retains partial text; Regenerate and Edit/resubmit keep turn order coherent; actual model/level/token/latency metadata is Owner-scoped. A real billed Owner browser generation check remains outstanding. Automatic in-place stream reconnection is deferred and must not be represented as implemented. | **Implementation deployed; authenticated Owner generation acceptance pending; stream reconnection deferred** |
-| **M5 — Private files and multimodal conversations** | Add secure upload, private storage, file-to-conversation association and supported Gemini file/image/PDF inputs. | Owner-only access enforced for upload/read/delete; MIME/type/size and provider support validated; no public URLs or secret leakage; file deletion and retention verified; representative image/PDF/document tests pass. | Not started |
-| **M6 — Optional BRɅIN context** | Provide an explicit opt-in for approved BRɅIN retrieval context; maintain provenance and source access rules. | Off by default; only authorized and ready BRɅIN sources are used; citations/provenance are preserved where available; general chats work without retrieval; no student or other tenant data can be queried. | Not started |
-| **M7 — Owner observability and cost controls** | Add a dedicated usage view for owner chats, model/level/token/latency/error data and configurable billing alerts. | Owner usage is separate from student metrics; estimates are labelled estimates; provider quota/billing realities are clear; alerts are testable; no student-style daily cap is applied. | Not started |
-| **M8 — Security, regression and production release** | Run authorization, isolation, prompt-boundary, provider, streaming, file, responsive UI, cost and regression tests; deploy behind Owner-only access. | Full checks and targeted acceptance pass; student Telegram and existing Admin/BRɅIN flows remain unchanged; production owner-only smoke tests pass; rollback path and deployed revision are recorded; docs and continuation prompt reflect verified production state. | Not started |
+| **M0 — Product and architecture baseline** | Define owner-only scope, existing admin baseline, trust boundaries, model/thinking registry, data boundaries, delivery workflow and handoff. | Roadmap and continuation prompt committed; implementation state accurately recorded; docs index updated. | **Complete — documentation only** |
+| **M1 — Owner identity and authorization** | Add explicit Owner identity/role to the existing admin sign-in/session flow. Protect the Owner route and API namespace server-side. | Owner signs in through `/admin/login`; non-Owner admins and forged role claims are denied; session expiry/logout and credential rotation work; authorization tests and production acceptance pass. | **Complete — deployed** |
+| **M2 — Workspace shell and chat persistence** | Deploy the Owner-only responsive workspace and isolated D1 conversations/messages; implement new chat, history, reopen, rename and delete. | Every route/API is Owner-only; Owner messages persist across reload; records are scoped to the configured Owner; same-origin mutation protection and student-flow regression checks pass. | **Complete — deployed** |
+| **M3 — Gemini model catalogue and provider adapter** | Build a server-side model allowlist, project/location eligibility checks, Owner model selector and a separate general-purpose Gemini provider adapter. | Only project/location-verified models are selectable; model/API metadata is server-controlled; provider errors remain explicit; no student prompt/contract or silent fallback is used. | **Complete — deployed; model picker observed in production** |
+| **M4 — Thinking controls and text response lifecycle** | Map each model to supported thinking settings; stream Owner text responses; support Stop, Regenerate and Edit/resubmit; persist partial/final state and generation metadata. | Selected model/thinking setting reaches Vertex correctly; SSE streams user-facing text only; Stop retains a truthful partial response; Edit/Regenerate preserve turn order; metadata is Owner-scoped. A real billed Owner browser acceptance remains outstanding. Automatic in-place stream reconnection remains deferred. | **Implementation deployed; authenticated Owner acceptance pending; reconnection deferred** |
+| **M5 — Voice dictation to editable text** | Add a microphone input that transcribes speech into the existing text composer. The transcript is reviewed/edited and manually sent through the exact same Owner chat path as typed text. | Owner-only capture/transcription; explicit mic permission and clear recording/error states; transcript is editable before send; cancel/retry works; supported language/quality is tested; raw audio is not retained by default; the sent transcript persists as an ordinary user text message. Do not implement Gemini Live, voice-to-voice sessions or assistant speech output. | Not started |
+| **M6 — Relevant Gemini API capabilities** | Evaluate and selectively integrate only native Gemini capabilities that materially improve general Owner requests, such as Google Search grounding/citations, URL context or code execution, where supported by the selected model/API and configured project. | A server-owned compatibility map records model/API/project/location support; each enabled tool is useful, transparent and tested; the selected model is preserved; results/citations are shown where returned; disabled/unsupported tools are not sent. No broad tool catalogue is added just for parity. External or sensitive actions require separate explicit confirmation and are not part of this milestone by default. | Not started |
+| **M7 — Owner usage and cost visibility** | Provide separate usage visibility for model, thinking level, tokens, latency, errors and defensible cost estimates/alerts. | Owner data is separate from student analytics; estimates are labelled; Google quotas/billing are explained; alerts are testable; no student-style daily or burst cap is added. | Not started |
+| **M8 — Security, quality and production acceptance** | Complete cross-feature privacy, authorization, prompt-boundary, transcription, model/API compatibility, streaming, usage and regression checks. | Real authenticated Owner journey passes for typed chat and voice dictation; model selection/thinking are honoured; Stop/Edit/Regenerate work; tool behaviour is verified when M6 is enabled; student Telegram, Admin Control Center and BRɅIN admin remain unchanged; production revision and rollback evidence are recorded. | Not started |
+
+### Optional add-on — BRɅIN knowledge context (outside the core milestone sequence)
+
+BRɅIN retrieval may be added only when explicitly enabled by the Owner. It must remain off by default and cannot be a precondition for ordinary Gemini chat or voice-dictated questions. Implementation must use the approved private BRɅIN contract, authorization and provenance rules.
+
+### Deferred / not in the approved baseline
+
+- Private file and image/PDF uploads.
+- Gemini Live or real-time audio/video sessions.
+- Speech-to-speech conversation or assistant voice output.
+- Image, video or audio generation.
+- Computer use, MCP servers and generic external-action integrations.
+- Consumer Gemini app feature parity or an attempt to mirror every Google Cloud console capability.
+
+These are not implicit milestones. Add a separate milestone only after a concrete Owner need is approved and the relevant model/API/project support is verified.
 
 ### Milestone completion rule
 
@@ -207,13 +215,16 @@ A milestone is complete only when its acceptance criteria are satisfied by code 
 
 Unless separately approved, this feature does not:
 
-- Turn the student Telegram bot into a general-purpose chatbot.
-- Change student SSC scope, student prompts, quotas, exam profiles, question history or quiz contracts.
+- Turn the student Telegram bot into a general-purpose chatbot or change its SSC scope, prompts, quotas, profiles, data or answer contracts.
 - Give teachers, ordinary operators or other admin users Owner access.
 - Reuse student conversation/profile data as automatic Owner context.
-- Automatically inject Fatman or BRɅIN passages into general-purpose answers.
-- Expose provider secrets, private reasoning traces, or internal authentication state.
-- Promise unlimited provider capacity, zero billing, or models the configured Vertex project cannot access.
+- Automatically inject Fatman or BRɅIN passages into ordinary Owner questions.
+- Implement Gemini Live, real-time voice/video, speech-to-speech interaction or assistant voice output.
+- Generate images, video or audio, or add computer-use/MCP/general-purpose external-action surfaces by default.
+- Require file/image/PDF uploads in the initial product.
+- Claim parity with every feature in the consumer Gemini app or Google Cloud Console.
+- Expose provider secrets, private reasoning traces or internal authentication state.
+- Promise unlimited provider capacity, zero billing or models the configured Vertex project cannot access.
 - Silently switch models, thinking levels, providers or API versions after a failure.
 
 ## 7. Living implementation ledger
@@ -222,23 +233,18 @@ This section is the current source of truth for this feature's progress. Update 
 
 ### Current checkpoint
 
-- **Completed and deployed:** M0 product/architecture baseline; M1 Owner identity and authorization; M2 Owner workspace shell and chat persistence; M3 Vertex model registry/provider adapter and live Owner model-picker verification; M4 model-aware thinking control and streamed Owner response implementation.
-- **M3 live verification:** on 2026-11-18 the Owner supplied a production screenshot showing the model selector populated with the project/location-verified candidates. The UI only displays catalogue rows with `selectable: true`; do not infer that unlisted registry candidates are enabled.
-- **M4 production release:** merged commit `2912d55cde147c48d1cc608b4b318b51487697ba`, PR [#320](https://github.com/ashini-x/parmar-ai/pull/320), workflow [44168257509](https://github.com/ashini-x/parmar-ai/actions/runs/44168257509) succeeded. Typecheck passed; `npm test` passed 482 tests across 72 files; `npm run test:node` passed 62 tests across 9 files; all three Worker dry-runs passed. Paired production deployments, root/health smoke checks, BRVIN service binding, Fatman readiness and release acceptance passed. Deployed versions: `brvin-service` `44acfa29-199c-4468-8b4a-23fefeaef363`; `parmar-ai` `10c630d6-ec4c-4407-8059-39193290e1ba`. Production acceptance artifact: `14367310746`. No rollback was needed.
-- **M4 implementation:** the Owner-specific thinking selector, Vertex `generationConfig.thinkingConfig.thinkingLevel` binding, Owner-only SSE generation endpoint, thought-part filtering, incremental partial persistence, Stop/request cancellation, Regenerate, Edit/resubmit and separate `owner_intelligence_generation_metadata` table are deployed.
-- **Acceptance still pending:** automated tests use mock Vertex responses; no real billed prompt/stream has yet been exercised in the authenticated production Owner browser. Automatic in-place SSE reconnection is not implemented. The Owner can reopen persisted partial text and manually Regenerate.
-- **Next:** complete a real Owner browser acceptance: choose a verified model and supported thinking level, send a short prompt, confirm the model/level label and streamed answer, test Stop/partial retention, then Edit and Regenerate. Keep M4 open until that production behavior is confirmed. Treat automatic reconnection as a separate remaining M4 follow-up rather than a shipped capability.
-- **M2 implementation:** `/admin/intelligence` remains the responsive dark workspace. It provides New chat, conversation history, reopen, rename and delete. Owner-authored messages persist in D1.
-- **M2 storage:** `owner_intelligence_conversations` and `owner_intelligence_messages` remain separate from student tables and Durable Object state. Every read/write is scoped by the normalized configured Owner username. No automatic Owner-chat retention cleanup is configured; chats remain until individually deleted.
-- **M2 APIs:** `GET/POST /admin/api/intelligence/conversations`; `GET/PATCH/DELETE /admin/api/intelligence/conversations/:id`; `POST /admin/api/intelligence/conversations/:id/messages`. The complete namespace remains behind `requireOwner`; mutations require same-origin Origin checks.
-- **M3 model API:** `GET /admin/api/intelligence/models` is Owner-only, uses the server-configured project/location and the existing server-side Google service-account token utility, and probes the central registry candidates with Vertex `countTokens`. Only HTTP success makes a model selectable. The complete catalogue is cached for 90 seconds; no more than three probes run concurrently and each candidate has an 8-second timeout.
-- **M3 current registry:** Gemini 4 Hydrogen, Carbon and Argon; Gemini 3.8, 3.7 and 3.6 Flash; Gemini 3.5 Flash and Flash-Lite. The Owner UI only displays entries with `selectable: true`. It prefers Hydrogen, then 3.8 Flash, then the first available candidate as the initial page selection. M4 binds the selected model to actual generation and repopulates the thinking selector from that model's registry-supported levels.
-- **M3 provider adapter:** `generateOwnerGeminiContent` uses plain multi-turn text content and an optional Owner system instruction. It does not invoke the student SSC prompt, `AnswerPacket`, student profile, student quota, Google Search grounding or BRɅIN/Fatman context. It refuses a model without a recent successful project/location probe, applies the model's API single-request output ceiling, sanitizes provider errors and never auto-falls back.
-- **Official Google compatibility references checked 2026-11-18:** [thinking-level matrix](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking), [Gemini 4 limits and migration guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/start/get-started-with-gemini-4), [Gemini 3.8 Flash developer guide](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-3-8-flash), and [Gemini 4 Argon developer guide](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-argon). The 4 family has a 1,048,576-token unified input/output budget; the current non-streaming direct HTTP adapter's per-request output ceiling is 65,536 for Hydrogen and 32,768 for Carbon/Argon. Gemini 3.8/3.7/3.6/3.5 candidates have a 1,048,576 context window and 65,536 output ceiling. Thinking metadata is recorded per model; M4 sends the selected supported level in the Vertex generation configuration.
-- **M3 release:** provider layer first deployed by `75be2818b1688f7e70745cb3560ed8c7c56ec6b2` through workflow [44153429958](https://github.com/ashini-x/parmar-ai/actions/runs/44153429958). Follow-up model-selector/provider-hardening release `fc2e3488f4508da6298bdbcfcd134500cf2ccdfc` passed workflow [44157348057](https://github.com/ashini-x/parmar-ai/actions/runs/44157348057); deployed versions were recorded above.
-- **M4 release:** merged commit `2912d55cde147c48d1cc608b4b318b51487697ba` deployed in workflow [44168257509](https://github.com/ashini-x/parmar-ai/actions/runs/44168257509). Thinking controls and streamed generation are live, subject to the outstanding authenticated Owner browser test; automatic stream reconnection is deferred.
-- **Not implemented:** private attachments (M5), optional BRɅIN retrieval (M6), Owner observability/cost controls (M7) and automatic in-place stream reconnection.
-- **Production identity:** `OWNER_DASHBOARD_USER=admin` remains explicitly configured as the current single production Owner principal. Existing sessions minted before M1 require a fresh login.
+- **Completed and deployed:** M0 product/architecture baseline; M1 Owner identity and authorization; M2 Owner workspace shell and chat persistence; M3 Vertex model registry/provider adapter and production model-picker verification; M4 model-aware thinking control and streamed text generation implementation.
+- **M3 live verification:** on 2026-11-18 the Owner supplied a production screenshot showing the model selector populated with project/location-verified candidates. The UI only displays catalogue rows with `selectable: true`; do not infer that unlisted candidates are enabled.
+- **M4 production release:** merged commit `2912d55cde147c48d1cc608b4b318b51487697ba`, PR [#320](https://github.com/ashini-x/parmar-ai/pull/320), workflow [44168257509](https://github.com/ashini-x/parmar-ai/actions/runs/44168257509) succeeded. Typecheck passed; `npm test` passed 482 tests across 72 files; `npm run test:node` passed 62 tests across 9 files; all three Worker dry-runs passed. Paired production deploy, root/health smoke checks, BRVIN service binding, Fatman readiness and release acceptance passed. Versions: `brvin-service` `44acfa29-199c-4468-8b4a-23fefeaef363`; `parmar-ai` `10c630d6-ec4c-4407-8059-39193290e1ba`. Manifest artifact `14367310746`. No rollback was needed.
+- **M4 implementation:** selected-model thinking control, Vertex `generationConfig.thinkingConfig.thinkingLevel` binding, Owner-only SSE text generation, thought-part filtering, incremental partial persistence, Stop/request cancellation, Regenerate, Edit/resubmit and the dedicated `owner_intelligence_generation_metadata` table are deployed.
+- **M4 acceptance still pending:** automated tests use mocked Vertex responses; no real billed prompt/stream has yet been exercised in the authenticated production Owner browser. Verify a short typed prompt, selected model/thinking label, streamed output, Stop/partial retention, Edit/resubmit and Regenerate. Automatic in-place SSE reconnection is not implemented; persisted partial text can be reopened and manually regenerated.
+- **Next action:** complete the real authenticated Owner browser acceptance for M4. Do not begin M5 until this is verified or explicitly recorded as blocked. The next product milestone after M4 is M5 voice dictation to editable text; it is not Gemini Live.
+- **M2 workspace/storage:** `/admin/intelligence` provides a responsive dark workspace with New chat, conversation history, reopen, rename and delete. `owner_intelligence_conversations` and `owner_intelligence_messages` remain separate from student tables and Durable Object state; all reads/writes are scoped to the configured Owner.
+- **M3 model API:** `GET /admin/api/intelligence/models` is Owner-only, uses the server-configured project/location and server-side Google service-account auth, and probes registry candidates with Vertex `countTokens`. Only successful probes make a model selectable.
+- **M3 registry and adapter:** the current registry includes Gemini 4 Hydrogen/Carbon/Argon, Gemini 3.8/3.7/3.6 Flash and Gemini 3.5 Flash/Flash-Lite. The adapter sends plain multi-turn text and an optional neutral Owner system instruction. It does not invoke student SSC logic, Search grounding or BRɅIN/Fatman context. The UI uses only `selectable: true` entries; no silent fallback is permitted.
+- **Production identity:** `OWNER_DASHBOARD_USER=admin` remains explicitly configured as the current single production Owner principal. A legacy pre-M1 session requires a fresh login.
+- **Scope boundary recorded 2026-11-18:** Owner interaction is text-first. Voice is dictation to an editable text transcript. Gemini Live, real-time audio/video, assistant speech, media generation and generic Google capability parity are explicitly out of scope. Only useful, verified, model/API-compatible capabilities may be added.
+- **Not implemented:** voice dictation (M5), relevant native Gemini tools (M6), Owner usage/cost view (M7), and final overall acceptance (M8). File/media input and BRɅIN context are deferred/optional as described above.
 
 ### Decisions recorded
 
@@ -257,6 +263,8 @@ This section is the current source of truth for this feature's progress. Update 
 | OIW-ADR-011 | Owner generation must require a selectable catalogue entry and never silently fall back to another model. | A syntactically valid model ID is not proof that the configured project can invoke it. | Implemented in M3 |
 | OIW-ADR-012 | Owner thinking level is selected and validated against the chosen server registry entry, then sent using Vertex `generationConfig.thinkingConfig.thinkingLevel`. | Thinking options and request payload compatibility vary by Gemini model; rejecting unsupported values prevents silent downgrades. | Implemented and deployed in M4 |
 | OIW-ADR-013 | Streamed Owner assistant text and generation metadata remain in dedicated Owner D1 records; Stop/disconnect retains a truthful partial status. | The Owner must be able to reopen interrupted conversations without mixing generation data into student analytics or implying incomplete text is final. | Implemented and deployed in M4; automatic reconnection deferred |
+| OIW-ADR-014 | Owner Gemini Intelligence is a text-first general-purpose Gemini workspace. Voice is dictation transcribed into editable text and then sent through the same selected-model text chat pipeline. | The Owner asked for broad Gemini model capability through text or spoken input, not a clone of every Google surface. A separate transcription step avoids making Gemini Live, voice output or real-time audio/video architectural dependencies. | Accepted 2026-11-18; implementation not started |
+| OIW-ADR-015 | Add only Gemini API capabilities that are useful to Owner requests and verified for the exact model/API/project/location. | Avoids building feature parity with the consumer Gemini app or exposing every Google tool without a concrete use case. | Accepted 2026-11-18; M6 evaluation pending |
 
 ### Completed task log
 
@@ -268,6 +276,7 @@ This section is the current source of truth for this feature's progress. Update 
 | 2026-11-17 | M2 Owner Intelligence workspace and conversation persistence implemented and deployed. | `src/admin/intelligence.ts`, `src/index.ts`, `test/admin-owner-intelligence.test.ts`, and Owner workspace, data, security, API, privacy and test documents. | Runtime commits include `6333912746610c31ac963b78f7747b9b780589a9`, `cf04645b384a232a1f33f2fb1891139cc0b0f245`, `e424b49fa96977bffd3c60e4e63a176bd8c53cde`, `43bca853efa98039ffb0d1ca20fe122844ad18db`, final source `dd5d1ec6b0f9ccbe61facf0ed0cfa4c11ef21d25`; test coverage commits `b76fb634e6dcae1dea8bd8568ab2bc69f2e09aa6` and `7c162d5f2aec944db02d8e6b819dbe6f0018115d`. Production workflow [44145644996](https://github.com/ashini-x/parmar-ai/actions/runs/44145644996): success. Typecheck passed; 470 Vitest tests and 62 Node tests passed; all three Worker dry-runs passed; both Workers deployed; production smoke and release acceptance passed. No rollback. Authenticated manual browser walkthrough was not performed. |
 | 2026-11-18 | M3 Vertex model catalogue, Owner model selector and provider eligibility hardening. | `src/admin/intelligence-provider.ts`, `src/admin/intelligence.ts`, `test/admin-owner-intelligence-provider.test.ts`, `test/admin-owner-intelligence.test.ts`, and the Owner workspace, API, security, AI and test documents. | Initial provider deployment: commit `75be2818b1688f7e70745cb3560ed8c7c56ec6b2`, workflow [44153429958](https://github.com/ashini-x/parmar-ai/actions/runs/44153429958), success. Follow-up source commit `fc2e3488f4508da6298bdbcfcd134500cf2ccdfc`, production workflow [44157348057](https://github.com/ashini-x/parmar-ai/actions/runs/44157348057), success on 2026-11-17. `npm run check` passed; `npm test` passed 478 tests across 72 files; `npm run test:node` passed 62 tests across 9 files; private BRVIN, Parmar AI and standalone BRɅIN website Worker dry-runs passed. Paired production deployment, root/health smoke checks, BRVIN service binding, Fatman retrieval readiness and production release acceptance all passed. No rollback was needed. Deployed Worker versions: `brvin-service` `ad04c1ac-98b8-43ef-92c1-bef8dbead2ac`; `parmar-ai` `add293a6-6489-400b-996f-168034203058`. Production release manifest uploaded as artifact `14362111251`. On 2026-11-18, the Owner supplied a production screenshot showing the model selector populated with the candidates the server had marked selectable for the configured project/location. |
 | 2026-11-18 | M4 model-specific thinking selector and streamed Owner generation implemented, validated and deployed. | `src/admin/intelligence.ts`, `src/admin/intelligence-provider.ts`, `test/admin-owner-intelligence.test.ts`, `test/admin-owner-intelligence-provider.test.ts`, `docs/API.md`, `docs/AI_PIPELINE.md`, `docs/SECURITY_MODEL.md`, `docs/DATA_MODEL.md`, `docs/DATA_GOVERNANCE.md`, `docs/TEST_PLAN.md`, `docs/README.md`, `CHANGELOG.md`, `PRIVACY.md` and both Owner workspace documents. | PR [#320](https://github.com/ashini-x/parmar-ai/pull/320), merged as `2912d55cde147c48d1cc608b4b318b51487697ba`. PR validation and main workflow [44168257509](https://github.com/ashini-x/parmar-ai/actions/runs/44168257509) succeeded. `npm run check` passed; `npm test` passed 482 tests across 72 files; `npm run test:node` passed 62 tests across 9 files; three Worker dry-runs passed. Paired production deploy, root/health smoke checks, BRVIN service binding, Fatman readiness and release acceptance passed. Deployed versions: `brvin-service` `44acfa29-199c-4468-8b4a-23fefeaef363`; `parmar-ai` `10c630d6-ec4c-4407-8059-39193290e1ba`. Manifest artifact `14367310746`. No rollback. A real billed Owner browser generation test remains outstanding; automatic stream reconnection is deferred. |
+| 2026-11-18 | Clarified Owner Gemini Intelligence product scope as a general-purpose, text-first Gemini workspace with voice dictation. | `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md`, `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md`, `docs/README.md`, `CHANGELOG.md`. | Documentation-only scope/ADR update. No source code, tests or deployment changed. Commit recorded in this task's Git history. M4's real Owner acceptance remains the next action. |
 
 ### Required update after every feature task
 
@@ -287,23 +296,23 @@ A task is not complete until the relevant code/test/deployment work and these do
 
 ## 8. Verification checklist for the overall feature
 
-- [ ] Anonymous visitor cannot load workspace UI or use any workspace API.
-- [ ] Authenticated non-owner admin cannot load workspace UI or use any workspace API.
-- [ ] Owner can enter using the existing admin sign-in journey.
-- [ ] Client-side role tampering cannot elevate access.
-- [ ] Session expiry, logout and credential/role revocation prevent further access.
-- [ ] Owner messages, files and usage do not appear in student records or student analytics.
-- [ ] Owner assistant can answer open-ended non-SSC requests without the student prompt/schema.
-- [ ] Selected model is confirmed available to this project and location.
-- [ ] Thinking options and generation payload are valid for the selected model/API.
-- [ ] No silent model or thinking downgrade occurs.
-- [ ] Stream interruption, stop, retry and regeneration preserve conversation consistency.
-- [ ] Uploads are private, validated, isolated and deletable.
-- [ ] BRɅIN context is opt-in and respects project/source authorization.
-- [ ] Provider quotas, billing and context limits are communicated accurately.
+- [ ] Anonymous visitor cannot load workspace UI or use any Owner API.
+- [ ] Authenticated non-Owner admin cannot load workspace UI or use any Owner API.
+- [ ] Owner can enter using the existing admin sign-in journey; role/session tampering fails.
+- [ ] Owner messages and generation metadata never appear in student data or student analytics.
+- [ ] Open-ended questions use the Owner's selected model without SSC prompt/schema/classifier or forced BRɅIN context.
+- [ ] The selected model and supported thinking setting are honoured; no silent model/provider downgrade occurs.
+- [ ] Typed messages and reviewed voice transcripts use the same conversation and generation endpoint.
+- [ ] Voice transcript is editable before send; mic permissions, cancel, errors and supported language quality are handled; raw audio is not retained by default.
+- [ ] Stream interruption, Stop, partial retention, Edit/resubmit and Regenerate preserve conversation consistency.
+- [ ] Every enabled native Gemini tool is useful, selected-model/API/project compatible, transparent and tested.
+- [ ] External or sensitive tool actions require explicit Owner confirmation before execution.
+- [ ] Optional BRɅIN context is off by default and respects project/source authorization and provenance.
+- [ ] Provider quotas, billing, context and request limits are communicated accurately.
+- [ ] Gemini Live, real-time audio/video, assistant voice output and generated media are not added without a separate approved scope change.
 - [ ] Existing student Telegram, Admin Control Center and BRɅIN admin tests remain green.
-- [ ] Production Owner-only smoke tests and rollback procedure are verified.
-- [ ] This roadmap and the continuation prompt match the deployed commit.
+- [ ] Production Owner-only acceptance and rollback procedure are verified.
+- [ ] This roadmap and the continuation prompt match the latest repository state.
 
 ## 9. Related project documentation
 
