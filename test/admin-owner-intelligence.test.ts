@@ -106,7 +106,7 @@ class FakeOwnerD1 {
       }
       return;
     }
-    if (sql.startsWith("UPDATE owner_intelligence_messages SET content")) {
+    if (sql.startsWith("UPDATE owner_intelligence_messages SET content = ?, status = ?")) {
       const [content, status, id, owner_id] = values;
       const row = this.messages.get(String(id));
       if (row && row.owner_id === String(owner_id) && row.role === "assistant") {
