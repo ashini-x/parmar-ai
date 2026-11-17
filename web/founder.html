@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#1E1E1C"><meta name="robots" content="index, follow">
-<title>Ashini Gogoi — Founder of BRɅIN</title><meta name="description" content="Ashini Gogoi is building BRɅIN, a document and retrieval platform with connected applications."><link rel="canonical" href="https://brvin.in/founder">
-<meta property="og:type" content="website"><meta property="og:site_name" content="BRɅIN"><meta property="og:title" content="Ashini Gogoi — Founder of BRɅIN"><meta property="og:description" content="Ashini Gogoi is building BRɅIN, a document and retrieval platform with connected applications."><meta property="og:url" content="https://brvin.in/founder">
+<title>Ashini Gogoi — Founder of BRɅIN</title><meta name="description" content="Ashini Gogoi explains why BRɅIN is being built: shared knowledge infrastructure for applications using private documents, permissions and source-linked evidence."><link rel="canonical" href="https://brvin.in/founder">
+<meta property="og:type" content="website"><meta property="og:site_name" content="BRɅIN"><meta property="og:title" content="Ashini Gogoi — Founder of BRɅIN"><meta property="og:description" content="The story behind BRɅIN: shared knowledge infrastructure for applications using private documents, permissions and source-linked evidence."><meta property="og:url" content="https://brvin.in/founder">
 <style>
 :root{color-scheme:light;--page:#F7F6F2;--paper:#FFFFFF;--soft:#F0EFEA;--ink:#171715;--body:#4F4E49;--muted:#77756E;--line:#E2E0DA;--line-strong:#D2CFC7;--max:1180px}
 *{box-sizing:border-box}
@@ -94,6 +94,9 @@ body{
   .nav-items a[href="/#demo"]{display:none}
 }
 
+
+.legal-document h2:not(:first-child){margin-top:36px}
+@media(max-width:760px){.legal-document h2:not(:first-child){margin-top:30px}}
 </style></head><body><header class="site-nav"><div class="nav-inner shell"><a class="brand" href="/" aria-label="BRɅIN home">BRɅIN</a><nav class="nav-items" aria-label="Main navigation"><a href="/">Home</a><a href="/#platform">Platform</a><a href="/#demo">Voice demo</a><a href="/#plans">Plans</a><a href="/founder">Founder</a><a href="/privacy">Privacy</a><a class="nav-cta" href="mailto:partners@brvin.in">Contact</a></nav></div></header>
 <main>
 <section class="legal-hero shell">
@@ -103,8 +106,15 @@ body{
 </section>
 <section class="legal-wrap shell">
   <article class="legal-document">
-    <h2>What I'm building</h2>
-    <p>The problem we are working on is straightforward: when an application answers from a private document, people should be able to check where the information came from, and the application should only see material it is allowed to access. BRɅIN Core handles document processing, permissions and retrieval. It returns selected passages with their original PDF page references; the connected application creates the final answer.</p>
+    <h2>Why I started BRɅIN</h2>
+    <p>I started working on BRɅIN while building applications that needed to answer from real study material. With परमार्थAI, I saw that producing a response was only one part of the job: a learner also needed to trace it to the source and the original PDF page. As I thought about other products and workspaces, the same foundation kept coming up — document intake, OCR, page mapping, indexing, access checks and retrieval.</p>
+    <p>Rebuilding that foundation inside each application would repeat the same work and tie the knowledge system too closely to one product. I wanted a shared layer that could process documents, enforce the relevant access rules and return evidence, while each application kept control of its own users, model, prompts and final answer. That is the idea behind BRɅIN.</p>
+
+    <h3>The gap I'm working on</h3>
+    <p>I'm not trying to build another general-purpose chatbot. The problem I'm focused on is underneath the user experience: how a specialised application or private workspace can use its own documents, apply its own access rules and receive traceable evidence without having to assemble every part of document processing and retrieval itself. The initial use cases are our own learning products and workspaces; the broader direction is a reusable service that other applications can integrate.</p>
+
+    <h3>What I'm building</h3>
+    <p>BRɅIN Core handles document processing, permissions and retrieval. It returns selected passages with their original PDF page references; the connected application creates the final answer.</p>
 
     <h3>BRɅIN Core</h3>
     <p>Core currently uses private Google Cloud Storage, Google Cloud Vision OCR, Cloudflare Workers and Workflows, D1 and Cloudflare AI Search. The live retrieval service checks application and project permissions before returning evidence.</p>
