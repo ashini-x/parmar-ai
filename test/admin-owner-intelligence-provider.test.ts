@@ -162,7 +162,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       ] } }] },
       { candidates: [{ content: { role: "model", parts: [{ text: "world." }] } }],
         usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 5, totalTokenCount: 13 } },
-    ].map((chunk) => "data: " + JSON.stringify(chunk) + "\\r\\n\\r\\n").join("");
+    ].map((chunk) => "data: " + JSON.stringify(chunk) + "\r\n\r\n").join("");
     const calls: string[] = [];
     const fetcher: typeof fetch = async (url) => {
       const value = String(url);
