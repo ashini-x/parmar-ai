@@ -230,31 +230,15 @@ export interface OwnerGeminiGenerationResult {
   rawResponse: Record<string, unknown>;
 }
 
-async function providerErrorDetail(response: Response): Promise<string | undefined> {
-  try {
-    const payload = await response.clone().json() as { error?: { message?: unknown } };
-    const message = payload?.error?.message;
-    if (typeof message !== "string") return undefined;
-    const sanitized = message.replace(/[\\r\\n\\t]+/gu, " ").replace(/\\s{2,}/gu, " ").trim();
-    return sanitized ? sanitized.slice(0, 360) : undefined;
-  } catch {
-    return undefined;
+function providerStatusMessage(status: number): string {
+  if (status === 400) return "Vertex AI rejected the request. The conversation format or size may not be supported.";
+  if (status === 401 || status === 403) {
+    return "Vertex AI denied GenerateContent access for this model or project. A successful Count Tokens check does not guarantee generation permission; check the service account's Vertex AI access and this model's project/location eligibility.";
   }
-}
-
-function providerStatusMessage(status: number, detail?: string): string {
-  const base = status === 400
-    ? "Vertex AI rejected the request. The conversation format or size may not be supported."
-    : status === 401 || status === 403
-      ? "Vertex AI denied GenerateContent access for this model or project. Check the service account's Vertex AI permissions and the model's project/location access."
-      : status === 404
-        ? "The selected model is not available at the configured location."
-        : status === 429
-          ? "Vertex AI is temporarily rate limiting requests for this project or model."
-          : status >= 500
-            ? "Vertex AI is temporarily unavailable."
-            : "The Vertex AI request could not be completed.";
-  return detail ? base + " Google details: " + detail : base;
+  if (status === 404) return "The selected model is not available at the configured location.";
+  if (status === 429) return "Vertex AI is temporarily rate limiting requests for this project or model.";
+  if (status >= 500) return "Vertex AI is temporarily unavailable.";
+  return "The Vertex AI request could not be completed.";
 }
 
 /**
@@ -338,8 +322,7 @@ export async function generateOwnerGeminiContent(
       },
     );
     if (!response.ok) {
-      const detail = await providerErrorDetail(response);
-      throw new OwnerGeminiProviderError(providerStatusMessage(response.status, detail), response.status, response.status === 408 || response.status === 429 || response.status >= 500);
+      throw new OwnerGeminiProviderError(providerStatusMessage(response.status), response.status, response.status === 408 || response.status === 429 || response.status >= 500);
     }
     let parsed: Record<string, unknown>;
     try {
@@ -418,7 +401,7 @@ async function getVerifiedModelAccessToken(
   if (!verified.selectable) {
     throw new OwnerGeminiProviderError(
       verified.availabilityReason === "provider_access_denied"
-        ? "Vertex AI denied access to the selected model or project."
+        ? "Vertex AI denied GenerateContent access for this model or project. A Count Tokens check does not guarantee generation permission; check the service account and model access."
         : "The selected Gemini model is not currently verified for this project and location.",
       undefined,
       true,
@@ -507,8 +490,7 @@ export async function openOwnerGeminiStream(
     if (!response.ok) {
       clearTimeout(timeout);
       signal.removeEventListener("abort", abortFromCaller);
-      const detail = await providerErrorDetail(response);
-      throw new OwnerGeminiProviderError(providerStatusMessage(response.status, detail), response.status, response.status === 408 || response.status === 429 || response.status >= 500);
+      throw new OwnerGeminiProviderError(providerStatusMessage(response.status), response.status, response.status === 408 || response.status === 429 || response.status >= 500);
     }
     if (!response.body) {
       clearTimeout(timeout);
