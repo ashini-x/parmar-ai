@@ -194,10 +194,12 @@ export interface OwnerGeminiGenerationInput {
   contents: OwnerGeminiContent[];
   systemInstruction?: string;
   maxOutputTokens?: number;
+  thinkingLevel?: OwnerThinkingLevel;
 }
 
 export interface OwnerGeminiGenerationResult {
   modelId: string;
+  thinkingLevel: OwnerThinkingLevel;
   text: string;
   usage: {
     promptTokens: number;
@@ -243,6 +245,10 @@ export async function generateOwnerGeminiContent(
       (typeof input.systemInstruction !== "string" || input.systemInstruction.length > 20_000)) {
     throw new OwnerGeminiProviderError("The system instruction is invalid or too long.");
   }
+  const thinkingLevel = input.thinkingLevel ?? definition.defaultThinkingLevel;
+  if (!definition.thinkingLevels.includes(thinkingLevel)) {
+    throw new OwnerGeminiProviderError("The selected thinking level is not supported by this model.");
+  }
   // Public catalogue membership does not establish project entitlement.
   // Require a recent successful project/location capability probe before generation.
   const catalogue = await listOwnerGeminiModels(env, dependencies);
@@ -274,7 +280,7 @@ export async function generateOwnerGeminiContent(
   try {
     const body: Record<string, unknown> = {
       contents: input.contents.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
-      generationConfig: { maxOutputTokens },
+      generationConfig: { maxOutputTokens, thinkingConfig: { thinkingLevel } },
     };
     if (input.systemInstruction?.trim()) {
       body.systemInstruction = { parts: [{ text: input.systemInstruction }] };
@@ -308,6 +314,7 @@ export async function generateOwnerGeminiContent(
       ? parsed.usageMetadata as Record<string, unknown> : {};
     return {
       modelId: definition.id,
+      thinkingLevel,
       text,
       usage: {
         promptTokens: Number(usage.promptTokenCount ?? 0),
@@ -326,4 +333,187 @@ export async function generateOwnerGeminiContent(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+
+export type OwnerGeminiStreamEvent =
+  | { type: "delta"; text: string }
+  | { type: "done"; usage: OwnerGeminiGenerationResult["usage"]; elapsedMs: number };
+
+export interface OwnerGeminiStreamInput extends OwnerGeminiGenerationInput {
+  thinkingLevel: OwnerThinkingLevel;
+}
+
+/**
+ * Opens a server-authoritative Vertex SSE stream. Thought parts are deliberately
+ * omitted: only user-facing text parts are yielded to the Owner workspace.
+ * The caller's AbortSignal is forwarded upstream so Stop/disconnect cancels work.
+ */
+export async function openOwnerGeminiStream(
+  env: Env,
+  input: OwnerGeminiStreamInput,
+  signal: AbortSignal,
+  dependencies: OwnerProviderDependencies = defaultDependencies,
+): Promise<AsyncGenerator<OwnerGeminiStreamEvent>> {
+  const definition = OWNER_GEMINI_MODEL_REGISTRY.find((model) => model.id === input.modelId);
+  if (!definition) throw new OwnerGeminiProviderError("The requested model is not in the Owner model registry.");
+  if (!definition.thinkingLevels.includes(input.thinkingLevel)) {
+    throw new OwnerGeminiProviderError("The selected thinking level is not supported by this model.");
+  }
+  if (!Array.isArray(input.contents) || input.contents.length < 1 || input.contents.length > 50 ||
+      input.contents.some((item) => !item || (item.role !== "user" && item.role !== "model") ||
+        typeof item.text !== "string" || !item.text.trim() || item.text.length > 50_000)) {
+    throw new OwnerGeminiProviderError("The conversation content is invalid or exceeds the supported request size.");
+  }
+  if (input.systemInstruction !== undefined &&
+      (typeof input.systemInstruction !== "string" || input.systemInstruction.length > 20_000)) {
+    throw new OwnerGeminiProviderError("The system instruction is invalid or too long.");
+  }
+
+  const project = configuredProject(env);
+  const location = configuredLocation(env);
+  if (!project || !env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim()) {
+    throw new OwnerGeminiProviderError("Vertex AI is not configured for the Owner workspace.");
+  }
+  const catalogue = await listOwnerGeminiModels(env, dependencies);
+  const confirmedModel = catalogue.models.find((model) => model.id === definition.id && model.selectable);
+  if (!catalogue.ok || !confirmedModel) {
+    throw new OwnerGeminiProviderError(
+      catalogue.ok
+        ? "This model has not been confirmed for the configured Vertex AI project and location."
+        : "Vertex AI model availability could not be verified for the Owner workspace.",
+      undefined,
+      true,
+    );
+  }
+
+  const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
+    ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
+    : Math.min(definition.singleRequestOutputTokens, 8_192);
+
+  let token: string;
+  try {
+    token = await dependencies.getAccessToken(env);
+  } catch {
+    throw new OwnerGeminiProviderError("Google authentication for Vertex AI is currently unavailable.", undefined, true);
+  }
+
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort();
+  if (signal.aborted) controller.abort();
+  else signal.addEventListener("abort", abortFromCaller, { once: true });
+  const timeout = setTimeout(() => controller.abort(), 8 * 60_000);
+  const startedAt = Date.now();
+  const body: Record<string, unknown> = {
+    contents: input.contents.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
+    generationConfig: {
+      maxOutputTokens,
+      thinkingConfig: { thinkingLevel: input.thinkingLevel },
+    },
+  };
+  if (input.systemInstruction?.trim()) {
+    body.systemInstruction = { parts: [{ text: input.systemInstruction }] };
+  }
+
+  let response: Response;
+  try {
+    response = await dependencies.fetch(
+      `${vertexBase(location)}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(definition.id)}:streamGenerateContent?alt=sse`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "text/event-stream" },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok) {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", abortFromCaller);
+      throw new OwnerGeminiProviderError(providerStatusMessage(response.status), response.status, response.status === 408 || response.status === 429 || response.status >= 500);
+    }
+    if (!response.body) {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", abortFromCaller);
+      throw new OwnerGeminiProviderError("Vertex AI returned an empty response stream.");
+    }
+  } catch (error) {
+    clearTimeout(timeout);
+    signal.removeEventListener("abort", abortFromCaller);
+    if (error instanceof OwnerGeminiProviderError) throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new OwnerGeminiProviderError("The Vertex AI stream was cancelled or timed out.", undefined, true);
+    }
+    throw new OwnerGeminiProviderError("The Vertex AI streaming request failed. Please retry without changing the selected model.", undefined, true);
+  }
+
+  return (async function* (): AsyncGenerator<OwnerGeminiStreamEvent> {
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+    let usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0 };
+    let finished = false;
+
+    async function* parseBlock(block: string): AsyncGenerator<OwnerGeminiStreamEvent> {
+      const data = block.split(/\\r?\\n/u)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .join("\\n");
+      if (!data || data === "[DONE]") return;
+      let parsed: Record<string, unknown>;
+      try { parsed = JSON.parse(data) as Record<string, unknown>; }
+      catch { throw new OwnerGeminiProviderError("Vertex AI returned an invalid streaming event."); }
+      const usageValue = typeof parsed.usageMetadata === "object" && parsed.usageMetadata !== null
+        ? parsed.usageMetadata as Record<string, unknown> : null;
+      if (usageValue) {
+        usage = {
+          promptTokens: Number(usageValue.promptTokenCount ?? usage.promptTokens),
+          outputTokens: Number(usageValue.candidatesTokenCount ?? usage.outputTokens),
+          totalTokens: Number(usageValue.totalTokenCount ?? usage.totalTokens),
+        };
+      }
+      const candidates = Array.isArray(parsed.candidates) ? parsed.candidates as Array<Record<string, unknown>> : [];
+      const candidate = candidates[0];
+      const content = candidate && typeof candidate.content === "object" && candidate.content !== null
+        ? candidate.content as Record<string, unknown> : null;
+      const parts = content && Array.isArray(content.parts) ? content.parts as Array<Record<string, unknown>> : [];
+      for (const part of parts) {
+        if (part.thought === true || typeof part.text !== "string" || !part.text) continue;
+        fullText += part.text;
+        yield { type: "delta", text: part.text };
+      }
+    }
+
+    try {
+      while (true) {
+        const next = await reader.read();
+        buffer += decoder.decode(next.value, { stream: !next.done });
+        let boundary = buffer.indexOf("\\n\\n");
+        while (boundary >= 0) {
+          const block = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          yield* parseBlock(block);
+          boundary = buffer.indexOf("\\n\\n");
+        }
+        if (next.done) break;
+      }
+      if (buffer.trim()) yield* parseBlock(buffer);
+      if (!fullText.trim()) throw new OwnerGeminiProviderError("Vertex AI completed without a text response.");
+      finished = true;
+      yield { type: "done", usage, elapsedMs: Date.now() - startedAt };
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
+        throw new OwnerGeminiProviderError("Generation was stopped.", undefined, false);
+      }
+      if (error instanceof OwnerGeminiProviderError) throw error;
+      throw new OwnerGeminiProviderError("The Vertex AI stream failed. Any received text has been retained.", undefined, true);
+    } finally {
+      if (!finished) {
+        try { await reader.cancel(); } catch { /* the upstream may already be closed */ }
+      }
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", abortFromCaller);
+      reader.releaseLock();
+    }
+  })();
 }
