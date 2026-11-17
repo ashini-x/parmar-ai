@@ -149,17 +149,23 @@ describe("Owner Vertex AI provider registry and adapter", () => {
         error: { code: 403, status: "PERMISSION_DENIED", message: "Permission 'aiplatform.endpoints.predict' denied on resource project." },
       }), { status: 403, headers: { "content-type": "application/json" } });
     };
-    await expect(openOwnerGeminiStream(
-      env,
-      { modelId: "gemini-4-carbon", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Continue our conversation." }] },
-      new AbortController().signal,
-      dependencies(fetcher),
-    )).rejects.toMatchObject({
+    let failure: unknown;
+    try {
+      await openOwnerGeminiStream(
+        env,
+        { modelId: "gemini-4-carbon", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Continue our conversation." }] },
+        new AbortController().signal,
+        dependencies(fetcher),
+      );
+    } catch (error) {
+      failure = error;
+    }
+    expect(calls.some((url) => url.endsWith(":countTokens"))).toBe(true);
+    expect(calls.some((url) => url.includes(":streamGenerateContent"))).toBe(true);
+    expect(failure).toMatchObject({
       status: 403,
       message: expect.stringContaining("aiplatform.endpoints.predict"),
     });
-    expect(calls.some((url) => url.endsWith(":countTokens"))).toBe(true);
-    expect(calls.some((url) => url.includes(":streamGenerateContent"))).toBe(true);
   });
 
   it("rejects unpaired, repeated-role or oversized conversation turns before provider access", async () => {
