@@ -1,3 +1,13 @@
+## 2026-11-18: Owner Gemini cross-model conversation continuity fix
+
+- Exclude pending, failed and empty assistant rows from the prompt sent to Gemini. These rows remain in the UI transcript but are not valid model turns.
+- Merge adjacent same-role messages after filtering to produce a valid alternating user/model conversation when a prior generation failed before returning text.
+- Bound the request to the newest recent history (maximum 49 turns / 300,000 characters, 50,000 characters per part) while keeping the full conversation unchanged in Owner D1.
+- Add provider-side validation for user-led alternating turns, non-empty text parts and the total context limit.
+- Clarify that Count Tokens eligibility does not guarantee GenerateContent permission; explain 401/403 access failures without silently switching models.
+- Merged as `252622df4a8429448252471dd61ce0cc48adc092` (PR [#329](https://github.com/ashini-x/parmar-ai/pull/329)). Validation [44195649792](https://github.com/ashini-x/parmar-ai/actions/runs/44195649792) passed TypeScript, 489 Vitest tests, 62 Node tests and all three Worker dry-runs. Production workflow [44195976369](https://github.com/ashini-x/parmar-ai/actions/runs/44195976369) passed paired deployment and release acceptance.
+- Deployed versions: `brvin-service` `c0bd4f4d-148a-4985-a864-33acb0fcd924`; `parmar-ai` `dbbbc9ab-81ed-4e6d-81aa-9dd9345d4b54`. Manifest artifact `14379620781`.
+
 ## 2026-11-18: Owner Gemini chat activity, completion cards and selected-model verification performance
 
 - Refresh the Owner workspace with familiar chat conventions: right-aligned user bubbles, bordered assistant response cards, model/thinking-level badges and green Completed status tags.
