@@ -113,6 +113,7 @@ async function safeVertexErrorDiagnostic(response: Response): Promise<string | u
     const payload = await response.clone().json() as {
       error?: {
         status?: unknown;
+        message?: unknown;
         details?: Array<{ reason?: unknown; metadata?: Record<string, unknown> }>;
       };
     };
@@ -128,12 +129,24 @@ async function safeVertexErrorDiagnostic(response: Response): Promise<string | u
     const reason = details.map((detail) => detail?.reason)
       .find((value): value is string =>
         typeof value === "string" && /^[A-Z0-9_]{3,64}$/u.test(value));
-    const permission = details.map((detail) => detail?.metadata?.permission)
+    const detailPermission = details.map((detail) => detail?.metadata?.permission)
       .find((value): value is string =>
         typeof value === "string" &&
-        /^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/u.test(value));
+        /^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$/u.test(value));
 
-    if (reason && reason !== providerStatus) fragments.push("reason " + reason);
+    // Some Google REST errors put ErrorInfo in a formatted message rather
+    // than the JSON details array. Extract only safe reason and IAM
+    // permission identifiers; never echo the raw message or resource path.
+    const message = typeof error.message === "string" ? error.message : "";
+    const messagePermission = message.match(/Permission ['"]([a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+)['"] denied/iu)?.[1];
+    const messageReason = message.match(/reason:\\s*["']([A-Z0-9_]{3,64})["']/u)?.[1];
+    const permission = detailPermission ?? (
+      messagePermission && /^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$/u.test(messagePermission)
+        ? messagePermission : undefined
+    );
+    const safeReason = reason ?? messageReason;
+
+    if (safeReason && safeReason !== providerStatus) fragments.push("reason " + safeReason);
     if (permission) fragments.push("permission " + permission);
     return fragments.length ? "Google diagnostic: " + fragments.join("; ") + "." : undefined;
   } catch {
@@ -303,11 +316,11 @@ function providerStatusMessage(
   if (status === 400) {
     message = stage === "count_tokens_probe"
       ? "Vertex AI rejected the Count Tokens availability check for this model."
-      : "Vertex AI rejected the GenerateContent request. The conversation format or request configuration may not be supported.";
+      : "Vertex AI rejected the StreamGenerateContent request. The conversation format or request configuration may not be supported.";
   } else if (status === 401 || status === 403) {
     message = stage === "count_tokens_probe"
       ? "Vertex AI denied the Count Tokens availability probe for this model/project. No GenerateContent request was sent; this is a model-eligibility check failure."
-      : "Vertex AI denied the GenerateContent request for this model/project. This failure occurred at answer generation, after the model availability check.";
+      : "Vertex AI denied the StreamGenerateContent request for this model/project. This failure occurred at answer generation, after the model availability check.";
   } else if (status === 404) {
     message = stage === "count_tokens_probe"
       ? "The selected model was not found by the Count Tokens availability check in this location."
@@ -315,10 +328,10 @@ function providerStatusMessage(
   } else if (status === 429) {
     message = stage === "count_tokens_probe"
       ? "Vertex AI rate-limited the Count Tokens availability check."
-      : "Vertex AI rate-limited the GenerateContent request.";
+      : "Vertex AI rate-limited the StreamGenerateContent request.";
   } else if (status >= 500) {
     message = "Vertex AI is temporarily unavailable during " +
-      (stage === "count_tokens_probe" ? "the Count Tokens availability check." : "GenerateContent.");
+      (stage === "count_tokens_probe" ? "the Count Tokens availability check." : "StreamGenerateContent.");
   } else {
     message = "The Vertex AI request could not be completed during " +
       (stage === "count_tokens_probe" ? "the Count Tokens availability check." : "GenerateContent.");
