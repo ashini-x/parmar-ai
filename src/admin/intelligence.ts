@@ -361,7 +361,7 @@ function workspaceHtml(nonce: string): string {
         <div class="welcome"><div class="welcome-mark">BɅ</div><h1>Your thinking space.</h1><p>A private workspace for research, reasoning, writing, mathematics, coding and ideas. Your conversations are stored separately from the student learning system.</p><span class="next-step">PRIVATE OWNER WORKSPACE</span></div>
       </div>
       <div class="composer-wrap">
-        <div class="composer"><textarea id="messageInput" rows="1" maxlength="50000" placeholder="Write a message…"></textarea><div class="composer-bottom"><span class="composer-hint" id="composerHint">Messages are saved privately. Gemini replies arrive in the next model milestones.</span><button class="send-action" id="sendMessage" type="button" disabled aria-label="Save message">↑</button></div></div>
+        <div class="composer"><textarea id="messageInput" disabled rows="1" maxlength="50000" placeholder="Write a message…"></textarea><div class="composer-bottom"><span class="composer-hint" id="composerHint">Messages are saved privately. Gemini replies arrive in the next model milestones.</span><button class="send-action" id="sendMessage" type="button" disabled aria-label="Save message">↑</button></div></div>
         <div class="disclaimer">Your messages are saved to your private Owner conversation. AI responses and model controls will be enabled in the next milestones.</div>
       </div>
     </div>
@@ -399,6 +399,7 @@ function workspaceHtml(nonce: string): string {
     welcome.appendChild(node("p","","A private workspace for research, reasoning, writing, mathematics, coding and ideas. Your conversations are stored separately from the student learning system."));
     welcome.appendChild(node("span","next-step","PRIVATE OWNER WORKSPACE"));
     messages.appendChild(welcome);
+    updateComposer();
   }
   function renderMessages(items){
     messages.replaceChildren();
@@ -442,9 +443,8 @@ function workspaceHtml(nonce: string): string {
     var result=await request(api+"/"+encodeURIComponent(id));
     state.activeId=result.conversation.id;state.messages=result.messages||[];
     heading.textContent=result.conversation.title;
-    messageInput.disabled=false;
-    updateComposer();
     renderHistory();renderMessages(state.messages);
+    updateComposer();
   }
   function updateComposer(){
     var hasText=messageInput.value.trim().length>0;
