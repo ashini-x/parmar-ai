@@ -266,7 +266,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain("Your conversations");
     expect(html).toContain('id="modelSelect"');
     expect(html).toContain("/admin/api/intelligence/models");
-    expect(html).toContain("Models appear only after the configured Vertex AI project and location pass a live capability check.");
+    expect(html).toContain('id="thinkingSelect"');
+    expect(html).toContain("Responses stream from your selected model.");
   });
 
   it("creates, lists, reopens, renames and deletes only the Owner's conversations and messages", async () => {
@@ -349,6 +350,75 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
 
     const actualDb = env.DB as unknown as FakeOwnerD1;
     expect([...actualDb.messages.values()].filter((message) => message.conversation_id === id)).toHaveLength(0);
+  });
+
+
+  it("keeps the streaming generation endpoint Owner-only and rejects unsupported model thinking levels", async () => {
+    const env = appEnv();
+    const adminCookie = await login("admin", "admin-test-password", env);
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Generation guard test" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const path = "/admin/api/intelligence/conversations/" + createdBody.conversation.id + "/generate";
+
+    expect((await call(env, path, "")).status).toBe(401);
+    expect((await call(env, path, adminCookie, { method: "POST", origin, body: {} })).status).toBe(403);
+    const unsupported = await call(env, path, ownerCookie, {
+      method: "POST",
+      origin,
+      body: { content: "Test", modelId: "gemini-4-argon", thinkingLevel: "XHIGH" },
+    });
+    const unsupportedBody = await unsupported.json() as { error: string };
+    expect(unsupported.status).toBe(400);
+    expect(unsupportedBody.error).toBe("thinking_level_not_supported");
+    expect((env.DB as unknown as FakeOwnerD1).messages.size).toBe(0);
+  });
+
+  it("edits and regenerates the stored prompt without retaining obsolete later turns", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Edit and regenerate" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const saved = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+      method: "POST", origin, body: { content: "Original question" },
+    });
+    const savedBody = await saved.json() as { message: { id: string } };
+    const db = env.DB as unknown as FakeOwnerD1;
+    db.messages.set("obsolete-assistant", {
+      id: "obsolete-assistant", conversation_id: id, owner_id: "owner",
+      role: "assistant", content: "Obsolete answer", status: "complete", created_at: Date.now() + 1,
+    });
+
+    const editPath = "/admin/api/intelligence/conversations/" + id + "/generate";
+    const edited = await call(env, editPath, ownerCookie, {
+      method: "POST", origin,
+      body: {
+        content: "Corrected question",
+        editMessageId: savedBody.message.id,
+        modelId: "gemini-4-argon",
+        thinkingLevel: "MEDIUM",
+      },
+    });
+    expect(edited.status).toBe(503); // Expected: this unit fixture deliberately has no Vertex credentials.
+    expect(db.messages.has("obsolete-assistant")).toBe(false);
+    expect(db.messages.get(savedBody.message.id)?.content).toBe("Corrected question");
+    expect([...db.messages.values()].some((row) => row.role === "assistant" && row.status === "error")).toBe(true);
+    expect([...db.generationMetadata.values()].some((row) => row.model_id === "gemini-4-argon" && row.thinking_level === "MEDIUM")).toBe(true);
+
+    const regenerated = await call(env, editPath, ownerCookie, {
+      method: "POST", origin,
+      body: { action: "regenerate", modelId: "gemini-4-argon", thinkingLevel: "MEDIUM" },
+    });
+    expect(regenerated.status).toBe(503);
+    expect([...db.messages.values()].filter((row) => row.role === "assistant")).toHaveLength(1);
+    expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
   });
 
   it("rejects invalid titles and does not reveal conversations owned by another principal", async () => {
