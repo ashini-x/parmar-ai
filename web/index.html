@@ -720,7 +720,7 @@ button{font:inherit}
  const button=document.getElementById("play-voice-preview"),panel=document.getElementById("voice-demo"),status=document.getElementById("voice-preview-status");
  if(!button||!panel||!status)return;
  const speech=window.speechSynthesis;
- const spokenText="This is an illustrative voice response. The relevant passage is on page twelve. Its citation stays attached, so you can return to the original document and verify the context.";
+ const spokenText="This is a sample of how an app could read a retrieved passage aloud. The page reference stays available so you can check the original document.";
  const reset=(message)=>{panel.classList.remove("is-playing");button.setAttribute("aria-pressed","false");button.querySelector("span").textContent="Play spoken preview";status.textContent=message||"Browser voice preview · sample content";};
  button.addEventListener("click",()=>{
   if(!speech||typeof window.SpeechSynthesisUtterance!=="function"){reset("Spoken preview is not supported in this browser.");return;}
