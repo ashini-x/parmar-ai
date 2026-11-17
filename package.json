@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "test:node": "vitest run --config vitest.node.config.ts",
     "format:check": "prettier --check .",
-    "deploy:web": "npx wrangler deploy --config wrangler.web.jsonc"
+    "deploy:web": "node scripts/render-web-legal-dates.mjs && npx wrangler deploy --config wrangler.web.jsonc"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.1.10",
