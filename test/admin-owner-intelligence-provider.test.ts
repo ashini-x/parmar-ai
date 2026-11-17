@@ -169,7 +169,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       calls.push({ url: value, body: String(init?.body ?? "") });
       if (value.endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 2 }), { status: 200 });
       const encoded = new TextEncoder().encode(sse);
-      const splitAt = sse.indexOf("\\r\\n\\r\\n") + 1;
+      const splitAt = sse.indexOf("\r\n\r\n") + 1;
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
           controller.enqueue(encoded.slice(0, splitAt));
