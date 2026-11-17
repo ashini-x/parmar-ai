@@ -827,7 +827,7 @@ function workspaceHtml(nonce: string): string {
   function renderMessages(items){
     messages.replaceChildren();
     if(!items.length){showWelcome();return;}
-    items.forEach(function(item){
+    items.forEach(function(item,index){
       var wrap=node("article","message");
       wrap.appendChild(node("div","message-avatar",item.role==="assistant"?"BɅ":item.role==="system"?"·":"O"));
       var body=node("div","message-body");
@@ -847,7 +847,7 @@ function workspaceHtml(nonce: string): string {
           editingMessageId=item.id;messageInput.value=item.content;messageInput.focus();updateComposer();
         });
         var actions=node("div","message-actions");actions.appendChild(edit);body.appendChild(actions);
-      }else if(item.role==="assistant"&&item.status!=="pending"&&!sending){
+      }else if(item.role==="assistant"&&item.status!=="pending"&&!sending&&index===items.length-1){
         var retry=node("button","message-action","Regenerate");
         retry.type="button";retry.addEventListener("click",function(){generateMessage({action:"regenerate"});});
         var actions2=node("div","message-actions");actions2.appendChild(retry);body.appendChild(actions2);
