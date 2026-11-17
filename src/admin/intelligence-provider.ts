@@ -61,6 +61,7 @@ const defaultDependencies: OwnerProviderDependencies = {
   fetch: globalThis.fetch.bind(globalThis),
 };
 const PROBE_TIMEOUT_MS = 8_000;
+const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
 const GENERATION_TIMEOUT_MS = 35_000;
 const CATALOGUE_CACHE_MS = 90_000;
 const catalogueCache = new Map<string, { expiresAt: number; value: OwnerModelCatalogue }>();
@@ -79,6 +80,20 @@ function vertexBase(location: string): string {
   return location === "global" ? "https://aiplatform.googleapis.com" : `https://${location}-aiplatform.googleapis.com`;
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, onTimeout?: () => void): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        onTimeout?.();
+        reject(new Error("Timed out"));
+      }, timeoutMs);
+    }),
+  ]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
 function failureReason(status: number | null): OwnerGeminiModel["availabilityReason"] {
   if (status === 400 || status === 404) return "model_or_location_not_available";
   if (status === 401 || status === 403) return "provider_access_denied";
@@ -94,9 +109,8 @@ async function probeModel(
   dependencies: OwnerProviderDependencies,
 ): Promise<OwnerGeminiModel> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
-    const response = await dependencies.fetch(
+    const response = await withTimeout(dependencies.fetch(
       `${vertexBase(location)}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(model.id)}:countTokens`,
       {
         method: "POST",
@@ -104,15 +118,13 @@ async function probeModel(
         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Owner model availability check." }] }] }),
         signal: controller.signal,
       },
-    );
+    ), PROBE_TIMEOUT_MS, () => controller.abort());
     if (response.ok) {
       return { ...model, availability: "available", selectable: true, availabilityReason: "project_location_probe_passed" };
     }
     return { ...model, availability: response.status === 400 || response.status === 404 ? "unavailable" : "unverified", selectable: false, availabilityReason: failureReason(response.status) };
   } catch {
     return { ...model, availability: "unverified", selectable: false, availabilityReason: "provider_temporarily_unavailable" };
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -150,7 +162,7 @@ export async function listOwnerGeminiModels(
 
   let token: string;
   try {
-    token = await dependencies.getAccessToken(env);
+    token = await withTimeout(dependencies.getAccessToken(env), ACCESS_TOKEN_TIMEOUT_MS);
   } catch {
     return {
       ok: false, configured: true, location, checkedAt, error: "google_auth_unavailable",

@@ -675,7 +675,7 @@ function workspaceHtml(nonce: string): string {
 .section-label{font-size:10px;color:#858585;text-transform:uppercase;letter-spacing:.13em;padding:23px 9px 9px}
 .history{flex:1;overflow:auto;min-height:0}.history-empty{font-size:12px;line-height:1.55;color:#777;padding:10px 9px}.history-item{display:flex;align-items:center;gap:4px;margin:2px 0;border-radius:9px;padding:3px}.history-item.active{background:#303030}.history-item:hover{background:#292929}.history-open{min-width:0;flex:1;border:0;background:none;text-align:left;padding:8px 7px;font-size:12px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:6px}.history-action{border:0;background:transparent;color:#8b8b8b;border-radius:6px;padding:5px 6px;font-size:12px}.history-action:hover{background:#414141;color:#fff}
 .side-footer{border-top:1px solid #303030;padding:12px 5px 2px}.owner-note{display:flex;align-items:center;gap:8px;padding:7px 7px 10px;font-size:11px;color:#a1a1a1}.owner-dot{width:7px;height:7px;border-radius:50%;background:#4dba87}.logout{width:100%;border:0;background:transparent;color:#aaa;text-align:left;padding:9px 8px;border-radius:8px;font-size:12px}.logout:hover{background:#292929;color:#fff}
-.main{display:flex;flex:1;min-width:0;flex-direction:column;position:relative}.topbar{height:60px;flex:0 0 60px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:12px}.top-left{display:flex;align-items:center;gap:11px;min-width:0}.mobile-menu{display:none;border:0;background:transparent;font-size:19px;padding:7px}.page-title{font-size:14px;font-weight:600;white-space:nowrap}.private-tag{font-size:10px;color:#9b9b9b;border:1px solid #404040;border-radius:20px;padding:5px 8px}.top-right{display:flex;align-items:center;gap:9px}.model-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.model-label{font-size:9px;color:#888;letter-spacing:.1em}.model-picker select{max-width:178px;min-width:112px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.model-picker select:disabled,.thinking-picker select:disabled{opacity:.65;cursor:default}.thinking-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.thinking-picker select{max-width:110px;min-width:80px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.avatar{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#3d3d3d;color:#f0f0f0;font-size:11px;font-weight:700}
+.main{display:flex;flex:1;min-width:0;flex-direction:column;position:relative}.topbar{height:60px;flex:0 0 60px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:12px}.top-left{display:flex;align-items:center;gap:11px;min-width:0}.mobile-menu{display:none;border:0;background:transparent;font-size:19px;padding:7px}.page-title{font-size:14px;font-weight:600;white-space:nowrap}.private-tag{font-size:10px;color:#9b9b9b;border:1px solid #404040;border-radius:20px;padding:5px 8px}.top-right{display:flex;align-items:center;gap:9px}.model-retry{border:1px solid #555;background:#303030;color:#e5e5e5;border-radius:8px;padding:7px 9px;font-size:10px;cursor:pointer}.model-retry:hover{background:#414141}.model-retry:disabled{opacity:.55;cursor:wait}.model-retry[hidden]{display:none}.model-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.model-label{font-size:9px;color:#888;letter-spacing:.1em}.model-picker select{max-width:178px;min-width:112px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.model-picker select:disabled,.thinking-picker select:disabled{opacity:.65;cursor:default}.thinking-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.thinking-picker select{max-width:110px;min-width:80px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.avatar{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#3d3d3d;color:#f0f0f0;font-size:11px;font-weight:700}
 .content{flex:1;overflow:auto;display:flex;justify-content:center;padding:36px 22px 18px}.stage{width:min(820px,100%);min-height:100%;display:flex;flex-direction:column}.conversation-heading{font-size:12px;color:#999;margin:0 0 22px;min-height:18px}.messages{flex:1;display:flex;flex-direction:column;gap:22px;padding-bottom:30px}.welcome{margin:auto auto 50px;width:min(600px,100%);text-align:center}.welcome-mark{width:56px;height:56px;border:1px solid #565656;border-radius:18px;display:grid;place-items:center;margin:0 auto 22px;font-size:22px;font-weight:700;letter-spacing:-2px;background:#282828}.welcome h1{font-size:27px;letter-spacing:-.04em;font-weight:600;margin:0 0 12px}.welcome p{font-size:13px;color:#a0a0a0;line-height:1.7;margin:0 auto;max-width:480px}.next-step{display:inline-flex;margin-top:22px;border:1px solid #464646;border-radius:20px;padding:7px 11px;font-size:10px;color:#aaa;letter-spacing:.02em}
 .message{display:flex;gap:14px;align-items:flex-start;max-width:100%;padding:0 5px}.message-avatar{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#383838;font-size:10px;font-weight:700}.message-body{min-width:0;flex:1;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:#e4e4e4}.message-role{font-size:10px;color:#929292;margin:0 0 5px;text-transform:uppercase;letter-spacing:.08em}.message-actions{display:flex;gap:7px;margin-top:8px}.message-action{border:1px solid #444;background:transparent;color:#aaa;border-radius:7px;padding:4px 8px;font-size:10px}.message-action:hover{background:#333;color:#fff}.message-status{font-size:10px;color:#a0a0a0;margin-top:6px}
 .composer-wrap{padding:12px 0 5px}.composer{border:1px solid #484848;background:#2b2b2b;border-radius:17px;padding:12px 13px 9px;box-shadow:0 8px 30px rgba(0,0,0,.12)}.composer textarea{display:block;width:100%;resize:none;min-height:42px;max-height:130px;outline:none;border:0;background:transparent;color:#aaa;font-size:13px;line-height:1.5}.composer textarea::placeholder{color:#858585}.composer-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px}.composer-hint{font-size:10px;color:#848484}.send-action{border:0;background:#ececec;color:#171717;border-radius:10px;width:30px;height:30px;font-size:17px;font-weight:700;cursor:pointer}.send-action:disabled{background:#444;color:#8b8b8b;cursor:not-allowed}.send-action.stop{background:#d7d7d7;color:#171717}.send-action:not(:disabled):hover{background:#fff}.disclaimer{text-align:center;color:#777;font-size:10px;padding:10px 5px 0;line-height:1.5}
@@ -696,7 +696,7 @@ function workspaceHtml(nonce: string): string {
 <main class="main">
   <header class="topbar">
     <div class="top-left"><button class="mobile-menu" id="mobileMenu" type="button" aria-label="Open conversations">☰</button><div class="page-title">BRɅIN Intelligence</div><span class="private-tag">OWNER ONLY</span></div>
-    <div class="top-right"><label class="model-picker"><span class="model-label">MODEL</span><select id="modelSelect" aria-label="Select Gemini model" disabled><option value="">Checking models…</option></select></label><label class="thinking-picker"><span class="model-label">THINKING</span><select id="thinkingSelect" aria-label="Select thinking level" disabled><option value="">—</option></select></label><div class="avatar" aria-label="Owner">O</div></div>
+    <div class="top-right"><label class="model-picker"><span class="model-label">MODEL</span><select id="modelSelect" aria-label="Select Gemini model" disabled><option value="">Checking models…</option></select></label><button class="model-retry" id="modelRetry" type="button" hidden>Retry</button><label class="thinking-picker"><span class="model-label">THINKING</span><select id="thinkingSelect" aria-label="Select thinking level" disabled><option value="">—</option></select></label><div class="avatar" aria-label="Owner">O</div></div>
   </header>
   <section class="content" aria-label="Conversation workspace">
     <div class="stage">
@@ -726,6 +726,10 @@ function workspaceHtml(nonce: string): string {
   var composerHint=document.getElementById("composerHint");
   var modelSelect=document.getElementById("modelSelect");
   var thinkingSelect=document.getElementById("thinkingSelect");
+  var modelRetry=document.getElementById("modelRetry");
+  var modelLoadInProgress=false;
+  var modelLoadMessage="Checking configured Gemini models…";
+  var modelLoadController=null;
   var sending=false;
   var activeAbortController=null;
   var editingMessageId=null;
@@ -756,8 +760,29 @@ function workspaceHtml(nonce: string): string {
     thinkingSelect.title="Thinking level supported by "+model.label+" · default "+state.selectedThinkingLevel;
   }
   async function loadModels(){
+    if(modelLoadInProgress)return;
+    modelLoadInProgress=true;
+    modelLoadMessage="Checking configured Gemini models…";
+    state.models=[];
+    state.selectedModelId=null;
+    state.selectedThinkingLevel=null;
+    modelSelect.replaceChildren(node("option","","Checking models…"));
+    modelSelect.disabled=true;
+    modelRetry.hidden=true;
+    modelRetry.disabled=true;
+    thinkingSelect.replaceChildren(node("option","","—"));
+    thinkingSelect.disabled=true;
+    updateComposer();
+
+    var controller=new AbortController();
+    modelLoadController=controller;
+    var timeoutId=window.setTimeout(function(){controller.abort();},45000);
     try{
-      var response=await fetch("/admin/api/intelligence/models",{credentials:"same-origin",cache:"no-store"});
+      var response=await fetch("/admin/api/intelligence/models",{
+        credentials:"same-origin",
+        cache:"no-store",
+        signal:controller.signal
+      });
       var result={};
       try{result=await response.json();}catch(_error){}
       modelSelect.replaceChildren();
@@ -768,7 +793,12 @@ function workspaceHtml(nonce: string): string {
         modelSelect.disabled=true;
         modelSelect.title=result.error==="vertex_not_configured"
           ?"Vertex AI credentials or project configuration are missing."
-          :"The Vertex AI model catalogue could not be checked. Refresh to retry.";
+          :"The Vertex AI model catalogue could not be checked. Use Retry to try again.";
+        modelLoadMessage=result.error==="vertex_not_configured"
+          ?"Vertex AI is not configured for this Owner workspace."
+          :"The Gemini model catalogue could not be checked. Retry the model check.";
+        modelRetry.hidden=result.error==="vertex_not_configured";
+        updateComposer();
         return;
       }
       var available=result.models.filter(function(model){
@@ -780,6 +810,9 @@ function workspaceHtml(nonce: string): string {
         modelSelect.appendChild(none);
         modelSelect.disabled=true;
         modelSelect.title="No candidate model passed the current project/location check. Verify Google Cloud access, API enablement, region and quotas.";
+        modelLoadMessage="No Gemini model passed the project/location check. Retry after checking Google Cloud access.";
+        modelRetry.hidden=false;
+        updateComposer();
         return;
       }
       available.forEach(function(model){
@@ -795,22 +828,29 @@ function workspaceHtml(nonce: string): string {
       populateThinkingLevels(preferred.id);
       modelSelect.disabled=false;
       modelSelect.title="Project/location verified · "+available.length+" available model(s) · "+String(result.location||"configured location");
-      modelSelect.addEventListener("change",function(){
-        state.selectedModelId=modelSelect.value||null;
-        populateThinkingLevels(state.selectedModelId);
-        updateComposer();
-      });
-      thinkingSelect.addEventListener("change",function(){
-        state.selectedThinkingLevel=thinkingSelect.value||null;
-        updateComposer();
-      });
-    }catch(_error){
+      modelRetry.hidden=true;
+      modelLoadMessage=null;
+      updateComposer();
+    }catch(error){
+      var timedOut=controller.signal.aborted||(error&&error.name==="AbortError");
       modelSelect.replaceChildren();
-      var failed=node("option","","Model check unavailable");
+      var failed=node("option","",timedOut?"Model check timed out":"Model check unavailable");
       failed.value="";
       modelSelect.appendChild(failed);
       modelSelect.disabled=true;
-      modelSelect.title="Could not reach the private Owner model catalogue. Refresh to retry.";
+      modelSelect.title=timedOut
+        ?"The model catalogue request exceeded 45 seconds. Retry the check."
+        :"Could not reach the private Owner model catalogue. Check the connection and retry.";
+      modelRetry.hidden=false;
+      modelLoadMessage=timedOut
+        ?"The Gemini model check timed out after 45 seconds. Retry the check."
+        :"The Gemini model catalogue could not be reached. Retry the check.";
+      updateComposer();
+    }finally{
+      window.clearTimeout(timeoutId);
+      if(modelLoadController===controller)modelLoadController=null;
+      modelLoadInProgress=false;
+      modelRetry.disabled=false;
     }
   }
   function showWelcome(){
@@ -900,6 +940,7 @@ function workspaceHtml(nonce: string): string {
     thinkingSelect.disabled=sending||!state.selectedThinkingLevel;
     composerHint.textContent=sending
       ?"Generating with "+state.selectedModelId+" · "+state.selectedThinkingLevel+" · select Stop to keep the partial answer"
+      :modelLoadMessage?modelLoadMessage
       :editingMessageId?"Editing a previous message · sending will replace it and remove later turns"
       :"Your selected model and thinking level will be used for this response.";
   }
@@ -1035,6 +1076,16 @@ function workspaceHtml(nonce: string): string {
   messageInput.addEventListener("keydown",function(event){
     if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();if(sending)return;saveMessage();}
   });
+  modelSelect.addEventListener("change",function(){
+    state.selectedModelId=modelSelect.value||null;
+    populateThinkingLevels(state.selectedModelId);
+    updateComposer();
+  });
+  thinkingSelect.addEventListener("change",function(){
+    state.selectedThinkingLevel=thinkingSelect.value||null;
+    updateComposer();
+  });
+  modelRetry.addEventListener("click",function(){loadModels();});
   loadModels();
   refreshList().catch(showError);
 })();
