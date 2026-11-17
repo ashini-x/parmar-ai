@@ -221,9 +221,9 @@ function isSameOriginMutation(request: Request): boolean {
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown> | null> {
   const length = Number(request.headers.get("Content-Length") ?? "0");
-  if (length > 4_096) return null;
+  if (length > 52_000) return null;
   const raw = await request.text();
-  if (raw.length > 4_096) return null;
+  if (raw.length > 52_000) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
@@ -263,8 +263,28 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
   const prefix = root + "/";
   if (!url.pathname.startsWith(prefix)) return notFound();
   const suffix = url.pathname.slice(prefix.length).split("/");
-  if (suffix.length !== 1 || !validConversationId(suffix[0])) return notFound();
+  if ((suffix.length !== 1 && !(suffix.length === 2 && suffix[1] === "messages")) || !validConversationId(suffix[0])) return notFound();
   const id = suffix[0];
+
+  if (suffix.length === 2 && suffix[1] === "messages") {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+    const body = await readJsonBody(request);
+    if (!body || Object.keys(body).length !== 1 || typeof body.content !== "string") {
+      return json({ ok: false, error: "invalid_request" }, 400);
+    }
+    try {
+      const message = await appendOwnerIntelligenceMessage(env, {
+        conversationId: id,
+        role: "user",
+        content: body.content,
+      });
+      return message ? json({ ok: true, message }, 201) : notFound();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid message content.";
+      return json({ ok: false, error: "invalid_message", message }, 400);
+    }
+  }
 
   if (request.method === "GET") {
     const result = await getOwnerIntelligenceConversation(env, id);
@@ -314,7 +334,7 @@ function workspaceHtml(nonce: string): string {
 .main{display:flex;flex:1;min-width:0;flex-direction:column;position:relative}.topbar{height:60px;flex:0 0 60px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:12px}.top-left{display:flex;align-items:center;gap:11px;min-width:0}.mobile-menu{display:none;border:0;background:transparent;font-size:19px;padding:7px}.page-title{font-size:14px;font-weight:600;white-space:nowrap}.private-tag{font-size:10px;color:#9b9b9b;border:1px solid #404040;border-radius:20px;padding:5px 8px}.top-right{display:flex;align-items:center;gap:9px}.model-status{font-size:11px;color:#b9b9b9;border:1px solid #404040;border-radius:8px;padding:7px 10px;background:#252525}.avatar{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#3d3d3d;color:#f0f0f0;font-size:11px;font-weight:700}
 .content{flex:1;overflow:auto;display:flex;justify-content:center;padding:36px 22px 18px}.stage{width:min(820px,100%);min-height:100%;display:flex;flex-direction:column}.conversation-heading{font-size:12px;color:#999;margin:0 0 22px;min-height:18px}.messages{flex:1;display:flex;flex-direction:column;gap:22px;padding-bottom:30px}.welcome{margin:auto auto 50px;width:min(600px,100%);text-align:center}.welcome-mark{width:56px;height:56px;border:1px solid #565656;border-radius:18px;display:grid;place-items:center;margin:0 auto 22px;font-size:22px;font-weight:700;letter-spacing:-2px;background:#282828}.welcome h1{font-size:27px;letter-spacing:-.04em;font-weight:600;margin:0 0 12px}.welcome p{font-size:13px;color:#a0a0a0;line-height:1.7;margin:0 auto;max-width:480px}.next-step{display:inline-flex;margin-top:22px;border:1px solid #464646;border-radius:20px;padding:7px 11px;font-size:10px;color:#aaa;letter-spacing:.02em}
 .message{display:flex;gap:14px;align-items:flex-start;max-width:100%;padding:0 5px}.message-avatar{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#383838;font-size:10px;font-weight:700}.message-body{min-width:0;flex:1;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:#e4e4e4}.message-role{font-size:10px;color:#929292;margin:0 0 5px;text-transform:uppercase;letter-spacing:.08em}
-.composer-wrap{padding:12px 0 5px}.composer{border:1px solid #484848;background:#2b2b2b;border-radius:17px;padding:12px 13px 9px;box-shadow:0 8px 30px rgba(0,0,0,.12)}.composer textarea{display:block;width:100%;resize:none;min-height:42px;max-height:130px;outline:none;border:0;background:transparent;color:#aaa;font-size:13px;line-height:1.5}.composer textarea::placeholder{color:#858585}.composer-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px}.composer-hint{font-size:10px;color:#848484}.send-disabled{border:0;background:#444;color:#8b8b8b;border-radius:10px;width:30px;height:30px;font-size:15px;cursor:not-allowed}.disclaimer{text-align:center;color:#777;font-size:10px;padding:10px 5px 0;line-height:1.5}
+.composer-wrap{padding:12px 0 5px}.composer{border:1px solid #484848;background:#2b2b2b;border-radius:17px;padding:12px 13px 9px;box-shadow:0 8px 30px rgba(0,0,0,.12)}.composer textarea{display:block;width:100%;resize:none;min-height:42px;max-height:130px;outline:none;border:0;background:transparent;color:#aaa;font-size:13px;line-height:1.5}.composer textarea::placeholder{color:#858585}.composer-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px}.composer-hint{font-size:10px;color:#848484}.send-action{border:0;background:#ececec;color:#171717;border-radius:10px;width:30px;height:30px;font-size:17px;font-weight:700;cursor:pointer}.send-action:disabled{background:#444;color:#8b8b8b;cursor:not-allowed}.send-action:not(:disabled):hover{background:#fff}.disclaimer{text-align:center;color:#777;font-size:10px;padding:10px 5px 0;line-height:1.5}
 .loading{color:#999;font-size:12px;padding:12px 8px}.error{color:#f2a4a4;font-size:12px;padding:12px 8px}
 @media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.topbar{padding:0 13px}.content{padding:28px 16px 12px}.welcome h1{font-size:24px}.model-status{font-size:10px;padding:6px 8px}.private-tag{display:none}.composer-wrap{padding-top:18px}}
 @media(max-width:390px){.model-status{max-width:142px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.page-title{font-size:13px}.avatar{display:none}}
@@ -341,8 +361,8 @@ function workspaceHtml(nonce: string): string {
         <div class="welcome"><div class="welcome-mark">BɅ</div><h1>Your thinking space.</h1><p>A private workspace for research, reasoning, writing, mathematics, coding and ideas. Your conversations are stored separately from the student learning system.</p><span class="next-step">PRIVATE OWNER WORKSPACE</span></div>
       </div>
       <div class="composer-wrap">
-        <div class="composer"><textarea disabled aria-disabled="true" rows="1" placeholder="Message BRɅIN Intelligence…"></textarea><div class="composer-bottom"><span class="composer-hint">Gemini responses and message sending arrive in the next model milestones.</span><button class="send-disabled" type="button" disabled aria-label="Send message">↑</button></div></div>
-        <div class="disclaimer">Your chats are private to the Owner account. Model responses are not active yet; the Gemini connection is the next implementation milestone.</div>
+        <div class="composer"><textarea id="messageInput" rows="1" maxlength="50000" placeholder="Write a message…"></textarea><div class="composer-bottom"><span class="composer-hint" id="composerHint">Messages are saved privately. Gemini replies arrive in the next model milestones.</span><button class="send-action" id="sendMessage" type="button" disabled aria-label="Save message">↑</button></div></div>
+        <div class="disclaimer">Your messages are saved to your private Owner conversation. AI responses and model controls will be enabled in the next milestones.</div>
       </div>
     </div>
   </section>
@@ -357,6 +377,10 @@ function workspaceHtml(nonce: string): string {
   var messages=document.getElementById("messages");
   var heading=document.getElementById("conversationHeading");
   var sidebar=document.getElementById("sidebar");
+  var messageInput=document.getElementById("messageInput");
+  var sendButton=document.getElementById("sendMessage");
+  var composerHint=document.getElementById("composerHint");
+  var sending=false;
   function node(tag,className,text){var el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;}
   function errorText(error){return error&&error.message?error.message:"Something went wrong. Please retry.";}
   async function request(path,options){
@@ -418,7 +442,32 @@ function workspaceHtml(nonce: string): string {
     var result=await request(api+"/"+encodeURIComponent(id));
     state.activeId=result.conversation.id;state.messages=result.messages||[];
     heading.textContent=result.conversation.title;
+    messageInput.disabled=false;
+    updateComposer();
     renderHistory();renderMessages(state.messages);
+  }
+  function updateComposer(){
+    var hasText=messageInput.value.trim().length>0;
+    sendButton.disabled=sending||!state.activeId||!hasText;
+    messageInput.disabled=!state.activeId||sending;
+    composerHint.textContent=sending?"Saving your message…":"Messages are saved privately. Gemini replies arrive in the next model milestones.";
+  }
+  async function saveMessage(){
+    var content=messageInput.value.trim();
+    if(!content||!state.activeId||sending)return;
+    sending=true;updateComposer();
+    try{
+      var result=await request(api+"/"+encodeURIComponent(state.activeId)+"/messages",{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({content:content})
+      });
+      state.messages.push(result.message);
+      messageInput.value="";
+      renderMessages(state.messages);
+      await refreshList(state.activeId);
+    }catch(error){showError(error);}
+    finally{sending=false;updateComposer();}
   }
   async function newConversation(){
     try{
@@ -449,6 +498,11 @@ function workspaceHtml(nonce: string): string {
   }
   document.getElementById("newChat").addEventListener("click",newConversation);
   document.getElementById("mobileMenu").addEventListener("click",function(){sidebar.classList.toggle("open");});
+  sendButton.addEventListener("click",saveMessage);
+  messageInput.addEventListener("input",updateComposer);
+  messageInput.addEventListener("keydown",function(event){
+    if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();saveMessage();}
+  });
   refreshList().catch(showError);
 })();
 </script>
