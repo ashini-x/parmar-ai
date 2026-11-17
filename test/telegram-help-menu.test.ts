@@ -7,11 +7,16 @@ describe("Telegram Help menu actions", () => {
     expect(parseHelpMenuAction("help:profile")).toBe("profile");
     expect(parseHelpMenuAction("help:reset")).toBe("reset");
     expect(parseHelpMenuAction("help:delete")).toBe("delete");
+    expect(parseHelpMenuAction("help:reset:confirm")).toBe("reset_confirm");
+    expect(parseHelpMenuAction("help:reset:cancel")).toBe("reset_cancel");
+    expect(parseHelpMenuAction("help:delete:confirm")).toBe("delete_confirm");
+    expect(parseHelpMenuAction("help:delete:cancel")).toBe("delete_cancel");
   });
 
   it("rejects unrelated and malformed callback data", () => {
     expect(parseHelpMenuAction("fatman:enter")).toBeNull();
     expect(parseHelpMenuAction("help:unknown")).toBeNull();
+    expect(parseHelpMenuAction("help:delete:force")).toBeNull();
     expect(parseHelpMenuAction(undefined)).toBeNull();
   });
 });

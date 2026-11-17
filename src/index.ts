@@ -48,6 +48,7 @@ import {
   buildHelpMenuMarkup,
   buildExamSelectionMarkup,
   buildExamChangeMarkup,
+  buildHelpDestructiveConfirmationMarkup,
   CREATOR_CONTACT_CALLBACK_DATA,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
@@ -371,6 +372,29 @@ async function handleCreatorContactCallback(
   }
 }
 
+async function updateHelpActionMessage(
+  env: Env,
+  chatId: number,
+  messageId: number | undefined,
+  text: string,
+  botConnectionId: string,
+  replyMarkup?: { inline_keyboard: Array<Array<Record<string, unknown>>> },
+): Promise<number> {
+  if (isSafeInteger(messageId)) {
+    try {
+      await editTelegramMessage(env, chatId, messageId, text, botConnectionId, true, replyMarkup);
+      return messageId;
+    } catch (error) {
+      logger.warn("help_action_message_edit_failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const sent = await sendTelegramMessage(env, chatId, text, undefined, botConnectionId, true, replyMarkup);
+  return sent.message_id;
+}
+
 async function handleHelpMenuCallback(
   callback: TelegramCallbackQuery,
   env: Env,
@@ -391,6 +415,7 @@ async function handleHelpMenuCallback(
   const chatId = callback.message?.chat?.id;
   const senderId = callback.from?.id;
   const action = parseHelpMenuAction(callback.data);
+  let actionMessageId = callback.message?.message_id;
   if (
     !action ||
     !isSafeInteger(chatId) ||
@@ -403,7 +428,8 @@ async function handleHelpMenuCallback(
   }
 
   try {
-    await answerCallback("Opening " + action + "…");
+    const isConfirmedAction = action === "reset_confirm" || action === "delete_confirm";
+    await answerCallback(isConfirmedAction ? "Please wait…" : "Opening " + action.replace(/_/gu, " ") + "…");
 
     if (action === "exam") {
       await sendTelegramMessage(
@@ -427,13 +453,75 @@ async function handleHelpMenuCallback(
       return;
     }
 
-    if (action === "reset") {
-      await jobStoreRequest(env, chatId, { action: "reset_profile", botConnectionId });
+    if (action === "reset" || action === "delete") {
+      const confirmationText = action === "reset"
+        ? [
+            "**Reset your study profile?**",
+            "",
+            "This will clear your selected SSC exam, tracked question count, recent topics, revision queue and learning insights.",
+            "",
+            "Your account and saved usage records will remain unchanged.",
+            "",
+            "You can’t undo this action.",
+          ].join("\n")
+        : [
+            "**Delete all your data?**",
+            "",
+            "This permanently removes your saved study profile, conversation context, question and quiz history, and associated account records.",
+            "",
+            "This action cannot be undone. Your daily question limit will remain unchanged.",
+          ].join("\n");
+
       await sendTelegramMessage(
         env,
         chatId,
-        `Theek hai. Tumhari ${BOT_BRAND_NAME} study profile reset kar di. Ab fresh tracking se shuru karte hain 📚`,
+        confirmationText,
         undefined,
+        botConnectionId,
+        true,
+        buildHelpDestructiveConfirmationMarkup(action),
+      );
+      return;
+    }
+
+    if (action === "reset_cancel" || action === "delete_cancel") {
+      const isReset = action === "reset_cancel";
+      await answerCallback(isReset ? "Reset cancelled." : "Deletion cancelled.");
+      await updateHelpActionMessage(
+        env,
+        chatId,
+        actionMessageId,
+        isReset
+          ? "**Reset cancelled.**\n\nYour study profile is unchanged."
+          : "**Deletion cancelled.**\n\nYour data is safe. Nothing was deleted.",
+        botConnectionId,
+      );
+      return;
+    }
+
+    const isReset = action === "reset_confirm";
+    const statusText = isReset
+      ? "**Resetting your study profile…**\n\nPlease wait while we clear your study progress."
+      : "**Deleting your data…**\n\nPlease wait while we remove your stored information.";
+
+    // Update the confirmation message before starting any storage work so the
+    // student immediately sees that the request is being processed.
+    actionMessageId = await updateHelpActionMessage(
+      env,
+      chatId,
+      actionMessageId,
+      statusText,
+      botConnectionId,
+      { inline_keyboard: [] },
+    );
+
+    if (isReset) {
+      await jobStoreRequest(env, chatId, { action: "reset_profile", botConnectionId });
+      await updateHelpActionMessage(
+        env,
+        chatId,
+        actionMessageId,
+        "**Your study profile has been reset.**\n\nYou’re ready for a fresh start. Choose your SSC exam again whenever you’re ready.",
         botConnectionId,
       );
       return;
@@ -442,16 +530,18 @@ async function handleHelpMenuCallback(
     const deletion = await deleteUserData(env, senderId);
     const dataChatId = deletion.chatId ?? chatId;
     const id = env.JOB_DEDUPE.idFromName(String(dataChatId));
-    await env.JOB_DEDUPE.get(id).fetch("https://job-store/internal", {
+    const response = await env.JOB_DEDUPE.get(id).fetch("https://job-store/internal", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "delete_data" }),
     });
-    await sendTelegramMessage(
+    if (!response.ok) throw new Error("Stored study data cleanup was not confirmed.");
+
+    await updateHelpActionMessage(
       env,
       chatId,
-      `Tumhari ${BOT_BRAND_NAME} ki stored study data aur history delete kar di gayi hai. Ab fresh start hoga 🗑️`,
-      undefined,
+      actionMessageId,
+      "**Your data has been deleted successfully.**\n\nYour study profile and saved history have been removed. Your daily question limit remains unchanged.",
       botConnectionId,
     );
   } catch (error) {
@@ -460,6 +550,22 @@ async function handleHelpMenuCallback(
       action,
       error: error instanceof Error ? error.message : String(error),
     });
+
+    if (action === "reset_confirm" || action === "delete_confirm") {
+      const isReset = action === "reset_confirm";
+      await updateHelpActionMessage(
+        env,
+        chatId,
+        actionMessageId,
+        isReset
+          ? "**We couldn’t reset your study profile.**\n\nPlease try again. Your existing data has not been confirmed as reset."
+          : "**We couldn’t finish deleting all your data.**\n\nSome cleanup may have completed, but the full deletion was not confirmed. Please retry to finish.",
+        botConnectionId,
+        buildHelpDestructiveConfirmationMarkup(isReset ? "reset" : "delete"),
+      ).catch(() => undefined);
+      return;
+    }
+
     await sendTelegramMessage(
       env,
       chatId,
@@ -469,7 +575,6 @@ async function handleHelpMenuCallback(
     ).catch(() => undefined);
   }
 }
-
 
 async function handleExamSelectionCallback(
   callback: TelegramCallbackQuery,

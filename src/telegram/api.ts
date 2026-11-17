@@ -82,6 +82,18 @@ export function buildExamChangeMarkup(): TelegramInlineKeyboardMarkup {
   };
 }
 
+export function buildHelpDestructiveConfirmationMarkup(
+  action: "reset" | "delete",
+): TelegramInlineKeyboardMarkup {
+  const confirmLabel = action === "reset" ? "Reset profile" : "Delete permanently";
+  return {
+    inline_keyboard: [[
+      { text: "Cancel", callback_data: `help:${action}:cancel` },
+      { text: confirmLabel, callback_data: `help:${action}:confirm` },
+    ]],
+  };
+}
+
 export function buildAdminContactMarkup(): TelegramInlineKeyboardMarkup {
   return {
     inline_keyboard: [[

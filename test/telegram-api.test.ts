@@ -16,6 +16,7 @@ import {
   buildHelpMenuMarkup,
   buildExamSelectionMarkup,
   buildExamChangeMarkup,
+  buildHelpDestructiveConfirmationMarkup,
   buildAdminContactMarkup,
 } from "../src/telegram/api";
 import type { Env } from "../src/config/env";
@@ -76,6 +77,26 @@ describe("Telegram SSC exam selection keyboard", () => {
   it("offers one concise action to change the saved target exam", () => {
     expect(buildExamChangeMarkup()).toEqual({
       inline_keyboard: [[{ text: "Change exam", callback_data: "exam:menu" }]],
+    });
+  });
+});
+
+describe("Telegram destructive-action confirmation keyboards", () => {
+  it("asks for reset confirmation with a cancel option", () => {
+    expect(buildHelpDestructiveConfirmationMarkup("reset")).toEqual({
+      inline_keyboard: [[
+        { text: "Cancel", callback_data: "help:reset:cancel" },
+        { text: "Reset profile", callback_data: "help:reset:confirm" },
+      ]],
+    });
+  });
+
+  it("asks for explicit permanent-delete confirmation", () => {
+    expect(buildHelpDestructiveConfirmationMarkup("delete")).toEqual({
+      inline_keyboard: [[
+        { text: "Cancel", callback_data: "help:delete:cancel" },
+        { text: "Delete permanently", callback_data: "help:delete:confirm" },
+      ]],
     });
   });
 });

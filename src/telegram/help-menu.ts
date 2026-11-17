@@ -1,4 +1,4 @@
-export type HelpMenuAction = "exam" | "profile" | "reset" | "delete";
+export type HelpMenuAction = "exam" | "profile" | "reset" | "delete" | "reset_confirm" | "reset_cancel" | "delete_confirm" | "delete_cancel";
 
 export const SSC_EXAM_OPTIONS = [
   { code: "cgl", label: "CGL", profileValue: "SSC CGL" },
@@ -12,11 +12,17 @@ export const SSC_EXAM_OPTIONS = [
 export type ExamSelectionAction = "menu" | (typeof SSC_EXAM_OPTIONS)[number]["code"];
 
 export function parseHelpMenuAction(value: unknown): HelpMenuAction | null {
-  if (value === "help:exam") return "exam";
-  if (value === "help:profile") return "profile";
-  if (value === "help:reset") return "reset";
-  if (value === "help:delete") return "delete";
-  return null;
+  const actions: Record<string, HelpMenuAction> = {
+    "help:exam": "exam",
+    "help:profile": "profile",
+    "help:reset": "reset",
+    "help:delete": "delete",
+    "help:reset:confirm": "reset_confirm",
+    "help:reset:cancel": "reset_cancel",
+    "help:delete:confirm": "delete_confirm",
+    "help:delete:cancel": "delete_cancel",
+  };
+  return typeof value === "string" ? actions[value] ?? null : null;
 }
 
 export function parseExamSelectionAction(value: unknown): ExamSelectionAction | null {
