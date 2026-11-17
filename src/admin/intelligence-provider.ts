@@ -61,6 +61,7 @@ const defaultDependencies: OwnerProviderDependencies = {
   fetch: globalThis.fetch.bind(globalThis),
 };
 const PROBE_TIMEOUT_MS = 8_000;
+const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
 const GENERATION_TIMEOUT_MS = 35_000;
 const CATALOGUE_CACHE_MS = 90_000;
 const catalogueCache = new Map<string, { expiresAt: number; value: OwnerModelCatalogue }>();
@@ -79,6 +80,20 @@ function vertexBase(location: string): string {
   return location === "global" ? "https://aiplatform.googleapis.com" : `https://${location}-aiplatform.googleapis.com`;
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, onTimeout?: () => void): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        onTimeout?.();
+        reject(new Error("Timed out"));
+      }, timeoutMs);
+    }),
+  ]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
 function failureReason(status: number | null): OwnerGeminiModel["availabilityReason"] {
   if (status === 400 || status === 404) return "model_or_location_not_available";
   if (status === 401 || status === 403) return "provider_access_denied";
