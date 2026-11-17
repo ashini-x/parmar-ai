@@ -163,10 +163,10 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       { candidates: [{ content: { role: "model", parts: [{ text: "world." }] } }],
         usageMetadata: { promptTokenCount: 8, candidatesTokenCount: 5, totalTokenCount: 13 } },
     ].map((chunk) => "data: " + JSON.stringify(chunk) + "\r\n\r\n").join("");
-    const calls: string[] = [];
-    const fetcher: typeof fetch = async (url) => {
+    const calls: Array<{ url: string; body?: string }> = [];
+    const fetcher: typeof fetch = async (url, init) => {
       const value = String(url);
-      calls.push(value);
+      calls.push({ url: value, body: String(init?.body ?? "") });
       if (value.endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 2 }), { status: 200 });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     };
@@ -187,7 +187,8 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       type: "done",
       usage: { promptTokens: 8, outputTokens: 5, totalTokens: 13 },
     });
-    const streamRequest = calls.find((value) => value.includes(":streamGenerateContent"));
-    expect(streamRequest).toContain("?alt=sse");
+    const streamRequest = calls.find((value) => value.url.includes(":streamGenerateContent"));
+    expect(streamRequest?.url).toContain("?alt=sse");
+    expect(JSON.parse(streamRequest?.body ?? "{}").generationConfig.thinkingConfig).toEqual({ thinkingLevel: "HIGH" });
   });
 
