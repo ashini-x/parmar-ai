@@ -138,7 +138,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(JSON.stringify(body)).not.toContain("SSC");
   });
 
-  it("preserves the provider permission detail when GenerateContent returns 403", async () => {
+  it("explains that Count Tokens eligibility does not guarantee GenerateContent permission", async () => {
     const calls: string[] = [];
     const env = { ...configuredEnv, GCP_PROJECT_ID: "permission-detail-test-project" } as Env;
     const fetcher: typeof fetch = async (url) => {
@@ -164,7 +164,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(calls.some((url) => url.includes(":streamGenerateContent"))).toBe(true);
     expect(failure).toMatchObject({
       status: 403,
-      message: expect.stringContaining("aiplatform.endpoints.predict"),
+      message: expect.stringContaining("GenerateContent access"),
     });
   });
 
