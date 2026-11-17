@@ -201,7 +201,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain("New chat");
     expect(html).toContain("Your conversations");
     expect(html).toContain("Gemini setup · M3");
-    expect(html).toContain("Gemini responses and message sending arrive in the next model milestones.");
+    expect(html).toContain("Messages are saved privately. Gemini replies arrive in the next model milestones.");
   });
 
   it("creates, lists, reopens, renames and deletes only the Owner's conversations and messages", async () => {
