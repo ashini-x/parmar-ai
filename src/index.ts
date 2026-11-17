@@ -55,7 +55,7 @@ import { internalServerError, json, methodNotAllowed, notFound } from "./http/re
 import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession, recordEvent, recordQuestionResult, recordQuestionStart, recordUserSeen, updateUserIdentity, getAnalyticsConfig, cleanupAnalytics, ensureAnalyticsSchema, getLatestFatmanReleaseQaRun, grantUnlimitedAiAccess, revokeUnlimitedAiAccess, isAdminTelegramUser, hasUnlimitedAiAccess, recordAiUsage, isUserSuspended, deleteUserData } from "./analytics/db";
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, getAdminSessionRole, handleAdminLogin, loginHtml, requireAdmin, requireOwner } from "./admin/auth";
-import { handleOwnerIntelligenceApi, ownerIntelligencePage } from "./admin/intelligence";
+import { handleOwnerIntelligenceApi, ownerIntelligenceClientScript, ownerIntelligencePage } from "./admin/intelligence";
 import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, testFatmanVision, uploadFatmanPage } from "./fatman/admin";
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
@@ -3101,6 +3101,19 @@ const worker = {
       if (url.pathname === "/admin/logout") {
         if (request.method !== "POST") return withRequestId(methodNotAllowed(["POST"]), requestId);
         return clearAdminSession();
+      }
+
+      // Keep the Owner workspace application script private and serve it as a same-origin asset.
+      if (url.pathname === "/admin/intelligence.js") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        if (!(await requireOwner(request, env))) {
+          const status = (await requireAdmin(request, env)) ? 403 : 401;
+          return withRequestId(new Response(status === 403 ? "Owner access required." : "Unauthorized.", {
+            status,
+            headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" },
+          }), requestId);
+        }
+        return withRequestId(ownerIntelligenceClientScript(), requestId);
       }
 
       // M1 established the explicit Owner session; M2 replaces the placeholder
