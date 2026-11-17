@@ -131,7 +131,7 @@ async function safeVertexErrorDiagnostic(response: Response): Promise<string | u
     const permission = details.map((detail) => detail?.metadata?.permission)
       .find((value): value is string =>
         typeof value === "string" &&
-        /^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$/u.test(value));
+        /^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/u.test(value));
 
     if (reason && reason !== providerStatus) fragments.push("reason " + reason);
     if (permission) fragments.push("permission " + permission);
