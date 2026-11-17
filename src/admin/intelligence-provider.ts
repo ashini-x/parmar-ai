@@ -437,6 +437,8 @@ export async function openOwnerGeminiStream(
     throw new OwnerGeminiProviderError("The system instruction is invalid or too long.");
   }
 
+  const project = configuredProject(env);
+  if (!project) throw new OwnerGeminiProviderError("Vertex AI is not configured for the Owner workspace.");
   const location = configuredLocation(env);
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
     ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
