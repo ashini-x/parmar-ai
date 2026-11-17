@@ -1,6 +1,6 @@
-# New-chat continuation prompt — BRɅIN Intelligence Owner Workspace
+# New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the owner-only **BRɅIN Intelligence** feature in `ashini-x/parmar-ai`.
+Continue the owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`.
 
 ## Read the source of truth first
 
@@ -11,43 +11,52 @@ Continue the owner-only **BRɅIN Intelligence** feature in `ashini-x/parmar-ai`.
 
 ## Product boundary
 
-Build a ChatGPT-like general-purpose AI workspace **inside the existing protected Admin Control Center**. The Owner signs in through the existing admin login. The workspace is owner-only; ordinary admin/operator access must not inherit Owner permissions.
+Build a private, general-purpose Gemini workspace **inside the existing protected Admin Control Center**. The Owner signs in through the existing admin login and chooses the Gemini model they want from the models the configured Vertex AI project/location can actually invoke.
 
 This is separate from the student-facing परमार्थAI Telegram tutor. Do not broaden the student bot beyond SSC GA/GS, and do not change student prompts, quotas, profiles, data or answer contracts as part of this feature.
 
-The Owner should be able to use Gemini models that the configured Vertex AI project/location can actually access, select model-specific supported thinking levels, ask open-ended questions, maintain chat history, stream answers, stop/regenerate/edit prompts, and eventually upload supported files/images/PDFs. BRɅIN knowledge context may be an explicit opt-in, never automatic by default.
+The Owner can interact in two ways:
+- Type a prompt in the chat box.
+- Speak through a dictation control; speech is transcribed into editable text, reviewed by the Owner, and then sent as a normal text message.
 
-Do not describe this as unlimited provider capacity. Do not apply student daily/burst caps to the Owner workspace, but clearly respect Google Cloud quotas, regional/model availability, billing, context and API limits. Never silently downgrade a model or thinking level.
+Both input routes use the same conversation, selected Gemini model, supported thinking level and text-generation path. The assistant returns text. Do not build Gemini Live, real-time audio/video, speech-to-speech sessions or assistant voice output.
+
+“Full Gemini capability” means open-ended use of the chosen model and selectively exposed API capabilities that are useful and actually supported by that model/API/project/location. It does not mean consumer Gemini app parity or every Google API/tool. Candidate native tools such as Search grounding, URL context or code execution should be assessed individually and only enabled when useful and verified. BRɅIN retrieval is optional, off by default, and never automatically injected.
+
+Do not describe this as unlimited provider capacity. Do not apply student daily/burst caps to the Owner workspace, but respect Google Cloud quotas, region/model availability, billing, context and API limits. Never silently downgrade a model or thinking level.
 
 ## Current checkpoint (latest source inspected: 2026-11-18)
 
-- M0 — product/architecture/security/milestone baseline: **complete**.
+- M0 — product, architecture, security and milestone baseline: **complete**.
 - M1 — explicit Owner identity and authorization: **complete and deployed**.
 - M2 — responsive Owner workspace and isolated D1 chat persistence: **complete and deployed**.
 - M3 — server-side Vertex Gemini model registry, project/location Count Tokens availability probes, Owner model picker and general-purpose provider adapter: **complete and deployed**.
-- **M3 live Owner-session check completed:** the Owner supplied a production screenshot on 2026-11-18 showing the model dropdown populated with candidates returned as selectable by the project/location probe. The UI renders only `selectable: true` entries; this does not mean every public registry candidate is enabled.
-- M3 follow-up source commit: `fc2e3488f4508da6298bdbcfcd134500cf2ccdfc`; workflow [44157348057](https://github.com/ashini-x/parmar-ai/actions/runs/44157348057) succeeded. Deployed M3 versions: `brvin-service` `ad04c1ac-98b8-43ef-92c1-bef8dbead2ac`; `parmar-ai` `add293a6-6489-400b-996f-168034203058`.
-- **M4 implementation deployed:** PR [#320](https://github.com/ashini-x/parmar-ai/pull/320), merged commit `2912d55cde147c48d1cc608b4b318b51487697ba`; main release workflow [44168257509](https://github.com/ashini-x/parmar-ai/actions/runs/44168257509) succeeded.
-- M4 adds the model-specific thinking selector, sends the selected supported value through Vertex `generationConfig.thinkingConfig.thinkingLevel`, streams user-facing text via Owner-only SSE, filters provider thought parts, persists partial responses, supports Stop/request cancellation, Edit/resubmit and Regenerate, and stores model/thinking/token/latency metadata in the dedicated `owner_intelligence_generation_metadata` table.
-- M4 verification: `npm run check` passed; `npm test` passed **482 tests across 72 files**; `npm run test:node` passed **62 tests across 9 files**; all three Worker dry-runs passed. Paired production deployment, root/health smoke checks, BRVIN service binding, Fatman readiness and production release acceptance passed. No rollback was needed.
-- M4 deployed Worker versions: `brvin-service` `44acfa29-199c-4468-8b4a-23fefeaef363`; `parmar-ai` `10c630d6-ec4c-4407-8059-39193290e1ba`. Release manifest artifact: `14367310746`.
-- **M4 browser acceptance still pending:** automated provider/route tests use mocked Vertex responses; no real billed Owner prompt has yet been sent from the authenticated production browser. Sign in through `/admin/login`, open `/admin/intelligence`, choose a verified model and supported thinking level, send a short prompt, and verify the streaming response and displayed model/level. Then test Stop/partial retention, Edit/resubmit and Regenerate.
-- **Known deferred capability:** automatic in-place SSE reconnection is not implemented. A disconnected/stopped response remains saved as partial and can be reopened; the Owner can manually Regenerate. Do not claim automatic generation resume.
-- M5 — private files/images/PDFs remains not started; M6 — explicit opt-in BRɅIN context remains not started; M7 — Owner observability/cost controls remains not started.
+- **M3 live Owner-session check completed:** the Owner supplied a production screenshot on 2026-11-18 showing the model dropdown populated with candidates returned as selectable by the project/location probe. This does not mean every public registry candidate is enabled.
+- M3 follow-up source commit: `fc2e3488f4508da6298bdbcfcd134500cf2ccdfc`; workflow [44157348057](https://github.com/ashini-x/parmar-ai/actions/runs/44157348057) succeeded. Deployed versions: `brvin-service` `ad04c1ac-98b8-43ef-92c1-bef8dbead2ac`; `parmar-ai` `add293a6-6489-400b-996f-168034203058`.
+- **M4 implementation deployed:** PR [#320](https://github.com/ashini-x/parmar-ai/pull/320), merged commit `2912d55cde147c48d1cc608b4b318b51487697ba`; workflow [44168257509](https://github.com/ashini-x/parmar-ai/actions/runs/44168257509) succeeded.
+- M4 adds model-specific thinking selection, binds it to Vertex `generationConfig.thinkingConfig.thinkingLevel`, streams user-facing text through Owner-only SSE, filters provider thought parts, persists partial responses, supports Stop, Edit/resubmit and Regenerate, and stores model/thinking/token/latency metadata in `owner_intelligence_generation_metadata`.
+- M4 verification: `npm run check` passed; `npm test` passed **482 tests across 72 files**; `npm run test:node` passed **62 tests across 9 files**; all three Worker dry-runs passed. Paired production deployment, root/health smoke checks, BRVIN service binding, Fatman readiness and release acceptance passed. No rollback.
+- M4 deployed versions: `brvin-service` `44acfa29-199c-4468-8b4a-23fefeaef363`; `parmar-ai` `10c630d6-ec4c-4407-8059-39193290e1ba`. Release manifest artifact `14367310746`.
+- **M4 browser acceptance still pending:** no real billed Owner prompt has yet been sent from the authenticated production browser. Sign in at `/admin/login`, open `/admin/intelligence`, choose a verified model and thinking level, send a short typed prompt, verify the response/model/level, then test Stop/partial retention, Edit/resubmit and Regenerate. Keep M4 open until verified.
+- **Known deferred M4 capability:** automatic in-place SSE reconnection is not implemented. Saved partial text can be reopened and manually regenerated; do not claim automatic resume.
+- **Next action:** finish that real authenticated Owner browser acceptance for M4. Only after that move to M5, which is voice dictation to editable text—not Gemini Live.
+- **Approved forward milestones:** M5 voice dictation; M6 selected-model/useful Gemini API tools only where compatible (for example Search grounding, URL context or code execution after verification); M7 Owner usage/cost visibility; M8 full security, quality and production acceptance. BRɅIN context remains a separate optional add-on outside this sequence.
+- **Scope explicitly excludes:** Gemini Live, real-time voice/video, speech-to-speech, assistant voice output, image/video/audio generation, computer-use/MCP by default, and required file/image/PDF uploads. Do not add these without a separate Owner-approved scope change.
 - Production maps `OWNER_DASHBOARD_USER=admin` to the Owner role. Sign out and sign in again if using a legacy pre-M1 session. Owner records remain separate from student data.
 
-**Next action:** perform the real authenticated Owner browser generation acceptance described above. Keep M4 open until a real prompt/stream/stop/edit/regenerate journey is confirmed. Track automatic in-place SSE reconnection as a deferred follow-up, not a shipped capability.
-
-Re-read the roadmap for the full acceptance ledger, completed tasks and production deployment revisions before making further changes.
+Re-read the roadmap for the full milestone ledger, architecture decisions, completed task evidence and production revisions before doing more work.
 
 ## Non-negotiable implementation discipline
 
 - Before every task, inspect the latest default branch and relevant source files. At minimum, understand `src/admin/auth.ts`, `src/index.ts`, `src/admin/dashboard.ts`, `src/config/env.ts`, `src/ai/gemini.ts`, `src/analytics/db.ts`, plus the security/data/AI/test documents as relevant. For M2, begin from the deployed M1 role gate; do not rewrite or bypass it.
-- The current code has `requireAdmin` and a separate `requireOwner`. Do not rely on a hidden UI link or client-supplied role. The deployed M2 page and conversation APIs already enforce `requireOwner`; preserve that guard on all M3+ model, generation, stream, stop, file and retrieval endpoints. Every data operation must remain scoped to the configured Owner principal, and mutations must retain same-origin checks.
-- M2 stores Owner conversations/messages in dedicated `owner_intelligence_conversations` and `owner_intelligence_messages` tables. Keep later file references, model usage and generations separate too; never write Owner prompts to student analytics, profiles, quiz history or Durable Object state.
+- The current code has `requireAdmin` and a separate `requireOwner`. Do not rely on a hidden UI link or client-supplied role. The deployed M2 page and conversation APIs already enforce `requireOwner`; preserve that guard on all model, generation, stream, stop, transcription and optional retrieval/tool endpoints. Every data operation must remain scoped to the configured Owner principal, and mutations must retain same-origin checks.
+- M2 stores Owner conversations/messages in dedicated `owner_intelligence_conversations` and `owner_intelligence_messages` tables. Keep any future transcription-job metadata and model usage/generation records separate too; never write Owner prompts to student analytics, profiles, quiz history or Durable Object state.
 - Use server-side credentials only. Never expose service-account keys, Vertex access tokens, session secrets or uploaded-object credentials to the browser.
 - Make model availability and thinking compatibility server-authoritative and project/location-aware. Verify current Google documentation and the actual configured project before enabling a model. Do not hardcode a stale model catalogue or present a global model list as guaranteed access.
 - Do not use student SSC prompts, `AnswerPacket`, student classification, Fatman context or automatic BRɅIN retrieval for general Owner messages.
+- Keep typed messages and reviewed voice transcripts on one Owner text-generation path. Never make Gemini Live or voice output an architectural dependency.
+- Do not add Google tools, model modalities, file uploads or external integrations solely for feature parity. Validate that a capability is useful and supported by the exact selected model/API/project/location before implementing it.
+- Voice transcription is not assistant conversation: transcription provider choice is an M5 design decision. Compare browser support and privacy/quality/cost before choosing; raw audio is not retained by default.
 - Preserve current Admin Control Center, BRɅIN admin and student Telegram behaviour unless a task explicitly requires a reviewed change.
 - Run the relevant tests; report exact evidence. Do not claim unrun tests or deployment.
 - Deploy only when the task/request authorizes deployment and the repository's release discipline is met.
