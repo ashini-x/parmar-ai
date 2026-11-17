@@ -162,7 +162,7 @@ export async function listOwnerGeminiModels(
 
   let token: string;
   try {
-    token = await dependencies.getAccessToken(env);
+    token = await withTimeout(dependencies.getAccessToken(env), ACCESS_TOKEN_TIMEOUT_MS);
   } catch {
     return {
       ok: false, configured: true, location, checkedAt, error: "google_auth_unavailable",
