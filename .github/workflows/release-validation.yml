@@ -258,6 +258,8 @@ jobs:
       url: https://brvin.in
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -311,6 +313,18 @@ jobs:
           fetch_page "/privacy" "$privacy_file" "Privacy Policy"
           fetch_page "/terms" "$terms_file" "Terms of Service"
           fetch_page "/founder" "$founder_file" "Ashini Gogoi"
+
+          # Legal dates come from each policy file's latest Git change, rendered in India time.
+          for legal_file in "$privacy_file" "$terms_file"; do
+            grep -Eq 'Effective date: [0-9]{2} [A-Za-z]+ [0-9]{4} \(IST\)\.' "$legal_file" || {
+              echo "::error::Legal effective date is missing or not rendered in IST."
+              exit 1
+            }
+          done
+          if grep -Fq '__BRVIN_LEGAL_EFFECTIVE_DATE__' "$privacy_file" "$terms_file"; then
+            echo "::error::Unrendered legal date placeholder found."
+            exit 1
+          fi
 
           # Verify every homepage navigation target exists and its anchor scrolls smoothly.
           for expected in 'href="#platform"' 'href="#demo"' 'href="#plans"' 'href="/founder">Founder</a>' 'href="/privacy"' 'href="mailto:partners@brvin.in"'; do
