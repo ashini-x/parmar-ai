@@ -1,4 +1,4 @@
-import type { D1Database } from "@cloudflare/workers-types";
+import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
 import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
 import { openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
