@@ -1,3 +1,12 @@
+## 2026-11-18: Owner Gemini model picker liveness fix
+
+- Bound Google access-token acquisition to 12 seconds and every Vertex Count Tokens capability probe to 8 seconds with a Promise-level timeout; abort the underlying probe when it times out.
+- Add a 45-second browser model-catalogue deadline so the picker cannot remain in “Checking models…” indefinitely.
+- Show clear Vertex-unavailable, no-verified-models, timed-out or connection-failure states, with a Retry control where retry is meaningful.
+- Register model/thinking change listeners once and refresh composer availability after catalogue success/failure.
+- Add regression tests for never-settling token and model-probe requests.
+- Merged as `15c2de6c484af03e0ca1a06d34d1f81ce5f04c58`; production workflow [44175875966](https://github.com/ashini-x/parmar-ai/actions/runs/44175875966) passed paired deployment and release acceptance. Deployed versions: `brvin-service` `b9008a5e-3181-4345-9cbd-c06fb0a75ea2`; `parmar-ai` `aec54709-e501-4f6d-b1d2-e7887f3e42b6`.
+
 ## 2026-11-18: BRɅIN Intelligence M4 Owner Gemini chat
 
 - Add a model-aware thinking selector populated from the project/location-verified Owner Gemini registry and bind the selected level to Vertex `generationConfig.thinkingConfig.thinkingLevel`; unsupported levels are rejected instead of downgraded.
