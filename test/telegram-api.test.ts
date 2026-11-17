@@ -14,6 +14,8 @@ import {
   buildFatmanStartMarkup,
   buildFatmanExitMarkup,
   buildHelpMenuMarkup,
+  buildExamSelectionMarkup,
+  buildExamChangeMarkup,
   buildAdminContactMarkup,
 } from "../src/telegram/api";
 import type { Env } from "../src/config/env";
@@ -48,6 +50,33 @@ describe("Telegram retry_after handling", () => {
     expect(getTelegramRetryDelayMs(Number.POSITIVE_INFINITY)).toBe(1_000);
     expect(getTelegramRetryDelayMs(0)).toBe(1_000);
     expect(getTelegramRetryDelayMs(-1)).toBe(1_000);
+  });
+});
+
+describe("Telegram SSC exam selection keyboard", () => {
+  it("shows six short SSC-only choices as clickable buttons in two columns", () => {
+    expect(buildExamSelectionMarkup()).toEqual({
+      inline_keyboard: [
+        [
+          { text: "CGL", callback_data: "exam:cgl" },
+          { text: "CHSL", callback_data: "exam:chsl" },
+        ],
+        [
+          { text: "CPO", callback_data: "exam:cpo" },
+          { text: "MTS", callback_data: "exam:mts" },
+        ],
+        [
+          { text: "GD", callback_data: "exam:gd" },
+          { text: "STENO", callback_data: "exam:steno" },
+        ],
+      ],
+    });
+  });
+
+  it("offers one concise action to change the saved target exam", () => {
+    expect(buildExamChangeMarkup()).toEqual({
+      inline_keyboard: [[{ text: "Change exam", callback_data: "exam:menu" }]],
+    });
   });
 });
 

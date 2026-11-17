@@ -2,6 +2,7 @@ import type { Env, GeminiImageInput } from "../config/env";
 import { MAX_PHOTO_COUNT, MAX_SINGLE_PHOTO_BYTES, MAX_TOTAL_PHOTO_BYTES } from "../config/env";
 import { getActiveTelegramBot, getTelegramBotApiToken, hasTelegramBotRecords } from "./bot-store";
 import { formatTelegramHtml, stripTelegramMarkdownMarkers } from "./formatting";
+import { SSC_EXAM_OPTIONS } from "./help-menu";
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4_096;
 
@@ -60,6 +61,24 @@ export function buildHelpMenuMarkup(): TelegramInlineKeyboardMarkup {
       { text: "Reset", callback_data: "help:reset" },
       { text: "Delete", callback_data: "help:delete" },
     ]],
+  };
+}
+
+export function buildExamSelectionMarkup(): TelegramInlineKeyboardMarkup {
+  const buttons = SSC_EXAM_OPTIONS.map((exam) => ({
+    text: exam.label,
+    callback_data: `exam:${exam.code}`,
+  }));
+  const rows: Array<Array<Record<string, unknown>>> = [];
+  for (let index = 0; index < buttons.length; index += 2) {
+    rows.push(buttons.slice(index, index + 2));
+  }
+  return { inline_keyboard: rows };
+}
+
+export function buildExamChangeMarkup(): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[{ text: "Change exam", callback_data: "exam:menu" }]],
   };
 }
 

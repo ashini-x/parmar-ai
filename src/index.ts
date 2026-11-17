@@ -18,7 +18,7 @@ import { loadQuestionContextInParallel, runSuspensionAndModeLookup } from "./tel
 import { buildFatmanModeStatusMessage, parseFatmanModeAction, parseFatmanModeCommand, resolveFatmanModeTarget } from "./telegram/fatman-mode";
 import { buildTelegramWebhookSetupPayload } from "./telegram/webhook-config";
 import { buildTelegramMenuCommandTargets, buildTelegramMenuCommands, isAdminCommand, isHelpCommand, isParmarSirCommand, isStartCommand } from "./telegram/menu";
-import { parseHelpMenuAction } from "./telegram/help-menu";
+import { parseExamSelectionAction, parseHelpMenuAction, SSC_EXAM_OPTIONS } from "./telegram/help-menu";
 import { PHOTO_CAPTION_REQUIRED_TEXT } from "./telegram/photo-intent";
 import { addRequestId, getOrCreateRequestId } from "./core/request-id";
 import {
@@ -45,6 +45,8 @@ import {
   buildFatmanStartMarkup,
   buildFatmanExitMarkup,
   buildHelpMenuMarkup,
+  buildExamSelectionMarkup,
+  buildExamChangeMarkup,
   CREATOR_CONTACT_CALLBACK_DATA,
 } from "./telegram/api";
 import { internalServerError, json, methodNotAllowed, notFound } from "./http/response";
@@ -406,9 +408,11 @@ async function handleHelpMenuCallback(
       await sendTelegramMessage(
         env,
         chatId,
-        "Choose your target exam:\n/exam cgl\n/exam chsl\n/exam cpo\n/exam mts\n/exam gd\n/exam steno",
+        "Choose your SSC exam:",
         undefined,
         botConnectionId,
+        true,
+        buildExamSelectionMarkup(),
       );
       return;
     }
@@ -461,6 +465,129 @@ async function handleHelpMenuCallback(
       "This action could not be completed right now. Please try again.",
       undefined,
       botConnectionId,
+    ).catch(() => undefined);
+  }
+}
+
+
+async function handleExamSelectionCallback(
+  callback: TelegramCallbackQuery,
+  env: Env,
+  botConnectionId: string,
+  requestId: string,
+): Promise<void> {
+  const callbackId = callback.id?.trim();
+  if (!callbackId) return;
+
+  let answered = false;
+  const answerCallback = async (text: string, showAlert = false) => {
+    try {
+      await telegramApi(env, "answerCallbackQuery", {
+        callback_query_id: callbackId,
+        text,
+        show_alert: showAlert,
+      }, botConnectionId);
+      answered = true;
+    } catch (error) {
+      logger.warn("exam_selection_callback_ack_failed", {
+        requestId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const chatId = callback.message?.chat?.id;
+  const senderId = callback.from?.id;
+  const action = parseExamSelectionAction(callback.data);
+  const messageId = callback.message?.message_id;
+  if (
+    !action ||
+    !isSafeInteger(chatId) ||
+    callback.message?.chat?.type !== "private" ||
+    !isSafeInteger(senderId) ||
+    senderId !== chatId
+  ) {
+    await answerCallback("This control is only available in your private chat.", true);
+    return;
+  }
+
+  try {
+    if (action === "menu") {
+      await answerCallback("Choose exam.");
+      if (isSafeInteger(messageId)) {
+        await editTelegramMessage(
+          env,
+          chatId,
+          messageId,
+          "Choose your SSC exam:",
+          botConnectionId,
+          true,
+          buildExamSelectionMarkup(),
+        );
+      } else {
+        await sendTelegramMessage(
+          env,
+          chatId,
+          "Choose your SSC exam:",
+          undefined,
+          botConnectionId,
+          true,
+          buildExamSelectionMarkup(),
+        );
+      }
+      return;
+    }
+
+    const selectedExam = SSC_EXAM_OPTIONS.find((exam) => exam.code === action);
+    if (!selectedExam) {
+      await answerCallback("Please choose a valid exam.", true);
+      return;
+    }
+
+    await jobStoreRequest(env, chatId, {
+      action: "set_exam",
+      exam: selectedExam.profileValue,
+      botConnectionId,
+    });
+    await answerCallback(`${selectedExam.label} selected.`);
+
+    const confirmation = `Target exam set: ${selectedExam.label}.`;
+    if (isSafeInteger(messageId)) {
+      await editTelegramMessage(
+        env,
+        chatId,
+        messageId,
+        confirmation,
+        botConnectionId,
+        true,
+        buildExamChangeMarkup(),
+      );
+    } else {
+      await sendTelegramMessage(
+        env,
+        chatId,
+        confirmation,
+        undefined,
+        botConnectionId,
+        true,
+        buildExamChangeMarkup(),
+      );
+    }
+  } catch (error) {
+    logger.warn("exam_selection_callback_failed", {
+      requestId,
+      action,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    if (!answered) await answerCallback("Could not update your target exam. Please try again.", true);
+    await sendTelegramMessage(
+      env,
+      chatId,
+      "Could not update your target exam. Please try again.",
+      undefined,
+      botConnectionId,
+      true,
+      buildExamSelectionMarkup(),
     ).catch(() => undefined);
   }
 }
@@ -618,6 +745,8 @@ async function handleTelegramWebhook(request: Request, env: Env, requestId: stri
       await handleCreatorContactCallback(update.callback_query, env, bot.connectionId, requestId);
     } else if (parseHelpMenuAction(update.callback_query.data)) {
       await handleHelpMenuCallback(update.callback_query, env, bot.connectionId, requestId);
+    } else if (parseExamSelectionAction(update.callback_query.data)) {
+      await handleExamSelectionCallback(update.callback_query, env, bot.connectionId, requestId);
     } else {
       await handleFatmanModeCallback(update.callback_query, env, bot.connectionId, requestId);
     }
