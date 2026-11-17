@@ -259,18 +259,37 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(response.headers.get("content-security-policy")).toContain("script-src 'nonce-");
+    expect(response.headers.get("content-security-policy")).toContain("script-src 'self'");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(html).toContain("BRɅIN Intelligence");
     expect(html).toContain("New chat");
     expect(html).toContain("Your conversations");
     expect(html).toContain('id="modelSelect"');
-    expect(html).toContain("/admin/api/intelligence/models");
     expect(html).toContain('id="modelRetry"');
-    expect(html).toContain("Model check timed out");
-    expect(html).toContain("signal:controller.signal");
     expect(html).toContain('id="thinkingSelect"');
     expect(html).toContain("Responses stream from your selected model.");
+    expect(html).toContain('<script src="/admin/intelligence.js" defer></script>');
+    expect(html).not.toContain("<script nonce=");
+  });
+
+  it("serves the Owner workspace JavaScript as a protected same-origin asset", async () => {
+    const env = appEnv();
+    const adminCookie = await login("admin", "admin-test-password", env);
+    const ownerCookie = await login("owner", "owner-test-password", env);
+
+    expect((await call(env, "/admin/intelligence.js")).status).toBe(401);
+    expect((await call(env, "/admin/intelligence.js", adminCookie)).status).toBe(403);
+
+    const response = await call(env, "/admin/intelligence.js", ownerCookie);
+    const script = await response.text();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/javascript");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(script).toContain("/admin/api/intelligence/models");
+    expect(script).toContain('document.getElementById("newChat").addEventListener');
+    expect(script).toContain("The Owner workspace request timed out");
+    expect(script).toContain("Could not load conversations");
   });
 
   it("creates, lists, reopens, renames and deletes only the Owner's conversations and messages", async () => {
