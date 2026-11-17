@@ -102,6 +102,45 @@ function failureReason(status: number | null): OwnerGeminiModel["availabilityRea
   return "provider_temporarily_unavailable";
 }
 
+interface OwnerGeminiProbeResult {
+  model: OwnerGeminiModel;
+  status?: number;
+  diagnostic?: string;
+}
+
+async function safeVertexErrorDiagnostic(response: Response): Promise<string | undefined> {
+  try {
+    const payload = await response.clone().json() as {
+      error?: {
+        status?: unknown;
+        details?: Array<{ reason?: unknown; metadata?: Record<string, unknown> }>;
+      };
+    };
+    const error = payload.error;
+    if (!error || typeof error !== "object") return undefined;
+
+    const fragments: string[] = [];
+    const providerStatus = typeof error.status === "string" &&
+      /^[A-Z0-9_]{3,48}$/u.test(error.status) ? error.status : undefined;
+    if (providerStatus) fragments.push(providerStatus);
+
+    const details = Array.isArray(error.details) ? error.details : [];
+    const reason = details.map((detail) => detail?.reason)
+      .find((value): value is string =>
+        typeof value === "string" && /^[A-Z0-9_]{3,64}$/u.test(value));
+    const permission = details.map((detail) => detail?.metadata?.permission)
+      .find((value): value is string =>
+        typeof value === "string" &&
+        /^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/u.test(value));
+
+    if (reason && reason !== providerStatus) fragments.push("reason " + reason);
+    if (permission) fragments.push("permission " + permission);
+    return fragments.length ? "Google diagnostic: " + fragments.join("; ") + "." : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function probeModel(
   env: Env,
   model: OwnerGeminiModelDefinition,
@@ -109,7 +148,7 @@ async function probeModel(
   location: string,
   token: string,
   dependencies: OwnerProviderDependencies,
-): Promise<OwnerGeminiModel> {
+): Promise<OwnerGeminiProbeResult> {
   const controller = new AbortController();
   try {
     const response = await withTimeout(dependencies.fetch(
@@ -121,16 +160,36 @@ async function probeModel(
         signal: controller.signal,
       },
     ), PROBE_TIMEOUT_MS, () => controller.abort());
+
     if (response.ok) {
-      return { ...model, availability: "available", selectable: true, availabilityReason: "project_location_probe_passed" };
+      return {
+        model: { ...model, availability: "available", selectable: true, availabilityReason: "project_location_probe_passed" },
+      };
     }
-    return { ...model, availability: response.status === 400 || response.status === 404 ? "unavailable" : "unverified", selectable: false, availabilityReason: failureReason(response.status) };
+
+    return {
+      model: {
+        ...model,
+        availability: response.status === 400 || response.status === 404 ? "unavailable" : "unverified",
+        selectable: false,
+        availabilityReason: failureReason(response.status),
+      },
+      status: response.status,
+      diagnostic: await safeVertexErrorDiagnostic(response),
+    };
   } catch {
-    return { ...model, availability: "unverified", selectable: false, availabilityReason: "provider_temporarily_unavailable" };
+    return {
+      model: { ...model, availability: "unverified", selectable: false, availabilityReason: "provider_temporarily_unavailable" },
+    };
   }
 }
 
-async function mapLimited<T, R>(items: readonly T[], limit: number, mapper: (item: T) => Promise<R>): Promise<R[]> {
+
+async function mapLimited<T, R>(
+  items: readonly T[],
+  limit: number,
+  mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
@@ -172,8 +231,9 @@ export async function listOwnerGeminiModels(
     };
   }
 
-  const models = await mapLimited(OWNER_GEMINI_MODEL_REGISTRY, 3, (model) =>
+  const probes = await mapLimited(OWNER_GEMINI_MODEL_REGISTRY, 3, (model) =>
     probeModel(env, model, project, location, token, dependencies));
+  const models = probes.map((probe) => probe.model);
   const value: OwnerModelCatalogue = { ok: true, configured: true, location, checkedAt, models };
   const expiresAt = checkedAt + CATALOGUE_CACHE_MS;
   catalogueCache.set(cacheKey, { expiresAt, value });
@@ -193,14 +253,18 @@ export async function ownerIntelligenceModelsResponse(
   return json(catalogue, catalogue.ok ? 200 : 503, { "cache-control": "no-store" });
 }
 
+export type OwnerGeminiProviderStage = "count_tokens_probe" | "generate_content";
+
 export class OwnerGeminiProviderError extends Error {
   readonly status?: number;
   readonly retryable: boolean;
-  constructor(message: string, status?: number, retryable = false) {
+  readonly stage?: OwnerGeminiProviderStage;
+  constructor(message: string, status?: number, retryable = false, stage?: OwnerGeminiProviderStage) {
     super(message);
     this.name = "OwnerGeminiProviderError";
     this.status = status;
     this.retryable = retryable;
+    this.stage = stage;
   }
 }
 
@@ -230,15 +294,36 @@ export interface OwnerGeminiGenerationResult {
   rawResponse: Record<string, unknown>;
 }
 
-function providerStatusMessage(status: number): string {
-  if (status === 400) return "Vertex AI rejected the request. The conversation format or size may not be supported.";
-  if (status === 401 || status === 403) {
-    return "Vertex AI denied GenerateContent access for this model or project. A successful Count Tokens check does not guarantee generation permission; check the service account's Vertex AI access and this model's project/location eligibility.";
+function providerStatusMessage(
+  status: number,
+  stage: OwnerGeminiProviderStage,
+  diagnostic?: string,
+): string {
+  let message: string;
+  if (status === 400) {
+    message = stage === "count_tokens_probe"
+      ? "Vertex AI rejected the Count Tokens availability check for this model."
+      : "Vertex AI rejected the GenerateContent request. The conversation format or request configuration may not be supported.";
+  } else if (status === 401 || status === 403) {
+    message = stage === "count_tokens_probe"
+      ? "Vertex AI denied the Count Tokens availability probe for this model/project. No GenerateContent request was sent; this is a model-eligibility check failure."
+      : "Vertex AI denied the GenerateContent request for this model/project. This failure occurred at answer generation, after the model availability check.";
+  } else if (status === 404) {
+    message = stage === "count_tokens_probe"
+      ? "The selected model was not found by the Count Tokens availability check in this location."
+      : "The selected model was not found by the GenerateContent endpoint in this location.";
+  } else if (status === 429) {
+    message = stage === "count_tokens_probe"
+      ? "Vertex AI rate-limited the Count Tokens availability check."
+      : "Vertex AI rate-limited the GenerateContent request.";
+  } else if (status >= 500) {
+    message = "Vertex AI is temporarily unavailable during " +
+      (stage === "count_tokens_probe" ? "the Count Tokens availability check." : "GenerateContent.");
+  } else {
+    message = "The Vertex AI request could not be completed during " +
+      (stage === "count_tokens_probe" ? "the Count Tokens availability check." : "GenerateContent.");
   }
-  if (status === 404) return "The selected model is not available at the configured location.";
-  if (status === 429) return "Vertex AI is temporarily rate limiting requests for this project or model.";
-  if (status >= 500) return "Vertex AI is temporarily unavailable.";
-  return "The Vertex AI request could not be completed.";
+  return diagnostic ? message + " " + diagnostic : message;
 }
 
 /**
@@ -322,7 +407,13 @@ export async function generateOwnerGeminiContent(
       },
     );
     if (!response.ok) {
-      throw new OwnerGeminiProviderError(providerStatusMessage(response.status), response.status, response.status === 408 || response.status === 429 || response.status >= 500);
+      const diagnostic = await safeVertexErrorDiagnostic(response);
+      throw new OwnerGeminiProviderError(
+        providerStatusMessage(response.status, "generate_content", diagnostic),
+        response.status,
+        response.status === 408 || response.status === 429 || response.status >= 500,
+        "generate_content",
+      );
     }
     let parsed: Record<string, unknown>;
     try {
@@ -397,17 +488,20 @@ async function getVerifiedModelAccessToken(
 
   // The catalogue cache has expired. Recheck only the model the Owner selected,
   // not every model in the registry, then reuse this token for the generation call.
-  const verified = await probeModel(env, model, project, location, token, dependencies);
-  if (!verified.selectable) {
+  const probe = await probeModel(env, model, project, location, token, dependencies);
+  if (!probe.model.selectable) {
+    const status = probe.status;
+    const message = status
+      ? providerStatusMessage(status, "count_tokens_probe", probe.diagnostic)
+      : "The Count Tokens availability probe could not complete. No GenerateContent request was sent; check Google authentication, network availability and retry.";
     throw new OwnerGeminiProviderError(
-      verified.availabilityReason === "provider_access_denied"
-        ? "Vertex AI denied GenerateContent access for this model or project. A Count Tokens check does not guarantee generation permission; check the service account and model access."
-        : "The selected Gemini model is not currently verified for this project and location.",
-      undefined,
-      true,
+      message,
+      status,
+      status === 408 || status === 429 || (status !== undefined && status >= 500) || status === undefined,
+      "count_tokens_probe",
     );
   }
-  verifiedModelCache.set(cacheKey, { expiresAt: Date.now() + CATALOGUE_CACHE_MS, model: verified });
+  verifiedModelCache.set(cacheKey, { expiresAt: Date.now() + CATALOGUE_CACHE_MS, model: probe.model });
   return token;
 }
 
@@ -490,7 +584,13 @@ export async function openOwnerGeminiStream(
     if (!response.ok) {
       clearTimeout(timeout);
       signal.removeEventListener("abort", abortFromCaller);
-      throw new OwnerGeminiProviderError(providerStatusMessage(response.status), response.status, response.status === 408 || response.status === 429 || response.status >= 500);
+      const diagnostic = await safeVertexErrorDiagnostic(response);
+      throw new OwnerGeminiProviderError(
+        providerStatusMessage(response.status, "generate_content", diagnostic),
+        response.status,
+        response.status === 408 || response.status === 429 || response.status >= 500,
+        "generate_content",
+      );
     }
     if (!response.body) {
       clearTimeout(timeout);
