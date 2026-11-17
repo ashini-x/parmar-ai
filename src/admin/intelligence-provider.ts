@@ -274,14 +274,13 @@ export async function generateOwnerGeminiContent(
   if (!project || !env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim()) {
     throw new OwnerGeminiProviderError("Vertex AI is not configured for the Owner workspace.");
   }
-  const validTurnShape = Array.isArray(input.contents) && input.contents.length >= 1 && input.contents.length <= 50 &&
-    input.contents.every((item, index) => item && (item.role === "user" || item.role === "model") &&
+  const contents = Array.isArray(input.contents) ? input.contents : [];
+  const validTurnShape = contents.length >= 1 && contents.length <= 50 &&
+    contents[0]?.role === "user" && contents[contents.length - 1]?.role === "user" &&
+    contents.every((item, index) => item && (item.role === "user" || item.role === "model") &&
       typeof item.text === "string" && Boolean(item.text.trim()) && item.text.length <= 50_000 &&
-      (index === 0 ? item.role === "user" : item.role !== input.contents[index - 1].role)) &&
-    input.contents[input.contents.length - 1]?.role === "user";
-  const contextChars = Array.isArray(input.contents)
-    ? input.contents.reduce((total, item) => total + (typeof item?.text === "string" ? item.text.length : 0), 0)
-    : Number.POSITIVE_INFINITY;
+      (index === 0 || item.role !== contents[index - 1]?.role));
+  const contextChars = contents.reduce((total, item) => total + (typeof item?.text === "string" ? item.text.length : 0), 0);
   if (!validTurnShape || contextChars > MAX_CONVERSATION_CONTEXT_CHARS) {
     throw new OwnerGeminiProviderError("The conversation context is invalid or too large. BRɅIN keeps your full history, but only a clean recent section can be sent to this model.");
   }
