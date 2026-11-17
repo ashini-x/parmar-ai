@@ -423,7 +423,7 @@ async function handleHelpMenuCallback(
         getStudentProfile(env, chatId),
         getStudentUsage(env, chatId, senderId),
       ]);
-      await sendTelegramMessage(env, chatId, buildProfileText(profile, usage), undefined, botConnectionId, true, undefined, "Contact BRɅIN");
+      await sendTelegramMessage(env, chatId, buildProfileText(profile, usage), undefined, botConnectionId);
       return;
     }
 
