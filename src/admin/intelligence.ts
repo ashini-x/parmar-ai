@@ -678,13 +678,13 @@ function workspaceHtml(nonce: string): string {
 .section-label{font-size:10px;color:#858585;text-transform:uppercase;letter-spacing:.13em;padding:23px 9px 9px}
 .history{flex:1;overflow:auto;min-height:0}.history-empty{font-size:12px;line-height:1.55;color:#777;padding:10px 9px}.history-item{display:flex;align-items:center;gap:4px;margin:2px 0;border-radius:9px;padding:3px}.history-item.active{background:#303030}.history-item:hover{background:#292929}.history-open{min-width:0;flex:1;border:0;background:none;text-align:left;padding:8px 7px;font-size:12px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:6px}.history-action{border:0;background:transparent;color:#8b8b8b;border-radius:6px;padding:5px 6px;font-size:12px}.history-action:hover{background:#414141;color:#fff}
 .side-footer{border-top:1px solid #303030;padding:12px 5px 2px}.owner-note{display:flex;align-items:center;gap:8px;padding:7px 7px 10px;font-size:11px;color:#a1a1a1}.owner-dot{width:7px;height:7px;border-radius:50%;background:#4dba87}.logout{width:100%;border:0;background:transparent;color:#aaa;text-align:left;padding:9px 8px;border-radius:8px;font-size:12px}.logout:hover{background:#292929;color:#fff}
-.main{display:flex;flex:1;min-width:0;flex-direction:column;position:relative}.topbar{height:60px;flex:0 0 60px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:12px}.top-left{display:flex;align-items:center;gap:11px;min-width:0}.mobile-menu{display:none;border:0;background:transparent;font-size:19px;padding:7px}.page-title{font-size:14px;font-weight:600;white-space:nowrap}.private-tag{font-size:10px;color:#9b9b9b;border:1px solid #404040;border-radius:20px;padding:5px 8px}.top-right{display:flex;align-items:center;gap:9px}.model-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.model-label{font-size:9px;color:#888;letter-spacing:.1em}.model-picker select{max-width:178px;min-width:112px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.model-picker select:disabled{opacity:.65;cursor:default}.avatar{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#3d3d3d;color:#f0f0f0;font-size:11px;font-weight:700}
+.main{display:flex;flex:1;min-width:0;flex-direction:column;position:relative}.topbar{height:60px;flex:0 0 60px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:12px}.top-left{display:flex;align-items:center;gap:11px;min-width:0}.mobile-menu{display:none;border:0;background:transparent;font-size:19px;padding:7px}.page-title{font-size:14px;font-weight:600;white-space:nowrap}.private-tag{font-size:10px;color:#9b9b9b;border:1px solid #404040;border-radius:20px;padding:5px 8px}.top-right{display:flex;align-items:center;gap:9px}.model-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.model-label{font-size:9px;color:#888;letter-spacing:.1em}.model-picker select{max-width:178px;min-width:112px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.model-picker select:disabled,.thinking-picker select:disabled{opacity:.65;cursor:default}.thinking-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.thinking-picker select{max-width:110px;min-width:80px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.avatar{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#3d3d3d;color:#f0f0f0;font-size:11px;font-weight:700}
 .content{flex:1;overflow:auto;display:flex;justify-content:center;padding:36px 22px 18px}.stage{width:min(820px,100%);min-height:100%;display:flex;flex-direction:column}.conversation-heading{font-size:12px;color:#999;margin:0 0 22px;min-height:18px}.messages{flex:1;display:flex;flex-direction:column;gap:22px;padding-bottom:30px}.welcome{margin:auto auto 50px;width:min(600px,100%);text-align:center}.welcome-mark{width:56px;height:56px;border:1px solid #565656;border-radius:18px;display:grid;place-items:center;margin:0 auto 22px;font-size:22px;font-weight:700;letter-spacing:-2px;background:#282828}.welcome h1{font-size:27px;letter-spacing:-.04em;font-weight:600;margin:0 0 12px}.welcome p{font-size:13px;color:#a0a0a0;line-height:1.7;margin:0 auto;max-width:480px}.next-step{display:inline-flex;margin-top:22px;border:1px solid #464646;border-radius:20px;padding:7px 11px;font-size:10px;color:#aaa;letter-spacing:.02em}
-.message{display:flex;gap:14px;align-items:flex-start;max-width:100%;padding:0 5px}.message-avatar{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#383838;font-size:10px;font-weight:700}.message-body{min-width:0;flex:1;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:#e4e4e4}.message-role{font-size:10px;color:#929292;margin:0 0 5px;text-transform:uppercase;letter-spacing:.08em}
-.composer-wrap{padding:12px 0 5px}.composer{border:1px solid #484848;background:#2b2b2b;border-radius:17px;padding:12px 13px 9px;box-shadow:0 8px 30px rgba(0,0,0,.12)}.composer textarea{display:block;width:100%;resize:none;min-height:42px;max-height:130px;outline:none;border:0;background:transparent;color:#aaa;font-size:13px;line-height:1.5}.composer textarea::placeholder{color:#858585}.composer-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px}.composer-hint{font-size:10px;color:#848484}.send-action{border:0;background:#ececec;color:#171717;border-radius:10px;width:30px;height:30px;font-size:17px;font-weight:700;cursor:pointer}.send-action:disabled{background:#444;color:#8b8b8b;cursor:not-allowed}.send-action:not(:disabled):hover{background:#fff}.disclaimer{text-align:center;color:#777;font-size:10px;padding:10px 5px 0;line-height:1.5}
+.message{display:flex;gap:14px;align-items:flex-start;max-width:100%;padding:0 5px}.message-avatar{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#383838;font-size:10px;font-weight:700}.message-body{min-width:0;flex:1;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:#e4e4e4}.message-role{font-size:10px;color:#929292;margin:0 0 5px;text-transform:uppercase;letter-spacing:.08em}.message-actions{display:flex;gap:7px;margin-top:8px}.message-action{border:1px solid #444;background:transparent;color:#aaa;border-radius:7px;padding:4px 8px;font-size:10px}.message-action:hover{background:#333;color:#fff}.message-status{font-size:10px;color:#a0a0a0;margin-top:6px}
+.composer-wrap{padding:12px 0 5px}.composer{border:1px solid #484848;background:#2b2b2b;border-radius:17px;padding:12px 13px 9px;box-shadow:0 8px 30px rgba(0,0,0,.12)}.composer textarea{display:block;width:100%;resize:none;min-height:42px;max-height:130px;outline:none;border:0;background:transparent;color:#aaa;font-size:13px;line-height:1.5}.composer textarea::placeholder{color:#858585}.composer-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px}.composer-hint{font-size:10px;color:#848484}.send-action{border:0;background:#ececec;color:#171717;border-radius:10px;width:30px;height:30px;font-size:17px;font-weight:700;cursor:pointer}.send-action:disabled{background:#444;color:#8b8b8b;cursor:not-allowed}.send-action.stop{background:#d7d7d7;color:#171717}.send-action:not(:disabled):hover{background:#fff}.disclaimer{text-align:center;color:#777;font-size:10px;padding:10px 5px 0;line-height:1.5}
 .loading{color:#999;font-size:12px;padding:12px 8px}.error{color:#f2a4a4;font-size:12px;padding:12px 8px}
-@media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.topbar{padding:0 13px}.content{padding:28px 16px 12px}.welcome h1{font-size:24px}.model-picker{padding:6px 7px;gap:4px}.model-label{display:none}.model-picker select{max-width:132px;min-width:90px}.private-tag{display:none}.composer-wrap{padding-top:18px}}
-@media(max-width:390px){.model-picker{max-width:146px}.model-picker select{max-width:112px;min-width:0}.page-title{font-size:13px}.avatar{display:none}}
+@media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.topbar{padding:0 13px}.content{padding:28px 16px 12px}.welcome h1{font-size:24px}.model-picker,.thinking-picker{padding:6px 7px;gap:4px}.model-label{display:none}.model-picker select{max-width:122px;min-width:80px}.thinking-picker select{max-width:90px;min-width:64px}.private-tag{display:none}.composer-wrap{padding-top:18px}}
+@media(max-width:390px){.model-picker{max-width:122px}.model-picker select{max-width:94px;min-width:0}.thinking-picker{max-width:94px}.thinking-picker select{max-width:70px;min-width:0}.page-title{font-size:13px}.avatar{display:none}}
 </style>
 </head>
 <body>
@@ -699,7 +699,7 @@ function workspaceHtml(nonce: string): string {
 <main class="main">
   <header class="topbar">
     <div class="top-left"><button class="mobile-menu" id="mobileMenu" type="button" aria-label="Open conversations">☰</button><div class="page-title">BRɅIN Intelligence</div><span class="private-tag">OWNER ONLY</span></div>
-    <div class="top-right"><label class="model-picker"><span class="model-label">MODEL</span><select id="modelSelect" aria-label="Select Gemini model" disabled><option value="">Checking models…</option></select></label><div class="avatar" aria-label="Owner">O</div></div>
+    <div class="top-right"><label class="model-picker"><span class="model-label">MODEL</span><select id="modelSelect" aria-label="Select Gemini model" disabled><option value="">Checking models…</option></select></label><label class="thinking-picker"><span class="model-label">THINKING</span><select id="thinkingSelect" aria-label="Select thinking level" disabled><option value="">—</option></select></label><div class="avatar" aria-label="Owner">O</div></div>
   </header>
   <section class="content" aria-label="Conversation workspace">
     <div class="stage">
@@ -708,8 +708,8 @@ function workspaceHtml(nonce: string): string {
         <div class="welcome"><div class="welcome-mark">BɅ</div><h1>Your thinking space.</h1><p>A private workspace for research, reasoning, writing, mathematics, coding and ideas. Your conversations are stored separately from the student learning system.</p><span class="next-step">PRIVATE OWNER WORKSPACE</span></div>
       </div>
       <div class="composer-wrap">
-        <div class="composer"><textarea id="messageInput" disabled rows="1" maxlength="50000" placeholder="Write a message…"></textarea><div class="composer-bottom"><span class="composer-hint" id="composerHint">Messages are saved privately. Gemini replies arrive in the next model milestones.</span><button class="send-action" id="sendMessage" type="button" disabled aria-label="Save message">↑</button></div></div>
-        <div class="disclaimer">Models appear only after the configured Vertex AI project and location pass a live capability check. AI responses arrive in the next milestone.</div>
+        <div class="composer"><textarea id="messageInput" disabled rows="1" maxlength="50000" placeholder="Write a message…"></textarea><div class="composer-bottom"><span class="composer-hint" id="composerHint">Choose a verified Gemini model and thinking level to begin.</span><button class="send-action" id="sendMessage" type="button" disabled aria-label="Send message">↑</button></div></div>
+        <div class="disclaimer">Responses stream from your selected model. Thinking tokens, quotas and billing remain subject to Google Cloud limits.</div>
       </div>
     </div>
   </section>
@@ -719,7 +719,7 @@ function workspaceHtml(nonce: string): string {
 (function(){
   "use strict";
   var api="/admin/api/intelligence/conversations";
-  var state={conversations:[],activeId:null,messages:[],selectedModelId:null};
+  var state={conversations:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[]};
   var history=document.getElementById("history");
   var messages=document.getElementById("messages");
   var heading=document.getElementById("conversationHeading");
@@ -728,7 +728,10 @@ function workspaceHtml(nonce: string): string {
   var sendButton=document.getElementById("sendMessage");
   var composerHint=document.getElementById("composerHint");
   var modelSelect=document.getElementById("modelSelect");
+  var thinkingSelect=document.getElementById("thinkingSelect");
   var sending=false;
+  var activeAbortController=null;
+  var editingMessageId=null;
   function node(tag,className,text){var el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;}
   function errorText(error){return error&&error.message?error.message:"Something went wrong. Please retry.";}
   async function request(path,options){
@@ -737,6 +740,23 @@ function workspaceHtml(nonce: string): string {
     try{body=await response.json();}catch(_error){}
     if(!response.ok||body.ok===false){throw new Error(body.message||body.error||("Request failed ("+response.status+")"));}
     return body;
+  }
+  function populateThinkingLevels(modelId){
+    var model=state.models.find(function(item){return item.id===modelId;});
+    thinkingSelect.replaceChildren();
+    if(!model||!Array.isArray(model.thinkingLevels)||!model.thinkingLevels.length){
+      thinkingSelect.appendChild(node("option","","Unavailable"));
+      thinkingSelect.disabled=true;state.selectedThinkingLevel=null;return;
+    }
+    model.thinkingLevels.forEach(function(level){
+      var labels={MINIMAL:"Minimal",LOW:"Low",MEDIUM:"Medium",HIGH:"High",XHIGH:"Extra high"};
+      var option=node("option","",labels[level]||level);
+      option.value=level;thinkingSelect.appendChild(option);
+    });
+    state.selectedThinkingLevel=model.defaultThinkingLevel||model.thinkingLevels[0];
+    thinkingSelect.value=state.selectedThinkingLevel;
+    thinkingSelect.disabled=false;
+    thinkingSelect.title="Thinking level supported by "+model.label+" · default "+state.selectedThinkingLevel;
   }
   async function loadModels(){
     try{
@@ -770,14 +790,22 @@ function workspaceHtml(nonce: string): string {
         option.value=model.id;
         modelSelect.appendChild(option);
       });
+      state.models=available;
       var preferred=available.find(function(model){return model.id==="gemini-4-hydrogen";})||
         available.find(function(model){return model.id==="gemini-3.8-flash";})||available[0];
       modelSelect.value=preferred.id;
       state.selectedModelId=preferred.id;
+      populateThinkingLevels(preferred.id);
       modelSelect.disabled=false;
-      modelSelect.title="Project/location verified · "+available.length+" available model(s) · "+String(result.location||"configured location")+". Selection is ready for the next model milestone.";
+      modelSelect.title="Project/location verified · "+available.length+" available model(s) · "+String(result.location||"configured location");
       modelSelect.addEventListener("change",function(){
         state.selectedModelId=modelSelect.value||null;
+        populateThinkingLevels(state.selectedModelId);
+        updateComposer();
+      });
+      thinkingSelect.addEventListener("change",function(){
+        state.selectedThinkingLevel=thinkingSelect.value||null;
+        updateComposer();
       });
     }catch(_error){
       modelSelect.replaceChildren();
@@ -806,8 +834,27 @@ function workspaceHtml(nonce: string): string {
       var wrap=node("article","message");
       wrap.appendChild(node("div","message-avatar",item.role==="assistant"?"BɅ":item.role==="system"?"·":"O"));
       var body=node("div","message-body");
-      body.appendChild(node("div","message-role",item.role));
-      body.appendChild(node("div","",item.content));
+      var roleLabel=item.role;
+      if(item.role==="assistant"&&item.model_id){
+        var model=state.models.find(function(entry){return entry.id===item.model_id;});
+        roleLabel=(model?model.label:item.model_id)+" · "+String(item.thinking_level||"");
+      }
+      body.appendChild(node("div","message-role",roleLabel));
+      body.appendChild(node("div","",item.content|| (item.status==="pending"?"Generating…":"")));
+      if(item.status==="pending")body.appendChild(node("div","message-status","Generating response…"));
+      else if(item.status==="partial")body.appendChild(node("div","message-status","Stopped · partial response saved"));
+      else if(item.status==="error")body.appendChild(node("div","message-status","Generation failed"));
+      if(item.role==="user"&&!sending){
+        var edit=node("button","message-action","Edit");
+        edit.type="button";edit.addEventListener("click",function(){
+          editingMessageId=item.id;messageInput.value=item.content;messageInput.focus();updateComposer();
+        });
+        var actions=node("div","message-actions");actions.appendChild(edit);body.appendChild(actions);
+      }else if(item.role==="assistant"&&item.status!=="pending"&&!sending){
+        var retry=node("button","message-action","Regenerate");
+        retry.type="button";retry.addEventListener("click",function(){generateMessage({action:"regenerate"});});
+        var actions2=node("div","message-actions");actions2.appendChild(retry);body.appendChild(actions2);
+      }
       wrap.appendChild(body);messages.appendChild(wrap);
     });
   }
@@ -846,27 +893,117 @@ function workspaceHtml(nonce: string): string {
   }
   function updateComposer(){
     var hasText=messageInput.value.trim().length>0;
-    sendButton.disabled=sending||!state.activeId||!hasText;
+    var canGenerate=Boolean(state.activeId&&state.selectedModelId&&state.selectedThinkingLevel);
+    sendButton.disabled=sending?false:(!canGenerate||!hasText);
+    sendButton.textContent=sending?"■":"↑";
+    sendButton.classList.toggle("stop",sending);
+    sendButton.setAttribute("aria-label",sending?"Stop generation":"Send message");
     messageInput.disabled=!state.activeId||sending;
-    composerHint.textContent=sending?"Saving your message…":"Messages are saved privately. AI replies arrive in the next milestone.";
+    modelSelect.disabled=sending||!state.models.length;
+    thinkingSelect.disabled=sending||!state.selectedThinkingLevel;
+    composerHint.textContent=sending
+      ?"Generating with "+state.selectedModelId+" · "+state.selectedThinkingLevel+" · select Stop to keep the partial answer"
+      :editingMessageId?"Editing a previous message · sending will replace it and remove later turns"
+      :"Your selected model and thinking level will be used for this response.";
   }
-  async function saveMessage(){
+
+  function stopGeneration(){
+    if(activeAbortController)activeAbortController.abort();
+  }
+
+  function updateStreamingMessage(messageId,update){
+    var item=state.messages.find(function(entry){return entry.id===messageId;});
+    if(!item){item=update;state.messages.push(item);}
+    else Object.keys(update).forEach(function(key){item[key]=update[key];});
+    renderMessages(state.messages);
+  }
+
+  function handleStreamBlock(block,messageId){
+    var eventName="message";
+    var dataLines=[];
+    block.split(/\\r?\\n/u).forEach(function(line){
+      if(line.indexOf("event:")===0)eventName=line.slice(6).trim();
+      else if(line.indexOf("data:")===0)dataLines.push(line.slice(5).trim());
+    });
+    if(!dataLines.length)return;
+    var data;
+    try{data=JSON.parse(dataLines.join("\\n"));}catch(_error){throw new Error("The response stream returned invalid data.");}
+    if(eventName==="meta"){
+      if(data.message)updateStreamingMessage(data.message.id,data.message);
+    }else if(eventName==="delta"){
+      var item=state.messages.find(function(entry){return entry.id===messageId;})||
+        state.messages.slice().reverse().find(function(entry){return entry.role==="assistant"&&entry.status==="pending";});
+      if(item){item.content=(item.content||"")+String(data.text||"");renderMessages(state.messages);}
+    }else if(eventName==="done"){
+      if(data.message)updateStreamingMessage(data.message.id,data.message);
+    }else if(eventName==="error"){
+      var target=state.messages.find(function(entry){return entry.id===messageId;});
+      if(target){target.status=data.partial?"partial":"error";renderMessages(state.messages);}
+      throw new Error(data.message||"Generation failed.");
+    }
+  }
+
+  async function generateMessage(options){
+    options=options||{};
+    if(sending||!state.activeId||!state.selectedModelId||!state.selectedThinkingLevel)return;
     var content=messageInput.value.trim();
-    if(!content||!state.activeId||sending)return;
-    sending=true;updateComposer();
+    if(!options.action&&!content)return;
+    var conversationId=state.activeId;
+    var requestBody={modelId:state.selectedModelId,thinkingLevel:state.selectedThinkingLevel};
+    if(options.action)requestBody.action=options.action;
+    else{
+      requestBody.content=content;
+      if(editingMessageId)requestBody.editMessageId=editingMessageId;
+    }
+    sending=true;activeAbortController=new AbortController();updateComposer();
+    var assistantId=null;
     try{
-      var result=await request(api+"/"+encodeURIComponent(state.activeId)+"/messages",{
+      var response=await fetch(api+"/"+encodeURIComponent(conversationId)+"/generate",{
         method:"POST",
+        credentials:"same-origin",
+        cache:"no-store",
         headers:{"content-type":"application/json"},
-        body:JSON.stringify({content:content})
+        body:JSON.stringify(requestBody),
+        signal:activeAbortController.signal
       });
-      state.messages.push(result.message);
+      if(!response.ok){
+        var failure={};try{failure=await response.json();}catch(_error){}
+        throw new Error(failure.message||failure.error||("Generation request failed ("+response.status+")"));
+      }
+      await openConversation(conversationId);
+      var pending=state.messages.slice().reverse().find(function(item){return item.role==="assistant"&&item.status==="pending";});
+      assistantId=pending?pending.id:null;
+      if(!response.body)throw new Error("The streaming response body is unavailable.");
+      var reader=response.body.getReader();
+      var decoder=new TextDecoder();
+      var buffer="";
+      function consume(block){handleStreamBlock(block,assistantId);}
+      while(true){
+        var next=await reader.read();
+        buffer+=decoder.decode(next.value,{stream:!next.done}).replace(/\\r\\n/gu,"\\n");
+        var boundary=buffer.indexOf("\\n\\n");
+        while(boundary>=0){
+          var block=buffer.slice(0,boundary);buffer=buffer.slice(boundary+2);consume(block);
+          boundary=buffer.indexOf("\\n\\n");
+        }
+        if(next.done)break;
+      }
+      if(buffer.trim())consume(buffer);
+      await reader.cancel().catch(function(){});
+    }catch(error){
+      if(!(error&&error.name==="AbortError")){
+        if(error&&error.message)showError(error);
+      }
+    }finally{
+      sending=false;activeAbortController=null;editingMessageId=null;
       messageInput.value="";
-      renderMessages(state.messages);
-      await refreshList(state.activeId);
-    }catch(error){showError(error);}
-    finally{sending=false;updateComposer();}
+      try{await refreshList(conversationId);}catch(_error){}
+      updateComposer();
+    }
   }
+
+  function saveMessage(){return generateMessage({});}
+
   async function newConversation(){
     try{
       var result=await request(api,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:"New chat"})});
@@ -896,10 +1033,10 @@ function workspaceHtml(nonce: string): string {
   }
   document.getElementById("newChat").addEventListener("click",newConversation);
   document.getElementById("mobileMenu").addEventListener("click",function(){sidebar.classList.toggle("open");});
-  sendButton.addEventListener("click",saveMessage);
+  sendButton.addEventListener("click",function(){if(sending)stopGeneration();else saveMessage();});
   messageInput.addEventListener("input",updateComposer);
   messageInput.addEventListener("keydown",function(event){
-    if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();saveMessage();}
+    if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();if(sending)return;saveMessage();}
   });
   loadModels();
   refreshList().catch(showError);
