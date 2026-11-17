@@ -286,8 +286,9 @@ jobs:
           privacy_file="$(mktemp)"
           terms_file="$(mktemp)"
           founder_file="$(mktemp)"
+          why_file="$(mktemp)"
           not_found_file="$(mktemp)"
-          trap 'rm -f "$home_file" "$privacy_file" "$terms_file" "$founder_file" "$not_found_file"' EXIT
+          trap 'rm -f "$home_file" "$privacy_file" "$terms_file" "$founder_file" "$why_file" "$not_found_file"' EXIT
 
           fetch_page() {
             local path="$1"
@@ -309,15 +310,19 @@ jobs:
             fi
           }
 
-          fetch_page "/" "$home_file" "Answers should lead back to the source."
+          fetch_page "/" "$home_file" "Answers with evidence."
+          fetch_page "/why" "$why_file" "Why BRɅIN"
           fetch_page "/privacy" "$privacy_file" "Privacy Policy"
           fetch_page "/terms" "$terms_file" "Terms of Service"
           fetch_page "/founder" "$founder_file" "Ashini Gogoi"
           grep -Fq 'WORKED EXAMPLE / NOT A LIVE CUSTOMER RECORD' "$home_file" || { echo "::error::Homepage sample is not clearly labelled."; exit 1; }
           grep -Fq 'BROWSER SPEECH SYNTHESIS' "$home_file" || { echo "::error::Browser voice preview disclosure is missing."; exit 1; }
-          grep -Fq 'THE PROBLEM WE RAN INTO' "$home_file" || { echo "::error::Homepage problem statement is missing."; exit 1; }
-          grep -Fq 'HOW THE PIECES FIT TOGETHER' "$home_file" || { echo "::error::Homepage knowledge-flow diagram is missing."; exit 1; }
-          grep -Fq 'Bounded evidence' "$home_file" || { echo "::error::Homepage evidence output is missing."; exit 1; }
+          grep -Fq 'The answer is only half the job.' "$why_file" || { echo "::error::Why page problem statement is missing."; exit 1; }
+          grep -Fq 'The market already solves parts of this.' "$why_file" || { echo "::error::Why page market context is missing."; exit 1; }
+          grep -Fq 'Start with teacher-owned knowledge.' "$why_file" || { echo "::error::Why page education wedge is missing."; exit 1; }
+          grep -Fq 'One knowledge layer. Multiple experiences.' "$why_file" || { echo "::error::Why page product model is missing."; exit 1; }
+          grep -Fq 'This is the growth hypothesis, not a claim of achieved scale.' "$why_file" || { echo "::error::Why page growth caveat is missing."; exit 1; }
+          grep -Fq 'Vertex AI embeddings with Qdrant Cloud' "$why_file" || { echo "::error::Why page production/evaluation disclosure is missing."; exit 1; }
 
           # Legal dates come from each policy file's latest Git change, rendered in India time.
           for legal_file in "$privacy_file" "$terms_file"; do
@@ -332,17 +337,22 @@ jobs:
           fi
 
           # Verify every homepage navigation target exists and its anchor scrolls smoothly.
-          for expected in 'href="#why"' 'href="#platform"' 'href="#demo"' 'href="#plans"' 'href="/founder">Founder</a>' 'href="/privacy"' 'href="mailto:partners@brvin.in"'; do
+          for expected in 'href="/why">Why BRɅIN</a>' 'href="#platform"' 'href="#demo"' 'href="#plans"' 'href="/founder">Founder</a>' 'href="/privacy"' 'href="mailto:partners@brvin.in"'; do
             grep -Fq "$expected" "$home_file" || { echo "::error::Homepage navigation target missing: $expected"; exit 1; }
           done
-          for expected in 'id="why"' 'id="platform"' 'id="demo"' 'id="plans"'; do
+          for expected in 'id="platform"' 'id="demo"' 'id="plans"'; do
             grep -Fq "$expected" "$home_file" || { echo "::error::Homepage section target missing: $expected"; exit 1; }
           done
           grep -Fq 'scroll-behavior:smooth' "$home_file" || { echo "::error::Smooth scrolling is not enabled."; exit 1; }
-          for page_file in "$home_file" "$privacy_file" "$terms_file" "$founder_file"; do
+          for page_file in "$home_file" "$why_file" "$privacy_file" "$terms_file" "$founder_file"; do
             nav_count="$(grep -oF 'href="/founder">Founder</a>' "$page_file" | wc -l | tr -d '[:space:]')"
             if [[ "$nav_count" != "1" ]]; then
               echo "::error::Expected exactly one Founder navigation link; found $nav_count."
+              exit 1
+            fi
+            why_nav_count="$(grep -oF 'href="/why">Why BRɅIN</a>' "$page_file" | wc -l | tr -d '[:space:]')"
+            if [[ "$why_nav_count" != "1" ]]; then
+              echo "::error::Expected exactly one Why BRɅIN navigation link; found $why_nav_count."
               exit 1
             fi
           done
@@ -377,6 +387,7 @@ jobs:
             done
           }
           check_footer "$home_file"
+          check_footer "$why_file"
           check_footer "$privacy_file"
           check_footer "$terms_file"
           check_footer "$founder_file"
