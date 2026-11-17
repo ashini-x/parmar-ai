@@ -243,7 +243,7 @@ This section is the current source of truth for this feature's progress. Update 
 
 | Date | Task | Files updated | Evidence / result |
 |---|---|---|---|
-| 2026-11-17 | M0 documentation baseline created. | `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md`, `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md`, `docs/README.md` | Documentation committed to the default branch. No application code or deployment change. |
+| 2026-11-17 | M0 documentation baseline created and verified. | `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md`, `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md`, `docs/README.md` | Commits: `aa29d00787d06d5a60da31b450c4b6f1a9dbe02f` (roadmap), `b1e1a24c8c1f613cfed44fa8e63fc62b7e1c6fbf` (prompt), `482569563aae6539652fa99ad563bbb9c60cea11` (index). All three documents fetched back from `main` and their cross-links verified. Tests: not run (documentation-only). Deployment: none. |
 
 ### Required update after every feature task
 

@@ -21,7 +21,7 @@ Do not describe this as unlimited provider capacity. Do not apply student daily/
 
 ## Current checkpoint at the last documentation update
 
-- M0 — product/architecture/security/milestone baseline: **complete (documentation only)**.
+- M0 — product/architecture/security/milestone baseline: **complete (documentation only)**. The roadmap, this prompt and `docs/README.md` were committed and fetched back from `main`; initial commits are `aa29d00787d06d5a60da31b450c4b6f1a9dbe02f`, `b1e1a24c8c1f613cfed44fa8e63fc62b7e1c6fbf` and `482569563aae6539652fa99ad563bbb9c60cea11` respectively.
 - Next milestone: **M1 — Owner identity and authorization**.
 - No Owner Intelligence application code, routes, database schema, model registry or UI had been implemented at that checkpoint.
 - No deployment was made for this feature at that checkpoint.
