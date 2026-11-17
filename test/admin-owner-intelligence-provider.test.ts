@@ -138,15 +138,27 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(JSON.stringify(body)).not.toContain("SSC");
   });
 
-  it("explains that Count Tokens eligibility does not guarantee GenerateContent permission", async () => {
+  it("identifies a GenerateContent 403 and exposes only safe Google permission diagnostics", async () => {
     const calls: string[] = [];
-    const env = { ...configuredEnv, GCP_PROJECT_ID: "permission-detail-test-project" } as Env;
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "generate-permission-test-project" } as Env;
     const fetcher: typeof fetch = async (url) => {
       const value = String(url);
       calls.push(value);
       if (value.endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
       return new Response(JSON.stringify({
-        error: { code: 403, status: "PERMISSION_DENIED", message: "Permission 'aiplatform.endpoints.predict' denied on resource project." },
+        error: {
+          code: 403,
+          status: "PERMISSION_DENIED",
+          message: "Permission denied on resource projects/secret-project-id.",
+          details: [{
+            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+            reason: "IAM_PERMISSION_DENIED",
+            metadata: {
+              permission: "aiplatform.endpoints.predict",
+              resource: "projects/secret-project-id",
+            },
+          }],
+        },
       }), { status: 403, headers: { "content-type": "application/json" } });
     };
     let failure: unknown;
@@ -164,8 +176,52 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(calls.some((url) => url.includes(":streamGenerateContent"))).toBe(true);
     expect(failure).toMatchObject({
       status: 403,
-      message: expect.stringContaining("GenerateContent access"),
+      stage: "generate_content",
+      message: expect.stringContaining("GenerateContent request"),
     });
+    expect(failure).toMatchObject({
+      message: expect.stringContaining("permission aiplatform.endpoints.predict"),
+    });
+    expect((failure as Error).message).not.toContain("secret-project-id");
+  });
+
+  it("identifies a Count Tokens 403 and does not attempt GenerateContent", async () => {
+    const calls: string[] = [];
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "count-token-permission-test-project" } as Env;
+    const fetcher: typeof fetch = async (url) => {
+      const value = String(url);
+      calls.push(value);
+      return new Response(JSON.stringify({
+        error: {
+          code: 403,
+          status: "PERMISSION_DENIED",
+          details: [{
+            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+            reason: "IAM_PERMISSION_DENIED",
+            metadata: { permission: "aiplatform.endpoints.predict" },
+          }],
+        },
+      }), { status: 403, headers: { "content-type": "application/json" } });
+    };
+    let failure: unknown;
+    try {
+      await openOwnerGeminiStream(
+        env,
+        { modelId: "gemini-4-carbon", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Try Carbon." }] },
+        new AbortController().signal,
+        dependencies(fetcher),
+      );
+    } catch (error) {
+      failure = error;
+    }
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain(":countTokens");
+    expect(failure).toMatchObject({
+      status: 403,
+      stage: "count_tokens_probe",
+      message: expect.stringContaining("Count Tokens availability probe"),
+    });
+    expect((failure as Error).message).not.toContain("GenerateContent request");
   });
 
   it("rejects unpaired, repeated-role or oversized conversation turns before provider access", async () => {
