@@ -193,5 +193,32 @@ The Owner-only general-purpose workspace uses two dedicated D1 tables. These rec
 | `total_tokens` | Total token count returned by Vertex, or zero when absent. |
 | `elapsed_ms` | Server-measured elapsed generation time in milliseconds. |
 
+
+### `owner_intelligence_session_usage`
+
+| Column | Purpose |
+|---|---|
+| `conversation_id` | Primary key and foreign key to one Owner conversation; one independent budget per chat. |
+| `owner_id` | Configured Owner principal; all reads and writes are Owner-scoped. |
+| `token_limit` | Session budget in tokens; currently 200,000. |
+| `used_tokens` | Cumulative committed usage for every generation in this conversation. Editing or regenerating a turn does not refund tokens already consumed by Vertex. |
+| `reserved_tokens` | Prompt plus permitted output capacity held while one generation is in flight. A conversation cannot reserve a second generation concurrently. |
+| `locked_reason` | Server-side reason that makes the chat read-only when the remaining budget cannot support another request. |
+| `updated_at` | Last usage/accounting update in Unix milliseconds. |
+
+### `owner_intelligence_token_reservations`
+
+| Column | Purpose |
+|---|---|
+| `reservation_id` | Unique generation-reservation UUID. |
+| `conversation_id`, `owner_id` | Owner-scoped parent chat. |
+| `reserved_tokens` | Exact CountTokens prompt count plus the output allowance reserved for this request. |
+| `status` | `reserved`, `settled`, `released` or `expired`. |
+| `actual_tokens` | Final Vertex total usage, or the conservative reservation amount when final usage is unavailable. |
+| `usage_is_estimated` | Marks conservative reservation-based accounting when a final usage total was not received. |
+| `created_at`, `settled_at` | Reservation start and settlement time in Unix milliseconds. |
+
+The 200,000-token counter is cumulative for the lifetime of a conversation, not a model context-window setting. On first access to a legacy chat, the usage row is initialized from the sum of its recorded assistant `total_tokens` metadata. Historical generations whose usage was never recorded cannot be reconstructed. New chats receive a fresh budget. Deleting a conversation cascades its budget and reservations along with its messages. A missing final usage event is charged at the reserved amount rather than silently treated as zero.
+
 Conversation list queries are limited to the latest 100 rows for the Owner principal. Deleting a conversation removes its messages and the conversation row; the generation metadata foreign key cascades with its assistant message. Changing `OWNER_DASHBOARD_USER` changes the owner scope and requires a deliberate migration if conversations must be retained. Password rotation does not change the scope.
 
