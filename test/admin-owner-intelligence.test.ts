@@ -610,19 +610,95 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
         thinkingLevel: "MEDIUM",
       },
     });
-    expect(edited.status).toBe(503); // Expected: this unit fixture deliberately has no Vertex credentials.
-    expect(db.messages.has("obsolete-assistant")).toBe(false);
-    expect(db.messages.get(savedBody.message.id)?.content).toBe("Corrected question");
-    expect([...db.messages.values()].some((row) => row.role === "assistant" && row.status === "error")).toBe(true);
-    expect([...db.generationMetadata.values()].some((row) => row.model_id === "gemini-4-argon" && row.thinking_level === "MEDIUM")).toBe(true);
+    expect(edited.status).toBe(503); // CountTokens preflight fails before any prompt edit is committed.
+    expect(db.messages.has("obsolete-assistant")).toBe(true);
+    expect(db.messages.get(savedBody.message.id)?.content).toBe("Original question");
+    expect([...db.messages.values()].filter((row) => row.role === "assistant")).toHaveLength(1);
+    expect(db.generationMetadata.size).toBe(0);
 
     const regenerated = await call(env, editPath, ownerCookie, {
       method: "POST", origin,
       body: { action: "regenerate", modelId: "gemini-4-argon", thinkingLevel: "MEDIUM" },
     });
     expect(regenerated.status).toBe(503);
+    expect(db.messages.has("obsolete-assistant")).toBe(true);
+    expect(db.messages.get(savedBody.message.id)?.content).toBe("Original question");
     expect([...db.messages.values()].filter((row) => row.role === "assistant")).toHaveLength(1);
     expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
+  });
+
+  it("keeps a 200,000-token budget per conversation and blocks a full session server-side", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Capped session" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const db = env.DB as unknown as FakeOwnerD1;
+    db.sessionUsage.set(id, {
+      conversation_id: id, owner_id: "owner", token_limit: OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT,
+      used_tokens: OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT, reserved_tokens: 0,
+      locked_reason: null, updated_at: Date.now(),
+    });
+
+    const detail = await call(env, "/admin/api/intelligence/conversations/" + id, ownerCookie);
+    const detailBody = await detail.json() as { usage: { limit_tokens: number; used_tokens: number; remaining_tokens: number; locked: boolean } };
+    expect(detail.status).toBe(200);
+    expect(detailBody.usage).toEqual(expect.objectContaining({
+      limit_tokens: 200_000, used_tokens: 200_000, remaining_tokens: 0, locked: true,
+    }));
+
+    const blocked = await call(env, "/admin/api/intelligence/conversations/" + id + "/generate", ownerCookie, {
+      method: "POST", origin,
+      body: { content: "This must not be sent.", modelId: "gemini-4-carbon", thinkingLevel: "HIGH" },
+    });
+    const blockedBody = await blocked.json() as { error: string; usage: { locked: boolean } };
+    expect(blocked.status).toBe(409);
+    expect(blockedBody.error).toBe("session_token_limit_reached");
+    expect(blockedBody.usage.locked).toBe(true);
+    expect(db.messages.size).toBe(0); // A rejected prompt is not persisted as an unanswered user turn.
+
+    const next = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Fresh session" },
+    });
+    const nextBody = await next.json() as { conversation: { id: string } };
+    const freshUsage = await getOwnerIntelligenceSessionUsage(env, nextBody.conversation.id);
+    expect(freshUsage).toEqual(expect.objectContaining({
+      limit_tokens: 200_000, used_tokens: 0, remaining_tokens: 200_000, locked: false,
+    }));
+  });
+
+  it("backfills existing chats from generation totalTokenCount without charging new chats", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Existing token history" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const db = env.DB as unknown as FakeOwnerD1;
+    db.messages.set("historic-user", {
+      id: "historic-user", conversation_id: id, owner_id: "owner",
+      role: "user", content: "Historic question", status: "complete", created_at: 1,
+    });
+    db.messages.set("historic-assistant", {
+      id: "historic-assistant", conversation_id: id, owner_id: "owner",
+      role: "assistant", content: "Historic answer", status: "complete", created_at: 2,
+    });
+    db.generationMetadata.set("historic-assistant", {
+      message_id: "historic-assistant", owner_id: "owner", model_id: "gemini-4-carbon",
+      thinking_level: "HIGH", prompt_tokens: 800, output_tokens: 200,
+      total_tokens: 1_250, elapsed_ms: 900,
+    });
+
+    const usage = await getOwnerIntelligenceSessionUsage(env, id);
+    expect(usage).toEqual(expect.objectContaining({
+      limit_tokens: 200_000, used_tokens: 1_250, reserved_tokens: 0,
+      remaining_tokens: 198_750, locked: false,
+    }));
   });
 
   it("rejects invalid titles and does not reveal conversations owned by another principal", async () => {
