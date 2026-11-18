@@ -407,6 +407,14 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 - Preserve complete D1 transcript, exact historical message IDs, role order and provenance despite compaction, rollover, failed retrieval, forks and GitHub sync conflicts.
 - Preserve all seven Owner journeys recorded in the canonical Memory and Context Architecture.
 
+### Topic API routing regression — production issue found 2026-11-19 IST
+
+- Production diagnosis: the browser client used `/admin/api/intelligence/conversations/topics` for topic GET/POST/PATCH; the Worker exposes `/admin/api/intelligence/topics`.
+- Read-only production D1 inspection of the configured `parmar-ai-admin-prod` binding found zero rows in `owner_intelligence_topics`; the Owner's attempted `Owner Intelligence` topic was not created.
+- Corrective source change introduces a dedicated `topicsApi`, routes list/create/rename to the Worker route, and uses a topic-specific `Retry topics` handler instead of incorrectly showing `Could not load conversations` and retrying only conversation history.
+- Regression test asserts the topic status container, correct GET/POST/PATCH endpoint strings, absence of the incorrect conversations/topics path, and topic-specific retry behavior.
+- **Deployment gate:** do not ask the Owner to repeat topic creation until this fix passes CI and deploys to the production `parmar-ai` Worker. Then verify that the created topic appears in both selectors and is persisted in D1.
+
 ### M4.3 Owner browser acceptance status — 2026-11-19 IST
 
 **Owner-provided production screenshot confirms the installation sub-gate passed:**
