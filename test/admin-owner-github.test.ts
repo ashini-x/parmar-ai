@@ -69,10 +69,16 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
       ["sign", "verify"],
     );
     const privateKey = pemFromDer(new Uint8Array(await crypto.subtle.exportKey("pkcs8", pair.privateKey)));
+    Object.assign(env, {
+      GCP_PROJECT_ID: "owner-github-test-project",
+      GCP_CLIENT_EMAIL: "owner-github-test@brvin-test.iam.gserviceaccount.com",
+      GCP_PRIVATE_KEY: privateKey,
+      GEMINI_LOCATION: "global",
+    });
     const appId = 52_001;
     const installationId = 77_001;
     const repositoryId = 88_001;
-    const tokenRequests: Array<{ path: string; body: Record<string, unknown> }> = [];
+    const tokenRequests: Array<{ path: string; body: { permissions?: { [key: string]: string }; [key: string]: unknown } }> = [];
     const baseCommitSha = "a".repeat(40);
     const savedCommitSha = "b".repeat(40);
     let currentBranchHead = baseCommitSha;
@@ -82,6 +88,22 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
       const url = String(input);
       const method = init?.method ?? "GET";
       const body: { [key: string]: unknown; permissions?: { [key: string]: string } } = typeof init?.body === "string" && new Headers(init?.headers).get("content-type")?.includes("application/json") ? JSON.parse(init.body) as { [key: string]: unknown; permissions?: { [key: string]: string } } : {};
+      if (url === "https://oauth2.googleapis.com/token" && method === "POST") {
+        return new Response(JSON.stringify({ access_token: "google-owner-test-token", expires_in: 3600, token_type: "Bearer" }), { status: 200 });
+      }
+      if (url.includes(":countTokens") && method === "POST") {
+        return new Response(JSON.stringify({ totalTokens: 1200 }), { status: 200 });
+      }
+      if (url.includes(":generateContent") && method === "POST") {
+        return new Response(JSON.stringify({
+          candidates: [{ content: { parts: [{ text: JSON.stringify({
+            projectMemory: "# BRɅIN\\n\\nDurable project goals and architecture, based on the supplied source.",
+            progress: "# Progress\\n\\nThe current reviewed save flow is in progress.",
+            decisions: "# Accepted decisions\\n\\nOnly decisions confirmed by the Owner are recorded.",
+          }) }] } }],
+          usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 420, totalTokenCount: 1620 },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
       if (url === "https://api.github.com/app-manifests/manifest-code/conversions" && method === "POST") {
         return new Response(JSON.stringify({
           id: appId,
@@ -151,10 +173,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
       if (url === "https://api.github.com/repos/ashini-x/parmar-ai/git/commits/" + baseCommitSha && method === "GET") {
         return new Response(JSON.stringify({ sha: baseCommitSha, tree: { sha: "base-tree-sha" } }), { status: 200 });
       }
-      if (url === "https://api.github.com/repos/ashini-x/parmar-ai/contents/memory/index.md?ref=feature%2Ftest-branch" ||
-          url.startsWith("https://api.github.com/repos/ashini-x/parmar-ai/contents/memory/project-memory.md?ref=feature%2Ftest-branch") ||
-          url.startsWith("https://api.github.com/repos/ashini-x/parmar-ai/contents/memory/progress.md?ref=feature%2Ftest-branch") ||
-          url.startsWith("https://api.github.com/repos/ashini-x/parmar-ai/contents/memory/decisions.md?ref=feature%2Ftest-branch")) {
+      if (url.includes("/contents/memory/") && url.includes("?ref=" + baseCommitSha)) {
         return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
       }
       if (url === "https://api.github.com/repos/ashini-x/parmar-ai/git/trees" && method === "POST") {
@@ -328,7 +347,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
       env,
       "/admin/api/intelligence/github/conversations/" + conversation.id + "/preview",
       cookie,
-      { method: "POST", body: { topicId: topic.id } },
+      { method: "POST", body: { topicId: topic.id, modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH" } },
     );
     expect(previewResponse.status, await previewResponse.clone().text()).toBe(201);
     const preview = (await previewResponse.json() as { preview: {
@@ -341,7 +360,10 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     expect(preview.files).toHaveLength(5);
     expect(preview.files.some((file) => file.name === "sessions/" + new Date().toISOString().slice(0, 10) + "-" +
       conversation.id.slice(0, 8) + "-" + preview.id.slice(0, 8) + ".md")).toBe(true);
-    expect(preview.note).toContain("not a Gemini-generated summary");
+    expect(preview.note).toContain("Gemini prepared this editable candidate");
+    const usageAfterDraft = await env.DB!.prepare("SELECT used_tokens FROM owner_intelligence_session_usage WHERE conversation_id=? AND owner_id=?")
+      .bind(conversation.id, env.OWNER_DASHBOARD_USER).first<{ used_tokens: number }>();
+    expect(usageAfterDraft?.used_tokens).toBe(1620);
     const writeTokenCountBefore = tokenRequests.filter((entry) => entry.body.permissions?.contents === "write").length;
 
     const notConfirmed = await call(env, "/admin/api/intelligence/github/previews/" + preview.id + "/confirm", cookie, {
