@@ -366,22 +366,19 @@ The future implementation is not complete until tests and Owner acceptance cover
 These are planned acceptance criteria, not claims of deployed functionality or tests already passed.
 
 
-## 11. Live hub provisioning and installation recovery — 2026-11-19 IST
+## 11. Live hub and Owner App installation status — 2026-11-19 IST
 
-GitHub repository lookup confirms `ashini-x/owner-memory-hub` exists (repository ID `1463342529`), has default branch `main`, contains README `# owner-memory-hub`, and GitHub metadata reports **Private** visibility. The Owner reports the BRɅIN Owner Memory App's repository access is set to **Only select repositories** with only this hub selected; this separate App setting has not been independently inspected through the ChatGPT GitHub connection.
+GitHub metadata verifies `ashini-x/owner-memory-hub` exists (repository ID `1463342529`), has default branch `main`, contains README `# owner-memory-hub`, and is **Private**.
 
-Owner Intelligence still reports **App created · installation required**. The deployed status endpoint derives this state from configured App credentials plus zero verified active installation rows in Owner-scoped D1. The first installation was completed while GitHub repository selection was **All repositories**. The deployed callback requires **selected** and checks this before D1 persistence; that first callback therefore could not register the installation. The single-use callback state is consumed and is not retroactively replayed when repository access is changed later.
+**Owner browser evidence (2026-11-19):** the production Owner Intelligence panel displays `Connected · 1 verified installation(s)`, account `ashini-x · User`, and repository `ashini-x/owner-memory-hub · Private`. The branch field shows `main` and the memory-root field shows the UI default `memory`. This confirms the selected-only installation and GitHub user/PKCE verification reached the deployed Owner UI. The screenshot also shows `Select a topic above`; therefore no topic/repository/path attachment has been completed yet. The displayed `main` and `memory` values are form defaults/current selections, not proof of a saved topic attachment.
 
-**Recommended recovery: uninstall only the existing GitHub App installation, then reinstall it through Owner Intelligence with a fresh state. Do not delete the GitHub App registration.** The App registration, its slug, private key/client secret bundle encrypted in Owner D1, and Owner Intelligence configuration must remain intact.
+**M4.3 installation sub-gate: complete.** Do not uninstall, recreate or reinstall the GitHub App. Keep the App installed only on the private `owner-memory-hub` repository with the existing exact permissions.
 
-1. In GitHub, open Settings → Applications → Installed GitHub Apps → **BRɅIN Owner Memory** → Configure. Choose **Uninstall** for this account's installation. This removes the installation, not the GitHub App registration.
-2. Return to the Owner Intelligence page and refresh. The panel should still say the App is created and offer **Install GitHub App**.
-3. Click **Install GitHub App** from Owner Intelligence. This mints a fresh, single-use, 30-minute installation state and opens GitHub's installation URL. Do not reuse an old browser tab or old installation URL.
-4. On GitHub, select the `ashini-x` account, choose **Only select repositories**, select only `owner-memory-hub`, confirm exact permissions (Metadata read and Contents read/write as displayed by GitHub; no extra permission or events), and click Install.
-5. GitHub should redirect to the deployed setup URL with `installation_id`, `setup_action=install` and the fresh state. The Worker validates that state and then redirects to GitHub user authorization with PKCE. Complete the authorization using the same GitHub account.
-6. The Worker then checks the authorized user's installation list for the exact App ID and installation ID, checks selected-only mode and the exact permission set, and only then writes the verified installation row into Owner-scoped D1.
-7. Return to Owner Intelligence and refresh. Expected state: `Connected · 1 verified installation(s)`, plus the account and repository selectors. Confirm `ashini-x/owner-memory-hub` appears and is marked Private.
+**Remaining M4.3 live acceptance:**
+1. Create a project topic using `+ Topic` (start with a real project or a temporary acceptance topic).
+2. Select that topic under `Start New Chat In`. Attach `ashini-x/owner-memory-hub`, branch `main`, and a project-specific memory root. For example, use `projects/owner-intelligence/memory` for an Owner Intelligence project topic; do not use the same root for multiple projects.
+3. Open a conversation in that topic and select it in `Save Current Chat to Project`.
+4. Generate a Save preview, inspect and edit all five files, then explicitly confirm. Verify the exact GitHub commit and all five file contents at that commit, the D1 topic association/promotion, and the same conversation's token meter.
+5. Exercise stale-branch conflict handling: advance a touched destination file after preview and before confirmation. Confirm the save returns Conflict and does not overwrite the external edit. Then create a fresh preview and complete a normal verified save.
 
-If the fresh install/PKCE flow still fails, stop and capture the Owner Intelligence page and safe callback reason. Do not delete/recreate the GitHub App registration or repeat installation attempts blindly. The next engineering diagnosis should check the setup URL, preserved state, callback stage and exact GitHub installation metadata.
-
-After the panel reports Connected, attach a project topic to a unique hub memory path, then complete M4.3 preview/edit/confirm/read-back and stale-branch Conflict acceptance. M4.4 remains blocked until that real browser acceptance passes.
+Only after these pass is M4.3 fully accepted and M4.4 unlocked. M4.4 remains unimplemented and must add hierarchical hub manifests, project/workstream/feature cataloguing, manifest-selected memory loading, immutable per-conversation repository/branch/commit snapshots, strict project isolation and safe multi-writer/path-aware conflict handling.

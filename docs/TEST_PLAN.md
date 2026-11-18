@@ -272,7 +272,7 @@ PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/
 
 - **Owner-reported 2026-11-18:** the latest Hydrogen HIGH production request responds and no longer shows `RESOURCE_EXHAUSTED` after PR #338's bounded initial stream-open retry release. This is evidence of recovery on the tested request, not proof that shared Vertex capacity/rate limits can never recur. Keep the retry guard; do not switch model or endpoint silently. If the error recurs, capture the new provider diagnostic and then inspect project/model quota, billing tier and capacity.
 
-### M4.3 — GitHub authorization and reviewed Save to GitHub (merged/deployed; live Owner acceptance pending)
+### M4.3 — GitHub authorization and reviewed Save to GitHub (implementation deployed; installation verified; save/conflict acceptance pending)
 
 #### Automated local-D1 tests
 - Owner boundary: anonymous GitHub API calls return 401; non-Owner admin sessions return 403; all topic/conversation/preview D1 reads and writes are scoped to the configured Owner.
@@ -406,3 +406,23 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 - For fixed B, test 10, 50, 100 and 200 turns; prove every request ≤ B and aggregate prompt input ≤ N × B while a naïve full-history baseline exhibits triangular growth.
 - Preserve complete D1 transcript, exact historical message IDs, role order and provenance despite compaction, rollover, failed retrieval, forks and GitHub sync conflicts.
 - Preserve all seven Owner journeys recorded in the canonical Memory and Context Architecture.
+
+### M4.3 Owner browser acceptance status — 2026-11-19 IST
+
+**Owner-provided production screenshot confirms the installation sub-gate passed:**
+- Panel: `Connected · 1 verified installation(s)`.
+- Account: `ashini-x · User`.
+- Repository: `ashini-x/owner-memory-hub · Private`.
+- Branch field: `main`; memory-root field currently displays `memory`.
+- The UI still says `Select a topic above`; no topic attachment is evidenced by this screenshot.
+
+**Remaining manual acceptance (not yet passed):**
+- [ ] Create a project topic and attach the verified hub with a unique project memory-root path.
+- [ ] Create/open a conversation in that topic and select it in Save Current Chat to Project.
+- [ ] Generate the Save preview and review/edit each of the five files.
+- [ ] Confirm the save; verify commit SHA and byte-exact read-back of all five files.
+- [ ] Verify topic association/promotion and the same conversation's 200K token accounting.
+- [ ] Advance a touched destination path after preview; confirming the stale preview must return Conflict and preserve the external edit.
+- [ ] Create a fresh preview and complete a normal successful verified save.
+
+Do not uninstall/reinstall the App. Do not mark M4.3 complete or start M4.4 until the remaining manual checks pass.
