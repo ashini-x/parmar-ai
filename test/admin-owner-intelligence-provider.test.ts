@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/config/env";
 import {
+  countOwnerGeminiInputTokens,
   generateOwnerGeminiContent,
   openOwnerGeminiStream,
   listOwnerGeminiModels,
@@ -21,6 +22,36 @@ function dependencies(fetcher: typeof fetch, token = "test-token"): OwnerProvide
 }
 
 describe("Owner Vertex AI provider registry and adapter", () => {
+  it("counts the exact multi-turn prompt for a per-chat token budget", async () => {
+    const calls: Array<{ url: RequestInfo | URL; body: Record<string, unknown> }> = [];
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "session-token-preflight-project" } as Env;
+    const fetcher: typeof fetch = async (url, init) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      calls.push({ url, body });
+      return new Response(JSON.stringify({
+        totalTokens: String(body.contents).includes("Owner model availability check.") ? 1 : 12_345,
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const contents = [
+      { role: "user" as const, text: "Earlier question" },
+      { role: "model" as const, text: "Earlier answer" },
+      { role: "user" as const, text: "Continue from the saved history." },
+    ];
+    const tokens = await countOwnerGeminiInputTokens(
+      env,
+      { modelId: "gemini-4-carbon", contents },
+      dependencies(fetcher),
+    );
+    expect(tokens).toBe(12_345);
+    expect(calls).toHaveLength(2); // selected-model eligibility probe + exact conversation preflight
+    expect(String(calls[1].url)).toContain(":countTokens");
+    expect(calls[1].body.contents).toEqual(contents.map((turn) => ({
+      role: turn.role,
+      parts: [{ text: turn.text }],
+    })));
+  });
+
+
   beforeEach(() => vi.restoreAllMocks());
 
   it("probes only centrally allowlisted models with the project-scoped countTokens API", async () => {
