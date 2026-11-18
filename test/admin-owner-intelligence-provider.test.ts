@@ -176,7 +176,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(calls.some((url) => url.includes(":streamGenerateContent"))).toBe(true);
     expect(failure).toMatchObject({
       status: 403,
-      stage: "generate_content",
+      stage: "stream_generate_content",
       message: expect.stringContaining("StreamGenerateContent request"),
     });
     expect(failure).toMatchObject({
@@ -214,7 +214,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(calls.some((url) => url.includes(":streamGenerateContent"))).toBe(true);
     expect(failure).toMatchObject({
       status: 403,
-      stage: "generate_content",
+      stage: "stream_generate_content",
       message: expect.stringContaining("permission aiplatform.endpoints.predict"),
     });
     expect((failure as Error).message).toContain("reason IAM_PERMISSION_DENIED");
