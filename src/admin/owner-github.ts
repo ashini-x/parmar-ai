@@ -194,9 +194,16 @@ async function consumeState(env: Env, state: string, purpose: "manifest" | "inst
   } catch { return null; }
 }
 function callbackResult(result: "app-created" | "installed" | "error"): Response {
-  return new Response(null, { status: 303, headers: {
-    location: "/admin/intelligence?github=" + result,
-    "cache-control": "no-store", "referrer-policy": "no-referrer",
+  // Render a same-origin landing document before navigating into the Owner
+  // workspace. The workspace cookie uses SameSite=Strict; this avoids relying
+  // on it being sent on the first cross-site OAuth redirect request.
+  const target = "/admin/intelligence?github=" + result;
+  const html = "<!doctype html><html lang='en'><meta charset='utf-8'><meta name='referrer' content='no-referrer'>" +
+    "<meta http-equiv='refresh' content='0;url=" + target + "'><title>Returning to BRɅIN</title>" +
+    "<body><p>GitHub connection step completed. <a href='" + target + "'>Continue to BRɅIN Intelligence</a>.</p></body></html>";
+  return new Response(html, { status: 200, headers: {
+    "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+    "referrer-policy": "no-referrer", "x-content-type-options": "nosniff",
   } });
 }
 async function startManifest(env: Env, request: Request, owner: string): Promise<Response> {
@@ -212,7 +219,7 @@ async function startManifest(env: Env, request: Request, owner: string): Promise
     redirect_url: redirectUri,
     setup_url: redirectUri,
     callback_urls: [redirectUri],
-    setup_on_update: true,
+    setup_on_update: false,
     public: false,
     default_permissions: { metadata: "read", contents: "write" },
     default_events: [],
@@ -443,7 +450,7 @@ async function attachRepository(env: Env, owner: string, topicId: string, input:
     return json({ ok: false, error: "repository_not_verified" }, 400);
   }
   const branchPath = "/repos/" + encodeURIComponent(parts[0]) + "/" + encodeURIComponent(parts[1]) + "/branches/" +
-    input.branch.split("/").map(encodeURIComponent).join("/");
+    encodeURIComponent(input.branch);
   const branch = (await github<{ name?: string }>(branchPath, token)).data;
   if (clean(branch.name, 120) !== input.branch) return json({ ok: false, error: "branch_not_verified" }, 400);
   const update = await env.DB!.prepare("UPDATE owner_intelligence_topics SET github_installation_id=?, repository_id=?, repository_owner=?, repository_name=?, repository_branch=?, memory_root=?, updated_at=? WHERE id=? AND owner_id=?")
