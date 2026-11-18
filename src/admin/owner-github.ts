@@ -10,6 +10,13 @@ const STATE_TABLE = "owner_intelligence_github_oauth_states";
 type Bundle = { appId: number; slug: string; name: string; clientId: string; clientSecret: string; privateKey: string; redirectUri: string };
 type AppRow = { owner_id: string; app_id: number; app_slug: string; app_name: string; redirect_uri: string; secret_ciphertext: string; status: string };
 type InstallationRow = { installation_id: number; account_login: string; account_type: string; repository_selection: string; authorized_user: string };
+type GitHubInstallation = {
+  id?: number;
+  app_id?: number;
+  account?: { login?: string; type?: string };
+  repository_selection?: string;
+  permissions?: Record<string, string>;
+};
 type GitHubResponse<T> = { data: T; headers: Headers };
 
 function principal(env: Env): string {
@@ -39,9 +46,11 @@ function owned(bytes: Uint8Array): ArrayBuffer {
 function randomState(): string {
   return b64url(crypto.getRandomValues(new Uint8Array(32)));
 }
+async function sha256Bytes(value: string): Promise<Uint8Array> {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+}
 async function sha256(value: string): Promise<string> {
-  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return [...await sha256Bytes(value)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 async function vaultKey(env: Env, owner: string): Promise<CryptoKey> {
   const secret = env.ADMIN_SESSION_SECRET?.trim();
@@ -129,7 +138,7 @@ async function ensureSchema(env: Env): Promise<void> {
     env.DB.prepare("CREATE TABLE IF NOT EXISTS " + APP_TABLE + " (owner_id TEXT PRIMARY KEY, app_id INTEGER NOT NULL, app_slug TEXT NOT NULL, app_name TEXT NOT NULL, redirect_uri TEXT NOT NULL, secret_ciphertext TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'created', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS " + INSTALL_TABLE + " (owner_id TEXT NOT NULL, installation_id INTEGER NOT NULL, app_id INTEGER NOT NULL, account_login TEXT NOT NULL, account_type TEXT NOT NULL DEFAULT '', repository_selection TEXT NOT NULL DEFAULT 'selected', status TEXT NOT NULL DEFAULT 'active', authorized_user TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(owner_id, installation_id))"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_owner_github_installations_owner ON " + INSTALL_TABLE + "(owner_id, status, account_login)"),
-    env.DB.prepare("CREATE TABLE IF NOT EXISTS " + STATE_TABLE + " (state_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL, purpose TEXT NOT NULL CHECK (purpose IN ('manifest','installation')), payload_json TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS " + STATE_TABLE + " (state_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL, purpose TEXT NOT NULL CHECK (purpose IN ('manifest','installation','user_authorization')), payload_json TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)"),
   ]);
   if (results.some((result) => !result.success)) throw new Error("D1 did not confirm the Owner GitHub schema.");
   const columns = await env.DB.prepare("PRAGMA table_info(owner_intelligence_topics)").all<{ name: string }>();
@@ -199,6 +208,8 @@ async function startManifest(env: Env, request: Request, owner: string): Promise
     description: "Private, Owner-controlled project memory for BRɅIN Intelligence.",
     redirect_url: redirectUri,
     setup_url: redirectUri,
+    callback_urls: [redirectUri],
+    setup_on_update: false,
     public: false,
     default_permissions: { metadata: "read", contents: "write" },
     default_events: [],
@@ -246,24 +257,108 @@ async function installationCallback(env: Env, url: URL): Promise<Response> {
   const state = clean(url.searchParams.get("state"), 128);
   const installationId = Number(url.searchParams.get("installation_id"));
   const setupAction = clean(url.searchParams.get("setup_action"), 20);
-  if (!state || !Number.isSafeInteger(installationId) || installationId < 1 || !["install", "update"].includes(setupAction)) return callbackResult("error");
+  if (!state || !Number.isSafeInteger(installationId) || installationId < 1 ||
+      !["install", "update"].includes(setupAction)) return callbackResult("error");
   const consumed = await consumeState(env, state, "installation");
   if (!consumed) return callbackResult("error");
   const owner = consumed.owner_id;
-  const { bundle, token } = await installationJwt(env, owner);
+  const { bundle } = await getBundle(env, owner);
   if (Number(consumed.payload.appId) !== bundle.appId) return callbackResult("error");
-  const { data } = await github("/app/installations/" + installationId, token);
-  const account = (data.account || {}) as { login?: string; type?: string };
-  const permissions = data.permissions || {};
-  if (Number(data.id) !== installationId || Number(data.app_id) !== bundle.appId ||
-      !clean(account.login, 100) || permissions.contents !== "write" || permissions.metadata !== "read" ||
-      data.repository_selection !== "selected") return callbackResult("error");
+
+  // GitHub explicitly warns that installation_id on a setup URL can be spoofed.
+  // Do not trust it until a GitHub user token confirms that this user can see
+  // this exact installation and that it belongs to this App.
+  const verifier = randomState() + randomState();
+  const challenge = b64url(await sha256Bytes(verifier));
+  const authState = await createState(env, owner, "user_authorization", {
+    appId: bundle.appId,
+    installationId,
+    redirectUri: bundle.redirectUri,
+    codeVerifier: verifier,
+  });
+  const authorize = new URL("https://github.com/login/oauth/authorize");
+  authorize.searchParams.set("client_id", bundle.clientId);
+  authorize.searchParams.set("redirect_uri", bundle.redirectUri);
+  authorize.searchParams.set("state", authState);
+  authorize.searchParams.set("code_challenge", challenge);
+  authorize.searchParams.set("code_challenge_method", "S256");
+  return new Response(null, {
+    status: 303,
+    headers: { location: authorize.toString(), "cache-control": "no-store", "referrer-policy": "no-referrer" },
+  });
+}
+async function exchangeUserCode(bundle: Bundle, code: string, verifier: string): Promise<string> {
+  const response = await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded", "user-agent": "BRɅIN-Owner-Memory" },
+    body: new URLSearchParams({
+      client_id: bundle.clientId,
+      client_secret: bundle.clientSecret,
+      code,
+      redirect_uri: bundle.redirectUri,
+      code_verifier: verifier,
+    }).toString(),
+  });
+  const raw = await response.text();
+  let result: { access_token?: string } = {};
+  try { result = raw ? JSON.parse(raw) as typeof result : {}; } catch { result = {}; }
+  if (!response.ok || !result.access_token) throw new Error("GitHub account authorization could not be verified.");
+  return result.access_token;
+}
+async function userAuthorizationCallback(env: Env, url: URL): Promise<Response> {
+  const code = clean(url.searchParams.get("code"), 1024);
+  const state = clean(url.searchParams.get("state"), 128);
+  if (!code || !state || url.searchParams.has("error")) return callbackResult("error");
+  const consumed = await consumeState(env, state, "user_authorization");
+  if (!consumed) return callbackResult("error");
+  const owner = consumed.owner_id;
+  const redirectUri = clean(consumed.payload.redirectUri, 500);
+  if (!redirectUri || new URL(redirectUri).origin !== url.origin || new URL(redirectUri).pathname !== CALLBACK) {
+    return callbackResult("error");
+  }
+  const { bundle } = await getBundle(env, owner);
+  const installationId = Number(consumed.payload.installationId);
+  if (Number(consumed.payload.appId) !== bundle.appId || !Number.isSafeInteger(installationId) || installationId < 1) {
+    return callbackResult("error");
+  }
+  const verifier = clean(consumed.payload.codeVerifier, 200);
+  if (verifier.length < 43) return callbackResult("error");
+  const userToken = await exchangeUserCode(bundle, code, verifier);
+  const user = (await github<{ id?: number; login?: string }>("/user", userToken)).data;
+  if (!Number.isSafeInteger(Number(user.id)) || !clean(user.login, 100)) return callbackResult("error");
+
+  const installations: GitHubInstallation[] = [];
+  let page = 1;
+  while (page <= 5) {
+    const result = await github<{ installations?: GitHubInstallation[] }>(
+      "/user/installations?per_page=100&page=" + page, userToken,
+    );
+    installations.push(...(result.data.installations || []));
+    if (!/rel="next"/u.test(result.headers.get("link") || "")) break;
+    page += 1;
+  }
+  const selected = installations.find((item) =>
+    Number(item.id) === installationId && Number(item.app_id) === bundle.appId,
+  );
+  if (!selected || !clean(selected.account?.login, 100) || selected.repository_selection !== "selected" ||
+      selected.permissions?.metadata !== "read" || selected.permissions?.contents !== "write") {
+    return callbackResult("error");
+  }
+
   const now = Date.now();
-  const result = await env.DB!.prepare("INSERT INTO " + INSTALL_TABLE + " (owner_id, installation_id, app_id, account_login, account_type, repository_selection, status, authorized_user, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'selected', 'active', ?, ?, ?) ON CONFLICT(owner_id, installation_id) DO UPDATE SET app_id=excluded.app_id, account_login=excluded.account_login, account_type=excluded.account_type, repository_selection='selected', status='active', authorized_user=excluded.authorized_user, updated_at=excluded.updated_at")
-    .bind(owner, installationId, bundle.appId, clean(account.login, 100), clean(account.type, 40), clean(url.searchParams.get("account") || account.login, 100), now, now).run();
-  if (!result.success) throw new Error("D1 did not confirm the verified GitHub installation.");
+  const saved = await env.DB!.prepare(
+    "INSERT INTO " + INSTALL_TABLE +
+    " (owner_id, installation_id, app_id, account_login, account_type, repository_selection, status, authorized_user, created_at, updated_at)" +
+    " VALUES (?, ?, ?, ?, ?, 'selected', 'active', ?, ?, ?)" +
+    " ON CONFLICT(owner_id, installation_id) DO UPDATE SET app_id=excluded.app_id, account_login=excluded.account_login," +
+    " account_type=excluded.account_type, repository_selection='selected', status='active'," +
+    " authorized_user=excluded.authorized_user, updated_at=excluded.updated_at",
+  ).bind(owner, installationId, bundle.appId, clean(selected.account?.login, 100),
+    clean(selected.account?.type, 40), clean(user.login, 100), now, now).run();
+  if (!saved.success) throw new Error("D1 did not confirm the verified GitHub installation.");
   await env.DB!.prepare("UPDATE " + APP_TABLE + " SET status='authorized', updated_at=? WHERE owner_id=? AND app_id=?")
     .bind(now, owner, bundle.appId).run();
+  // The temporary user access token is deliberately not persisted.
   return callbackResult("installed");
 }
 export async function handleOwnerGithubCallback(request: Request, env: Env, url: URL): Promise<Response> {
@@ -277,6 +372,7 @@ export async function handleOwnerGithubCallback(request: Request, env: Env, url:
     if (!row) return callbackResult("error");
     if (row.purpose === "manifest") return await manifestCallback(env, request, url);
     if (row.purpose === "installation") return await installationCallback(env, url);
+    if (row.purpose === "user_authorization") return await userAuthorizationCallback(env, url);
     return callbackResult("error");
   } catch {
     return callbackResult("error");
