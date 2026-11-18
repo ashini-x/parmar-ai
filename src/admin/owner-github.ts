@@ -404,9 +404,8 @@ async function installationToken(env: Env, owner: string, installationId: number
   const known = await env.DB!.prepare("SELECT installation_id FROM " + INSTALL_TABLE + " WHERE owner_id=? AND installation_id=? AND app_id=? AND status='active'")
     .bind(owner, installationId, row.app_id).first<{ installation_id: number }>();
   if (!known) throw new Error("That GitHub installation has not been verified for this Owner.");
-  const body: Record<string, unknown> = { permissions: { contents: "write" } };
+  const body: Record<string, unknown> = { permissions: { contents: "read" } };
   if (repositoryId !== undefined) body.repository_ids = [repositoryId];
-  body.permissions = { contents: "read" };
   const result = await github<{ token?: string }>("/app/installations/" + installationId + "/access_tokens", token, "POST", body);
   if (!result.data.token) throw new Error("GitHub did not issue a short-lived repository token.");
   void bundle;
