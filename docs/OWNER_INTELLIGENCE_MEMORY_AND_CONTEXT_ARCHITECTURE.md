@@ -1,7 +1,8 @@
 # Owner Intelligence — Memory and Token-Aware Context Architecture
 
 **Status:** Approved design with 2026-11-19 central Owner Memory Hub and AI collaboration amendment; M4.4–M4.8 not implemented  
-**Approved:** 2026-11-18  
+**Original approval:** 2026-11-18  
+**Central hub/collaboration amendment:** 2026-11-19 IST  
 **Parent roadmap:** [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md)  
 **Continuation:** [OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md](OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md)  
 **Scope:** Owner-only workspace in `ashini-x/parmar-ai`
