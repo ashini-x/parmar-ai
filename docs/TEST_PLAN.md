@@ -301,7 +301,7 @@ PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/
 
 Current-head PR validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files, and all three Worker dry-run bundles. PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`. Production workflow [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment, root/health, BRVIN service binding, Fatman retrieval and release-acceptance checks. Deployed parmar-ai version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and brvin-service version `d43a9f7b-32b3-486f-9845-75ed11811165`, each at 100% traffic. The remaining gate is a real Owner-authenticated browser walkthrough of App creation/selected-only installation, topic attach, preview/edit/confirm, exact GitHub read-back and stale-branch Conflict handling.
 
-## Owner Intelligence — project memory and token-aware continuity (M4.2 Scratchpad/topic foundation deployed; M4.3–M4.8 planned)
+## Owner Intelligence — project memory and token-aware continuity (M4.2–M4.3 implementation deployed; M4.3 live acceptance pending; M4.4–M4.8 planned)
 
 The following are future acceptance criteria, not tests that have passed in the current release. See [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md).
 
