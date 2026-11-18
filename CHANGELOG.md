@@ -1,3 +1,10 @@
+## 2026-11-18: Owner Gemini transient Vertex stream throttling resilience
+
+- Add at most two retries (three attempts total) for transient initial `StreamGenerateContent` HTTP 408/429/5xx responses, using exponential backoff, jitter and a bounded `Retry-After` delay.
+- Keep the configured `global` endpoint; preserve the exact model, thinking level, prompt contents and output cap. Do not retry permanent 4xx or restart an SSE stream after it has been accepted. Stop cancels a pending backoff.
+- The screenshot's `RESOURCE_EXHAUSTED` is a Vertex provider-capacity/rate-limit condition, not the application's M4.1 200,000-token chat budget. The complete M4.1 D1 budget, reservations, settlement, meter and read-only boundary remain unchanged.
+- Regression coverage added for transient recovery and bounded retry exhaustion. PR validation and production deployment evidence will be recorded after they actually run.
+
 ## 2026-11-18: Owner Context Replicator architecture finalized (documentation-only)
 
 - Name the **Cloudflare Owner Context Replicator** as the single logical Worker-side middleware that scopes the Owner request, selects bounded recent context and exact D1 recall, includes pinned Project Memory, runs exact Vertex CountTokens preflight, preserves M4.1 reservation ordering and hands the measured payload to the existing Vertex REST/SSE adapter.
