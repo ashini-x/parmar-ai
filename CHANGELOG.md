@@ -1,3 +1,13 @@
+## 2026-11-18: Owner Gemini Carbon formatted-error diagnostics and StreamGenerateContent stage
+
+- Name the actual failing operation as `StreamGenerateContent`, separately from non-stream `GenerateContent` and the `:countTokens` availability probe.
+- Parse the safe IAM permission and reason identifiers from either structured Google ErrorInfo or the formatted Google REST error message. Never return the raw provider message or project/resource path.
+- Add regression tests for formatted-message extraction and resource identifier redaction.
+- The latest Carbon HIGH screenshot before this release showed `PERMISSION_DENIED` but no permission/reason. Production records confirm two earlier Carbon HIGH completions in the same conversation followed by later intermittent zero-token failures.
+- Google documents `aiplatform.endpoints.predict` for both `CountTokens` and `StreamGenerateContent`; its IAM role reference lists `roles/aiplatform.user` as including that permission. Do not infer a missing role from generic `PERMISSION_DENIED`; inspect Data Access audit logs if the post-release retry still lacks ErrorInfo. Data Access logs are disabled by default and can incur logging charges. [Agent Platform Data Access logging](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/enable-audit-logs) · [Google IAM roles](https://docs.cloud.google.com/iam/docs/roles-permissions/aiplatform).
+- PR [#333](https://github.com/ashini-x/parmar-ai/pull/333), merged as `46d8d4a738d7f2d6d9c2fe37d9899caf8d8c6bd5`. Validation [44205106618](https://github.com/ashini-x/parmar-ai/actions/runs/44205106618) passed TypeScript, 491 Vitest tests, 62 Node tests and all three Worker dry-runs. Production [44205352694](https://github.com/ashini-x/parmar-ai/actions/runs/44205352694) passed paired deployment and release acceptance.
+- Deployed versions: `brvin-service` `03df3ad9-d5a3-4785-919f-d2e251ff3733`; `parmar-ai` `8ae9c848-28a1-4ec7-9c5a-001f8380d7f9`. Manifest artifact `14382239548`. Post-release Carbon retest remains pending.
+
 ## 2026-11-18: Owner Gemini provider-stage diagnostics for Carbon
 
 - Distinguish a failed Vertex `:countTokens` availability probe from a failed `:streamGenerateContent` call. The old generic 401/403 message could incorrectly imply that GenerateContent had been reached.
