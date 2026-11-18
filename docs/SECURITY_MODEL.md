@@ -42,6 +42,10 @@ The Owner API enforces a cumulative 200,000-token budget per conversation on the
 
 
 
+## Owner GitHub App authorization boundary
+
+The Owner GitHub connection is separate from BRVIN Connect and from the ChatGPT GitHub connector. It is a private App with only repository Metadata read and Contents write, installed on selected repositories. App private key/client secret are encrypted in the Owner-scoped D1 vault; one-use callback state is hashed and Owner-bound. An installation callback's `installation_id` is untrusted until PKCE user authorization completes and GitHub's authenticated-user installations endpoint confirms the exact App ID + installation ID. The short-lived user token is discarded after verification. Per-repository installation tokens are minted server-side with Contents write and a single selected repository ID; tokens are not stored in D1 or exposed to the browser. Topic repository, branch and memory-root are verified against GitHub and scoped by the Owner principal on every attachment mutation. Save-to-GitHub must remain preview/confirm/conflict-aware and must read back the resulting commit before any Synced status is written.
+
 ## Owner Vertex AI model registry and provider boundary
 
 The Owner model catalogue is served only below the `/admin/api/intelligence/*` namespace and inherits the route's `requireOwner` guard. It never accepts a project, location, Owner ID, provider URL or credential from browser input. Project/location are read from Worker configuration; candidate model IDs, API versions, modality scope, thinking metadata and token limits are maintained server-side. Google service-account credentials and access tokens remain server-side.
