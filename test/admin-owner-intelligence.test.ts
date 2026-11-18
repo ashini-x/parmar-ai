@@ -153,7 +153,7 @@ class FakeOwnerD1 {
     throw new Error("Unexpected Owner D1 read: " + sql);
   }
   execute(sql: string, values: unknown[], previousChanges = 0): number {
-    if (sql.startsWith("CREATE TABLE") || sql.startsWith("CREATE INDEX") || sql.startsWith("ALTER TABLE owner_intelligence_conversations")) return 0;
+    if (sql.startsWith("CREATE TABLE") || sql.startsWith("CREATE INDEX") || sql.startsWith("CREATE UNIQUE INDEX") || sql.startsWith("ALTER TABLE owner_intelligence_conversations")) return 0;
     if (sql.startsWith("INSERT OR IGNORE INTO owner_intelligence_session_usage")) {
       const [limit, updatedAt, conversationId, ownerId] = values;
       const conversation = this.conversations.get(String(conversationId));
@@ -453,9 +453,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     const env = appEnv();
     const ownerCookie = await login("owner", "owner-test-password", env);
     const response = await call(env, "/admin/intelligence", ownerCookie);
+    expect(response.status).toBe(200);
     const html = await response.text();
-
-    expect(response.status, await response.clone().text()).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("content-security-policy")).toContain("script-src 'self'");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
