@@ -104,6 +104,10 @@ class FakeOwnerD1 {
     return results;
   }
   read(sql: string, values: unknown[]): Array<Record<string, unknown>> {
+    if (sql.startsWith("PRAGMA table_info(owner_intelligence_conversations)")) {
+      return ["id", "owner_id", "title", "created_at", "updated_at", "topic_id", "session_kind", "lifecycle_status"]
+        .map((name) => ({ name }));
+    }
     if (sql.includes("FROM owner_intelligence_session_usage")) {
       const row = this.sessionUsage.get(String(values[0]));
       return row && row.owner_id === String(values[1]) ? [{ ...row }] : [];
@@ -149,7 +153,7 @@ class FakeOwnerD1 {
     throw new Error("Unexpected Owner D1 read: " + sql);
   }
   execute(sql: string, values: unknown[], previousChanges = 0): number {
-    if (sql.startsWith("CREATE TABLE") || sql.startsWith("CREATE INDEX")) return 0;
+    if (sql.startsWith("CREATE TABLE") || sql.startsWith("CREATE INDEX") || sql.startsWith("ALTER TABLE owner_intelligence_conversations")) return 0;
     if (sql.startsWith("INSERT OR IGNORE INTO owner_intelligence_session_usage")) {
       const [limit, updatedAt, conversationId, ownerId] = values;
       const conversation = this.conversations.get(String(conversationId));
