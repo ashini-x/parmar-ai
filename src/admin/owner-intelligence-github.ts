@@ -20,6 +20,10 @@ type PreviewRow = {
 type FileDraft = { name: string; content: string };
 type Bundle = { appId: number; slug: string; name: string; privateKey: string; installationId: number };
 class GitHubError extends Error { constructor(readonly status: number) { super("GitHub API error"); } }
+function hasLeastPermissions(value: Record<string, string> | undefined): boolean {
+  return Boolean(value && value.metadata === "read" && value.contents === "write" &&
+    Object.keys(value).every((key) => key === "metadata" || key === "contents"));
+}
 
 function owner(env: Env): string {
   const value = env.OWNER_DASHBOARD_USER?.trim().toLowerCase();
@@ -132,6 +136,7 @@ async function getApp(env: Env): Promise<AppRow | null> {
 async function api<T>(path: string, token?: string, method = "GET", data?: unknown): Promise<T> {
   const response = await fetch(API + path, {
     method,
+    cache: "no-store",
     headers: {
       accept: "application/vnd.github+json", "user-agent": "Owner-Gemini-Intelligence",
       "x-github-api-version": "2022-11-28",
@@ -185,10 +190,22 @@ async function getBundle(env: Env): Promise<Bundle> {
   const row = await getApp(env);
   if (!row) throw new Error("Create the dedicated Owner GitHub App first.");
   if (!row.installation_id) throw new Error("Install the Owner GitHub App on selected repositories first.");
-  return {
+  const value: Bundle = {
     appId: row.app_id, slug: row.slug, name: row.name,
     privateKey: await decryptKey(env, row.private_key_ciphertext), installationId: row.installation_id
   };
+  const [app, installation] = await Promise.all([
+    appApi<{ id?: number; permissions?: Record<string, string> }>(value, "/app"),
+    appApi<{ id?: number; app_id?: number; permissions?: Record<string, string>; repository_selection?: string }>(
+      value, "/app/installations/" + row.installation_id
+    )
+  ]);
+  if (Number(app.id) !== row.app_id || !hasLeastPermissions(app.permissions) ||
+      Number(installation.id) !== row.installation_id || Number(installation.app_id) !== row.app_id ||
+      !hasLeastPermissions(installation.permissions) || installation.repository_selection !== "selected") {
+    throw new Error("The dedicated Owner GitHub App or its installation no longer matches the required selected-repository, Metadata: read and Contents: write boundary. Review the App settings and reconnect.");
+  }
+  return value;
 }
 async function appApi<T>(value: Bundle, path: string, method = "GET", data?: unknown): Promise<T> {
   return api<T>(path, await appJwt(value), method, data);
@@ -326,7 +343,7 @@ export async function ownerIntelligenceGitHubCallback(env:Env,request:Request):P
     const text=await response.text();let data:unknown={};try{data=text?JSON.parse(text):{};}catch{data={};}
     if(!response.ok)throw new GitHubError(response.status);
     const app=data as {id?:number;slug?:string;name?:string;pem?:string;permissions?:Record<string,string>},permissions=app.permissions||{};
-    if(!Number.isSafeInteger(app.id)||!app.slug||!app.pem||permissions.metadata!=="read"||permissions.contents!=="write"||Object.keys(permissions).some((key)=>key!=="metadata"&&key!=="contents")){
+    if(!Number.isSafeInteger(app.id)||!app.slug||!app.pem||!hasLeastPermissions(permissions)){
       return callbackPage("GitHub App permissions did not match","The returned App must have exactly Metadata: read and Contents: write. No private key was stored.",false);
     }
     const now=Date.now();
@@ -353,7 +370,7 @@ export async function ownerIntelligenceGitHubSetup(env:Env,request:Request):Prom
     const value:Bundle={appId:row.app_id,slug:row.slug,name:row.name,privateKey:await decryptKey(env,row.private_key_ciphertext),installationId};
     const installed=await appApi<{id?:number;app_id?:number;account?:{login?:string};permissions?:Record<string,string>;repository_selection?:string}>(value,"/app/installations/"+installationId);
     const granted=installed.permissions||{};
-    if(Number(installed.id)!==installationId||Number(installed.app_id)!==row.app_id||granted.metadata!=="read"||granted.contents!=="write"||installed.repository_selection!=="selected"){
+    if(Number(installed.id)!==installationId||Number(installed.app_id)!==row.app_id||!hasLeastPermissions(granted)||installed.repository_selection!=="selected"){
       return callbackPage("GitHub installation rejected","Installation must belong to the dedicated App, grant Metadata: read and Contents: write, and use selected repositories only. No installation was saved.",false);
     }
     const account=clean(installed.account?.login,100);
