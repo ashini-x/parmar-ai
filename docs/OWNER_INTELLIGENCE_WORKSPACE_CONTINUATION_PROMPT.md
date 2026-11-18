@@ -9,8 +9,9 @@ Before changing anything, inspect the latest `main` branch and read, in this ord
 1. `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md` — authoritative milestone status, gates, decisions and task log.
 2. `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md` — this handoff.
 3. `docs/OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md` — approved memory/context design, including the Cloudflare Owner Context Replicator.
-4. `docs/TEST_PLAN.md` and `docs/README.md`.
-5. Re-read the source files and deployment/workflow state relevant to the first incomplete task. Do not rely on an old chat summary or assume this prompt is newer than GitHub.
+4. `docs/OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md` — authoritative Gemini/ChatGPT role split, central hub hierarchy, exchange artifacts and Owner approval gates.
+5. `docs/TEST_PLAN.md` and `docs/README.md`.
+6. Re-read the source files and deployment/workflow state relevant to the first incomplete task. Do not rely on an old chat summary or assume this prompt is newer than GitHub.
 
 ## Product and security boundary
 
