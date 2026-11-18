@@ -1,12 +1,14 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { env as workerTestBindings } from "cloudflare:workers";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/config/env";
 import worker from "../src";
 import { handleAdminLogin } from "../src/admin/auth";
 
 const ORIGIN = "https://parmar-ai.test";
 const CALLBACK = "/admin/api/intelligence/github/callback";
+
+afterEach(() => vi.unstubAllGlobals());
 
 function ownerEnv(owner = "owner-github-test"): Env {
   return Object.assign({}, workerTestBindings, {
