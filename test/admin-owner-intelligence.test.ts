@@ -203,7 +203,8 @@ class FakeOwnerD1 {
       }
       return changes;
     }
-    if (sql.startsWith("UPDATE owner_intelligence_token_reservations SET status = ?")) {
+    if (sql.includes("UPDATE owner_intelligence_token_reservations") &&
+        sql.includes("SET status = ?")) {
       const [status, actualTokens, estimated, settledAt, reservationId, conversationId, ownerId] = values;
       const row = this.reservations.get(String(reservationId));
       if (!row || row.conversation_id !== String(conversationId) || row.owner_id !== String(ownerId) || row.status !== "reserved") return 0;
