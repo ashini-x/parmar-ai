@@ -211,7 +211,7 @@ export async function getOwnerIntelligenceSessionUsage(
     used_tokens: used,
     reserved_tokens: reserved,
     remaining_tokens: remaining,
-    locked: Boolean(row.locked_reason) || remaining === 0,
+    locked: Boolean(row.locked_reason) || (used >= limit && reserved === 0),
     locked_reason: row.locked_reason,
   };
 }
@@ -271,7 +271,7 @@ async function settleOwnerIntelligenceSessionReservation(
   if (!row) return;
   const reserved = Math.max(0, Number(row.reserved_tokens));
   const estimated = !release && actualTokens === undefined;
-  const charge = release ? 0 : estimated ? reserved : Math.max(0, Math.min(reserved, Math.floor(Number(actualTokens))));
+  const charge = release ? 0 : estimated ? reserved : Math.max(0, Math.floor(Number(actualTokens)));
   const nextStatus = release ? "released" : "settled";
   await env.DB!.batch([
     env.DB!.prepare(
@@ -1400,13 +1400,14 @@ export function ownerIntelligenceClientScript(): Response {
         body.appendChild(node("div","message-detail","The request failed before a complete answer was produced."));
       }
       var sessionLocked=Boolean(state.sessionUsage&&state.sessionUsage.locked);
-      if(item.role==="user"&&!sending&&!sessionLocked){
+      var sessionBusy=Boolean(state.sessionUsage&&Number(state.sessionUsage.reserved_tokens)>0);
+      if(item.role==="user"&&!sending&&!sessionLocked&&!sessionBusy){
         var edit=node("button","message-action","Edit");
         edit.type="button";edit.addEventListener("click",function(){
           editingMessageId=item.id;messageInput.value=item.content;messageInput.focus();updateComposer();
         });
         var actions=node("div","message-actions");actions.appendChild(edit);body.appendChild(actions);
-      }else if(item.role==="assistant"&&item.status!=="pending"&&!sending&&!sessionLocked&&index===items.length-1){
+      }else if(item.role==="assistant"&&item.status!=="pending"&&!sending&&!sessionLocked&&!sessionBusy&&index===items.length-1){
         var retry=node("button","message-action","Regenerate");
         retry.type="button";retry.addEventListener("click",function(){generateMessage({action:"regenerate"});});
         var actions2=node("div","message-actions");actions2.appendChild(retry);body.appendChild(actions2);
@@ -1472,17 +1473,20 @@ export function ownerIntelligenceClientScript(): Response {
     var hasText=messageInput.value.trim().length>0;
     var canGenerate=Boolean(state.activeId&&state.selectedModelId&&state.selectedThinkingLevel);
     var sessionLocked=Boolean(state.sessionUsage&&state.sessionUsage.locked);
-    sendButton.disabled=sending?false:(!canGenerate||!hasText||sessionLocked);
+    var sessionBusy=Boolean(state.sessionUsage&&Number(state.sessionUsage.reserved_tokens)>0);
+    sendButton.disabled=sending?false:(!canGenerate||!hasText||sessionLocked||sessionBusy);
     sendButton.textContent=sending?"■":"↑";
     sendButton.classList.toggle("stop",sending);
     sendButton.setAttribute("aria-label",sending?"Stop generation":"Send message");
-    messageInput.disabled=!state.activeId||sending||sessionLocked;
+    messageInput.disabled=!state.activeId||sending||sessionLocked||sessionBusy;
     modelSelect.disabled=sending||!state.models.length;
     thinkingSelect.disabled=sending||!state.selectedThinkingLevel;
     composerHint.textContent=sending
       ?"Generating with "+state.selectedModelId+" · "+state.selectedThinkingLevel+" · select Stop to keep the partial answer"
       :sessionLocked
         ?"This chat is read-only after its 200,000-token budget. Start a new chat to continue from a GitHub Markdown checkpoint."
+      :sessionBusy
+        ?"A response is already being generated in this chat. Wait for it to finish before sending another message."
       :modelLoadMessage?modelLoadMessage
       :editingMessageId?"Editing a previous message · sending will replace it and remove later turns"
       :"Your selected model and thinking level will be used for this response.";
