@@ -265,6 +265,10 @@ async function installationCallback(env: Env, url: URL): Promise<Response> {
   const consumed = await consumeState(env, state, "installation");
   if (!consumed) return callbackResult("error");
   const owner = consumed.owner_id;
+  const redirectUri = clean(consumed.payload.redirectUri, 500);
+  if (!redirectUri || new URL(redirectUri).origin !== url.origin || new URL(redirectUri).pathname !== CALLBACK) {
+    return callbackResult("error");
+  }
   const { bundle } = await getBundle(env, owner);
   if (Number(consumed.payload.appId) !== bundle.appId) return callbackResult("error");
 
