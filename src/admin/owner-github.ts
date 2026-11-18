@@ -693,9 +693,9 @@ async function loadConversationForSave(env: Env, owner: string, conversationId: 
   ).bind(conversationId, owner).first<{ id: string; title: string; topic_id: string | null }>();
   if (!conversation) return null;
   const result = await env.DB!.prepare(
-    "SELECT id,role,content,status,created_at FROM owner_intelligence_messages WHERE conversation_id=? AND owner_id=? AND role IN ('user','assistant') ORDER BY created_at ASC,id ASC",
+    "SELECT id,role,content,status,created_at FROM owner_intelligence_messages WHERE conversation_id=? AND owner_id=? AND role IN ('user','assistant') ORDER BY created_at DESC,id DESC LIMIT 18",
   ).bind(conversationId, owner).all<OwnerMessage>();
-  return { ...conversation, messages: result.results ?? [] };
+  return { ...conversation, messages: (result.results ?? []).reverse() };
 }
 type TopicMemoryRow = {
   id: string; title: string; github_installation_id: number | null; repository_id: number | null;
@@ -900,7 +900,14 @@ async function confirmMemorySave(env: Env, request: Request, owner: string, prev
   const preview = await loadPreview(env, owner, previewId);
   if (!preview) return notFound();
   if (preview.status === "synced" && preview.commit_sha) {
-    return json({ ok: true, status: "synced", commitSha: preview.commit_sha, idempotent: true });
+    const files = JSON.parse(preview.files_json) as MemoryFile[];
+    return json({
+      ok: true, status: "synced", commitSha: preview.commit_sha,
+      repository: preview.repository_owner + "/" + preview.repository_name,
+      branch: preview.branch, topicId: preview.topic_id,
+      files: files.map((file) => preview.memory_root + "/" + file.name),
+      idempotent: true,
+    });
   }
   if (preview.expires_at <= Date.now() && preview.status === "ready") {
     await env.DB!.prepare("UPDATE owner_intelligence_github_previews SET status='expired',updated_at=? WHERE id=? AND owner_id=? AND status='ready'")
