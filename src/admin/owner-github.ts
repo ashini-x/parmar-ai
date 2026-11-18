@@ -120,7 +120,7 @@ async function github<T>(path: string, token: string, method = "GET", body?: unk
   const response = await fetch(API + path, {
     method,
     headers: {
-      accept: "application/vnd.github+json", "user-agent": "BRɅIN-Owner-Memory",
+      accept: "application/vnd.github+json", "user-agent": "BRVIN-Owner-Memory",
       authorization: "Bearer " + token, "x-github-api-version": "2022-11-28",
       ...(body === undefined ? {} : { "content-type": "application/json" }),
     },
@@ -232,7 +232,7 @@ async function startManifest(env: Env, request: Request, owner: string): Promise
 }
 async function convertManifest(code: string): Promise<{ id?: number; slug?: string; name?: string; pem?: string; client_id?: string; client_secret?: string; permissions?: Record<string, string> }> {
   const response = await fetch(API + "/app-manifests/" + encodeURIComponent(code) + "/conversions", {
-    method: "POST", headers: { accept: "application/vnd.github+json", "user-agent": "BRɅIN-Owner-Memory", "x-github-api-version": "2022-11-28" },
+    method: "POST", headers: { accept: "application/vnd.github+json", "user-agent": "BRVIN-Owner-Memory", "x-github-api-version": "2022-11-28" },
   });
   const raw = await response.text(); let data: unknown = {};
   try { data = raw ? JSON.parse(raw) : {}; } catch { data = {}; }
@@ -308,7 +308,7 @@ async function installationCallback(env: Env, url: URL): Promise<Response> {
 async function exchangeUserCode(bundle: Bundle, code: string, verifier: string): Promise<string> {
   const response = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST",
-    headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded", "user-agent": "BRɅIN-Owner-Memory" },
+    headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded", "user-agent": "BRVIN-Owner-Memory" },
     body: new URLSearchParams({
       client_id: bundle.clientId,
       client_secret: bundle.clientSecret,
