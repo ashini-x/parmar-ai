@@ -196,11 +196,11 @@ async function consumeState(env: Env, state: string, purpose: "manifest" | "inst
     return payload && typeof payload === "object" && !Array.isArray(payload) ? { owner_id: row.owner_id, payload: payload as Record<string, unknown> } : null;
   } catch { return null; }
 }
-function callbackResult(result: "app-created" | "installed" | "error"): Response {
-  // Render a same-origin landing document before navigating into the Owner
-  // workspace. The workspace cookie uses SameSite=Strict; this avoids relying
-  // on it being sent on the first cross-site OAuth redirect request.
-  const target = "/admin/intelligence?github=" + result;
+function callbackResult(result: "app-created" | "installed" | "error", reason?: string): Response {
+  // Return through a same-origin document so the Owner's SameSite=Strict
+  // session is present when the workspace reloads after GitHub's redirect.
+  const target = "/admin/intelligence?github=" + result +
+    (result === "error" && reason ? "&reason=" + encodeURIComponent(reason) : "");
   const html = "<!doctype html><html lang='en'><meta charset='utf-8'><meta name='referrer' content='no-referrer'>" +
     "<meta http-equiv='refresh' content='0;url=" + target + "'><title>Returning to BRɅIN</title>" +
     "<body><p>GitHub connection step completed. <a href='" + target + "'>Continue to BRɅIN Intelligence</a>.</p></body></html>";
@@ -324,42 +324,40 @@ async function exchangeUserCode(bundle: Bundle, code: string, verifier: string):
   return result.access_token;
 }
 async function userAuthorizationCallback(env: Env, url: URL): Promise<Response> {
-  let stage = "validate_callback";
+  let stage = "authorization_response";
   try {
     const code = clean(url.searchParams.get("code"), 1024);
     const state = clean(url.searchParams.get("state"), 128);
-    if (!code || !state || url.searchParams.has("error")) return callbackResult("error");
-    stage = "consume_one_time_state";
+    if (!code || !state || url.searchParams.has("error")) return callbackResult("error", "authorization_response_invalid");
+
+    stage = "state_verification";
     const consumed = await consumeState(env, state, "user_authorization");
-    if (!consumed) return callbackResult("error");
+    if (!consumed) return callbackResult("error", "authorization_state_invalid");
     const owner = consumed.owner_id;
     const redirectUri = clean(consumed.payload.redirectUri, 500);
     if (!redirectUri || new URL(redirectUri).origin !== url.origin || new URL(redirectUri).pathname !== CALLBACK) {
-      console.warn("owner_github_callback_rejected", "redirect_origin_mismatch");
-      return callbackResult("error");
+      return callbackResult("error", "redirect_uri_mismatch");
     }
-    stage = "load_encrypted_app";
+
+    stage = "app_credential_verification";
     const { bundle } = await getBundle(env, owner);
     const installationId = Number(consumed.payload.installationId);
     if (Number(consumed.payload.appId) !== bundle.appId || !Number.isSafeInteger(installationId) || installationId < 1) {
-      console.warn("owner_github_callback_rejected", "app_or_installation_mismatch");
-      return callbackResult("error");
+      return callbackResult("error", "installation_reference_mismatch");
     }
     const verifier = clean(consumed.payload.codeVerifier, 200);
-    if (verifier.length < 43) {
-      console.warn("owner_github_callback_rejected", "pkce_verifier_missing");
-      return callbackResult("error");
-    }
-    stage = "exchange_pkce_user_code";
+    if (verifier.length < 43) return callbackResult("error", "pkce_verifier_missing");
+
+    stage = "user_token_exchange";
     const userToken = await exchangeUserCode(bundle, code, verifier);
-    stage = "verify_github_user";
+
+    stage = "github_user_lookup";
     const user = (await github<{ id?: number; login?: string }>("/user", userToken)).data;
     if (!Number.isSafeInteger(Number(user.id)) || !clean(user.login, 100)) {
-      console.warn("owner_github_callback_rejected", "github_user_unverified");
-      return callbackResult("error");
+      return callbackResult("error", "github_user_unverified");
     }
 
-    stage = "list_user_installations";
+    stage = "installation_lookup";
     const installations: GitHubInstallation[] = [];
     let page = 1;
     while (page <= 5) {
@@ -373,17 +371,13 @@ async function userAuthorizationCallback(env: Env, url: URL): Promise<Response> 
     const selected = installations.find((item) =>
       Number(item.id) === installationId && Number(item.app_id) === bundle.appId,
     );
-    if (!selected) {
-      console.warn("owner_github_callback_rejected", "installation_not_visible_to_authorized_user");
-      return callbackResult("error");
-    }
+    if (!selected) return callbackResult("error", "installation_not_visible_to_user");
     if (!clean(selected.account?.login, 100) || selected.repository_selection !== "selected" ||
         selected.permissions?.metadata !== "read" || selected.permissions?.contents !== "write") {
-      console.warn("owner_github_callback_rejected", "installation_permissions_or_selection_mismatch");
-      return callbackResult("error");
+      return callbackResult("error", "installation_permissions_or_selection_mismatch");
     }
 
-    stage = "persist_verified_installation";
+    stage = "installation_persistence";
     const now = Date.now();
     const saved = await env.DB!.prepare(
       "INSERT INTO " + INSTALL_TABLE +
@@ -395,16 +389,11 @@ async function userAuthorizationCallback(env: Env, url: URL): Promise<Response> 
     ).bind(owner, installationId, bundle.appId, clean(selected.account?.login, 100),
       clean(selected.account?.type, 40), clean(user.login, 100), now, now).run();
     if (!saved.success) throw new Error("D1 did not confirm the verified GitHub installation.");
-    stage = "mark_app_authorized";
     await env.DB!.prepare("UPDATE " + APP_TABLE + " SET status='authorized', updated_at=? WHERE owner_id=? AND app_id=?")
       .bind(now, owner, bundle.appId).run();
-    // The temporary user access token is deliberately not persisted.
     return callbackResult("installed");
-  } catch (error) {
-    // Log only a static stage and error class; never log GitHub tokens, secrets,
-    // private keys, request URLs or upstream response bodies.
-    console.error("owner_github_user_authorization_failed", stage, error instanceof Error ? error.name : "unknown");
-    return callbackResult("error");
+  } catch {
+    return callbackResult("error", stage);
   }
 }
 export async function handleOwnerGithubCallback(request: Request, env: Env, url: URL): Promise<Response> {
