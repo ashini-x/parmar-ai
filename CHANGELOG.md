@@ -1,3 +1,9 @@
+## 2026-11-18: Owner reports M4 interaction and M4.1 meter/concurrency acceptance
+
+- Record the Owner's authenticated production browser report that M4 waiting/first-visible-token/streaming, Stop with partial retention after reopening, Edit/resubmit, Regenerate and selected model/thinking-level preservation behaved as expected.
+- Record M4.1 meter/in-flight reservation checks as passed by Owner report, plus cross-tab concurrency: different conversations can generate concurrently, while a second simultaneous request to the same conversation is rejected.
+- These are Owner-reported UI results; no direct production D1 inspection was captured in this chat. The exact 200,000-token hard-boundary test (final reservation, one-token-over rejection and rejected-prompt non-persistence) remains pending. Do not start M4.2 until that acceptance is closed.
+
 ## 2026-11-18: Owner Gemini transient Vertex stream throttling resilience
 
 - Add at most two retries (three attempts total) for transient initial `StreamGenerateContent` HTTP 408/429/5xx responses, using exponential backoff, jitter and a bounded `Retry-After` delay.

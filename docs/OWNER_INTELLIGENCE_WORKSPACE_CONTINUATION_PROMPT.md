@@ -21,9 +21,9 @@ The Owner can type a prompt or dictate speech into editable text; both use the s
 ## Current implementation status — do not overstate
 
 - M0–M3 are complete and deployed.
-- M4 model-aware thinking, SSE text generation, partial persistence, Stop, Edit/resubmit and Regenerate are implemented/deployed. **Authenticated Owner acceptance is still open** for Stop/partial retention, Edit/resubmit, Regenerate and the observable waiting/streaming lifecycle.
+- M4 model-aware thinking, SSE text generation, partial persistence, Stop, Edit/resubmit and Regenerate are implemented/deployed. **Owner-reported authenticated production acceptance passed on 2026-11-18** for waiting/first-visible-token/streaming status, Stop/partial retention after reload, Edit/resubmit, Regenerate and selected model/thinking-level preservation. Automatic reconnection remains deferred.
 - Owner-reported Vertex `StreamGenerateContent` HTTP 429 / `RESOURCE_EXHAUSTED` is separate from the 200K conversation cap. PR [#338](https://github.com/ashini-x/parmar-ai/pull/338) is merged as `518dd899db443caa0f9db3e402961e90cb5baf82`; production Worker version `3dc555ca-c84b-49c0-8f73-2575c2397143` is at 100% traffic. The current endpoint remains `global`. The Worker now retries transient initial 408/429/5xx stream-open responses at most twice with exponential backoff, jitter and a capped `Retry-After`; it does not retry permanent 4xx or an already accepted SSE stream, and Stop cancels the wait. The exact selected model/thinking level/request is preserved. **The Owner must still test the same Hydrogen HIGH request after deployment**; persistent failures require checking Google project/model quotas, billing tier and capacity. Preserve the exact 200,000-token M4.1 D1 budget and reservation/settlement architecture.
-- M4.1's independent **200,000 cumulative token budget per conversation** is merged and deployed (PR #335). D1 tracks committed usage and in-flight reservations; exact CountTokens preflight, output reservation/cap, usage settlement and the visible meter/read-only boundary are implemented. **Authenticated Owner acceptance is still open** for meter refresh, in-flight reservation visibility and the exact 200,000-token hard boundary.
+- M4.1's independent **200,000 cumulative token budget per conversation** is merged and deployed (PR #335). D1 tracks committed usage and in-flight reservations; exact CountTokens preflight, output reservation/cap, usage settlement and the visible meter/read-only boundary are implemented. **Owner-reported browser acceptance passed** for meter/in-flight reservation and concurrency: different conversations can generate concurrently, but a second request to the same conversation is rejected across tabs. The exact 200,000-token hard-boundary check remains open.
 - M4.2–M4.8 are approved design only. Scratchpad/topic management, runtime GitHub App auth, automatic Save to GitHub, pinned Project Memory loading, rollover, Replicator middleware, historical recall, compaction, forks and caching are **not implemented**.
 - Automatic in-place SSE reconnection is deferred and not implemented.
 
@@ -31,14 +31,11 @@ The Owner can type a prompt or dictate speech into editable text; both use the s
 
 **Do not start M4.2 or implement the Replicator yet.** First close the existing authenticated M4 and M4.1 acceptance checks, in this order:
 
-1. Verify M4 waiting/first-visible-token/streaming status transitions and ensure only observable request state is shown.
-   - First, retry the previously failing Hydrogen HIGH request on the deployed Worker and record whether bounded `RESOURCE_EXHAUSTED` retries recover; a successful deployment alone does not prove persistent Google throttling is resolved.
-   - Automated retry regression must prove the same selected model/thinking request is retried only for transient initial `StreamGenerateContent` 408/429/5xx responses, and stops after the bounded attempt count.
-2. Verify Stop retains truthful partial response text/status.
-3. Verify Edit/resubmit and Regenerate preserve turn order and selected model/thinking level.
-4. Verify M4.1 meter refresh after completed/stopped/failed generation, including used/reserved/remaining values while a generation is in flight.
-5. Verify a second concurrent generation cannot over-reserve the same chat, and the server rejects a turn at the exact 200,000-token boundary before persisting the rejected prompt.
-6. Record the actual browser evidence in the roadmap. Do not claim a manual check passed until it has been performed.
+1. **Reported passed:** M4 waiting/first-visible-token/streaming status, Stop with partial retention after reload, Edit/resubmit and Regenerate preserve turn order and selected model/thinking level.
+2. **Reported passed:** M4.1 meter refresh and in-flight reservation display; distinct conversations can generate concurrently, while a second generation in the same conversation is rejected across tabs.
+3. **Still open:** prove the exact 200,000-token hard boundary in deterministic server/D1 tests: final permitted reservation, one-token-over rejection, concurrent reservation rejection and no persistence of a rejected prompt. Do not consume 200K production tokens to test this.
+4. Separately confirm whether the deployed bounded retry recovers the previously failing Hydrogen HIGH `RESOURCE_EXHAUSTED` request. If all three attempts still fail, inspect Google project/model quota, billing tier and capacity; do not remove the M4.1 limit or switch models silently.
+5. Record any new evidence accurately in the roadmap. Treat Owner-reported UI results as such; do not claim a direct D1 inspection unless performed.
 
 Once both M4 and M4.1 acceptance gates pass, implement M4.2, then M4.3 through M4.8 sequentially. Only after that continuity sequence resume the unchanged original M5 voice-dictation milestone, then M6–M8. Do not renumber or silently mark any milestone complete.
 

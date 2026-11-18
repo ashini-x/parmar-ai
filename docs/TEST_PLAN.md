@@ -56,17 +56,24 @@ Automated checks added for this release:
 - Legacy conversations are backfilled from recorded assistant generation `total_tokens` metadata.
 - Edit/regenerate preflight failure leaves the original prompt and later turns intact rather than committing a destructive edit before provider preflight succeeds.
 
+Authenticated Owner browser evidence reported 2026-11-18:
+
+- **M4 interaction acceptance — reported passed:** Owner observed the waiting/first-visible-token/streaming lifecycle; Stop retained partial text/status after reopening; Edit/resubmit and Regenerate retained turn order and the selected model/thinking level.
+- **M4.1 meter/concurrency — reported passed:** Owner reports used/reserved/remaining and in-flight reservation behavior matched expectations. Two tabs on different conversations generated concurrently; two tabs on the same conversation did not permit a second simultaneous generation.
+- This is a record of the Owner's browser report. No direct production D1 query or independent screenshot artifact was captured in this chat. Do not infer exact D1 reservation values or database non-persistence solely from the UI report.
+- **Still pending:** exact 200,000-token hard-boundary server/D1 acceptance, including the final permitted reservation, one-token-over rejection before prompt persistence, and same-conversation concurrent reservation race. Do not use 200K production token expenditure to create this test state.
+
 Production acceptance for this release:
 
 - Open an existing Owner chat and confirm the meter shows used, in-flight reserved and remaining token counts; verify the meter refreshes after a completed, stopped or failed generation.
-- Confirm an in-flight request reserves capacity and prevents a second concurrent generation in that chat, including when the reservation consumes all remaining capacity; it must not be displayed as a completed/read-only session until the reservation is settled.
-- Exercise the 200,000-token boundary and verify the server returns 409 before a rejected prompt is persisted. A new chat must show a fresh 200,000-token budget.
+- Confirm an in-flight request reserves capacity and prevents a second concurrent generation in that chat, including when the reservation consumes all remaining capacity; it must not be displayed as a completed/read-only session until the reservation is settled. Owner reports the two-tab same-chat rejection and independent-chat concurrency check passed on 2026-11-18.
+- **Still pending:** exercise the exact 200,000-token boundary and verify the server returns 409 before a rejected prompt is persisted. A new chat must show a fresh 200,000-token budget. Prefer deterministic test fixtures/D1 tests rather than consuming real production tokens.
 - Verify the GitHub Markdown checkpoint reminder is visible and that the Owner can start a new chat and manually paste a checkpoint link. No automatic GitHub import or cross-chat context transfer is implemented.
 - Confirm a stream with final usage metadata settles from `totalTokenCount`; an interrupted stream without final usage metadata is conservatively charged at its reservation.
 
 The automated tests are not a substitute for authenticated Owner production browser acceptance. Record the exact deployed revision and workflow before marking the production acceptance complete.
 
-**Automated and release evidence for 2026-11-18:** PR validation [44221814569](https://github.com/ashini-x/parmar-ai/actions/runs/44221814569) passed `npm run check`, 494 Vitest tests across 72 files, 62 Node tests across 9 files and dry-run bundle validation for the BRVIN service, Parmar AI Worker and standalone BRɅIN website Worker. Merged revision `109e21b155b794ec2ac1cc29274d5513e56c6762` was deployed by production workflow [44222082173](https://github.com/ashini-x/parmar-ai/actions/runs/44222082173). Paired Worker deployment, root and health smoke checks, BRVIN service binding, Fatman retrieval readiness and release acceptance passed. Authenticated Owner-specific browser tests for the budget meter and exact exhaustion boundary remain unchecked and must be completed by an Owner session.
+**Automated and release evidence for 2026-11-18:** PR validation [44221814569](https://github.com/ashini-x/parmar-ai/actions/runs/44221814569) passed `npm run check`, 494 Vitest tests across 72 files, 62 Node tests across 9 files and dry-run bundle validation for the BRVIN service, Parmar AI Worker and standalone BRɅIN website Worker. Merged revision `109e21b155b794ec2ac1cc29274d5513e56c6762` was deployed by production workflow [44222082173](https://github.com/ashini-x/parmar-ai/actions/runs/44222082173). Paired Worker deployment, root and health smoke checks, BRVIN service binding, Fatman retrieval readiness and release acceptance passed. Authenticated Owner-specific browser checks for the meter and in-flight reservation are reported passed on 2026-11-18; the exact exhaustion boundary remains unchecked and must be verified deterministically before M4.1 is closed.
 
 ## Limits
 - Five accepted questions in the burst window cause the sixth to receive the burst response.
