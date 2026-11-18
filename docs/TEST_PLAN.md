@@ -290,7 +290,7 @@ PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/
 - Idempotency: repeated confirmation after Synced returns the same stored commit result and does not mint a second write token or create another commit. Verifying/committing states retry the stored commit; conflicts require a fresh preview.
 - Transcript integrity: compare conversation/message IDs and content plus generation metadata before/after preview and save. GitHub save does not delete or rewrite D1 transcript messages. The draft generation alone adds its measured/estimated usage to the same 200K ledger.
 
-#### Owner-authenticated browser acceptance still required after deployment
+#### Owner-authenticated browser acceptance still required to complete M4.3
 1. Create the dedicated private App from the Owner workspace; verify GitHub lists only Metadata read + Contents write and no events.
 2. Install on selected repositories only. Complete the GitHub authorization round trip and confirm only installations verified for the authorized GitHub account appear.
 3. Attach one selected repository/branch/memory-root to a project topic.
