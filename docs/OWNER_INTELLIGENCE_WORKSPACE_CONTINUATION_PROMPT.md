@@ -125,11 +125,13 @@ This section supersedes any earlier wording in this prompt that assumes one GitH
 
 ### Owner's immediate actions
 
-1. The repository now exists: [`ashini-x/owner-memory-hub`](https://github.com/ashini-x/owner-memory-hub), ID `1463342529`, default branch `main`, README present. **GitHub currently reports it as Public. Change it to Private first and verify the new visibility before connecting the App.** Do not put source code or secrets in it.
-2. In GitHub → Settings → Applications → Installed GitHub Apps → BRɅIN Owner Memory → Configure, change Repository access to **Only select repositories** and select only `owner-memory-hub`. The current production callback intentionally rejects `repository_selection=all`; do not choose All repositories.
-3. Return to Owner Intelligence, start the Install GitHub App flow again and complete the GitHub authorization/PKCE round trip so the new selected-only installation is verified and recorded in D1.
-4. Create one Owner topic per project for the M4.3 transition. Attach the same `owner-memory-hub` repository and a unique memory-root path such as `projects/<project-id>/memory` to each topic. Do not create one repo per project. Hierarchical workstream/feature selectors come with M4.4.
-5. Complete the real M4.3 preview/edit/confirm/read-back and stale-branch Conflict browser acceptance before M4.4 begins.
+1. The hub now exists and GitHub metadata verifies [`ashini-x/owner-memory-hub`](https://github.com/ashini-x/owner-memory-hub) is **Private**, ID `1463342529`, default branch `main`, README present. Do not copy source code or secrets into it.
+2. The Owner reports BRɅIN Owner Memory is set to **Only select repositories** with only `owner-memory-hub`. Do not uninstall/delete it yet.
+3. In Owner Intelligence, click **Install GitHub App** once. This creates a fresh one-use 30-minute installation state and opens GitHub. If it shows the App is already installed, open **Configure** for that installation; verify only `owner-memory-hub` is selected under **Only select repositories**, then save/confirm. The manifest sets `setup_on_update: true`; the update redirect should preserve the fresh state and return to the Worker setup callback.
+4. Complete the subsequent GitHub user-authorization/PKCE step using the same account, then return to Owner Intelligence and refresh. Expected state: `Connected · 1 verified installation(s)`, with the account and repository selectors. Confirm `ashini-x/owner-memory-hub` appears as Private.
+5. If GitHub does not redirect to the Worker setup URL or the panel still says installation required after PKCE, capture the final safe URL/error and screenshot. Do not repeatedly click Install or uninstall/recreate the App until callback state/redirect configuration is diagnosed.
+6. Once connected, create one Owner topic per project for the M4.3 transition. Attach the same hub repository and a unique memory-root path such as `projects/<project-id>/memory`; do not create one repo per project. Hierarchical workstream/feature selectors come with M4.4.
+7. Complete the real M4.3 preview/edit/confirm/read-back and stale-branch Conflict browser acceptance before M4.4 begins.
 
 ### M4.4–M4.8 design authority
 
