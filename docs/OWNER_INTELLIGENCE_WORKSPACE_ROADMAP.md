@@ -481,8 +481,16 @@ All seven original Owner scenarios stay in scope: reviewed save; durable Scratch
 
 ### GitHub installation and current gate
 
-The Owner Memory App verification deliberately requires a **selected-repositories** installation, not GitHub's "All repositories" setting. The target setup is to install/configure that App for only the private `owner-memory-hub` repository with the existing exact permissions (Metadata read, Contents read/write) and no webhook events. The repository has not been confirmed created in this task. The Owner must create it privately with a README, then configure the App to select only that repository and complete a fresh Owner Intelligence installation/PKCE round trip.
+The Owner Memory App verification deliberately requires a **selected-repositories** installation, not GitHub's "All repositories" setting. The target setup is to install/configure that App for only the private `owner-memory-hub` repository with the existing exact permissions (Metadata read, Contents read/write) and no webhook events. The repository now exists as `ashini-x/owner-memory-hub` (ID `1463342529`, default branch `main`, README present), but GitHub currently reports it as **Public**. The Owner must change it to **Private** and verify that setting before configuring the App to select only this repository and completing a fresh Owner Intelligence installation/PKCE round trip.
 
 M4.3 implementation remains deployed; live Owner acceptance remains pending. After the hub install, verify a real reviewed save to a project-specific memory root, exact commit/file read-back and stale-branch Conflict. Do not mark M4.3 accepted before that browser walkthrough. M4.4 then implements hierarchical manifests, pinned hub snapshots and scoped memory loading, plus safe path-aware multi-writer conflict handling. Existing branch-head protection must not be weakened; unrelated-path advances may be rebased only after all touched-file and manifest preconditions pass.
 
 **Canonical protocol:** [OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md](OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md). This decision is approved at the documentation/architecture level only; it does not claim that the new repository, collaboration UI, automatic classification, prompt loader, path-aware merge or AI orchestration already exists.
+
+
+
+### Owner Memory Hub provisioning status — 2026-11-19 IST
+
+- Verified GitHub repository: [`ashini-x/owner-memory-hub`](https://github.com/ashini-x/owner-memory-hub), repository ID `1463342529`, default branch `main`, README present (`# owner-memory-hub`), no source-code migration observed.
+- **Blocking issue:** GitHub currently reports `visibility=public`; the design requires **Private**. Change repository visibility to Private and verify it before installing/using the write-capable Owner Memory App.
+- Next: configure the App for selected repositories only and select only this hub, complete the Owner Intelligence installation/PKCE callback, then finish M4.3 save/read-back/stale-branch Conflict acceptance.
