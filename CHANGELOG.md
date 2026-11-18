@@ -1,3 +1,11 @@
+## 2026-11-18: Owner Intelligence M4.2 Scratchpad/topic foundation deployed
+
+- PR [#343](https://github.com/ashini-x/parmar-ai/pull/343) merged as `5dfd42499fc9f14dfda915c3c264242af779dc2d`.
+- PR validation [44340775103](https://github.com/ashini-x/parmar-ai/actions/runs/44340775103): TypeScript, 503 Vitest tests/73 files, 62 Node tests/9 files and all three Worker dry-run bundles passed.
+- Production workflow [44341065839](https://github.com/ashini-x/parmar-ai/actions/runs/44341065839) passed paired Worker deployment, root/health smoke, BRVIN service binding, Fatman retrieval readiness and production acceptance. `parmar-ai` version `107a75e0-4f62-4a16-a748-6b0f0b6e6894` (deployment `06dcc10a-0ee3-4b6c-be66-81b7746c9e20`) and `brvin-service` version `030e0db4-c94d-40e7-a246-a22213aca3b8` (deployment `f111b1b0-b659-4f5d-8560-50d578c20411`) are both at 100% traffic. Manifest artifact [14443836745](https://github.com/ashini-x/parmar-ai/actions/runs/44341065839/artifacts/14443836745). No rollback was required.
+- M4.2 provides D1-backed Owner topics, additive conversation metadata, persistent Scratchpad default, optional topic association and protected topic controls. It does not load GitHub Project Memory or pin repository/branch/commit snapshots; those belong to M4.3–M4.4.
+- Owner reports latest Hydrogen HIGH request responds without displaying `RESOURCE_EXHAUSTED` after PR #338. This is a successful observed request, not proof that transient shared provider capacity issues can never recur.
+
 ## 2026-11-18: Owner Intelligence M4.2 Scratchpad/topic foundation validated
 
 - Add Owner-scoped D1 topics with title/slug/lifecycle fields and repository/memory snapshot placeholders for later milestones; expose Owner-only list/create/rename APIs.
