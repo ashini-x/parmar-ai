@@ -12,11 +12,24 @@ export interface OwnerIntelligenceSessionUsage {
   locked_reason?: string | null;
 }
 
+export interface OwnerIntelligenceTopic {
+  id: string;
+  title: string;
+  slug: string;
+  lifecycle_status: "active" | "archived";
+  created_at: number;
+  updated_at: number;
+}
+
 export interface OwnerIntelligenceConversation {
   id: string;
   title: string;
   created_at: number;
   updated_at: number;
+  topic_id: string | null;
+  topic_title?: string | null;
+  session_kind: "scratchpad" | "topic";
+  lifecycle_status: "active" | "archived";
 }
 
 export interface OwnerIntelligenceMessage {
@@ -34,8 +47,12 @@ export interface OwnerIntelligenceMessage {
   elapsed_ms?: number | null;
 }
 
-interface OwnerConversationRow extends OwnerIntelligenceConversation {
+interface OwnerConversationRow extends Partial<OwnerIntelligenceConversation> {
+  id: string;
   owner_id: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
 }
 
 interface OwnerMessageRow extends OwnerIntelligenceMessage {
@@ -48,6 +65,7 @@ const MAX_MESSAGE_LENGTH = 50_000;
 const MAX_OWNER_GEMINI_CONTEXT_CHARS = 300_000;
 const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
 const MAX_CONVERSATIONS = 100;
+const MAX_TOPICS = 100;
 export const OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT = 200_000;
 const OWNER_INTELLIGENCE_DEFAULT_OUTPUT_RESERVATION = 8_192;
 const OWNER_INTELLIGENCE_RESERVATION_TTL_MS = 10 * 60_000;
@@ -72,6 +90,25 @@ export async function ensureOwnerIntelligenceSchema(env: Env): Promise<void> {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_conversations_owner_updated
       ON owner_intelligence_conversations(owner_id, updated_at DESC)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_topics (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      lifecycle_status TEXT NOT NULL DEFAULT 'active',
+      repository_owner TEXT,
+      repository_name TEXT,
+      repository_branch TEXT,
+      memory_root TEXT,
+      manifest_revision TEXT,
+      current_commit_sha TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`),
+    db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_intelligence_topics_owner_slug
+      ON owner_intelligence_topics(owner_id, slug)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_topics_owner_updated
+      ON owner_intelligence_topics(owner_id, updated_at DESC)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_messages (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL,
@@ -125,6 +162,32 @@ export async function ensureOwnerIntelligenceSchema(env: Env): Promise<void> {
   if (results.some((result) => !result.success)) {
     throw new Error("D1 did not confirm the Owner Intelligence schema.");
   }
+
+  // M4.2 is an additive migration: old conversations become Scratchpads by
+  // default, while their IDs, messages, usage rows and reservation history stay
+  // untouched. PRAGMA + duplicate-column verification makes parallel Worker
+  // isolates safe when they first encounter an older database.
+  const conversationColumns = await db.prepare("PRAGMA table_info(owner_intelligence_conversations)").all<{ name: string }>();
+  const knownColumns = new Set((conversationColumns.results ?? []).map((column) => column.name));
+  const additions = [
+    ["topic_id", "ALTER TABLE owner_intelligence_conversations ADD COLUMN topic_id TEXT"],
+    ["session_kind", "ALTER TABLE owner_intelligence_conversations ADD COLUMN session_kind TEXT NOT NULL DEFAULT 'scratchpad'"],
+    ["lifecycle_status", "ALTER TABLE owner_intelligence_conversations ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'active'"],
+  ] as const;
+  for (const [column, statement] of additions) {
+    if (knownColumns.has(column)) continue;
+    try {
+      const result = await db.prepare(statement).run();
+      if (!result.success) throw new Error("D1 rejected the Owner conversation migration.");
+    } catch (error) {
+      const refreshed = await db.prepare("PRAGMA table_info(owner_intelligence_conversations)").all<{ name: string }>();
+      if (!(refreshed.results ?? []).some((item) => item.name === column)) throw error;
+    }
+  }
+  const migrationIndex = await db.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_owner_intelligence_conversations_owner_topic ON owner_intelligence_conversations(owner_id, topic_id, updated_at DESC)",
+  ).run();
+  if (!migrationIndex.success) throw new Error("D1 did not confirm the Owner topic index.");
   readyDatabases.add(db);
 }
 
@@ -298,7 +361,67 @@ function normalizedTitle(value: unknown): string {
 }
 
 function mapConversation(row: OwnerConversationRow): OwnerIntelligenceConversation {
-  return { id: row.id, title: row.title, created_at: Number(row.created_at), updated_at: Number(row.updated_at) };
+  const topicId = row.topic_id ?? null;
+  return {
+    id: row.id,
+    title: row.title,
+    created_at: Number(row.created_at),
+    updated_at: Number(row.updated_at),
+    topic_id: topicId,
+    ...(row.topic_title ? { topic_title: row.topic_title } : {}),
+    session_kind: row.session_kind === "topic" || topicId ? "topic" : "scratchpad",
+    lifecycle_status: row.lifecycle_status === "archived" ? "archived" : "active",
+  };
+}
+
+function mapTopic(row: OwnerIntelligenceTopic & { owner_id: string }): OwnerIntelligenceTopic {
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    lifecycle_status: row.lifecycle_status === "archived" ? "archived" : "active",
+    created_at: Number(row.created_at),
+    updated_at: Number(row.updated_at),
+  };
+}
+
+function topicSlug(title: string, id: string): string {
+  const base = title.normalize("NFKD").replace(/[\\u0300-\\u036f]/gu, "")
+    .toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 36) || "topic";
+  return base + "-" + id.slice(0, 8);
+}
+
+export async function listOwnerIntelligenceTopics(env: Env): Promise<OwnerIntelligenceTopic[]> {
+  await ensureOwnerIntelligenceSchema(env);
+  const result = await env.DB!.prepare(
+    "SELECT id, owner_id, title, slug, lifecycle_status, created_at, updated_at FROM owner_intelligence_topics WHERE owner_id = ? AND lifecycle_status = 'active' ORDER BY title COLLATE NOCASE ASC, created_at ASC LIMIT ?",
+  ).bind(ownerPrincipal(env), MAX_TOPICS).all<OwnerIntelligenceTopic & { owner_id: string }>();
+  return (result.results ?? []).map(mapTopic);
+}
+
+export async function createOwnerIntelligenceTopic(env: Env, title: string): Promise<OwnerIntelligenceTopic> {
+  await ensureOwnerIntelligenceSchema(env);
+  const safeTitle = normalizedTitle(title);
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  const slug = topicSlug(safeTitle, id);
+  const result = await env.DB!.prepare(
+    "INSERT INTO owner_intelligence_topics (id, owner_id, title, slug, lifecycle_status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)",
+  ).bind(id, ownerPrincipal(env), safeTitle, slug, now, now).run();
+  if (!result.success) throw new Error("D1 did not confirm the new topic.");
+  return { id, title: safeTitle, slug, lifecycle_status: "active", created_at: now, updated_at: now };
+}
+
+export async function renameOwnerIntelligenceTopic(env: Env, id: string, title: string): Promise<OwnerIntelligenceTopic | null> {
+  await ensureOwnerIntelligenceSchema(env);
+  const result = await env.DB!.prepare(
+    "UPDATE owner_intelligence_topics SET title = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND lifecycle_status = 'active'",
+  ).bind(normalizedTitle(title), Date.now(), id, ownerPrincipal(env)).run();
+  if (!result.success) throw new Error("D1 did not confirm the topic rename.");
+  const row = await env.DB!.prepare(
+    "SELECT id, owner_id, title, slug, lifecycle_status, created_at, updated_at FROM owner_intelligence_topics WHERE id = ? AND owner_id = ?",
+  ).bind(id, ownerPrincipal(env)).first<OwnerIntelligenceTopic & { owner_id: string }>();
+  return row ? mapTopic(row) : null;
 }
 
 function mapMessage(row: OwnerMessageRow): OwnerIntelligenceMessage {
@@ -321,7 +444,11 @@ function mapMessage(row: OwnerMessageRow): OwnerIntelligenceMessage {
 export async function listOwnerIntelligenceConversations(env: Env): Promise<OwnerIntelligenceConversation[]> {
   await ensureOwnerIntelligenceSchema(env);
   const result = await env.DB!.prepare(
-    "SELECT id, owner_id, title, created_at, updated_at FROM owner_intelligence_conversations WHERE owner_id = ? ORDER BY updated_at DESC, created_at DESC LIMIT ?",
+    `SELECT id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status,
+      (SELECT t.title FROM owner_intelligence_topics t
+       WHERE t.id = owner_intelligence_conversations.topic_id AND t.owner_id = owner_intelligence_conversations.owner_id) AS topic_title
+     FROM owner_intelligence_conversations
+     WHERE owner_id = ? ORDER BY updated_at DESC, created_at DESC LIMIT ?`,
   ).bind(ownerPrincipal(env), MAX_CONVERSATIONS).all<OwnerConversationRow>();
   return (result.results ?? []).map(mapConversation);
 }
@@ -329,16 +456,36 @@ export async function listOwnerIntelligenceConversations(env: Env): Promise<Owne
 export async function createOwnerIntelligenceConversation(
   env: Env,
   title = "New chat",
+  topicId?: string | null,
 ): Promise<OwnerIntelligenceConversation> {
   await ensureOwnerIntelligenceSchema(env);
+  const ownerId = ownerPrincipal(env);
+  let topic: OwnerIntelligenceTopic | null = null;
+  if (topicId) {
+    const row = await env.DB!.prepare(
+      "SELECT id, owner_id, title, slug, lifecycle_status, created_at, updated_at FROM owner_intelligence_topics WHERE id = ? AND owner_id = ? AND lifecycle_status = 'active'",
+    ).bind(topicId, ownerId).first<OwnerIntelligenceTopic & { owner_id: string }>();
+    if (!row) throw new Error("The selected topic is not available to this Owner.");
+    topic = mapTopic(row);
+  }
   const id = crypto.randomUUID();
   const now = Date.now();
   const safeTitle = normalizedTitle(title);
-  const result = await env.DB!.prepare(
-    "INSERT INTO owner_intelligence_conversations (id, owner_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-  ).bind(id, ownerPrincipal(env), safeTitle, now, now).run();
+  const result = topic
+    ? await env.DB!.prepare(
+      "INSERT INTO owner_intelligence_conversations (id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status) VALUES (?, ?, ?, ?, ?, ?, 'topic', 'active')",
+    ).bind(id, ownerId, safeTitle, now, now, topic.id).run()
+    : await env.DB!.prepare(
+      "INSERT INTO owner_intelligence_conversations (id, owner_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    ).bind(id, ownerId, safeTitle, now, now).run();
   if (!result.success) throw new Error("D1 did not confirm the new conversation.");
-  return { id, title: safeTitle, created_at: now, updated_at: now };
+  return {
+    id, title: safeTitle, created_at: now, updated_at: now,
+    topic_id: topic?.id ?? null,
+    ...(topic ? { topic_title: topic.title } : {}),
+    session_kind: topic ? "topic" : "scratchpad",
+    lifecycle_status: "active",
+  };
 }
 
 export async function getOwnerIntelligenceConversation(
@@ -348,7 +495,10 @@ export async function getOwnerIntelligenceConversation(
   await ensureOwnerIntelligenceSchema(env);
   const ownerId = ownerPrincipal(env);
   const row = await env.DB!.prepare(
-    "SELECT id, owner_id, title, created_at, updated_at FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
+    `SELECT id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status,
+      (SELECT t.title FROM owner_intelligence_topics t
+       WHERE t.id = owner_intelligence_conversations.topic_id AND t.owner_id = owner_intelligence_conversations.owner_id) AS topic_title
+     FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?`,
   ).bind(id, ownerId).first<OwnerConversationRow>();
   if (!row) return null;
 
@@ -376,7 +526,7 @@ export async function renameOwnerIntelligenceConversation(
   ).bind(normalizedTitle(title), Date.now(), id, ownerPrincipal(env)).run();
   if (!result.success) throw new Error("D1 did not confirm the conversation rename.");
   const row = await env.DB!.prepare(
-    "SELECT id, owner_id, title, created_at, updated_at FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
+    "SELECT id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
   ).bind(id, ownerPrincipal(env)).first<OwnerConversationRow>();
   return row ? mapConversation(row) : null;
 }
@@ -976,6 +1126,41 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
     return handleOwnerGeneration(request, env, generationMatch[1]);
   }
 
+  const topicsRoot = "/admin/api/intelligence/topics";
+  if (url.pathname === topicsRoot) {
+    if (request.method === "GET") return json({ ok: true, topics: await listOwnerIntelligenceTopics(env) });
+    if (request.method === "POST") {
+      if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+      const body = await readJsonBody(request);
+      if (!body || Object.keys(body).some((key) => key !== "title") || typeof body.title !== "string") {
+        return json({ ok: false, error: "invalid_request" }, 400);
+      }
+      try {
+        return json({ ok: true, topic: await createOwnerIntelligenceTopic(env, body.title) }, 201);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Invalid topic title.";
+        return json({ ok: false, error: "invalid_topic", message }, 400);
+      }
+    }
+    return methodNotAllowed(["GET", "POST"]);
+  }
+  const topicMatch = url.pathname.match(/^\\/admin\\/api\\/intelligence\\/topics\\/([0-9a-f-]{36})$/iu);
+  if (topicMatch && validConversationId(topicMatch[1])) {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+    const body = await readJsonBody(request);
+    if (!body || Object.keys(body).length !== 1 || typeof body.title !== "string") {
+      return json({ ok: false, error: "invalid_request" }, 400);
+    }
+    try {
+      const topic = await renameOwnerIntelligenceTopic(env, topicMatch[1], body.title);
+      return topic ? json({ ok: true, topic }) : notFound();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid topic title.";
+      return json({ ok: false, error: "invalid_topic", message }, 400);
+    }
+  }
+
   const root = "/admin/api/intelligence/conversations";
   if (url.pathname === root) {
     if (request.method === "GET") {
@@ -984,11 +1169,18 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
     if (request.method === "POST") {
       if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
       const body = await readJsonBody(request);
-      if (!body || (body.title !== undefined && typeof body.title !== "string")) {
+      if (!body ||
+          Object.keys(body).some((key) => key !== "title" && key !== "topicId") ||
+          (body.title !== undefined && typeof body.title !== "string") ||
+          (body.topicId !== undefined && body.topicId !== null && (typeof body.topicId !== "string" || !validConversationId(body.topicId)))) {
         return json({ ok: false, error: "invalid_request" }, 400);
       }
       try {
-        const conversation = await createOwnerIntelligenceConversation(env, body.title === undefined ? "New chat" : body.title);
+        const conversation = await createOwnerIntelligenceConversation(
+          env,
+          body.title === undefined ? "New chat" : body.title,
+          typeof body.topicId === "string" ? body.topicId : null,
+        );
         return json({ ok: true, conversation }, 201);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Invalid conversation title.";
