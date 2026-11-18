@@ -1266,6 +1266,15 @@ function workspaceHtml(): string {
 .new-topic-button:hover,.rename-topic-button:not(:disabled):hover{background:#363636;color:#fff}
 .rename-topic-button{align-self:flex-start;padding:5px 7px;font-size:9px}
 .rename-topic-button:disabled{opacity:.4;cursor:not-allowed}
+.github-panel{display:flex;flex-direction:column;gap:7px;margin-top:12px;padding:10px;border:1px solid #303030;border-radius:10px;background:#1d1d1d}
+.github-panel-title{font-size:9px;letter-spacing:.12em;font-weight:700;color:#929292}
+.github-panel-status{font-size:10px;color:#c6c6c6;line-height:1.4}
+.github-connect-button,.github-attach-button{width:100%;border:1px solid #454545;border-radius:7px;background:#292929;color:#e3e3e3;padding:8px;font-size:10px;text-align:center}
+.github-connect-button:hover,.github-attach-button:not(:disabled):hover{background:#3a3a3a}
+.github-attach-button:disabled{opacity:.4;cursor:not-allowed}
+.github-field-label{font-size:8px;letter-spacing:.1em;color:#858585;font-weight:650;margin-top:3px}
+.github-field{width:100%;min-width:0;border:1px solid #414141;border-radius:7px;background:#292929;color:#e5e5e5;padding:7px;font:inherit;font-size:10px}
+.github-hint{margin:0;color:#858585;font-size:9px;line-height:1.45;overflow-wrap:anywhere}
 .conversation-heading{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .conversation-scope{display:inline-flex;align-items:center;border:1px solid #454545;border-radius:999px;padding:3px 8px;background:#292929;color:#bdbdbd;font-size:9px;font-weight:650;letter-spacing:.08em;text-transform:uppercase}
 .conversation-title{color:#e4e4e4;font-size:13px;font-weight:550;letter-spacing:0}
@@ -1295,6 +1304,23 @@ function workspaceHtml(): string {
     </div>
     <button class="rename-topic-button" id="renameTopic" type="button" disabled>Rename selected topic</button>
   </div>
+  <section class="github-panel" aria-label="GitHub project connection">
+    <div class="github-panel-title">GITHUB PROJECT MEMORY</div>
+    <div class="github-panel-status" id="githubStatus">Checking connection…</div>
+    <button class="github-connect-button" id="githubConnect" type="button">Connect GitHub</button>
+    <div id="githubRepositoryControls" hidden>
+      <label class="github-field-label" for="githubInstallation">ACCOUNT INSTALLATION</label>
+      <select class="github-field" id="githubInstallation" aria-label="GitHub installation"></select>
+      <label class="github-field-label" for="githubRepository">REPOSITORY</label>
+      <select class="github-field" id="githubRepository" aria-label="GitHub repository" disabled><option value="">Choose an installation first</option></select>
+      <label class="github-field-label" for="githubBranch">BRANCH</label>
+      <input class="github-field" id="githubBranch" value="main" maxlength="120" autocomplete="off">
+      <label class="github-field-label" for="githubMemoryRoot">MEMORY ROOT</label>
+      <input class="github-field" id="githubMemoryRoot" value="memory" maxlength="180" autocomplete="off">
+      <button class="github-attach-button" id="githubAttachTopic" type="button" disabled>Attach repository to topic</button>
+    </div>
+    <p class="github-hint" id="githubHint">Only the Owner can connect a private GitHub App. Project Memory loading and saving are separate steps.</p>
+  </section>
   <div class="section-label">Your conversations</div>
   <div class="history" id="history" aria-live="polite"><div class="loading">Loading conversations…</div></div>
   <div class="side-footer"><div class="owner-note"><span class="owner-dot"></span><span>Owner workspace · Private</span></div><form method="post" action="/admin/logout"><button class="logout" type="submit">↗&nbsp; Sign out</button></form></div>
@@ -1334,7 +1360,7 @@ export function ownerIntelligenceClientScript(): Response {
 (function(){
   "use strict";
   var api="/admin/api/intelligence/conversations";
-  var state={conversations:[],topics:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
+  var state={conversations:[],topics:[],githubInstallations:[],githubRepositories:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
   var history=document.getElementById("history");
   var messages=document.getElementById("messages");
   var heading=document.getElementById("conversationHeading");
@@ -1354,6 +1380,16 @@ export function ownerIntelligenceClientScript(): Response {
   var newChatTopic=document.getElementById("newChatTopic");
   var newTopicButton=document.getElementById("newTopic");
   var renameTopicButton=document.getElementById("renameTopic");
+  var githubStatus=document.getElementById("githubStatus");
+  var githubConnect=document.getElementById("githubConnect");
+  var githubRepositoryControls=document.getElementById("githubRepositoryControls");
+  var githubInstallation=document.getElementById("githubInstallation");
+  var githubRepository=document.getElementById("githubRepository");
+  var githubBranch=document.getElementById("githubBranch");
+  var githubMemoryRoot=document.getElementById("githubMemoryRoot");
+  var githubAttachTopic=document.getElementById("githubAttachTopic");
+  var githubHint=document.getElementById("githubHint");
+  var githubConfigured=false;
   var modelLoadInProgress=false;
   var modelLoadMessage="Checking configured Gemini models…";
   var modelLoadController=null;
@@ -1650,6 +1686,85 @@ export function ownerIntelligenceClientScript(): Response {
     panel.appendChild(retry);
     history.appendChild(panel);
   }
+  async function refreshGithubStatus(){
+    var result=await request("/admin/api/intelligence/github/status");
+    githubConfigured=Boolean(result.configured);
+    state.githubInstallations=result.installations||[];
+    githubStatus.textContent=!result.configured?"Not connected":(state.githubInstallations.length?"Connected · "+state.githubInstallations.length+" verified installation(s)":"App created · installation required");
+    githubConnect.textContent=!result.configured?"Create private GitHub App":(state.githubInstallations.length?"Install on another account":"Install GitHub App");
+    githubRepositoryControls.hidden=state.githubInstallations.length===0;
+    githubInstallation.replaceChildren();
+    state.githubInstallations.forEach(function(item){
+      var option=node("option","",item.account+" · "+item.accountType);
+      option.value=String(item.id);githubInstallation.appendChild(option);
+    });
+    if(state.githubInstallations.length)await refreshGithubRepositories();
+    updateGithubAttachAvailability();
+  }
+  async function beginGithubConnection(){
+    githubConnect.disabled=true;
+    try{
+      if(!githubConfigured){
+        var manifestResult=await request("/admin/api/intelligence/github/app/manifest",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+        var form=document.createElement("form");
+        form.method="POST";form.action=manifestResult.actionUrl;form.style.display="none";
+        var manifest=document.createElement("input");
+        manifest.type="hidden";manifest.name="manifest";manifest.value=JSON.stringify(manifestResult.manifest);
+        form.appendChild(manifest);document.body.appendChild(form);form.submit();return;
+      }
+      var installResult=await request("/admin/api/intelligence/github/install",{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+      window.location.assign(installResult.installationUrl);
+    }catch(error){githubHint.textContent=errorText(error);}
+    finally{githubConnect.disabled=false;}
+  }
+  async function refreshGithubRepositories(){
+    var installationId=githubInstallation.value;
+    githubRepository.replaceChildren(node("option","","Loading repositories…"));
+    githubRepository.disabled=true;state.githubRepositories=[];
+    if(!installationId){githubRepository.replaceChildren(node("option","","Choose an installation first"));updateGithubAttachAvailability();return;}
+    try{
+      var result=await request("/admin/api/intelligence/github/installations/"+encodeURIComponent(installationId)+"/repositories");
+      state.githubRepositories=result.repositories||[];
+      githubRepository.replaceChildren(node("option","","Choose a repository"));
+      state.githubRepositories.forEach(function(repo){
+        var option=node("option","",repo.fullName+(repo.private?" · Private":" · Public"));
+        option.value=String(repo.id);option.dataset.fullName=repo.fullName;option.dataset.defaultBranch=repo.defaultBranch;
+        githubRepository.appendChild(option);
+      });
+      githubRepository.disabled=false;
+      if(state.githubRepositories.length===1){
+        githubRepository.value=String(state.githubRepositories[0].id);
+        githubBranch.value=state.githubRepositories[0].defaultBranch;
+      }
+    }catch(error){
+      githubRepository.replaceChildren(node("option","","Could not load repositories"));
+      githubHint.textContent=errorText(error);
+    }
+    updateGithubAttachAvailability();
+  }
+  function updateGithubAttachAvailability(){
+    var hasTopic=Boolean(newChatTopic.value);
+    var hasRepository=Boolean(githubInstallation.value&&githubRepository.value);
+    githubAttachTopic.disabled=!(hasTopic&&hasRepository&&githubBranch.value.trim()&&githubMemoryRoot.value.trim());
+    githubAttachTopic.textContent=hasTopic?"Attach repository to "+(state.topics.find(function(t){return t.id===newChatTopic.value;})||{}).title:"Select a topic above";
+  }
+  async function attachGithubRepository(){
+    var topicId=newChatTopic.value;
+    var selected=githubRepository.options[githubRepository.selectedIndex];
+    if(!topicId||!selected||!selected.value)return;
+    githubAttachTopic.disabled=true;
+    try{
+      var result=await request("/admin/api/intelligence/github/topics/"+encodeURIComponent(topicId)+"/repository",{
+        method:"PATCH",headers:{"content-type":"application/json"},
+        body:JSON.stringify({
+          installationId:Number(githubInstallation.value),repositoryId:Number(selected.value),
+          repositoryFullName:selected.dataset.fullName,branch:githubBranch.value.trim(),memoryRoot:githubMemoryRoot.value.trim()
+        })
+      });
+      githubHint.textContent="Attached "+result.repository+" · "+result.branch+" to the selected topic. Memory loading is M4.4.";
+    }catch(error){githubHint.textContent=errorText(error);}
+    finally{updateGithubAttachAvailability();}
+  }
   async function refreshTopics(preferredId){
     var result=await request(api+"/topics");
     state.topics=result.topics||[];
@@ -1897,7 +2012,17 @@ export function ownerIntelligenceClientScript(): Response {
   document.getElementById("newChat").addEventListener("click",newConversation);
   newTopicButton.addEventListener("click",createTopic);
   renameTopicButton.addEventListener("click",renameSelectedTopic);
-  newChatTopic.addEventListener("change",function(){renameTopicButton.disabled=!newChatTopic.value;});
+  newChatTopic.addEventListener("change",function(){renameTopicButton.disabled=!newChatTopic.value;updateGithubAttachAvailability();});
+  githubConnect.addEventListener("click",beginGithubConnection);
+  githubInstallation.addEventListener("change",refreshGithubRepositories);
+  githubRepository.addEventListener("change",function(){
+    var selected=githubRepository.options[githubRepository.selectedIndex];
+    if(selected&&selected.dataset.defaultBranch)githubBranch.value=selected.dataset.defaultBranch;
+    updateGithubAttachAvailability();
+  });
+  githubBranch.addEventListener("input",updateGithubAttachAvailability);
+  githubMemoryRoot.addEventListener("input",updateGithubAttachAvailability);
+  githubAttachTopic.addEventListener("click",attachGithubRepository);
   document.getElementById("mobileMenu").addEventListener("click",function(){sidebar.classList.toggle("open");});
   sendButton.addEventListener("click",function(){if(sending)stopGeneration();else saveMessage();});
   messageInput.addEventListener("input",updateComposer);
@@ -1916,6 +2041,12 @@ export function ownerIntelligenceClientScript(): Response {
   modelRetry.addEventListener("click",function(){loadModels();});
   loadModels();
   refreshTopics().catch(showHistoryError);
+  refreshGithubStatus().catch(function(error){githubStatus.textContent="Connection status unavailable";githubHint.textContent=errorText(error);});
+  var githubReturn=new URLSearchParams(window.location.search).get("github");
+  if(githubReturn==="app-created")githubHint.textContent="GitHub App created. Install it on the account that owns the repositories you want to use.";
+  else if(githubReturn==="installed")githubHint.textContent="GitHub installation verified. Choose a repository and attach it to a topic.";
+  else if(githubReturn==="error")githubHint.textContent="GitHub setup was not completed or the installation could not be verified. Start again from this panel.";
+  if(githubReturn)window.history.replaceState({},document.title,window.location.pathname);
   refreshList().catch(showHistoryError);
 })();
 `;
