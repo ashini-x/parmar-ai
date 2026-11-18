@@ -68,3 +68,8 @@ The draft operation uses the model/thinking level already selected in the worksp
 No GitHub write occurs before explicit confirmation. The D1 preview stores the Owner, conversation/topic, repository ID, branch, memory root, expected base commit SHA, file set, expiry and state. Only the exact five preview paths and bounded content sizes can be confirmed. The Worker checks the current branch head, creates one Git tree/commit, persists its SHA before a non-force branch ref update, and recovers interrupted committing/verifying work from the recorded SHA. It fetches the exact commit and every expected file by that SHA and compares content before setting Synced. A conflict or failed verification cannot be reported as Synced. Topic promotion and current commit metadata update occur only after file read-back succeeds. D1 transcript rows remain intact; the draft's measured/estimated usage is charged to the existing 200K chat ledger.
 
 PR #346 is still a release candidate until current-head validation passes, it is merged/deployed and an authenticated Owner completes the real GitHub App installation/save/conflict browser acceptance.
+
+
+### M4.3 production status
+
+PR #346 is merged and deployed. Production release [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed. The Owner must still perform the live private App creation/selected-repository installation and preview/confirm/read-back/conflict acceptance. The server-side least-privilege, PKCE, encryption and non-force commit controls described above are deployed; live acceptance is not yet complete.
