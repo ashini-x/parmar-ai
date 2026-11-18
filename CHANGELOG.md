@@ -4,7 +4,7 @@
 - Preserve D1 as the full live conversation and token-accounting system of record; use GitHub only for curated, versioned project memory after a dedicated server-side GitHub App integration is implemented.
 - Record Scratchpad-by-default, optional Project Memory attachment, explicit preview/confirm Save to GitHub, 180K warning / 190K rollover action / 200K existing hard cap, token-aware prompt construction, exact historical recall, reversible compaction/forking and measured model-specific caching.
 - Keep authenticated M4 and M4.1 production acceptance as the first outstanding tasks before M4.2 implementation. Original M5 voice dictation and M6–M8 remain unchanged and follow the continuity sequence.
-- No application code, database schema, Cloudflare resource/binding, tests, or production runtime behaviour changed in this documentation-only task.
+- No application code, database schema, Cloudflare resource/binding or production runtime behaviour changed in this documentation-only task. PR [#336](https://github.com/ashini-x/parmar-ai/pull/336) validation [44233899226](https://github.com/ashini-x/parmar-ai/actions/runs/44233899226) passed `npm run check`, 494 Vitest tests across 72 files, 62 Node tests across 9 files and all three Worker dry-runs. Production deployment jobs were correctly skipped by the repository's docs-only path filter.
 
 ## 2026-11-18: Owner Intelligence per-chat 200,000-token budget (PR #335)
 
