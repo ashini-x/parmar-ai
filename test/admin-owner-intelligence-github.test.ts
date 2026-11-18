@@ -148,8 +148,8 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     const startBody = await start.json() as { actionUrl: string };
     const manifestState = new URL(startBody.actionUrl).searchParams.get("state")!;
     const manifestCallback = await call(env, "/admin/api/intelligence/github/callback?code=manifest-code&state=" + encodeURIComponent(manifestState));
-    expect(manifestCallback.status).toBe(303);
-    expect(manifestCallback.headers.get("location")).toContain("github=app-created");
+    expect(manifestCallback.status).toBe(200);
+    expect(await manifestCallback.text()).toContain("/admin/intelligence?github=app-created");
 
     const statusAfterCreate = await call(env, "/admin/api/intelligence/github/status", cookie);
     expect((await statusAfterCreate.json() as { configured: boolean; authorized: boolean }))
@@ -173,8 +173,8 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     expect((await statusBeforeUserVerification.json() as { installations: unknown[] }).installations).toHaveLength(0);
 
     const userCallback = await call(env, "/admin/api/intelligence/github/callback?code=user-auth-code&state=" + encodeURIComponent(authorizeUrl.searchParams.get("state")!));
-    expect(userCallback.status).toBe(303);
-    expect(userCallback.headers.get("location")).toContain("github=installed");
+    expect(userCallback.status).toBe(200);
+    expect(await userCallback.text()).toContain("/admin/intelligence?github=installed");
 
     const status = await call(env, "/admin/api/intelligence/github/status", cookie);
     const statusBody = await status.json() as { authorized: boolean; installations: Array<{ id: number; account: string; authorizedUser: string }> };
