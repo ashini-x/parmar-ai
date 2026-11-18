@@ -125,10 +125,10 @@ This section supersedes any earlier wording in this prompt that assumes one GitH
 
 ### Owner's immediate actions
 
-1. Create `owner-memory-hub` under the GitHub account that owns BRɅIN Owner Memory. Set it to **Private**, initialize with a README, use `main` as the default branch and do not manually create folders or copy source code. Its existence is not yet verified in this task.
+1. The repository now exists: [`ashini-x/owner-memory-hub`](https://github.com/ashini-x/owner-memory-hub), ID `1463342529`, default branch `main`, README present. **GitHub currently reports it as Public. Change it to Private first and verify the new visibility before connecting the App.** Do not put source code or secrets in it.
 2. In GitHub → Settings → Applications → Installed GitHub Apps → BRɅIN Owner Memory → Configure, change Repository access to **Only select repositories** and select only `owner-memory-hub`. The current production callback intentionally rejects `repository_selection=all`; do not choose All repositories.
 3. Return to Owner Intelligence, start the Install GitHub App flow again and complete the GitHub authorization/PKCE round trip so the new selected-only installation is verified and recorded in D1.
-4. Create one Owner topic per project for the M4.3 transition. Attach the same `owner-memory-hub` repository and a unique memory root such as `projects/<project-id>/memory` to each topic. Do not create one repo per project. Hierarchical workstream/feature selectors come with M4.4.
+4. Create one Owner topic per project for the M4.3 transition. Attach the same `owner-memory-hub` repository and a unique memory-root path such as `projects/<project-id>/memory` to each topic. Do not create one repo per project. Hierarchical workstream/feature selectors come with M4.4.
 5. Complete the real M4.3 preview/edit/confirm/read-back and stale-branch Conflict browser acceptance before M4.4 begins.
 
 ### M4.4–M4.8 design authority
