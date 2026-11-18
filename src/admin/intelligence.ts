@@ -1,7 +1,16 @@
 import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
 import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
-import { openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
+import { countOwnerGeminiInputTokens, openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
+
+export interface OwnerIntelligenceSessionUsage {
+  limit_tokens: number;
+  used_tokens: number;
+  reserved_tokens: number;
+  remaining_tokens: number;
+  locked: boolean;
+  locked_reason?: string | null;
+}
 
 export interface OwnerIntelligenceConversation {
   id: string;
@@ -39,6 +48,9 @@ const MAX_MESSAGE_LENGTH = 50_000;
 const MAX_OWNER_GEMINI_CONTEXT_CHARS = 300_000;
 const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
 const MAX_CONVERSATIONS = 100;
+export const OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT = 200_000;
+const OWNER_INTELLIGENCE_DEFAULT_OUTPUT_RESERVATION = 8_192;
+const OWNER_INTELLIGENCE_RESERVATION_TTL_MS = 10 * 60_000;
 
 /**
  * Creates an entirely separate Owner chat store. Only a completed binding is
@@ -85,6 +97,30 @@ export async function ensureOwnerIntelligenceSchema(env: Env): Promise<void> {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_generation_owner
       ON owner_intelligence_generation_metadata(owner_id, model_id)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_session_usage (
+      conversation_id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      token_limit INTEGER NOT NULL DEFAULT 200000,
+      used_tokens INTEGER NOT NULL DEFAULT 0,
+      reserved_tokens INTEGER NOT NULL DEFAULT 0,
+      locked_reason TEXT,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (conversation_id) REFERENCES owner_intelligence_conversations(id) ON DELETE CASCADE
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_token_reservations (
+      reservation_id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      reserved_tokens INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('reserved','settled','released','expired')),
+      actual_tokens INTEGER NOT NULL DEFAULT 0,
+      usage_is_estimated INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      settled_at INTEGER,
+      FOREIGN KEY (conversation_id) REFERENCES owner_intelligence_conversations(id) ON DELETE CASCADE
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_reservations_session
+      ON owner_intelligence_token_reservations(owner_id, conversation_id, status, created_at)`),
   ]);
   if (results.some((result) => !result.success)) {
     throw new Error("D1 did not confirm the Owner Intelligence schema.");
