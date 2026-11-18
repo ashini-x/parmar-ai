@@ -742,7 +742,7 @@ async function createMemoryPreview(env: Env, request: Request, owner: string, co
   const now = Date.now();
   const expires = now + PREVIEW_TTL_MS;
   const inserted = await env.DB!.prepare(
-    "INSERT INTO owner_intelligence_github_previews (id,owner_id,topic_id,conversation_id,installation_id,repository_id,repository_owner,repository_name,branch,memory_root,base_commit_sha,files_json,status,commit_sha,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'ready',NULL,?,?,?)",
+    "INSERT INTO owner_intelligence_github_previews (id,owner_id,topic_id,conversation_id,installation_id,repository_id,repository_owner,repository_name,branch,memory_root,base_commit_sha,files_json,status,commit_sha,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'ready',NULL,?,?,?)",
   ).bind(
     previewId, owner, topic.id, conversationId, Number(topic.github_installation_id), Number(topic.repository_id),
     topic.repository_owner, topic.repository_name, branch, memoryRoot, baseCommit, JSON.stringify(files),
