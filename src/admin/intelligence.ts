@@ -728,9 +728,9 @@ async function handleOwnerGeneration(
   if (body.editMessageId && body.action) return json({ ok: false, error: "invalid_request" }, 400);
   if (!body.action && typeof body.content !== "string") return json({ ok: false, error: "message_required" }, 400);
 
-  let messages: OwnerIntelligenceMessage[] | null;
+  let plan: OwnerPromptPlan | null;
   try {
-    messages = await prepareOwnerPrompt(env, conversationId, {
+    plan = await planOwnerPrompt(env, conversationId, {
       content: body.content as string | undefined,
       editMessageId: body.editMessageId as string | undefined,
       action: body.action as "regenerate" | undefined,
@@ -739,21 +739,101 @@ async function handleOwnerGeneration(
     const message = error instanceof Error ? error.message : "The prompt could not be prepared.";
     return json({ ok: false, error: "prompt_update_failed", message }, 400);
   }
-  if (!messages) return notFound();
+  if (!plan) return notFound();
 
-  const contents = buildOwnerGeminiConversationContents(messages);
+  const contents = buildOwnerGeminiConversationContents(plan.messages);
   if (!contents.length || contents[contents.length - 1].role !== "user") {
     return json({ ok: false, error: "latest_message_missing" }, 409);
   }
-  const assistantMessage = await appendOwnerIntelligenceMessage(env, {
-    conversationId,
-    role: "assistant",
-    content: "",
-    status: "pending",
-    modelId: definition.id,
-    thinkingLevel,
-  });
-  if (!assistantMessage) return notFound();
+
+  let sessionUsage = await getOwnerIntelligenceSessionUsage(env, conversationId);
+  if (!sessionUsage) return notFound();
+  if (sessionUsage.locked || sessionUsage.reserved_tokens > 0) {
+    const inProgress = sessionUsage.reserved_tokens > 0 && !sessionUsage.locked;
+    return json({
+      ok: false,
+      error: inProgress ? "generation_in_progress" : "session_token_limit_reached",
+      message: inProgress
+        ? "A response is already being generated in this chat. Wait for it to finish before sending another message."
+        : "This chat has reached its 200,000-token session budget. Start a new chat to continue. Save a Markdown checkpoint in GitHub and paste its link into your next chat to carry context forward.",
+      usage: sessionUsage,
+    }, 409);
+  }
+
+  let promptTokens: number;
+  try {
+    promptTokens = await countOwnerGeminiInputTokens(env, { modelId: definition.id, contents });
+  } catch (error) {
+    const providerError = error instanceof OwnerGeminiProviderError ? error : null;
+    const status = providerError?.status === 400 ? 400 :
+      providerError?.status === 401 || providerError?.status === 403 ? 502 : 503;
+    return json({
+      ok: false,
+      error: "session_preflight_failed",
+      message: providerError?.message ?? "The session token preflight could not be completed. No message was sent.",
+      usage: sessionUsage,
+    }, status);
+  }
+
+  const availableTokens = sessionUsage.remaining_tokens;
+  const outputTokenLimit = Math.min(OWNER_INTELLIGENCE_DEFAULT_OUTPUT_RESERVATION, availableTokens - promptTokens);
+  if (outputTokenLimit < 1) {
+    sessionUsage = await lockOwnerIntelligenceSession(env, conversationId, "request_exceeds_remaining_budget") ?? sessionUsage;
+    return json({
+      ok: false,
+      error: "session_token_limit_reached",
+      message: "The remaining session budget is too small for this conversation's prompt and a response. This chat is now read-only. Start a new chat and paste your GitHub Markdown checkpoint link to continue.",
+      usage: sessionUsage,
+    }, 409);
+  }
+
+  const reservationId = crypto.randomUUID();
+  const reservedTokens = promptTokens + outputTokenLimit;
+  const reserved = await reserveOwnerIntelligenceSessionTokens(env, conversationId, reservationId, reservedTokens);
+  if (!reserved) {
+    sessionUsage = await getOwnerIntelligenceSessionUsage(env, conversationId) ?? sessionUsage;
+    const inProgress = sessionUsage.reserved_tokens > 0 && !sessionUsage.locked;
+    return json({
+      ok: false,
+      error: inProgress ? "generation_in_progress" : "session_token_limit_reached",
+      message: inProgress
+        ? "A response is already being generated in this chat. Wait for it to finish before sending another message."
+        : "This chat has reached its 200,000-token session budget. Start a new chat to continue.",
+      usage: sessionUsage,
+    }, 409);
+  }
+
+  let messages: OwnerIntelligenceMessage[] | null;
+  try {
+    messages = await plan.commit();
+    if (!messages) {
+      await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId, undefined, true);
+      return notFound();
+    }
+  } catch (error) {
+    await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId, undefined, true);
+    const message = error instanceof Error ? error.message : "The prompt could not be saved.";
+    return json({ ok: false, error: "prompt_update_failed", message }, 400);
+  }
+
+  let assistantMessage: OwnerIntelligenceMessage | null;
+  try {
+    assistantMessage = await appendOwnerIntelligenceMessage(env, {
+      conversationId,
+      role: "assistant",
+      content: "",
+      status: "pending",
+      modelId: definition.id,
+      thinkingLevel,
+    });
+  } catch {
+    await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId, undefined, true);
+    throw new Error("D1 could not create the pending assistant response.");
+  }
+  if (!assistantMessage) {
+    await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId, undefined, true);
+    return notFound();
+  }
 
   const abortController = new AbortController();
   const abortFromRequest = () => abortController.abort();
@@ -766,7 +846,7 @@ async function handleOwnerGeneration(
       modelId: definition.id,
       thinkingLevel,
       contents,
-      maxOutputTokens: 8_192,
+      maxOutputTokens: outputTokenLimit,
     }, abortController.signal);
   } catch (error) {
     request.signal.removeEventListener("abort", abortFromRequest);
@@ -774,6 +854,7 @@ async function handleOwnerGeneration(
     const status = providerError?.status === 400 ? 400 : providerError?.status === 401 || providerError?.status === 403 ? 502 : 503;
     const message = providerError?.message ?? "The model request could not be started.";
     await updateOwnerAssistantMessage(env, assistantMessage.id, "", "error");
+    await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId, undefined, true);
     return json({ ok: false, error: "generation_start_failed", message }, status);
   }
 
@@ -788,8 +869,17 @@ async function handleOwnerGeneration(
     usage?: { promptTokens: number; outputTokens: number; totalTokens: number; elapsedMs: number },
   ): Promise<OwnerIntelligenceMessage | null> => {
     if (!finalizePromise) {
-      finalizePromise = updateOwnerAssistantMessage(env, assistantMessage.id, generatedText, status, usage)
-        .then((message) => { finalMessage = message; return message; });
+      finalizePromise = (async () => {
+        const message = await updateOwnerAssistantMessage(env, assistantMessage!.id, generatedText, status, usage);
+        await settleOwnerIntelligenceSessionReservation(
+          env,
+          conversationId,
+          reservationId,
+          usage && usage.totalTokens > 0 ? usage.totalTokens : undefined,
+        );
+        finalMessage = message;
+        return message;
+      })();
     }
     return finalizePromise;
   };
@@ -815,7 +905,7 @@ async function handleOwnerGeneration(
                 throw new OwnerGeminiProviderError("The response exceeded the supported 50,000-character message size.");
               }
               if (generatedText.length - lastPersistedLength >= 1_024 || Date.now() - lastPersistedAt >= 1_000) {
-                await updateOwnerAssistantMessage(env, assistantMessage.id, generatedText, "partial");
+                await updateOwnerAssistantMessage(env, assistantMessage!.id, generatedText, "partial");
                 lastPersistedLength = generatedText.length;
                 lastPersistedAt = Date.now();
               }
@@ -873,7 +963,6 @@ async function handleOwnerGeneration(
     },
   });
 }
-
 export async function handleOwnerIntelligenceApi(request: Request, env: Env, url: URL): Promise<Response> {
   if (url.pathname === "/admin/api/intelligence/models") {
     if (request.method !== "GET") return methodNotAllowed(["GET"]);
