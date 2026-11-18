@@ -1,8 +1,9 @@
-## 2026-11-19 IST: Owner Memory Hub repository provisioned; privacy gate remains
+## 2026-11-19 IST: Owner Memory Hub private visibility verified; setup callback pending
 
-- GitHub repository lookup verified `ashini-x/owner-memory-hub` (ID `1463342529`), default branch `main`, and README `# owner-memory-hub`.
-- GitHub metadata currently reports visibility `public`, which does not meet the approved Private requirement. Owner must change it to Private and verify before the write-capable BRɅIN Owner Memory App is connected.
-- No source-code migration, App installation, project memory write, application code change or production deployment occurred in this step.
+- GitHub metadata confirms `ashini-x/owner-memory-hub` (ID `1463342529`) is Private, with default branch `main` and README present.
+- Owner reports BRɅIN Owner Memory App repository access is selected-only with only the hub selected. The separate ChatGPT GitHub connector cannot independently inspect that private App's installation settings.
+- Owner Intelligence still reports installation required; its D1 verified-installation list has not been populated. Next is a fresh state-bound install/configure/update redirect and GitHub OAuth/PKCE verification, not immediate uninstall/reinstall.
+- No source-code migration, project memory save, application runtime change or production deployment occurred in this step.
 
 ## 2026-11-19 IST: Owner Intelligence central Memory Hub and AI collaboration architecture approved (documentation only)
 
