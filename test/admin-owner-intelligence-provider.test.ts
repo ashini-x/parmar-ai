@@ -177,12 +177,49 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(failure).toMatchObject({
       status: 403,
       stage: "generate_content",
-      message: expect.stringContaining("GenerateContent request"),
+      message: expect.stringContaining("StreamGenerateContent request"),
     });
     expect(failure).toMatchObject({
       message: expect.stringContaining("permission aiplatform.endpoints.predict"),
     });
     expect((failure as Error).message).not.toContain("secret-project-id");
+  });
+
+  it("extracts only the IAM permission and reason from a formatted Google 403 message", async () => {
+    const calls: string[] = [];
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "formatted-error-test-project" } as Env;
+    const fetcher: typeof fetch = async (url) => {
+      const value = String(url);
+      calls.push(value);
+      if (value.endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      return new Response(JSON.stringify({
+        error: {
+          code: 403,
+          status: "PERMISSION_DENIED",
+          message: "Permission 'aiplatform.endpoints.predict' denied on resource '//aiplatform.googleapis.com/projects/secret-project-id/locations/global/publishers/google/models/gemini-4-carbon'. [reason: \"IAM_PERMISSION_DENIED\" domain: \"aiplatform.googleapis.com\"]",
+        },
+      }), { status: 403, headers: { "content-type": "application/json" } });
+    };
+    let failure: unknown;
+    try {
+      await openOwnerGeminiStream(
+        env,
+        { modelId: "gemini-4-carbon", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Check the model." }] },
+        new AbortController().signal,
+        dependencies(fetcher),
+      );
+    } catch (error) {
+      failure = error;
+    }
+    expect(calls.some((url) => url.includes(":streamGenerateContent"))).toBe(true);
+    expect(failure).toMatchObject({
+      status: 403,
+      stage: "generate_content",
+      message: expect.stringContaining("permission aiplatform.endpoints.predict"),
+    });
+    expect((failure as Error).message).toContain("reason IAM_PERMISSION_DENIED");
+    expect((failure as Error).message).not.toContain("secret-project-id");
+    expect((failure as Error).message).not.toContain("aiplatform.googleapis.com/projects");
   });
 
   it("identifies a Count Tokens 403 and does not attempt GenerateContent", async () => {
