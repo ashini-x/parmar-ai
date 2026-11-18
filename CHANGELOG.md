@@ -3,9 +3,9 @@
 - Feature branch `feat/owner-intelligence-m4-3-github-app-auth` implements a dedicated private BRɅIN Owner Memory GitHub App, separate from BRVIN Connect and the ChatGPT GitHub connector.
 - Requests only repository Metadata read and Contents write; no webhook events. App private key/client secret are encrypted in Owner-scoped D1. Manifest and installation callbacks use one-time Owner-bound state.
 - Uses GitHub user authorization with PKCE to verify the exact App installation against `GET /user/installations`; does not trust `installation_id` from a setup URL by itself. The temporary user token is discarded.
-- Mints short-lived installation tokens scoped to the selected repository ID and Contents write. Verifies repository ID/full name and branch before attaching repository/branch/memory-root references to an Owner topic.
+- Mints short-lived installation tokens scoped to the selected repository ID and Contents read for repository discovery/attachment. Verifies repository ID/full name and branch before attaching repository/branch/memory-root references to an Owner topic. Contents write is reserved for a later write token minted only after explicit Save confirmation.
 - Adds Owner workspace controls for App registration, installation, account/repository selection and topic attachment. This does not load Project Memory or write a Git commit.
-- Adds `test/admin-owner-intelligence-github.test.ts` for mocked GitHub registration/authorization/repository attachment and local D1. Validation and merge are pending.
+- Adds `test/admin-owner-github.test.ts` for mocked GitHub registration/authorization/repository attachment and local D1. Validation and merge are pending.
 - Still to implement in M4.3: reviewed memory draft/diff, explicit confirmation, conflict-aware atomic commit, read-back verification, and only then Archived & Synced status.
 
 ## 2026-11-18: Owner Intelligence M4.2 Scratchpad/topic foundation deployed
