@@ -392,7 +392,8 @@ async function makePreview(env:Env,request:Request):Promise<Response>{
   if(conversation.topic_id&&topicId!==conversation.topic_id)return json({ok:false,error:"conversation_topic_mismatch",message:"This conversation already belongs to another topic."},409);
   if(!topic&&(typeof data.topicTitle!=="string"||!data.topicTitle.trim()||data.topicTitle.trim().length>80))return json({ok:false,error:"project_title_required",message:"Enter a project name to promote this Scratchpad after its first verified save."},400);
   const title=topic?.title||(data.topicTitle as string).trim(),newTopicId=topic?.id||crypto.randomUUID();
-  const projectSlug=topic?.slug||projectSlug(title,newTopicId),root=topic?.memory_root||"projects/"+projectSlug+"/memory";
+  const topicSlugValue=topic?.slug||projectSlug(title,newTopicId),root=topic?.memory_root||"projects/"+topicSlugValue+"/memory";
+  if(!/^[A-Za-z0-9._/-]{1,140}$/u.test(root)||root.includes("..")||root.startsWith("/")||root.endsWith("/"))return json({ok:false,error:"invalid_memory_root"},400);
   const value=await getBundle(env),available=await getRepositories(value);
   const repository=available.find((item)=>item.fullName.toLowerCase()===(data.repository as string).toLowerCase());
   if(!repository)return json({ok:false,error:"repository_not_installed",message:"Choose a repository included in the selected-repository GitHub App installation."},403);
@@ -404,7 +405,7 @@ async function makePreview(env:Env,request:Request):Promise<Response>{
   const files=await createFiles(token,repository.fullName,branch,root,title,conversation.id,conversation.messages);
   const id=crypto.randomUUID(),now=Date.now(),expires=now+30*60_000;
   await env.DB!.prepare("INSERT INTO owner_intelligence_github_previews (id,owner_id,conversation_id,topic_id,topic_title,topic_slug,repository_owner,repository_name,repository_id,branch,memory_root,base_commit_sha,files_json,status,commit_sha,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'ready',NULL,?,?,?)")
-    .bind(id,owner(env),conversation.id,newTopicId,title,projectSlug,repository.owner,repository.name,repository.id,branch,root,base,JSON.stringify(files),expires,now,now).run();
+    .bind(id,owner(env),conversation.id,newTopicId,title,topicSlugValue,repository.owner,repository.name,repository.id,branch,root,base,JSON.stringify(files),expires,now,now).run();
   return json({ok:true,preview:{id,topicId:newTopicId,topicTitle:title,repository:repository.fullName,branch,baseCommitSha:base,memoryRoot:root,expiresAt:expires,files,
     note:"This editable draft uses D1 transcript excerpts and existing repository Markdown. It does not call Gemini or load Project Memory into this chat. Review every file before confirming."}},201);
 }
