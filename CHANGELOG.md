@@ -1,3 +1,12 @@
+## 2026-11-19 IST: Owner Intelligence central Memory Hub and AI collaboration architecture approved (documentation only)
+
+- Lock one private `owner-memory-hub` repository as the curated memory and AI-collaboration layer for many Owner projects, workstreams, features and conversations. Application source code remains in its existing independent repositories; only repository/path/commit references are stored in the hub.
+- Define the operating split: Owner is director/final approver; Gemini Owner Intelligence plans, designs, reviews and curates docs; ChatGPT Software Engineer inspects code, implements approved briefs, tests, PRs, merges and deploys through its separate Owner-authorized connections.
+- Define a document-mediated, Owner-directed collaboration protocol: separate proposal/review/response/decision/implementation-brief/report artifacts with provenance; no automatic agent wake-up, private transcript sharing or self-approval.
+- Preserve all original M4.1–M4.8 concerns, the 200,000-token cumulative per-chat ledger, the M4.6 fixed per-request budget B and O(N) aggregate prompt-input target, the ten/fifty/one-hundred/two-hundred-turn tests and all seven Owner workflows.
+- Specify the Owner Memory App's target installation on only the private hub repository, selected-only mode and existing exact permissions. No source-code repositories are added to this write-capable App.
+- No application code, runtime schema, tests or deployment changed. The hub, hierarchy, pinned snapshots, context replicator, path-aware concurrent writer and collaboration UI remain planned work.
+
 ## 2026-11-19 IST: Owner Intelligence M4.3 merged and deployed to production
 
 - PR [#346](https://github.com/ashini-x/parmar-ai/pull/346) merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`.
@@ -274,12 +283,3 @@
 - Explicit user data deletion.
 
 Historical releases remain below this entry.
-
-## 2026-11-19 IST: Owner Intelligence central Memory Hub and AI collaboration architecture approved (documentation only)
-
-- Lock one private `owner-memory-hub` repository as the curated memory and AI-collaboration layer for many Owner projects, workstreams, features and conversations. Application source code remains in its existing independent repositories; only repository/path/commit references are stored in the hub.
-- Define the operating split: Owner is director/final approver; Gemini Owner Intelligence plans, designs, reviews and curates docs; ChatGPT Software Engineer inspects code, implements approved briefs, tests, PRs, merges and deploys through its separate Owner-authorized connections.
-- Define a document-mediated, Owner-directed collaboration protocol: separate proposal/review/response/decision/implementation-brief/report artifacts with provenance; no automatic agent wake-up, private transcript sharing or self-approval.
-- Preserve all original M4.1–M4.8 concerns, the 200,000-token cumulative per-chat ledger, the M4.6 fixed per-request budget B and O(N) aggregate prompt-input target, the ten/fifty/one-hundred/two-hundred-turn tests and all seven Owner workflows.
-- Specify the Owner Memory App's target installation on only the private hub repository, selected-only mode and existing exact permissions. No source-code repositories are added to this write-capable App.
-- No application code, runtime schema, tests or deployment changed. The hub, hierarchy, pinned snapshots, context replicator, path-aware concurrent writer and collaboration UI remain planned work.
