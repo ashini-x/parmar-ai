@@ -96,6 +96,8 @@ The 200K cumulative per-chat M4.1 limit and the M4.6 per-request context budget 
 - Roadmap: `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md`
 - Continuation prompt: `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md`
 - Memory/context architecture: `docs/OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md`
+- AI collaboration protocol: `docs/OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md`
+- Provider/infrastructure policy: `docs/OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md`
 - Test plan: `docs/TEST_PLAN.md`
 - Documentation index: `docs/README.md`
 
