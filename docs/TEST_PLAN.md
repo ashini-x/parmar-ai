@@ -339,3 +339,35 @@ These are planned tests, not tests that have passed. The Replicator is an approv
 - No model, thinking level, prompt policy or access boundary changes silently as a caching fallback.
 
 These criteria must be added to the relevant automated suites as each sub-milestone is implemented. The existence of this planned checklist is not evidence of implementation or production acceptance.
+
+
+## Owner Intelligence — M4.3 GitHub authorization and Save to GitHub
+
+### Automated tests required
+
+- Owner session only: anonymous requests return 401; an authenticated non-Owner admin receives 403 for status, repository, preview and confirm APIs.
+- Same-origin mutation: missing/mismatched Origin and cross-site fetch metadata are rejected before App setup, preview or commit.
+- Manifest boundary: App registration requests a private App with exactly Metadata: read and Contents: write, no events, and Owner-specific callback/setup URLs. A second concurrent completion must not overwrite an already stored App key.
+- Callback state: manifest and installation states are cryptographically random, stored as hashes, expire, are single-use and are bound to the configured Owner. Invalid, expired and replayed state cannot store credentials or installations.
+- Credential handling: private keys are encrypted in D1, are never returned by any API, HTML or client script, and cannot be used after session-secret decryption fails. Installation tokens remain short-lived and server-side.
+- Permission drift: each live App use verifies the App ID, installation ID, exact permission set and selected-repository installation mode; unexpected permissions or all-repository installation block operations.
+- Repository scope: a preview only accepts a repository present in the selected installation; its installation token is further narrowed to that repository ID. Validate repository, branch and memory-root paths.
+- Preview integrity: conversation/topic reads are Owner-scoped; preserve current D1 messages and usage rows; limit preview file count/size; preserve existing Markdown; identify transcript excerpts as references rather than Gemini-generated summaries; do not load Project Memory into generation.
+- Confirmation: no GitHub writes before explicit Owner confirmation. Edited files must match the preview's allowed path set and size limits. Missing/false confirmation is rejected.
+- Conflict safety: changed base branch returns conflict without force-pushing or overwriting external edits. The write uses a Git tree/commit and a non-force branch update.
+- Verification: read the commit object and each expected file at the saved commit. Only after exact content verification may D1 mark the preview synced and promote a Scratchpad to a topic. Failed read-back remains pending/failed, never Synced.
+- Idempotency/recovery: repeating a verified confirmation returns the same commit result; a pending verification can be retried without creating a second commit. A conflicting preview must be replaced with a fresh preview against the current head.
+- Transcript integrity: compare D1 conversation/message IDs, message contents, generation metadata, 200K usage and reservations before and after preview/confirm; GitHub save must not alter token accounting.
+
+### Owner-authenticated browser acceptance required
+
+1. Create the dedicated Owner App from the Save to GitHub dialog; confirm GitHub shows only Metadata: read and Contents: write.
+2. Install it using selected repositories only, choosing the target repository and no others.
+3. Confirm Owner workspace lists only installed repositories. Preview an existing Scratchpad and a topic-bound conversation.
+4. Edit the proposed Markdown in the dialog, cancel once and verify there is no commit; reopen, confirm and verify the commit SHA and all exact files.
+5. Confirm a successful first Scratchpad save promotes the existing conversation to a project without creating a duplicate chat; the transcript and 200K ledger remain unchanged.
+6. Make an external branch edit after preview and confirm the old preview returns conflict without overwriting that edit; create a new preview and reconcile deliberately.
+7. Test expired/replayed callback state and an installation whose App permissions were expanded or changed to all repositories; both must fail closed.
+8. Reload the workspace and verify the UI reports Synced only when the stored commit and files have been read back.
+
+At the current feature-branch checkpoint, these tests have been authored only for the initial Owner authorization/CSRF/manifest/UI surface. CI execution and real GitHub browser acceptance are pending. No production claim is made.
