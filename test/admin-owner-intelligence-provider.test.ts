@@ -8,6 +8,7 @@ import {
   OwnerGeminiProviderError,
   OWNER_GEMINI_MODEL_REGISTRY,
   type OwnerProviderDependencies,
+  type OwnerGeminiStreamEvent,
 } from "../src/admin/intelligence-provider";
 
 const configuredEnv = {
@@ -249,6 +250,108 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect((failure as Error).message).toContain("reason IAM_PERMISSION_DENIED");
     expect((failure as Error).message).not.toContain("secret-project-id");
     expect((failure as Error).message).not.toContain("aiplatform.googleapis.com/projects");
+  });
+
+  it("retries transient StreamGenerateContent RESOURCE_EXHAUSTED responses with bounded backoff and preserves the selected model/thinking level", async () => {
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "owner-stream-retry-success-project" } as Env;
+    const delays: number[] = [];
+    const streamRequests: Array<{ url: string; body: Record<string, unknown> }> = [];
+    let streamAttempts = 0;
+    const sse = "data: " + JSON.stringify({
+      candidates: [{ content: { role: "model", parts: [{ text: "Recovered response." }] } }],
+      usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 3, totalTokenCount: 7 },
+    }) + "\r\n\r\n";
+    const fetcher: typeof fetch = async (url, init) => {
+      const value = String(url);
+      if (value.endsWith(":countTokens")) {
+        return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      }
+      streamAttempts += 1;
+      streamRequests.push({
+        url: value,
+        body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+      });
+      if (streamAttempts < 3) {
+        return new Response(JSON.stringify({
+          error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "temporary shared capacity contention" },
+        }), { status: 429, headers: { "content-type": "application/json" } });
+      }
+      return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
+    };
+    const stream = await openOwnerGeminiStream(
+      env,
+      {
+        modelId: "gemini-4-hydrogen",
+        thinkingLevel: "HIGH",
+        contents: [{ role: "user", text: "Retry the same selected model request." }],
+      },
+      new AbortController().signal,
+      {
+        ...dependencies(fetcher),
+        sleep: async (milliseconds) => { delays.push(milliseconds); },
+        random: () => 0.5,
+      },
+    );
+    const events: OwnerGeminiStreamEvent[] = [];
+    for await (const event of stream) events.push(event);
+
+    expect(streamAttempts).toBe(3);
+    expect(delays).toEqual([1_000, 2_000]);
+    expect(streamRequests.every((request) => request.url.includes(":streamGenerateContent"))).toBe(true);
+    expect(streamRequests[1]?.body).toEqual(streamRequests[0]?.body);
+    expect(streamRequests[2]?.body).toEqual(streamRequests[0]?.body);
+    expect(streamRequests[0]?.body.generationConfig).toEqual({
+      maxOutputTokens: 8_192,
+      thinkingConfig: { thinkingLevel: "HIGH" },
+    });
+    expect(streamRequests[0].url).toContain("/locations/global/publishers/google/models/gemini-4-hydrogen:streamGenerateContent");
+    expect(events.filter((event) => event.type === "delta").map((event) => event.type === "delta" ? event.text : "")).toEqual(["Recovered response."]);
+    expect(events[events.length - 1]).toMatchObject({
+      type: "done",
+      usage: { promptTokens: 4, outputTokens: 3, totalTokens: 7 },
+    });
+  });
+
+  it("caps StreamGenerateContent RESOURCE_EXHAUSTED retries and returns the final safe provider diagnostic", async () => {
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "owner-stream-retry-exhausted-project" } as Env;
+    const delays: number[] = [];
+    let streamAttempts = 0;
+    const fetcher: typeof fetch = async (url) => {
+      if (String(url).endsWith(":countTokens")) {
+        return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      }
+      streamAttempts += 1;
+      return new Response(JSON.stringify({
+        error: {
+          code: 429,
+          status: "RESOURCE_EXHAUSTED",
+          message: "temporary capacity; do not expose secret-project-id",
+        },
+      }), { status: 429, headers: { "content-type": "application/json" } });
+    };
+
+    await expect(openOwnerGeminiStream(
+      env,
+      {
+        modelId: "gemini-4-hydrogen",
+        thinkingLevel: "HIGH",
+        contents: [{ role: "user", text: "Return a rate-limit failure after bounded retries." }],
+      },
+      new AbortController().signal,
+      {
+        ...dependencies(fetcher),
+        sleep: async (milliseconds) => { delays.push(milliseconds); },
+        random: () => 0.5,
+      },
+    )).rejects.toMatchObject({
+      status: 429,
+      stage: "stream_generate_content",
+      retryable: true,
+      message: expect.stringContaining("RESOURCE_EXHAUSTED"),
+    });
+
+    expect(streamAttempts).toBe(3);
+    expect(delays).toEqual([1_000, 2_000]);
   });
 
   it("identifies a Count Tokens 403 and does not attempt GenerateContent", async () => {
