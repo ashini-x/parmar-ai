@@ -1934,6 +1934,7 @@ export function ownerIntelligenceClientScript(): Response {
   }
   async function createGithubMemoryPreview(){
     if(!state.activeId||!githubSaveTopic.value)return;
+    var previewConversationId=state.activeId;
     githubPreviewSave.disabled=true;
     githubSavePreview.hidden=true;
     githubMemoryPreview=null;
@@ -1971,6 +1972,14 @@ export function ownerIntelligenceClientScript(): Response {
     }catch(error){
       githubSaveStatus.textContent=errorText(error);
     }finally{
+      try{
+        var usageResult=await request(api+"/"+encodeURIComponent(previewConversationId));
+        if(state.activeId===previewConversationId){
+          state.sessionUsage=usageResult.usage||null;
+          renderSessionBudget();
+          updateComposer();
+        }
+      }catch(_usageError){}
       updateGithubSaveAvailability();
     }
   }
