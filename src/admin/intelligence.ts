@@ -353,6 +353,16 @@ async function settleOwnerIntelligenceSessionReservation(
 }
 
 
+function redactOwnerMemoryInput(value: string): string {
+  return value
+    .replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/giu, "[REDACTED PRIVATE KEY]")
+    .replace(/\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{20,}\b/giu, "[REDACTED GITHUB TOKEN]")
+    .replace(/\bAIza[0-9A-Za-z_-]{30,}\b/gu, "[REDACTED API KEY]")
+    .replace(/\bya29\.[A-Za-z0-9._-]{20,}\b/gu, "[REDACTED ACCESS TOKEN]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]{20,}={0,2}/giu, "Bearer [REDACTED]")
+    .replace(/\b(access[_-]?token|api[_-]?key|client[_-]?secret|password|secret)\s*[:=]\s*["']?([^\s"'`]{8,})/giu, "$1=[REDACTED]");
+}
+
 export async function draftOwnerMemoryWithBudget(
   env: Env,
   conversationId: string,
@@ -383,9 +393,10 @@ export async function draftOwnerMemoryWithBudget(
   const contents: OwnerGeminiContent[] = [];
   for (const message of source) {
     const role = message.role === "assistant" ? "model" as const : "user" as const;
-    const excerpt = message.content.length > 8_000
-      ? message.content.slice(-8_000) + "\n[This source message was bounded for the memory-draft request.]"
-      : message.content;
+    const safeMessage = redactOwnerMemoryInput(message.content);
+    const excerpt = safeMessage.length > 8_000
+      ? safeMessage.slice(-8_000) + "\n[This source message was bounded for the memory-draft request.]"
+      : safeMessage;
     const text = "D1 transcript message " + message.id + " (" + message.role + "):\n" + excerpt;
     const previous = contents[contents.length - 1];
     if (previous?.role === role) previous.text += "\n\n" + text;
@@ -394,7 +405,7 @@ export async function draftOwnerMemoryWithBudget(
   if (contents[0]?.role === "model") contents.shift();
 
   const memoryBlocks = Object.entries(input.currentMemory).map(([name, value]) =>
-    "### Existing " + name + "\n" + value.slice(0, 50_000),
+    "### Existing " + name + "\n" + redactOwnerMemoryInput(value).slice(0, 50_000),
   );
   const task = [
     "Prepare a proposed update to the project's human-readable Markdown memory using the source material below.",
