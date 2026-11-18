@@ -8,6 +8,7 @@ import {
   OwnerGeminiProviderError,
   OWNER_GEMINI_MODEL_REGISTRY,
   type OwnerProviderDependencies,
+  type OwnerGeminiStreamEvent,
 } from "../src/admin/intelligence-provider";
 
 const configuredEnv = {
@@ -259,7 +260,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     const sse = "data: " + JSON.stringify({
       candidates: [{ content: { role: "model", parts: [{ text: "Recovered response." }] } }],
       usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 3, totalTokenCount: 7 },
-    }) + "\\r\\n\\r\\n";
+    }) + "\r\n\r\n";
     const fetcher: typeof fetch = async (url, init) => {
       const value = String(url);
       if (value.endsWith(":countTokens")) {
@@ -291,18 +292,15 @@ describe("Owner Vertex AI provider registry and adapter", () => {
         random: () => 0.5,
       },
     );
-    const events = [];
+    const events: OwnerGeminiStreamEvent[] = [];
     for await (const event of stream) events.push(event);
 
     expect(streamAttempts).toBe(3);
     expect(delays).toEqual([1_000, 2_000]);
     expect(streamRequests.every((request) => request.url.includes(":streamGenerateContent"))).toBe(true);
-    expect(streamRequests.map((request) => request.body)).toEqual([
-      streamRequests[0].body,
-      streamRequests[0].body,
-      streamRequests[0].body,
-    ]);
-    expect(streamRequests[0].body.generationConfig).toEqual({
+    expect(streamRequests[1]?.body).toEqual(streamRequests[0]?.body);
+    expect(streamRequests[2]?.body).toEqual(streamRequests[0]?.body);
+    expect(streamRequests[0]?.body.generationConfig).toEqual({
       maxOutputTokens: 8_192,
       thinkingConfig: { thinkingLevel: "HIGH" },
     });
