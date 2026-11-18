@@ -20,6 +20,20 @@ type GitHubInstallation = {
   permissions?: Record<string, string>;
 };
 type GitHubResponse<T> = { data: T; headers: Headers };
+type MemoryFile = { name: string; content: string };
+type OwnerMessage = { id: string; role: "user" | "assistant"; content: string; status: string; created_at: number };
+type PreviewRow = {
+  id: string; owner_id: string; topic_id: string; conversation_id: string; installation_id: number;
+  repository_id: number; repository_owner: string; repository_name: string; branch: string; memory_root: string;
+  base_commit_sha: string; files_json: string; status: string; commit_sha: string | null;
+  expires_at: number; created_at: number; updated_at: number;
+};
+class GitHubHttpError extends Error {
+  constructor(readonly status: number) { super("GitHub returned HTTP " + status + "."); }
+}
+const PREVIEW_FILE_LIMIT = 50_000;
+const PREVIEW_TOTAL_LIMIT = 160_000;
+const PREVIEW_TTL_MS = 30 * 60_000;
 
 function principal(env: Env): string {
   const value = env.OWNER_DASHBOARD_USER?.trim().toLowerCase();
@@ -130,19 +144,20 @@ async function github<T>(path: string, token: string, method = "GET", body?: unk
   try { data = raw ? JSON.parse(raw) : {}; } catch { data = {}; }
   if (!response.ok) {
     const requestId = clean(response.headers.get("x-github-request-id"), 80);
-    throw new Error("GitHub returned HTTP " + response.status + (requestId ? " (request " + requestId + ")" : "") + ".");
+    throw new GitHubHttpError(response.status);
   }
   return { data: data as T, headers: response.headers };
 }
 async function ensureSchema(env: Env): Promise<void> {
   if (!env.DB) throw new Error("The Owner Intelligence database is not configured.");
   await ensureOwnerIntelligenceSchema(env);
-  await ensureOwnerIntelligenceSchema(env);
   const results = await env.DB.batch([
     env.DB.prepare("CREATE TABLE IF NOT EXISTS " + APP_TABLE + " (owner_id TEXT PRIMARY KEY, app_id INTEGER NOT NULL, app_slug TEXT NOT NULL, app_name TEXT NOT NULL, redirect_uri TEXT NOT NULL, secret_ciphertext TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'created', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS " + INSTALL_TABLE + " (owner_id TEXT NOT NULL, installation_id INTEGER NOT NULL, app_id INTEGER NOT NULL, account_login TEXT NOT NULL, account_type TEXT NOT NULL DEFAULT '', repository_selection TEXT NOT NULL DEFAULT 'selected', status TEXT NOT NULL DEFAULT 'active', authorized_user TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(owner_id, installation_id))"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_owner_github_installations_owner ON " + INSTALL_TABLE + "(owner_id, status, account_login)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS " + STATE_TABLE + " (state_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL, purpose TEXT NOT NULL CHECK (purpose IN ('manifest','installation','user_authorization')), payload_json TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS owner_intelligence_github_previews (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, topic_id TEXT NOT NULL, conversation_id TEXT NOT NULL, installation_id INTEGER NOT NULL, repository_id INTEGER NOT NULL, repository_owner TEXT NOT NULL, repository_name TEXT NOT NULL, branch TEXT NOT NULL, memory_root TEXT NOT NULL, base_commit_sha TEXT NOT NULL, files_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'ready', commit_sha TEXT, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_owner_github_previews_owner ON owner_intelligence_github_previews(owner_id, created_at DESC)"),
   ]);
   if (results.some((result) => !result.success)) throw new Error("D1 did not confirm the Owner GitHub schema.");
   const columns = await env.DB.prepare("PRAGMA table_info(owner_intelligence_topics)").all<{ name: string }>();
@@ -248,7 +263,8 @@ async function manifestCallback(env: Env, request: Request, url: URL): Promise<R
   if (!redirectUri || new URL(redirectUri).origin !== url.origin || new URL(redirectUri).pathname !== CALLBACK) return callbackResult("error");
   const app = await convertManifest(code); const permissions = app.permissions || {};
   if (!app.id || !app.slug || !app.pem || !app.client_id || !app.client_secret ||
-      permissions.metadata !== "read" || permissions.contents !== "write") return callbackResult("error");
+      permissions.metadata !== "read" || permissions.contents !== "write" ||
+      Object.keys(permissions).some((key) => key !== "metadata" && key !== "contents")) return callbackResult("error");
   const bundle: Bundle = {
     appId: Number(app.id), slug: clean(app.slug, 100), name: clean(app.name || "BRɅIN Owner Memory", 100),
     clientId: clean(app.client_id, 160), clientSecret: app.client_secret, privateKey: app.pem, redirectUri,
@@ -373,7 +389,8 @@ async function userAuthorizationCallback(env: Env, url: URL): Promise<Response> 
     );
     if (!selected) return callbackResult("error", "installation_not_visible_to_user");
     if (!clean(selected.account?.login, 100) || selected.repository_selection !== "selected" ||
-        selected.permissions?.metadata !== "read" || selected.permissions?.contents !== "write") {
+        selected.permissions?.metadata !== "read" || selected.permissions?.contents !== "write" ||
+        Object.keys(selected.permissions || {}).some((key) => key !== "metadata" && key !== "contents")) {
       return callbackResult("error", "installation_permissions_or_selection_mismatch");
     }
 
@@ -416,16 +433,39 @@ export async function handleOwnerGithubCallback(request: Request, env: Env, url:
     return callbackResult("error");
   }
 }
-async function installationToken(env: Env, owner: string, installationId: number, repositoryId?: number): Promise<string> {
+async function installationToken(
+  env: Env,
+  owner: string,
+  installationId: number,
+  repositoryId?: number,
+  access: "read" | "write" = "read",
+): Promise<string> {
   const { row, bundle, token } = await installationJwt(env, owner);
   const known = await env.DB!.prepare("SELECT installation_id FROM " + INSTALL_TABLE + " WHERE owner_id=? AND installation_id=? AND app_id=? AND status='active'")
     .bind(owner, installationId, row.app_id).first<{ installation_id: number }>();
   if (!known) throw new Error("That GitHub installation has not been verified for this Owner.");
-  const body: Record<string, unknown> = { permissions: { contents: "read" } };
+  const [appResponse, installationResponse] = await Promise.all([
+    github<{ id?: number; permissions?: Record<string, string> }>("/app", token),
+    github<GitHubInstallation>("/app/installations/" + installationId, token),
+  ]);
+  const appPermissions = appResponse.data.permissions || {};
+  const installation = installationResponse.data;
+  const installationPermissions = installation.permissions || {};
+  const exactPermissions = (value: Record<string, string>) =>
+    value.metadata === "read" && value.contents === "write" &&
+    Object.keys(value).every((key) => key === "metadata" || key === "contents");
+  if (Number(appResponse.data.id) !== bundle.appId || !exactPermissions(appPermissions) ||
+      Number(installation.id) !== installationId || Number(installation.app_id) !== bundle.appId ||
+      installation.repository_selection !== "selected" || !exactPermissions(installationPermissions)) {
+    throw new Error("The Owner GitHub App or installation no longer meets its exact least-privilege, selected-repository boundary. Review its permissions and reconnect.");
+  }
+  if (access === "write" && installationPermissions.contents !== "write") {
+    throw new Error("The selected GitHub installation does not grant the required Contents write permission.");
+  }
+  const body: Record<string, unknown> = { permissions: { contents: access } };
   if (repositoryId !== undefined) body.repository_ids = [repositoryId];
   const result = await github<{ token?: string }>("/app/installations/" + installationId + "/access_tokens", token, "POST", body);
   if (!result.data.token) throw new Error("GitHub did not issue a short-lived repository token.");
-  void bundle;
   return result.data.token;
 }
 async function listInstallations(env: Env, owner: string): Promise<InstallationRow[]> {
