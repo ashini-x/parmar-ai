@@ -164,7 +164,8 @@ class FakeOwnerD1 {
       row.reserved_tokens += Number(reserved); row.updated_at = Number(updatedAt);
       return 1;
     }
-    if (sql.startsWith("UPDATE owner_intelligence_session_usage SET used_tokens = used_tokens +")) {
+    if (sql.includes("UPDATE owner_intelligence_session_usage") &&
+        sql.includes("SET used_tokens = used_tokens +")) {
       const [charge, reserved, updatedAt, conversationId, ownerId] = values;
       const row = this.sessionUsage.get(String(conversationId));
       if (!row || row.owner_id !== String(ownerId)) return 0;
