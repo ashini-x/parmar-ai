@@ -411,9 +411,9 @@ export async function draftOwnerMemoryWithBudget(
     "Do not use tools, access external systems, reveal credentials, or alter the selected model/provider.",
     "Produce concise, fact-grounded project files. Mark uncertainty. Only record explicitly accepted Owner decisions.",
     "The Owner must review and edit your result; do not claim it is already saved or synchronized.",
-  ].join("\\n");
+  ].join("\n");
   const memoryBlocks = Object.entries(input.currentMemory).map(([name, value]) =>
-    "### Existing " + name + "\\n" + redactOwnerMemoryInput(value).slice(0, 50_000),
+    "### Existing " + name + "\n" + redactOwnerMemoryInput(value).slice(0, 50_000),
   );
   const task = [
     "Prepare a proposed update to the project's human-readable Markdown memory using the source material below.",
