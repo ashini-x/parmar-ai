@@ -1,3 +1,14 @@
+## 2026-11-18: Owner Intelligence M4.3 reviewed GitHub Save implementation (PR #346; release gates pending)
+
+- Added the Owner-only Gemini-drafted Markdown preview and explicit Save confirmation to the existing dedicated PKCE-verified GitHub App integration.
+- The preview preserves the current selected Gemini model/thinking level, reads existing project Markdown at one pinned base commit, uses bounded D1 transcript excerpts, and produces editable project-memory.md, progress.md and decisions.md while preserving index.md and proposing a source-linked session note.
+- Draft generation calls Vertex CountTokens for the exact conversation content plus fixed system instruction, reserves prompt/output in the same conversation's D1 200K ledger and settles provider usage; the token meter refreshes after the attempt.
+- Added best-effort credential redaction before model input and before file persistence; the Owner must still review each proposed file.
+- Confirmation is explicit. Contents write token is minted only after confirmation; expected branch head is rechecked; one Git tree/commit is created; commit SHA is recorded in D1 before a non-force branch update; every expected file is read back at the exact commit SHA before Synced and Scratchpad promotion.
+- Added durable preview states/expiry, exact path/content and size validation, conflict and idempotent retry handling, and local-D1 test coverage for metered Gemini drafting, secret redaction, confirmation, commit/read-back, duplicate confirm and stale-branch conflict.
+- PR #346 current-head checks after the latest UI/redaction refinements are pending. A previously green baseline run [44379838462](https://github.com/ashini-x/parmar-ai/actions/runs/44379838462) passed 505 Vitest tests/74 files, 62 Node tests/9 files and all three Worker dry-run bundles at commit c6f2b2ed27f9fc134db268e8b5408c40b9eecfe7. No production deployment or live Owner GitHub App installation/save acceptance has happened yet.
+- M4.4 remains responsible for manifest-selected Project Memory loading and pinned repository/branch/commit snapshots.
+
 ## 2026-11-18: Owner Intelligence M4.3 GitHub App authorization and repository attachment validated
 
 - Feature branch `feat/owner-intelligence-m4-3-github-app-auth` implements a dedicated private BRɅIN Owner Memory GitHub App, separate from BRVIN Connect and the ChatGPT GitHub connector.
