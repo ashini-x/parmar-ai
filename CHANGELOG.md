@@ -3,7 +3,7 @@
 - Add at most two retries (three attempts total) for transient initial `StreamGenerateContent` HTTP 408/429/5xx responses, using exponential backoff, jitter and a bounded `Retry-After` delay.
 - Keep the configured `global` endpoint; preserve the exact model, thinking level, prompt contents and output cap. Do not retry permanent 4xx or restart an SSE stream after it has been accepted. Stop cancels a pending backoff.
 - The screenshot's `RESOURCE_EXHAUSTED` is a Vertex provider-capacity/rate-limit condition, not the application's M4.1 200,000-token chat budget. The complete M4.1 D1 budget, reservations, settlement, meter and read-only boundary remain unchanged.
-- Regression coverage added for transient recovery and bounded retry exhaustion. PR validation and production deployment evidence will be recorded after they actually run.
+- Regression coverage added for transient recovery and bounded retry exhaustion. PR [#338](https://github.com/ashini-x/parmar-ai/pull/338) merged as `518dd899db443caa0f9db3e402961e90cb5baf82`. PR workflow [44248188580](https://github.com/ashini-x/parmar-ai/actions/runs/44248188580) passed TypeScript, 496 Vitest tests across 72 files, 62 Node tests across 9 files and all three Worker dry-runs. Cloudflare confirms production deployment `23141013-465e-490a-a428-bcb2fcaac001`, Worker version `3dc555ca-c84b-49c0-8f73-2575c2397143`, at 100% traffic. The Owner's post-deployment live Hydrogen HIGH retry is still pending; persistent Google capacity/quota issues remain possible.
 
 ## 2026-11-18: Owner Context Replicator architecture finalized (documentation-only)
 
