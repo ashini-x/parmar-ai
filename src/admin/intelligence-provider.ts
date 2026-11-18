@@ -54,6 +54,9 @@ export interface OwnerModelCatalogue {
 export interface OwnerProviderDependencies {
   getAccessToken: (env: Env) => Promise<string>;
   fetch: typeof fetch;
+  /** Optional deterministic seams for bounded stream-open retry tests. */
+  sleep?: (milliseconds: number) => Promise<void>;
+  random?: () => number;
 }
 
 const defaultDependencies: OwnerProviderDependencies = {
@@ -65,6 +68,11 @@ const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
 const MAX_CONVERSATION_CONTEXT_CHARS = 300_000;
 const GENERATION_TIMEOUT_MS = 35_000;
 const CATALOGUE_CACHE_MS = 90_000;
+// Interactive chat retries the initial stream-open response at most twice.
+// Retries happen only before a successful SSE response/body has been accepted.
+const STREAM_OPEN_MAX_ATTEMPTS = 3;
+const STREAM_OPEN_INITIAL_BACKOFF_MS = 1_000;
+const STREAM_OPEN_MAX_BACKOFF_MS = 4_000;
 const catalogueCache = new Map<string, { expiresAt: number; value: OwnerModelCatalogue }>();
 const verifiedModelCache = new Map<string, { expiresAt: number; model: OwnerGeminiModel }>();
 
@@ -80,6 +88,77 @@ function configuredLocation(env: Env): string {
 
 function vertexBase(location: string): string {
   return location === "global" ? "https://aiplatform.googleapis.com" : `https://${location}-aiplatform.googleapis.com`;
+}
+
+function isRetryableStreamOpenStatus(status: number): boolean {
+  return status === 408 || status === 429 || status === 500 ||
+    status === 502 || status === 503 || status === 504;
+}
+
+function streamOpenRetryDelayMs(
+  response: Response,
+  failedAttempt: number,
+  random: () => number,
+): number {
+  const base = Math.min(
+    STREAM_OPEN_INITIAL_BACKOFF_MS * (2 ** (failedAttempt - 1)),
+    STREAM_OPEN_MAX_BACKOFF_MS,
+  );
+  const jitter = 0.5 + Math.min(1, Math.max(0, random()));
+  let delay = Math.round(base * jitter);
+
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    const retryAfterMs = Number.isFinite(seconds) && seconds >= 0
+      ? seconds * 1_000
+      : Math.max(0, Date.parse(retryAfter) - Date.now());
+    if (Number.isFinite(retryAfterMs)) {
+      delay = Math.max(delay, Math.min(STREAM_OPEN_MAX_BACKOFF_MS, retryAfterMs));
+    }
+  }
+
+  return Math.min(STREAM_OPEN_MAX_BACKOFF_MS, delay);
+}
+
+async function waitForStreamRetry(
+  milliseconds: number,
+  signal: AbortSignal,
+  dependencies: OwnerProviderDependencies,
+): Promise<void> {
+  const stopped = () => new OwnerGeminiProviderError("Generation was stopped.", undefined, false);
+  if (signal.aborted) throw stopped();
+
+  if (dependencies.sleep) {
+    let onAbort: (() => void) | undefined;
+    try {
+      await Promise.race([
+        dependencies.sleep(milliseconds),
+        new Promise<never>((_resolve, reject) => {
+          onAbort = () => reject(stopped());
+          signal.addEventListener("abort", onAbort, { once: true });
+        }),
+      ]);
+    } finally {
+      if (onAbort) signal.removeEventListener("abort", onAbort);
+    }
+    if (signal.aborted) throw stopped();
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener("abort", abort);
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, milliseconds);
+    const abort = () => {
+      clearTimeout(timer);
+      cleanup();
+      reject(stopped());
+    };
+    signal.addEventListener("abort", abort, { once: true });
+  });
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, onTimeout?: () => void): Promise<T> {
@@ -656,17 +735,33 @@ export async function openOwnerGeminiStream(
     body.systemInstruction = { parts: [{ text: input.systemInstruction }] };
   }
 
-  let response: Response;
+  let response: Response | undefined;
   try {
-    response = await dependencies.fetch(
-      `${vertexBase(location)}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(definition.id)}:streamGenerateContent?alt=sse`,
-      {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "text/event-stream" },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      },
-    );
+    const streamUrl =
+      `${vertexBase(location)}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(definition.id)}:streamGenerateContent?alt=sse`;
+    const streamRequest: RequestInit = {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "text/event-stream" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    };
+
+    for (let attempt = 1; attempt <= STREAM_OPEN_MAX_ATTEMPTS; attempt += 1) {
+      response = await dependencies.fetch(streamUrl, streamRequest);
+      if (response.ok || !isRetryableStreamOpenStatus(response.status) || attempt === STREAM_OPEN_MAX_ATTEMPTS) {
+        break;
+      }
+
+      // A non-2xx response means no SSE stream has been accepted. Retry only
+      // this initial response; never restart a stream after text has begun.
+      const delay = streamOpenRetryDelayMs(response, attempt, dependencies.random ?? Math.random);
+      try { await response.body?.cancel(); } catch { /* discard a retryable error body */ }
+      await waitForStreamRetry(delay, controller.signal, dependencies);
+    }
+
+    if (!response) {
+      throw new OwnerGeminiProviderError("The Vertex AI streaming request returned no response.", undefined, true, "stream_generate_content");
+    }
     if (!response.ok) {
       clearTimeout(timeout);
       signal.removeEventListener("abort", abortFromCaller);
@@ -674,7 +769,7 @@ export async function openOwnerGeminiStream(
       throw new OwnerGeminiProviderError(
         providerStatusMessage(response.status, "stream_generate_content", diagnostic),
         response.status,
-        response.status === 408 || response.status === 429 || response.status >= 500,
+        isRetryableStreamOpenStatus(response.status),
         "stream_generate_content",
       );
     }
