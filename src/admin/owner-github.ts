@@ -220,7 +220,6 @@ async function startManifest(env: Env, request: Request, owner: string): Promise
     redirect_url: redirectUri,
     setup_url: redirectUri,
     callback_urls: [redirectUri],
-    setup_on_update: true,
     setup_on_update: false,
     public: false,
     default_permissions: { metadata: "read", contents: "write" },
