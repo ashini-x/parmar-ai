@@ -2002,6 +2002,7 @@ export function ownerIntelligenceClientScript(): Response {
       :modelLoadMessage?modelLoadMessage
       :editingMessageId?"Editing a previous message · sending will replace it and remove later turns"
       :"Your selected model and thinking level will be used for this response.";
+    updateGithubSaveAvailability();
   }
 
   function stopGeneration(){
