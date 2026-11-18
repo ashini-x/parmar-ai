@@ -282,6 +282,22 @@ The following are future acceptance criteria, not tests that have passed in the 
 - A failed search never claims complete recall; all original D1 turns remain accessible.
 - Historical retrieval is constrained to the authenticated Owner and selected topic/project.
 
+### M4.6 — Cloudflare Owner Context Replicator and bounded-growth acceptance
+
+These are planned tests, not tests that have passed. The Replicator is an approved M4.6 architecture and is not implemented yet.
+
+- **Owner boundary:** unauthenticated and non-Owner callers cannot access the middleware, D1 conversation data, project snapshot, retrieval endpoint or outbox jobs. Every query and job is scoped to the configured Owner principal.
+- **Context source contract:** assemble from mandatory application/Owner instructions, the current turn, bounded recent valid turns, compact structured state, pinned manifest-selected active Project Memory, and only those older exact D1 message pairs returned by scoped retrieval. Pending/failed/empty assistant rows are excluded; role ordering stays valid.
+- **Single budget:** all included sources, including project memory and retrieval, count toward the same selected-model/API input budget B after required output capacity and request overhead are reserved. There is no unmetered second context bucket.
+- **Exact final measurement:** call Vertex CountTokens using the selected model/API on the final effective prompt. The contents passed to generation must match those measured. Character counts and turn counts are early filters only.
+- **Deterministic trimming:** when optional context exceeds B, remove it in documented lowest-priority order and re-count. Never remove security policy or silently truncate the current turn. If mandatory instructions plus the user turn cannot fit, fail before committing the prompt or starting generation.
+- **M4.1 accounting order:** preserve exact CountTokens preflight, atomic D1 reservation of prompt plus permitted output, concurrency protection, prompt-persistence ordering and final usage settlement. A rejected request leaves the original prompt and later turns intact.
+- **10/50/100/200-turn scaling series:** run a deterministic scripted workload with a fixed selected model, fixed B, fixed project snapshot and representative per-turn token sizes. Assert every request input is ≤ B and the aggregate prompt input over N turns is ≤ N × B. Once the recent suffix/retrieval set has saturated, adding older D1 transcript rows must not cause those rows to be replayed or increase the prompt beyond B.
+- **Quadratic baseline comparison:** run the same scripted conversation using naive full-history replay and record its triangular aggregate input-token curve. The bounded-context path must obey the N × B linear upper bound and materially remain below the full-replay aggregate for long histories. Do not use this finite benchmark to claim a mathematical proof for arbitrary workloads; the proof is the per-request invariant plus the fixed-B sum bound.
+- **Canonical transcript integrity:** the full D1 transcript and usage records remain intact after context assembly, trimming, failed retrieval, rollover or compaction. Retrieval returns exact message IDs/pairs and source provenance.
+- **Failure and injection handling:** empty, slow or failed retrieval cannot produce a false “complete recall” claim; it degrades to a safe bounded context or a clear error. Project notes and historical user text are untrusted data and cannot override application policy.
+- **Memory job durability:** Owner-confirmed save/rollover/compaction writes an idempotent D1 outbox item before dispatch. Duplicate Queue/Workflow delivery cannot create duplicate GitHub commits; missing GitHub connectivity leaves a durable D1 handoff and a truthful pending status.
+
 ### M4.7 — Compact Memory and Fork Chat
 - Active project memory above 40,000 measured tokens triggers a warning, not an automatic rewrite.
 - Compaction produces a preview and diff; a master context targets under 10,000 tokens only where it can preserve required state and decisions.

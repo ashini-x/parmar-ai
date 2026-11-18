@@ -1,3 +1,11 @@
+## 2026-11-18: Owner Context Replicator architecture finalized (documentation-only)
+
+- Name the **Cloudflare Owner Context Replicator** as the single logical Worker-side middleware that scopes the Owner request, selects bounded recent context and exact D1 recall, includes pinned Project Memory, runs exact Vertex CountTokens preflight, preserves M4.1 reservation ordering and hands the measured payload to the existing Vertex REST/SSE adapter.
+- Specify the scaling invariant: for a fixed per-request input budget B, each prompt is at most B tokens and aggregate prompt input over N turns is at most N × B = O(N); naive full-history replay is approximately O(N²). The 10/50/100/200-turn deterministic proof/acceptance suite is planned, not run.
+- Explicitly map all seven Owner workflows: Save a discussion, persistent Scratchpad, near-limit rollover, return to pinned project memory, promote Scratchpad, preview safe compaction and fork an isolated experiment.
+- Update M4.6 roadmap acceptance, ADRs, TEST_PLAN.md and the new-chat continuation prompt. Preserve the outstanding authenticated M4/M4.1 gates and keep M4.2–M4.8 approved/not started.
+- No application code, database migration, secret, Cloudflare resource/binding or runtime configuration changed. No production deployment is required for this documentation-only architecture finalization. The Replicator and all seven workflows remain unimplemented.
+
 ## 2026-11-18: Owner Intelligence long-session memory and token-aware context plan approved (documentation-only)
 
 - Approve M4.2–M4.8 as nested continuity sub-milestones without renumbering or marking the original M4/M5–M8 milestones complete.

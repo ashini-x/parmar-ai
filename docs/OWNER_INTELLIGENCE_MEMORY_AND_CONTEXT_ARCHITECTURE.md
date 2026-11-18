@@ -154,6 +154,20 @@ At attachment time, record repository, branch and exact Git commit SHA plus sele
 
 Display the project-memory estimate separately from the new conversation's 200K cumulative usage. The estimate is not charged as conversation usage until the corresponding content is actually sent to the selected model; the exact prompt preflight remains authoritative.
 
+### 4.4 The seven Owner workflows
+
+The approved product experience must support these seven end-to-end scenarios. They are acceptance scenarios, not claims about shipped UI or runtime capabilities:
+
+1. **Save a useful discussion:** while in a chat, the Owner requests Save to GitHub, reviews the proposed Markdown files/diff and destination, then explicitly confirms. M4.3 commits the curated memory atomically and verifies the resulting commit before showing Synced. The complete D1 transcript remains unchanged.
+2. **Use a throwaway chat:** New Chat starts a Scratchpad in M4.2. It persists in D1 across browser/device changes, requires no project selection and is not automatically written to GitHub. No silent seven-/fourteen-day expiry is allowed.
+3. **Continue near the chat limit:** M4.5 warns at 180,000 cumulative tokens, offers Roll Over at 190,000, optionally highlights urgency at 195,000, and preserves the 200,000 hard lock. It retains the old chat and creates a linked fresh-budget chat with a provenance-bearing handoff; D1 remains the fallback when GitHub is unavailable.
+4. **Return to a project weeks later:** M4.4 lets the Owner attach Project Memory. Only manifest-allowlisted active files load by default, the exact repository/branch/commit SHA is pinned, and archived/session material is retrieved only on demand.
+5. **Promote a Scratchpad:** M4.3 lets the Owner save an existing Scratchpad into a project. The current conversation is linked to the topic only after the first memory commit is verified; it is not duplicated or restarted.
+6. **Control memory bloat:** M4.7 warns when active project memory exceeds 40,000 measured tokens. The Owner previews compaction toward a sub-10,000-token master only where safe; original notes are preserved in the versioned archive with provenance.
+7. **Experiment without damaging the project:** M4.7 creates a child chat with its own 200,000-token budget and pinned memory snapshot. The parent remains unchanged and experimental results do not update main project memory until the Owner explicitly saves or merges them.
+
+These seven workflows share the same D1 transcript authority, Owner-only authorization and context-budget enforcement. They must not introduce silent data deletion, implicit GitHub writes or unreviewed changes to the selected project memory.
+
 ## 5. Rollover and durable handoff
 
 Recommended first thresholds, applied to committed usage plus in-flight reservation:
@@ -176,6 +190,81 @@ Keep the old chat read-only but fully accessible. Create a new conversation with
 If GitHub is unavailable, retain the handoff in D1 and show an honest **Sync pending** status with retry. The user can still continue from the D1 handoff. Never lose the handoff just because external sync failed. Do not guarantee a sub-three-second rollover: Gemini summarisation, network latency and GitHub commit time vary. Maintain compact structured state during normal work when it is safe; rollover should only need to reconcile the recent tail when such state is current and provenance-checked.
 
 ## 6. Token-aware context assembly and historical recall
+
+### 6.0 Cloudflare Owner Context Replicator — the coordinating middleware
+
+**Architecture decision:** the **Cloudflare Owner Context Replicator** is the single logical middleware/orchestration boundary that reconstructs the effective conversational context for each Owner turn. It is a server-side Cloudflare Worker responsibility, not a separate model, a browser-side transcript cache, or a claim to reproduce ChatGPT's proprietary internals. Its job is to replicate the useful *conversation continuity behaviour*—bounded working context plus selective durable recall—while leaving the complete source transcript intact in D1.
+
+The logical request path is:
+
+```text
+Owner browser
+    │  authenticated turn + selected model/thinking level
+    ▼
+Owner-only Cloudflare Worker route
+    ▼
+Cloudflare Owner Context Replicator
+    ├─ 1. Policy and scope
+    │     Owner identity, conversation/topic, selected model/API,
+    │     model context ceiling, output reservation and request budget
+    ├─ 2. Canonical state read
+    │     D1 transcript + message status/order + M4.1 usage/reservations
+    ├─ 3. Context source selection
+    │     pinned active Project Memory + structured state
+    │     + D1 FTS/keyword hits (exact source message IDs)
+    │     + bounded recent valid turn suffix
+    ├─ 4. Budgeted assembly
+    │     priority ordering, provenance and untrusted-data boundaries
+    ├─ 5. Exact final fit gate
+    │     Vertex CountTokens on the effective request; deterministic
+    │     removal of optional low-priority context and re-count as needed
+    └─ 6. Handoff to the existing provider adapter
+          unchanged selected model/thinking level → Vertex REST/SSE
+                    │
+                    ▼
+           streamed response + usage settlement
+                    │
+                    ▼
+              canonical D1 transcript
+
+Owner-confirmed save / rollover / compaction
+    ▼
+D1 outbox → dedicated Owner memory Queue/Workflow
+    ▼
+GitHub App → conflict-aware project-memory commit → read-back verification
+```
+
+The stages have the following contract:
+
+1. **Authenticate and scope first.** Reuse the existing Owner route guard and bind every read/write to the configured Owner principal. Validate the conversation, topic and pinned project snapshot server-side. Never accept Owner identity, repo/path scope or model authority from browser-supplied context alone.
+2. **Read canonical records, not browser replay.** Load authoritative D1 conversation metadata, valid message rows and M4.1 accounting. Keep all messages in D1. Exclude pending, failed and empty assistant rows from model context; after filtering, preserve the provider's valid user-led role ordering.
+3. **Select context by purpose.** Use only the current pinned, manifest-approved active Project Memory; add compact structured project state with source references; search D1 FTS/keyword indexes for relevant older exact message pairs; then choose the most useful recent valid suffix. A Scratchpad has no project memory unless the Owner explicitly attaches/promotes it.
+4. **Assemble under a request-specific budget.** Derive the available input budget from the selected model/API's currently verified context/input ceiling after reserving the requested output allowance and required request overhead. Put mandatory application/Owner policy and the current user turn above optional context. Count project memory, structured state, retrieval results, recent turns and the current turn together—not in separate unaccounted buckets.
+5. **Measure the actual final request.** Call Vertex CountTokens for the exact assembled contents and the exact selected model/API. If it does not fit, remove optional context deterministically from lowest priority upward and re-count. Never remove mandatory security policy or silently truncate the current user turn. If mandatory content plus the user turn cannot fit, return a clear actionable error before committing the prompt mutation or starting generation.
+6. **Preserve M4.1 accounting order.** Only after successful exact preflight, reserve prompt plus permitted output capacity atomically in D1, then commit the prompt mutation according to the current M4.1 ordering. A concurrent generation cannot over-reserve the chat.
+7. **Use the existing provider path.** Pass the same final effective content, selected model and supported thinking level that were measured to the current Vertex REST/SSE adapter. Do not switch providers/models, expose thought parts, or add a tool/parser loop as part of the replicator's first slice.
+8. **Persist and account independently of context selection.** Save user/assistant/partial transcript rows and usage settlement in D1. Prompt assembly must never truncate, rewrite or compact the canonical transcript. Exact historical retrieval always resolves back to D1 message IDs and records their source/provenance.
+9. **Make memory writes explicit and durable.** Ordinary turns do not silently write GitHub memory. Save, rollover and compaction jobs first create an Owner-scoped idempotent D1 outbox record; a dedicated Queue/Workflow performs retryable external work. A GitHub status becomes Synced only after the expected commit is read back and verified. D1 handoff remains usable if GitHub is down.
+
+The context replicator must preserve the adapter's role/message contract and treat all Project Memory and historical user content as untrusted reference data. Imported prompt-injection text cannot change application policy, authorization or the chosen model. Cache support (M4.8) may optimize stable prefixes only; cache expiry/miss must produce the same logical request through an uncached path.
+
+#### Bounded-input and quadratic-growth solution
+
+Let **B** be the selected model/API's effective maximum *input* token budget for one request after mandatory output capacity and required overhead have been reserved. For every generated turn (i), the final CountTokens result must satisfy:
+
+`inputTokens(i) ≤ B`
+
+For (N) turns, cumulative prompt input sent through the provider is therefore bounded by:
+
+`P(N) = Σ inputTokens(i) ≤ N × B = O(N)`
+
+This is the desired scaling property for a fixed model and fixed request budget. With naive full-history replay, if each new turn contributes an average of (c) tokens and every later prompt repeats all earlier turns, aggregate prompt input is approximately:
+
+`c × (1 + 2 + … + N) = c × N(N + 1) / 2 = O(N²)`
+
+The existing 200,000-token M4.1 lifetime ledger alone does **not** solve this repeated-context problem: it limits the cumulative cost of one chat but does not prevent a growing transcript from being resent on every turn. The Replicator solves it by bounding each assembled prompt and retrieving older records selectively, not by deleting history.
+
+This is an upper-bound claim about **prompt input tokens** under a fixed per-request budget. It is not a guarantee of exact historical recall, response-token volume, fixed latency or a particular invoice amount. A different selected model may have a different B. Project memory, retrieved history and summaries must all be included in the same B; they cannot become an unmetered second context window. The M4.7 compaction workflow manages durable project-memory growth, while exact per-request CountTokens remains the final authority.
 
 ### 6.1 Prompt layers
 
@@ -211,6 +300,21 @@ Start with Owner-scoped exact/lexical search over D1, preferably FTS5 where appr
 Return exact source message pairs/IDs and fetch those rows from D1 for the prompt. Do not use a generated summary as the only source when the original messages are available. A later semantic layer may rank candidates but must still fetch authoritative source messages.
 
 Do not add a Gemini function tool or parser loop in the first implementation slice. The existing custom Vertex REST/SSE adapter currently parses user-facing text deltas and filters thought parts; adding function calls requires a separately scoped and tested provider protocol change, bounded tool iterations, safe allowlisting, function-response handling, thinking/signature preservation and exact token accounting.
+
+### 6.4 Scaling acceptance for the Replicator
+
+When M4.6 is implemented, add deterministic CountTokens-backed tests that use scripted histories of 10, 50, 100 and 200 turns. Hold the selected model, budget B, project snapshot and representative turn sizes constant so the tests can distinguish bounded context from full-history replay. Assert that:
+
+- Every final request, including mandatory instructions, active project data, retrieved turns, recent suffix and current turn, measures at or below B.
+- Once the recent suffix and selected retrieval set have saturated, increasing the number of older transcript rows does not increase the assembled request beyond B or cause the builder to resend the full transcript.
+- The sum of prompt input tokens over N test turns is no greater than N × B. The same scripted workload's full-history replay baseline should exhibit the expected triangular/quadratic growth.
+- The exact final contents passed to GenerateContent are the contents measured by CountTokens; no character-count or turn-count estimate substitutes for the final check.
+- The complete D1 transcript is unchanged; retrieved historical turns resolve to exact D1 message IDs and retain provenance.
+- Retrieval timeout/empty/error paths still produce a safe bounded prompt or a clear preflight failure; they never claim perfect recall or silently change model.
+- A turn whose mandatory content cannot fit is rejected before prompt persistence/generation. Optional context may be reduced only through the deterministic priority policy.
+- Project/history text stays outside trusted system policy; prompt-injection fixtures cannot override Owner/application instructions.
+
+These are planned architecture acceptance tests, not test results from the documentation finalization. The O(N) bound applies while B is fixed; model changes or a deliberately changed budget require a separately measured series.
 
 ## 7. Memory compaction and forks
 
