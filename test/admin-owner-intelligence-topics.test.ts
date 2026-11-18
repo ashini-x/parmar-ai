@@ -119,7 +119,7 @@ describe("Owner Intelligence M4.2 Scratchpad and topics", () => {
     const rejected = await call(other, "/admin/api/intelligence/conversations", otherCookie, {
       method: "POST", body: { title: "Not allowed", topicId },
     });
-    expect(rejected.status).toBe(400);
+    expect(rejected.status).toBe(404);
     expect((await rejected.json() as { message: string }).message).toContain("not available to this Owner");
   });
 
