@@ -386,8 +386,7 @@ function mapTopic(row: OwnerIntelligenceTopic & { owner_id: string }): OwnerInte
 }
 
 function topicSlug(title: string, id: string): string {
-  const base = title.normalize("NFKD").replace(/[\\u0300-\\u036f]/gu, "")
-    .toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 36) || "topic";
+  const base = title.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 36) || "topic";
   return base + "-" + id.slice(0, 8);
 }
 
@@ -1144,7 +1143,7 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
     }
     return methodNotAllowed(["GET", "POST"]);
   }
-  const topicMatch = url.pathname.match(/^\\/admin\\/api\\/intelligence\\/topics\\/([0-9a-f-]{36})$/iu);
+  const topicMatch = url.pathname.match(/^\/admin\/api\/intelligence\/topics\/([0-9a-f-]{36})$/iu);
   if (topicMatch && validConversationId(topicMatch[1])) {
     if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
     if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
