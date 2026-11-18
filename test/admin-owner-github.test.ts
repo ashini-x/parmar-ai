@@ -145,7 +145,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     };
     expect(manifestResult.manifest.public).toBe(false);
     expect(manifestResult.manifest.default_permissions).toEqual({ metadata: "read", contents: "write" });
-    expect(manifestResult.manifest.setup_url).toBe(ORIGIN + CALLBACK);
+    expect(manifestResult.manifest.setup_url).toBe(ORIGIN + "/admin/api/intelligence/github/setup");
     expect(manifestResult.actionUrl).toContain("https://github.com/settings/apps/new?state=");
 
     const manifestState = new URL(manifestResult.actionUrl).searchParams.get("state");
@@ -175,7 +175,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
 
     const installationCallback = await call(
       env,
-      CALLBACK + "?installation_id=" + installationId + "&setup_action=install&state=" + encodeURIComponent(installationState ?? ""),
+      "/admin/api/intelligence/github/setup?installation_id=" + installationId + "&setup_action=install&state=" + encodeURIComponent(installationState ?? ""),
       cookie,
     );
     expect(installationCallback.status).toBe(303);
