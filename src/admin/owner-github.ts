@@ -1027,6 +1027,31 @@ export async function handleOwnerGithubApi(request: Request, env: Env, url: URL)
       if (!Number.isSafeInteger(id) || id < 1) return notFound();
       return await listRepositories(env, owner, id);
     }
+    const previewRoute = url.pathname.match(/^\/admin\/api\/intelligence\/github\/conversations\/([0-9a-f-]{36})\/preview$/iu);
+    if (previewRoute) {
+      if (request.method !== "POST") return methodNotAllowed(["POST"]);
+      if (!sameOrigin(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+      return await createMemoryPreview(env, request, owner, previewRoute[1]);
+    }
+    const previewStatus = url.pathname.match(/^\/admin\/api\/intelligence\/github\/previews\/([0-9a-f-]{36})$/iu);
+    if (previewStatus) {
+      if (request.method !== "GET") return methodNotAllowed(["GET"]);
+      const preview = await loadPreview(env, owner, previewStatus[1]);
+      if (!preview) return notFound();
+      return json({ ok: true, preview: {
+        id: preview.id, topicId: preview.topic_id, conversationId: preview.conversation_id,
+        repository: preview.repository_owner + "/" + preview.repository_name, branch: preview.branch,
+        memoryRoot: preview.memory_root, baseCommitSha: preview.base_commit_sha,
+        status: preview.status, commitSha: preview.commit_sha, expiresAt: preview.expires_at,
+        files: JSON.parse(preview.files_json) as MemoryFile[],
+      } });
+    }
+    const confirmRoute = url.pathname.match(/^\/admin\/api\/intelligence\/github\/previews\/([0-9a-f-]{36})\/confirm$/iu);
+    if (confirmRoute) {
+      if (request.method !== "POST") return methodNotAllowed(["POST"]);
+      if (!sameOrigin(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+      return await confirmMemorySave(env, request, owner, confirmRoute[1]);
+    }
     const attach = url.pathname.match(/^\/admin\/api\/intelligence\/github\/topics\/([0-9a-f-]{36})\/repository$/iu);
     if (attach) {
       if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
