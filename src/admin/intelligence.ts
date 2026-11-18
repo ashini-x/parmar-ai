@@ -3,6 +3,16 @@ import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
 import { countOwnerGeminiInputTokens, openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
 
+/**
+ * Provider seam for deterministic Owner generation tests. Production routes
+ * omit this argument and always use the real Vertex adapter.
+ */
+export interface OwnerIntelligenceProviderOverrides {
+  countInputTokens?: typeof countOwnerGeminiInputTokens;
+  openStream?: typeof openOwnerGeminiStream;
+}
+
+
 export interface OwnerIntelligenceSessionUsage {
   limit_tokens: number;
   used_tokens: number;
@@ -706,6 +716,7 @@ async function handleOwnerGeneration(
   request: Request,
   env: Env,
   conversationId: string,
+  provider: OwnerIntelligenceProviderOverrides = {},
 ): Promise<Response> {
   if (request.method !== "POST") return methodNotAllowed(["POST"]);
   if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
@@ -764,7 +775,7 @@ async function handleOwnerGeneration(
 
   let promptTokens: number;
   try {
-    promptTokens = await countOwnerGeminiInputTokens(env, { modelId: definition.id, contents });
+    promptTokens = await (provider.countInputTokens ?? countOwnerGeminiInputTokens)(env, { modelId: definition.id, contents });
   } catch (error) {
     const providerError = error instanceof OwnerGeminiProviderError ? error : null;
     const status = providerError?.status === 400 ? 400 :
@@ -844,7 +855,7 @@ async function handleOwnerGeneration(
 
   let upstream: AsyncGenerator<OwnerGeminiStreamEvent>;
   try {
-    upstream = await openOwnerGeminiStream(env, {
+    upstream = await (provider.openStream ?? openOwnerGeminiStream)(env, {
       modelId: definition.id,
       thinkingLevel,
       contents,
@@ -965,7 +976,12 @@ async function handleOwnerGeneration(
     },
   });
 }
-export async function handleOwnerIntelligenceApi(request: Request, env: Env, url: URL): Promise<Response> {
+export async function handleOwnerIntelligenceApi(
+  request: Request,
+  env: Env,
+  url: URL,
+  provider: OwnerIntelligenceProviderOverrides = {},
+): Promise<Response> {
   if (url.pathname === "/admin/api/intelligence/models") {
     if (request.method !== "GET") return methodNotAllowed(["GET"]);
     return ownerIntelligenceModelsResponse(env);
@@ -973,7 +989,7 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
 
   const generationMatch = url.pathname.match(/^\/admin\/api\/intelligence\/conversations\/([0-9a-f-]{36})\/generate$/iu);
   if (generationMatch && validConversationId(generationMatch[1])) {
-    return handleOwnerGeneration(request, env, generationMatch[1]);
+    return handleOwnerGeneration(request, env, generationMatch[1], provider);
   }
 
   const root = "/admin/api/intelligence/conversations";
