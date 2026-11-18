@@ -324,60 +324,88 @@ async function exchangeUserCode(bundle: Bundle, code: string, verifier: string):
   return result.access_token;
 }
 async function userAuthorizationCallback(env: Env, url: URL): Promise<Response> {
-  const code = clean(url.searchParams.get("code"), 1024);
-  const state = clean(url.searchParams.get("state"), 128);
-  if (!code || !state || url.searchParams.has("error")) return callbackResult("error");
-  const consumed = await consumeState(env, state, "user_authorization");
-  if (!consumed) return callbackResult("error");
-  const owner = consumed.owner_id;
-  const redirectUri = clean(consumed.payload.redirectUri, 500);
-  if (!redirectUri || new URL(redirectUri).origin !== url.origin || new URL(redirectUri).pathname !== CALLBACK) {
-    return callbackResult("error");
-  }
-  const { bundle } = await getBundle(env, owner);
-  const installationId = Number(consumed.payload.installationId);
-  if (Number(consumed.payload.appId) !== bundle.appId || !Number.isSafeInteger(installationId) || installationId < 1) {
-    return callbackResult("error");
-  }
-  const verifier = clean(consumed.payload.codeVerifier, 200);
-  if (verifier.length < 43) return callbackResult("error");
-  const userToken = await exchangeUserCode(bundle, code, verifier);
-  const user = (await github<{ id?: number; login?: string }>("/user", userToken)).data;
-  if (!Number.isSafeInteger(Number(user.id)) || !clean(user.login, 100)) return callbackResult("error");
+  let stage = "validate_callback";
+  try {
+    const code = clean(url.searchParams.get("code"), 1024);
+    const state = clean(url.searchParams.get("state"), 128);
+    if (!code || !state || url.searchParams.has("error")) return callbackResult("error");
+    stage = "consume_one_time_state";
+    const consumed = await consumeState(env, state, "user_authorization");
+    if (!consumed) return callbackResult("error");
+    const owner = consumed.owner_id;
+    const redirectUri = clean(consumed.payload.redirectUri, 500);
+    if (!redirectUri || new URL(redirectUri).origin !== url.origin || new URL(redirectUri).pathname !== CALLBACK) {
+      console.warn("owner_github_callback_rejected", "redirect_origin_mismatch");
+      return callbackResult("error");
+    }
+    stage = "load_encrypted_app";
+    const { bundle } = await getBundle(env, owner);
+    const installationId = Number(consumed.payload.installationId);
+    if (Number(consumed.payload.appId) !== bundle.appId || !Number.isSafeInteger(installationId) || installationId < 1) {
+      console.warn("owner_github_callback_rejected", "app_or_installation_mismatch");
+      return callbackResult("error");
+    }
+    const verifier = clean(consumed.payload.codeVerifier, 200);
+    if (verifier.length < 43) {
+      console.warn("owner_github_callback_rejected", "pkce_verifier_missing");
+      return callbackResult("error");
+    }
+    stage = "exchange_pkce_user_code";
+    const userToken = await exchangeUserCode(bundle, code, verifier);
+    stage = "verify_github_user";
+    const user = (await github<{ id?: number; login?: string }>("/user", userToken)).data;
+    if (!Number.isSafeInteger(Number(user.id)) || !clean(user.login, 100)) {
+      console.warn("owner_github_callback_rejected", "github_user_unverified");
+      return callbackResult("error");
+    }
 
-  const installations: GitHubInstallation[] = [];
-  let page = 1;
-  while (page <= 5) {
-    const result = await github<{ installations?: GitHubInstallation[] }>(
-      "/user/installations?per_page=100&page=" + page, userToken,
+    stage = "list_user_installations";
+    const installations: GitHubInstallation[] = [];
+    let page = 1;
+    while (page <= 5) {
+      const result = await github<{ installations?: GitHubInstallation[] }>(
+        "/user/installations?per_page=100&page=" + page, userToken,
+      );
+      installations.push(...(result.data.installations || []));
+      if (!/rel="next"/u.test(result.headers.get("link") || "")) break;
+      page += 1;
+    }
+    const selected = installations.find((item) =>
+      Number(item.id) === installationId && Number(item.app_id) === bundle.appId,
     );
-    installations.push(...(result.data.installations || []));
-    if (!/rel="next"/u.test(result.headers.get("link") || "")) break;
-    page += 1;
-  }
-  const selected = installations.find((item) =>
-    Number(item.id) === installationId && Number(item.app_id) === bundle.appId,
-  );
-  if (!selected || !clean(selected.account?.login, 100) || selected.repository_selection !== "selected" ||
-      selected.permissions?.metadata !== "read" || selected.permissions?.contents !== "write") {
+    if (!selected) {
+      console.warn("owner_github_callback_rejected", "installation_not_visible_to_authorized_user");
+      return callbackResult("error");
+    }
+    if (!clean(selected.account?.login, 100) || selected.repository_selection !== "selected" ||
+        selected.permissions?.metadata !== "read" || selected.permissions?.contents !== "write") {
+      console.warn("owner_github_callback_rejected", "installation_permissions_or_selection_mismatch");
+      return callbackResult("error");
+    }
+
+    stage = "persist_verified_installation";
+    const now = Date.now();
+    const saved = await env.DB!.prepare(
+      "INSERT INTO " + INSTALL_TABLE +
+      " (owner_id, installation_id, app_id, account_login, account_type, repository_selection, status, authorized_user, created_at, updated_at)" +
+      " VALUES (?, ?, ?, ?, ?, 'selected', 'active', ?, ?, ?)" +
+      " ON CONFLICT(owner_id, installation_id) DO UPDATE SET app_id=excluded.app_id, account_login=excluded.account_login," +
+      " account_type=excluded.account_type, repository_selection='selected', status='active'," +
+      " authorized_user=excluded.authorized_user, updated_at=excluded.updated_at",
+    ).bind(owner, installationId, bundle.appId, clean(selected.account?.login, 100),
+      clean(selected.account?.type, 40), clean(user.login, 100), now, now).run();
+    if (!saved.success) throw new Error("D1 did not confirm the verified GitHub installation.");
+    stage = "mark_app_authorized";
+    await env.DB!.prepare("UPDATE " + APP_TABLE + " SET status='authorized', updated_at=? WHERE owner_id=? AND app_id=?")
+      .bind(now, owner, bundle.appId).run();
+    // The temporary user access token is deliberately not persisted.
+    return callbackResult("installed");
+  } catch (error) {
+    // Log only a static stage and error class; never log GitHub tokens, secrets,
+    // private keys, request URLs or upstream response bodies.
+    console.error("owner_github_user_authorization_failed", stage, error instanceof Error ? error.name : "unknown");
     return callbackResult("error");
   }
-
-  const now = Date.now();
-  const saved = await env.DB!.prepare(
-    "INSERT INTO " + INSTALL_TABLE +
-    " (owner_id, installation_id, app_id, account_login, account_type, repository_selection, status, authorized_user, created_at, updated_at)" +
-    " VALUES (?, ?, ?, ?, ?, 'selected', 'active', ?, ?, ?)" +
-    " ON CONFLICT(owner_id, installation_id) DO UPDATE SET app_id=excluded.app_id, account_login=excluded.account_login," +
-    " account_type=excluded.account_type, repository_selection='selected', status='active'," +
-    " authorized_user=excluded.authorized_user, updated_at=excluded.updated_at",
-  ).bind(owner, installationId, bundle.appId, clean(selected.account?.login, 100),
-    clean(selected.account?.type, 40), clean(user.login, 100), now, now).run();
-  if (!saved.success) throw new Error("D1 did not confirm the verified GitHub installation.");
-  await env.DB!.prepare("UPDATE " + APP_TABLE + " SET status='authorized', updated_at=? WHERE owner_id=? AND app_id=?")
-    .bind(now, owner, bundle.appId).run();
-  // The temporary user access token is deliberately not persisted.
-  return callbackResult("installed");
 }
 export async function handleOwnerGithubCallback(request: Request, env: Env, url: URL): Promise<Response> {
   if (request.method !== "GET") return methodNotAllowed(["GET"]);
