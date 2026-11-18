@@ -489,12 +489,6 @@ M4.3 implementation remains deployed; live Owner acceptance remains pending. Aft
 
 
 
-### Owner Memory Hub provisioning status — 2026-11-19 IST
-
-- Verified GitHub repository: [`ashini-x/owner-memory-hub`](https://github.com/ashini-x/owner-memory-hub), repository ID `1463342529`, default branch `main`, README present (`# owner-memory-hub`), no source-code migration observed.
-- **Blocking issue:** GitHub currently reports `visibility=public`; the design requires **Private**. Change repository visibility to Private and verify it before installing/using the write-capable Owner Memory App.
-- Next: configure the App for selected repositories only and select only this hub, complete the Owner Intelligence installation/PKCE callback, then finish M4.3 save/read-back/stale-branch Conflict acceptance.
-
 ### Owner Memory Hub provisioning and installation status — 2026-11-19 IST
 
 - Verified repository: [`ashini-x/owner-memory-hub`](https://github.com/ashini-x/owner-memory-hub), ID `1463342529`, default branch `main`, README present, and GitHub metadata confirms **Private** visibility.
@@ -502,3 +496,13 @@ M4.3 implementation remains deployed; live Owner acceptance remains pending. Aft
 - Owner Intelligence still reports **App created · installation required**. The deployed status endpoint derives this from configured App credentials plus zero verified active installation rows in Owner-scoped D1.
 - **Do not uninstall/recreate yet.** Click Install GitHub App inside Owner Intelligence to mint a fresh one-use state, configure/save the existing installation through that flow, preserve the state through GitHub's configured setup-on-update redirect, then complete the PKCE user-authorization round trip. Verify Connected/installation/repository selectors before proceeding.
 - If setup redirect or PKCE fails, capture the safe callback reason and diagnose state/redirect configuration before considering uninstall/reinstall.
+
+### Owner Memory Hub installation recovery — 2026-11-19 IST
+
+- GitHub metadata verifies [`ashini-x/owner-memory-hub`](https://github.com/ashini-x/owner-memory-hub), repository ID `1463342529`, default branch `main`, README present and **Private** visibility.
+- Owner reports the BRɅIN Owner Memory App is now configured for **Only select repositories** with only this hub selected.
+- The first installation was completed with **All repositories** selected. The deployed installation callback requires `repository_selection=selected`, consumes its one-use state and rejects the All-repositories installation before writing a verified D1 installation row. Changing repository access later does not replay that consumed callback.
+- **Recovery decision:** uninstall only the existing GitHub App installation (do not delete the App registration), then click **Install GitHub App** from Owner Intelligence and reinstall with a fresh state, selecting only the private hub. Complete the setup callback and PKCE authorization.
+- Verify `Connected · 1 verified installation(s)` and the private hub repository selector before topic attachment. If this clean install fails, capture its callback stage/reason and diagnose before further attempts.
+- M4.3 real preview/edit/confirm/read-back/stale-branch Conflict acceptance remains pending.
+
