@@ -1275,6 +1275,19 @@ function workspaceHtml(): string {
 .github-field-label{font-size:8px;letter-spacing:.1em;color:#858585;font-weight:650;margin-top:3px}
 .github-field{width:100%;min-width:0;border:1px solid #414141;border-radius:7px;background:#292929;color:#e5e5e5;padding:7px;font:inherit;font-size:10px}
 .github-hint{margin:0;color:#858585;font-size:9px;line-height:1.45;overflow-wrap:anywhere}
+.github-save{display:flex;flex-direction:column;gap:7px;margin-top:8px;padding-top:9px;border-top:1px solid #343434}
+.github-save select{width:100%;border:1px solid #414141;border-radius:7px;background:#292929;color:#e5e5e5;padding:7px;font:inherit;font-size:10px}
+.github-save-button,.github-confirm-button,.github-discard-button{border:1px solid #454545;border-radius:7px;background:#292929;color:#e3e3e3;padding:8px;font-size:10px}
+.github-save-button:not(:disabled):hover,.github-confirm-button:not(:disabled):hover,.github-discard-button:hover{background:#3a3a3a}
+.github-save-button:disabled,.github-confirm-button:disabled{opacity:.4;cursor:not-allowed}
+.github-save-status{font-size:10px;line-height:1.45;color:#b8b8b8;overflow-wrap:anywhere;white-space:pre-wrap}
+.github-save-preview{display:flex;flex-direction:column;gap:7px}
+.github-save-preview[hidden]{display:none}
+.github-save-files{display:flex;flex-direction:column;gap:8px}
+.github-save-file{display:flex;flex-direction:column;gap:4px}
+.github-save-file label{font-size:9px;color:#bcbcbc;font-weight:650;overflow-wrap:anywhere}
+.github-save-file textarea{width:100%;min-height:130px;max-height:360px;resize:vertical;border:1px solid #414141;border-radius:7px;background:#171717;color:#e5e5e5;padding:8px;font:10px/1.5 ui-monospace,SFMono-Regular,monospace}
+
 .conversation-heading{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .conversation-scope{display:inline-flex;align-items:center;border:1px solid #454545;border-radius:999px;padding:3px 8px;background:#292929;color:#bdbdbd;font-size:9px;font-weight:650;letter-spacing:.08em;text-transform:uppercase}
 .conversation-title{color:#e4e4e4;font-size:13px;font-weight:550;letter-spacing:0}
@@ -1319,6 +1332,18 @@ function workspaceHtml(): string {
       <input class="github-field" id="githubMemoryRoot" value="memory" maxlength="180" autocomplete="off">
       <button class="github-attach-button" id="githubAttachTopic" type="button" disabled>Attach repository to topic</button>
     </div>
+    <section class="github-save" id="githubSaveBox" hidden aria-label="Save conversation to project memory">
+      <label class="github-field-label" for="githubSaveTopic">SAVE CURRENT CHAT TO PROJECT</label>
+      <select id="githubSaveTopic" aria-label="Project to save this conversation into"><option value="">Choose a project topic</option></select>
+      <button class="github-save-button" id="githubPreviewSave" type="button" disabled>Preview Save to GitHub</button>
+      <div class="github-save-status" id="githubSaveStatus" aria-live="polite">Open a conversation and choose a project topic.</div>
+      <div class="github-save-preview" id="githubSavePreview" hidden>
+        <div class="github-hint" id="githubPreviewSummary"></div>
+        <div class="github-save-files" id="githubPreviewFiles"></div>
+        <button class="github-confirm-button" id="githubConfirmSave" type="button">Confirm and commit reviewed files</button>
+        <button class="github-discard-button" id="githubDiscardPreview" type="button">Discard preview</button>
+      </div>
+    </section>
     <p class="github-hint" id="githubHint">Only the Owner can connect a private GitHub App. Project Memory loading and saving are separate steps.</p>
   </section>
   <div class="section-label">Your conversations</div>
@@ -1389,6 +1414,16 @@ export function ownerIntelligenceClientScript(): Response {
   var githubMemoryRoot=document.getElementById("githubMemoryRoot");
   var githubAttachTopic=document.getElementById("githubAttachTopic");
   var githubHint=document.getElementById("githubHint");
+  var githubSaveBox=document.getElementById("githubSaveBox");
+  var githubSaveTopic=document.getElementById("githubSaveTopic");
+  var githubPreviewSave=document.getElementById("githubPreviewSave");
+  var githubSaveStatus=document.getElementById("githubSaveStatus");
+  var githubSavePreview=document.getElementById("githubSavePreview");
+  var githubPreviewSummary=document.getElementById("githubPreviewSummary");
+  var githubPreviewFiles=document.getElementById("githubPreviewFiles");
+  var githubConfirmSave=document.getElementById("githubConfirmSave");
+  var githubDiscardPreview=document.getElementById("githubDiscardPreview");
+  var githubMemoryPreview=null;
   var githubConfigured=false;
   var modelLoadInProgress=false;
   var modelLoadMessage="Checking configured Gemini models…";
@@ -1399,9 +1434,9 @@ export function ownerIntelligenceClientScript(): Response {
   var generationActivity=null;
   function node(tag,className,text){var el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;}
   function errorText(error){return error&&error.message?error.message:"Something went wrong. Please retry.";}
-  async function request(path,options){
+  async function request(path,options,timeoutMs){
     var controller=new AbortController();
-    var timeoutId=window.setTimeout(function(){controller.abort();},15000);
+    var timeoutId=window.setTimeout(function(){controller.abort();},timeoutMs||15000);
     try{
       var requestOptions=Object.assign({credentials:"same-origin",cache:"no-store"},options||{});
       requestOptions.signal=controller.signal;
@@ -1561,6 +1596,9 @@ export function ownerIntelligenceClientScript(): Response {
   }
   function showWelcome(){
     if(!state.activeId)heading.textContent="";
+    githubSaveBox.hidden=true;
+    githubMemoryPreview=null;
+    githubSavePreview.hidden=true;
     messages.replaceChildren();
     var welcome=node("div","welcome");
     welcome.appendChild(node("div","welcome-mark","BɅ"));
@@ -1748,6 +1786,96 @@ export function ownerIntelligenceClientScript(): Response {
     githubAttachTopic.disabled=!(hasTopic&&hasRepository&&githubBranch.value.trim()&&githubMemoryRoot.value.trim());
     githubAttachTopic.textContent=hasTopic?"Attach repository to "+(state.topics.find(function(t){return t.id===newChatTopic.value;})||{}).title:"Select a topic above";
   }
+  function updateGithubSaveAvailability(){
+    var selected=Boolean(githubSaveTopic.value);
+    githubPreviewSave.disabled=!state.activeId||!selected||sending||!githubConfigured||!state.githubInstallations.length;
+    if(!state.activeId){
+      githubSaveStatus.textContent="Open a conversation before saving.";
+    }else if(!state.topics.length){
+      githubSaveStatus.textContent="Create a project topic first, then attach a verified GitHub repository and branch.";
+    }else if(!githubSaveTopic.value){
+      githubSaveStatus.textContent="Choose the project topic for this conversation.";
+    }
+  }
+  async function createGithubMemoryPreview(){
+    if(!state.activeId||!githubSaveTopic.value)return;
+    githubPreviewSave.disabled=true;
+    githubSavePreview.hidden=true;
+    githubMemoryPreview=null;
+    githubSaveStatus.textContent="Reading the selected topic's current Markdown and preparing an editable preview…";
+    try{
+      var result=await request("/admin/api/intelligence/github/conversations/"+encodeURIComponent(state.activeId)+"/preview",{
+        method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({topicId:githubSaveTopic.value})
+      },60000);
+      githubMemoryPreview=result.preview;
+      githubPreviewSummary.textContent=
+        "Destination: "+githubMemoryPreview.repository+" · "+githubMemoryPreview.branch+
+        "\nBase commit: "+githubMemoryPreview.baseCommitSha+
+        "\nMemory root: "+githubMemoryPreview.memoryRoot+
+        "\nExpires: "+new Date(githubMemoryPreview.expiresAt).toLocaleString()+
+        "\n"+githubMemoryPreview.note;
+      githubPreviewFiles.replaceChildren();
+      githubMemoryPreview.files.forEach(function(file,index){
+        var wrapper=node("div","github-save-file");
+        var label=node("label","",file.name);
+        var editor=node("textarea");
+        editor.id="github-memory-file-"+index;
+        editor.dataset.fileName=file.name;
+        editor.setAttribute("aria-label","Edit "+file.name);
+        editor.spellcheck=false;
+        editor.value=file.content;
+        label.htmlFor=editor.id;
+        wrapper.appendChild(label);
+        wrapper.appendChild(editor);
+        githubPreviewFiles.appendChild(wrapper);
+      });
+      githubSavePreview.hidden=false;
+      githubSaveStatus.textContent="Review and edit all five Markdown files. Nothing has been committed yet.";
+    }catch(error){
+      githubSaveStatus.textContent=errorText(error);
+    }finally{
+      updateGithubSaveAvailability();
+    }
+  }
+  function discardGithubMemoryPreview(){
+    githubMemoryPreview=null;
+    githubSavePreview.hidden=true;
+    githubPreviewFiles.replaceChildren();
+    githubSaveStatus.textContent="Preview discarded. No GitHub changes were made.";
+    updateGithubSaveAvailability();
+  }
+  async function confirmGithubMemorySave(){
+    if(!githubMemoryPreview)return;
+    var editors=githubPreviewFiles.querySelectorAll("textarea[data-file-name]");
+    var files=Array.prototype.map.call(editors,function(editor){
+      return {name:editor.dataset.fileName,content:editor.value};
+    });
+    if(!window.confirm("Commit these "+files.length+" reviewed Markdown files to "+githubMemoryPreview.repository+" on "+githubMemoryPreview.branch+"?")){
+      return;
+    }
+    githubConfirmSave.disabled=true;
+    githubSaveStatus.textContent="Committing reviewed files and verifying the resulting commit and every file by read-back…";
+    try{
+      var result=await request("/admin/api/intelligence/github/previews/"+encodeURIComponent(githubMemoryPreview.id)+"/confirm",{
+        method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({confirmed:true,files:files})
+      },60000);
+      if(result.status!=="synced"){
+        githubSaveStatus.textContent="GitHub did not return a verified Synced status. The preview remains available to check or retry.";
+        githubConfirmSave.disabled=false;
+        return;
+      }
+      githubSaveStatus.textContent="Synced · "+result.commitSha+"\n"+result.repository+" · "+result.branch;
+      githubConfirmSave.disabled=true;
+      await refreshTopics(result.topicId);
+      await refreshList(state.activeId);
+      githubSaveTopic.value=result.topicId;
+      updateGithubSaveAvailability();
+    }catch(error){
+      githubSaveStatus.textContent=errorText(error);
+      githubConfirmSave.disabled=false;
+    }
+  }
   async function attachGithubRepository(){
     var topicId=newChatTopic.value;
     var selected=githubRepository.options[githubRepository.selectedIndex];
@@ -1778,6 +1906,18 @@ export function ownerIntelligenceClientScript(): Response {
     });
     newChatTopic.value=state.topics.some(function(topic){return topic.id===previous;})?previous:"";
     renameTopicButton.disabled=!newChatTopic.value;
+    var saveTopic=githubSaveTopic.value;
+    githubSaveTopic.replaceChildren(node("option","","Choose a project topic"));
+    githubSaveTopic.options[0].value="";
+    state.topics.forEach(function(topic){
+      var option=node("option","",topic.title);
+      option.value=topic.id;
+      githubSaveTopic.appendChild(option);
+    });
+    var activeConversation=state.conversations.find(function(item){return item.id===state.activeId;});
+    var preferredSaveTopic=activeConversation&&activeConversation.topic_id?activeConversation.topic_id:saveTopic;
+    githubSaveTopic.value=state.topics.some(function(topic){return topic.id===preferredSaveTopic;})?preferredSaveTopic:"";
+    updateGithubSaveAvailability();
   }
   async function createTopic(){
     var title=window.prompt("Name this topic");
@@ -1830,6 +1970,10 @@ export function ownerIntelligenceClientScript(): Response {
   async function openConversation(id){
     var result=await request(api+"/"+encodeURIComponent(id));
     state.activeId=result.conversation.id;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
+    githubSaveBox.hidden=false;
+    var preferredTopic=result.conversation.topic_id||"";
+    githubSaveTopic.value=state.topics.some(function(topic){return topic.id===preferredTopic;})?preferredTopic:githubSaveTopic.value;
+    updateGithubSaveAvailability();
     heading.replaceChildren(
       node("span","conversation-scope",result.conversation.topic_title||"Scratchpad"),
       node("span","conversation-title",result.conversation.title)
@@ -1981,6 +2125,10 @@ export function ownerIntelligenceClientScript(): Response {
       var result=await request(api,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(conversationBody)});
       newChatTopic.value="";
       renameTopicButton.disabled=true;
+      githubSaveTopic.value="";
+      githubMemoryPreview=null;
+      githubSavePreview.hidden=true;
+      githubSaveBox.hidden=false;
       await refreshList(result.conversation.id);
       sidebar.classList.remove("open");
     }catch(error){showHistoryError(error);}
@@ -2023,6 +2171,14 @@ export function ownerIntelligenceClientScript(): Response {
   githubBranch.addEventListener("input",updateGithubAttachAvailability);
   githubMemoryRoot.addEventListener("input",updateGithubAttachAvailability);
   githubAttachTopic.addEventListener("click",attachGithubRepository);
+  githubSaveTopic.addEventListener("change",function(){
+    githubMemoryPreview=null;
+    githubSavePreview.hidden=true;
+    updateGithubSaveAvailability();
+  });
+  githubPreviewSave.addEventListener("click",createGithubMemoryPreview);
+  githubConfirmSave.addEventListener("click",confirmGithubMemorySave);
+  githubDiscardPreview.addEventListener("click",discardGithubMemoryPreview);
   document.getElementById("mobileMenu").addEventListener("click",function(){sidebar.classList.toggle("open");});
   sendButton.addEventListener("click",function(){if(sending)stopGeneration();else saveMessage();});
   messageInput.addEventListener("input",updateComposer);
@@ -2042,6 +2198,7 @@ export function ownerIntelligenceClientScript(): Response {
   loadModels();
   refreshTopics().catch(showHistoryError);
   refreshGithubStatus().catch(function(error){githubStatus.textContent="Connection status unavailable";githubHint.textContent=errorText(error);});
+  updateGithubSaveAvailability();
   var githubReturn=new URLSearchParams(window.location.search).get("github");
   if(githubReturn==="app-created")githubHint.textContent="GitHub App created. Install it on the account that owns the repositories you want to use.";
   else if(githubReturn==="installed")githubHint.textContent="GitHub installation verified. Choose a repository and attach it to a topic.";
@@ -2067,7 +2224,7 @@ export async function ownerIntelligencePage(env: Env): Promise<Response> {
       "cache-control": "no-store",
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
-      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; form-action 'self' https://github.com; base-uri 'none'; frame-ancestors 'none'",
     },
   });
 }
