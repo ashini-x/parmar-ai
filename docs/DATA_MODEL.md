@@ -222,3 +222,22 @@ The 200,000-token counter is cumulative for the lifetime of a conversation, not 
 
 Conversation list queries are limited to the latest 100 rows for the Owner principal. Deleting a conversation removes its messages and the conversation row; the generation metadata foreign key cascades with its assistant message. Changing `OWNER_DASHBOARD_USER` changes the owner scope and requires a deliberate migration if conversations must be retained. Password rotation does not change the scope.
 
+
+
+## Owner Intelligence GitHub integration records (M4.3)
+
+The following additive D1 tables are created by the Owner GitHub integration schema initializer. They do not replace or modify the canonical conversation, message, generation metadata, usage or reservation tables.
+
+### owner_intelligence_github_app
+
+One row per configured Owner principal. Stores the GitHub App numeric ID, slug/name, encrypted private-key ciphertext, installation ID, installation account and selected-repository mode. The private key is encrypted before storage and is never serialized to the browser. Installation tokens are not persisted.
+
+### owner_intelligence_github_states
+
+Stores SHA-256 hashes of one-time manifest/installation state tokens, Owner principal, purpose, bounded payload, expiry and creation time. Raw state is returned only in the one-time GitHub setup URLs and is deleted when consumed. Expired/replayed state is rejected.
+
+### owner_intelligence_github_previews
+
+Stores an Owner-scoped preview ID, source conversation, proposed topic/project ID and title, repository owner/name/numeric ID, branch, memory root, expected base commit SHA, reviewed file JSON, save status, verified commit SHA, expiry and timestamps. Status transitions distinguish ready, conflict, verifying, synced and expired. The file set and preview are bounded; the D1 transcript remains the source record.
+
+A successful verified save writes the repository/branch/memory-root/current-commit metadata into the existing Owner topic and associates the Scratchpad conversation with that topic. This is only a repository metadata association; M4.4 separately loads manifest-selected memory and pins an exact commit snapshot into future generation requests.
