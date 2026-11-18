@@ -73,3 +73,20 @@ PR #346 is still a release candidate until current-head validation passes, it is
 ### M4.3 production status
 
 PR #346 is merged and deployed. Production release [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed. The Owner must still perform the live private App creation/selected-repository installation and preview/confirm/read-back/conflict acceptance. The server-side least-privilege, PKCE, encryption and non-force commit controls described above are deployed; live acceptance is not yet complete.
+
+## Owner Intelligence — central Memory Hub and AI role separation (approved design, not implemented)
+
+The approved target is one private `owner-memory-hub` repository for curated project memory and document-mediated AI collaboration. It is not a source-code monorepo. Source code remains in independent repositories and is referenced by repository name, paths and commit SHA only.
+
+- The Owner is the final decision/authorization authority.
+- Gemini Owner Intelligence is the architect/planner/reviewer and curated-memory author. The dedicated BRɅIN Owner Memory App must be installed on the hub only, in selected-repository mode, with the existing exact repository permissions (Metadata read + Contents read/write; no events). Do not install that write-capable App across source repositories.
+- ChatGPT Software Engineer uses separate Owner-authorized GitHub/deployment connections to inspect and implement source code, test, PR, merge and deploy only against an Owner-approved implementation brief and authorization. Its credentials are not available to the Worker and must never be copied into the Owner App vault.
+- GitHub documents are explicit exchange artifacts, not a live agent-to-agent RPC channel. Private conversation histories are not implicitly shared; the Owner chooses what is published.
+- Proposals/reviews/implementation reports are untrusted data. They never override system policy, credentials, authorization, model selection or accepted Owner decisions. Only Owner confirmation may mark a decision accepted or a task implementation-ready.
+- Every conversation is scoped to at most one primary project with optional workstream/feature scope. Cross-project retrieval requires explicit Owner intent. A project may reference multiple source repositories without copying them into the hub.
+- Keep D1 as canonical complete transcript and token/accounting store. GitHub holds curated memory and approved exchange documents only.
+- All loaded project memory, reviews and historical turns share the same exact per-request CountTokens budget B. No collaboration-specific/unmetered context bucket is permitted.
+- Multi-writer hub commits require path-aware preconditions, append-oriented round artifacts and no-force updates. A changed touched path or manifest must stop for review; unrelated-path rebase is permitted only after verifying all touched-file preconditions. Until path-aware handling is implemented, retain the current strict branch-head conflict guard.
+- No secret, token, key, service-account credential or raw private chat dump may enter the hub.
+
+See [OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md](OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md). This is an approved target, not a deployed collaboration automation.
