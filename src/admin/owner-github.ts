@@ -522,6 +522,477 @@ async function attachRepository(env: Env, owner: string, topicId: string, input:
   return json({ ok: true, topicId, repository: fullName, branch: input.branch, memoryRoot: input.memoryRoot,
     note: "Repository attached. Project Memory loading is a separate M4.4 step." });
 }
+
+function validUuid(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value);
+}
+function validBranch(value: string): boolean {
+  return value.length > 0 && value.length <= 180 && /^[A-Za-z0-9._/-]+$/u.test(value) &&
+    !value.startsWith("/") && !value.endsWith("/") && !value.includes("..") &&
+    !value.includes("//") && !value.endsWith(".lock") && !value.includes("@{");
+}
+function validMemoryRoot(value: string): boolean {
+  return value.length > 0 && value.length <= 180 && /^[A-Za-z0-9._/-]+$/u.test(value) &&
+    !value.startsWith("/") && !value.endsWith("/") &&
+    value.split("/").every((part) => Boolean(part) && part !== "." && part !== "..");
+}
+function gitPath(path: string): string {
+  return path.split("/").map((part) => encodeURIComponent(part)).join("/");
+}
+function repositoryPath(owner: string, name: string, suffix: string): string {
+  return "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(name) + suffix;
+}
+function decodeGitHubFile(value: string): string {
+  const binary = atob(value.replace(/\s/gu, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+async function readMemoryFile(token: string, owner: string, name: string, path: string, branch: string): Promise<string | null> {
+  try {
+    const response = await github<{ type?: string; encoding?: string; content?: string }>(
+      repositoryPath(owner, name, "/contents/" + gitPath(path) + "?ref=" + encodeURIComponent(branch)),
+      token,
+    );
+    if (response.data.type !== "file" || response.data.encoding !== "base64" || typeof response.data.content !== "string") {
+      throw new Error("A project-memory path is not a normal UTF-8 Markdown file.");
+    }
+    return decodeGitHubFile(response.data.content);
+  } catch (error) {
+    if (error instanceof GitHubHttpError && error.status === 404) return null;
+    throw error;
+  }
+}
+async function branchHead(token: string, owner: string, name: string, branch: string): Promise<string> {
+  const response = await github<{ object?: { sha?: string } }>(
+    repositoryPath(owner, name, "/git/ref/heads/" + encodeURIComponent(branch)),
+    token,
+  );
+  const sha = clean(response.data.object?.sha, 64);
+  if (!/^[0-9a-f]{40}$/iu.test(sha)) throw new Error("GitHub did not return a valid target branch SHA.");
+  return sha;
+}
+function appendProgress(existing: string, conversationId: string, previewId: string, messages: OwnerMessage[]): string {
+  const marker = "owner-intelligence-" + conversationId + "-" + previewId.slice(0, 8);
+  const start = "<!-- " + marker + ":start -->";
+  const end = "<!-- " + marker + ":end -->";
+  const previous = existing.replace(new RegExp(start + "[\\s\\S]*?" + end, "gu"), "").trim();
+  const latestUser = [...messages].reverse().find((message) => message.role === "user");
+  const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant" &&
+    (message.status === "complete" || message.status === "partial"));
+  const section = [
+    "## Conversation checkpoint",
+    "",
+    "- Conversation ID: " + conversationId,
+    latestUser ? "- Latest Owner message ID: " + latestUser.id : "- No Owner message was found.",
+    latestAssistant ? "- Latest assistant message ID: " + latestAssistant.id + " (" + latestAssistant.status + ")" : "- No completed assistant message was found.",
+    "",
+    "This is a source-linked checkpoint, not a complete summary of the transcript. Review and edit it before saving.",
+  ].join("\n");
+  return [previous || "# Progress", start, section, end].join("\n\n") + "\n";
+}
+async function buildMemoryFiles(
+  token: string,
+  repoOwner: string,
+  repoName: string,
+  branch: string,
+  memoryRoot: string,
+  topicTitle: string,
+  conversationId: string,
+  previewId: string,
+  messages: OwnerMessage[],
+): Promise<MemoryFile[]> {
+  const fixedNames = ["index.md", "project-memory.md", "progress.md", "decisions.md"];
+  const existing = new Map<string, string | null>();
+  for (const name of fixedNames) {
+    existing.set(name, await readMemoryFile(token, repoOwner, repoName, memoryRoot + "/" + name, branch));
+  }
+  const index = existing.get("index.md") || [
+    "# Project memory index",
+    "",
+    "## Active memory",
+    "",
+    "- project-memory.md — stable goals, architecture, terminology and constraints",
+    "- progress.md — current progress and next actions",
+    "- decisions.md — decisions explicitly accepted by the Owner",
+    "",
+    "Session notes are historical references and are not loaded by default.",
+  ].join("\n") + "\n";
+  const projectMemory = existing.get("project-memory.md") || [
+    "# " + topicTitle,
+    "",
+    "## Stable project memory",
+    "",
+    "Owner: curate durable goals, architecture, terminology and constraints here.",
+    "",
+    "This is an editable starter template, not an AI-generated project summary.",
+  ].join("\n") + "\n";
+  const decisions = existing.get("decisions.md") || [
+    "# Accepted decisions",
+    "",
+    "Only record decisions explicitly accepted by the Owner. This save draft does not infer or promote decisions automatically.",
+  ].join("\n") + "\n";
+  const progress = appendProgress(existing.get("progress.md") || "# Progress\n", conversationId, previewId, messages);
+  const sessionPath = "sessions/" + new Date().toISOString().slice(0, 10) + "-" +
+    conversationId.slice(0, 8) + "-" + previewId.slice(0, 8) + ".md";
+  const relevant = messages.filter((message) =>
+    message.role === "user" ||
+    (message.role === "assistant" && (message.status === "complete" || message.status === "partial")),
+  ).slice(-10);
+  const sessionLines = [
+    "# Session note",
+    "",
+    "- Project: " + topicTitle,
+    "- Conversation: " + conversationId,
+    "- Source: Owner Intelligence D1 transcript",
+    "- Content below is a bounded excerpt of source messages, not an AI-generated summary.",
+    "",
+  ];
+  for (const message of relevant) {
+    const excerpt = message.content.length > 2_400
+      ? message.content.slice(0, 2_400) + "\n\n[Excerpt shortened for this review draft.]"
+      : message.content;
+    sessionLines.push(
+      "## " + (message.role === "user" ? "Owner" : "Assistant") + " · " + message.id,
+      "",
+      excerpt,
+      "",
+    );
+  }
+  const files: MemoryFile[] = [
+    { name: "index.md", content: index },
+    { name: "project-memory.md", content: projectMemory },
+    { name: "progress.md", content: progress },
+    { name: "decisions.md", content: decisions },
+    { name: sessionPath, content: sessionLines.join("\n").slice(0, 20_000) },
+  ];
+  if (files.some((file) => file.content.length > PREVIEW_FILE_LIMIT) ||
+      files.reduce((sum, file) => sum + file.content.length, 0) > PREVIEW_TOTAL_LIMIT) {
+    throw new Error("The selected project memory is too large for one review. Edit or archive the existing memory before saving.");
+  }
+  return files;
+}
+async function loadConversationForSave(env: Env, owner: string, conversationId: string): Promise<{
+  id: string; title: string; topic_id: string | null; messages: OwnerMessage[];
+} | null> {
+  const conversation = await env.DB!.prepare(
+    "SELECT id,title,topic_id FROM owner_intelligence_conversations WHERE id=? AND owner_id=? AND lifecycle_status='active'",
+  ).bind(conversationId, owner).first<{ id: string; title: string; topic_id: string | null }>();
+  if (!conversation) return null;
+  const result = await env.DB!.prepare(
+    "SELECT id,role,content,status,created_at FROM owner_intelligence_messages WHERE conversation_id=? AND owner_id=? AND role IN ('user','assistant') ORDER BY created_at ASC,id ASC",
+  ).bind(conversationId, owner).all<OwnerMessage>();
+  return { ...conversation, messages: result.results ?? [] };
+}
+type TopicMemoryRow = {
+  id: string; title: string; github_installation_id: number | null; repository_id: number | null;
+  repository_owner: string | null; repository_name: string | null; repository_branch: string | null; memory_root: string | null;
+};
+async function loadTopicMemory(env: Env, owner: string, topicId: string): Promise<TopicMemoryRow | null> {
+  return env.DB!.prepare(
+    "SELECT id,title,github_installation_id,repository_id,repository_owner,repository_name,repository_branch,memory_root FROM owner_intelligence_topics WHERE id=? AND owner_id=? AND lifecycle_status='active'",
+  ).bind(topicId, owner).first<TopicMemoryRow>();
+}
+async function createMemoryPreview(env: Env, request: Request, owner: string, conversationId: string): Promise<Response> {
+  if (!validUuid(conversationId)) return notFound();
+  let body: Record<string, unknown>;
+  try { body = await request.json() as Record<string, unknown>; } catch { return json({ ok: false, error: "invalid_request" }, 400); }
+  if (!body || Object.keys(body).some((key) => key !== "topicId") || !validUuid(body.topicId)) {
+    return json({ ok: false, error: "invalid_request", message: "Select an Owner project topic for this conversation." }, 400);
+  }
+  const conversation = await loadConversationForSave(env, owner, conversationId);
+  if (!conversation) return notFound();
+  const topic = await loadTopicMemory(env, owner, body.topicId);
+  if (!topic) return notFound();
+  if (conversation.topic_id && conversation.topic_id !== topic.id) {
+    return json({ ok: false, error: "conversation_topic_mismatch", message: "This conversation is already associated with a different project topic." }, 409);
+  }
+  if (!topic.github_installation_id || !topic.repository_id || !topic.repository_owner ||
+      !topic.repository_name || !topic.repository_branch || !topic.memory_root) {
+    return json({ ok: false, error: "github_repository_not_attached", message: "Attach a verified GitHub repository and branch to this topic first." }, 409);
+  }
+  const branch = topic.repository_branch;
+  const memoryRoot = topic.memory_root;
+  if (!validBranch(branch) || !validMemoryRoot(memoryRoot)) {
+    return json({ ok: false, error: "invalid_project_memory_path", message: "The saved branch or memory root is invalid. Re-attach the repository before previewing." }, 409);
+  }
+  const token = await installationToken(env, owner, Number(topic.github_installation_id), Number(topic.repository_id), "read");
+  const repo = (await github<{ id?: number; full_name?: string; archived?: boolean }>(
+    repositoryPath(topic.repository_owner, topic.repository_name, ""),
+    token,
+  )).data;
+  const fullName = topic.repository_owner + "/" + topic.repository_name;
+  if (Number(repo.id) !== Number(topic.repository_id) || clean(repo.full_name, 200).toLowerCase() !== fullName.toLowerCase() || repo.archived === true) {
+    return json({ ok: false, error: "repository_not_verified", message: "The attached repository no longer matches the verified GitHub destination. Re-attach it before saving." }, 409);
+  }
+  const branchResult = (await github<{ name?: string }>(
+    repositoryPath(topic.repository_owner, topic.repository_name, "/branches/" + encodeURIComponent(branch)),
+    token,
+  )).data;
+  if (clean(branchResult.name, 180) !== branch) {
+    return json({ ok: false, error: "branch_not_verified", message: "The attached Git branch could not be verified." }, 409);
+  }
+  const baseCommit = await branchHead(token, topic.repository_owner, topic.repository_name, branch);
+  const previewId = crypto.randomUUID();
+  const files = await buildMemoryFiles(
+    token, topic.repository_owner, topic.repository_name, branch, memoryRoot,
+    topic.title, conversationId, previewId, conversation.messages,
+  );
+  const now = Date.now();
+  const expires = now + PREVIEW_TTL_MS;
+  const inserted = await env.DB!.prepare(
+    "INSERT INTO owner_intelligence_github_previews (id,owner_id,topic_id,conversation_id,installation_id,repository_id,repository_owner,repository_name,branch,memory_root,base_commit_sha,files_json,status,commit_sha,expires_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'ready',NULL,?,?,?)",
+  ).bind(
+    previewId, owner, topic.id, conversationId, Number(topic.github_installation_id), Number(topic.repository_id),
+    topic.repository_owner, topic.repository_name, branch, memoryRoot, baseCommit, JSON.stringify(files),
+    expires, now, now,
+  ).run();
+  if (!inserted.success) throw new Error("D1 did not persist the reviewed GitHub save preview.");
+  return json({
+    ok: true,
+    preview: {
+      id: previewId, topicId: topic.id, topicTitle: topic.title, conversationId,
+      repository: fullName, branch, memoryRoot, baseCommitSha: baseCommit, expiresAt: expires, files,
+      note: "This editable starter preserves current project Markdown and adds bounded, message-ID-linked D1 transcript excerpts. It is not a Gemini-generated summary. Nothing is written to GitHub until you explicitly confirm.",
+    },
+  }, 201);
+}
+async function loadPreview(env: Env, owner: string, id: string): Promise<PreviewRow | null> {
+  return env.DB!.prepare("SELECT * FROM owner_intelligence_github_previews WHERE id=? AND owner_id=?")
+    .bind(id, owner).first<PreviewRow>();
+}
+function validatePreviewFiles(preview: PreviewRow, value: unknown): MemoryFile[] | null {
+  if (!Array.isArray(value)) return null;
+  const original = JSON.parse(preview.files_json) as MemoryFile[];
+  const allowed = new Set(original.map((file) => file.name));
+  const result: MemoryFile[] = [];
+  let total = 0;
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const file = item as Record<string, unknown>;
+    if (typeof file.name !== "string" || !allowed.has(file.name) || typeof file.content !== "string" ||
+        file.content.length > PREVIEW_FILE_LIMIT || result.some((current) => current.name === file.name)) return null;
+    total += file.content.length;
+    result.push({ name: file.name, content: file.content });
+  }
+  return result.length === allowed.size && total <= PREVIEW_TOTAL_LIMIT &&
+    [...allowed].every((name) => result.some((file) => file.name === name)) ? result : null;
+}
+async function commitTreeSha(token: string, owner: string, name: string, commitSha: string): Promise<string> {
+  const commit = (await github<{ tree?: { sha?: string } }>(
+    repositoryPath(owner, name, "/git/commits/" + commitSha), token,
+  )).data;
+  const sha = clean(commit.tree?.sha, 64);
+  if (!/^[0-9a-f]{40}$/iu.test(sha)) throw new Error("GitHub did not return a valid commit tree.");
+  return sha;
+}
+async function verifyMemoryCommit(token: string, preview: PreviewRow, commitSha: string, files: MemoryFile[]): Promise<boolean> {
+  const commit = (await github<{ sha?: string }>(
+    repositoryPath(preview.repository_owner, preview.repository_name, "/git/commits/" + commitSha), token,
+  )).data;
+  if (clean(commit.sha, 64) !== commitSha) return false;
+  for (const file of files) {
+    const saved = (await github<{ type?: string; encoding?: string; content?: string }>(
+      repositoryPath(preview.repository_owner, preview.repository_name,
+        "/contents/" + gitPath(preview.memory_root + "/" + file.name) + "?ref=" + encodeURIComponent(commitSha)),
+      token,
+    )).data;
+    if (saved.type !== "file" || saved.encoding !== "base64" || typeof saved.content !== "string" ||
+        decodeGitHubFile(saved.content) !== file.content) return false;
+  }
+  return true;
+}
+async function finishVerifiedSave(env: Env, owner: string, preview: PreviewRow, files: MemoryFile[]): Promise<Response> {
+  const now = Date.now();
+  const result = await env.DB!.batch([
+    env.DB!.prepare(
+      "UPDATE owner_intelligence_topics SET manifest_revision='owner-memory-v1',current_commit_sha=?,updated_at=? WHERE id=? AND owner_id=? AND lifecycle_status='active' AND github_installation_id=? AND repository_id=? AND repository_branch=? AND memory_root=?",
+    ).bind(preview.commit_sha, now, preview.topic_id, owner, preview.installation_id, preview.repository_id, preview.branch, preview.memory_root),
+    env.DB!.prepare(
+      "UPDATE owner_intelligence_conversations SET topic_id=?,session_kind='topic',updated_at=? WHERE id=? AND owner_id=? AND lifecycle_status='active' AND (topic_id IS NULL OR topic_id=?)",
+    ).bind(preview.topic_id, now, preview.conversation_id, owner, preview.topic_id),
+    env.DB!.prepare(
+      "UPDATE owner_intelligence_github_previews SET status='synced',files_json=?,updated_at=? WHERE id=? AND owner_id=? AND status='verifying' AND commit_sha=?",
+    ).bind(JSON.stringify(files), now, preview.id, owner, preview.commit_sha),
+  ]);
+  if (result.some((entry) => !entry.success) ||
+      Number(result[0]?.meta?.changes || 0) !== 1 ||
+      Number(result[1]?.meta?.changes || 0) !== 1 ||
+      Number(result[2]?.meta?.changes || 0) !== 1) {
+    return json({
+      ok: false, error: "github_sync_record_pending",
+      message: "GitHub commit and file read-back succeeded, but D1 could not finish the Synced record. Do not repeat the commit; retry this preview's verification.",
+      commitSha: preview.commit_sha,
+    }, 503);
+  }
+  return json({
+    ok: true, status: "synced", commitSha: preview.commit_sha,
+    repository: preview.repository_owner + "/" + preview.repository_name,
+    branch: preview.branch, topicId: preview.topic_id,
+    files: files.map((file) => preview.memory_root + "/" + file.name),
+  });
+}
+async function confirmMemorySave(env: Env, request: Request, owner: string, previewId: string): Promise<Response> {
+  if (!validUuid(previewId)) return notFound();
+  let body: Record<string, unknown>;
+  try { body = await request.json() as Record<string, unknown>; } catch { return json({ ok: false, error: "invalid_request" }, 400); }
+  if (!body || Object.keys(body).some((key) => !["confirmed", "files"].includes(key)) || body.confirmed !== true) {
+    return json({ ok: false, error: "explicit_confirmation_required", message: "Review the complete preview and explicitly confirm the exact files before saving." }, 400);
+  }
+  const preview = await loadPreview(env, owner, previewId);
+  if (!preview) return notFound();
+  if (preview.status === "synced" && preview.commit_sha) {
+    return json({ ok: true, status: "synced", commitSha: preview.commit_sha, idempotent: true });
+  }
+  if (preview.expires_at <= Date.now() && preview.status === "ready") {
+    await env.DB!.prepare("UPDATE owner_intelligence_github_previews SET status='expired',updated_at=? WHERE id=? AND owner_id=? AND status='ready'")
+      .bind(Date.now(), preview.id, owner).run();
+    return json({ ok: false, error: "preview_expired", message: "This preview expired. Create a new preview against the latest branch head." }, 409);
+  }
+  const files = validatePreviewFiles(preview, body.files);
+  if (!files) return json({ ok: false, error: "invalid_preview_files", message: "The edited Markdown files must match the reviewed paths and stay within the preview limits." }, 400);
+  const conversation = await loadConversationForSave(env, owner, preview.conversation_id);
+  const topic = await loadTopicMemory(env, owner, preview.topic_id);
+  if (!conversation || !topic) return notFound();
+  if ((conversation.topic_id && conversation.topic_id !== preview.topic_id) ||
+      Number(topic.github_installation_id) !== preview.installation_id ||
+      Number(topic.repository_id) !== preview.repository_id ||
+      topic.repository_owner !== preview.repository_owner || topic.repository_name !== preview.repository_name ||
+      topic.repository_branch !== preview.branch || topic.memory_root !== preview.memory_root) {
+    return json({ ok: false, error: "project_destination_changed", message: "The topic or attached repository changed after preview. Create a new preview and review the destination again." }, 409);
+  }
+
+  const readToken = await installationToken(env, owner, preview.installation_id, preview.repository_id, "read");
+  if (preview.status === "verifying" && preview.commit_sha) {
+    const verified = await verifyMemoryCommit(readToken, preview, preview.commit_sha, files);
+    if (!verified) return json({ ok: false, error: "github_verification_pending", message: "The commit or expected files could not be read back exactly. Synced has not been set." }, 503);
+    return finishVerifiedSave(env, owner, preview, files);
+  }
+
+  if (preview.status === "ready") {
+    const currentHead = await branchHead(readToken, preview.repository_owner, preview.repository_name, preview.branch);
+    if (currentHead !== preview.base_commit_sha) {
+      await env.DB!.prepare("UPDATE owner_intelligence_github_previews SET status='conflict',updated_at=? WHERE id=? AND owner_id=? AND status='ready'")
+        .bind(Date.now(), preview.id, owner).run();
+      return json({ ok: false, error: "github_branch_conflict", message: "The target branch changed after preview. No GitHub files were written; create a fresh preview against the current head.", expectedBase: preview.base_commit_sha, currentHead }, 409);
+    }
+    const claim = await env.DB!.prepare(
+      "UPDATE owner_intelligence_github_previews SET status='writing',updated_at=? WHERE id=? AND owner_id=? AND status='ready'",
+    ).bind(Date.now(), preview.id, owner).run();
+    if (Number(claim.meta?.changes || 0) !== 1) {
+      return json({ ok: false, error: "github_preview_already_confirming", message: "This preview is already being confirmed or has changed. Reload its status before retrying." }, 409);
+    }
+    try {
+      // The write-scoped installation token is minted only after the Owner's explicit confirmation.
+      const writeToken = await installationToken(env, owner, preview.installation_id, preview.repository_id, "write");
+      const baseTree = await commitTreeSha(readToken, preview.repository_owner, preview.repository_name, preview.base_commit_sha);
+      const tree = (await github<{ sha?: string }>(
+        repositoryPath(preview.repository_owner, preview.repository_name, "/git/trees"),
+        writeToken,
+        "POST",
+        {
+          base_tree: baseTree,
+          tree: files.map((file) => ({
+            path: preview.memory_root + "/" + file.name,
+            mode: "100644",
+            type: "blob",
+            content: file.content,
+          })),
+        },
+      )).data;
+      if (!tree.sha) throw new Error("GitHub did not return the proposed memory tree.");
+      const commit = (await github<{ sha?: string }>(
+        repositoryPath(preview.repository_owner, preview.repository_name, "/git/commits"),
+        writeToken,
+        "POST",
+        {
+          message: "Owner Intelligence: save project memory for topic " + preview.topic_id,
+          tree: tree.sha,
+          parents: [preview.base_commit_sha],
+        },
+      )).data;
+      const commitSha = clean(commit.sha, 64);
+      if (!/^[0-9a-f]{40}$/iu.test(commitSha)) throw new Error("GitHub did not return a valid memory commit SHA.");
+      const recorded = await env.DB!.prepare(
+        "UPDATE owner_intelligence_github_previews SET status='committing',commit_sha=?,files_json=?,updated_at=? WHERE id=? AND owner_id=? AND status='writing'",
+      ).bind(commitSha, JSON.stringify(files), Date.now(), preview.id, owner).run();
+      if (Number(recorded.meta?.changes || 0) !== 1) {
+        throw new Error("D1 could not record the GitHub commit before the branch update. No branch update was attempted.");
+      }
+      const latestHead = await branchHead(readToken, preview.repository_owner, preview.repository_name, preview.branch);
+      if (latestHead !== preview.base_commit_sha) {
+        await env.DB!.prepare("UPDATE owner_intelligence_github_previews SET status='conflict',updated_at=? WHERE id=? AND owner_id=? AND status='committing'")
+          .bind(Date.now(), preview.id, owner).run();
+        return json({ ok: false, error: "github_branch_conflict", message: "The branch advanced while GitHub prepared the commit. No branch update was made; create a fresh preview.", expectedBase: preview.base_commit_sha, currentHead: latestHead }, 409);
+      }
+      try {
+        await github(
+          repositoryPath(preview.repository_owner, preview.repository_name, "/git/refs/heads/" + encodeURIComponent(preview.branch)),
+          writeToken,
+          "PATCH",
+          { sha: commitSha, force: false },
+        );
+      } catch (error) {
+        if (error instanceof GitHubHttpError && (error.status === 409 || error.status === 422)) {
+          await env.DB!.prepare("UPDATE owner_intelligence_github_previews SET status='conflict',updated_at=? WHERE id=? AND owner_id=? AND status='committing'")
+            .bind(Date.now(), preview.id, owner).run();
+          return json({ ok: false, error: "github_branch_conflict", message: "GitHub rejected the non-force branch update. No external branch edit was overwritten." }, 409);
+        }
+        throw error;
+      }
+      await env.DB!.prepare("UPDATE owner_intelligence_github_previews SET status='verifying',updated_at=? WHERE id=? AND owner_id=? AND status='committing'")
+        .bind(Date.now(), preview.id, owner).run();
+      const verifying: PreviewRow = { ...preview, status: "verifying", commit_sha: commitSha, files_json: JSON.stringify(files) };
+      if (!await verifyMemoryCommit(readToken, verifying, commitSha, files)) {
+        return json({ ok: false, error: "github_verification_pending", message: "GitHub accepted the branch update, but file read-back verification did not finish. Synced has not been set; retry this preview.", commitSha }, 503);
+      }
+      return finishVerifiedSave(env, owner, verifying, files);
+    } catch (error) {
+      await env.DB!.prepare("UPDATE owner_intelligence_github_previews SET status='failed',updated_at=? WHERE id=? AND owner_id=? AND status='writing'")
+        .bind(Date.now(), preview.id, owner).run();
+      throw error;
+    }
+  }
+
+  if (preview.status === "committing" && preview.commit_sha) {
+    const head = await branchHead(readToken, preview.repository_owner, preview.repository_name, preview.branch);
+    if (head === preview.base_commit_sha) {
+      const writeToken = await installationToken(env, owner, preview.installation_id, preview.repository_id, "write");
+      try {
+        await github(
+          repositoryPath(preview.repository_owner, preview.repository_name, "/git/refs/heads/" + encodeURIComponent(preview.branch)),
+          writeToken,
+          "PATCH",
+          { sha: preview.commit_sha, force: false },
+        );
+      } catch (error) {
+        if (error instanceof GitHubHttpError && (error.status === 409 || error.status === 422)) {
+          await env.DB!.prepare("UPDATE owner_intelligence_github_previews SET status='conflict',updated_at=? WHERE id=? AND owner_id=? AND status='committing'")
+            .bind(Date.now(), preview.id, owner).run();
+          return json({ ok: false, error: "github_branch_conflict", message: "GitHub rejected the non-force branch update. External edits were not overwritten." }, 409);
+        }
+        throw error;
+      }
+    } else if (head !== preview.commit_sha) {
+      await env.DB!.prepare("UPDATE owner_intelligence_github_previews SET status='conflict',updated_at=? WHERE id=? AND owner_id=? AND status='committing'")
+        .bind(Date.now(), preview.id, owner).run();
+      return json({ ok: false, error: "github_branch_conflict", message: "The target branch changed while the earlier confirmation was interrupted. Create a fresh preview after reviewing the external change." }, 409);
+    }
+    await env.DB!.prepare("UPDATE owner_intelligence_github_previews SET status='verifying',updated_at=? WHERE id=? AND owner_id=? AND status='committing'")
+      .bind(Date.now(), preview.id, owner).run();
+    const verifying: PreviewRow = { ...preview, status: "verifying" };
+    if (!await verifyMemoryCommit(readToken, verifying, preview.commit_sha, files)) {
+      return json({ ok: false, error: "github_verification_pending", message: "The existing commit is not yet fully verified. Synced has not been set." }, 503);
+    }
+    return finishVerifiedSave(env, owner, verifying, files);
+  }
+  return json({
+    ok: false, error: "github_preview_not_ready",
+    message: "This preview is not ready for another commit. Create a fresh preview or retry verification of the recorded commit.",
+  }, 409);
+}
+
 function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("Origin");
   return Boolean(origin && origin === new URL(request.url).origin);
