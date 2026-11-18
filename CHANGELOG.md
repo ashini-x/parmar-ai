@@ -1,3 +1,12 @@
+## 2026-11-18: Owner Intelligence M4.2 Scratchpad/topic foundation validated
+
+- Add Owner-scoped D1 topics with title/slug/lifecycle fields and repository/memory snapshot placeholders for later milestones; expose Owner-only list/create/rename APIs.
+- Extend existing conversation metadata additively with nullable `topic_id`, `session_kind` and `lifecycle_status`. Existing conversations default to Scratchpad/active without rewriting IDs, transcript, generation metadata, 200K usage or reservations.
+- Make New Chat default to Scratchpad and provide an optional Owner-topic selector; display the current Scratchpad/topic label in the conversation heading. No automatic GitHub commit, project-memory loading, repository/branch/commit pinning or automatic expiry/deletion is added; GitHub authorization/Save is M4.3 and Project Memory snapshot loading is M4.4.
+- Add Miniflare local-D1 integration tests for legacy migration/preservation, Scratchpad default, optional topic association, topic rename, cross-Owner rejection and protected UI controls.
+- PR [#343](https://github.com/ashini-x/parmar-ai/pull/343), workflow [44340180726](https://github.com/ashini-x/parmar-ai/actions/runs/44340180726): TypeScript, 503 Vitest tests across 73 files, 62 Node tests across 9 files and all three Worker dry-runs passed. The PR is validated; merge/deployment evidence is pending.
+- Owner reports that the latest live Hydrogen HIGH request now responds without showing `RESOURCE_EXHAUSTED` after PR #338's bounded retry release. This is an observed successful request, not a guarantee that provider capacity errors can never recur.
+
 ## 2026-11-18: Owner Intelligence M4.1 exact 200K boundary acceptance completed
 
 - Add deterministic Owner generation tests against the Cloudflare Workers Vitest local D1 binding (Miniflare SQLite), with Vertex CountTokens/stream calls mocked.
