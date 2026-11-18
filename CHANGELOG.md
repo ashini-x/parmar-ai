@@ -1,3 +1,10 @@
+## 2026-11-19 IST: Owner Memory Hub installation verified in Owner Intelligence
+
+- Owner-provided production screenshot shows `Connected · 1 verified installation(s)`, account `ashini-x · User`, and repository `ashini-x/owner-memory-hub · Private`; branch field is `main`.
+- The selected-only GitHub App installation/PKCE verification sub-gate is therefore complete. Do not uninstall, recreate or reinstall the App.
+- The panel still says `Select a topic above`; topic attachment with a unique memory root, reviewed five-file Save, exact commit/file read-back, topic promotion and stale-branch Conflict acceptance remain pending for M4.3.
+- M4.4 stays blocked until these remaining M4.3 acceptance checks pass. No application code or deployment changed in this documentation update.
+
 ## 2026-11-19 IST: Owner Memory Hub private and clean App reinstall selected
 
 - GitHub metadata confirms `ashini-x/owner-memory-hub` (ID `1463342529`) is Private, with default branch `main` and README present.
