@@ -272,7 +272,7 @@ PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/
 
 - **Owner-reported 2026-11-18:** the latest Hydrogen HIGH production request responds and no longer shows `RESOURCE_EXHAUSTED` after PR #338's bounded initial stream-open retry release. This is evidence of recovery on the tested request, not proof that shared Vertex capacity/rate limits can never recur. Keep the retry guard; do not switch model or endpoint silently. If the error recurs, capture the new provider diagnostic and then inspect project/model quota, billing tier and capacity.
 
-### M4.3 — GitHub authorization and reviewed Save to GitHub (PR #346; release gates pending)
+### M4.3 — GitHub authorization and reviewed Save to GitHub (merged/deployed; live Owner acceptance pending)
 
 #### Automated local-D1 tests
 - Owner boundary: anonymous GitHub API calls return 401; non-Owner admin sessions return 403; all topic/conversation/preview D1 reads and writes are scoped to the configured Owner.
@@ -299,7 +299,7 @@ PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/
 6. Advance the branch externally between preview and confirm. Confirm Conflict is shown, the external edit remains intact and a new preview is required.
 7. Refresh the page and confirm Synced appears only for a verified commit; retry an interrupted verification without creating a second commit.
 
-Current PR validation baseline at commit c6f2b2ed27f9fc134db268e8b5408c40b9eecfe7 passed 505 Vitest tests/74 files, 62 Node tests/9 files, typecheck and three Worker dry-run bundles. UI meter-refresh and secret-redaction test refinements were committed after that baseline; the current-head CI run must pass before merge. Production deployment and authenticated Owner browser acceptance have not happened yet.
+Current-head PR validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files, and all three Worker dry-run bundles. PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`. Production workflow [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment, root/health, BRVIN service binding, Fatman retrieval and release-acceptance checks. Deployed parmar-ai version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and brvin-service version `d43a9f7b-32b3-486f-9845-75ed11811165`, each at 100% traffic. The remaining gate is a real Owner-authenticated browser walkthrough of App creation/selected-only installation, topic attach, preview/edit/confirm, exact GitHub read-back and stale-branch Conflict handling.
 
 ## Owner Intelligence — project memory and token-aware continuity (M4.2 Scratchpad/topic foundation deployed; M4.3–M4.8 planned)
 
