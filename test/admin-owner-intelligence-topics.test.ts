@@ -133,11 +133,14 @@ describe("Owner Intelligence M4.2 Scratchpad and topics", () => {
     const scriptResponse = await call(env, "/admin/intelligence.js", cookie);
     expect(scriptResponse.status).toBe(200);
     const script = await scriptResponse.text();
+    expect(html).toContain('id="topicStatus"');
     expect(script).toContain('var topicsApi="/admin/api/intelligence/topics"');
     expect(script).toContain("request(topicsApi)");
     expect(script).toContain('request(topicsApi,{method:"POST"');
     expect(script).toContain('request(topicsApi+"/"+encodeURIComponent(topic.id),{method:"PATCH"');
     expect(script).not.toContain('request(api+"/topics');
+    expect(script).toContain('refreshTopics().catch(showTopicError)');
+    expect(script).toContain('var retry=node("button","topic-status-retry","Retry topics")');
     expect(script).toContain("conversationBody.topicId");
   });
 });
