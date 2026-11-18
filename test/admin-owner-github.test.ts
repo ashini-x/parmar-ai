@@ -81,7 +81,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     const githubFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
-      const body = typeof init?.body === "string" && new Headers(init?.headers).get("content-type")?.includes("application/json") ? JSON.parse(init.body) as Record<string, unknown> : {};
+      const body: { [key: string]: unknown; permissions?: { [key: string]: string } } = typeof init?.body === "string" && new Headers(init?.headers).get("content-type")?.includes("application/json") ? JSON.parse(init.body) as { [key: string]: unknown; permissions?: { [key: string]: string } } : {};
       if (url === "https://api.github.com/app-manifests/manifest-code/conversions" && method === "POST") {
         return new Response(JSON.stringify({
           id: appId,
