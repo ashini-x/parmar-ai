@@ -260,6 +260,18 @@ PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/
 
 
 
+### M4.2 — Scratchpad and topic foundation (validated in PR #343)
+
+- Local D1/Miniflare integration proves an older conversation schema is extended additively: existing conversation ID, transcript message and per-chat `used_tokens=1,234` / `token_limit=200,000` remain unchanged; new metadata defaults to `topic_id=null`, `session_kind=scratchpad`, `lifecycle_status=active`.
+- Owner API tests prove topic create/list/rename, Scratchpad as the default new-chat type, explicit optional topic association for a new chat, and rejection of a foreign Owner's topic ID.
+- Owner workspace tests verify the HTML page exposes the Scratchpad-default selector and the protected same-origin client script populates topics and passes an explicit topic ID on creation.
+- Validation [44340180726](https://github.com/ashini-x/parmar-ai/actions/runs/44340180726): `npm run check`, 503 Vitest tests across 73 files, 62 Node tests across 9 files and all three Worker dry-run bundles passed. M4.2's code diff is on PR [#343](https://github.com/ashini-x/parmar-ai/pull/343); merge/deployment pending.
+- This is topic/Scratchpad infrastructure only. Project Memory files are not loaded, commits are not written to GitHub, and repository/branch/commit snapshots are not pinned yet; these belong to M4.3–M4.4. No automatic expiry/deletion was added. The 200K limit and accounting code are unchanged.
+
+### Vertex transient retry live observation
+
+- **Owner-reported 2026-11-18:** the latest Hydrogen HIGH production request responds and no longer shows `RESOURCE_EXHAUSTED` after PR #338's bounded initial stream-open retry release. This is evidence of recovery on the tested request, not proof that shared Vertex capacity/rate limits can never recur. Keep the retry guard; do not switch model or endpoint silently. If the error recurs, capture the new provider diagnostic and then inspect project/model quota, billing tier and capacity.
+
 ## Owner Intelligence — project memory and token-aware continuity (planned M4.2–M4.8; not implemented)
 
 The following are future acceptance criteria, not tests that have passed in the current release. See [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md).
