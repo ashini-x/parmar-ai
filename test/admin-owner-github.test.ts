@@ -110,6 +110,15 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
           permissions: { metadata: "read", contents: "write" },
         }] }), { status: 200, headers: { "content-type": "application/json" } });
       }
+      if (url === "https://api.github.com/app" && method === "GET") {
+        return new Response(JSON.stringify({ id: appId, permissions: { metadata: "read", contents: "write" } }), { status: 200 });
+      }
+      if (url === "https://api.github.com/app/installations/" + installationId && method === "GET") {
+        return new Response(JSON.stringify({
+          id: installationId, app_id: appId, repository_selection: "selected",
+          permissions: { metadata: "read", contents: "write" },
+        }), { status: 200 });
+      }
       if (url === "https://api.github.com/app/installations/" + installationId + "/access_tokens" && method === "POST") {
         tokenRequests.push({ path: url, body });
         return new Response(JSON.stringify({ token: "ghs-short-lived-installation-token" }), { status: 201 });
