@@ -1,3 +1,13 @@
+## 2026-11-18: Owner Intelligence M4.3 GitHub App authorization implementation started
+
+- Feature branch `feat/owner-intelligence-m4-3-github-app-auth` implements a dedicated private BRɅIN Owner Memory GitHub App, separate from BRVIN Connect and the ChatGPT GitHub connector.
+- Requests only repository Metadata read and Contents write; no webhook events. App private key/client secret are encrypted in Owner-scoped D1. Manifest and installation callbacks use one-time Owner-bound state.
+- Uses GitHub user authorization with PKCE to verify the exact App installation against `GET /user/installations`; does not trust `installation_id` from a setup URL by itself. The temporary user token is discarded.
+- Mints short-lived installation tokens scoped to the selected repository ID and Contents write. Verifies repository ID/full name and branch before attaching repository/branch/memory-root references to an Owner topic.
+- Adds Owner workspace controls for App registration, installation, account/repository selection and topic attachment. This does not load Project Memory or write a Git commit.
+- Adds `test/admin-owner-intelligence-github.test.ts` for mocked GitHub registration/authorization/repository attachment and local D1. Validation and merge are pending.
+- Still to implement in M4.3: reviewed memory draft/diff, explicit confirmation, conflict-aware atomic commit, read-back verification, and only then Archived & Synced status.
+
 ## 2026-11-18: Owner Intelligence M4.2 Scratchpad/topic foundation deployed
 
 - PR [#343](https://github.com/ashini-x/parmar-ai/pull/343) merged as `5dfd42499fc9f14dfda915c3c264242af779dc2d`.
@@ -5,15 +15,6 @@
 - Production workflow [44341065839](https://github.com/ashini-x/parmar-ai/actions/runs/44341065839) passed paired Worker deployment, root/health smoke, BRVIN service binding, Fatman retrieval readiness and production acceptance. `parmar-ai` version `107a75e0-4f62-4a16-a748-6b0f0b6e6894` (deployment `06dcc10a-0ee3-4b6c-be66-81b7746c9e20`) and `brvin-service` version `030e0db4-c94d-40e7-a246-a22213aca3b8` (deployment `f111b1b0-b659-4f5d-8560-50d578c20411`) are both at 100% traffic. Manifest artifact [14443836745](https://github.com/ashini-x/parmar-ai/actions/runs/44341065839/artifacts/14443836745). No rollback was required.
 - M4.2 provides D1-backed Owner topics, additive conversation metadata, persistent Scratchpad default, optional topic association and protected topic controls. It does not load GitHub Project Memory or pin repository/branch/commit snapshots; those belong to M4.3–M4.4.
 - Owner reports latest Hydrogen HIGH request responds without displaying `RESOURCE_EXHAUSTED` after PR #338. This is a successful observed request, not proof that transient shared provider capacity issues can never recur.
-
-## 2026-11-18: Owner Intelligence M4.2 Scratchpad/topic foundation validated
-
-- Add Owner-scoped D1 topics with title/slug/lifecycle fields and repository/memory snapshot placeholders for later milestones; expose Owner-only list/create/rename APIs.
-- Extend existing conversation metadata additively with nullable `topic_id`, `session_kind` and `lifecycle_status`. Existing conversations default to Scratchpad/active without rewriting IDs, transcript, generation metadata, 200K usage or reservations.
-- Make New Chat default to Scratchpad and provide an optional Owner-topic selector; display the current Scratchpad/topic label in the conversation heading. No automatic GitHub commit, project-memory loading, repository/branch/commit pinning or automatic expiry/deletion is added; GitHub authorization/Save is M4.3 and Project Memory snapshot loading is M4.4.
-- Add Miniflare local-D1 integration tests for legacy migration/preservation, Scratchpad default, optional topic association, topic rename, cross-Owner rejection and protected UI controls.
-- PR [#343](https://github.com/ashini-x/parmar-ai/pull/343), workflow [44340180726](https://github.com/ashini-x/parmar-ai/actions/runs/44340180726): TypeScript, 503 Vitest tests across 73 files, 62 Node tests across 9 files and all three Worker dry-runs passed. The PR is validated; merge/deployment evidence is pending.
-- Owner reports that the latest live Hydrogen HIGH request now responds without showing `RESOURCE_EXHAUSTED` after PR #338's bounded retry release. This is an observed successful request, not a guarantee that provider capacity errors can never recur.
 
 ## 2026-11-18: Owner Intelligence M4.1 exact 200K boundary acceptance completed
 
