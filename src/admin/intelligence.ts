@@ -12,11 +12,24 @@ export interface OwnerIntelligenceSessionUsage {
   locked_reason?: string | null;
 }
 
+export interface OwnerIntelligenceTopic {
+  id: string;
+  title: string;
+  slug: string;
+  lifecycle_status: "active" | "archived";
+  created_at: number;
+  updated_at: number;
+}
+
 export interface OwnerIntelligenceConversation {
   id: string;
   title: string;
   created_at: number;
   updated_at: number;
+  topic_id: string | null;
+  topic_title?: string | null;
+  session_kind: "scratchpad" | "topic";
+  lifecycle_status: "active" | "archived";
 }
 
 export interface OwnerIntelligenceMessage {
@@ -34,8 +47,12 @@ export interface OwnerIntelligenceMessage {
   elapsed_ms?: number | null;
 }
 
-interface OwnerConversationRow extends OwnerIntelligenceConversation {
+interface OwnerConversationRow extends Partial<OwnerIntelligenceConversation> {
+  id: string;
   owner_id: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
 }
 
 interface OwnerMessageRow extends OwnerIntelligenceMessage {
@@ -48,6 +65,7 @@ const MAX_MESSAGE_LENGTH = 50_000;
 const MAX_OWNER_GEMINI_CONTEXT_CHARS = 300_000;
 const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
 const MAX_CONVERSATIONS = 100;
+const MAX_TOPICS = 100;
 export const OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT = 200_000;
 const OWNER_INTELLIGENCE_DEFAULT_OUTPUT_RESERVATION = 8_192;
 const OWNER_INTELLIGENCE_RESERVATION_TTL_MS = 10 * 60_000;
@@ -72,6 +90,25 @@ export async function ensureOwnerIntelligenceSchema(env: Env): Promise<void> {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_conversations_owner_updated
       ON owner_intelligence_conversations(owner_id, updated_at DESC)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_topics (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      lifecycle_status TEXT NOT NULL DEFAULT 'active',
+      repository_owner TEXT,
+      repository_name TEXT,
+      repository_branch TEXT,
+      memory_root TEXT,
+      manifest_revision TEXT,
+      current_commit_sha TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`),
+    db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_intelligence_topics_owner_slug
+      ON owner_intelligence_topics(owner_id, slug)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_topics_owner_updated
+      ON owner_intelligence_topics(owner_id, updated_at DESC)`),
     db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_messages (
       id TEXT PRIMARY KEY,
       conversation_id TEXT NOT NULL,
@@ -125,6 +162,32 @@ export async function ensureOwnerIntelligenceSchema(env: Env): Promise<void> {
   if (results.some((result) => !result.success)) {
     throw new Error("D1 did not confirm the Owner Intelligence schema.");
   }
+
+  // M4.2 is an additive migration: old conversations become Scratchpads by
+  // default, while their IDs, messages, usage rows and reservation history stay
+  // untouched. PRAGMA + duplicate-column verification makes parallel Worker
+  // isolates safe when they first encounter an older database.
+  const conversationColumns = await db.prepare("PRAGMA table_info(owner_intelligence_conversations)").all<{ name: string }>();
+  const knownColumns = new Set((conversationColumns.results ?? []).map((column) => column.name));
+  const additions = [
+    ["topic_id", "ALTER TABLE owner_intelligence_conversations ADD COLUMN topic_id TEXT"],
+    ["session_kind", "ALTER TABLE owner_intelligence_conversations ADD COLUMN session_kind TEXT NOT NULL DEFAULT 'scratchpad'"],
+    ["lifecycle_status", "ALTER TABLE owner_intelligence_conversations ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'active'"],
+  ] as const;
+  for (const [column, statement] of additions) {
+    if (knownColumns.has(column)) continue;
+    try {
+      const result = await db.prepare(statement).run();
+      if (!result.success) throw new Error("D1 rejected the Owner conversation migration.");
+    } catch (error) {
+      const refreshed = await db.prepare("PRAGMA table_info(owner_intelligence_conversations)").all<{ name: string }>();
+      if (!(refreshed.results ?? []).some((item) => item.name === column)) throw error;
+    }
+  }
+  const migrationIndex = await db.prepare(
+    "CREATE INDEX IF NOT EXISTS idx_owner_intelligence_conversations_owner_topic ON owner_intelligence_conversations(owner_id, topic_id, updated_at DESC)",
+  ).run();
+  if (!migrationIndex.success) throw new Error("D1 did not confirm the Owner topic index.");
   readyDatabases.add(db);
 }
 
@@ -298,7 +361,66 @@ function normalizedTitle(value: unknown): string {
 }
 
 function mapConversation(row: OwnerConversationRow): OwnerIntelligenceConversation {
-  return { id: row.id, title: row.title, created_at: Number(row.created_at), updated_at: Number(row.updated_at) };
+  const topicId = row.topic_id ?? null;
+  return {
+    id: row.id,
+    title: row.title,
+    created_at: Number(row.created_at),
+    updated_at: Number(row.updated_at),
+    topic_id: topicId,
+    ...(row.topic_title ? { topic_title: row.topic_title } : {}),
+    session_kind: row.session_kind === "topic" || topicId ? "topic" : "scratchpad",
+    lifecycle_status: row.lifecycle_status === "archived" ? "archived" : "active",
+  };
+}
+
+function mapTopic(row: OwnerIntelligenceTopic & { owner_id: string }): OwnerIntelligenceTopic {
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    lifecycle_status: row.lifecycle_status === "archived" ? "archived" : "active",
+    created_at: Number(row.created_at),
+    updated_at: Number(row.updated_at),
+  };
+}
+
+function topicSlug(title: string, id: string): string {
+  const base = title.replace(/Ʌ/gu, "a").toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 36) || "topic";
+  return base + "-" + id.slice(0, 8);
+}
+
+export async function listOwnerIntelligenceTopics(env: Env): Promise<OwnerIntelligenceTopic[]> {
+  await ensureOwnerIntelligenceSchema(env);
+  const result = await env.DB!.prepare(
+    "SELECT id, owner_id, title, slug, lifecycle_status, created_at, updated_at FROM owner_intelligence_topics WHERE owner_id = ? AND lifecycle_status = 'active' ORDER BY title COLLATE NOCASE ASC, created_at ASC LIMIT ?",
+  ).bind(ownerPrincipal(env), MAX_TOPICS).all<OwnerIntelligenceTopic & { owner_id: string }>();
+  return (result.results ?? []).map(mapTopic);
+}
+
+export async function createOwnerIntelligenceTopic(env: Env, title: string): Promise<OwnerIntelligenceTopic> {
+  await ensureOwnerIntelligenceSchema(env);
+  const safeTitle = normalizedTitle(title);
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  const slug = topicSlug(safeTitle, id);
+  const result = await env.DB!.prepare(
+    "INSERT INTO owner_intelligence_topics (id, owner_id, title, slug, lifecycle_status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)",
+  ).bind(id, ownerPrincipal(env), safeTitle, slug, now, now).run();
+  if (!result.success) throw new Error("D1 did not confirm the new topic.");
+  return { id, title: safeTitle, slug, lifecycle_status: "active", created_at: now, updated_at: now };
+}
+
+export async function renameOwnerIntelligenceTopic(env: Env, id: string, title: string): Promise<OwnerIntelligenceTopic | null> {
+  await ensureOwnerIntelligenceSchema(env);
+  const result = await env.DB!.prepare(
+    "UPDATE owner_intelligence_topics SET title = ?, updated_at = ? WHERE id = ? AND owner_id = ? AND lifecycle_status = 'active'",
+  ).bind(normalizedTitle(title), Date.now(), id, ownerPrincipal(env)).run();
+  if (!result.success) throw new Error("D1 did not confirm the topic rename.");
+  const row = await env.DB!.prepare(
+    "SELECT id, owner_id, title, slug, lifecycle_status, created_at, updated_at FROM owner_intelligence_topics WHERE id = ? AND owner_id = ?",
+  ).bind(id, ownerPrincipal(env)).first<OwnerIntelligenceTopic & { owner_id: string }>();
+  return row ? mapTopic(row) : null;
 }
 
 function mapMessage(row: OwnerMessageRow): OwnerIntelligenceMessage {
@@ -321,7 +443,11 @@ function mapMessage(row: OwnerMessageRow): OwnerIntelligenceMessage {
 export async function listOwnerIntelligenceConversations(env: Env): Promise<OwnerIntelligenceConversation[]> {
   await ensureOwnerIntelligenceSchema(env);
   const result = await env.DB!.prepare(
-    "SELECT id, owner_id, title, created_at, updated_at FROM owner_intelligence_conversations WHERE owner_id = ? ORDER BY updated_at DESC, created_at DESC LIMIT ?",
+    `SELECT id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status,
+      (SELECT t.title FROM owner_intelligence_topics t
+       WHERE t.id = owner_intelligence_conversations.topic_id AND t.owner_id = owner_intelligence_conversations.owner_id) AS topic_title
+     FROM owner_intelligence_conversations
+     WHERE owner_id = ? ORDER BY updated_at DESC, created_at DESC LIMIT ?`,
   ).bind(ownerPrincipal(env), MAX_CONVERSATIONS).all<OwnerConversationRow>();
   return (result.results ?? []).map(mapConversation);
 }
@@ -329,16 +455,36 @@ export async function listOwnerIntelligenceConversations(env: Env): Promise<Owne
 export async function createOwnerIntelligenceConversation(
   env: Env,
   title = "New chat",
+  topicId?: string | null,
 ): Promise<OwnerIntelligenceConversation> {
   await ensureOwnerIntelligenceSchema(env);
+  const ownerId = ownerPrincipal(env);
+  let topic: OwnerIntelligenceTopic | null = null;
+  if (topicId) {
+    const row = await env.DB!.prepare(
+      "SELECT id, owner_id, title, slug, lifecycle_status, created_at, updated_at FROM owner_intelligence_topics WHERE id = ? AND owner_id = ? AND lifecycle_status = 'active'",
+    ).bind(topicId, ownerId).first<OwnerIntelligenceTopic & { owner_id: string }>();
+    if (!row) throw new Error("The selected topic is not available to this Owner.");
+    topic = mapTopic(row);
+  }
   const id = crypto.randomUUID();
   const now = Date.now();
   const safeTitle = normalizedTitle(title);
-  const result = await env.DB!.prepare(
-    "INSERT INTO owner_intelligence_conversations (id, owner_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-  ).bind(id, ownerPrincipal(env), safeTitle, now, now).run();
+  const result = topic
+    ? await env.DB!.prepare(
+      "INSERT INTO owner_intelligence_conversations (id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status) VALUES (?, ?, ?, ?, ?, ?, 'topic', 'active')",
+    ).bind(id, ownerId, safeTitle, now, now, topic.id).run()
+    : await env.DB!.prepare(
+      "INSERT INTO owner_intelligence_conversations (id, owner_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    ).bind(id, ownerId, safeTitle, now, now).run();
   if (!result.success) throw new Error("D1 did not confirm the new conversation.");
-  return { id, title: safeTitle, created_at: now, updated_at: now };
+  return {
+    id, title: safeTitle, created_at: now, updated_at: now,
+    topic_id: topic?.id ?? null,
+    ...(topic ? { topic_title: topic.title } : {}),
+    session_kind: topic ? "topic" : "scratchpad",
+    lifecycle_status: "active",
+  };
 }
 
 export async function getOwnerIntelligenceConversation(
@@ -348,7 +494,10 @@ export async function getOwnerIntelligenceConversation(
   await ensureOwnerIntelligenceSchema(env);
   const ownerId = ownerPrincipal(env);
   const row = await env.DB!.prepare(
-    "SELECT id, owner_id, title, created_at, updated_at FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
+    `SELECT id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status,
+      (SELECT t.title FROM owner_intelligence_topics t
+       WHERE t.id = owner_intelligence_conversations.topic_id AND t.owner_id = owner_intelligence_conversations.owner_id) AS topic_title
+     FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?`,
   ).bind(id, ownerId).first<OwnerConversationRow>();
   if (!row) return null;
 
@@ -376,7 +525,7 @@ export async function renameOwnerIntelligenceConversation(
   ).bind(normalizedTitle(title), Date.now(), id, ownerPrincipal(env)).run();
   if (!result.success) throw new Error("D1 did not confirm the conversation rename.");
   const row = await env.DB!.prepare(
-    "SELECT id, owner_id, title, created_at, updated_at FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
+    "SELECT id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
   ).bind(id, ownerPrincipal(env)).first<OwnerConversationRow>();
   return row ? mapConversation(row) : null;
 }
@@ -976,6 +1125,41 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
     return handleOwnerGeneration(request, env, generationMatch[1]);
   }
 
+  const topicsRoot = "/admin/api/intelligence/topics";
+  if (url.pathname === topicsRoot) {
+    if (request.method === "GET") return json({ ok: true, topics: await listOwnerIntelligenceTopics(env) });
+    if (request.method === "POST") {
+      if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+      const body = await readJsonBody(request);
+      if (!body || Object.keys(body).some((key) => key !== "title") || typeof body.title !== "string") {
+        return json({ ok: false, error: "invalid_request" }, 400);
+      }
+      try {
+        return json({ ok: true, topic: await createOwnerIntelligenceTopic(env, body.title) }, 201);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Invalid topic title.";
+        return json({ ok: false, error: "invalid_topic", message }, 400);
+      }
+    }
+    return methodNotAllowed(["GET", "POST"]);
+  }
+  const topicMatch = url.pathname.match(/^\/admin\/api\/intelligence\/topics\/([0-9a-f-]{36})$/iu);
+  if (topicMatch && validConversationId(topicMatch[1])) {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+    const body = await readJsonBody(request);
+    if (!body || Object.keys(body).length !== 1 || typeof body.title !== "string") {
+      return json({ ok: false, error: "invalid_request" }, 400);
+    }
+    try {
+      const topic = await renameOwnerIntelligenceTopic(env, topicMatch[1], body.title);
+      return topic ? json({ ok: true, topic }) : notFound();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid topic title.";
+      return json({ ok: false, error: "invalid_topic", message }, 400);
+    }
+  }
+
   const root = "/admin/api/intelligence/conversations";
   if (url.pathname === root) {
     if (request.method === "GET") {
@@ -984,15 +1168,23 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
     if (request.method === "POST") {
       if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
       const body = await readJsonBody(request);
-      if (!body || (body.title !== undefined && typeof body.title !== "string")) {
+      if (!body ||
+          Object.keys(body).some((key) => key !== "title" && key !== "topicId") ||
+          (body.title !== undefined && typeof body.title !== "string") ||
+          (body.topicId !== undefined && body.topicId !== null && (typeof body.topicId !== "string" || !validConversationId(body.topicId)))) {
         return json({ ok: false, error: "invalid_request" }, 400);
       }
       try {
-        const conversation = await createOwnerIntelligenceConversation(env, body.title === undefined ? "New chat" : body.title);
+        const conversation = await createOwnerIntelligenceConversation(
+          env,
+          body.title === undefined ? "New chat" : body.title,
+          typeof body.topicId === "string" ? body.topicId : null,
+        );
         return json({ ok: true, conversation }, 201);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Invalid conversation title.";
-        return json({ ok: false, error: "invalid_title", message }, 400);
+        const topicUnavailable = message === "The selected topic is not available to this Owner.";
+        return json({ ok: false, error: topicUnavailable ? "invalid_topic" : "invalid_title", message }, topicUnavailable ? 404 : 400);
       }
     }
     return methodNotAllowed(["GET", "POST"]);
@@ -1066,6 +1258,17 @@ function workspaceHtml(): string {
 .sidebar{width:274px;flex:0 0 274px;background:#171717;border-right:1px solid #303030;display:flex;flex-direction:column;padding:16px 12px;z-index:5}
 .brand{display:flex;align-items:center;gap:10px;padding:7px 8px 20px}.brand-mark{width:34px;height:34px;display:grid;place-items:center;border:1px solid #555;border-radius:11px;color:#fff;font-size:15px;font-weight:700;letter-spacing:-1px}.brand-name{font-size:15px;font-weight:650;letter-spacing:.02em}.brand-sub{color:#8a8a8a;font-size:10px;letter-spacing:.12em;margin-top:3px}
 .new-chat{display:flex;align-items:center;gap:10px;width:100%;border:1px solid #454545;background:#242424;border-radius:10px;padding:11px 12px;text-align:left;font-size:13px;font-weight:600}.new-chat:hover{background:#303030}.plus{font-size:19px;font-weight:300;line-height:14px}
+.new-chat-scope{display:flex;flex-direction:column;gap:7px;margin-top:9px;padding:9px;border:1px solid #303030;border-radius:10px;background:#1d1d1d}
+.new-chat-scope-label{font-size:9px;color:#858585;letter-spacing:.12em;font-weight:650}
+.new-chat-scope-controls{display:flex;align-items:center;gap:6px;min-width:0}
+.new-chat-scope select{min-width:0;flex:1;border:1px solid #414141;border-radius:7px;background:#292929;color:#e5e5e5;padding:7px 6px;font:inherit;font-size:11px}
+.new-topic-button,.rename-topic-button{border:1px solid #414141;border-radius:7px;background:#292929;color:#c9c9c9;padding:7px 8px;font-size:10px;white-space:nowrap}
+.new-topic-button:hover,.rename-topic-button:not(:disabled):hover{background:#363636;color:#fff}
+.rename-topic-button{align-self:flex-start;padding:5px 7px;font-size:9px}
+.rename-topic-button:disabled{opacity:.4;cursor:not-allowed}
+.conversation-heading{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.conversation-scope{display:inline-flex;align-items:center;border:1px solid #454545;border-radius:999px;padding:3px 8px;background:#292929;color:#bdbdbd;font-size:9px;font-weight:650;letter-spacing:.08em;text-transform:uppercase}
+.conversation-title{color:#e4e4e4;font-size:13px;font-weight:550;letter-spacing:0}
 .section-label{font-size:10px;color:#858585;text-transform:uppercase;letter-spacing:.13em;padding:23px 9px 9px}
 .history{flex:1;overflow:auto;min-height:0}.history-empty{font-size:12px;line-height:1.55;color:#777;padding:10px 9px}.history-item{display:flex;align-items:center;gap:4px;margin:2px 0;border-radius:9px;padding:3px}.history-item.active{background:#303030}.history-item:hover{background:#292929}.history-open{min-width:0;flex:1;border:0;background:none;text-align:left;padding:8px 7px;font-size:12px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:6px}.history-action{border:0;background:transparent;color:#8b8b8b;border-radius:6px;padding:5px 6px;font-size:12px}.history-action:hover{background:#414141;color:#fff}
 .side-footer{border-top:1px solid #303030;padding:12px 5px 2px}.owner-note{display:flex;align-items:center;gap:8px;padding:7px 7px 10px;font-size:11px;color:#a1a1a1}.owner-dot{width:7px;height:7px;border-radius:50%;background:#4dba87}.logout{width:100%;border:0;background:transparent;color:#aaa;text-align:left;padding:9px 8px;border-radius:8px;font-size:12px}.logout:hover{background:#292929;color:#fff}
@@ -1084,6 +1287,14 @@ function workspaceHtml(): string {
 <aside class="sidebar" id="sidebar" aria-label="Conversation sidebar">
   <div class="brand"><div class="brand-mark">BɅ</div><div><div class="brand-name">BRɅIN</div><div class="brand-sub">INTELLIGENCE · PRIVATE</div></div></div>
   <button class="new-chat" id="newChat" type="button"><span class="plus">＋</span><span>New chat</span></button>
+  <div class="new-chat-scope">
+    <label class="new-chat-scope-label" for="newChatTopic">START NEW CHAT IN</label>
+    <div class="new-chat-scope-controls">
+      <select id="newChatTopic" aria-label="Start new chat in"><option value="">Scratchpad</option></select>
+      <button class="new-topic-button" id="newTopic" type="button">＋ Topic</button>
+    </div>
+    <button class="rename-topic-button" id="renameTopic" type="button" disabled>Rename selected topic</button>
+  </div>
   <div class="section-label">Your conversations</div>
   <div class="history" id="history" aria-live="polite"><div class="loading">Loading conversations…</div></div>
   <div class="side-footer"><div class="owner-note"><span class="owner-dot"></span><span>Owner workspace · Private</span></div><form method="post" action="/admin/logout"><button class="logout" type="submit">↗&nbsp; Sign out</button></form></div>
@@ -1123,7 +1334,7 @@ export function ownerIntelligenceClientScript(): Response {
 (function(){
   "use strict";
   var api="/admin/api/intelligence/conversations";
-  var state={conversations:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
+  var state={conversations:[],topics:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
   var history=document.getElementById("history");
   var messages=document.getElementById("messages");
   var heading=document.getElementById("conversationHeading");
@@ -1140,6 +1351,9 @@ export function ownerIntelligenceClientScript(): Response {
   var modelSelect=document.getElementById("modelSelect");
   var thinkingSelect=document.getElementById("thinkingSelect");
   var modelRetry=document.getElementById("modelRetry");
+  var newChatTopic=document.getElementById("newChatTopic");
+  var newTopicButton=document.getElementById("newTopic");
+  var renameTopicButton=document.getElementById("renameTopic");
   var modelLoadInProgress=false;
   var modelLoadMessage="Checking configured Gemini models…";
   var modelLoadController=null;
@@ -1436,6 +1650,42 @@ export function ownerIntelligenceClientScript(): Response {
     panel.appendChild(retry);
     history.appendChild(panel);
   }
+  async function refreshTopics(preferredId){
+    var result=await request(api+"/topics");
+    state.topics=result.topics||[];
+    var previous=preferredId!==undefined?preferredId:newChatTopic.value;
+    newChatTopic.replaceChildren(node("option","","Scratchpad"));
+    newChatTopic.options[0].value="";
+    state.topics.forEach(function(topic){
+      var option=node("option","",topic.title);
+      option.value=topic.id;
+      newChatTopic.appendChild(option);
+    });
+    newChatTopic.value=state.topics.some(function(topic){return topic.id===previous;})?previous:"";
+    renameTopicButton.disabled=!newChatTopic.value;
+  }
+  async function createTopic(){
+    var title=window.prompt("Name this topic");
+    if(title===null)return;
+    newTopicButton.disabled=true;
+    try{
+      var result=await request(api+"/topics",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
+      await refreshTopics(result.topic.id);
+    }catch(error){showHistoryError(error);}
+    finally{newTopicButton.disabled=false;}
+  }
+  async function renameSelectedTopic(){
+    var topic=state.topics.find(function(item){return item.id===newChatTopic.value;});
+    if(!topic)return;
+    var title=window.prompt("Rename topic",topic.title);
+    if(title===null)return;
+    renameTopicButton.disabled=true;
+    try{
+      var result=await request(api+"/topics/"+encodeURIComponent(topic.id),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
+      await refreshTopics(result.topic.id);
+    }catch(error){showHistoryError(error);}
+    finally{renameTopicButton.disabled=!newChatTopic.value;}
+  }
   function renderHistory(){
     history.replaceChildren();
     if(!state.conversations.length){history.appendChild(node("div","history-empty","Your saved conversations will appear here."));return;}
@@ -1465,7 +1715,10 @@ export function ownerIntelligenceClientScript(): Response {
   async function openConversation(id){
     var result=await request(api+"/"+encodeURIComponent(id));
     state.activeId=result.conversation.id;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
-    heading.textContent=result.conversation.title;
+    heading.replaceChildren(
+      node("span","conversation-scope",result.conversation.topic_title||"Scratchpad"),
+      node("span","conversation-title",result.conversation.title)
+    );
     renderHistory();renderSessionBudget();renderMessages(state.messages);
     updateComposer();
   }
@@ -1608,7 +1861,11 @@ export function ownerIntelligenceClientScript(): Response {
     button.disabled=true;
     button.setAttribute("aria-busy","true");
     try{
-      var result=await request(api,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:"New chat"})});
+      var conversationBody={title:"New chat"};
+      if(newChatTopic.value)conversationBody.topicId=newChatTopic.value;
+      var result=await request(api,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(conversationBody)});
+      newChatTopic.value="";
+      renameTopicButton.disabled=true;
       await refreshList(result.conversation.id);
       sidebar.classList.remove("open");
     }catch(error){showHistoryError(error);}
@@ -1638,6 +1895,9 @@ export function ownerIntelligenceClientScript(): Response {
     messages.replaceChildren(notice);
   }
   document.getElementById("newChat").addEventListener("click",newConversation);
+  newTopicButton.addEventListener("click",createTopic);
+  renameTopicButton.addEventListener("click",renameSelectedTopic);
+  newChatTopic.addEventListener("change",function(){renameTopicButton.disabled=!newChatTopic.value;});
   document.getElementById("mobileMenu").addEventListener("click",function(){sidebar.classList.toggle("open");});
   sendButton.addEventListener("click",function(){if(sending)stopGeneration();else saveMessage();});
   messageInput.addEventListener("input",updateComposer);
@@ -1655,6 +1915,7 @@ export function ownerIntelligenceClientScript(): Response {
   });
   modelRetry.addEventListener("click",function(){loadModels();});
   loadModels();
+  refreshTopics().catch(showHistoryError);
   refreshList().catch(showHistoryError);
 })();
 `;
