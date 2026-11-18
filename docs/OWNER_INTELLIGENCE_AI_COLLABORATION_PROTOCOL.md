@@ -364,3 +364,18 @@ The future implementation is not complete until tests and Owner acceptance cover
 - All seven original Owner workflows remain supported without silent deletion, auto-sync, unreviewed writes or cross-project leakage.
 
 These are planned acceptance criteria, not claims of deployed functionality or tests already passed.
+
+
+## 11. Live hub provisioning check — 2026-11-19 IST
+
+GitHub repository lookup confirms `ashini-x/owner-memory-hub` exists (repository ID `1463342529`), has default branch `main`, and contains a README whose current content is `# owner-memory-hub`. No source-code files have been migrated.
+
+**Important configuration exception:** GitHub currently reports this repository's visibility as `public`. The approved architecture requires `private`. Do not install/use the BRɅIN Owner Memory App against this hub until the Owner changes the repository visibility to Private and the private setting is verified. The repository's presence is verified; private visibility and Owner App installation/PKCE authorization are not yet accepted.
+
+After changing visibility:
+1. Re-fetch repository metadata and verify `visibility=private`.
+2. Configure BRɅIN Owner Memory for `Only select repositories` and select only `owner-memory-hub`.
+3. Complete the fresh Owner Intelligence installation/PKCE callback and verify the installation is recorded.
+4. Perform the M4.3 reviewed Save/read-back/stale-branch Conflict acceptance.
+
+This is a provisioning-status update only. It does not create or install the App, write project documents, or change runtime code.
