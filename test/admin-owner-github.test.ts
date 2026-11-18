@@ -129,7 +129,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
           id: repositoryId, full_name: "ashini-x/parmar-ai", archived: false,
         }), { status: 200 });
       }
-      if (url === "https://api.github.com/repos/ashini-x/parmar-ai/branches/feature/test-branch") {
+      if (url === "https://api.github.com/repos/ashini-x/parmar-ai/branches/feature%2Ftest-branch") {
         return new Response(JSON.stringify({ name: "feature/test-branch" }), { status: 200 });
       }
       return new Response(JSON.stringify({ message: "Unexpected GitHub request: " + method + " " + url }), {
