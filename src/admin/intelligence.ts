@@ -386,7 +386,7 @@ function mapTopic(row: OwnerIntelligenceTopic & { owner_id: string }): OwnerInte
 }
 
 function topicSlug(title: string, id: string): string {
-  const base = title.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 36) || "topic";
+  const base = title.replace(/Ʌ/gu, "a").toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 36) || "topic";
   return base + "-" + id.slice(0, 8);
 }
 
@@ -1183,7 +1183,8 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
         return json({ ok: true, conversation }, 201);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Invalid conversation title.";
-        return json({ ok: false, error: "invalid_title", message }, 400);
+        const topicUnavailable = message === "The selected topic is not available to this Owner.";
+        return json({ ok: false, error: topicUnavailable ? "invalid_topic" : "invalid_title", message }, topicUnavailable ? 404 : 400);
       }
     }
     return methodNotAllowed(["GET", "POST"]);
