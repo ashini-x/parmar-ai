@@ -1930,10 +1930,205 @@ export function ownerIntelligenceClientScript(): Response {
       await refreshList();
     }catch(error){showError(error);}
   }
+  function setGitHubStatus(message,isError){
+    githubDialogStatus.textContent=message||"";
+    githubDialogStatus.classList.toggle("github-error",Boolean(isError));
+  }
+  function resetGitHubDialog(){
+    githubConnectStage.hidden=true;
+    githubInstallStage.hidden=true;
+    githubDestinationStage.hidden=true;
+    githubPreviewStage.hidden=true;
+    githubPreview=null;
+    githubPreviewFiles.replaceChildren();
+    githubConfirmButton.disabled=false;
+    githubPreviewButton.disabled=false;
+    setGitHubStatus("",false);
+  }
+  async function loadGitHubRepositories(){
+    var result=await request("/admin/api/intelligence/github/repositories");
+    githubRepositoryItems=result.repositories||[];
+    githubRepository.replaceChildren();
+    if(!githubRepositoryItems.length){
+      githubRepository.appendChild(node("option","","No selected repositories"));
+      githubRepository.value="";
+      return;
+    }
+    githubRepositoryItems.forEach(function(item){
+      var option=node("option","",item.fullName+(item.private?" · private":""));
+      option.value=item.fullName;
+      githubRepository.appendChild(option);
+    });
+    var topic=state.topics.find(function(item){
+      return state.activeConversation&&item.id===state.activeConversation.topic_id;
+    });
+    var preferred=topic&&topic.repository_owner&&topic.repository_name
+      ?topic.repository_owner+"/"+topic.repository_name:"";
+    var selected=githubRepositoryItems.find(function(item){return item.fullName===preferred;})||githubRepositoryItems[0];
+    githubRepository.value=selected.fullName;
+    githubBranch.value=(topic&&topic.repository_branch)||selected.defaultBranch||"";
+  }
+  async function openGitHubDialog(){
+    if(!state.activeConversation){
+      showError(new Error("Open a conversation before saving it to GitHub."));
+      return;
+    }
+    resetGitHubDialog();
+    githubProjectName.value=state.activeConversation.title||"Project";
+    githubBranch.value="";
+    githubRepository.replaceChildren(node("option","","Loading installed repositories…"));
+    githubDialog.showModal();
+    setGitHubStatus("Checking the dedicated Owner GitHub App…",false);
+    try{
+      var result=await request("/admin/api/intelligence/github/status");
+      githubConnection=result.github||{status:"not_connected"};
+      if(githubConnection.status==="not_connected"){
+        githubConnectStage.hidden=false;
+        setGitHubStatus("A separate Owner-only GitHub App has not been created yet.",false);
+      }else if(!githubConnection.installed){
+        githubInstallStage.hidden=false;
+        setGitHubStatus("The dedicated App exists. Install it on selected repositories only.",false);
+      }else{
+        githubDestinationStage.hidden=false;
+        await loadGitHubRepositories();
+        setGitHubStatus("Connected as "+(githubConnection.installationAccount||"GitHub installation")+". Choose the destination and create a preview.",false);
+      }
+    }catch(error){
+      setGitHubStatus(errorText(error),true);
+    }
+  }
+  async function startGitHubApp(){
+    githubConnectButton.disabled=true;
+    try{
+      var result=await request("/admin/api/intelligence/github/start",{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({})
+      });
+      var form=document.createElement("form");
+      form.method="post";
+      form.action=result.action;
+      var field=document.createElement("input");
+      field.type="hidden";
+      field.name="manifest";
+      field.value=JSON.stringify(result.manifest);
+      form.appendChild(field);
+      document.body.appendChild(form);
+      form.submit();
+    }catch(error){
+      setGitHubStatus(errorText(error),true);
+      githubConnectButton.disabled=false;
+    }
+  }
+  async function createGitHubPreview(){
+    if(!state.activeConversation||!githubRepository.value){
+      setGitHubStatus("Choose an installed repository first.",true);
+      return;
+    }
+    githubPreviewButton.disabled=true;
+    githubPreviewStage.hidden=true;
+    setGitHubStatus("Preparing the editable Markdown preview against the current branch head…",false);
+    try{
+      var payload={
+        conversationId:state.activeConversation.id,
+        repository:githubRepository.value,
+        branch:githubBranch.value.trim()
+      };
+      if(state.activeConversation.topic_id){
+        payload.topicId=state.activeConversation.topic_id;
+      }else{
+        payload.topicTitle=githubProjectName.value.trim();
+      }
+      var result=await request("/admin/api/intelligence/github/preview",{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify(payload)
+      });
+      githubPreview=result.preview;
+      githubPreviewNote.textContent=
+        "Destination: "+githubPreview.repository+" / "+githubPreview.branch+
+        "\nBase commit: "+githubPreview.baseCommitSha+
+        "\nMemory root: "+githubPreview.memoryRoot+
+        "\n"+githubPreview.note+
+        "\nThis preview expires at "+new Date(githubPreview.expiresAt).toLocaleString()+".";
+      githubPreviewFiles.replaceChildren();
+      githubPreview.files.forEach(function(file,index){
+        var wrapper=node("div","github-file");
+        var label=node("label","github-file-label",file.name);
+        var textarea=node("textarea");
+        textarea.value=file.content;
+        textarea.dataset.githubFile=file.name;
+        textarea.id="github-preview-file-"+index;
+        textarea.setAttribute("aria-label","Edit "+file.name);
+        label.htmlFor=textarea.id;
+        wrapper.appendChild(label);
+        wrapper.appendChild(textarea);
+        githubPreviewFiles.appendChild(wrapper);
+      });
+      githubPreviewStage.hidden=false;
+      setGitHubStatus("Review and edit every file below. Nothing has been written to GitHub yet.",false);
+    }catch(error){
+      setGitHubStatus(errorText(error),true);
+    }finally{
+      githubPreviewButton.disabled=false;
+    }
+  }
+  async function confirmGitHubSave(){
+    if(!githubPreview)return;
+    var editors=githubPreviewFiles.querySelectorAll("textarea[data-github-file]");
+    var files=Array.prototype.map.call(editors,function(editor){
+      return {name:editor.dataset.githubFile,content:editor.value};
+    });
+    if(!window.confirm("Commit these "+files.length+" reviewed Markdown files to "+githubPreview.repository+" on "+githubPreview.branch+"?")){
+      return;
+    }
+    githubConfirmButton.disabled=true;
+    setGitHubStatus("Saving one commit, then verifying its SHA and each file by read-back…",false);
+    try{
+      var result=await request("/admin/api/intelligence/github/confirm",{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({previewId:githubPreview.id,confirmed:true,files:files})
+      });
+      if(result.status==="synced"){
+        setGitHubStatus("Synced · "+result.commitSha+" · "+result.repository+"/"+result.branch,false);
+        await refreshTopics(result.topicId);
+        await refreshList(state.activeId);
+        githubConfirmButton.disabled=true;
+      }else{
+        setGitHubStatus("No verified Synced state was returned. The preview remains available for verification.",true);
+        githubConfirmButton.disabled=false;
+      }
+    }catch(error){
+      setGitHubStatus(errorText(error),true);
+      githubConfirmButton.disabled=false;
+    }
+  }
+  function discardGitHubPreview(){
+    githubPreview=null;
+    githubPreviewStage.hidden=true;
+    githubPreviewFiles.replaceChildren();
+    setGitHubStatus("Preview discarded. No GitHub changes were made.",false);
+  }
   function showError(error){
     var notice=node("div","error",errorText(error));
     messages.replaceChildren(notice);
   }
+  saveToGitHubButton.addEventListener("click",openGitHubDialog);
+  githubDialogClose.addEventListener("click",function(){githubDialog.close();});
+  githubConnectButton.addEventListener("click",startGitHubApp);
+  githubInstallButton.addEventListener("click",function(){
+    if(githubConnection&&githubConnection.appInstallUrl){
+      window.location.assign(githubConnection.appInstallUrl);
+    }
+  });
+  githubRepository.addEventListener("change",function(){
+    var repository=githubRepositoryItems.find(function(item){return item.fullName===githubRepository.value;});
+    if(repository&&!githubBranch.value)githubBranch.value=repository.defaultBranch||"";
+  });
+  githubPreviewButton.addEventListener("click",createGitHubPreview);
+  githubConfirmButton.addEventListener("click",confirmGitHubSave);
+  githubRepreviewButton.addEventListener("click",discardGitHubPreview);
   document.getElementById("newChat").addEventListener("click",newConversation);
   newTopicButton.addEventListener("click",createTopic);
   renameTopicButton.addEventListener("click",renameSelectedTopic);
