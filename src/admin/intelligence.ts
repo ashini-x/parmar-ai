@@ -1,7 +1,16 @@
 import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
 import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
-import { openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
+import { countOwnerGeminiInputTokens, openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
+
+export interface OwnerIntelligenceSessionUsage {
+  limit_tokens: number;
+  used_tokens: number;
+  reserved_tokens: number;
+  remaining_tokens: number;
+  locked: boolean;
+  locked_reason?: string | null;
+}
 
 export interface OwnerIntelligenceConversation {
   id: string;
@@ -39,6 +48,9 @@ const MAX_MESSAGE_LENGTH = 50_000;
 const MAX_OWNER_GEMINI_CONTEXT_CHARS = 300_000;
 const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
 const MAX_CONVERSATIONS = 100;
+export const OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT = 200_000;
+const OWNER_INTELLIGENCE_DEFAULT_OUTPUT_RESERVATION = 8_192;
+const OWNER_INTELLIGENCE_RESERVATION_TTL_MS = 10 * 60_000;
 
 /**
  * Creates an entirely separate Owner chat store. Only a completed binding is
@@ -85,6 +97,30 @@ export async function ensureOwnerIntelligenceSchema(env: Env): Promise<void> {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_generation_owner
       ON owner_intelligence_generation_metadata(owner_id, model_id)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_session_usage (
+      conversation_id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      token_limit INTEGER NOT NULL DEFAULT 200000,
+      used_tokens INTEGER NOT NULL DEFAULT 0,
+      reserved_tokens INTEGER NOT NULL DEFAULT 0,
+      locked_reason TEXT,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (conversation_id) REFERENCES owner_intelligence_conversations(id) ON DELETE CASCADE
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_token_reservations (
+      reservation_id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      reserved_tokens INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('reserved','settled','released','expired')),
+      actual_tokens INTEGER NOT NULL DEFAULT 0,
+      usage_is_estimated INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      settled_at INTEGER,
+      FOREIGN KEY (conversation_id) REFERENCES owner_intelligence_conversations(id) ON DELETE CASCADE
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_reservations_session
+      ON owner_intelligence_token_reservations(owner_id, conversation_id, status, created_at)`),
   ]);
   if (results.some((result) => !result.success)) {
     throw new Error("D1 did not confirm the Owner Intelligence schema.");
@@ -96,6 +132,161 @@ function ownerPrincipal(env: Env): string {
   const configured = env.OWNER_DASHBOARD_USER?.trim().toLowerCase();
   if (!configured) throw new Error("The Owner Intelligence principal is not configured.");
   return configured;
+}
+
+interface OwnerSessionUsageRow {
+  conversation_id: string;
+  owner_id: string;
+  token_limit: number;
+  used_tokens: number;
+  reserved_tokens: number;
+  locked_reason: string | null;
+  updated_at: number;
+}
+
+async function ensureOwnerSessionUsageRow(env: Env, conversationId: string): Promise<OwnerSessionUsageRow | null> {
+  await ensureOwnerIntelligenceSchema(env);
+  const ownerId = ownerPrincipal(env);
+  await env.DB!.prepare(
+    `INSERT OR IGNORE INTO owner_intelligence_session_usage
+       (conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at)
+     SELECT c.id, c.owner_id, ?, COALESCE(SUM(g.total_tokens), 0), 0, NULL, ?
+     FROM owner_intelligence_conversations c
+     LEFT JOIN owner_intelligence_messages m
+       ON m.conversation_id = c.id AND m.owner_id = c.owner_id AND m.role = 'assistant'
+     LEFT JOIN owner_intelligence_generation_metadata g
+       ON g.message_id = m.id AND g.owner_id = m.owner_id
+     WHERE c.id = ? AND c.owner_id = ?
+     GROUP BY c.id, c.owner_id`,
+  ).bind(OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT, Date.now(), conversationId, ownerId).run();
+  const row = await env.DB!.prepare(
+    `SELECT conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at
+     FROM owner_intelligence_session_usage WHERE conversation_id = ? AND owner_id = ?`,
+  ).bind(conversationId, ownerId).first<OwnerSessionUsageRow>();
+  return row ?? null;
+}
+
+async function expireOwnerSessionReservations(env: Env, usage: OwnerSessionUsageRow): Promise<void> {
+  const cutoff = Date.now() - OWNER_INTELLIGENCE_RESERVATION_TTL_MS;
+  const expired = await env.DB!.prepare(
+    `SELECT reservation_id, reserved_tokens FROM owner_intelligence_token_reservations
+     WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?`,
+  ).bind(usage.conversation_id, usage.owner_id, cutoff).all<{ reservation_id: string; reserved_tokens: number }>();
+  if (!expired.results?.length) return;
+  const charge = expired.results.reduce((total, item) => total + Number(item.reserved_tokens || 0), 0);
+  await env.DB!.batch([
+    env.DB!.prepare(
+      `UPDATE owner_intelligence_session_usage
+       SET used_tokens = used_tokens + ?, reserved_tokens = MAX(0, reserved_tokens - ?), updated_at = ?
+       WHERE conversation_id = ? AND owner_id = ?
+         AND EXISTS (SELECT 1 FROM owner_intelligence_token_reservations
+           WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?)`,
+    ).bind(charge, charge, Date.now(), usage.conversation_id, usage.owner_id, usage.conversation_id, usage.owner_id, cutoff),
+    env.DB!.prepare(
+      `UPDATE owner_intelligence_token_reservations
+       SET status = 'expired', actual_tokens = reserved_tokens, usage_is_estimated = 1, settled_at = ?
+       WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?`,
+    ).bind(Date.now(), usage.conversation_id, usage.owner_id, cutoff),
+  ]);
+}
+
+export async function getOwnerIntelligenceSessionUsage(
+  env: Env,
+  conversationId: string,
+): Promise<OwnerIntelligenceSessionUsage | null> {
+  const initialized = await ensureOwnerSessionUsageRow(env, conversationId);
+  if (!initialized) return null;
+  await expireOwnerSessionReservations(env, initialized);
+  const row = await env.DB!.prepare(
+    `SELECT conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at
+     FROM owner_intelligence_session_usage WHERE conversation_id = ? AND owner_id = ?`,
+  ).bind(conversationId, initialized.owner_id).first<OwnerSessionUsageRow>();
+  if (!row) return null;
+  const limit = Math.max(0, Number(row.token_limit));
+  const used = Math.max(0, Number(row.used_tokens));
+  const reserved = Math.max(0, Number(row.reserved_tokens));
+  const remaining = Math.max(0, limit - used - reserved);
+  return {
+    limit_tokens: limit,
+    used_tokens: used,
+    reserved_tokens: reserved,
+    remaining_tokens: remaining,
+    locked: Boolean(row.locked_reason) || (used >= limit && reserved === 0),
+    locked_reason: row.locked_reason,
+  };
+}
+
+async function lockOwnerIntelligenceSession(
+  env: Env,
+  conversationId: string,
+  reason: string,
+): Promise<OwnerIntelligenceSessionUsage | null> {
+  const usage = await ensureOwnerSessionUsageRow(env, conversationId);
+  if (!usage) return null;
+  await env.DB!.prepare(
+    `UPDATE owner_intelligence_session_usage SET locked_reason = ?, updated_at = ?
+     WHERE conversation_id = ? AND owner_id = ? AND (locked_reason IS NULL OR locked_reason = '')`,
+  ).bind(reason, Date.now(), conversationId, usage.owner_id).run();
+  return getOwnerIntelligenceSessionUsage(env, conversationId);
+}
+
+async function reserveOwnerIntelligenceSessionTokens(
+  env: Env,
+  conversationId: string,
+  reservationId: string,
+  reservedTokens: number,
+): Promise<boolean> {
+  const usage = await ensureOwnerSessionUsageRow(env, conversationId);
+  if (!usage || !Number.isSafeInteger(reservedTokens) || reservedTokens <= 0) return false;
+  const now = Date.now();
+  const results = await env.DB!.batch([
+    env.DB!.prepare(
+      `UPDATE owner_intelligence_session_usage
+       SET reserved_tokens = reserved_tokens + ?, updated_at = ?
+       WHERE conversation_id = ? AND owner_id = ? AND reserved_tokens = 0
+         AND used_tokens + reserved_tokens + ? <= token_limit
+         AND (locked_reason IS NULL OR locked_reason = '')`,
+    ).bind(reservedTokens, now, conversationId, usage.owner_id, reservedTokens),
+    env.DB!.prepare(
+      `INSERT INTO owner_intelligence_token_reservations
+       (reservation_id, conversation_id, owner_id, reserved_tokens, status, actual_tokens, usage_is_estimated, created_at)
+       SELECT ?, ?, ?, ?, 'reserved', 0, 0, ? WHERE changes() = 1`,
+    ).bind(reservationId, conversationId, usage.owner_id, reservedTokens, now),
+  ]);
+  return Number(results[0]?.meta?.changes ?? 0) === 1;
+}
+
+async function settleOwnerIntelligenceSessionReservation(
+  env: Env,
+  conversationId: string,
+  reservationId: string,
+  actualTokens?: number,
+  release = false,
+): Promise<void> {
+  const ownerId = ownerPrincipal(env);
+  const row = await env.DB!.prepare(
+    `SELECT reserved_tokens FROM owner_intelligence_token_reservations
+     WHERE reservation_id = ? AND conversation_id = ? AND owner_id = ? AND status = 'reserved'`,
+  ).bind(reservationId, conversationId, ownerId).first<{ reserved_tokens: number }>();
+  if (!row) return;
+  const reserved = Math.max(0, Number(row.reserved_tokens));
+  const estimated = !release && actualTokens === undefined;
+  const charge = release ? 0 : estimated ? reserved : Math.max(0, Math.floor(Number(actualTokens)));
+  const nextStatus = release ? "released" : "settled";
+  await env.DB!.batch([
+    env.DB!.prepare(
+      `UPDATE owner_intelligence_session_usage
+       SET used_tokens = used_tokens + ?, reserved_tokens = MAX(0, reserved_tokens - ?), updated_at = ?
+       WHERE conversation_id = ? AND owner_id = ?
+         AND EXISTS (SELECT 1 FROM owner_intelligence_token_reservations
+           WHERE reservation_id = ? AND owner_id = ? AND status = 'reserved')`,
+    ).bind(charge, reserved, Date.now(), conversationId, ownerId, reservationId, ownerId),
+    env.DB!.prepare(
+      `UPDATE owner_intelligence_token_reservations
+       SET status = ?, actual_tokens = ?, usage_is_estimated = ?, settled_at = ?
+       WHERE reservation_id = ? AND conversation_id = ? AND owner_id = ? AND status = 'reserved'`,
+    ).bind(nextStatus, charge, estimated ? 1 : 0, Date.now(), reservationId, conversationId, ownerId),
+  ]);
 }
 
 function normalizedTitle(value: unknown): string {
@@ -153,7 +344,7 @@ export async function createOwnerIntelligenceConversation(
 export async function getOwnerIntelligenceConversation(
   env: Env,
   id: string,
-): Promise<{ conversation: OwnerIntelligenceConversation; messages: OwnerIntelligenceMessage[] } | null> {
+): Promise<{ conversation: OwnerIntelligenceConversation; messages: OwnerIntelligenceMessage[]; usage: OwnerIntelligenceSessionUsage | null } | null> {
   await ensureOwnerIntelligenceSchema(env);
   const ownerId = ownerPrincipal(env);
   const row = await env.DB!.prepare(
@@ -170,7 +361,8 @@ export async function getOwnerIntelligenceConversation(
      WHERE m.conversation_id = ? AND m.owner_id = ?
      ORDER BY m.created_at ASC, m.id ASC`,
   ).bind(id, ownerId).all<OwnerMessageRow>();
-  return { conversation: mapConversation(row), messages: (result.results ?? []).map(mapMessage) };
+  const usage = await getOwnerIntelligenceSessionUsage(env, id);
+  return { conversation: mapConversation(row), messages: (result.results ?? []).map(mapMessage), usage };
 }
 
 export async function renameOwnerIntelligenceConversation(
@@ -212,6 +404,7 @@ export async function appendOwnerIntelligenceMessage(
   env: Env,
   input: {
     conversationId: string;
+    id?: string;
     role: OwnerIntelligenceMessage["role"];
     content: string;
     status?: OwnerIntelligenceMessage["status"];
@@ -239,7 +432,7 @@ export async function appendOwnerIntelligenceMessage(
   ).bind(input.conversationId, ownerId).first<{ latest: number | null }>();
   const createdAt = Math.max(Date.now(), Number(latest?.latest ?? 0) + 1);
   const message: OwnerIntelligenceMessage = {
-    id: crypto.randomUUID(),
+    id: input.id ?? crypto.randomUUID(),
     conversation_id: input.conversationId,
     role: input.role,
     content: input.content,
@@ -298,22 +491,47 @@ async function updateOwnerAssistantMessage(
   return row ? mapMessage(row) : null;
 }
 
-async function prepareOwnerPrompt(
+interface OwnerPromptPlan {
+  messages: OwnerIntelligenceMessage[];
+  commit(): Promise<OwnerIntelligenceMessage[] | null>;
+}
+
+async function loadOwnerIntelligenceMessages(
+  env: Env,
+  conversationId: string,
+  ownerId = ownerPrincipal(env),
+): Promise<OwnerIntelligenceMessage[]> {
+  const result = await env.DB!.prepare(
+    `SELECT m.id, m.conversation_id, m.owner_id, m.role, m.content, m.status, m.created_at,
+      g.model_id, g.thinking_level, g.prompt_tokens, g.output_tokens, g.total_tokens, g.elapsed_ms
+     FROM owner_intelligence_messages m
+     LEFT JOIN owner_intelligence_generation_metadata g
+       ON g.message_id = m.id AND g.owner_id = m.owner_id
+     WHERE m.conversation_id = ? AND m.owner_id = ?
+     ORDER BY m.created_at ASC, m.id ASC`,
+  ).bind(conversationId, ownerId).all<OwnerMessageRow>();
+  return (result.results ?? []).map(mapMessage);
+}
+
+/**
+ * Build a read-only preview of the next model context. Persist the new/edit/
+ * regenerate turn only after CountTokens preflight and budget reservation pass.
+ */
+async function planOwnerPrompt(
   env: Env,
   conversationId: string,
   input: { content?: string; editMessageId?: string; action?: "regenerate" },
-): Promise<OwnerIntelligenceMessage[] | null> {
+): Promise<OwnerPromptPlan | null> {
   await ensureOwnerIntelligenceSchema(env);
   const ownerId = ownerPrincipal(env);
   const conversation = await env.DB!.prepare(
     "SELECT id, title FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
   ).bind(conversationId, ownerId).first<{ id: string; title: string }>();
   if (!conversation) return null;
-  const existing = await env.DB!.prepare(
+  const result = await env.DB!.prepare(
     "SELECT id, conversation_id, owner_id, role, content, status, created_at FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ? ORDER BY created_at ASC, id ASC",
   ).bind(conversationId, ownerId).all<OwnerMessageRow>();
-  const ordered = existing.results ?? [];
-  const statements: D1PreparedStatement[] = [];
+  const ordered = result.results ?? [];
 
   if (input.action === "regenerate") {
     let targetIndex = -1;
@@ -321,45 +539,82 @@ async function prepareOwnerPrompt(
       if (ordered[i].role === "user") { targetIndex = i; break; }
     }
     if (targetIndex < 0) throw new Error("There is no user message to regenerate.");
-    for (const row of ordered.slice(targetIndex + 1)) {
-      statements.push(env.DB!.prepare("DELETE FROM owner_intelligence_messages WHERE id = ? AND owner_id = ?").bind(row.id, ownerId));
-    }
-  } else if (input.editMessageId) {
+    const preview = ordered.slice(0, targetIndex + 1).map(mapMessage);
+    return {
+      messages: preview,
+      async commit() {
+        const statements = ordered.slice(targetIndex + 1).map((row) =>
+          env.DB!.prepare("DELETE FROM owner_intelligence_messages WHERE id = ? AND owner_id = ?").bind(row.id, ownerId),
+        );
+        if (statements.length) {
+          const deleted = await env.DB!.batch(statements);
+          if (deleted.some((item) => !item.success)) throw new Error("D1 did not confirm the regeneration reset.");
+        }
+        return loadOwnerIntelligenceMessages(env, conversationId, ownerId);
+      },
+    };
+  }
+
+  if (input.editMessageId) {
     if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
       throw new Error("Enter a message between 1 and 50,000 characters.");
     }
     const targetIndex = ordered.findIndex((row) => row.id === input.editMessageId && row.role === "user");
     if (targetIndex < 0) throw new Error("The user message to edit was not found.");
     const target = ordered[targetIndex];
-    statements.push(env.DB!.prepare(
-      "UPDATE owner_intelligence_messages SET content = ?, status = 'complete' WHERE id = ? AND owner_id = ? AND role = 'user'",
-    ).bind(input.content.trim(), target.id, ownerId));
-    for (const row of ordered.slice(targetIndex + 1)) {
-      statements.push(env.DB!.prepare("DELETE FROM owner_intelligence_messages WHERE id = ? AND owner_id = ?").bind(row.id, ownerId));
-    }
-  } else {
-    if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
-      throw new Error("Enter a message between 1 and 50,000 characters.");
-    }
-    const message = await appendOwnerIntelligenceMessage(env, {
-      conversationId, role: "user", content: input.content.trim(),
+    const preview = ordered.slice(0, targetIndex + 1).map((row, index) => {
+      const mapped = mapMessage(row);
+      return index === targetIndex ? { ...mapped, content: input.content!.trim(), status: "complete" as const } : mapped;
     });
-    if (!message) return null;
-    if (conversation.title === "New chat") {
-      const title = input.content.trim().replace(/\s+/gu, " ").slice(0, MAX_TITLE_LENGTH);
-      await env.DB!.prepare(
-        "UPDATE owner_intelligence_conversations SET title = ?, updated_at = ? WHERE id = ? AND owner_id = ?",
-      ).bind(title, message.created_at, conversationId, ownerId).run();
-    }
+    return {
+      messages: preview,
+      async commit() {
+        const statements: D1PreparedStatement[] = [
+          env.DB!.prepare(
+            "UPDATE owner_intelligence_messages SET content = ?, status = 'complete' WHERE id = ? AND owner_id = ? AND role = 'user'",
+          ).bind(input.content!.trim(), target.id, ownerId),
+          ...ordered.slice(targetIndex + 1).map((row) =>
+            env.DB!.prepare("DELETE FROM owner_intelligence_messages WHERE id = ? AND owner_id = ?").bind(row.id, ownerId),
+          ),
+        ];
+        const updated = await env.DB!.batch(statements);
+        if (updated.some((item) => !item.success)) throw new Error("D1 did not confirm the prompt edit.");
+        return loadOwnerIntelligenceMessages(env, conversationId, ownerId);
+      },
+    };
   }
-  if (statements.length) {
-    const result = await env.DB!.batch(statements);
-    if (result.some((item) => !item.success)) throw new Error("D1 did not confirm the prompt edit or regeneration reset.");
+
+  if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
+    throw new Error("Enter a message between 1 and 50,000 characters.");
   }
-  const result = await env.DB!.prepare(
-    "SELECT id, conversation_id, owner_id, role, content, status, created_at FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ? ORDER BY created_at ASC, id ASC",
-  ).bind(conversationId, ownerId).all<OwnerMessageRow>();
-  return (result.results ?? []).map(mapMessage);
+  const latest = ordered.reduce((value, row) => Math.max(value, Number(row.created_at)), 0);
+  const plannedMessage: OwnerIntelligenceMessage = {
+    id: crypto.randomUUID(),
+    conversation_id: conversationId,
+    role: "user",
+    content: input.content.trim(),
+    status: "complete",
+    created_at: Math.max(Date.now(), latest + 1),
+  };
+  return {
+    messages: [...ordered.map(mapMessage), plannedMessage],
+    async commit() {
+      const saved = await appendOwnerIntelligenceMessage(env, {
+        conversationId,
+        id: plannedMessage.id,
+        role: "user",
+        content: plannedMessage.content,
+      });
+      if (!saved) return null;
+      if (conversation.title === "New chat") {
+        const title = plannedMessage.content.replace(/\s+/gu, " ").slice(0, MAX_TITLE_LENGTH);
+        await env.DB!.prepare(
+          "UPDATE owner_intelligence_conversations SET title = ?, updated_at = ? WHERE id = ? AND owner_id = ?",
+        ).bind(title, saved.created_at, conversationId, ownerId).run();
+      }
+      return loadOwnerIntelligenceMessages(env, conversationId, ownerId);
+    },
+  };
 }
 
 /**
@@ -475,9 +730,9 @@ async function handleOwnerGeneration(
   if (body.editMessageId && body.action) return json({ ok: false, error: "invalid_request" }, 400);
   if (!body.action && typeof body.content !== "string") return json({ ok: false, error: "message_required" }, 400);
 
-  let messages: OwnerIntelligenceMessage[] | null;
+  let plan: OwnerPromptPlan | null;
   try {
-    messages = await prepareOwnerPrompt(env, conversationId, {
+    plan = await planOwnerPrompt(env, conversationId, {
       content: body.content as string | undefined,
       editMessageId: body.editMessageId as string | undefined,
       action: body.action as "regenerate" | undefined,
@@ -486,21 +741,101 @@ async function handleOwnerGeneration(
     const message = error instanceof Error ? error.message : "The prompt could not be prepared.";
     return json({ ok: false, error: "prompt_update_failed", message }, 400);
   }
-  if (!messages) return notFound();
+  if (!plan) return notFound();
 
-  const contents = buildOwnerGeminiConversationContents(messages);
+  const contents = buildOwnerGeminiConversationContents(plan.messages);
   if (!contents.length || contents[contents.length - 1].role !== "user") {
     return json({ ok: false, error: "latest_message_missing" }, 409);
   }
-  const assistantMessage = await appendOwnerIntelligenceMessage(env, {
-    conversationId,
-    role: "assistant",
-    content: "",
-    status: "pending",
-    modelId: definition.id,
-    thinkingLevel,
-  });
-  if (!assistantMessage) return notFound();
+
+  let sessionUsage = await getOwnerIntelligenceSessionUsage(env, conversationId);
+  if (!sessionUsage) return notFound();
+  if (sessionUsage.locked || sessionUsage.reserved_tokens > 0) {
+    const inProgress = sessionUsage.reserved_tokens > 0 && !sessionUsage.locked;
+    return json({
+      ok: false,
+      error: inProgress ? "generation_in_progress" : "session_token_limit_reached",
+      message: inProgress
+        ? "A response is already being generated in this chat. Wait for it to finish before sending another message."
+        : "This chat has reached its 200,000-token session budget. Start a new chat to continue. Save a Markdown checkpoint in GitHub and paste its link into your next chat to carry context forward.",
+      usage: sessionUsage,
+    }, 409);
+  }
+
+  let promptTokens: number;
+  try {
+    promptTokens = await countOwnerGeminiInputTokens(env, { modelId: definition.id, contents });
+  } catch (error) {
+    const providerError = error instanceof OwnerGeminiProviderError ? error : null;
+    const status = providerError?.status === 400 ? 400 :
+      providerError?.status === 401 || providerError?.status === 403 ? 502 : 503;
+    return json({
+      ok: false,
+      error: "session_preflight_failed",
+      message: providerError?.message ?? "The session token preflight could not be completed. No message was sent.",
+      usage: sessionUsage,
+    }, status);
+  }
+
+  const availableTokens = sessionUsage.remaining_tokens;
+  const outputTokenLimit = Math.min(OWNER_INTELLIGENCE_DEFAULT_OUTPUT_RESERVATION, availableTokens - promptTokens);
+  if (outputTokenLimit < 1) {
+    sessionUsage = await lockOwnerIntelligenceSession(env, conversationId, "request_exceeds_remaining_budget") ?? sessionUsage;
+    return json({
+      ok: false,
+      error: "session_token_limit_reached",
+      message: "The remaining session budget is too small for this conversation's prompt and a response. This chat is now read-only. Start a new chat and paste your GitHub Markdown checkpoint link to continue.",
+      usage: sessionUsage,
+    }, 409);
+  }
+
+  const reservationId = crypto.randomUUID();
+  const reservedTokens = promptTokens + outputTokenLimit;
+  const reserved = await reserveOwnerIntelligenceSessionTokens(env, conversationId, reservationId, reservedTokens);
+  if (!reserved) {
+    sessionUsage = await getOwnerIntelligenceSessionUsage(env, conversationId) ?? sessionUsage;
+    const inProgress = sessionUsage.reserved_tokens > 0 && !sessionUsage.locked;
+    return json({
+      ok: false,
+      error: inProgress ? "generation_in_progress" : "session_token_limit_reached",
+      message: inProgress
+        ? "A response is already being generated in this chat. Wait for it to finish before sending another message."
+        : "This chat has reached its 200,000-token session budget. Start a new chat to continue.",
+      usage: sessionUsage,
+    }, 409);
+  }
+
+  let messages: OwnerIntelligenceMessage[] | null;
+  try {
+    messages = await plan.commit();
+    if (!messages) {
+      await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId, undefined, true);
+      return notFound();
+    }
+  } catch (error) {
+    await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId, undefined, true);
+    const message = error instanceof Error ? error.message : "The prompt could not be saved.";
+    return json({ ok: false, error: "prompt_update_failed", message }, 400);
+  }
+
+  let assistantMessage: OwnerIntelligenceMessage | null;
+  try {
+    assistantMessage = await appendOwnerIntelligenceMessage(env, {
+      conversationId,
+      role: "assistant",
+      content: "",
+      status: "pending",
+      modelId: definition.id,
+      thinkingLevel,
+    });
+  } catch {
+    await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId, undefined, true);
+    throw new Error("D1 could not create the pending assistant response.");
+  }
+  if (!assistantMessage) {
+    await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId, undefined, true);
+    return notFound();
+  }
 
   const abortController = new AbortController();
   const abortFromRequest = () => abortController.abort();
@@ -513,7 +848,7 @@ async function handleOwnerGeneration(
       modelId: definition.id,
       thinkingLevel,
       contents,
-      maxOutputTokens: 8_192,
+      maxOutputTokens: outputTokenLimit,
     }, abortController.signal);
   } catch (error) {
     request.signal.removeEventListener("abort", abortFromRequest);
@@ -521,6 +856,7 @@ async function handleOwnerGeneration(
     const status = providerError?.status === 400 ? 400 : providerError?.status === 401 || providerError?.status === 403 ? 502 : 503;
     const message = providerError?.message ?? "The model request could not be started.";
     await updateOwnerAssistantMessage(env, assistantMessage.id, "", "error");
+    await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId, undefined, true);
     return json({ ok: false, error: "generation_start_failed", message }, status);
   }
 
@@ -535,8 +871,17 @@ async function handleOwnerGeneration(
     usage?: { promptTokens: number; outputTokens: number; totalTokens: number; elapsedMs: number },
   ): Promise<OwnerIntelligenceMessage | null> => {
     if (!finalizePromise) {
-      finalizePromise = updateOwnerAssistantMessage(env, assistantMessage.id, generatedText, status, usage)
-        .then((message) => { finalMessage = message; return message; });
+      finalizePromise = (async () => {
+        const message = await updateOwnerAssistantMessage(env, assistantMessage!.id, generatedText, status, usage);
+        await settleOwnerIntelligenceSessionReservation(
+          env,
+          conversationId,
+          reservationId,
+          usage && usage.totalTokens > 0 ? usage.totalTokens : undefined,
+        );
+        finalMessage = message;
+        return message;
+      })();
     }
     return finalizePromise;
   };
@@ -562,7 +907,7 @@ async function handleOwnerGeneration(
                 throw new OwnerGeminiProviderError("The response exceeded the supported 50,000-character message size.");
               }
               if (generatedText.length - lastPersistedLength >= 1_024 || Date.now() - lastPersistedAt >= 1_000) {
-                await updateOwnerAssistantMessage(env, assistantMessage.id, generatedText, "partial");
+                await updateOwnerAssistantMessage(env, assistantMessage!.id, generatedText, "partial");
                 lastPersistedLength = generatedText.length;
                 lastPersistedAt = Date.now();
               }
@@ -620,7 +965,6 @@ async function handleOwnerGeneration(
     },
   });
 }
-
 export async function handleOwnerIntelligenceApi(request: Request, env: Env, url: URL): Promise<Response> {
   if (url.pathname === "/admin/api/intelligence/models") {
     if (request.method !== "GET") return methodNotAllowed(["GET"]);
@@ -732,6 +1076,7 @@ function workspaceHtml(): string {
 .loading{color:#999;font-size:12px;padding:12px 8px}.error{color:#f2a4a4;font-size:12px;padding:12px 8px}.history-failure{padding:10px 8px;display:flex;flex-direction:column;gap:8px}.history-failure-title{font-size:12px;color:#e5b0b0}.history-failure-message{font-size:11px;line-height:1.5;color:#aaa;overflow-wrap:anywhere}.history-retry{align-self:flex-start;border:1px solid #555;background:#303030;color:#eee;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer}.history-retry:hover{background:#414141}.history-retry:disabled,.new-chat:disabled{opacity:.55;cursor:wait}
 @media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.topbar{padding:0 13px}.content{padding:28px 16px 12px}.welcome h1{font-size:24px}.model-picker,.thinking-picker{padding:6px 7px;gap:4px}.model-label{display:none}.model-picker select{max-width:122px;min-width:80px}.thinking-picker select{max-width:90px;min-width:64px}.private-tag{display:none}.composer-wrap{padding-top:18px}}
 @media(max-width:390px){.model-picker{max-width:122px}.model-picker select{max-width:94px;min-width:0}.thinking-picker{max-width:94px}.thinking-picker select{max-width:70px;min-width:0}.page-title{font-size:13px}.avatar{display:none}}
+.session-budget{margin:0 0 16px;padding:12px 14px;border:1px solid #383838;border-radius:12px;background:#1d1d1d}.session-budget-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:#a8a8a8}.session-budget-label{font-size:9px;font-weight:700;letter-spacing:.12em;color:#858585}.session-budget-top strong{font-size:12px;font-weight:650;color:#e8e8e8;font-variant-numeric:tabular-nums}.session-budget-top span:last-child{margin-left:auto;font-variant-numeric:tabular-nums}.session-budget-track{height:6px;margin-top:10px;border-radius:999px;overflow:hidden;background:#363636}.session-budget-fill{display:block;width:0;height:100%;border-radius:999px;background:#6b91eb;transition:width .25s ease,background .2s ease}.session-budget.near-limit .session-budget-fill{background:#d6a34c}.session-budget.locked .session-budget-fill{background:#c66d6d}.session-budget-tip{margin:8px 0 0;color:#858585;font-size:10px;line-height:1.45}.session-budget-notice{margin-top:10px;padding:10px 11px;border:1px solid #684848;border-radius:9px;background:#2b2020;color:#f0c5c5;font-size:12px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -751,6 +1096,12 @@ function workspaceHtml(): string {
   <section class="content" aria-label="Conversation workspace">
     <div class="stage">
       <div class="conversation-heading" id="conversationHeading"></div>
+      <section class="session-budget" id="sessionBudget" hidden aria-label="Chat session token budget">
+        <div class="session-budget-top"><span class="session-budget-label">CHAT SESSION BUDGET</span><strong id="sessionBudgetValue">0 / 200,000 tokens</strong><span id="sessionBudgetRemaining">200,000 left</span></div>
+        <div class="session-budget-track" id="sessionBudgetTrack" role="progressbar" aria-label="Tokens used in this chat" aria-valuemin="0" aria-valuemax="200000" aria-valuenow="0"><span class="session-budget-fill" id="sessionBudgetFill"></span></div>
+        <p class="session-budget-tip">To continue in a new chat, save a Markdown checkpoint in GitHub and paste its link into that chat. Context is not transferred automatically.</p>
+        <div class="session-budget-notice" id="sessionBudgetNotice" hidden>This chat has reached its 200,000-token budget and is now read-only. Start a new chat, then paste your GitHub Markdown checkpoint link to continue.</div>
+      </section>
       <div class="messages" id="messages" aria-live="polite">
         <div class="welcome"><div class="welcome-mark">BɅ</div><h1>Your thinking space.</h1><p>A private workspace for research, reasoning, writing, mathematics, coding and ideas. Your conversations are stored separately from the student learning system.</p><span class="next-step">PRIVATE OWNER WORKSPACE</span></div>
       </div>
@@ -772,7 +1123,7 @@ export function ownerIntelligenceClientScript(): Response {
 (function(){
   "use strict";
   var api="/admin/api/intelligence/conversations";
-  var state={conversations:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[]};
+  var state={conversations:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
   var history=document.getElementById("history");
   var messages=document.getElementById("messages");
   var heading=document.getElementById("conversationHeading");
@@ -780,6 +1131,12 @@ export function ownerIntelligenceClientScript(): Response {
   var messageInput=document.getElementById("messageInput");
   var sendButton=document.getElementById("sendMessage");
   var composerHint=document.getElementById("composerHint");
+  var sessionBudget=document.getElementById("sessionBudget");
+  var sessionBudgetValue=document.getElementById("sessionBudgetValue");
+  var sessionBudgetRemaining=document.getElementById("sessionBudgetRemaining");
+  var sessionBudgetTrack=document.getElementById("sessionBudgetTrack");
+  var sessionBudgetFill=document.getElementById("sessionBudgetFill");
+  var sessionBudgetNotice=document.getElementById("sessionBudgetNotice");
   var modelSelect=document.getElementById("modelSelect");
   var thinkingSelect=document.getElementById("thinkingSelect");
   var modelRetry=document.getElementById("modelRetry");
@@ -923,6 +1280,35 @@ export function ownerIntelligenceClientScript(): Response {
       modelRetry.disabled=false;
     }
   }
+  function formatTokenCount(value){
+    var number=Math.max(0,Math.floor(Number(value)||0));
+    return number.toLocaleString();
+  }
+  function renderSessionBudget(){
+    var usage=state.sessionUsage;
+    if(!state.activeId||!usage){
+      sessionBudget.hidden=true;
+      sessionBudget.classList.remove("near-limit","locked");
+      return;
+    }
+    var limit=Math.max(1,Number(usage.limit_tokens)||200000);
+    var used=Math.max(0,Number(usage.used_tokens)||0);
+    var reserved=Math.max(0,Number(usage.reserved_tokens)||0);
+    var committed=Math.min(limit,used+reserved);
+    var remaining=Math.max(0,Number.isFinite(Number(usage.remaining_tokens))?Number(usage.remaining_tokens):limit-committed);
+    var locked=usage.locked===true;
+    var percent=Math.min(100,committed/limit*100);
+    sessionBudget.hidden=false;
+    sessionBudgetValue.textContent=formatTokenCount(used)+" used"+(reserved?" · "+formatTokenCount(reserved)+" reserved":"")+" / "+formatTokenCount(limit);
+    sessionBudgetRemaining.textContent=locked?"Limit reached":formatTokenCount(remaining)+" left";
+    sessionBudgetFill.style.width=percent.toFixed(2)+"%";
+    sessionBudgetTrack.setAttribute("aria-valuemax",String(limit));
+    sessionBudgetTrack.setAttribute("aria-valuenow",String(committed));
+    sessionBudgetTrack.setAttribute("aria-valuetext",formatTokenCount(committed)+" of "+formatTokenCount(limit)+" tokens used or reserved");
+    sessionBudget.classList.toggle("near-limit",percent>=80&&!locked);
+    sessionBudget.classList.toggle("locked",locked);
+    sessionBudgetNotice.hidden=!locked;
+  }
   function showWelcome(){
     if(!state.activeId)heading.textContent="";
     messages.replaceChildren();
@@ -932,6 +1318,7 @@ export function ownerIntelligenceClientScript(): Response {
     welcome.appendChild(node("p","","A private workspace for research, reasoning, writing, mathematics, coding and ideas. Your conversations are stored separately from the student learning system."));
     welcome.appendChild(node("span","next-step","PRIVATE OWNER WORKSPACE"));
     messages.appendChild(welcome);
+    renderSessionBudget();
     updateComposer();
   }
   function appendActivityCard(parent,activity){
@@ -1012,13 +1399,15 @@ export function ownerIntelligenceClientScript(): Response {
       }else if(item.role==="assistant"&&item.status==="error"){
         body.appendChild(node("div","message-detail","The request failed before a complete answer was produced."));
       }
-      if(item.role==="user"&&!sending){
+      var sessionLocked=Boolean(state.sessionUsage&&state.sessionUsage.locked);
+      var sessionBusy=Boolean(state.sessionUsage&&Number(state.sessionUsage.reserved_tokens)>0);
+      if(item.role==="user"&&!sending&&!sessionLocked&&!sessionBusy){
         var edit=node("button","message-action","Edit");
         edit.type="button";edit.addEventListener("click",function(){
           editingMessageId=item.id;messageInput.value=item.content;messageInput.focus();updateComposer();
         });
         var actions=node("div","message-actions");actions.appendChild(edit);body.appendChild(actions);
-      }else if(item.role==="assistant"&&item.status!=="pending"&&!sending&&index===items.length-1){
+      }else if(item.role==="assistant"&&item.status!=="pending"&&!sending&&!sessionLocked&&!sessionBusy&&index===items.length-1){
         var retry=node("button","message-action","Regenerate");
         retry.type="button";retry.addEventListener("click",function(){generateMessage({action:"regenerate"});});
         var actions2=node("div","message-actions");actions2.appendChild(retry);body.appendChild(actions2);
@@ -1071,27 +1460,33 @@ export function ownerIntelligenceClientScript(): Response {
     else if(!state.conversations.some(function(item){return item.id===state.activeId;})){state.activeId=state.conversations.length?state.conversations[0].id:null;}
     renderHistory();
     if(state.activeId){await openConversation(state.activeId);}
-    else{state.messages=[];showWelcome();}
+    else{state.messages=[];state.sessionUsage=null;renderSessionBudget();showWelcome();}
   }
   async function openConversation(id){
     var result=await request(api+"/"+encodeURIComponent(id));
-    state.activeId=result.conversation.id;state.messages=result.messages||[];
+    state.activeId=result.conversation.id;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
     heading.textContent=result.conversation.title;
-    renderHistory();renderMessages(state.messages);
+    renderHistory();renderSessionBudget();renderMessages(state.messages);
     updateComposer();
   }
   function updateComposer(){
     var hasText=messageInput.value.trim().length>0;
     var canGenerate=Boolean(state.activeId&&state.selectedModelId&&state.selectedThinkingLevel);
-    sendButton.disabled=sending?false:(!canGenerate||!hasText);
+    var sessionLocked=Boolean(state.sessionUsage&&state.sessionUsage.locked);
+    var sessionBusy=Boolean(state.sessionUsage&&Number(state.sessionUsage.reserved_tokens)>0);
+    sendButton.disabled=sending?false:(!canGenerate||!hasText||sessionLocked||sessionBusy);
     sendButton.textContent=sending?"■":"↑";
     sendButton.classList.toggle("stop",sending);
     sendButton.setAttribute("aria-label",sending?"Stop generation":"Send message");
-    messageInput.disabled=!state.activeId||sending;
+    messageInput.disabled=!state.activeId||sending||sessionLocked||sessionBusy;
     modelSelect.disabled=sending||!state.models.length;
     thinkingSelect.disabled=sending||!state.selectedThinkingLevel;
     composerHint.textContent=sending
       ?"Generating with "+state.selectedModelId+" · "+state.selectedThinkingLevel+" · select Stop to keep the partial answer"
+      :sessionLocked
+        ?"This chat is read-only after its 200,000-token budget. Start a new chat to continue from a GitHub Markdown checkpoint."
+      :sessionBusy
+        ?"A response is already being generated in this chat. Wait for it to finish before sending another message."
       :modelLoadMessage?modelLoadMessage
       :editingMessageId?"Editing a previous message · sending will replace it and remove later turns"
       :"Your selected model and thinking level will be used for this response.";

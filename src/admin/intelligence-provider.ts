@@ -526,6 +526,71 @@ async function getVerifiedModelAccessToken(
   return token;
 }
 
+/**
+ * Count the exact input that the next Owner generation request will send.
+ * CountTokens is an input estimate only; the conversation budget separately
+ * reserves the maximum permitted output (including thinking tokens).
+ */
+export async function countOwnerGeminiInputTokens(
+  env: Env,
+  input: { modelId: string; contents: OwnerGeminiContent[] },
+  dependencies: OwnerProviderDependencies = defaultDependencies,
+): Promise<number> {
+  const definition = OWNER_GEMINI_MODEL_REGISTRY.find((model) => model.id === input.modelId);
+  if (!definition) throw new OwnerGeminiProviderError("The requested model is not in the Owner model registry.");
+  const contents = Array.isArray(input.contents) ? input.contents : [];
+  const validTurnShape = contents.length >= 1 && contents.length <= 50 &&
+    contents[0]?.role === "user" && contents[contents.length - 1]?.role === "user" &&
+    contents.every((item, index) => item && (item.role === "user" || item.role === "model") &&
+      typeof item.text === "string" && Boolean(item.text.trim()) && item.text.length <= 50_000 &&
+      (index === 0 || item.role !== contents[index - 1]?.role));
+  const contextChars = contents.reduce((total, item) => total + (typeof item?.text === "string" ? item.text.length : 0), 0);
+  if (!validTurnShape || contextChars > MAX_CONVERSATION_CONTEXT_CHARS) {
+    throw new OwnerGeminiProviderError("The conversation context is invalid or too large.");
+  }
+
+  const project = configuredProject(env);
+  if (!project) throw new OwnerGeminiProviderError("Vertex AI is not configured for the Owner workspace.");
+  const location = configuredLocation(env);
+  const token = await getVerifiedModelAccessToken(env, definition, dependencies);
+  const controller = new AbortController();
+  try {
+    const response = await withTimeout(dependencies.fetch(
+      `${vertexBase(location)}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(definition.id)}:countTokens`,
+      {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: contents.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
+        }),
+        signal: controller.signal,
+      },
+    ), PROBE_TIMEOUT_MS, () => controller.abort());
+
+    if (!response.ok) {
+      const diagnostic = await safeVertexErrorDiagnostic(response);
+      throw new OwnerGeminiProviderError(
+        providerStatusMessage(response.status, "count_tokens_probe", diagnostic),
+        response.status,
+        response.status === 408 || response.status === 429 || response.status >= 500,
+        "count_tokens_probe",
+      );
+    }
+    const result = await response.json() as { totalTokens?: unknown };
+    const totalTokens = Number(result.totalTokens);
+    if (!Number.isSafeInteger(totalTokens) || totalTokens < 0) {
+      throw new OwnerGeminiProviderError("Vertex AI returned an invalid Count Tokens result.");
+    }
+    return totalTokens;
+  } catch (error) {
+    if (error instanceof OwnerGeminiProviderError) throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new OwnerGeminiProviderError("The Count Tokens request timed out. Retry without changing the selected model.", 408, true, "count_tokens_probe");
+    }
+    throw new OwnerGeminiProviderError("The Count Tokens request could not be completed. Retry without changing the selected model.", undefined, true, "count_tokens_probe");
+  }
+}
+
 export type OwnerGeminiStreamEvent =
   | { type: "delta"; text: string }
   | { type: "done"; usage: OwnerGeminiGenerationResult["usage"]; elapsedMs: number };

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Env } from "../src/config/env";
 import worker from "../src";
 import { handleAdminLogin } from "../src/admin/auth";
-import { buildOwnerGeminiConversationContents, type OwnerIntelligenceMessage } from "../src/admin/intelligence";
+import { buildOwnerGeminiConversationContents, getOwnerIntelligenceSessionUsage, OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT, type OwnerIntelligenceMessage } from "../src/admin/intelligence";
 
 type ConversationRow = {
   id: string;
@@ -33,11 +33,35 @@ type GenerationMetadataRow = {
   elapsed_ms: number;
 };
 
+type SessionUsageRow = {
+  conversation_id: string;
+  owner_id: string;
+  token_limit: number;
+  used_tokens: number;
+  reserved_tokens: number;
+  locked_reason: string | null;
+  updated_at: number;
+};
+type ReservationRow = {
+  reservation_id: string;
+  conversation_id: string;
+  owner_id: string;
+  reserved_tokens: number;
+  status: "reserved" | "settled" | "released" | "expired";
+  actual_tokens: number;
+  usage_is_estimated: number;
+  created_at: number;
+  settled_at: number | null;
+};
+
 class FakeOwnerStatement {
   private values: unknown[] = [];
   constructor(private readonly db: FakeOwnerD1, private readonly sql: string) {}
   bind(...values: unknown[]): this { this.values = values; return this; }
-  async run(): Promise<{ success: boolean }> { this.db.execute(this.sql, this.values); return { success: true }; }
+  async run(): Promise<{ success: boolean; meta: { changes: number } }> {
+    const changes = this.db.execute(this.sql, this.values);
+    return { success: true, meta: { changes } };
+  }
   async first<T>(): Promise<T | null> { return (this.db.read(this.sql, this.values)[0] as T | undefined) ?? null; }
   async all<T>(): Promise<{ results: T[]; success: boolean }> {
     return { results: this.db.read(this.sql, this.values) as T[], success: true };
@@ -48,17 +72,37 @@ class FakeOwnerD1 {
   readonly conversations = new Map<string, ConversationRow>();
   readonly messages = new Map<string, MessageRow>();
   readonly generationMetadata = new Map<string, GenerationMetadataRow>();
+  readonly sessionUsage = new Map<string, SessionUsageRow>();
+  readonly reservations = new Map<string, ReservationRow>();
   prepare(sql: string): D1PreparedStatement {
     return new FakeOwnerStatement(this, sql) as unknown as D1PreparedStatement;
   }
-  async batch(statements: D1PreparedStatement[]): Promise<Array<{ success: boolean }>> {
+  async batch(statements: D1PreparedStatement[]): Promise<Array<{ success: boolean; meta: { changes: number } }>> {
+    const results: Array<{ success: boolean; meta: { changes: number } }> = [];
+    let previousChanges = 0;
     for (const statement of statements as unknown as FakeOwnerStatement[]) {
       const internal = statement as unknown as { sql: string; values: unknown[] };
-      this.execute(internal.sql, internal.values);
+      previousChanges = this.execute(internal.sql, internal.values, previousChanges);
+      results.push({ success: true, meta: { changes: previousChanges } });
     }
-    return statements.map(() => ({ success: true }));
+    return results;
   }
   read(sql: string, values: unknown[]): Array<Record<string, unknown>> {
+    if (sql.includes("FROM owner_intelligence_session_usage")) {
+      const row = this.sessionUsage.get(String(values[0]));
+      return row && row.owner_id === String(values[1]) ? [{ ...row }] : [];
+    }
+    if (sql.includes("FROM owner_intelligence_token_reservations")) {
+      if (sql.includes("WHERE reservation_id = ?")) {
+        const row = this.reservations.get(String(values[0]));
+        return row && row.conversation_id === String(values[1]) && row.owner_id === String(values[2]) &&
+          row.status === "reserved" ? [{ reserved_tokens: row.reserved_tokens }] : [];
+      }
+      return [...this.reservations.values()]
+        .filter((row) => row.conversation_id === String(values[0]) && row.owner_id === String(values[1]) &&
+          row.status === "reserved" && row.created_at <= Number(values[2]))
+        .map((row) => ({ reservation_id: row.reservation_id, reserved_tokens: row.reserved_tokens }));
+    }
     if (sql.includes("MAX(created_at)")) {
       const latest = [...this.messages.values()]
         .filter((row) => row.conversation_id === String(values[0]) && row.owner_id === String(values[1]))
@@ -88,15 +132,84 @@ class FakeOwnerD1 {
     }
     throw new Error("Unexpected Owner D1 read: " + sql);
   }
-  execute(sql: string, values: unknown[]): void {
-    if (sql.startsWith("CREATE TABLE") || sql.startsWith("CREATE INDEX")) return;
+  execute(sql: string, values: unknown[], previousChanges = 0): number {
+    if (sql.startsWith("CREATE TABLE") || sql.startsWith("CREATE INDEX")) return 0;
+    if (sql.startsWith("INSERT OR IGNORE INTO owner_intelligence_session_usage")) {
+      const [limit, updatedAt, conversationId, ownerId] = values;
+      const conversation = this.conversations.get(String(conversationId));
+      if (!conversation || conversation.owner_id !== String(ownerId) || this.sessionUsage.has(String(conversationId))) return 0;
+      const used = [...this.messages.values()]
+        .filter((message) => message.conversation_id === String(conversationId) &&
+          message.owner_id === String(ownerId) && message.role === "assistant")
+        .reduce((sum, message) => sum + Number(this.generationMetadata.get(message.id)?.total_tokens ?? 0), 0);
+      this.sessionUsage.set(String(conversationId), {
+        conversation_id: String(conversationId), owner_id: String(ownerId), token_limit: Number(limit),
+        used_tokens: used, reserved_tokens: 0, locked_reason: null, updated_at: Number(updatedAt),
+      });
+      return 1;
+    }
+    if (sql.startsWith("UPDATE owner_intelligence_session_usage SET reserved_tokens = reserved_tokens +")) {
+      const [reserved, updatedAt, conversationId, ownerId, requested] = values;
+      const row = this.sessionUsage.get(String(conversationId));
+      if (!row || row.owner_id !== String(ownerId) || row.reserved_tokens !== 0 ||
+          row.used_tokens + row.reserved_tokens + Number(requested) > row.token_limit || row.locked_reason) return 0;
+      row.reserved_tokens += Number(reserved); row.updated_at = Number(updatedAt);
+      return 1;
+    }
+    if (sql.startsWith("UPDATE owner_intelligence_session_usage SET used_tokens = used_tokens +")) {
+      const [charge, reserved, updatedAt, conversationId, ownerId] = values;
+      const row = this.sessionUsage.get(String(conversationId));
+      if (!row || row.owner_id !== String(ownerId)) return 0;
+      row.used_tokens += Number(charge);
+      row.reserved_tokens = Math.max(0, row.reserved_tokens - Number(reserved));
+      row.updated_at = Number(updatedAt);
+      return 1;
+    }
+    if (sql.startsWith("UPDATE owner_intelligence_session_usage SET locked_reason")) {
+      const [reason, updatedAt, conversationId, ownerId] = values;
+      const row = this.sessionUsage.get(String(conversationId));
+      if (!row || row.owner_id !== String(ownerId) || row.locked_reason) return 0;
+      row.locked_reason = String(reason); row.updated_at = Number(updatedAt);
+      return 1;
+    }
+    if (sql.startsWith("INSERT INTO owner_intelligence_token_reservations")) {
+      if (previousChanges !== 1) return 0;
+      const [reservationId, conversationId, ownerId, reservedTokens, createdAt] = values;
+      this.reservations.set(String(reservationId), {
+        reservation_id: String(reservationId), conversation_id: String(conversationId), owner_id: String(ownerId),
+        reserved_tokens: Number(reservedTokens), status: "reserved", actual_tokens: 0,
+        usage_is_estimated: 0, created_at: Number(createdAt), settled_at: null,
+      });
+      return 1;
+    }
+    if (sql.startsWith("UPDATE owner_intelligence_token_reservations SET status = 'expired'")) {
+      const [settledAt, conversationId, ownerId, cutoff] = values;
+      let changes = 0;
+      for (const row of this.reservations.values()) {
+        if (row.conversation_id === String(conversationId) && row.owner_id === String(ownerId) &&
+            row.status === "reserved" && row.created_at <= Number(cutoff)) {
+          row.status = "expired"; row.actual_tokens = row.reserved_tokens;
+          row.usage_is_estimated = 1; row.settled_at = Number(settledAt); changes += 1;
+        }
+      }
+      return changes;
+    }
+    if (sql.startsWith("UPDATE owner_intelligence_token_reservations SET status = ?")) {
+      const [status, actualTokens, estimated, settledAt, reservationId, conversationId, ownerId] = values;
+      const row = this.reservations.get(String(reservationId));
+      if (!row || row.conversation_id !== String(conversationId) || row.owner_id !== String(ownerId) || row.status !== "reserved") return 0;
+      row.status = status as ReservationRow["status"];
+      row.actual_tokens = Number(actualTokens); row.usage_is_estimated = Number(estimated);
+      row.settled_at = Number(settledAt);
+      return 1;
+    }
     if (sql.startsWith("INSERT INTO owner_intelligence_generation_metadata")) {
       const [message_id, owner_id, model_id, thinking_level] = values;
       this.generationMetadata.set(String(message_id), {
         message_id: String(message_id), owner_id: String(owner_id), model_id: String(model_id),
         thinking_level: String(thinking_level), prompt_tokens: 0, output_tokens: 0, total_tokens: 0, elapsed_ms: 0,
       });
-      return;
+      return 1;
     }
     if (sql.startsWith("UPDATE owner_intelligence_generation_metadata")) {
       const [prompt_tokens, output_tokens, total_tokens, elapsed_ms, message_id, owner_id] = values;
@@ -104,24 +217,27 @@ class FakeOwnerD1 {
       if (row && row.owner_id === String(owner_id)) {
         row.prompt_tokens = Number(prompt_tokens); row.output_tokens = Number(output_tokens);
         row.total_tokens = Number(total_tokens); row.elapsed_ms = Number(elapsed_ms);
+        return 1;
       }
-      return;
+      return 0;
     }
     if (sql.startsWith("UPDATE owner_intelligence_messages SET content = ?, status = ?")) {
       const [content, status, id, owner_id] = values;
       const row = this.messages.get(String(id));
       if (row && row.owner_id === String(owner_id) && row.role === "assistant") {
         row.content = String(content); row.status = status as MessageRow["status"];
+        return 1;
       }
-      return;
+      return 0;
     }
     if (sql.startsWith("UPDATE owner_intelligence_messages SET content = ?, status = 'complete'")) {
       const [content, id, owner_id] = values;
       const row = this.messages.get(String(id));
       if (row && row.owner_id === String(owner_id) && row.role === "user") {
         row.content = String(content); row.status = "complete";
+        return 1;
       }
-      return;
+      return 0;
     }
     if (sql.startsWith("INSERT INTO owner_intelligence_conversations")) {
       const [id, owner_id, title, created_at, updated_at] = values;
@@ -129,21 +245,25 @@ class FakeOwnerD1 {
         id: String(id), owner_id: String(owner_id), title: String(title),
         created_at: Number(created_at), updated_at: Number(updated_at),
       });
-      return;
+      return 1;
     }
     if (sql.startsWith("UPDATE owner_intelligence_conversations SET title")) {
       const [title, updated_at, id, owner_id] = values;
       const row = this.conversations.get(String(id));
       if (row && row.owner_id === String(owner_id)) {
         row.title = String(title); row.updated_at = Number(updated_at);
+        return 1;
       }
-      return;
+      return 0;
     }
     if (sql.startsWith("UPDATE owner_intelligence_conversations SET updated_at")) {
       const [updated_at, id, owner_id] = values;
       const row = this.conversations.get(String(id));
-      if (row && row.owner_id === String(owner_id)) row.updated_at = Number(updated_at);
-      return;
+      if (row && row.owner_id === String(owner_id)) {
+        row.updated_at = Number(updated_at);
+        return 1;
+      }
+      return 0;
     }
     if (sql.startsWith("INSERT INTO owner_intelligence_messages")) {
       const [id, conversation_id, owner_id, role, content, status, created_at] = values;
@@ -152,7 +272,7 @@ class FakeOwnerD1 {
         role: role as MessageRow["role"], content: String(content), status: status as MessageRow["status"],
         created_at: Number(created_at),
       });
-      return;
+      return 1;
     }
     if (sql.startsWith("DELETE FROM owner_intelligence_messages WHERE id = ?")) {
       const [id, owner_id] = values;
@@ -160,23 +280,32 @@ class FakeOwnerD1 {
       if (row && row.owner_id === String(owner_id)) {
         this.messages.delete(String(id));
         this.generationMetadata.delete(String(id));
+        return 1;
       }
-      return;
+      return 0;
     }
     if (sql.startsWith("DELETE FROM owner_intelligence_messages")) {
       const [conversation_id, owner_id] = values;
+      let changes = 0;
       for (const [id, row] of this.messages) {
         if (row.conversation_id === String(conversation_id) && row.owner_id === String(owner_id)) {
-          this.messages.delete(id); this.generationMetadata.delete(id);
+          this.messages.delete(id); this.generationMetadata.delete(id); changes += 1;
         }
       }
-      return;
+      return changes;
     }
     if (sql.startsWith("DELETE FROM owner_intelligence_conversations")) {
       const [id, owner_id] = values;
       const row = this.conversations.get(String(id));
-      if (row && row.owner_id === String(owner_id)) this.conversations.delete(String(id));
-      return;
+      if (row && row.owner_id === String(owner_id)) {
+        this.conversations.delete(String(id));
+        this.sessionUsage.delete(String(id));
+        for (const [reservationId, reservation] of this.reservations) {
+          if (reservation.conversation_id === String(id) && reservation.owner_id === String(owner_id)) this.reservations.delete(reservationId);
+        }
+        return 1;
+      }
+      return 0;
     }
     throw new Error("Unexpected Owner D1 write: " + sql);
   }
@@ -481,19 +610,95 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
         thinkingLevel: "MEDIUM",
       },
     });
-    expect(edited.status).toBe(503); // Expected: this unit fixture deliberately has no Vertex credentials.
-    expect(db.messages.has("obsolete-assistant")).toBe(false);
-    expect(db.messages.get(savedBody.message.id)?.content).toBe("Corrected question");
-    expect([...db.messages.values()].some((row) => row.role === "assistant" && row.status === "error")).toBe(true);
-    expect([...db.generationMetadata.values()].some((row) => row.model_id === "gemini-4-argon" && row.thinking_level === "MEDIUM")).toBe(true);
+    expect(edited.status).toBe(503); // CountTokens preflight fails before any prompt edit is committed.
+    expect(db.messages.has("obsolete-assistant")).toBe(true);
+    expect(db.messages.get(savedBody.message.id)?.content).toBe("Original question");
+    expect([...db.messages.values()].filter((row) => row.role === "assistant")).toHaveLength(1);
+    expect(db.generationMetadata.size).toBe(0);
 
     const regenerated = await call(env, editPath, ownerCookie, {
       method: "POST", origin,
       body: { action: "regenerate", modelId: "gemini-4-argon", thinkingLevel: "MEDIUM" },
     });
     expect(regenerated.status).toBe(503);
+    expect(db.messages.has("obsolete-assistant")).toBe(true);
+    expect(db.messages.get(savedBody.message.id)?.content).toBe("Original question");
     expect([...db.messages.values()].filter((row) => row.role === "assistant")).toHaveLength(1);
     expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
+  });
+
+  it("keeps a 200,000-token budget per conversation and blocks a full session server-side", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Capped session" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const db = env.DB as unknown as FakeOwnerD1;
+    db.sessionUsage.set(id, {
+      conversation_id: id, owner_id: "owner", token_limit: OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT,
+      used_tokens: OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT, reserved_tokens: 0,
+      locked_reason: null, updated_at: Date.now(),
+    });
+
+    const detail = await call(env, "/admin/api/intelligence/conversations/" + id, ownerCookie);
+    const detailBody = await detail.json() as { usage: { limit_tokens: number; used_tokens: number; remaining_tokens: number; locked: boolean } };
+    expect(detail.status).toBe(200);
+    expect(detailBody.usage).toEqual(expect.objectContaining({
+      limit_tokens: 200_000, used_tokens: 200_000, remaining_tokens: 0, locked: true,
+    }));
+
+    const blocked = await call(env, "/admin/api/intelligence/conversations/" + id + "/generate", ownerCookie, {
+      method: "POST", origin,
+      body: { content: "This must not be sent.", modelId: "gemini-4-carbon", thinkingLevel: "HIGH" },
+    });
+    const blockedBody = await blocked.json() as { error: string; usage: { locked: boolean } };
+    expect(blocked.status).toBe(409);
+    expect(blockedBody.error).toBe("session_token_limit_reached");
+    expect(blockedBody.usage.locked).toBe(true);
+    expect(db.messages.size).toBe(0); // A rejected prompt is not persisted as an unanswered user turn.
+
+    const next = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Fresh session" },
+    });
+    const nextBody = await next.json() as { conversation: { id: string } };
+    const freshUsage = await getOwnerIntelligenceSessionUsage(env, nextBody.conversation.id);
+    expect(freshUsage).toEqual(expect.objectContaining({
+      limit_tokens: 200_000, used_tokens: 0, remaining_tokens: 200_000, locked: false,
+    }));
+  });
+
+  it("backfills existing chats from generation totalTokenCount without charging new chats", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Existing token history" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const db = env.DB as unknown as FakeOwnerD1;
+    db.messages.set("historic-user", {
+      id: "historic-user", conversation_id: id, owner_id: "owner",
+      role: "user", content: "Historic question", status: "complete", created_at: 1,
+    });
+    db.messages.set("historic-assistant", {
+      id: "historic-assistant", conversation_id: id, owner_id: "owner",
+      role: "assistant", content: "Historic answer", status: "complete", created_at: 2,
+    });
+    db.generationMetadata.set("historic-assistant", {
+      message_id: "historic-assistant", owner_id: "owner", model_id: "gemini-4-carbon",
+      thinking_level: "HIGH", prompt_tokens: 800, output_tokens: 200,
+      total_tokens: 1_250, elapsed_ms: 900,
+    });
+
+    const usage = await getOwnerIntelligenceSessionUsage(env, id);
+    expect(usage).toEqual(expect.objectContaining({
+      limit_tokens: 200_000, used_tokens: 1_250, reserved_tokens: 0,
+      remaining_tokens: 198_750, locked: false,
+    }));
   });
 
   it("rejects invalid titles and does not reveal conversations owned by another principal", async () => {
