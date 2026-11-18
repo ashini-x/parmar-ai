@@ -132,16 +132,16 @@ async function safeVertexErrorDiagnostic(response: Response): Promise<string | u
     const detailPermission = details.map((detail) => detail?.metadata?.permission)
       .find((value): value is string =>
         typeof value === "string" &&
-        /^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$/u.test(value));
+        /^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/u.test(value));
 
     // Some Google REST errors put ErrorInfo in a formatted message rather
     // than the JSON details array. Extract only safe reason and IAM
     // permission identifiers; never echo the raw message or resource path.
     const message = typeof error.message === "string" ? error.message : "";
-    const messagePermission = message.match(/Permission ['"]([a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+)['"] denied/iu)?.[1];
-    const messageReason = message.match(/reason:\\s*["']([A-Z0-9_]{3,64})["']/u)?.[1];
+    const messagePermission = message.match(/Permission ['"]([a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+)['"] denied/iu)?.[1];
+    const messageReason = message.match(/reason:\s*["']([A-Z0-9_]{3,64})["']/u)?.[1];
     const permission = detailPermission ?? (
-      messagePermission && /^[a-z][a-zA-Z0-9]*(?:\\.[a-z][a-zA-Z0-9]*)+$/u.test(messagePermission)
+      messagePermission && /^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/u.test(messagePermission)
         ? messagePermission : undefined
     );
     const safeReason = reason ?? messageReason;
@@ -266,7 +266,7 @@ export async function ownerIntelligenceModelsResponse(
   return json(catalogue, catalogue.ok ? 200 : 503, { "cache-control": "no-store" });
 }
 
-export type OwnerGeminiProviderStage = "count_tokens_probe" | "generate_content";
+export type OwnerGeminiProviderStage = "count_tokens_probe" | "generate_content" | "stream_generate_content";
 
 export class OwnerGeminiProviderError extends Error {
   readonly status?: number;
@@ -316,19 +316,27 @@ function providerStatusMessage(
   if (status === 400) {
     message = stage === "count_tokens_probe"
       ? "Vertex AI rejected the Count Tokens availability check for this model."
-      : "Vertex AI rejected the StreamGenerateContent request. The conversation format or request configuration may not be supported.";
+      : stage === "stream_generate_content"
+        ? "Vertex AI rejected the StreamGenerateContent request. The conversation format or request configuration may not be supported."
+        : "Vertex AI rejected the GenerateContent request. The conversation format or request configuration may not be supported.";
   } else if (status === 401 || status === 403) {
     message = stage === "count_tokens_probe"
       ? "Vertex AI denied the Count Tokens availability probe for this model/project. No GenerateContent request was sent; this is a model-eligibility check failure."
-      : "Vertex AI denied the StreamGenerateContent request for this model/project. This failure occurred at answer generation, after the model availability check.";
+      : stage === "stream_generate_content"
+        ? "Vertex AI denied the StreamGenerateContent request for this model/project. This failure occurred at answer generation, after the model availability check."
+        : "Vertex AI denied the GenerateContent request for this model/project. This failure occurred at answer generation, after the model availability check.";
   } else if (status === 404) {
     message = stage === "count_tokens_probe"
       ? "The selected model was not found by the Count Tokens availability check in this location."
-      : "The selected model was not found by the GenerateContent endpoint in this location.";
+      : stage === "stream_generate_content"
+        ? "The selected model was not found by the StreamGenerateContent endpoint in this location."
+        : "The selected model was not found by the GenerateContent endpoint in this location.";
   } else if (status === 429) {
     message = stage === "count_tokens_probe"
       ? "Vertex AI rate-limited the Count Tokens availability check."
-      : "Vertex AI rate-limited the StreamGenerateContent request.";
+      : stage === "stream_generate_content"
+        ? "Vertex AI rate-limited the StreamGenerateContent request."
+        : "Vertex AI rate-limited the GenerateContent request.";
   } else if (status >= 500) {
     message = "Vertex AI is temporarily unavailable during " +
       (stage === "count_tokens_probe" ? "the Count Tokens availability check." : "StreamGenerateContent.");
@@ -599,7 +607,7 @@ export async function openOwnerGeminiStream(
       signal.removeEventListener("abort", abortFromCaller);
       const diagnostic = await safeVertexErrorDiagnostic(response);
       throw new OwnerGeminiProviderError(
-        providerStatusMessage(response.status, "generate_content", diagnostic),
+        providerStatusMessage(response.status, "stream_generate_content", diagnostic),
         response.status,
         response.status === 408 || response.status === 429 || response.status >= 500,
         "generate_content",
