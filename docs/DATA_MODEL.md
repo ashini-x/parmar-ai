@@ -222,3 +222,24 @@ The 200,000-token counter is cumulative for the lifetime of a conversation, not 
 
 Conversation list queries are limited to the latest 100 rows for the Owner principal. Deleting a conversation removes its messages and the conversation row; the generation metadata foreign key cascades with its assistant message. Changing `OWNER_DASHBOARD_USER` changes the owner scope and requires a deliberate migration if conversations must be retained. Password rotation does not change the scope.
 
+
+
+### Owner GitHub integration tables (M4.3, additive)
+
+The Owner GitHub tables are separate from the student Telegram data model and never hold the full Owner transcript.
+
+#### `owner_intelligence_github_app`
+One row per configured Owner. Stores GitHub App ID/slug/name, redirect URI, encrypted App private-key/client-secret bundle, App status and timestamps. Raw credentials and installation access tokens are never stored or returned to the browser.
+
+#### `owner_intelligence_github_installations`
+Owner + installation ID key. Stores App ID, GitHub account login/type, selected-repository mode, verified authorized GitHub user login, active/revoked status and timestamps. Installation identity is accepted only after PKCE GitHub user authorization confirms it in that user's installation list.
+
+#### `owner_intelligence_github_states`
+SHA-256 state hash primary key, Owner principal, purpose (manifest, installation or user authorization), JSON callback payload, creation time and expiry. Raw state is random and single-use; the database stores only its hash. Expired/replayed values are rejected.
+
+#### `owner_intelligence_github_previews`
+Owner-scoped preview UUID, source conversation and topic IDs, verified installation/repository IDs, repository owner/name, branch, memory root, expected base commit SHA, reviewed five-file JSON, status, commit SHA, expiry and timestamps. State transitions include ready, writing, committing, verifying, synced, conflict, expired and failed. The preview expires after 30 minutes. The exact file set and each/aggregate content size are bounded. A retry in committing/verifying uses the stored commit SHA rather than creating a second commit.
+
+The existing `owner_intelligence_topics` table is extended with GitHub installation ID and repository ID in addition to its existing repository owner/name/branch, memory root, manifest revision and current commit SHA fields. A successful verified save updates the topic's current commit SHA and associates the existing Scratchpad conversation to the topic. This is not the M4.4 prompt snapshot; M4.4 separately records the exact repo/branch/commit selected for each conversation's active Project Memory context.
+
+The Save draft is a normal metered Gemini generation. Its prompt/output tokens are recorded through the same `owner_intelligence_session_usage` and `owner_intelligence_token_reservations` records as chat generation. GitHub preview/confirm does not rewrite or delete transcript rows. The existing 200,000-token budget remains unchanged.
