@@ -339,6 +339,25 @@ The following are future acceptance criteria, not tests that have passed in the 
 - A failed search never claims complete recall; all original D1 turns remain accessible.
 - Historical retrieval is constrained to the authenticated Owner and selected topic/project.
 
+### M4.6-P0 — Cloudflare capacity and durability readiness (required before M4.6 implementation)
+
+These checks are a future measurement/release gate, not evidence that the current Cloudflare account has been measured. The Owner confirms Workers Free; actual aggregate usage and remaining headroom are unknown until this gate runs. Use the authoritative values and links in [OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md](OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md), then re-check live Cloudflare documentation and dashboard.
+
+- Confirm the actual account plan, billing state, spend limit/alerts and the inventory of all Workers/services sharing account allowances.
+- Capture representative and peak Workers requests/day, CPU time per invocation, 10 ms Free CPU failures, subrequest counts, errors and traffic patterns. Exercise the Owner chat, preview, context assembly, historical recall and GitHub verification paths with production-like payload sizes.
+- Capture D1 rows read/written, storage, per-database size, query latency, queries per Worker invocation and index/query plans. Include existing production usage; verify that query exhaustion is surfaced without losing the D1 transcript or usage ledger.
+- If a dedicated Owner Queue is proposed, measure write/read/delete/retry/DLQ operations and retention. On Free, verify the 24-hour message expiry is not relied upon for durable state.
+- If a dedicated Owner Workflow is proposed, measure executions, steps/day, CPU per step, persisted state, concurrency and retention; do not assume completed Workflow state is permanent.
+- Verify a D1 outbox/reconciler can re-dispatch an idempotent pending job after Queue message expiry, Queue/consumer outage, retry exhaustion, deployment or Workflow instance state expiry. A duplicate delivery must not produce a duplicate GitHub commit.
+- Produce a dated load/cost report and recommend (a) stay Free with measured headroom, (b) optimize queries/CPU/retries, or (c) move to Workers Paid. Estimate Workers, D1, Queues and Workflows separately. A $5/month Paid base is not an all-in bill cap; inspect spending-limit effects before enabling overages.
+- No Free-to-Paid change and no new D1 database, Queue, Workflow, R2, KV, Vectorize, AI Search or Workers AI resource is part of this gate without explicit Owner approval.
+
+### Locked single-provider regression checks
+
+- Assert Owner chat generation, CountTokens and memory drafting use the selected verified Gemini model through the Vertex adapter; the Save draft preserves the selected thinking level and consumes the same 200K chat ledger.
+- Assert a Vertex error remains an explicit error and preserves state; no automatic alternate model, provider or hidden summarizer is invoked.
+- Assert Owner Intelligence has no Workers AI binding/provider path. Do not confuse existing unrelated BRɅIN/student Cloudflare products with the Owner runtime.
+
 ### M4.6 — Cloudflare Owner Context Replicator and bounded-growth acceptance
 
 These are planned tests, not tests that have passed. The Replicator is an approved M4.6 architecture and is not implemented yet.
