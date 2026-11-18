@@ -455,7 +455,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     const response = await call(env, "/admin/intelligence", ownerCookie);
     const html = await response.text();
 
-    expect(response.status).toBe(200);
+    expect(response.status, await response.clone().text()).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("content-security-policy")).toContain("script-src 'self'");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
@@ -513,7 +513,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
       origin,
       body: { title: "Research notes" },
     });
-    expect(created.status).toBe(201);
+    expect(created.status, await created.clone().text()).toBe(201);
     const createdBody = await created.json() as { ok: boolean; conversation: { id: string; title: string } };
     expect(createdBody.ok).toBe(true);
     expect(createdBody.conversation.title).toBe("Research notes");
