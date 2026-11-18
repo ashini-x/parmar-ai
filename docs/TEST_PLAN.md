@@ -272,6 +272,16 @@ PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/
 
 - **Owner-reported 2026-11-18:** the latest Hydrogen HIGH production request responds and no longer shows `RESOURCE_EXHAUSTED` after PR #338's bounded initial stream-open retry release. This is evidence of recovery on the tested request, not proof that shared Vertex capacity/rate limits can never recur. Keep the retry guard; do not switch model or endpoint silently. If the error recurs, capture the new provider diagnostic and then inspect project/model quota, billing tier and capacity.
 
+### M4.3 — GitHub App authorization and topic repository attachment (implementation in progress; PR/CI pending)
+
+- The Owner workspace registers a dedicated private GitHub App with exactly repository `metadata: read` and `contents: write`; no other permissions or webhook events are requested.
+- App private key and client secret are encrypted in Owner-scoped D1. A single-use, Owner-bound state protects manifest and installation callbacks.
+- Installation callback `installation_id` is not trusted by itself. GitHub user authorization uses PKCE, and the Worker accepts an installation only after `GET /user/installations` confirms the exact installation ID and App ID for the authorized GitHub user. The temporary user token is discarded.
+- Repository listing uses a short-lived installation token. Topic attachment creates a token narrowed to the selected repository ID and `contents: write`, verifies repository ID/full name and branch against GitHub, then stores only Owner-scoped installation/repository/branch/memory-root references in D1.
+- The Owner UI provides App registration, installation, account/repository selection, branch and memory-root fields, and topic attachment. Repository attachment does not load Project Memory (M4.4) and does not save/commit memory.
+- Test file `test/admin-owner-intelligence-github.test.ts` exercises minimal App manifest fields, manifest callback, PKCE user authorization, installation verification, absence of trusted installation before user verification, repository listing, single-repository token restriction and topic attachment against local D1 with mocked GitHub calls. Await CI before accepting these tests.
+- **Still outstanding for M4.3:** draft memory files, preview exact diff/paths/base SHA, require explicit Owner confirmation, one conflict-aware atomic commit, read back expected commit/files, and only then mark Synced. No PR merge or production deployment has occurred yet.
+
 ## Owner Intelligence — project memory and token-aware continuity (M4.2 Scratchpad/topic foundation deployed; M4.3–M4.8 planned)
 
 The following are future acceptance criteria, not tests that have passed in the current release. See [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md).
