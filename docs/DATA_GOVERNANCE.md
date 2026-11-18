@@ -85,3 +85,10 @@ Material changes to stored data must update:
 - docs/DATA_MODEL.md
 - relevant tests
 - release notes
+
+
+### Owner GitHub project-memory lifecycle (M4.3)
+
+The full Owner transcript remains in the Owner-scoped conversation/message tables in D1. A Save preview reads bounded, source-linked transcript excerpts and existing Markdown; Gemini proposes editable Markdown, but nothing is written to GitHub until the Owner confirms. The draft is charged to the same 200K D1 usage/reservation ledger as normal chat generation. Existing transcript rows and generation metadata are not rewritten by Save. The D1 preview record is an expiring, Owner-scoped operation record (30 minutes) containing the destination, base commit SHA, proposed files, state and verified commit SHA. It does not replace D1 as the canonical transcript store.
+
+The dedicated GitHub App stores only an encrypted private-key/client-secret bundle in D1. One-time state is hashed. Temporary GitHub user tokens and short-lived installation tokens are not stored. GitHub receives only the explicit five-file Markdown commit that the Owner reviewed and confirmed. Common credential patterns are redacted best-effort before model input and file persistence, but this does not replace Owner review. Only a verified commit and file read-back can set Synced or promote a Scratchpad. Conflict and interrupted states remain durable for safe recovery; external branch edits are not force-overwritten. No automatic Scratchpad expiry or automatic chat-turn GitHub sync is introduced.
