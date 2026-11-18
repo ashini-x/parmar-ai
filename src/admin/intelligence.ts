@@ -148,7 +148,7 @@ async function ensureOwnerSessionUsageRow(env: Env, conversationId: string): Pro
   await ensureOwnerIntelligenceSchema(env);
   const ownerId = ownerPrincipal(env);
   await env.DB!.prepare(
-    \`INSERT OR IGNORE INTO owner_intelligence_session_usage
+    `INSERT OR IGNORE INTO owner_intelligence_session_usage
        (conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at)
      SELECT c.id, c.owner_id, ?, COALESCE(SUM(g.total_tokens), 0), 0, NULL, ?
      FROM owner_intelligence_conversations c
@@ -157,11 +157,11 @@ async function ensureOwnerSessionUsageRow(env: Env, conversationId: string): Pro
      LEFT JOIN owner_intelligence_generation_metadata g
        ON g.message_id = m.id AND g.owner_id = m.owner_id
      WHERE c.id = ? AND c.owner_id = ?
-     GROUP BY c.id, c.owner_id\`,
+     GROUP BY c.id, c.owner_id`,
   ).bind(OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT, Date.now(), conversationId, ownerId).run();
   const row = await env.DB!.prepare(
-    \`SELECT conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at
-     FROM owner_intelligence_session_usage WHERE conversation_id = ? AND owner_id = ?\`,
+    `SELECT conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at
+     FROM owner_intelligence_session_usage WHERE conversation_id = ? AND owner_id = ?`,
   ).bind(conversationId, ownerId).first<OwnerSessionUsageRow>();
   return row ?? null;
 }
@@ -169,21 +169,23 @@ async function ensureOwnerSessionUsageRow(env: Env, conversationId: string): Pro
 async function expireOwnerSessionReservations(env: Env, usage: OwnerSessionUsageRow): Promise<void> {
   const cutoff = Date.now() - OWNER_INTELLIGENCE_RESERVATION_TTL_MS;
   const expired = await env.DB!.prepare(
-    \`SELECT reservation_id, reserved_tokens FROM owner_intelligence_token_reservations
-     WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?\`,
+    `SELECT reservation_id, reserved_tokens FROM owner_intelligence_token_reservations
+     WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?`,
   ).bind(usage.conversation_id, usage.owner_id, cutoff).all<{ reservation_id: string; reserved_tokens: number }>();
   if (!expired.results?.length) return;
   const charge = expired.results.reduce((total, item) => total + Number(item.reserved_tokens || 0), 0);
   await env.DB!.batch([
     env.DB!.prepare(
-      \`UPDATE owner_intelligence_session_usage
+      `UPDATE owner_intelligence_session_usage
        SET used_tokens = used_tokens + ?, reserved_tokens = MAX(0, reserved_tokens - ?), updated_at = ?
-       WHERE conversation_id = ? AND owner_id = ?\`,
-    ).bind(charge, charge, Date.now(), usage.conversation_id, usage.owner_id),
+       WHERE conversation_id = ? AND owner_id = ?
+         AND EXISTS (SELECT 1 FROM owner_intelligence_token_reservations
+           WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?)`,
+    ).bind(charge, charge, Date.now(), usage.conversation_id, usage.owner_id, usage.conversation_id, usage.owner_id, cutoff),
     env.DB!.prepare(
-      \`UPDATE owner_intelligence_token_reservations
+      `UPDATE owner_intelligence_token_reservations
        SET status = 'expired', actual_tokens = reserved_tokens, usage_is_estimated = 1, settled_at = ?
-       WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?\`,
+       WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?`,
     ).bind(Date.now(), usage.conversation_id, usage.owner_id, cutoff),
   ]);
 }
@@ -196,8 +198,8 @@ export async function getOwnerIntelligenceSessionUsage(
   if (!initialized) return null;
   await expireOwnerSessionReservations(env, initialized);
   const row = await env.DB!.prepare(
-    \`SELECT conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at
-     FROM owner_intelligence_session_usage WHERE conversation_id = ? AND owner_id = ?\`,
+    `SELECT conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at
+     FROM owner_intelligence_session_usage WHERE conversation_id = ? AND owner_id = ?`,
   ).bind(conversationId, initialized.owner_id).first<OwnerSessionUsageRow>();
   if (!row) return null;
   const limit = Math.max(0, Number(row.token_limit));
@@ -222,8 +224,8 @@ async function lockOwnerIntelligenceSession(
   const usage = await ensureOwnerSessionUsageRow(env, conversationId);
   if (!usage) return null;
   await env.DB!.prepare(
-    \`UPDATE owner_intelligence_session_usage SET locked_reason = ?, updated_at = ?
-     WHERE conversation_id = ? AND owner_id = ? AND (locked_reason IS NULL OR locked_reason = '')\`,
+    `UPDATE owner_intelligence_session_usage SET locked_reason = ?, updated_at = ?
+     WHERE conversation_id = ? AND owner_id = ? AND (locked_reason IS NULL OR locked_reason = '')`,
   ).bind(reason, Date.now(), conversationId, usage.owner_id).run();
   return getOwnerIntelligenceSessionUsage(env, conversationId);
 }
@@ -239,16 +241,16 @@ async function reserveOwnerIntelligenceSessionTokens(
   const now = Date.now();
   const results = await env.DB!.batch([
     env.DB!.prepare(
-      \`UPDATE owner_intelligence_session_usage
+      `UPDATE owner_intelligence_session_usage
        SET reserved_tokens = reserved_tokens + ?, updated_at = ?
        WHERE conversation_id = ? AND owner_id = ? AND reserved_tokens = 0
          AND used_tokens + reserved_tokens + ? <= token_limit
-         AND (locked_reason IS NULL OR locked_reason = '')\`,
+         AND (locked_reason IS NULL OR locked_reason = '')`,
     ).bind(reservedTokens, now, conversationId, usage.owner_id, reservedTokens),
     env.DB!.prepare(
-      \`INSERT INTO owner_intelligence_token_reservations
+      `INSERT INTO owner_intelligence_token_reservations
        (reservation_id, conversation_id, owner_id, reserved_tokens, status, actual_tokens, usage_is_estimated, created_at)
-       SELECT ?, ?, ?, ?, 'reserved', 0, 0, ? WHERE changes() = 1\`,
+       SELECT ?, ?, ?, ?, 'reserved', 0, 0, ? WHERE changes() = 1`,
     ).bind(reservationId, conversationId, usage.owner_id, reservedTokens, now),
   ]);
   return Number(results[0]?.meta?.changes ?? 0) === 1;
@@ -263,8 +265,8 @@ async function settleOwnerIntelligenceSessionReservation(
 ): Promise<void> {
   const ownerId = ownerPrincipal(env);
   const row = await env.DB!.prepare(
-    \`SELECT reserved_tokens FROM owner_intelligence_token_reservations
-     WHERE reservation_id = ? AND conversation_id = ? AND owner_id = ? AND status = 'reserved'\`,
+    `SELECT reserved_tokens FROM owner_intelligence_token_reservations
+     WHERE reservation_id = ? AND conversation_id = ? AND owner_id = ? AND status = 'reserved'`,
   ).bind(reservationId, conversationId, ownerId).first<{ reserved_tokens: number }>();
   if (!row) return;
   const reserved = Math.max(0, Number(row.reserved_tokens));
@@ -273,16 +275,16 @@ async function settleOwnerIntelligenceSessionReservation(
   const nextStatus = release ? "released" : "settled";
   await env.DB!.batch([
     env.DB!.prepare(
-      \`UPDATE owner_intelligence_session_usage
+      `UPDATE owner_intelligence_session_usage
        SET used_tokens = used_tokens + ?, reserved_tokens = MAX(0, reserved_tokens - ?), updated_at = ?
        WHERE conversation_id = ? AND owner_id = ?
          AND EXISTS (SELECT 1 FROM owner_intelligence_token_reservations
-           WHERE reservation_id = ? AND owner_id = ? AND status = 'reserved')\`,
+           WHERE reservation_id = ? AND owner_id = ? AND status = 'reserved')`,
     ).bind(charge, reserved, Date.now(), conversationId, ownerId, reservationId, ownerId),
     env.DB!.prepare(
-      \`UPDATE owner_intelligence_token_reservations
+      `UPDATE owner_intelligence_token_reservations
        SET status = ?, actual_tokens = ?, usage_is_estimated = ?, settled_at = ?
-       WHERE reservation_id = ? AND conversation_id = ? AND owner_id = ? AND status = 'reserved'\`,
+       WHERE reservation_id = ? AND conversation_id = ? AND owner_id = ? AND status = 'reserved'`,
     ).bind(nextStatus, charge, estimated ? 1 : 0, Date.now(), reservationId, conversationId, ownerId),
   ]);
 }
@@ -342,7 +344,7 @@ export async function createOwnerIntelligenceConversation(
 export async function getOwnerIntelligenceConversation(
   env: Env,
   id: string,
-): Promise<{ conversation: OwnerIntelligenceConversation; messages: OwnerIntelligenceMessage[] } | null> {
+): Promise<{ conversation: OwnerIntelligenceConversation; messages: OwnerIntelligenceMessage[]; usage: OwnerIntelligenceSessionUsage | null } | null> {
   await ensureOwnerIntelligenceSchema(env);
   const ownerId = ownerPrincipal(env);
   const row = await env.DB!.prepare(
@@ -500,13 +502,13 @@ async function loadOwnerIntelligenceMessages(
   ownerId = ownerPrincipal(env),
 ): Promise<OwnerIntelligenceMessage[]> {
   const result = await env.DB!.prepare(
-    \`SELECT m.id, m.conversation_id, m.owner_id, m.role, m.content, m.status, m.created_at,
+    `SELECT m.id, m.conversation_id, m.owner_id, m.role, m.content, m.status, m.created_at,
       g.model_id, g.thinking_level, g.prompt_tokens, g.output_tokens, g.total_tokens, g.elapsed_ms
      FROM owner_intelligence_messages m
      LEFT JOIN owner_intelligence_generation_metadata g
        ON g.message_id = m.id AND g.owner_id = m.owner_id
      WHERE m.conversation_id = ? AND m.owner_id = ?
-     ORDER BY m.created_at ASC, m.id ASC\`,
+     ORDER BY m.created_at ASC, m.id ASC`,
   ).bind(conversationId, ownerId).all<OwnerMessageRow>();
   return (result.results ?? []).map(mapMessage);
 }
@@ -605,7 +607,7 @@ async function planOwnerPrompt(
       });
       if (!saved) return null;
       if (conversation.title === "New chat") {
-        const title = plannedMessage.content.replace(/\\s+/gu, " ").slice(0, MAX_TITLE_LENGTH);
+        const title = plannedMessage.content.replace(/\s+/gu, " ").slice(0, MAX_TITLE_LENGTH);
         await env.DB!.prepare(
           "UPDATE owner_intelligence_conversations SET title = ?, updated_at = ? WHERE id = ? AND owner_id = ?",
         ).bind(title, saved.created_at, conversationId, ownerId).run();
