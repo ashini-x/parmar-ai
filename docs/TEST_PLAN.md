@@ -46,6 +46,26 @@ This is an integration regression test with controlled external-service response
 - The same read-only acceptance can be run with `workflow_dispatch`; this path validates the current deployment and does not redeploy either Worker.
 - The acceptance check does not send real Telegram messages, generate Gemini answers, consume student quota, or mutate production data. Continue to use the protected Telegram admin connection test and the synthetic student-journey integration test for their respective coverage.
 
+## Owner Intelligence — per-chat token budget
+
+Automated checks added for this release:
+
+- Vertex CountTokens receives the exact bounded multi-turn user/model contents for the selected Owner model.
+- A conversation at 200,000 committed tokens returns HTTP 409, identifies `session_token_limit_reached`, reports a locked usage state and does not persist the rejected user prompt.
+- Creating another conversation initializes a separate 200,000-token budget with zero usage.
+- Legacy conversations are backfilled from recorded assistant generation `total_tokens` metadata.
+- Edit/regenerate preflight failure leaves the original prompt and later turns intact rather than committing a destructive edit before provider preflight succeeds.
+
+Production acceptance for this release:
+
+- Open an existing Owner chat and confirm the meter shows used, in-flight reserved and remaining token counts; verify the meter refreshes after a completed, stopped or failed generation.
+- Confirm an in-flight request reserves capacity and prevents a second concurrent generation in that chat, including when the reservation consumes all remaining capacity; it must not be displayed as a completed/read-only session until the reservation is settled.
+- Exercise the 200,000-token boundary and verify the server returns 409 before a rejected prompt is persisted. A new chat must show a fresh 200,000-token budget.
+- Verify the GitHub Markdown checkpoint reminder is visible and that the Owner can start a new chat and manually paste a checkpoint link. No automatic GitHub import or cross-chat context transfer is implemented.
+- Confirm a stream with final usage metadata settles from `totalTokenCount`; an interrupted stream without final usage metadata is conservatively charged at its reservation.
+
+The automated tests are not a substitute for authenticated Owner production browser acceptance. Record the exact deployed revision and workflow before marking the production acceptance complete.
+
 ## Limits
 - Five accepted questions in the burst window cause the sixth to receive the burst response.
 - Daily quota blocks additional AI jobs at the configured limit.
