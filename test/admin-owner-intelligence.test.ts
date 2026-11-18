@@ -1,4 +1,5 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env as workerTestBindings } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/config/env";
 import worker from "../src";
@@ -689,7 +690,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
   });
 
   it("permits the exact final prompt-plus-one-output-token reservation and then locks at 200,000", async () => {
-    const env = appEnv();
+    const env = appEnv({ DB: (workerTestBindings as unknown as Env).DB });
     const ownerCookie = await login("owner", "owner-test-password", env);
     const origin = "https://parmar-ai.test";
     const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
@@ -697,9 +698,11 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     });
     const createdBody = await created.json() as { conversation: { id: string } };
     const id = createdBody.conversation.id;
-    const db = env.DB as unknown as FakeOwnerD1;
+    const db = env.DB!;
     await getOwnerIntelligenceSessionUsage(env, id);
-    db.sessionUsage.get(id)!.used_tokens = OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 10;
+    await db.prepare(
+      "UPDATE owner_intelligence_session_usage SET used_tokens = ? WHERE conversation_id = ? AND owner_id = ?",
+    ).bind(OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 10, id, "owner").run();
 
     let requestedOutputLimit = 0;
     vi.mocked(countOwnerGeminiInputTokens).mockClear().mockResolvedValueOnce(5);
@@ -726,8 +729,11 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     await generated.text();
 
     expect(requestedOutputLimit).toBe(5);
-    expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
-    expect([...db.messages.values()].filter((row) => row.role === "assistant").map((row) => row.status)).toEqual(["complete"]);
+    const messagesAfterCompletion = await db.prepare(
+      "SELECT role, status FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ? ORDER BY created_at ASC",
+    ).bind(id, "owner").all<{ role: string; status: string }>();
+    expect(messagesAfterCompletion.results.filter((row) => row.role === "user")).toHaveLength(1);
+    expect(messagesAfterCompletion.results.filter((row) => row.role === "assistant").map((row) => row.status)).toEqual(["complete"]);
     const settled = await getOwnerIntelligenceSessionUsage(env, id);
     expect(settled).toEqual(expect.objectContaining({
       limit_tokens: 200_000,
@@ -737,7 +743,9 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
       locked: true,
     }));
 
-    const countBeforeRejectedPrompt = [...db.messages.values()].filter((row) => row.role === "user").length;
+    const countBeforeRejectedPrompt = Number((await db.prepare(
+      "SELECT COUNT(*) AS count FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ? AND role = 'user'",
+    ).bind(id, "owner").first<{ count: number }>())?.count ?? 0);
     const rejected = await call(env, path, ownerCookie, {
       method: "POST", origin,
       body: {
@@ -749,11 +757,14 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     const rejectedBody = await rejected.json() as { error: string };
     expect(rejected.status).toBe(409);
     expect(rejectedBody.error).toBe("session_token_limit_reached");
-    expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(countBeforeRejectedPrompt);
+    const countAfterRejectedPrompt = Number((await db.prepare(
+      "SELECT COUNT(*) AS count FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ? AND role = 'user'",
+    ).bind(id, "owner").first<{ count: number }>())?.count ?? 0);
+    expect(countAfterRejectedPrompt).toBe(countBeforeRejectedPrompt);
   });
 
   it("rejects a request that is one output token beyond the remaining budget before persisting its prompt", async () => {
-    const env = appEnv();
+    const env = appEnv({ DB: (workerTestBindings as unknown as Env).DB });
     const ownerCookie = await login("owner", "owner-test-password", env);
     const origin = "https://parmar-ai.test";
     const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
@@ -761,9 +772,11 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     });
     const createdBody = await created.json() as { conversation: { id: string } };
     const id = createdBody.conversation.id;
-    const db = env.DB as unknown as FakeOwnerD1;
+    const db = env.DB!;
     await getOwnerIntelligenceSessionUsage(env, id);
-    db.sessionUsage.get(id)!.used_tokens = OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 10;
+    await db.prepare(
+      "UPDATE owner_intelligence_session_usage SET used_tokens = ? WHERE conversation_id = ? AND owner_id = ?",
+    ).bind(OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 10, id, "owner").run();
 
     vi.mocked(countOwnerGeminiInputTokens).mockClear().mockResolvedValueOnce(10);
     vi.mocked(openOwnerGeminiStream).mockClear();
@@ -786,12 +799,18 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
       locked: true,
     }));
     expect(openOwnerGeminiStream).not.toHaveBeenCalled();
-    expect(db.messages.size).toBe(0);
-    expect(db.reservations.size).toBe(0);
+    const messageCount = Number((await db.prepare(
+      "SELECT COUNT(*) AS count FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ?",
+    ).bind(id, "owner").first<{ count: number }>())?.count ?? 0);
+    const reservationCount = Number((await db.prepare(
+      "SELECT COUNT(*) AS count FROM owner_intelligence_token_reservations WHERE conversation_id = ? AND owner_id = ?",
+    ).bind(id, "owner").first<{ count: number }>())?.count ?? 0);
+    expect(messageCount).toBe(0);
+    expect(reservationCount).toBe(0);
   });
 
   it("allows only one atomic D1 reservation when two same-chat requests cross preflight together", async () => {
-    const env = appEnv();
+    const env = appEnv({ DB: (workerTestBindings as unknown as Env).DB });
     const ownerCookie = await login("owner", "owner-test-password", env);
     const origin = "https://parmar-ai.test";
     const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
@@ -799,9 +818,11 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     });
     const createdBody = await created.json() as { conversation: { id: string } };
     const id = createdBody.conversation.id;
-    const db = env.DB as unknown as FakeOwnerD1;
+    const db = env.DB!;
     await getOwnerIntelligenceSessionUsage(env, id);
-    db.sessionUsage.get(id)!.used_tokens = OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 100;
+    await db.prepare(
+      "UPDATE owner_intelligence_session_usage SET used_tokens = ? WHERE conversation_id = ? AND owner_id = ?",
+    ).bind(OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 100, id, "owner").run();
 
     let countCalls = 0;
     let releaseCountTokens!: () => void;
@@ -847,8 +868,14 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     const blockedBody = await blocked.json() as { error: string; usage: { reserved_tokens: number } };
     expect(blockedBody.error).toBe("generation_in_progress");
     expect(blockedBody.usage.reserved_tokens).toBe(100);
-    expect(db.reservations.size).toBe(1);
-    expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
+    const reservationCount = Number((await db.prepare(
+      "SELECT COUNT(*) AS count FROM owner_intelligence_token_reservations WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved'",
+    ).bind(id, "owner").first<{ count: number }>())?.count ?? 0);
+    const userMessageCount = Number((await db.prepare(
+      "SELECT COUNT(*) AS count FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ? AND role = 'user'",
+    ).bind(id, "owner").first<{ count: number }>())?.count ?? 0);
+    expect(reservationCount).toBe(1);
+    expect(userMessageCount).toBe(1);
     const inFlight = await getOwnerIntelligenceSessionUsage(env, id);
     expect(inFlight).toEqual(expect.objectContaining({
       used_tokens: 199_900,
