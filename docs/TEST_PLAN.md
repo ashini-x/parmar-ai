@@ -413,7 +413,8 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 - Read-only production D1 inspection of the configured `parmar-ai-admin-prod` binding found zero rows in `owner_intelligence_topics`; the Owner's attempted `Owner Intelligence` topic was not created.
 - Corrective source change introduces a dedicated `topicsApi`, routes list/create/rename to the Worker route, and uses a topic-specific `Retry topics` handler instead of incorrectly showing `Could not load conversations` and retrying only conversation history.
 - Regression test asserts the topic status container, correct GET/POST/PATCH endpoint strings, absence of the incorrect conversations/topics path, and topic-specific retry behavior.
-- **Deployment gate:** do not ask the Owner to repeat topic creation until this fix passes CI and deploys to the production `parmar-ai` Worker. Then verify that the created topic appears in both selectors and is persisted in D1.
+- **Automated fix validation and production deployment passed:** PR [#352](https://github.com/ashini-x/parmar-ai/pull/352), merge `c555d9428421fbbe600a872093730fa3dce644e1`; workflow [44411119143](https://github.com/ashini-x/parmar-ai/actions/runs/44411119143) succeeded. Cloudflare deployment `582658d9-cd4c-4d2a-b2a8-4325c18591e0` serves `parmar-ai` version `1df8cbae-4777-44f9-87b4-e26dc6acde93` at 100% traffic. The full workflow passed typecheck, Vitest, Node tests, three dry-run bundles, production deployment and root/BRVIN/Fatman smoke checks.
+- **Remaining live browser check:** hard-refresh Owner Intelligence, create `Owner Intelligence`, verify the topic appears in both dropdowns and confirm it is persisted in production D1. Then attach the Memory Hub and continue the M4.3 acceptance checklist below.
 
 ### M4.3 Owner browser acceptance status — 2026-11-19 IST
 

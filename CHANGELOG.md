@@ -1,9 +1,17 @@
+## 2026-11-19 IST: Owner Intelligence topic API fix deployed to production
+
+- PR [#352](https://github.com/ashini-x/parmar-ai/pull/352) merged as `c555d9428421fbbe600a872093730fa3dce644e1`. It corrects the topic list/create/rename client URL to `/admin/api/intelligence/topics` and adds a topic-specific `Retry topics` action.
+- Validation and production release [44411119143](https://github.com/ashini-x/parmar-ai/actions/runs/44411119143) completed successfully: TypeScript, Vitest, Node tests, all three Worker dry-runs, paired Worker deployment, and root/BRVIN/Fatman smoke checks passed.
+- Cloudflare confirms `parmar-ai` version `1df8cbae-4777-44f9-87b4-e26dc6acde93` on deployment `582658d9-cd4c-4d2a-b2a8-4325c18591e0` at 100% traffic; `brvin-service` version `da8c9944-a349-4b74-a160-1582db9ec104` is also at 100%.
+- The production D1 query had confirmed the Owner's failed topic attempt created no row. The Owner must now hard-refresh and verify topic creation/listing in both dropdowns; then continue M4.3 attach/save/read-back/Conflict acceptance.
+- No topic row was manually inserted. No Memory Hub files or source-code repositories were changed by this fix.
+
 ## 2026-11-19 IST: Owner Intelligence topic creation route bug found; corrective fix under validation
 
 - Owner reported topic creation showed a red error/Retry and the topic did not appear. A read-only production D1 query confirmed zero rows in `owner_intelligence_topics`; the attempted topic was not created.
 - Root cause: the browser client called `/admin/api/intelligence/conversations/topics`, but the deployed Worker exposes `/admin/api/intelligence/topics`. Topic list, create and rename were all affected.
 - Corrective change introduces a dedicated `topicsApi`, updates GET/POST/PATCH calls and adds a topic-specific retry action that refreshes topics rather than conversation history. A regression assertion covers the correct paths and retry behavior.
-- Fix is in code review/CI and is not yet deployed at the time of this entry. Owner must not retry topic creation until the production Worker fix passes validation and deploys.
+- At the time of the original incident entry, the fix had not yet deployed. This was superseded by the deployment record immediately above; the Owner may now retry topic creation after a hard refresh.
 - No production D1 row was created or manually inserted. No source repo or Memory Hub content was changed.
 
 ## 2026-11-19 IST: Owner Memory Hub installation verified in Owner Intelligence
