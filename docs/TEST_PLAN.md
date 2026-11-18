@@ -66,6 +66,8 @@ Production acceptance for this release:
 
 The automated tests are not a substitute for authenticated Owner production browser acceptance. Record the exact deployed revision and workflow before marking the production acceptance complete.
 
+**Automated and release evidence for 2026-11-18:** PR validation [44221814569](https://github.com/ashini-x/parmar-ai/actions/runs/44221814569) passed `npm run check`, 494 Vitest tests across 72 files, 62 Node tests across 9 files and dry-run bundle validation for the BRVIN service, Parmar AI Worker and standalone BRɅIN website Worker. Merged revision `109e21b155b794ec2ac1cc29274d5513e56c6762` was deployed by production workflow [44222082173](https://github.com/ashini-x/parmar-ai/actions/runs/44222082173). Paired Worker deployment, root and health smoke checks, BRVIN service binding, Fatman retrieval readiness and release acceptance passed. Authenticated Owner-specific browser tests for the budget meter and exact exhaustion boundary remain unchecked and must be completed by an Owner session.
+
 ## Limits
 - Five accepted questions in the burst window cause the sixth to receive the burst response.
 - Daily quota blocks additional AI jobs at the configured limit.
