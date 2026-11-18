@@ -1,3 +1,12 @@
+## 2026-11-19 IST: Owner Intelligence M4.3 merged and deployed to production
+
+- PR [#346](https://github.com/ashini-x/parmar-ai/pull/346) merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`.
+- Current-head PR validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests across 74 files, 62 Node tests across 9 files and all three Worker dry-run bundles.
+- Production workflow [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired Worker deploy, root/health, BRVIN service binding, Fatman retrieval and release-acceptance checks. No rollback was triggered.
+- `parmar-ai` version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` (deployment `034968d5-a1ff-4a35-a085-457eee2b3c13`) and `brvin-service` version `d43a9f7b-32b3-486f-9845-75ed11811165` (deployment `063b01b9-c852-44d4-8ad9-a3ba8893e6c5`) are each at 100% traffic. Release acceptance artifact [14464228113](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092/artifacts/14464228113).
+- The deployed M4.3 feature includes dedicated PKCE GitHub App auth, selected-only installation, metered Gemini memory drafting, editable five-file preview, explicit confirmation, write token only after confirmation, non-force conflict-aware commit, durable retry/verification and byte-exact read-back before Synced.
+- Remaining: authenticated Owner creates/installs the private App on selected repositories and completes the live preview/edit/confirm/read-back and stale-branch-conflict browser acceptance. M4.4 Project Memory prompt loading/pinned snapshots remain unimplemented.
+
 ## 2026-11-18: Owner Intelligence M4.3 reviewed GitHub Save implementation (PR #346; release gates pending)
 
 - Added the Owner-only Gemini-drafted Markdown preview and explicit Save confirmation to the existing dedicated PKCE-verified GitHub App integration.
