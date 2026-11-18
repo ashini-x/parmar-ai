@@ -1901,7 +1901,7 @@ export function ownerIntelligenceClientScript(): Response {
   }
   function updateGithubSaveAvailability(){
     var selected=Boolean(githubSaveTopic.value);
-    githubPreviewSave.disabled=!state.activeId||!selected||sending||!githubConfigured||!state.githubInstallations.length;
+    githubPreviewSave.disabled=!state.activeId||!selected||!state.selectedModelId||!state.selectedThinkingLevel||sending||!githubConfigured||!state.githubInstallations.length;
     if(!state.activeId){
       githubSaveStatus.textContent="Open a conversation before saving.";
     }else if(!state.topics.length){
@@ -1918,13 +1918,15 @@ export function ownerIntelligenceClientScript(): Response {
     githubSaveStatus.textContent="Reading the selected topic's current Markdown and preparing an editable preview…";
     try{
       var result=await request("/admin/api/intelligence/github/conversations/"+encodeURIComponent(state.activeId)+"/preview",{
-        method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({topicId:githubSaveTopic.value})
+        method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({topicId:githubSaveTopic.value,modelId:state.selectedModelId,thinkingLevel:state.selectedThinkingLevel})
       },60000);
       githubMemoryPreview=result.preview;
       githubPreviewSummary.textContent=
         "Destination: "+githubMemoryPreview.repository+" · "+githubMemoryPreview.branch+
         "\nBase commit: "+githubMemoryPreview.baseCommitSha+
         "\nMemory root: "+githubMemoryPreview.memoryRoot+
+        "\nDraft model: "+githubMemoryPreview.draft.modelId+" · "+githubMemoryPreview.draft.thinkingLevel+
+        "\nDraft tokens charged to this chat: "+Number(githubMemoryPreview.draft.totalTokens||0).toLocaleString()+
         "\nExpires: "+new Date(githubMemoryPreview.expiresAt).toLocaleString()+
         "\n"+githubMemoryPreview.note;
       githubPreviewFiles.replaceChildren();
