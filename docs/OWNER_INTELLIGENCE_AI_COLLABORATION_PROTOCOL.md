@@ -20,6 +20,14 @@ The working model has three distinct roles:
 
 This is a **human-directed, document-mediated collaboration protocol**. GitHub is the durable hand-off and review layer between the two AI workspaces. It is not a live agent-to-agent RPC channel: a commit does not automatically wake the other AI, transfer its private chat history, or authorize an operation. The Owner asks each workspace to read or publish the relevant artifacts and remains in control of every decision.
 
+### 1.1 AI provider and infrastructure boundary
+
+Within the Owner Intelligence runtime, **Google Gemini through Vertex AI is the only AI provider**. Chat generation, CountTokens, memory drafting and any future model-backed Owner operation must use the approved Vertex adapter, the exact selected and verified Gemini model and its supported thinking level. There is no Cloudflare Workers AI, alternate provider, second hidden summarizer/reranker or automatic fallback. A memory draft consumes the same chat's M4.1 200,000-token D1 budget. On provider failure, preserve state and surface the error; never silently change model, thinking level, API or provider.
+
+Cloudflare is the deterministic application/backend layer for authentication, authorization, D1 transcript/usage/outbox, bounded context assembly, Vertex request transport, GitHub API operations, conflict/read-back verification and durable retry orchestration. It does not perform inference. The Owner confirms the account is on Workers Free; the full plan/capacity decision and M4.6-P0 gate are specified in [OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md](OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md). Actual account-wide headroom is unmeasured. D1 remains the durable source of truth; Queue and Workflow state are transport/execution only.
+
+ChatGPT Software Engineer remains an independent, Owner-authorized code/test/PR/merge/deploy executor using its own credentials. It is not a runtime provider or fallback and its connector credentials are never available to the Worker. BRɅIN's student-facing services and optional Owner BRɅIN context retain their separate existing boundaries.
+
 ## 2. Responsibility and permission boundaries
 
 ### 2.1 Gemini Owner Intelligence
@@ -344,6 +352,8 @@ This decision refines the existing M4 continuity design; it does not renumber or
 | ChatGPT implementation execution | Read approved brief, inspect code repositories, test, PR, merge/deploy when authorized, publish report | Operating convention; not an automatic integration |
 
 M4.4 must not begin before the real M4.3 selected-only hub installation/save/read-back/conflict acceptance passes. Do not migrate source code, provision new Cloudflare services, broaden the Owner App's permissions, or enable automatic AI-to-AI triggers as part of this documentation decision.
+
+The 2026-11-19 single-provider/Cloudflare Free policy is also locked. Complete M4.6-P0 (capacity, cost and outbox-recovery assessment) before M4.6; it does not alter the ongoing M4.3 live acceptance gate or authorize a Cloudflare plan upgrade/resource provision.
 
 ## 10. Acceptance scenarios for the complete system
 
