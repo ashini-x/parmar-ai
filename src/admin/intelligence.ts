@@ -1074,6 +1074,7 @@ function workspaceHtml(): string {
 .loading{color:#999;font-size:12px;padding:12px 8px}.error{color:#f2a4a4;font-size:12px;padding:12px 8px}.history-failure{padding:10px 8px;display:flex;flex-direction:column;gap:8px}.history-failure-title{font-size:12px;color:#e5b0b0}.history-failure-message{font-size:11px;line-height:1.5;color:#aaa;overflow-wrap:anywhere}.history-retry{align-self:flex-start;border:1px solid #555;background:#303030;color:#eee;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer}.history-retry:hover{background:#414141}.history-retry:disabled,.new-chat:disabled{opacity:.55;cursor:wait}
 @media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(300px,86vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.topbar{padding:0 13px}.content{padding:28px 16px 12px}.welcome h1{font-size:24px}.model-picker,.thinking-picker{padding:6px 7px;gap:4px}.model-label{display:none}.model-picker select{max-width:122px;min-width:80px}.thinking-picker select{max-width:90px;min-width:64px}.private-tag{display:none}.composer-wrap{padding-top:18px}}
 @media(max-width:390px){.model-picker{max-width:122px}.model-picker select{max-width:94px;min-width:0}.thinking-picker{max-width:94px}.thinking-picker select{max-width:70px;min-width:0}.page-title{font-size:13px}.avatar{display:none}}
+.session-budget{margin:0 0 16px;padding:12px 14px;border:1px solid #383838;border-radius:12px;background:#1d1d1d}.session-budget-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:#a8a8a8}.session-budget-label{font-size:9px;font-weight:700;letter-spacing:.12em;color:#858585}.session-budget-top strong{font-size:12px;font-weight:650;color:#e8e8e8;font-variant-numeric:tabular-nums}.session-budget-top span:last-child{margin-left:auto;font-variant-numeric:tabular-nums}.session-budget-track{height:6px;margin-top:10px;border-radius:999px;overflow:hidden;background:#363636}.session-budget-fill{display:block;width:0;height:100%;border-radius:999px;background:#6b91eb;transition:width .25s ease,background .2s ease}.session-budget.near-limit .session-budget-fill{background:#d6a34c}.session-budget.locked .session-budget-fill{background:#c66d6d}.session-budget-tip{margin:8px 0 0;color:#858585;font-size:10px;line-height:1.45}.session-budget-notice{margin-top:10px;padding:10px 11px;border:1px solid #684848;border-radius:9px;background:#2b2020;color:#f0c5c5;font-size:12px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -1093,6 +1094,12 @@ function workspaceHtml(): string {
   <section class="content" aria-label="Conversation workspace">
     <div class="stage">
       <div class="conversation-heading" id="conversationHeading"></div>
+      <section class="session-budget" id="sessionBudget" hidden aria-label="Chat session token budget">
+        <div class="session-budget-top"><span class="session-budget-label">CHAT SESSION BUDGET</span><strong id="sessionBudgetValue">0 / 200,000 tokens</strong><span id="sessionBudgetRemaining">200,000 left</span></div>
+        <div class="session-budget-track" id="sessionBudgetTrack" role="progressbar" aria-label="Tokens used in this chat" aria-valuemin="0" aria-valuemax="200000" aria-valuenow="0"><span class="session-budget-fill" id="sessionBudgetFill"></span></div>
+        <p class="session-budget-tip">To continue in a new chat, save a Markdown checkpoint in GitHub and paste its link into that chat. Context is not transferred automatically.</p>
+        <div class="session-budget-notice" id="sessionBudgetNotice" hidden>This chat has reached its 200,000-token budget and is now read-only. Start a new chat, then paste your GitHub Markdown checkpoint link to continue.</div>
+      </section>
       <div class="messages" id="messages" aria-live="polite">
         <div class="welcome"><div class="welcome-mark">BɅ</div><h1>Your thinking space.</h1><p>A private workspace for research, reasoning, writing, mathematics, coding and ideas. Your conversations are stored separately from the student learning system.</p><span class="next-step">PRIVATE OWNER WORKSPACE</span></div>
       </div>
@@ -1114,7 +1121,7 @@ export function ownerIntelligenceClientScript(): Response {
 (function(){
   "use strict";
   var api="/admin/api/intelligence/conversations";
-  var state={conversations:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[]};
+  var state={conversations:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
   var history=document.getElementById("history");
   var messages=document.getElementById("messages");
   var heading=document.getElementById("conversationHeading");
@@ -1122,6 +1129,12 @@ export function ownerIntelligenceClientScript(): Response {
   var messageInput=document.getElementById("messageInput");
   var sendButton=document.getElementById("sendMessage");
   var composerHint=document.getElementById("composerHint");
+  var sessionBudget=document.getElementById("sessionBudget");
+  var sessionBudgetValue=document.getElementById("sessionBudgetValue");
+  var sessionBudgetRemaining=document.getElementById("sessionBudgetRemaining");
+  var sessionBudgetTrack=document.getElementById("sessionBudgetTrack");
+  var sessionBudgetFill=document.getElementById("sessionBudgetFill");
+  var sessionBudgetNotice=document.getElementById("sessionBudgetNotice");
   var modelSelect=document.getElementById("modelSelect");
   var thinkingSelect=document.getElementById("thinkingSelect");
   var modelRetry=document.getElementById("modelRetry");
@@ -1265,6 +1278,35 @@ export function ownerIntelligenceClientScript(): Response {
       modelRetry.disabled=false;
     }
   }
+  function formatTokenCount(value){
+    var number=Math.max(0,Math.floor(Number(value)||0));
+    return number.toLocaleString();
+  }
+  function renderSessionBudget(){
+    var usage=state.sessionUsage;
+    if(!state.activeId||!usage){
+      sessionBudget.hidden=true;
+      sessionBudget.classList.remove("near-limit","locked");
+      return;
+    }
+    var limit=Math.max(1,Number(usage.limit_tokens)||200000);
+    var used=Math.max(0,Number(usage.used_tokens)||0);
+    var reserved=Math.max(0,Number(usage.reserved_tokens)||0);
+    var committed=Math.min(limit,used+reserved);
+    var remaining=Math.max(0,Number.isFinite(Number(usage.remaining_tokens))?Number(usage.remaining_tokens):limit-committed);
+    var locked=usage.locked===true||remaining===0;
+    var percent=Math.min(100,committed/limit*100);
+    sessionBudget.hidden=false;
+    sessionBudgetValue.textContent=formatTokenCount(used)+" used"+(reserved?" · "+formatTokenCount(reserved)+" reserved":"")+" / "+formatTokenCount(limit);
+    sessionBudgetRemaining.textContent=locked?"Limit reached":formatTokenCount(remaining)+" left";
+    sessionBudgetFill.style.width=percent.toFixed(2)+"%";
+    sessionBudgetTrack.setAttribute("aria-valuemax",String(limit));
+    sessionBudgetTrack.setAttribute("aria-valuenow",String(committed));
+    sessionBudgetTrack.setAttribute("aria-valuetext",formatTokenCount(committed)+" of "+formatTokenCount(limit)+" tokens used or reserved");
+    sessionBudget.classList.toggle("near-limit",percent>=80&&!locked);
+    sessionBudget.classList.toggle("locked",locked);
+    sessionBudgetNotice.hidden=!locked;
+  }
   function showWelcome(){
     if(!state.activeId)heading.textContent="";
     messages.replaceChildren();
@@ -1274,6 +1316,7 @@ export function ownerIntelligenceClientScript(): Response {
     welcome.appendChild(node("p","","A private workspace for research, reasoning, writing, mathematics, coding and ideas. Your conversations are stored separately from the student learning system."));
     welcome.appendChild(node("span","next-step","PRIVATE OWNER WORKSPACE"));
     messages.appendChild(welcome);
+    renderSessionBudget();
     updateComposer();
   }
   function appendActivityCard(parent,activity){
@@ -1354,13 +1397,14 @@ export function ownerIntelligenceClientScript(): Response {
       }else if(item.role==="assistant"&&item.status==="error"){
         body.appendChild(node("div","message-detail","The request failed before a complete answer was produced."));
       }
-      if(item.role==="user"&&!sending){
+      var sessionLocked=Boolean(state.sessionUsage&&state.sessionUsage.locked);
+      if(item.role==="user"&&!sending&&!sessionLocked){
         var edit=node("button","message-action","Edit");
         edit.type="button";edit.addEventListener("click",function(){
           editingMessageId=item.id;messageInput.value=item.content;messageInput.focus();updateComposer();
         });
         var actions=node("div","message-actions");actions.appendChild(edit);body.appendChild(actions);
-      }else if(item.role==="assistant"&&item.status!=="pending"&&!sending&&index===items.length-1){
+      }else if(item.role==="assistant"&&item.status!=="pending"&&!sending&&!sessionLocked&&index===items.length-1){
         var retry=node("button","message-action","Regenerate");
         retry.type="button";retry.addEventListener("click",function(){generateMessage({action:"regenerate"});});
         var actions2=node("div","message-actions");actions2.appendChild(retry);body.appendChild(actions2);
@@ -1413,27 +1457,30 @@ export function ownerIntelligenceClientScript(): Response {
     else if(!state.conversations.some(function(item){return item.id===state.activeId;})){state.activeId=state.conversations.length?state.conversations[0].id:null;}
     renderHistory();
     if(state.activeId){await openConversation(state.activeId);}
-    else{state.messages=[];showWelcome();}
+    else{state.messages=[];state.sessionUsage=null;renderSessionBudget();showWelcome();}
   }
   async function openConversation(id){
     var result=await request(api+"/"+encodeURIComponent(id));
-    state.activeId=result.conversation.id;state.messages=result.messages||[];
+    state.activeId=result.conversation.id;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
     heading.textContent=result.conversation.title;
-    renderHistory();renderMessages(state.messages);
+    renderHistory();renderSessionBudget();renderMessages(state.messages);
     updateComposer();
   }
   function updateComposer(){
     var hasText=messageInput.value.trim().length>0;
     var canGenerate=Boolean(state.activeId&&state.selectedModelId&&state.selectedThinkingLevel);
-    sendButton.disabled=sending?false:(!canGenerate||!hasText);
+    var sessionLocked=Boolean(state.sessionUsage&&state.sessionUsage.locked);
+    sendButton.disabled=sending?false:(!canGenerate||!hasText||sessionLocked);
     sendButton.textContent=sending?"■":"↑";
     sendButton.classList.toggle("stop",sending);
     sendButton.setAttribute("aria-label",sending?"Stop generation":"Send message");
-    messageInput.disabled=!state.activeId||sending;
+    messageInput.disabled=!state.activeId||sending||sessionLocked;
     modelSelect.disabled=sending||!state.models.length;
     thinkingSelect.disabled=sending||!state.selectedThinkingLevel;
     composerHint.textContent=sending
       ?"Generating with "+state.selectedModelId+" · "+state.selectedThinkingLevel+" · select Stop to keep the partial answer"
+      :sessionLocked
+        ?"This chat is read-only after its 200,000-token budget. Start a new chat to continue from a GitHub Markdown checkpoint."
       :modelLoadMessage?modelLoadMessage
       :editingMessageId?"Editing a previous message · sending will replace it and remove later turns"
       :"Your selected model and thinking level will be used for this response.";
