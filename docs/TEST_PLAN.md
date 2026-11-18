@@ -241,3 +241,57 @@ PR [#331](https://github.com/ashini-x/parmar-ai/pull/331), merged as `9acd131b48
 ### M4 automated evidence
 
 PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/actions/runs/44167885365) passed `npm run check`, 482 Vitest tests across 72 files, 62 Node tests across 9 files and all three Worker dry-runs. The merged main release workflow [44168257509](https://github.com/ashini-x/parmar-ai/actions/runs/44168257509) also passed validation, paired production deployment, root/health smoke checks, BRVIN service binding, Fatman readiness and production release acceptance. Deployed versions: `brvin-service` `44acfa29-199c-4468-8b4a-23fefeaef363`; `parmar-ai` `10c630d6-ec4c-4407-8059-39193290e1ba`. Release manifest artifact: `14367310746`. No rollback was needed. These automated tests use mocked Vertex responses; a real billed Owner browser prompt/stream/Stop/Edit/Regenerate acceptance is still pending. Automatic in-place SSE reconnection is deferred and is not implemented.
+
+
+
+## Owner Intelligence — project memory and token-aware continuity (planned M4.2–M4.8; not implemented)
+
+The following are future acceptance criteria, not tests that have passed in the current release. See [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md).
+
+### M4.2 — Scratchpad and topic foundation
+- New Chat creates a D1-backed Scratchpad with no forced project selection.
+- Scratchpads survive browser refresh, browser storage clearing and a different device while the Owner remains authenticated.
+- Existing conversation IDs, messages, generation metadata and 200K usage rows migrate without loss; migrations are additive/reversible where practical.
+- No automatic expiry is applied unless the Owner explicitly enables a documented, recoverable retention policy.
+
+### M4.3 — GitHub authorization and Save to GitHub
+- Only the authenticated Owner can start/complete repository authorization and memory commits.
+- GitHub App permissions are limited to Owner-selected repositories and required Contents read/write operations; tokens/private keys never reach the browser or logs.
+- Save preview is visible and editable before explicit confirmation; failed/conflicting commits never show Synced.
+- Multi-file save is one conflict-aware atomic commit; after commit, the app reads back/validates the expected commit SHA and file set.
+- The original D1 transcript is unchanged by summarization or GitHub sync.
+
+### M4.4 — Attach and load Project Memory
+- A new Scratchpad can optionally attach a project; selecting a project loads only manifest-listed active memory files.
+- Archived notes and old session notes are excluded by default and can be searched/opened on demand.
+- The loaded project snapshot records the GitHub repository, branch and exact commit SHA; a chat's snapshot does not silently change when the branch moves.
+- Vertex CountTokens measures the actual effective prompt for the selected model/API; project-memory estimates are shown separately from cumulative chat usage before sent.
+- Markdown prompt-injection content is treated as untrusted reference data and cannot override Owner policy or application instructions.
+
+### M4.5 — Automatic rollover
+- The UI warns at 180,000 cumulative tokens and offers a rollover action at 190,000; 195,000 may show an urgent state but does not replace the hard cap.
+- Thresholds include in-flight reserved tokens; concurrent generations cannot overspend the remaining session allowance.
+- Rollover preserves the old conversation as read-only and creates a linked new conversation with a fresh, independent 200,000-token budget.
+- The handoff includes current goal, locked decisions, technical/file state, blockers, next step and source message IDs.
+- GitHub sync is confirmed before showing Synced. When GitHub is unavailable, the handoff is retained in D1 and shown as sync-pending; no context is lost.
+
+### M4.6 — Token-aware context builder and historical recall
+- The exact complete prompt—including all application instructions, project context, retrieved history, current history and new user turn—is measured for the chosen model/API before the user turn mutation is committed.
+- Context selection is token-based, respects that model's real context/output constraints and reserves output capacity; character counts and fixed turn counts are only early filters, never final acceptance checks.
+- D1 keyword/FTS retrieval returns exact source messages/message pairs with IDs; summaries always retain provenance links to their source turns.
+- A failed search never claims complete recall; all original D1 turns remain accessible.
+- Historical retrieval is constrained to the authenticated Owner and selected topic/project.
+
+### M4.7 — Compact Memory and Fork Chat
+- Active project memory above 40,000 measured tokens triggers a warning, not an automatic rewrite.
+- Compaction produces a preview and diff; a master context targets under 10,000 tokens only where it can preserve required state and decisions.
+- Source notes are archived in the same versioned commit and are not silently discarded; provenance is preserved.
+- A fork is linked to its parent, has an independent 200K budget and pins the same project-memory revision; experiments do not update main project memory until explicit save/merge.
+
+### M4.8 — Context caching and retrieval optimization
+- Cache support, minimum token count, TTL, cache-read/write pricing, API surface and region are checked for the exact selected model before creating/reusing cache entries.
+- Cache namespaces are isolated by Owner/project/session as required; stale or unavailable caches fall back to the equivalent uncached request.
+- Tests and production metrics compare token counts, cache hit rate, latency and cost before caching or semantic indexing is enabled.
+- No model, thinking level, prompt policy or access boundary changes silently as a caching fallback.
+
+These criteria must be added to the relevant automated suites as each sub-milestone is implemented. The existence of this planned checklist is not evidence of implementation or production acceptance.

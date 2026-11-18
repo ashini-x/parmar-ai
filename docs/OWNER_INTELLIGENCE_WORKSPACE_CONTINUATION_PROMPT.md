@@ -25,6 +25,58 @@ Both input routes use the same conversation, selected Gemini model, supported th
 
 Do not describe this as unlimited provider capacity. Do not apply student daily/burst caps to the Owner workspace, but respect Google Cloud quotas, region/model availability, billing, context and API limits. Never silently downgrade a model or thinking level.
 
+
+## Approved continuity and memory extension (M4.2–M4.8; not implemented)
+
+The Owner approved the long-session and project-memory design on 2026-11-18. The architecture and acceptance criteria live in [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md). These are plans, not currently deployed features.
+
+### Token management is a core part of the plan
+
+Keep the deployed M4.1 per-chat 200,000-token cumulative lifetime budget unchanged. Add a separate token-aware context-management layer:
+
+- **Lifetime conversation budget:** D1 used + reserved tokens remain authoritative. CountTokens preflight, atomic reservation, output allowance cap, usage settlement and conservative missing-usage charging remain in place.
+- **Per-request context budget:** assemble the complete effective prompt from Owner instructions, selected project-memory files, relevant history and the new turn. Count the exact effective request with the selected model/API; never use character length or a fixed turn count as the final fit check.
+- **Context selection:** keep relevant recent turns, use a short structured project state with source message IDs, and retrieve older exact D1 turns when needed. D1 remains the untouched transcript source of truth.
+- **Rollover:** warn at 180K; surface Roll Over at 190K; keep the existing 200K server-enforced hard limit. New chat means a new independent budget; rollover preserves the old chat and creates a handoff-linked chat.
+- **Project memory:** GitHub stores concise, curated, versioned Markdown memory, not a copy of every raw conversation. Load only manifest-selected active files by default and pin the commit SHA for the chat.
+- **Caching:** evaluate Vertex caching only for the exact model/API/location and measured workload. Cache is an optimization, not memory, a correctness dependency, or a promise of universal discounts.
+- **Cost clarity:** cumulative 200K conversation usage is not a single-request input-size tier and does not establish a universal provider pricing cliff. Model prices, cache discounts and thresholds must be checked against current official pricing.
+
+### Approved M4.2–M4.8 sub-milestones
+
+1. **M4.2 — Scratchpad and topic foundation:** D1-backed Scratchpad by default; optional topic/project link; no silent retention expiry.
+2. **M4.3 — GitHub authorization and Save to GitHub:** dedicated server-side GitHub App with least privilege for Owner-selected repos; preview and confirm; verified atomic commit; D1 remains intact.
+3. **M4.4 — Attach and load Project Memory:** manifest-selected project context, pinned commit snapshot, exact token measurement; archives/old session notes loaded on demand.
+4. **M4.5 — Automatic rollover and handoff:** 180K warning, 190K action, 200K hard lock; preserve old chat, create fresh-budget successor; retain handoff in D1 if GitHub sync fails.
+5. **M4.6 — Token-aware context builder and historical recall:** exact full-prompt CountTokens fit; D1 lexical/FTS recall first; retrieve exact source message pairs and preserve IDs/provenance.
+6. **M4.7 — Compact Memory and Fork Chat:** 40K measured-token warning; preview compaction toward a 10K master where safe; archive source notes; fork with independent budget and pinned snapshot; no implicit main-memory writes.
+7. **M4.8 — Measured caching and retrieval optimization:** verify model-specific cache support/TTL/thresholds; measure hit rate, latency and cost; optional semantic indexing only after benchmark.
+
+### UX loop
+
+- **New Chat:** Scratchpad by default.
+- **Attach Project Memory:** optional project selector, not a blocking modal.
+- **Save to GitHub:** explicit preview and confirmation before commit.
+- **Roll Over:** appears near the budget threshold.
+- **Compact Memory** and **Fork Chat:** contextual actions, not primary top-bar actions.
+
+Scratchpad conversations remain in D1 and are available across devices. Automatic cleanup is not part of the first version; a future expiry feature must be Owner-configured and recoverable rather than silently deleting data.
+
+### Storage, security and infrastructure decisions
+
+- D1 remains canonical for complete conversations, message IDs, token usage/reservations, topics, pinned snapshots and idempotent memory-job/outbox state.
+- GitHub is the curated long-term project memory layer. A ChatGPT GitHub connector session is not a production credential for the Cloudflare Worker.
+- Use a GitHub App installation credential scoped to selected repositories with only required Contents permissions. Never expose installation tokens/private keys to browser JavaScript.
+- Treat all imported Markdown and retrieved history as untrusted reference data, not system instructions. Do not concatenate repository memory into trusted systemInstruction; preserve source paths, commit SHA and D1 message IDs.
+- Use D1 FTS/keyword retrieval first. Do not introduce Vectorize, Workers AI embeddings or a vector database until a representative evaluation proves the need, especially for English/Assamese/code/symbol retrieval.
+- R2 is optional for later export/archive only, not the transcript source of truth. KV is not canonical memory storage. Do not provision R2/KV/Vectorize/Workers AI as part of this documentation task.
+- For durable compaction/save jobs, use an idempotent D1 outbox plus a dedicated Owner memory Queue/Workflow with retries when implementation reaches that stage. Do not rely on post-response waitUntil for jobs that must survive disconnects or take longer than its documented limit.
+- Never promise a sub-three-second rollover. Precompute/maintain project state where safe, but return honest pending/sync states and preserve a D1 fallback.
+
+### Required implementation order
+
+**Do not jump to M4.2 yet.** First finish the still-open authenticated M4 interaction acceptance and the M4.1 token meter/reservation/200K boundary acceptance listed below. Then implement M4.2–M4.8 sequentially. Original M5 voice dictation and original M6–M8 scope/acceptance are unchanged and follow this nested continuity sequence.
+
 ## Current checkpoint (latest source inspected: 2026-11-18)
 
 - M0 — product, architecture, security and milestone baseline: **complete**.
@@ -44,6 +96,7 @@ Do not describe this as unlimited provider capacity. Do not apply student daily/
 - M4 verification: `npm run check` passed; `npm test` passed **482 tests across 72 files**; `npm run test:node` passed **62 tests across 9 files**; all three Worker dry-runs passed. Paired production deployment, root/health smoke checks, BRVIN service binding, Fatman readiness and release acceptance passed. No rollback.
 - M4 deployed versions: `brvin-service` `44acfa29-199c-4468-8b4a-23fefeaef363`; `parmar-ai` `10c630d6-ec4c-4407-8059-39193290e1ba`. Release manifest artifact `14367310746`.
 - **M4.1 — per-chat token budget (PR #335):** deployed. Each conversation has a 200,000-token cumulative lifetime budget, separate from model context and provider quotas. Exact Vertex CountTokens preflight runs before new/edit/regenerate prompt mutations; D1 atomically reserves prompt plus up to 8,192 output tokens; `maxOutputTokens` is capped to the remaining allowance; final usage comes from Vertex `usageMetadata.totalTokenCount`; missing final usage charges the reservation conservatively. Existing chats backfill from recorded assistant `total_tokens`; new chats start fresh. The UI shows used/reserved/remaining and a read-only state, plus a manual GitHub Markdown checkpoint reminder. The Owner saves a checkpoint and pastes its link into a new chat; no automatic GitHub read/import is implemented. PR [#335](https://github.com/ashini-x/parmar-ai/pull/335), merged `109e21b155b794ec2ac1cc29274d5513e56c6762`. PR validation [44221814569](https://github.com/ashini-x/parmar-ai/actions/runs/44221814569): TypeScript, 494 Vitest tests/72 files, 62 Node tests/9 files and three Worker dry-runs passed. Production [44222082173](https://github.com/ashini-x/parmar-ai/actions/runs/44222082173): paired deploy, root/health, BRVIN binding, Fatman readiness and release acceptance passed. `parmar-ai` version `e94b142b-5ddf-448e-a51b-0c9709bfb7f1`; `brvin-service` version `44547ea0-830e-41f8-97cb-95594959cae2`; artifact [14391366648](https://github.com/ashini-x/parmar-ai/actions/runs/44222082173/artifacts/14391366648). Production workflow acceptance is complete; authenticated Owner UI/boundary verification remains the next action.
+- **Approved M4.2–M4.8 continuity extension (documentation only):** see the architecture document linked above. The work is approved but not implemented. D1 stays canonical for live transcripts/accounting; GitHub will hold curated project memory only after dedicated runtime authentication is built. The current first action is still authenticated M4/M4.1 acceptance; do not start M4.2 before it is complete.
 - **M4 visual/activity acceptance:** final response rendering is now partially verified in the authenticated production browser. The Owner's 2026-11-18 screenshot shows a user bubble, assistant response card, Gemini 4 Carbon / `gemini-4-carbon` badge, HIGH thinking badge, green Completed tag, and response metadata of 11 seconds / 8,011 tokens. Production D1 independently confirms the same `hello` conversation has a successful Carbon HIGH assistant message at 00:50:52 UTC with 7,673 prompt tokens, 61 output tokens, 8,011 total tokens and 11,486 ms elapsed. The activity card's waiting/first-visible-token/streaming transitions were not captured in this screenshot. Still verify those transitions if needed, plus Stop with persisted partial state, Edit/resubmit and Regenerate; do not expose hidden thought tokens.
 - **Cross-model conversation continuity verified 2026-11-18:** in the same stored conversation (`e2bdc8bf…`), the Carbon HIGH attempt at 23:24:08 UTC failed, but subsequent Hydrogen HIGH and two Hydrogen XHIGH generations completed at 23:25:26, 23:26:04 and 23:27:25 UTC. Prompt usage grew from 5,842 to 6,717 tokens across those replies, confirming that earlier context remained available and the failed Carbon placeholder did not poison subsequent turns.
 - **Post-PR #333 Carbon HIGH production retry and recovery (2026-11-18):** the same `hello` conversation's 00:24:02 UTC retry failed with D1 `error`, zero tokens and empty content; matching Worker POST returned HTTP 502 after 7,339 ms on deployed `parmar-ai` version `8ae9c848-28a1-4ec7-9c5a-001f8380d7f9`. The generation-start handler maps upstream Vertex HTTP 401/403 to Worker 502. D1/Cloudflare telemetry did not retain the provider message, so that attempt's stage and denied permission/reason remain unknown. **A later Carbon HIGH request succeeded:** D1 at 00:50:52 UTC records `status=complete`, 7,673 prompt tokens, 61 output tokens, 8,011 total tokens, 11,486 ms elapsed and 227 response characters; the Owner screenshot shows the green Completed card and 11s / 8,011 tokens. Carbon is currently demonstrably callable; the earlier denial was intermittent. Do not add IAM roles or change OAuth scope based on the old generic denial.
@@ -52,7 +105,7 @@ Do not describe this as unlimited provider capacity. Do not apply student daily/
 - **Workspace startup/browser check completed 2026-11-18:** the Owner confirmed the page loads, conversations/models populate, New chat works and the composer is clickable. Do not repeat that setup check unless a new regression appears.
 - **M4 remaining authenticated acceptance:** successful Carbon HIGH and Hydrogen HIGH/XHIGH generation/context continuity are now verified in production. The Owner screenshot and D1 confirm the selected model/thinking badges, Completed response card and response timing/token metadata. Still verify Stop with persisted partial text, Edit/resubmit and Regenerate; capture the intermediate waiting/streaming activity state if not yet seen. The earlier Carbon HTTP 401/403 remains unexplained but a later successful Carbon request proves the model is currently callable. Keep M4 open until the interaction checks pass. Automatic in-place SSE reconnection remains deferred.
 - **Known deferred M4 capability:** automatic in-place SSE reconnection is not implemented. Saved partial text can be reopened and manually regenerated; do not claim automatic resume.
-- **Next action:** sign in to the deployed Owner workspace and verify the usage meter, checkpoint reminder, live usage refresh and server-enforced 200,000-token read-only boundary; then complete M4 Stop/partial retention, Edit/resubmit, Regenerate and waiting/streaming activity checks. Keep M4 open until these authenticated interactions pass. M5 voice dictation to editable text follows—not Gemini Live.
+- **Next action:** complete the authenticated M4 Stop/partial retention, Edit/resubmit, Regenerate and waiting/streaming activity checks, then complete M4.1's usage-meter refresh, in-flight reservation display and exact 200,000-token boundary check. Keep M4 open until those checks pass. After that, start M4.2 (Scratchpad/topic foundation), followed by M4.3–M4.8 in order. Only after this continuity sequence, resume original M5 voice dictation to editable text—not Gemini Live.
 - **Approved forward milestones:** M5 voice dictation; M6 selected-model/useful Gemini API tools only where compatible (for example Search grounding, URL context or code execution after verification); M7 Owner usage/cost visibility; M8 full security, quality and production acceptance. BRɅIN context remains a separate optional add-on outside this sequence.
 - **Scope explicitly excludes:** Gemini Live, real-time voice/video, speech-to-speech, assistant voice output, image/video/audio generation, computer-use/MCP by default, and required file/image/PDF uploads. Do not add these without a separate Owner-approved scope change.
 - Production maps `OWNER_DASHBOARD_USER=admin` to the Owner role. Sign out and sign in again if using a legacy pre-M1 session. Owner records remain separate from student data.
@@ -71,6 +124,12 @@ Re-read the roadmap for the full milestone ledger, architecture decisions, compl
 - Do not add Google tools, model modalities, file uploads or external integrations solely for feature parity. Validate that a capability is useful and supported by the exact selected model/API/project/location before implementing it.
 - Voice transcription is not assistant conversation: transcription provider choice is an M5 design decision. Compare browser support and privacy/quality/cost before choosing; raw audio is not retained by default.
 - Preserve current Admin Control Center, BRɅIN admin and student Telegram behaviour unless a task explicitly requires a reviewed change.
+
+- Treat token control as two separate layers: the existing 200,000-token cumulative conversation budget and a future exact token-aware per-request context budget. Never confuse either with the selected model's context window, output limit, provider quota or price tier.
+- Keep D1 as the untouched live transcript and usage authority. GitHub is curated/versioned project memory, only after a dedicated Worker GitHub App integration exists. The ChatGPT GitHub connector is not a runtime credential.
+- Before each M4.2–M4.8 task, read the memory/context architecture document and re-check live model/API cache support and Cloudflare resources. Do not enable R2, KV, Vectorize, Workers AI or a new Queue binding without a task-specific need, account verification and documentation.
+- Project memory is reference data, never system-policy text. Preserve message IDs, source paths and Git commit SHA; show a sync state only after verified commit.
+
 - Run the relevant tests; report exact evidence. Do not claim unrun tests or deployment.
 - Deploy only when the task/request authorizes deployment and the repository's release discipline is met.
 
@@ -103,3 +162,4 @@ When you finish the task:
 
 **Roadmap:** `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md`  
 **Continuation prompt:** `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md`
+**Memory/context architecture:** `docs/OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md`
