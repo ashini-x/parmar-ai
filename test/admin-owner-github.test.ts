@@ -61,7 +61,7 @@ function pemFromDer(bytes: Uint8Array): string {
 
 describe("Owner Intelligence M4.3 GitHub App authorization", () => {
   it("creates a least-privilege App, verifies a selected installation with PKCE, and attaches a repository to an Owner topic", async () => {
-    const env = ownerEnv();
+    const env = ownerEnv("owner-github-test-" + crypto.randomUUID());
     const cookie = await login(env);
     const pair = await crypto.subtle.generateKey(
       { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
@@ -154,15 +154,16 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     const manifestState = new URL(manifestResult.actionUrl).searchParams.get("state");
     expect(manifestState).toBeTruthy();
     const manifestCallback = await call(env, CALLBACK + "?code=manifest-code&state=" + encodeURIComponent(manifestState!), cookie);
-    expect(manifestCallback.status).toBe(303);
-    expect(manifestCallback.headers.get("location")).toBe("/admin/intelligence?github=app-created");
+    expect(manifestCallback.status).toBe(200);
+    expect(await manifestCallback.text()).toContain("/admin/intelligence?github=app-created");
 
     const replay = await call(env, CALLBACK + "?code=manifest-code&state=" + encodeURIComponent(manifestState!), cookie);
-    expect(replay.headers.get("location")).toBe("/admin/intelligence?github=error");
+    expect(replay.status).toBe(200);
+    expect(await replay.text()).toContain("/admin/intelligence?github=error");
 
     const appRow = await env.DB!.prepare(
       "SELECT app_id, app_slug, secret_ciphertext, status FROM owner_intelligence_github_app WHERE owner_id=?",
-    ).bind("owner-github-test").first<{ app_id: number; app_slug: string; secret_ciphertext: string; status: string }>();
+    ).bind(env.OWNER_DASHBOARD_USER).first<{ app_id: number; app_slug: string; secret_ciphertext: string; status: string }>();
     expect(appRow).toBeTruthy();
     expect(appRow?.app_id).toBe(appId);
     expect(appRow?.app_slug).toBe("brain-owner-memory");
@@ -191,12 +192,12 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     expect(authorizationState).toBeTruthy();
 
     const authorized = await call(env, CALLBACK + "?code=user-code&state=" + encodeURIComponent(authorizationState!), cookie);
-    expect(authorized.status).toBe(303);
-    expect(authorized.headers.get("location")).toBe("/admin/intelligence?github=installed");
+    expect(authorized.status).toBe(200);
+    expect(await authorized.text()).toContain("/admin/intelligence?github=installed");
 
     const installationRow = await env.DB!.prepare(
       "SELECT installation_id, account_login, authorized_user, status FROM owner_intelligence_github_installations WHERE owner_id=? AND installation_id=?",
-    ).bind("owner-github-test", installationId).first<{
+    ).bind(env.OWNER_DASHBOARD_USER, installationId).first<{
       installation_id: number; account_login: string; authorized_user: string; status: string;
     }>();
     expect(installationRow).toEqual(expect.objectContaining({
@@ -253,7 +254,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
 
     const topicRow = await env.DB!.prepare(
       "SELECT github_installation_id, repository_id, repository_owner, repository_name, repository_branch, memory_root FROM owner_intelligence_topics WHERE id=? AND owner_id=?",
-    ).bind(topic.id, "owner-github-test").first<Record<string, unknown>>();
+    ).bind(topic.id, env.OWNER_DASHBOARD_USER).first<Record<string, unknown>>();
     expect(topicRow).toEqual(expect.objectContaining({
       github_installation_id: installationId,
       repository_id: repositoryId,
@@ -272,7 +273,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
   });
 
   it("rejects a cross-site App setup mutation and keeps GitHub APIs Owner-only", async () => {
-    const env = ownerEnv("owner-github-csrf-test");
+    const env = ownerEnv("owner-github-csrf-test-" + crypto.randomUUID());
     const cookie = await login(env);
     const csrf = await call(env, "/admin/api/intelligence/github/app/manifest", cookie, {
       method: "POST", body: {},
@@ -289,7 +290,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     expect(rejected.status).toBe(403);
     expect(csrf.status).toBe(200);
 
-    const nonOwner = ownerEnv("different-owner");
+    const nonOwner = ownerEnv("different-owner-" + crypto.randomUUID());
     const nonOwnerCookie = await login(nonOwner);
     const topic = "5f4c5aa9-6f75-4d09-9dc4-1c6bdc9d5b00";
     const forbidden = await call(nonOwner, "/admin/api/intelligence/github/topics/" + topic + "/repository", nonOwnerCookie, {
