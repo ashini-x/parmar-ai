@@ -612,7 +612,7 @@ async function getVerifiedModelAccessToken(
  */
 export async function countOwnerGeminiInputTokens(
   env: Env,
-  input: { modelId: string; contents: OwnerGeminiContent[] },
+  input: { modelId: string; contents: OwnerGeminiContent[]; systemInstruction?: string },
   dependencies: OwnerProviderDependencies = defaultDependencies,
 ): Promise<number> {
   const definition = OWNER_GEMINI_MODEL_REGISTRY.find((model) => model.id === input.modelId);
@@ -624,8 +624,10 @@ export async function countOwnerGeminiInputTokens(
       typeof item.text === "string" && Boolean(item.text.trim()) && item.text.length <= 50_000 &&
       (index === 0 || item.role !== contents[index - 1]?.role));
   const contextChars = contents.reduce((total, item) => total + (typeof item?.text === "string" ? item.text.length : 0), 0);
-  if (!validTurnShape || contextChars > MAX_CONVERSATION_CONTEXT_CHARS) {
-    throw new OwnerGeminiProviderError("The conversation context is invalid or too large.");
+  if (!validTurnShape || contextChars > MAX_CONVERSATION_CONTEXT_CHARS ||
+      (input.systemInstruction !== undefined &&
+        (typeof input.systemInstruction !== "string" || input.systemInstruction.length > 20_000))) {
+    throw new OwnerGeminiProviderError("The conversation context or system instruction is invalid or too large.");
   }
 
   const project = configuredProject(env);
@@ -641,6 +643,9 @@ export async function countOwnerGeminiInputTokens(
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({
           contents: contents.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
+          ...(input.systemInstruction?.trim()
+            ? { systemInstruction: { parts: [{ text: input.systemInstruction }] } }
+            : {}),
         }),
         signal: controller.signal,
       },
