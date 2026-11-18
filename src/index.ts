@@ -3189,7 +3189,7 @@ const worker = {
 
       // GitHub's external App/installation callbacks use one-time D1 state bound to the Owner;
       // they cannot rely on the Owner's browser session surviving the round-trip.
-      if (url.pathname === "/admin/api/intelligence/github/callback") {
+      if (url.pathname === "/admin/api/intelligence/github/callback" || url.pathname === "/admin/api/intelligence/github/setup") {
         return withRequestId(await handleOwnerGithubCallback(request, env, url), requestId);
       }
 
