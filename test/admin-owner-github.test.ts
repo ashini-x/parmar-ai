@@ -73,6 +73,10 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     const installationId = 77_001;
     const repositoryId = 88_001;
     const tokenRequests: Array<{ path: string; body: Record<string, unknown> }> = [];
+    const baseCommitSha = "a".repeat(40);
+    const savedCommitSha = "b".repeat(40);
+    let currentBranchHead = baseCommitSha;
+    const savedFiles = new Map<string, string>();
 
     const githubFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -140,6 +144,43 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
       }
       if (url === "https://api.github.com/repos/ashini-x/parmar-ai/branches/feature%2Ftest-branch") {
         return new Response(JSON.stringify({ name: "feature/test-branch" }), { status: 200 });
+      }
+      if (url === "https://api.github.com/repos/ashini-x/parmar-ai/git/ref/heads/feature%2Ftest-branch" && method === "GET") {
+        return new Response(JSON.stringify({ object: { sha: currentBranchHead } }), { status: 200 });
+      }
+      if (url === "https://api.github.com/repos/ashini-x/parmar-ai/git/commits/" + baseCommitSha && method === "GET") {
+        return new Response(JSON.stringify({ sha: baseCommitSha, tree: { sha: "base-tree-sha" } }), { status: 200 });
+      }
+      if (url === "https://api.github.com/repos/ashini-x/parmar-ai/contents/memory/index.md?ref=feature%2Ftest-branch" ||
+          url.startsWith("https://api.github.com/repos/ashini-x/parmar-ai/contents/memory/project-memory.md?ref=feature%2Ftest-branch") ||
+          url.startsWith("https://api.github.com/repos/ashini-x/parmar-ai/contents/memory/progress.md?ref=feature%2Ftest-branch") ||
+          url.startsWith("https://api.github.com/repos/ashini-x/parmar-ai/contents/memory/decisions.md?ref=feature%2Ftest-branch")) {
+        return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
+      }
+      if (url === "https://api.github.com/repos/ashini-x/parmar-ai/git/trees" && method === "POST") {
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer ghs-short-lived-installation-token");
+        for (const item of (body.tree as Array<{ path: string; content: string }>)) savedFiles.set(item.path, item.content);
+        return new Response(JSON.stringify({ sha: "created-tree-sha" }), { status: 201 });
+      }
+      if (url === "https://api.github.com/repos/ashini-x/parmar-ai/git/commits" && method === "POST") {
+        return new Response(JSON.stringify({ sha: savedCommitSha }), { status: 201 });
+      }
+      if (url === "https://api.github.com/repos/ashini-x/parmar-ai/git/refs/heads/feature%2Ftest-branch" && method === "PATCH") {
+        currentBranchHead = String(body.sha);
+        return new Response(JSON.stringify({ ref: "refs/heads/feature/test-branch", object: { sha: currentBranchHead } }), { status: 200 });
+      }
+      if (url === "https://api.github.com/repos/ashini-x/parmar-ai/git/commits/" + savedCommitSha && method === "GET") {
+        return new Response(JSON.stringify({ sha: savedCommitSha, tree: { sha: "created-tree-sha" } }), { status: 200 });
+      }
+      if (url.includes("/contents/") && url.includes("?ref=" + savedCommitSha) && method === "GET") {
+        const encodedPath = new URL(url).pathname.split("/contents/")[1];
+        const path = decodeURIComponent(encodedPath);
+        const value = savedFiles.get(path);
+        if (value === undefined) return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
+        const bytes = new TextEncoder().encode(value);
+        let binary = "";
+        for (const byte of bytes) binary += String.fromCharCode(byte);
+        return new Response(JSON.stringify({ type: "file", encoding: "base64", content: btoa(binary) }), { status: 200 });
       }
       return new Response(JSON.stringify({ message: "Unexpected GitHub request: " + method + " " + url }), {
         status: 500, headers: { "content-type": "application/json" },
@@ -272,6 +313,85 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
       repository_branch: "feature/test-branch",
       memory_root: "memory",
     }));
+
+    const createdConversation = await call(env, "/admin/api/intelligence/conversations", cookie, {
+      method: "POST", body: { title: "GitHub save acceptance" },
+    });
+    expect(createdConversation.status).toBe(201);
+    const conversation = (await createdConversation.json() as { conversation: { id: string } }).conversation;
+    const message = await call(env, "/admin/api/intelligence/conversations/" + conversation.id + "/messages", cookie, {
+      method: "POST", body: { content: "Please preserve this tested checkpoint." },
+    });
+    expect(message.status).toBe(201);
+
+    const previewResponse = await call(
+      env,
+      "/admin/api/intelligence/github/conversations/" + conversation.id + "/preview",
+      cookie,
+      { method: "POST", body: { topicId: topic.id } },
+    );
+    expect(previewResponse.status, await previewResponse.clone().text()).toBe(201);
+    const preview = (await previewResponse.json() as { preview: {
+      id: string; repository: string; branch: string; baseCommitSha: string;
+      files: Array<{ name: string; content: string }>; note: string;
+    } }).preview;
+    expect(preview.repository).toBe("ashini-x/parmar-ai");
+    expect(preview.branch).toBe("feature/test-branch");
+    expect(preview.baseCommitSha).toBe(baseCommitSha);
+    expect(preview.files).toHaveLength(5);
+    expect(preview.files.some((file) => file.name === "sessions/" + new Date().toISOString().slice(0, 10) + "-" +
+      conversation.id.slice(0, 8) + "-" + preview.id.slice(0, 8) + ".md")).toBe(true);
+    expect(preview.note).toContain("not a Gemini-generated summary");
+    const writeTokenCountBefore = tokenRequests.filter((entry) => entry.body.permissions?.contents === "write").length;
+
+    const notConfirmed = await call(env, "/admin/api/intelligence/github/previews/" + preview.id + "/confirm", cookie, {
+      method: "POST", body: { confirmed: false, files: preview.files },
+    });
+    expect(notConfirmed.status).toBe(400);
+    expect(tokenRequests.filter((entry) => entry.body.permissions?.contents === "write")).toHaveLength(writeTokenCountBefore);
+
+    const saved = await call(env, "/admin/api/intelligence/github/previews/" + preview.id + "/confirm", cookie, {
+      method: "POST", body: { confirmed: true, files: preview.files },
+    });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    const savedBody = await saved.json() as { status: string; commitSha: string; topicId: string; files: string[] };
+    expect(savedBody).toMatchObject({ status: "synced", commitSha: savedCommitSha, topicId: topic.id });
+    expect(savedBody.files).toHaveLength(5);
+    expect(tokenRequests.filter((entry) => entry.body.permissions?.contents === "write")).toHaveLength(writeTokenCountBefore + 1);
+    expect(tokenRequests.at(-1)?.body).toEqual({ permissions: { contents: "write" }, repository_ids: [repositoryId] });
+
+    const syncedAgain = await call(env, "/admin/api/intelligence/github/previews/" + preview.id + "/confirm", cookie, {
+      method: "POST", body: { confirmed: true, files: preview.files },
+    });
+    expect(syncedAgain.status).toBe(200);
+    expect((await syncedAgain.json() as { idempotent?: boolean }).idempotent).toBe(true);
+    expect(tokenRequests.filter((entry) => entry.body.permissions?.contents === "write")).toHaveLength(writeTokenCountBefore + 1);
+
+    const savedTopic = await env.DB!.prepare(
+      "SELECT current_commit_sha FROM owner_intelligence_topics WHERE id=? AND owner_id=?",
+    ).bind(topic.id, env.OWNER_DASHBOARD_USER).first<{ current_commit_sha: string }>();
+    expect(savedTopic?.current_commit_sha).toBe(savedCommitSha);
+    const savedConversation = await env.DB!.prepare(
+      "SELECT topic_id,session_kind FROM owner_intelligence_conversations WHERE id=? AND owner_id=?",
+    ).bind(conversation.id, env.OWNER_DASHBOARD_USER).first<{ topic_id: string; session_kind: string }>();
+    expect(savedConversation).toEqual({ topic_id: topic.id, session_kind: "topic" });
+
+    const stalePreviewResponse = await call(
+      env,
+      "/admin/api/intelligence/github/conversations/" + conversation.id + "/preview",
+      cookie,
+      { method: "POST", body: { topicId: topic.id } },
+    );
+    expect(stalePreviewResponse.status).toBe(201);
+    const stalePreview = (await stalePreviewResponse.json() as { preview: { id: string; files: Array<{ name: string; content: string }> } }).preview;
+    currentBranchHead = "c".repeat(40);
+    const writeCountBeforeConflict = tokenRequests.filter((entry) => entry.body.permissions?.contents === "write").length;
+    const conflict = await call(env, "/admin/api/intelligence/github/previews/" + stalePreview.id + "/confirm", cookie, {
+      method: "POST", body: { confirmed: true, files: stalePreview.files },
+    });
+    expect(conflict.status).toBe(409);
+    expect((await conflict.json() as { error: string }).error).toBe("github_branch_conflict");
+    expect(tokenRequests.filter((entry) => entry.body.permissions?.contents === "write")).toHaveLength(writeCountBeforeConflict);
 
     const page = await call(env, "/admin/intelligence", cookie);
     const html = await page.text();
