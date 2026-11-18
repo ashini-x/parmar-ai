@@ -10,7 +10,7 @@
 
 Extend the deployed Owner Gemini chat so a project discussion can be saved, reopened after weeks, continued across independent chats, compacted safely, forked for experiments, and rolled over before the per-chat budget is exhausted.
 
-This is a design specification, not a claim that these capabilities exist today. The current workspace still has manual Markdown checkpoints only. No GitHub runtime credential, topic selector, automatic memory sync, project-memory loader, rollover workflow, historical recall tool, compaction or chat fork is currently shipped.
+This is a design specification for the capabilities that extend the deployed Owner workspace. M0–M4.3 (including Owner-scoped topics, a dedicated encrypted GitHub App credential, and reviewed preview/confirm Save to GitHub) are merged and deployed; authenticated Owner installation/save/conflict browser acceptance remains pending. Automatic Project Memory prompt loading, hierarchical hub manifests, immutable per-conversation snapshots, rollover, historical recall, compaction, fork and AI collaboration exchange are not yet shipped.
 
 The implementation must preserve the existing Owner-only Admin Control Center, Vertex authentication and SSE path, selected-model behaviour, D1 conversation storage, and the student/BRɅIN security boundaries. It must not rebuild the chat UI or replace the current provider adapter.
 
