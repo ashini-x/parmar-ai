@@ -1,6 +1,7 @@
 import type { Env } from "../config/env";
 import { ensureOwnerIntelligenceSchema } from "./intelligence";
 import { json, methodNotAllowed, notFound } from "../http/response";
+import { ensureOwnerIntelligenceSchema } from "./intelligence";
 
 const API = "https://api.github.com";
 const CALLBACK = "/admin/api/intelligence/github/callback";
@@ -135,6 +136,7 @@ async function github<T>(path: string, token: string, method = "GET", body?: unk
 }
 async function ensureSchema(env: Env): Promise<void> {
   if (!env.DB) throw new Error("The Owner Intelligence database is not configured.");
+  await ensureOwnerIntelligenceSchema(env);
   await ensureOwnerIntelligenceSchema(env);
   const results = await env.DB.batch([
     env.DB.prepare("CREATE TABLE IF NOT EXISTS " + APP_TABLE + " (owner_id TEXT PRIMARY KEY, app_id INTEGER NOT NULL, app_slug TEXT NOT NULL, app_name TEXT NOT NULL, redirect_uri TEXT NOT NULL, secret_ciphertext TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'created', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"),
