@@ -243,3 +243,19 @@ Owner-scoped preview UUID, source conversation and topic IDs, verified installat
 The existing `owner_intelligence_topics` table is extended with GitHub installation ID and repository ID in addition to its existing repository owner/name/branch, memory root, manifest revision and current commit SHA fields. A successful verified save updates the topic's current commit SHA and associates the existing Scratchpad conversation to the topic. This is not the M4.4 prompt snapshot; M4.4 separately records the exact repo/branch/commit selected for each conversation's active Project Memory context.
 
 The Save draft is a normal metered Gemini generation. Its prompt/output tokens are recorded through the same `owner_intelligence_session_usage` and `owner_intelligence_token_reservations` records as chat generation. GitHub preview/confirm does not rewrite or delete transcript rows. The existing 200,000-token budget remains unchanged.
+
+## Owner Memory Hub — planned project and collaboration records
+
+The single planned private `owner-memory-hub` GitHub repository is a curated document store, not a code monorepo. It will hold a versioned hub manifest and project catalog, then project/workstream/feature namespaces with stable immutable IDs, JSON manifests and human-readable Markdown memory. Projects may reference multiple source repositories by full name, path hints and commit SHA; application source trees are not copied into the hub.
+
+Planned logical records/files (schemas and D1 persistence must be designed and migrated in M4.4; these are not deployed D1 tables):
+- Hub manifest/schema revision and project registry entries.
+- Project, workstream and feature IDs, slugs, lifecycle state and parent/child relationships.
+- Source-repository references (repository full name, intended role, default branch, relevant paths and last verified commit reference).
+- Per-conversation primary project ID plus optional workstream/feature IDs.
+- Immutable conversation memory snapshot: hub repository ID/full name, branch, commit SHA, manifest revision and exact selected paths.
+- Collaboration thread/round IDs, author system, timestamps, status, source artifact commit SHA and related proposal/review/decision paths.
+- Owner-accepted decision records and implementation-ready task brief IDs.
+- ChatGPT implementation report references: code repository, PR/commit SHAs, test evidence, workflow/run IDs, deployed version IDs and rollback state.
+
+Current deployed schema still has a flat Owner topic with one repository/branch/memory-root association and conversation `topic_id`. During the M4.3 transition, multiple topics may point to the same hub repository with distinct memory-root paths. M4.4 must add hierarchical identity/scope and pinned snapshots additively without resetting existing conversation IDs, transcript messages, generation metadata, or 200K usage/reservations. Do not implement these proposed entities/columns before inspecting the actual current migrations and planning compatibility/rollback.

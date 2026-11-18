@@ -9,8 +9,9 @@ Before changing anything, inspect the latest `main` branch and read, in this ord
 1. `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md` — authoritative milestone status, gates, decisions and task log.
 2. `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md` — this handoff.
 3. `docs/OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md` — approved memory/context design, including the Cloudflare Owner Context Replicator.
-4. `docs/TEST_PLAN.md` and `docs/README.md`.
-5. Re-read the source files and deployment/workflow state relevant to the first incomplete task. Do not rely on an old chat summary or assume this prompt is newer than GitHub.
+4. `docs/OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md` — authoritative Gemini/ChatGPT role split, central hub hierarchy, exchange artifacts and Owner approval gates.
+5. `docs/TEST_PLAN.md` and `docs/README.md`.
+6. Re-read the source files and deployment/workflow state relevant to the first incomplete task. Do not rely on an old chat summary or assume this prompt is newer than GitHub.
 
 ## Product and security boundary
 
@@ -108,3 +109,37 @@ Remaining gate: Owner creates the private App and installs it on selected reposi
 PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`. Current-head PR validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files and three Worker dry-runs. Production release [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment, root/health, BRVIN binding, Fatman retrieval and release acceptance. Deployed `parmar-ai` version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and `brvin-service` version `d43a9f7b-32b3-486f-9845-75ed11811165`, both at 100%; release artifact [14464228113](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092/artifacts/14464228113).
 
 **Remaining manual Owner acceptance:** create/install the dedicated App on selected repositories; attach project topic/repository/branch/memory root; preview and edit all five files; confirm; inspect the exact GitHub commit/files; verify D1 topic association and token meter; advance branch after preview and confirm Conflict without external edit overwrite. Once these pass, M4.3 can be marked fully accepted and M4.4 may begin.
+
+## 2026-11-19 authoritative architecture and handoff update
+
+This section supersedes any earlier wording in this prompt that assumes one GitHub repository per project or that Gemini is the application-code executor.
+
+### Locked operating model
+
+- **Owner:** director and final authority for project registration, architecture decisions, accepted memory, implementation authorization and merge/deployment approval.
+- **Gemini Owner Intelligence:** discussion, architecture, planning, critique, correction, project-memory curation and implementation-brief drafting. It does not push/merge/deploy application source code.
+- **ChatGPT Software Engineer:** separately authorized engineering/release executor. It reads Owner-approved briefs, inspects the actual source repositories, implements, tests, opens/updates PRs, merges and deploys when authorized, and writes a factual implementation report to the hub.
+- GitHub is the versioned document exchange layer; no live agent-to-agent wake-up or private chat transcript sharing is implemented. The Owner explicitly asks each AI to read/publish selected artifacts.
+- One private `owner-memory-hub` is the target memory/collaboration repo. It does not contain source code. Existing source repositories remain independent and are represented by references.
+- Dedicated BRɅIN Owner Memory App: install only on the hub, selected-only, exact Metadata read + Contents read/write, no events. ChatGPT uses separate credentials; never share its connector token with Cloudflare or the Worker App.
+
+### Owner's immediate actions
+
+1. Create `owner-memory-hub` under the GitHub account that owns BRɅIN Owner Memory. Set it to **Private**, initialize with a README, use `main` as the default branch and do not manually create folders or copy source code. Its existence is not yet verified in this task.
+2. In GitHub → Settings → Applications → Installed GitHub Apps → BRɅIN Owner Memory → Configure, change Repository access to **Only select repositories** and select only `owner-memory-hub`. The current production callback intentionally rejects `repository_selection=all`; do not choose All repositories.
+3. Return to Owner Intelligence, start the Install GitHub App flow again and complete the GitHub authorization/PKCE round trip so the new selected-only installation is verified and recorded in D1.
+4. Create one Owner topic per project for the M4.3 transition. Attach the same `owner-memory-hub` repository and a unique memory root such as `projects/<project-id>/memory` to each topic. Do not create one repo per project. Hierarchical workstream/feature selectors come with M4.4.
+5. Complete the real M4.3 preview/edit/confirm/read-back and stale-branch Conflict browser acceptance before M4.4 begins.
+
+### M4.4–M4.8 design authority
+
+Read [OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md](OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md) before implementing memory/collaboration. M4.4 adds the central hub manifest/project catalog, stable project/workstream/feature IDs, immutable per-conversation hub commit snapshots, manifest-selected active memory and strict cross-project isolation. M4.3's current branch-head conflict guard must remain until safe path-aware multi-writer concurrency is implemented. M4.5 retains project-aware rollover and durable handoffs. M4.6 implements the Cloudflare Owner Context Replicator and all original fixed-B/O(N) acceptance. M4.7 and M4.8 remain as already specified.
+
+### Original Gemini problems remain non-negotiable
+
+- Preserve the exact M4.1 200,000-token cumulative budget per conversation and its D1 CountTokens/reservation/settlement/concurrency rules.
+- M4.6 solves quadratic full-history replay; the exact final prompt, including project/workstream/feature memory, selected collaboration artifacts, recent turns and relevant exact historical D1 message pairs, must fit one selected-model-specific input budget B. Every request is ≤ B; for fixed B, aggregate prompt input over N turns is ≤ N × B = O(N). Run deterministic 10/50/100/200-turn tests and compare to a naïve O(N²) full-history baseline.
+- Keep D1 as the full transcript authority. Do not copy every private turn to GitHub. Keep all seven Owner scenarios in the canonical Memory and Context Architecture.
+- ChatGPT execution begins only from an Owner-approved implementation-ready brief. Proposals/reviews are not authorization. ChatGPT reports actual source commits, tests, deployment workflow/version and rollback evidence; Gemini may audit the report.
+
+Canonical documents now include [OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md](OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md). Docs-only architecture updates do not justify a production Worker deployment.

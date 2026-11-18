@@ -301,7 +301,7 @@ PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/
 
 Current-head PR validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files, and all three Worker dry-run bundles. PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`. Production workflow [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment, root/health, BRVIN service binding, Fatman retrieval and release-acceptance checks. Deployed parmar-ai version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and brvin-service version `d43a9f7b-32b3-486f-9845-75ed11811165`, each at 100% traffic. The remaining gate is a real Owner-authenticated browser walkthrough of App creation/selected-only installation, topic attach, preview/edit/confirm, exact GitHub read-back and stale-branch Conflict handling.
 
-## Owner Intelligence — project memory and token-aware continuity (M4.2 Scratchpad/topic foundation deployed; M4.3–M4.8 planned)
+## Owner Intelligence — project memory and token-aware continuity (M4.2–M4.3 implementation deployed; M4.3 live acceptance pending; M4.4–M4.8 planned)
 
 The following are future acceptance criteria, not tests that have passed in the current release. See [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md).
 
@@ -368,3 +368,41 @@ These are planned tests, not tests that have passed. The Replicator is an approv
 - No model, thinking level, prompt policy or access boundary changes silently as a caching fallback.
 
 These criteria must be added to the relevant automated suites as each sub-milestone is implemented. The existence of this planned checklist is not evidence of implementation or production acceptance.
+
+## Owner Memory Hub and AI Collaboration — planned acceptance (not run)
+
+These checks become mandatory as M4.4–M4.8 implement the approved architecture. They are not evidence of current runtime capability.
+
+### Repository and separation
+- Verify the Owner Memory App is installed in selected-only mode on the private hub repository and has only Metadata read + Contents read/write, with no webhook events.
+- Verify the hub contains no application source trees or credentials. Source repositories remain unchanged and are referenced only by repository/path/commit metadata.
+- Verify ChatGPT uses its separate GitHub/deployment authorization; no ChatGPT credential is stored in Worker bindings, D1, prompts or logs.
+- Verify multiple project topics can target the same hub repository while using distinct project memory-root paths during the M4.3 transition.
+
+### Hierarchy and context isolation
+- Create unrelated projects and several workstreams/features under one project using stable IDs and validated manifests.
+- Verify a new Scratchpad stays unclassified until Owner promotion.
+- Verify one project/workstream/feature conversation loads only its allowed manifest paths and excludes unrelated projects by default.
+- Verify cross-project retrieval occurs only after explicit Owner intent and returns source commit/path provenance.
+- Verify snapshots remain pinned when the hub branch advances; refresh is explicit.
+
+### AI collaboration
+- Record a Gemini proposal, separate ChatGPT review, Gemini response and Owner decision as distinct versioned artifacts.
+- Prove no proposal/review can set its own status to accepted or implementation-ready.
+- Prove ChatGPT refuses implementation of a proposed-only/unapproved brief and requires a complete bounded implementation contract.
+- Verify ChatGPT implementation reports contain actual PR/merge commit, test results, deployment workflow/version and rollback evidence; missing evidence stays explicitly unknown.
+- Verify Gemini treats ChatGPT artifacts as untrusted input and can flag differences from the accepted design without mutating source code.
+- Verify no GitHub commit automatically wakes the other AI or shares its private transcript; the Owner initiates each handoff.
+
+### Shared-hub concurrency
+- Two writers changing separate project paths must not lose either update.
+- A same-path or controlling-manifest collision must result in a reviewable conflict, not force-push or silent last-write-wins.
+- An unrelated branch advance may be rebased only after touched-file and manifest blob SHA preconditions pass; retry is bounded and idempotent.
+- Until path-aware concurrency is shipped, the existing strict branch-head conflict behavior remains the accepted safe fallback.
+
+### Original Gemini token/continuity acceptance remains mandatory
+- Preserve the exact M4.1 200,000-token per-conversation budget and reservation/settlement ordering.
+- Count project, workstream, feature and collaboration artifacts inside one M4.6 per-request budget B with the exact final Vertex CountTokens request.
+- For fixed B, test 10, 50, 100 and 200 turns; prove every request ≤ B and aggregate prompt input ≤ N × B while a naïve full-history baseline exhibits triangular growth.
+- Preserve complete D1 transcript, exact historical message IDs, role order and provenance despite compaction, rollover, failed retrieval, forks and GitHub sync conflicts.
+- Preserve all seven Owner journeys recorded in the canonical Memory and Context Architecture.

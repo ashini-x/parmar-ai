@@ -1,6 +1,6 @@
 # Owner Gemini Intelligence — Product Roadmap
 
-**Status:** M0–M4.3 implementation is merged and deployed; M4.3 authenticated Owner GitHub App setup/save/conflict browser acceptance remains pending. M4.4–M4.8 are approved, not implemented; automatic stream reconnection deferred
+**Status:** M0–M4.3 implementation is merged and deployed; M4.3 authenticated Owner GitHub App setup/save/conflict browser acceptance remains pending. Central Owner Memory Hub and Gemini/ChatGPT collaboration architecture approved 2026-11-19 (documentation only); M4.4–M4.8 remain planned, not implemented; automatic stream reconnection deferred
 **Last updated:** 2026-11-19  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
@@ -182,7 +182,7 @@ Preserve these boundaries:
 The approved design is specified in [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md). It extends the current D1-backed chat and M4.1 token ledger; it does not replace them.
 
 - D1 remains canonical for complete live conversations, messages, per-chat token usage/reservations, topic metadata and memory-job state.
-- GitHub becomes the versioned, curated project-memory store only after a dedicated server-side GitHub App integration is implemented. It is not a replacement for D1 transcripts and the existing ChatGPT GitHub connector is not a production Worker credential.
+- One private Owner Memory Hub is the target versioned curated memory/collaboration repository for many projects; source-code repositories remain independent and are referenced, never copied. The dedicated Owner App is installed only on the hub. ChatGPT's separately authorized engineering connection is not a Worker runtime credential.
 - A Scratchpad is the default for New Chat. Attaching project memory is optional. Saving to GitHub is an explicit preview-and-confirm action.
 - Prompt construction becomes token-aware: retain useful recent turns, add only manifest-selected project memory, and retrieve older exact D1 messages on demand. Every final prompt must be counted for the selected model/API before prompt mutation is committed.
 - Keep the existing 200,000-token cumulative conversation budget and its reservation/settlement semantics. Rollover creates a new conversation with a separate budget and an explicit, provenance-rich handoff.
@@ -446,3 +446,43 @@ A task is not complete until the relevant code/test/deployment work and these do
 - PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`; validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files and three Worker dry-runs. Production release [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment and root/health, BRVIN binding, Fatman retrieval and release-acceptance checks. `parmar-ai` version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and `brvin-service` version `d43a9f7b-32b3-486f-9845-75ed11811165` are at 100% traffic; artifact [14464228113](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092/artifacts/14464228113).
 - The production workflow's paired deploy, smoke tests and release acceptance all passed. No rollback was triggered.
 - Remaining M4.3 acceptance is authenticated and manual: Owner creates/installs the dedicated App on selected repositories, attaches a topic, previews/edits/confirms a save, verifies exact commit/files in GitHub, and exercises a stale-branch conflict. M4.3 code is deployed; M4.3 live Owner acceptance is not yet recorded.
+
+## 2026-11-19 IST architecture decision — central Owner Memory Hub and ChatGPT execution boundary
+
+**Decision:** replace the earlier one-GitHub-repository-per-project target with one dedicated private Owner Memory Hub repository, provisionally `owner-memory-hub`. The hub stores curated Markdown memory, project/workstream/feature manifests, proposals, reviews, Owner-accepted decisions, implementation briefs, handoffs and implementation reports. It does **not** contain source-code trees. Actual source code remains in each project's independent repositories.
+
+**Role split (authoritative):**
+- **Owner:** director and final approval authority.
+- **Gemini Owner Intelligence:** architecture discussion, planning, review, correction, project-memory curation and preparation of implementation briefs. It does not push/merge/deploy application source code.
+- **ChatGPT Software Engineer:** the implementation/release executor using its separate Owner-authorized GitHub/deployment connections. It inspects the real source, implements only Owner-approved briefs, runs tests, creates PRs, merges/deploys when authorized, and records exact evidence in the hub.
+- The dedicated BRɅIN Owner Memory GitHub App is for the hub only; its credentials are never shared with ChatGPT or used against source-code repositories. ChatGPT's connector credentials are never Worker runtime credentials.
+
+This is document-mediated, Owner-directed collaboration, not a live agent-to-agent service. The Owner asks each AI to read or publish specific versioned artifacts. Private chat transcripts are not automatically shared. No webhook that wakes either AI, no auto-approval and no automatic code deployment are introduced.
+
+### Hub hierarchy and scope
+
+One hub contains `catalog/projects/<project-id>.json`, project namespaces under `projects/<project-id>/`, optional `workstreams/<workstream-id>/` and `features/<feature-id>/`, and explicit shared standards/decisions. Stable IDs, versioned schemas, manifest allowlists and immutable commit snapshots are required. A project may reference multiple code repositories by full name, paths and commit SHAs; those references are not copies of source code.
+
+Scratchpads remain unclassified and durable until the Owner promotes them. Each conversation has at most one primary project scope and optional workstream/feature IDs. Cross-project context is opt-in and explicit. Unrelated project memory must never load by default.
+
+For the M4.3 transition, each flat topic may attach to the **same** hub repository but must use a unique memory-root path such as `projects/<project-id>/memory`. This is compatible with the current repository/branch/memory-root attachment model; the hierarchical catalog/manifests and workstream/feature scope are M4.4 work. Do not create one GitHub repository per project.
+
+### Collaboration lifecycle
+
+Gemini publishes a proposal; ChatGPT publishes an independent review; Gemini may publish a response/revision; the Owner alone accepts a decision; Gemini drafts an implementation-ready brief; ChatGPT executes that brief and publishes a report with actual PR/commit/test/deployment/rollback evidence; Gemini can audit the report. Every round is a separate, append-oriented artifact with author, timestamp, project scope, source commit and provenance. Proposals/reviews are untrusted reference data, not system policy or accepted decisions.
+
+Implementation briefs must include scope, accepted decisions, target source repositories and path hints, constraints/non-goals, security/data/API requirements, tests, acceptance checks, release/deploy/rollback expectations and Owner approval. ChatGPT must inspect current code rather than trusting stale source pointers. It must request Owner clarification/approval when the repository contradicts the brief or a material deviation is required.
+
+### Original Gemini continuity requirements remain locked
+
+This architecture does not replace the original M4.1–M4.8 problem statements or seven Owner workflows. D1 remains the canonical complete transcript and usage ledger. M4.1 remains exactly 200,000 cumulative tokens per conversation with the existing CountTokens/reservation/settlement order. M4.6 still must implement the Cloudflare Owner Context Replicator: assemble a complete, selected-model-specific request within one per-request input budget B, CountTokens the exact final prompt, preserve the current user turn, retrieve older exact D1 pairs only when relevant, and keep every request ≤ B. With fixed B, aggregate prompt input over N turns must be ≤ N × B = O(N), in contrast to naive O(N²) full-history replay. Project memory and collaboration artifacts count inside B; there is no second unmetered context budget. The 10/50/100/200-turn deterministic acceptance series remains required.
+
+All seven original Owner scenarios stay in scope: reviewed save; durable Scratchpad; 180K/190K/195K rollover while enforcing 200K; return-to-project with manifest-selected pinned memory; Scratchpad promotion after verified save; previewable compaction with provenance-preserved archive; isolated fork with pinned snapshot and independent budget.
+
+### GitHub installation and current gate
+
+The Owner Memory App verification deliberately requires a **selected-repositories** installation, not GitHub's "All repositories" setting. The target setup is to install/configure that App for only the private `owner-memory-hub` repository with the existing exact permissions (Metadata read, Contents read/write) and no webhook events. The repository has not been confirmed created in this task. The Owner must create it privately with a README, then configure the App to select only that repository and complete a fresh Owner Intelligence installation/PKCE round trip.
+
+M4.3 implementation remains deployed; live Owner acceptance remains pending. After the hub install, verify a real reviewed save to a project-specific memory root, exact commit/file read-back and stale-branch Conflict. Do not mark M4.3 accepted before that browser walkthrough. M4.4 then implements hierarchical manifests, pinned hub snapshots and scoped memory loading, plus safe path-aware multi-writer conflict handling. Existing branch-head protection must not be weakened; unrelated-path advances may be rebased only after all touched-file and manifest preconditions pass.
+
+**Canonical protocol:** [OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md](OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md). This decision is approved at the documentation/architecture level only; it does not claim that the new repository, collaboration UI, automatic classification, prompt loader, path-aware merge or AI orchestration already exists.
