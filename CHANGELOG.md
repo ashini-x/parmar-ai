@@ -1,3 +1,11 @@
+## 2026-11-19 IST: Owner Intelligence topic creation route bug found; corrective fix under validation
+
+- Owner reported topic creation showed a red error/Retry and the topic did not appear. A read-only production D1 query confirmed zero rows in `owner_intelligence_topics`; the attempted topic was not created.
+- Root cause: the browser client called `/admin/api/intelligence/conversations/topics`, but the deployed Worker exposes `/admin/api/intelligence/topics`. Topic list, create and rename were all affected.
+- Corrective change introduces a dedicated `topicsApi`, updates GET/POST/PATCH calls and adds a topic-specific retry action that refreshes topics rather than conversation history. A regression assertion covers the correct paths and retry behavior.
+- Fix is in code review/CI and is not yet deployed at the time of this entry. Owner must not retry topic creation until the production Worker fix passes validation and deploys.
+- No production D1 row was created or manually inserted. No source repo or Memory Hub content was changed.
+
 ## 2026-11-19 IST: Owner Memory Hub installation verified in Owner Intelligence
 
 - Owner-provided production screenshot shows `Connected · 1 verified installation(s)`, account `ashini-x · User`, and repository `ashini-x/owner-memory-hub · Private`; branch field is `main`.

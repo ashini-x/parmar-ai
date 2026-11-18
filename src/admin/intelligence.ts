@@ -1401,6 +1401,7 @@ function workspaceHtml(): string {
 .new-topic-button:hover,.rename-topic-button:not(:disabled):hover{background:#363636;color:#fff}
 .rename-topic-button{align-self:flex-start;padding:5px 7px;font-size:9px}
 .rename-topic-button:disabled{opacity:.4;cursor:not-allowed}
+.topic-status{display:flex;flex-direction:column;gap:6px;font-size:10px;line-height:1.45;color:#e5b0b0;overflow-wrap:anywhere}.topic-status[hidden]{display:none}.topic-status-retry{align-self:flex-start;border:1px solid #555;background:#303030;color:#eee;border-radius:7px;padding:5px 9px;font-size:10px;cursor:pointer}.topic-status-retry:hover{background:#414141}.topic-status-retry:disabled{opacity:.55;cursor:wait}
 .github-panel{display:flex;flex-direction:column;gap:7px;margin-top:12px;padding:10px;border:1px solid #303030;border-radius:10px;background:#1d1d1d}
 .github-panel-title{font-size:9px;letter-spacing:.12em;font-weight:700;color:#929292}
 .github-panel-status{font-size:10px;color:#c6c6c6;line-height:1.4}
@@ -1451,6 +1452,7 @@ function workspaceHtml(): string {
       <button class="new-topic-button" id="newTopic" type="button">＋ Topic</button>
     </div>
     <button class="rename-topic-button" id="renameTopic" type="button" disabled>Rename selected topic</button>
+    <div class="topic-status" id="topicStatus" role="status" aria-live="polite" hidden></div>
   </div>
   <section class="github-panel" aria-label="GitHub project connection">
     <div class="github-panel-title">GITHUB PROJECT MEMORY</div>
@@ -1520,6 +1522,7 @@ export function ownerIntelligenceClientScript(): Response {
 (function(){
   "use strict";
   var api="/admin/api/intelligence/conversations";
+  var topicsApi="/admin/api/intelligence/topics";
   var state={conversations:[],topics:[],githubInstallations:[],githubRepositories:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
   var history=document.getElementById("history");
   var messages=document.getElementById("messages");
@@ -1540,6 +1543,7 @@ export function ownerIntelligenceClientScript(): Response {
   var newChatTopic=document.getElementById("newChatTopic");
   var newTopicButton=document.getElementById("newTopic");
   var renameTopicButton=document.getElementById("renameTopic");
+  var topicStatus=document.getElementById("topicStatus");
   var githubStatus=document.getElementById("githubStatus");
   var githubConnect=document.getElementById("githubConnect");
   var githubRepositoryControls=document.getElementById("githubRepositoryControls");
@@ -1859,6 +1863,22 @@ export function ownerIntelligenceClientScript(): Response {
     panel.appendChild(retry);
     history.appendChild(panel);
   }
+  function clearTopicError(){
+    topicStatus.hidden=true;
+    topicStatus.replaceChildren();
+  }
+  function showTopicError(error){
+    topicStatus.replaceChildren();
+    topicStatus.appendChild(node("div","topic-status-message","Could not load or save project topics: "+errorText(error)));
+    var retry=node("button","topic-status-retry","Retry topics");
+    retry.type="button";
+    retry.addEventListener("click",function(){
+      retry.disabled=true;
+      refreshTopics().catch(showTopicError).finally(function(){retry.disabled=false;});
+    });
+    topicStatus.appendChild(retry);
+    topicStatus.hidden=false;
+  }
   async function refreshGithubStatus(){
     var result=await request("/admin/api/intelligence/github/status");
     githubConfigured=Boolean(result.configured);
@@ -2040,7 +2060,8 @@ export function ownerIntelligenceClientScript(): Response {
     finally{updateGithubAttachAvailability();}
   }
   async function refreshTopics(preferredId){
-    var result=await request(api+"/topics");
+    var result=await request(topicsApi);
+    clearTopicError();
     state.topics=result.topics||[];
     var previous=preferredId!==undefined?preferredId:newChatTopic.value;
     newChatTopic.replaceChildren(node("option","","Scratchpad"));
@@ -2070,9 +2091,9 @@ export function ownerIntelligenceClientScript(): Response {
     if(title===null)return;
     newTopicButton.disabled=true;
     try{
-      var result=await request(api+"/topics",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
+      var result=await request(topicsApi,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
       await refreshTopics(result.topic.id);
-    }catch(error){showHistoryError(error);}
+    }catch(error){showTopicError(error);}
     finally{newTopicButton.disabled=false;}
   }
   async function renameSelectedTopic(){
@@ -2082,9 +2103,9 @@ export function ownerIntelligenceClientScript(): Response {
     if(title===null)return;
     renameTopicButton.disabled=true;
     try{
-      var result=await request(api+"/topics/"+encodeURIComponent(topic.id),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
+      var result=await request(topicsApi+"/"+encodeURIComponent(topic.id),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
       await refreshTopics(result.topic.id);
-    }catch(error){showHistoryError(error);}
+    }catch(error){showTopicError(error);}
     finally{renameTopicButton.disabled=!newChatTopic.value;}
   }
   function renderHistory(){
@@ -2343,7 +2364,7 @@ export function ownerIntelligenceClientScript(): Response {
   });
   modelRetry.addEventListener("click",function(){loadModels();});
   loadModels();
-  refreshTopics().catch(showHistoryError);
+  refreshTopics().catch(showTopicError);
   refreshGithubStatus().catch(function(error){githubStatus.textContent="Connection status unavailable";githubHint.textContent=errorText(error);});
   updateGithubSaveAvailability();
   var githubReturn=new URLSearchParams(window.location.search).get("github");
