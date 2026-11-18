@@ -5,6 +5,7 @@ import { ensureOwnerIntelligenceSchema } from "./intelligence";
 
 const API = "https://api.github.com";
 const CALLBACK = "/admin/api/intelligence/github/callback";
+const SETUP = "/admin/api/intelligence/github/setup";
 const APP_TABLE = "owner_intelligence_github_app";
 const INSTALL_TABLE = "owner_intelligence_github_installations";
 const STATE_TABLE = "owner_intelligence_github_oauth_states";
@@ -220,7 +221,7 @@ async function startManifest(env: Env, request: Request, owner: string): Promise
     url: new URL("/admin/intelligence", new URL(request.url).origin).toString(),
     description: "Private, Owner-controlled project memory for BRɅIN Intelligence.",
     redirect_url: redirectUri,
-    setup_url: redirectUri,
+    setup_url: new URL(SETUP, new URL(request.url).origin).toString(),
     callback_urls: [redirectUri],
     setup_on_update: false,
     public: false,
@@ -276,9 +277,9 @@ async function installationCallback(env: Env, url: URL): Promise<Response> {
   if (!consumed) return callbackResult("error");
   const owner = consumed.owner_id;
   const redirectUri = clean(consumed.payload.redirectUri, 500);
-  if (!redirectUri || new URL(redirectUri).origin !== url.origin || new URL(redirectUri).pathname !== CALLBACK) {
-    return callbackResult("error");
-  }
+  if (!redirectUri) return callbackResult("error");
+  const setupUri = new URL(SETUP, new URL(redirectUri).origin).toString();
+  if (setupUri !== url.origin + SETUP) return callbackResult("error");
   const { bundle } = await getBundle(env, owner);
   if (bundle.redirectUri !== redirectUri) return callbackResult("error");
   if (Number(consumed.payload.appId) !== bundle.appId) return callbackResult("error");
@@ -388,10 +389,13 @@ export async function handleOwnerGithubCallback(request: Request, env: Env, url:
     const row = await env.DB!.prepare("SELECT purpose FROM " + STATE_TABLE + " WHERE state_hash=? AND expires_at>?")
       .bind(await sha256(state), Date.now()).first<{ purpose: string }>();
     if (!row) return callbackResult("error");
-    if (row.purpose === "manifest") return await manifestCallback(env, request, url);
-    if (row.purpose === "installation") return await installationCallback(env, url);
-    if (row.purpose === "user_authorization") return await userAuthorizationCallback(env, url);
-    return callbackResult("error");
+    if (url.pathname === CALLBACK) {
+      if (row.purpose === "manifest") return await manifestCallback(env, request, url);
+      if (row.purpose === "user_authorization") return await userAuthorizationCallback(env, url);
+      return callbackResult("error");
+    }
+    if (url.pathname === SETUP && row.purpose === "installation") return await installationCallback(env, url);
+    return notFound();
   } catch {
     return callbackResult("error");
   }
