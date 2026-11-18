@@ -171,7 +171,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
         return new Response(JSON.stringify({ object: { sha: currentBranchHead } }), { status: 200 });
       }
       if (url === "https://api.github.com/repos/ashini-x/parmar-ai/git/commits/" + baseCommitSha && method === "GET") {
-        return new Response(JSON.stringify({ sha: baseCommitSha, tree: { sha: "base-tree-sha" } }), { status: 200 });
+        return new Response(JSON.stringify({ sha: baseCommitSha, tree: { sha: "d".repeat(40) } }), { status: 200 });
       }
       if (url.includes("/contents/memory/") && url.includes("?ref=" + baseCommitSha)) {
         return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
