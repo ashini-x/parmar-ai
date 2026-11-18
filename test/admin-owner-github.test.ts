@@ -242,7 +242,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
         memoryRoot: "memory",
       },
     });
-    expect(attached.status).toBe(200);
+    expect(attached.status, await attached.clone().text()).toBe(200);
     const attachedBody = await attached.json() as { repository: string; branch: string; memoryRoot: string };
     expect(attachedBody).toEqual(expect.objectContaining({
       repository: "ashini-x/parmar-ai",
