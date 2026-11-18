@@ -1,3 +1,12 @@
+## 2026-11-18: Owner Intelligence per-chat 200,000-token budget (PR #335)
+
+- Enforce a cumulative 200,000-token lifetime budget independently for each Owner conversation; it is not the Gemini model context window or an account-wide provider limit.
+- Use Vertex CountTokens on the exact bounded prompt before committing new/edit/regenerate changes; reserve prompt plus allowed output capacity atomically in Owner-scoped D1.
+- Cap the stream's output allowance to the available session budget and settle accounting from Vertex `usageMetadata.totalTokenCount`; conservatively charge the reservation when final usage metadata is missing.
+- Backfill existing chats from available assistant generation totals; new chats start with a clean independent budget. Edit and Regenerate do not refund provider usage already consumed.
+- Display used, reserved and remaining tokens, enforce a read-only state after exhaustion, and show the manual GitHub Markdown checkpoint workflow. GitHub content is not automatically fetched or imported.
+- Preserve Owner-only authorization and the existing separation from student Telegram, BRɅIN retrieval and the selected model/thinking behaviour.
+- PR [#335](https://github.com/ashini-x/parmar-ai/pull/335) is awaiting final validation, merge and production deployment at this checkpoint.
 ## 2026-11-18: Owner Gemini Carbon formatted-error diagnostics and StreamGenerateContent stage
 
 - Name the actual failing operation as `StreamGenerateContent`, separately from non-stream `GenerateContent` and the `:countTokens` availability probe.
