@@ -121,3 +121,7 @@ For repository-wide legal/security rules, see:
 - [../GOVERNANCE.md](../GOVERNANCE.md)
 - [../CONTRIBUTING.md](../CONTRIBUTING.md)
 - [../SUPPORT.md](../SUPPORT.md)
+
+## Owner Intelligence — approved central Memory Hub and AI collaboration design
+
+The approved target uses one private `owner-memory-hub` repository for curated project memory and document-mediated Gemini/ChatGPT collaboration. It does not move or copy application source code; each source repository remains independent. Gemini Owner Intelligence is the architecture/planning/review workspace; ChatGPT Software Engineer is the separately authorized code/test/PR/merge/deploy executor; the Owner makes final decisions. See [OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md](OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md), [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md), and the [Owner roadmap](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md). This is an approved design only: the hub repository, hierarchical manifests, collaboration workflow and M4.4+ context loader are not yet implemented. The original 200K per-chat limit and M4.6 fixed-B/O(N) context acceptance remain mandatory.
