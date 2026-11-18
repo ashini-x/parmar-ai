@@ -543,6 +543,16 @@ function gitPath(path: string): string {
 function repositoryPath(owner: string, name: string, suffix: string): string {
   return "/repos/" + encodeURIComponent(owner) + "/" + encodeURIComponent(name) + suffix;
 }
+function redactMemorySecrets(value: string): string {
+  return value
+    .replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/giu, "[REDACTED PRIVATE KEY]")
+    .replace(/\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]{20,}\b/giu, "[REDACTED GITHUB TOKEN]")
+    .replace(/\bAIza[0-9A-Za-z_-]{30,}\b/gu, "[REDACTED API KEY]")
+    .replace(/\bya29\.[A-Za-z0-9._-]{20,}\b/gu, "[REDACTED ACCESS TOKEN]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]{20,}={0,2}/giu, "Bearer [REDACTED]")
+    .replace(/\b(access[_-]?token|api[_-]?key|client[_-]?secret|password|secret)\s*[:=]\s*["']?([^\s"'`]{8,})/giu, "$1=[REDACTED]");
+}
+
 function decodeGitHubFile(value: string): string {
   const binary = atob(value.replace(/\s/gu, ""));
   const bytes = new Uint8Array(binary.length);
@@ -606,7 +616,8 @@ async function buildMemoryFiles(
   const fixedNames = ["index.md", "project-memory.md", "progress.md", "decisions.md"];
   const existing = new Map<string, string | null>();
   for (const name of fixedNames) {
-    existing.set(name, await readMemoryFile(token, repoOwner, repoName, memoryRoot + "/" + name, branch));
+    const saved = await readMemoryFile(token, repoOwner, repoName, memoryRoot + "/" + name, branch);
+    existing.set(name, saved === null ? null : redactMemorySecrets(saved));
   }
   const index = existing.get("index.md") || [
     "# Project memory index",
@@ -650,9 +661,10 @@ async function buildMemoryFiles(
     "",
   ];
   for (const message of relevant) {
-    const excerpt = message.content.length > 2_400
-      ? message.content.slice(0, 2_400) + "\n\n[Excerpt shortened for this review draft.]"
-      : message.content;
+    const safeContent = redactMemorySecrets(message.content);
+    const excerpt = safeContent.length > 2_400
+      ? safeContent.slice(0, 2_400) + "\n\n[Excerpt shortened for this review draft.]"
+      : safeContent;
     sessionLines.push(
       "## " + (message.role === "user" ? "Owner" : "Assistant") + " · " + message.id,
       "",
@@ -768,10 +780,12 @@ async function createMemoryPreview(env: Env, request: Request, owner: string, co
   }
   const files = starterFiles.map((file) => ({
     ...file,
-    content: file.name === "project-memory.md" ? draftValue.projectMemory as string
-      : file.name === "progress.md" ? draftValue.progress as string
-      : file.name === "decisions.md" ? draftValue.decisions as string
-      : file.content,
+    content: redactMemorySecrets(
+      file.name === "project-memory.md" ? draftValue.projectMemory as string
+        : file.name === "progress.md" ? draftValue.progress as string
+        : file.name === "decisions.md" ? draftValue.decisions as string
+        : file.content,
+    ),
   }));
   if (files.some((file) => file.content.length > PREVIEW_FILE_LIMIT) ||
       files.reduce((sum, file) => sum + file.content.length, 0) > PREVIEW_TOTAL_LIMIT) {
@@ -797,7 +811,7 @@ async function createMemoryPreview(env: Env, request: Request, owner: string, co
         promptTokens: generated.usage.promptTokens, outputTokens: generated.usage.outputTokens,
         totalTokens: generated.usage.totalTokens, elapsedMs: generated.elapsedMs,
       },
-      note: "Gemini prepared this editable candidate using the selected model and thinking level. The draft call was charged to this conversation's 200,000-token budget. Existing Markdown and bounded D1 transcript excerpts are included as source context. Review and edit every file; nothing is written to GitHub until explicit confirmation.",
+      note: "Gemini prepared this editable candidate using the selected model and thinking level. The draft call was charged to this conversation's 200,000-token budget. Existing Markdown and bounded D1 transcript excerpts are included as source context; recognizable credential/token patterns are redacted before drafting and saving. Review and edit every file; nothing is written to GitHub until explicit confirmation.",
     },
   }, 201);
 }
