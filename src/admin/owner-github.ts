@@ -178,8 +178,9 @@ async function persistBundle(env: Env, owner: string, bundle: Bundle): Promise<v
 }
 async function createState(env: Env, owner: string, purpose: "manifest" | "installation" | "user_authorization", payload: Record<string, unknown>): Promise<string> {
   const state = randomState(); const now = Date.now();
+  const ttlMs = purpose === "manifest" ? 50 * 60_000 : purpose === "installation" ? 30 * 60_000 : 10 * 60_000;
   const result = await env.DB!.prepare("INSERT INTO " + STATE_TABLE + " (state_hash, owner_id, purpose, payload_json, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(await sha256(state), owner, purpose, JSON.stringify(payload), now, now + 10 * 60_000).run();
+    .bind(await sha256(state), owner, purpose, JSON.stringify(payload), now, now + ttlMs).run();
   if (!result.success) throw new Error("D1 did not confirm the one-time GitHub state.");
   return state;
 }
@@ -219,6 +220,7 @@ async function startManifest(env: Env, request: Request, owner: string): Promise
     redirect_url: redirectUri,
     setup_url: redirectUri,
     callback_urls: [redirectUri],
+    setup_on_update: true,
     setup_on_update: false,
     public: false,
     default_permissions: { metadata: "read", contents: "write" },
