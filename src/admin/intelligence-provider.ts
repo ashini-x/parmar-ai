@@ -610,7 +610,7 @@ export async function openOwnerGeminiStream(
         providerStatusMessage(response.status, "stream_generate_content", diagnostic),
         response.status,
         response.status === 408 || response.status === 429 || response.status >= 500,
-        "generate_content",
+        "stream_generate_content",
       );
     }
     if (!response.body) {
