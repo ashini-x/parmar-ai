@@ -279,6 +279,7 @@ async function installationCallback(env: Env, url: URL): Promise<Response> {
     return callbackResult("error");
   }
   const { bundle } = await getBundle(env, owner);
+  if (bundle.redirectUri !== redirectUri) return callbackResult("error");
   if (Number(consumed.payload.appId) !== bundle.appId) return callbackResult("error");
 
   // GitHub explicitly warns that installation_id on a setup URL can be spoofed.
