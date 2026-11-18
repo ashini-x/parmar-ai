@@ -43,6 +43,7 @@ async function call(
     method: options.method ?? "GET",
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    redirect: "manual",
   });
   const context = createExecutionContext();
   const response = await worker.fetch(request, env, context);
@@ -269,7 +270,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
   });
 
   it("rejects a cross-site App setup mutation and keeps GitHub APIs Owner-only", async () => {
-    const env = ownerEnv();
+    const env = ownerEnv("owner-github-csrf-test");
     const cookie = await login(env);
     const csrf = await call(env, "/admin/api/intelligence/github/app/manifest", cookie, {
       method: "POST", body: {},
