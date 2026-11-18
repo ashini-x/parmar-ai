@@ -1520,6 +1520,7 @@ export function ownerIntelligenceClientScript(): Response {
 (function(){
   "use strict";
   var api="/admin/api/intelligence/conversations";
+  var topicsApi="/admin/api/intelligence/topics";
   var state={conversations:[],topics:[],githubInstallations:[],githubRepositories:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
   var history=document.getElementById("history");
   var messages=document.getElementById("messages");
@@ -2040,7 +2041,7 @@ export function ownerIntelligenceClientScript(): Response {
     finally{updateGithubAttachAvailability();}
   }
   async function refreshTopics(preferredId){
-    var result=await request(api+"/topics");
+    var result=await request(topicsApi);
     state.topics=result.topics||[];
     var previous=preferredId!==undefined?preferredId:newChatTopic.value;
     newChatTopic.replaceChildren(node("option","","Scratchpad"));
@@ -2070,7 +2071,7 @@ export function ownerIntelligenceClientScript(): Response {
     if(title===null)return;
     newTopicButton.disabled=true;
     try{
-      var result=await request(api+"/topics",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
+      var result=await request(topicsApi,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
       await refreshTopics(result.topic.id);
     }catch(error){showHistoryError(error);}
     finally{newTopicButton.disabled=false;}
@@ -2082,7 +2083,7 @@ export function ownerIntelligenceClientScript(): Response {
     if(title===null)return;
     renameTopicButton.disabled=true;
     try{
-      var result=await request(api+"/topics/"+encodeURIComponent(topic.id),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
+      var result=await request(topicsApi+"/"+encodeURIComponent(topic.id),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
       await refreshTopics(result.topic.id);
     }catch(error){showHistoryError(error);}
     finally{renameTopicButton.disabled=!newChatTopic.value;}
