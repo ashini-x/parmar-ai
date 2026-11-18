@@ -61,7 +61,7 @@ export interface OwnerProviderDependencies {
 
 const defaultDependencies: OwnerProviderDependencies = {
   getAccessToken: getGoogleAccessToken,
-  fetch: globalThis.fetch.bind(globalThis),
+  fetch: ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init)) as typeof fetch,
 };
 const PROBE_TIMEOUT_MS = 8_000;
 const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
