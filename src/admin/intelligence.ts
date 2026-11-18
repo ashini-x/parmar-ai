@@ -134,6 +134,159 @@ function ownerPrincipal(env: Env): string {
   return configured;
 }
 
+interface OwnerSessionUsageRow {
+  conversation_id: string;
+  owner_id: string;
+  token_limit: number;
+  used_tokens: number;
+  reserved_tokens: number;
+  locked_reason: string | null;
+  updated_at: number;
+}
+
+async function ensureOwnerSessionUsageRow(env: Env, conversationId: string): Promise<OwnerSessionUsageRow | null> {
+  await ensureOwnerIntelligenceSchema(env);
+  const ownerId = ownerPrincipal(env);
+  await env.DB!.prepare(
+    \`INSERT OR IGNORE INTO owner_intelligence_session_usage
+       (conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at)
+     SELECT c.id, c.owner_id, ?, COALESCE(SUM(g.total_tokens), 0), 0, NULL, ?
+     FROM owner_intelligence_conversations c
+     LEFT JOIN owner_intelligence_messages m
+       ON m.conversation_id = c.id AND m.owner_id = c.owner_id AND m.role = 'assistant'
+     LEFT JOIN owner_intelligence_generation_metadata g
+       ON g.message_id = m.id AND g.owner_id = m.owner_id
+     WHERE c.id = ? AND c.owner_id = ?
+     GROUP BY c.id, c.owner_id\`,
+  ).bind(OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT, Date.now(), conversationId, ownerId).run();
+  const row = await env.DB!.prepare(
+    \`SELECT conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at
+     FROM owner_intelligence_session_usage WHERE conversation_id = ? AND owner_id = ?\`,
+  ).bind(conversationId, ownerId).first<OwnerSessionUsageRow>();
+  return row ?? null;
+}
+
+async function expireOwnerSessionReservations(env: Env, usage: OwnerSessionUsageRow): Promise<void> {
+  const cutoff = Date.now() - OWNER_INTELLIGENCE_RESERVATION_TTL_MS;
+  const expired = await env.DB!.prepare(
+    \`SELECT reservation_id, reserved_tokens FROM owner_intelligence_token_reservations
+     WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?\`,
+  ).bind(usage.conversation_id, usage.owner_id, cutoff).all<{ reservation_id: string; reserved_tokens: number }>();
+  if (!expired.results?.length) return;
+  const charge = expired.results.reduce((total, item) => total + Number(item.reserved_tokens || 0), 0);
+  await env.DB!.batch([
+    env.DB!.prepare(
+      \`UPDATE owner_intelligence_session_usage
+       SET used_tokens = used_tokens + ?, reserved_tokens = MAX(0, reserved_tokens - ?), updated_at = ?
+       WHERE conversation_id = ? AND owner_id = ?\`,
+    ).bind(charge, charge, Date.now(), usage.conversation_id, usage.owner_id),
+    env.DB!.prepare(
+      \`UPDATE owner_intelligence_token_reservations
+       SET status = 'expired', actual_tokens = reserved_tokens, usage_is_estimated = 1, settled_at = ?
+       WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?\`,
+    ).bind(Date.now(), usage.conversation_id, usage.owner_id, cutoff),
+  ]);
+}
+
+export async function getOwnerIntelligenceSessionUsage(
+  env: Env,
+  conversationId: string,
+): Promise<OwnerIntelligenceSessionUsage | null> {
+  const initialized = await ensureOwnerSessionUsageRow(env, conversationId);
+  if (!initialized) return null;
+  await expireOwnerSessionReservations(env, initialized);
+  const row = await env.DB!.prepare(
+    \`SELECT conversation_id, owner_id, token_limit, used_tokens, reserved_tokens, locked_reason, updated_at
+     FROM owner_intelligence_session_usage WHERE conversation_id = ? AND owner_id = ?\`,
+  ).bind(conversationId, initialized.owner_id).first<OwnerSessionUsageRow>();
+  if (!row) return null;
+  const limit = Math.max(0, Number(row.token_limit));
+  const used = Math.max(0, Number(row.used_tokens));
+  const reserved = Math.max(0, Number(row.reserved_tokens));
+  const remaining = Math.max(0, limit - used - reserved);
+  return {
+    limit_tokens: limit,
+    used_tokens: used,
+    reserved_tokens: reserved,
+    remaining_tokens: remaining,
+    locked: Boolean(row.locked_reason) || remaining === 0,
+    locked_reason: row.locked_reason,
+  };
+}
+
+async function lockOwnerIntelligenceSession(
+  env: Env,
+  conversationId: string,
+  reason: string,
+): Promise<OwnerIntelligenceSessionUsage | null> {
+  const usage = await ensureOwnerSessionUsageRow(env, conversationId);
+  if (!usage) return null;
+  await env.DB!.prepare(
+    \`UPDATE owner_intelligence_session_usage SET locked_reason = ?, updated_at = ?
+     WHERE conversation_id = ? AND owner_id = ? AND (locked_reason IS NULL OR locked_reason = '')\`,
+  ).bind(reason, Date.now(), conversationId, usage.owner_id).run();
+  return getOwnerIntelligenceSessionUsage(env, conversationId);
+}
+
+async function reserveOwnerIntelligenceSessionTokens(
+  env: Env,
+  conversationId: string,
+  reservationId: string,
+  reservedTokens: number,
+): Promise<boolean> {
+  const usage = await ensureOwnerSessionUsageRow(env, conversationId);
+  if (!usage || !Number.isSafeInteger(reservedTokens) || reservedTokens <= 0) return false;
+  const now = Date.now();
+  const results = await env.DB!.batch([
+    env.DB!.prepare(
+      \`UPDATE owner_intelligence_session_usage
+       SET reserved_tokens = reserved_tokens + ?, updated_at = ?
+       WHERE conversation_id = ? AND owner_id = ? AND reserved_tokens = 0
+         AND used_tokens + reserved_tokens + ? <= token_limit
+         AND (locked_reason IS NULL OR locked_reason = '')\`,
+    ).bind(reservedTokens, now, conversationId, usage.owner_id, reservedTokens),
+    env.DB!.prepare(
+      \`INSERT INTO owner_intelligence_token_reservations
+       (reservation_id, conversation_id, owner_id, reserved_tokens, status, actual_tokens, usage_is_estimated, created_at)
+       SELECT ?, ?, ?, ?, 'reserved', 0, 0, ? WHERE changes() = 1\`,
+    ).bind(reservationId, conversationId, usage.owner_id, reservedTokens, now),
+  ]);
+  return Number(results[0]?.meta?.changes ?? 0) === 1;
+}
+
+async function settleOwnerIntelligenceSessionReservation(
+  env: Env,
+  conversationId: string,
+  reservationId: string,
+  actualTokens?: number,
+  release = false,
+): Promise<void> {
+  const ownerId = ownerPrincipal(env);
+  const row = await env.DB!.prepare(
+    \`SELECT reserved_tokens FROM owner_intelligence_token_reservations
+     WHERE reservation_id = ? AND conversation_id = ? AND owner_id = ? AND status = 'reserved'\`,
+  ).bind(reservationId, conversationId, ownerId).first<{ reserved_tokens: number }>();
+  if (!row) return;
+  const reserved = Math.max(0, Number(row.reserved_tokens));
+  const estimated = !release && actualTokens === undefined;
+  const charge = release ? 0 : estimated ? reserved : Math.max(0, Math.min(reserved, Math.floor(Number(actualTokens))));
+  const nextStatus = release ? "released" : "settled";
+  await env.DB!.batch([
+    env.DB!.prepare(
+      \`UPDATE owner_intelligence_session_usage
+       SET used_tokens = used_tokens + ?, reserved_tokens = MAX(0, reserved_tokens - ?), updated_at = ?
+       WHERE conversation_id = ? AND owner_id = ?
+         AND EXISTS (SELECT 1 FROM owner_intelligence_token_reservations
+           WHERE reservation_id = ? AND owner_id = ? AND status = 'reserved')\`,
+    ).bind(charge, reserved, Date.now(), conversationId, ownerId, reservationId, ownerId),
+    env.DB!.prepare(
+      \`UPDATE owner_intelligence_token_reservations
+       SET status = ?, actual_tokens = ?, usage_is_estimated = ?, settled_at = ?
+       WHERE reservation_id = ? AND conversation_id = ? AND owner_id = ? AND status = 'reserved'\`,
+    ).bind(nextStatus, charge, estimated ? 1 : 0, Date.now(), reservationId, conversationId, ownerId),
+  ]);
+}
+
 function normalizedTitle(value: unknown): string {
   if (typeof value !== "string") throw new Error("A conversation title is required.");
   const title = value.replace(/\s+/gu, " ").trim();
