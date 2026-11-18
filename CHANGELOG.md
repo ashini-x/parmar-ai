@@ -1,3 +1,12 @@
+## 2026-11-18: Owner Intelligence M4.1 exact 200K boundary acceptance completed
+
+- Add deterministic Owner generation tests against the Cloudflare Workers Vitest local D1 binding (Miniflare SQLite), with Vertex CountTokens/stream calls mocked.
+- Prove the final permitted prompt-plus-output reservation exactly fills the remaining 10 tokens, settles Used to 200,000 and Reserved to zero, and a subsequent prompt is rejected with 409 before persistence.
+- Prove a request one output token beyond remaining capacity is rejected before stream startup, with no user prompt and no reservation persisted.
+- Prove two same-chat requests released from CountTokens simultaneously are serialized by the actual local D1 conditional reservation: exactly one reservation and one user prompt are admitted.
+- PR [#341](https://github.com/ashini-x/parmar-ai/pull/341), merged as `60ed1705c247530b6321290c38abae8ee309022f`. Workflow [44335838504](https://github.com/ashini-x/parmar-ai/actions/runs/44335838504) passed `npm run check`, 499 Vitest tests across 72 files, 62 Node tests across 9 files and all three Worker dry-runs.
+- Test-only change; production runtime and deployment were unchanged. No production D1 records were mutated and no live Gemini tokens were consumed. The original per-conversation 200,000-token limit, reservations, settlement, meter and read-only state are unchanged.
+
 ## 2026-11-18: Owner reports M4 interaction and M4.1 meter/concurrency acceptance
 
 - Record the Owner's authenticated production browser report that M4 waiting/first-visible-token/streaming, Stop with partial retention after reopening, Edit/resubmit, Regenerate and selected model/thinking-level preservation behaved as expected.
