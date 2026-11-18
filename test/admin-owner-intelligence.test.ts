@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import type { Env } from "../src/config/env";
 import worker from "../src";
 import { handleAdminLogin } from "../src/admin/auth";
-import { buildOwnerGeminiConversationContents, getOwnerIntelligenceSessionUsage, OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT, type OwnerIntelligenceMessage } from "../src/admin/intelligence";
+import {
+  buildOwnerGeminiConversationContents,
+  getOwnerIntelligenceSessionUsage,
+  handleOwnerIntelligenceApi,
+  OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT,
+  type OwnerIntelligenceMessage,
+  type OwnerIntelligenceProviderOverrides,
+} from "../src/admin/intelligence";
 
 type ConversationRow = {
   id: string;
@@ -365,6 +372,23 @@ async function call(
   return response;
 }
 
+async function callOwnerGenerationHandler(
+  env: Env,
+  path: string,
+  body: unknown,
+  provider: OwnerIntelligenceProviderOverrides,
+): Promise<Response> {
+  const url = new URL("https://parmar-ai.test" + path);
+  const request = new Request(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", Origin: url.origin },
+    body: JSON.stringify(body),
+  });
+  // Exercise the real Owner generation handler with deterministic provider
+  // responses. Owner-session authorization is covered by the Worker route tests.
+  return handleOwnerIntelligenceApi(request, env, url, provider);
+}
+
 describe("Owner Gemini conversation context builder", () => {
   it("omits failed and empty assistant rows and merges adjacent user turns after a failed generation", () => {
     const messages: OwnerIntelligenceMessage[] = [
@@ -668,6 +692,178 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(freshUsage).toEqual(expect.objectContaining({
       limit_tokens: 200_000, used_tokens: 0, remaining_tokens: 200_000, locked: false,
     }));
+  });
+
+  it("permits the exact final prompt-plus-one-output-token reservation and then locks at 200,000", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Exact final reservation" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const db = env.DB as unknown as FakeOwnerD1;
+    await getOwnerIntelligenceSessionUsage(env, id);
+    db.sessionUsage.get(id)!.used_tokens = OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 10;
+
+    let requestedOutputLimit = 0;
+    const provider: OwnerIntelligenceProviderOverrides = {
+      countInputTokens: async () => 5,
+      openStream: async (_env, input) => {
+        requestedOutputLimit = input.maxOutputTokens ?? 0;
+        return (async function* () {
+          yield {
+            type: "done" as const,
+            usage: { promptTokens: 5, outputTokens: 5, totalTokens: 10 },
+            elapsedMs: 12,
+          };
+        })();
+      },
+    };
+    const path = "/admin/api/intelligence/conversations/" + id + "/generate";
+    const generated = await callOwnerGenerationHandler(env, path, {
+      content: "This request exactly fills the final ten tokens.",
+      modelId: "gemini-4-hydrogen",
+      thinkingLevel: "HIGH",
+    }, provider);
+    expect(generated.status).toBe(200);
+    await generated.text();
+
+    expect(requestedOutputLimit).toBe(5);
+    expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
+    expect([...db.messages.values()].filter((row) => row.role === "assistant").map((row) => row.status)).toEqual(["complete"]);
+    const settled = await getOwnerIntelligenceSessionUsage(env, id);
+    expect(settled).toEqual(expect.objectContaining({
+      limit_tokens: 200_000,
+      used_tokens: 200_000,
+      reserved_tokens: 0,
+      remaining_tokens: 0,
+      locked: true,
+    }));
+
+    const countBeforeRejectedPrompt = [...db.messages.values()].filter((row) => row.role === "user").length;
+    const rejected = await callOwnerGenerationHandler(env, path, {
+      content: "This prompt must not be persisted after the exact budget is consumed.",
+      modelId: "gemini-4-hydrogen",
+      thinkingLevel: "HIGH",
+    }, provider);
+    const rejectedBody = await rejected.json() as { error: string };
+    expect(rejected.status).toBe(409);
+    expect(rejectedBody.error).toBe("session_token_limit_reached");
+    expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(countBeforeRejectedPrompt);
+  });
+
+  it("rejects a request that is one output token beyond the remaining budget before persisting its prompt", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "One token over" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const db = env.DB as unknown as FakeOwnerD1;
+    await getOwnerIntelligenceSessionUsage(env, id);
+    db.sessionUsage.get(id)!.used_tokens = OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 10;
+
+    let streamCalled = false;
+    const provider: OwnerIntelligenceProviderOverrides = {
+      // Prompt itself uses all ten remaining tokens, leaving no required
+      // output capacity. The minimum valid generation needs eleven tokens.
+      countInputTokens: async () => 10,
+      openStream: async () => {
+        streamCalled = true;
+        return (async function* () {})();
+      },
+    };
+    const path = "/admin/api/intelligence/conversations/" + id + "/generate";
+    const response = await callOwnerGenerationHandler(env, path, {
+      content: "This request cannot fit the minimum one output token.",
+      modelId: "gemini-4-hydrogen",
+      thinkingLevel: "HIGH",
+    }, provider);
+    const responseBody = await response.json() as { error: string; usage: { used_tokens: number; reserved_tokens: number; locked: boolean } };
+
+    expect(response.status).toBe(409);
+    expect(responseBody.error).toBe("session_token_limit_reached");
+    expect(responseBody.usage).toEqual(expect.objectContaining({
+      used_tokens: 199_990,
+      reserved_tokens: 0,
+      locked: true,
+    }));
+    expect(streamCalled).toBe(false);
+    expect(db.messages.size).toBe(0);
+    expect(db.reservations.size).toBe(0);
+  });
+
+  it("allows only one atomic D1 reservation when two same-chat requests cross preflight together", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Reservation race" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const db = env.DB as unknown as FakeOwnerD1;
+    await getOwnerIntelligenceSessionUsage(env, id);
+    db.sessionUsage.get(id)!.used_tokens = OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 100;
+
+    let countCalls = 0;
+    let releaseCountTokens!: () => void;
+    const bothRequestsAtPreflight = new Promise<void>((resolve) => { releaseCountTokens = resolve; });
+    const provider: OwnerIntelligenceProviderOverrides = {
+      countInputTokens: async () => {
+        countCalls += 1;
+        if (countCalls === 2) releaseCountTokens();
+        await bothRequestsAtPreflight;
+        return 10;
+      },
+      openStream: async (_env, _input, signal) => (async function* () {
+        yield { type: "delta" as const, text: "partial output" };
+        await new Promise<void>((resolve) => {
+          if (signal.aborted) {
+            resolve();
+            return;
+          }
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+      })(),
+    };
+    const path = "/admin/api/intelligence/conversations/" + id + "/generate";
+    const requests = await Promise.all([
+      callOwnerGenerationHandler(env, path, {
+        content: "First concurrent request.",
+        modelId: "gemini-4-hydrogen",
+        thinkingLevel: "HIGH",
+      }, provider),
+      callOwnerGenerationHandler(env, path, {
+        content: "Second concurrent request.",
+        modelId: "gemini-4-hydrogen",
+        thinkingLevel: "HIGH",
+      }, provider),
+    ]);
+
+    expect(countCalls).toBe(2);
+    expect(requests.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(requests.filter((response) => response.status === 409)).toHaveLength(1);
+    const blocked = requests.find((response) => response.status === 409)!;
+    const blockedBody = await blocked.json() as { error: string; usage: { reserved_tokens: number } };
+    expect(blockedBody.error).toBe("generation_in_progress");
+    expect(blockedBody.usage.reserved_tokens).toBe(100);
+    expect(db.reservations.size).toBe(1);
+    expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
+    const inFlight = await getOwnerIntelligenceSessionUsage(env, id);
+    expect(inFlight).toEqual(expect.objectContaining({
+      used_tokens: 199_900,
+      reserved_tokens: 100,
+      remaining_tokens: 0,
+      locked: false,
+    }));
+
+    const accepted = requests.find((response) => response.status === 200)!;
+    await accepted.body?.cancel();
   });
 
   it("backfills existing chats from generation totalTokenCount without charging new chats", async () => {
