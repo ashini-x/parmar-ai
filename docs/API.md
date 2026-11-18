@@ -95,13 +95,15 @@ All routes below require a valid `requireOwner` session. They do not accept an o
 |---|---|---|
 | `GET` | `/admin/api/intelligence/conversations` | List up to the latest 100 conversations for the signed-in Owner. |
 | `POST` | `/admin/api/intelligence/conversations` | Create a conversation. Optional `title`; defaults to `New chat`. Title maximum 80 characters. |
-| `GET` | `/admin/api/intelligence/conversations/:id` | Reopen a conversation and return its messages in creation order. |
+| `GET` | `/admin/api/intelligence/conversations/:id` | Reopen a conversation and return its messages in creation order plus its `usage` object (`limit_tokens`, `used_tokens`, `reserved_tokens`, `remaining_tokens`, `locked`, and optional `locked_reason`). |
 | `PATCH` | `/admin/api/intelligence/conversations/:id` | Rename with JSON body `{ "title": "..." }`. |
 | `DELETE` | `/admin/api/intelligence/conversations/:id` | Delete the conversation and its saved messages. |
 | `POST` | `/admin/api/intelligence/conversations/:id/messages` | Save an Owner-authored message with JSON body `{ "content": "..." }`. Maximum content length: 50,000 JavaScript characters. |
 | `POST` | `/admin/api/intelligence/conversations/:id/generate` | Generate an assistant response using `{ "content": "...", "modelId": "...", "thinkingLevel": "..." }`. Optional `editMessageId` edits a prior user prompt; `{ "action": "regenerate", ... }` regenerates the latest user prompt. Returns server-sent events. |
 
 All mutations require a matching same-origin `Origin` header and reject cross-site fetch metadata. Conversation identifiers must be UUIDs. Every database operation is scoped to the normalized configured Owner username. A missing conversation or one owned by another principal returns 404 rather than disclosing its existence.
+
+Each conversation has a server-enforced cumulative 200,000-token lifetime budget. Before a `generate` request commits a new, edited or regenerated user turn, the Worker calls Vertex CountTokens for the exact prompt, then atomically reserves the prompt tokens and permitted output allowance in D1. The response stream's `usageMetadata.totalTokenCount` settles the reservation. If final usage metadata is missing, the reserved amount is charged conservatively. A new conversation starts a separate budget; Edit/Regenerate does not refund provider usage already incurred. A request blocked because a generation is already in progress or the budget is exhausted returns HTTP 409 with a machine-readable `error` and the latest `usage` object. A failed CountTokens preflight returns `session_preflight_failed` and does not persist the proposed prompt.
 
 The conversation/message APIs remain Owner-scoped and use the existing dedicated D1 tables. Generation is a separate Owner-only endpoint. Every mutating request requires a matching same-origin `Origin` header and rejects cross-site fetch metadata. The generation endpoint validates the selected model and thinking level against the server registry; it does not accept a browser-selected project, location, endpoint or credential.
 
