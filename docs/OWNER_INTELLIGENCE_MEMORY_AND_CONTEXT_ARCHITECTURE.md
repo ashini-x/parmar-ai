@@ -388,3 +388,12 @@ After M4.8, continue with the original M5 voice-dictation milestone, then the ex
 - [Cloudflare waitUntil documentation](https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil) — post-response work has a bounded lifetime; use a durable queue/workflow for work that must survive disconnects.
 - This design makes no universal claim about pricing cliffs, context sizes, caching discounts, or model availability. The configured project's live capability and the exact selected model remain authoritative.
 
+
+
+## M4.3 implementation checkpoint (feature branch; not yet production accepted)
+
+The current M4.3 implementation is on feat/owner-intelligence-m4-3-github-memory. It uses a dedicated Owner Gemini Intelligence GitHub App rather than the broader BRVIN Connect App. The App is required to have exactly Metadata: read and Contents: write, and its installation is required to use selected repositories (never all repositories). The Worker encrypts the returned private key in Owner-scoped D1, hashes and consumes one-time callback state, and re-verifies the App ID, installation ID, permission set and selected-repository setting before repository operations. Installation tokens are minted server-side and narrowed to the selected repository ID for writes.
+
+The Save flow reads the branch head and existing memory Markdown, builds an editable preview from those files and bounded, provenance-labelled D1 transcript excerpts, and requires an explicit Owner confirmation. The initial draft is not Gemini-generated and is not silently promoted as an authoritative project summary. It uses a Git tree/commit and non-force branch-ref update after checking the expected base; it then reads back the exact commit and all proposed files. D1 topic/project promotion is performed only after read-back verification. A conflict, failed write or failed verification must never be shown as Synced. D1 conversation messages and the M4.1 200K usage/reservation records remain unchanged.
+
+This M4.3 slice does not load Project Memory into prompts, pin the selected commit for future chats, import older archives, add background queues/outbox jobs, compact memory, roll over chats or change Gemini generation. Those remain separate M4.4–M4.8 tasks. PR validation, production deployment and authenticated Owner GitHub App installation/save acceptance are still pending until evidenced in the roadmap and continuation prompt.
