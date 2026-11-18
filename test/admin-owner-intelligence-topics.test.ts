@@ -125,11 +125,14 @@ describe("Owner Intelligence M4.2 Scratchpad and topics", () => {
 
   it("serves Scratchpad-default and optional-topic controls to the authenticated Owner", async () => {
     const env = ownerEnv(); const cookie = await login(env);
-    const response = await call(env, "/admin/intelligence.js", cookie);
-    expect(response.status).toBe(200);
-    const script = await response.text();
-    expect(script).toContain('id="newChatTopic"');
-    expect(script).toContain("Scratchpad");
+    const pageResponse = await call(env, "/admin/intelligence", cookie);
+    expect(pageResponse.status, await pageResponse.clone().text()).toBe(200);
+    const html = await pageResponse.text();
+    expect(html).toContain('id="newChatTopic"');
+    expect(html).toContain("Scratchpad");
+    const scriptResponse = await call(env, "/admin/intelligence.js", cookie);
+    expect(scriptResponse.status).toBe(200);
+    const script = await scriptResponse.text();
     expect(script).toContain('request(api+"/topics")');
     expect(script).toContain("conversationBody.topicId");
   });
