@@ -1352,7 +1352,7 @@ export function ownerIntelligenceClientScript(): Response {
 (function(){
   "use strict";
   var api="/admin/api/intelligence/conversations";
-  var state={conversations:[],topics:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
+  var state={conversations:[],topics:[],activeId:null,activeConversation:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
   var history=document.getElementById("history");
   var messages=document.getElementById("messages");
   var heading=document.getElementById("conversationHeading");
@@ -1372,6 +1372,27 @@ export function ownerIntelligenceClientScript(): Response {
   var newChatTopic=document.getElementById("newChatTopic");
   var newTopicButton=document.getElementById("newTopic");
   var renameTopicButton=document.getElementById("renameTopic");
+  var saveToGitHubButton=document.getElementById("saveToGitHub");
+  var githubDialog=document.getElementById("githubDialog");
+  var githubDialogClose=document.getElementById("githubDialogClose");
+  var githubConnectStage=document.getElementById("githubConnectStage");
+  var githubInstallStage=document.getElementById("githubInstallStage");
+  var githubDestinationStage=document.getElementById("githubDestinationStage");
+  var githubPreviewStage=document.getElementById("githubPreviewStage");
+  var githubConnectButton=document.getElementById("githubConnectButton");
+  var githubInstallButton=document.getElementById("githubInstallButton");
+  var githubRepository=document.getElementById("githubRepository");
+  var githubProjectName=document.getElementById("githubProjectName");
+  var githubBranch=document.getElementById("githubBranch");
+  var githubPreviewButton=document.getElementById("githubPreviewButton");
+  var githubPreviewNote=document.getElementById("githubPreviewNote");
+  var githubPreviewFiles=document.getElementById("githubPreviewFiles");
+  var githubConfirmButton=document.getElementById("githubConfirmButton");
+  var githubRepreviewButton=document.getElementById("githubRepreviewButton");
+  var githubDialogStatus=document.getElementById("githubDialogStatus");
+  var githubConnection=null;
+  var githubPreview=null;
+  var githubRepositoryItems=[];
   var modelLoadInProgress=false;
   var modelLoadMessage="Checking configured Gemini models…";
   var modelLoadController=null;
@@ -1732,7 +1753,7 @@ export function ownerIntelligenceClientScript(): Response {
   }
   async function openConversation(id){
     var result=await request(api+"/"+encodeURIComponent(id));
-    state.activeId=result.conversation.id;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
+    state.activeId=result.conversation.id;state.activeConversation=result.conversation;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
     heading.replaceChildren(
       node("span","conversation-scope",result.conversation.topic_title||"Scratchpad"),
       node("span","conversation-title",result.conversation.title)
@@ -1746,6 +1767,7 @@ export function ownerIntelligenceClientScript(): Response {
     var sessionLocked=Boolean(state.sessionUsage&&state.sessionUsage.locked);
     var sessionBusy=Boolean(state.sessionUsage&&Number(state.sessionUsage.reserved_tokens)>0);
     sendButton.disabled=sending?false:(!canGenerate||!hasText||sessionLocked||sessionBusy);
+    saveToGitHubButton.disabled=!state.activeId||sending;
     sendButton.textContent=sending?"■":"↑";
     sendButton.classList.toggle("stop",sending);
     sendButton.setAttribute("aria-label",sending?"Stop generation":"Send message");
