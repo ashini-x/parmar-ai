@@ -3193,12 +3193,6 @@ const worker = {
         return withRequestId(await handleOwnerGithubCallback(request, env, url), requestId);
       }
 
-      // GitHub callbacks are public endpoints but use short-lived, one-time,
-      // Owner-bound state and verify the GitHub App installation before storing it.
-      if (url.pathname === "/admin/api/intelligence/github/callback") {
-        return withRequestId(await handleOwnerGithubCallback(request, env, url), requestId);
-      }
-
       // Owner Intelligence APIs are checked before the generic admin API guard.
       // Every handler also scopes each D1 query to the configured Owner principal.
       if (url.pathname.startsWith("/admin/api/intelligence/github/")) {
@@ -3212,9 +3206,6 @@ const worker = {
         if (!(await requireOwner(request, env))) {
           const status = (await requireAdmin(request, env)) ? 403 : 401;
           return withRequestId(json({ ok: false, error: status === 403 ? "owner_access_required" : "unauthorized" }, status), requestId);
-        }
-        if (url.pathname.startsWith("/admin/api/intelligence/github/")) {
-          return withRequestId(await handleOwnerGithubApi(request, env, url), requestId);
         }
         return withRequestId(await handleOwnerIntelligenceApi(request, env, url), requestId);
       }
