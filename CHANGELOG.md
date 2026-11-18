@@ -6,7 +6,7 @@
 - Backfill existing chats from available assistant generation totals; new chats start with a clean independent budget. Edit and Regenerate do not refund provider usage already consumed.
 - Display used, reserved and remaining tokens, enforce a read-only state after exhaustion, and show the manual GitHub Markdown checkpoint workflow. GitHub content is not automatically fetched or imported.
 - Preserve Owner-only authorization and the existing separation from student Telegram, BRɅIN retrieval and the selected model/thinking behaviour.
-- PR [#335](https://github.com/ashini-x/parmar-ai/pull/335) is awaiting final validation, merge and production deployment at this checkpoint.
+- PR [#335](https://github.com/ashini-x/parmar-ai/pull/335), merged as `109e21b155b794ec2ac1cc29274d5513e56c6762`. Validation [44221814569](https://github.com/ashini-x/parmar-ai/actions/runs/44221814569) passed TypeScript, 494 Vitest tests/72 files, 62 Node tests/9 files and all three Worker dry-runs. Production [44222082173](https://github.com/ashini-x/parmar-ai/actions/runs/44222082173) passed paired deployment and release acceptance. Deployed `parmar-ai` `e94b142b-5ddf-448e-a51b-0c9709bfb7f1`, `brvin-service` `44547ea0-830e-41f8-97cb-95594959cae2`; manifest artifact `14391366648`. Authenticated Owner browser verification of the visible meter/exhaustion boundary remains pending.
 ## 2026-11-18: Owner Gemini Carbon formatted-error diagnostics and StreamGenerateContent stage
 
 - Name the actual failing operation as `StreamGenerateContent`, separately from non-stream `GenerateContent` and the `:countTokens` availability probe.
