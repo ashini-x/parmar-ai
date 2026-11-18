@@ -330,8 +330,11 @@ export async function ownerIntelligenceGitHubCallback(env:Env,request:Request):P
       return callbackPage("GitHub App permissions did not match","The returned App must have exactly Metadata: read and Contents: write. No private key was stored.",false);
     }
     const now=Date.now();
-    await env.DB!.prepare("INSERT INTO owner_intelligence_github_app (owner_id,app_id,slug,name,private_key_ciphertext,installation_id,installation_account,repository_selection,created_at,updated_at) VALUES (?,?,?,?,?,NULL,NULL,NULL,?,?) ON CONFLICT(owner_id) DO UPDATE SET app_id=excluded.app_id,slug=excluded.slug,name=excluded.name,private_key_ciphertext=excluded.private_key_ciphertext,installation_id=NULL,installation_account=NULL,repository_selection=NULL,updated_at=excluded.updated_at")
+    const saved = await env.DB!.prepare("INSERT INTO owner_intelligence_github_app (owner_id,app_id,slug,name,private_key_ciphertext,installation_id,installation_account,repository_selection,created_at,updated_at) VALUES (?,?,?,?,?,NULL,NULL,NULL,?,?) ON CONFLICT(owner_id) DO NOTHING")
       .bind(ownerId,app.id,clean(app.slug,100),clean(app.name||"Owner Gemini Intelligence",120),await encryptKey(env,app.pem),now,now).run();
+    if (Number(saved.meta?.changes || 0) !== 1) {
+      return callbackPage("An Owner GitHub App is already registered", "A different browser session completed App registration first. Return to Owner Intelligence and use the existing App installation link. This new App key was not stored.", false);
+    }
     const installUrl="https://github.com/apps/"+encodeURIComponent(app.slug)+"/installations/new";
     return callbackPage("Owner GitHub App created","A dedicated private App was created with Metadata: read and Contents: write only. Its private key is encrypted in Owner-only D1. Install it on selected repositories only; do not choose all repositories.",true,installUrl,"Install on selected repositories");
   }catch(error){
