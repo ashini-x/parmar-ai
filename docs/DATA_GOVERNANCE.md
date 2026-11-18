@@ -85,3 +85,10 @@ Material changes to stored data must update:
 - docs/DATA_MODEL.md
 - relevant tests
 - release notes
+
+
+### Owner GitHub project memory (M4.3)
+
+Owner Intelligence retains the complete conversation and usage ledger in Owner-scoped D1. GitHub receives only curated Markdown after an explicit preview and confirmation. The initial save template preserves existing repository Markdown and records bounded, clearly labelled transcript excerpts with D1 message IDs; it does not claim to be a complete or Gemini-generated summary. The Owner can edit the preview before the commit. No automatic chat-turn sync or Scratchpad expiry is introduced.
+
+The dedicated GitHub App key is encrypted in D1; installation access tokens are short-lived and are not stored or sent to the client. The App is restricted to Metadata: read and Contents: write and selected repositories only. A verified commit and its expected files must be read back before D1 marks the preview Synced. Branch conflicts remain conflicts and external edits are not force-overwritten. D1 messages and the M4.1 usage/reservation rows are unchanged by Save. M4.4 is responsible for consuming only manifest-approved active memory from a pinned Git commit.
