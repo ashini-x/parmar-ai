@@ -402,7 +402,7 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
       env,
       "/admin/api/intelligence/github/conversations/" + conversation.id + "/preview",
       cookie,
-      { method: "POST", body: { topicId: topic.id } },
+      { method: "POST", body: { topicId: topic.id, modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH" } },
     );
     expect(stalePreviewResponse.status).toBe(201);
     const stalePreview = (await stalePreviewResponse.json() as { preview: { id: string; files: Array<{ name: string; content: string }> } }).preview;
