@@ -57,6 +57,7 @@ import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUse
 import { clearAdminSession, getAdminSessionRole, handleAdminLogin, loginHtml, requireAdmin, requireOwner } from "./admin/auth";
 import { handleOwnerIntelligenceApi, ownerIntelligenceClientScript, ownerIntelligencePage } from "./admin/intelligence";
 import { handleOwnerGithubApi, handleOwnerGithubCallback } from "./admin/owner-github";
+import { handleOwnerGithubApi, handleOwnerGithubCallback } from "./admin/owner-github";
 import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, testFatmanVision, uploadFatmanPage } from "./fatman/admin";
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
@@ -3192,8 +3193,21 @@ const worker = {
         return withRequestId(await handleOwnerGithubCallback(request, env, url), requestId);
       }
 
+      // GitHub callbacks are public endpoints but use short-lived, one-time,
+      // Owner-bound state and verify the GitHub App installation before storing it.
+      if (url.pathname === "/admin/api/intelligence/github/callback") {
+        return withRequestId(await handleOwnerGithubCallback(request, env, url), requestId);
+      }
+
       // Owner Intelligence APIs are checked before the generic admin API guard.
       // Every handler also scopes each D1 query to the configured Owner principal.
+      if (url.pathname.startsWith("/admin/api/intelligence/github/")) {
+        if (!(await requireOwner(request, env))) {
+          const status = (await requireAdmin(request, env)) ? 403 : 401;
+          return withRequestId(json({ ok: false, error: status === 403 ? "owner_access_required" : "unauthorized" }, status), requestId);
+        }
+        return withRequestId(await handleOwnerGithubApi(request, env, url), requestId);
+      }
       if (url.pathname === "/admin/api/intelligence" || url.pathname.startsWith("/admin/api/intelligence/")) {
         if (!(await requireOwner(request, env))) {
           const status = (await requireAdmin(request, env)) ? 403 : 401;
