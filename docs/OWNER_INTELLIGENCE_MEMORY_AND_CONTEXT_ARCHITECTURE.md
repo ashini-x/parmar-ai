@@ -1,6 +1,6 @@
 # Owner Intelligence — Memory and Token-Aware Context Architecture
 
-**Status:** Approved design with 2026-11-19 central Owner Memory Hub and AI collaboration amendment; M4.4–M4.8 not implemented  
+**Status:** Approved design with 2026-11-19 central Owner Memory Hub, AI collaboration and single-provider/Cloudflare capacity amendments; M4.4–M4.8 not implemented  
 **Original approval:** 2026-11-18  
 **Central hub/collaboration amendment:** 2026-11-19 IST  
 **Parent roadmap:** [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md)  
@@ -125,6 +125,18 @@ The initial design does not require R2, KV, Vectorize or Workers AI:
 - KV is not canonical memory and its consistency/write characteristics make it unsuitable as the authority for topic or token state. D1 stores the authoritative state.
 - Use D1 FTS5/keyword retrieval first for exact historical recall. Consider a semantic index only after a representative query benchmark proves lexical retrieval insufficient.
 - Do not assume Cloudflare Vectorize or Workers AI is enabled. Re-inspect the account and current bindings before proposing provisioning. Account inspection on 2026-11-18 found R2 not enabled, no KV namespace and no Vectorize index. Those are observations, not permanent account guarantees.
+
+### 3.5 Locked AI provider and Cloudflare capacity policy
+
+Google Gemini through Vertex AI is the sole AI provider inside Owner Intelligence. Every chat generation, CountTokens preflight, Save-to-GitHub memory draft and future model-backed task uses the existing Vertex REST/SSE adapter and exact selected, server-verified Gemini model/thinking level. Do not add Workers AI, another provider, an unmetered summarizer/reranker or silent fallback. Memory drafting is an ordinary metered generation charged to the same conversation's M4.1 D1 token reservation/settlement ledger.
+
+Cloudflare is the deterministic backend: Owner authentication/authorization, request validation, D1 transcript/token/outbox persistence, context assembly, request transport, GitHub API operations, conflict checks, exact read-back, idempotent retries and telemetry. It does not perform model inference. ChatGPT's authorized engineering connection is separate and is never a Worker credential or provider fallback.
+
+The Owner confirms Workers Free is the current Cloudflare plan. The official Free/Paid reference table, dates and caveats are maintained in [OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md](OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md). Current account-wide consumption/headroom has not been measured; existing student/BRɅIN/other Workers share account quotas. Do not assume Owner Intelligence has the full daily allowance.
+
+The most relevant constraints are 100,000 Workers requests/day and 10 ms CPU/request; D1 5M rows read/day and 100K rows written/day, with 500 MB maximum Free database size and 5 GB total account storage; Queue 10,000 operations/day with 24-hour message retention; and Workflows 3,000 steps/day with finite compute/storage/state retention. Free D1 queries fail after the daily row-read or row-write limit is exceeded until 00:00 UTC. Workers Paid has a $5/month minimum account subscription and larger included allowances, but D1, Queues, Workflows and overages have separate metering; it is not a guaranteed all-in cap or unlimited compute.
+
+**M4.6-P0 is required before M4.6 implementation:** measure the live account plan/billing controls and shared workload, Worker CPU/request/subrequest usage, D1 rows/storage/latency, proposed Queue/Workflow operations/steps/retention, representative Owner-path costs and durable recovery. Produce a dated Free-versus-Paid decision; do not upgrade or provision resources without Owner approval. This gate does not block M4.3 acceptance or M4.4/M4.5. See the standalone provider/infrastructure policy for the complete checklist.
 
 ## 4. Owner experience and lifecycle
 
@@ -349,6 +361,8 @@ When implementation reaches this point:
 - Dispatch to a dedicated Owner memory Queue/Workflow (do not mix jobs with student AI work); retries must be idempotent and bounded.
 - Store status/attempt count/safe error/created/updated timestamps. A duplicate delivery must not create duplicate memory commits.
 - Complete the user-facing action only after the durable job reports its verified result. For rollover, D1 handoff is enough to open the successor even while GitHub sync retries.
+- Treat D1 outbox/job rows as the durable source of truth; Queue messages and Workflow instance state are delivery/execution mechanisms only. Reconcile/re-enqueue pending D1 work after message expiry, exhausted retries, consumer outage, deployment or Workflow state retention expiry.
+- On Workers Free, Queue retention is 24 hours and Workflows completed state is retained 3 days by default; neither duration is sufficient as the only record of a project memory task. Use bounded idempotent retries and an outbox reconciliation design. Paid retention is longer but still finite.
 - Provide a safe manual retry and conflict-resolution path.
 
 Do not add the new Queue, binding or Workflow until the live account/repo configuration is inspected and the required resource is justified. Use existing Cloudflare deployment patterns and update release docs before provisioning.
@@ -376,9 +390,10 @@ The work is nested under M4 and must not replace original milestones.
 | 2 | M4.3 | GitHub App auth and reviewed Save to GitHub | Least privilege; conflict-safe verified commit |
 | 3 | M4.4 | Project Memory manifest and pinned snapshot loading | Prompt token fit and reference-data security |
 | 4 | M4.5 | 180K/190K rollover, D1-safe handoff and fresh conversation | 200K limit remains enforced |
-| 5 | M4.6 | Token-aware prompt builder and exact historical recall | Correct CountTokens/usage accounting |
-| 6 | M4.7 | Previewable compaction and isolated forks | Originals/provenance retained |
-| 7 | M4.8 | Measured cache/retrieval optimisations | Real metrics show worthwhile benefit |
+| 5 (required gate) | M4.6-P0 | Cloudflare Free/Paid capacity, cost and durability audit | Measured account-wide headroom; D1 outbox recovery; Owner-approved Free/Paid decision; no unapproved provisioning |
+| 6 | M4.6 | Cloudflare Owner Context Replicator, bounded context and exact historical recall | Complete final prompt fits one exact CountTokens budget B; O(N) acceptance passes; D1 transcript remains complete |
+| 7 | M4.7 | Previewable compaction and isolated forks | Originals/provenance retained |
+| 8 | M4.8 | Measured cache/retrieval optimisations | Real metrics show worthwhile benefit |
 
 After M4.8, continue with the original M5 voice-dictation milestone, then the existing M6 native Gemini API capabilities, M7 usage/cost visibility and M8 security/quality/production acceptance. BRɅIN context remains a separate optional add-on.
 
@@ -387,6 +402,9 @@ After M4.8, continue with the original M5 voice-dictation milestone, then the ex
 - [Google Agent Platform pricing](https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing) — model/API/date-specific input/output/cache billing. Re-check on every pricing-related implementation.
 - [Google context caching overview](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/context-cache/context-cache-overview) — currently supported models, minimum token thresholds and TTL can change; re-check exact model/API/region at implementation.
 - [Cloudflare waitUntil documentation](https://developers.cloudflare.com/workers/runtime-apis/context/#waituntil) — post-response work has a bounded lifetime; use a durable queue/workflow for work that must survive disconnects.
+- [Owner Intelligence Provider and Infrastructure Policy](OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md) — locked Vertex-only provider boundary, 2026-11-19 Cloudflare Free/Paid reference, M4.6-P0 capacity/durability checklist and service-specific billing caveats.
+- [Workers pricing and limits](https://developers.cloudflare.com/workers/platform/pricing/) and [Workers limits](https://developers.cloudflare.com/workers/platform/limits/) — re-check live quotas and prices before implementation.
+- [D1 limits](https://developers.cloudflare.com/d1/platform/limits/), [Queues pricing](https://developers.cloudflare.com/queues/platform/pricing/) and [Workflows pricing](https://developers.cloudflare.com/workflows/reference/pricing/) — re-check service-specific limits/retention before provisioning.
 - This design makes no universal claim about pricing cliffs, context sizes, caching discounts, or model availability. The configured project's live capability and the exact selected model remain authoritative.
 
 

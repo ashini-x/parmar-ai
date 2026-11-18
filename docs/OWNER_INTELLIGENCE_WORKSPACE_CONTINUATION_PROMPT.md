@@ -10,14 +10,23 @@ Before changing anything, inspect the latest `main` branch and read, in this ord
 2. `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md` — this handoff.
 3. `docs/OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md` — approved memory/context design, including the Cloudflare Owner Context Replicator.
 4. `docs/OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md` — authoritative Gemini/ChatGPT role split, central hub hierarchy, exchange artifacts and Owner approval gates.
-5. `docs/TEST_PLAN.md` and `docs/README.md`.
-6. Re-read the source files and deployment/workflow state relevant to the first incomplete task. Do not rely on an old chat summary or assume this prompt is newer than GitHub.
+5. `docs/OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md` — locked single-provider decision, Cloudflare Free/Paid limits and M4.6-P0 gate.
+6. `docs/TEST_PLAN.md` and `docs/README.md`.
+7. Re-read the source files and deployment/workflow state relevant to the first incomplete task. Do not rely on an old chat summary or assume this prompt is newer than GitHub.
 
 ## Product and security boundary
 
-This is a private, general-purpose Gemini workspace inside the existing Owner-protected Admin Control Center. It is separate from the student-facing परमार्थAI Telegram tutor. Preserve the Owner route/session controls, selected-model and thinking-level behaviour, D1 isolation, current Vertex REST/SSE adapter, BRɅIN boundaries and all student flows.
+This is a private, general-purpose Gemini workspace inside the existing Owner-protected Admin Control Center. It is separate from the student-facing परमार्थAI Telegram tutor. Preserve the Owner route/session controls, selected-model and thinking-level behaviour, D1 isolation, current Vertex REST/SSE adapter, BRɅIN boundaries and all student flows. **Google Gemini through Vertex AI is the only AI provider inside Owner Intelligence.** Cloudflare is the deterministic backend only; do not use Workers AI, introduce another model provider, add a hidden model-backed summarizer/reranker or silently fall back. Cloudflare Free is the current Owner-confirmed account plan; do not assume account-wide headroom.
 
 The Owner can type a prompt or dictate speech into editable text; both use the same text-generation path. Do not add Gemini Live, real-time audio/video, speech-to-speech, assistant voice output, media generation, generic computer-use/MCP or broad consumer-Gemini parity without a separately approved scope change. BRɅIN context remains optional and off by default. Never silently switch model, thinking level, API or provider.
+
+### Locked infrastructure decision
+
+- All Owner Intelligence inference (chat, CountTokens, memory draft and future model-backed Owner tasks) goes through the existing Vertex REST/SSE adapter using the exact selected verified Gemini model/thinking level. A memory preview consumes the same conversation's M4.1 200K D1 budget. ChatGPT Software Engineer is a separate authorized code executor, not a runtime provider.
+- Cloudflare Workers/D1 perform authentication, validation, transcript/token/outbox persistence, context assembly, streaming transport and GitHub operations. D1 remains canonical. No Workers AI or new R2/KV/Vectorize/AI Search/Queue/Workflow resources are prerequisites; no resource is provisioned without a task-specific decision and Owner approval.
+- The detailed Workers Free/Paid comparison and official sources are in `docs/OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md`. The Owner confirms Workers Free; actual current account-wide usage/headroom is not yet measured.
+- M4.6-P0 — Cloudflare capacity and durability readiness — is required before M4.6 implementation. It measures shared Worker/D1/Queue/Workflow usage, costs and recovery. It does not block the current M4.3 acceptance walkthrough or automatically require an upgrade. Free Queue retention is 24 hours; D1 outbox, not queue messages or workflow state, remains the durable job authority.
+
 
 ## Current implementation status — do not overstate
 
@@ -29,6 +38,8 @@ The Owner can type a prompt or dictate speech into editable text; both use the s
 - Automatic in-place SSE reconnection is deferred and not implemented.
 
 ## Exact next task and execution gate
+
+**Do not switch to infrastructure work now.** The immediate task remains the Owner's in-progress M4.3 authenticated browser acceptance. Finish topic create/list verification, attach the private hub and unique memory root, reviewed five-file save/read-back/topic promotion, then stale-branch Conflict and recovery. M4.4 remains blocked until that live gate passes. The new M4.6-P0 capacity gate is later in the sequence and does not change the current walkthrough.
 
 **M4.1 and M4.2 foundations are complete and deployed. Do not re-run or weaken the 200,000-token boundary.** The latest main branch plus PR #343 records:
 
@@ -85,6 +96,8 @@ The 200K cumulative per-chat M4.1 limit and the M4.6 per-request context budget 
 - Roadmap: `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md`
 - Continuation prompt: `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md`
 - Memory/context architecture: `docs/OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md`
+- AI collaboration protocol: `docs/OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md`
+- Provider/infrastructure policy: `docs/OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md`
 - Test plan: `docs/TEST_PLAN.md`
 - Documentation index: `docs/README.md`
 

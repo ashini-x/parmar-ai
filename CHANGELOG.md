@@ -1,3 +1,11 @@
+## 2026-11-19 IST: Owner Intelligence single-provider and Cloudflare capacity policy finalized
+
+- Locked Google Gemini through Vertex AI as the only AI provider inside Owner Intelligence. Cloudflare Workers/D1 perform deterministic backend, storage, context orchestration and GitHub operations; Workers AI and alternate/hidden model providers are out of scope. ChatGPT Software Engineer remains a separate Owner-authorized code executor, not a runtime fallback.
+- Added [OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md](docs/OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md) with the Owner-confirmed Workers Free plan, official Cloudflare Free/Paid references checked 2026-11-19, service-specific D1/Queues/Workflows accounting and retention, cost caveats and upgrade decision rules.
+- Added M4.6-P0 — Cloudflare capacity and durability readiness — as a required measurement/cost/recovery gate before M4.6 implementation. It measures account-wide shared usage, representative Owner paths and D1 outbox recovery. It does not interrupt M4.3 browser acceptance, force a Workers Paid upgrade or authorize new resource provisioning.
+- Reaffirmed D1 as the canonical transcript, usage ledger and durable outbox. Queue messages and Workflow state are finite-retention transport/execution mechanisms; no new AI provider or Cloudflare resource is provisioned by this docs-only change.
+- Updated the Owner roadmap, continuation, memory/context architecture, collaboration protocol, test plan and documentation index. No application source, Worker binding, production database or deployment was changed.
+
 ## 2026-11-19 IST: Owner Intelligence topic API fix deployed to production
 
 - PR [#352](https://github.com/ashini-x/parmar-ai/pull/352) merged as `c555d9428421fbbe600a872093730fa3dce644e1`. It corrects the topic list/create/rename client URL to `/admin/api/intelligence/topics` and adds a topic-specific `Retry topics` action.
