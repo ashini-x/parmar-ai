@@ -223,7 +223,7 @@ async function startManifest(env: Env, request: Request, owner: string): Promise
     redirect_url: redirectUri,
     setup_url: new URL(SETUP, new URL(request.url).origin).toString(),
     callback_urls: [redirectUri],
-    setup_on_update: false,
+    setup_on_update: true,
     public: false,
     default_permissions: { metadata: "read", contents: "write" },
     default_events: [],
