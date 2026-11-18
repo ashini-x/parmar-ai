@@ -1257,6 +1257,17 @@ function workspaceHtml(): string {
 .sidebar{width:274px;flex:0 0 274px;background:#171717;border-right:1px solid #303030;display:flex;flex-direction:column;padding:16px 12px;z-index:5}
 .brand{display:flex;align-items:center;gap:10px;padding:7px 8px 20px}.brand-mark{width:34px;height:34px;display:grid;place-items:center;border:1px solid #555;border-radius:11px;color:#fff;font-size:15px;font-weight:700;letter-spacing:-1px}.brand-name{font-size:15px;font-weight:650;letter-spacing:.02em}.brand-sub{color:#8a8a8a;font-size:10px;letter-spacing:.12em;margin-top:3px}
 .new-chat{display:flex;align-items:center;gap:10px;width:100%;border:1px solid #454545;background:#242424;border-radius:10px;padding:11px 12px;text-align:left;font-size:13px;font-weight:600}.new-chat:hover{background:#303030}.plus{font-size:19px;font-weight:300;line-height:14px}
+.new-chat-scope{display:flex;flex-direction:column;gap:7px;margin-top:9px;padding:9px;border:1px solid #303030;border-radius:10px;background:#1d1d1d}
+.new-chat-scope-label{font-size:9px;color:#858585;letter-spacing:.12em;font-weight:650}
+.new-chat-scope-controls{display:flex;align-items:center;gap:6px;min-width:0}
+.new-chat-scope select{min-width:0;flex:1;border:1px solid #414141;border-radius:7px;background:#292929;color:#e5e5e5;padding:7px 6px;font:inherit;font-size:11px}
+.new-topic-button,.rename-topic-button{border:1px solid #414141;border-radius:7px;background:#292929;color:#c9c9c9;padding:7px 8px;font-size:10px;white-space:nowrap}
+.new-topic-button:hover,.rename-topic-button:not(:disabled):hover{background:#363636;color:#fff}
+.rename-topic-button{align-self:flex-start;padding:5px 7px;font-size:9px}
+.rename-topic-button:disabled{opacity:.4;cursor:not-allowed}
+.conversation-heading{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.conversation-scope{display:inline-flex;align-items:center;border:1px solid #454545;border-radius:999px;padding:3px 8px;background:#292929;color:#bdbdbd;font-size:9px;font-weight:650;letter-spacing:.08em;text-transform:uppercase}
+.conversation-title{color:#e4e4e4;font-size:13px;font-weight:550;letter-spacing:0}
 .section-label{font-size:10px;color:#858585;text-transform:uppercase;letter-spacing:.13em;padding:23px 9px 9px}
 .history{flex:1;overflow:auto;min-height:0}.history-empty{font-size:12px;line-height:1.55;color:#777;padding:10px 9px}.history-item{display:flex;align-items:center;gap:4px;margin:2px 0;border-radius:9px;padding:3px}.history-item.active{background:#303030}.history-item:hover{background:#292929}.history-open{min-width:0;flex:1;border:0;background:none;text-align:left;padding:8px 7px;font-size:12px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:6px}.history-action{border:0;background:transparent;color:#8b8b8b;border-radius:6px;padding:5px 6px;font-size:12px}.history-action:hover{background:#414141;color:#fff}
 .side-footer{border-top:1px solid #303030;padding:12px 5px 2px}.owner-note{display:flex;align-items:center;gap:8px;padding:7px 7px 10px;font-size:11px;color:#a1a1a1}.owner-dot{width:7px;height:7px;border-radius:50%;background:#4dba87}.logout{width:100%;border:0;background:transparent;color:#aaa;text-align:left;padding:9px 8px;border-radius:8px;font-size:12px}.logout:hover{background:#292929;color:#fff}
@@ -1275,6 +1286,14 @@ function workspaceHtml(): string {
 <aside class="sidebar" id="sidebar" aria-label="Conversation sidebar">
   <div class="brand"><div class="brand-mark">BɅ</div><div><div class="brand-name">BRɅIN</div><div class="brand-sub">INTELLIGENCE · PRIVATE</div></div></div>
   <button class="new-chat" id="newChat" type="button"><span class="plus">＋</span><span>New chat</span></button>
+  <div class="new-chat-scope">
+    <label class="new-chat-scope-label" for="newChatTopic">START NEW CHAT IN</label>
+    <div class="new-chat-scope-controls">
+      <select id="newChatTopic" aria-label="Start new chat in"><option value="">Scratchpad</option></select>
+      <button class="new-topic-button" id="newTopic" type="button">＋ Topic</button>
+    </div>
+    <button class="rename-topic-button" id="renameTopic" type="button" disabled>Rename selected topic</button>
+  </div>
   <div class="section-label">Your conversations</div>
   <div class="history" id="history" aria-live="polite"><div class="loading">Loading conversations…</div></div>
   <div class="side-footer"><div class="owner-note"><span class="owner-dot"></span><span>Owner workspace · Private</span></div><form method="post" action="/admin/logout"><button class="logout" type="submit">↗&nbsp; Sign out</button></form></div>
@@ -1314,7 +1333,7 @@ export function ownerIntelligenceClientScript(): Response {
 (function(){
   "use strict";
   var api="/admin/api/intelligence/conversations";
-  var state={conversations:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
+  var state={conversations:[],topics:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
   var history=document.getElementById("history");
   var messages=document.getElementById("messages");
   var heading=document.getElementById("conversationHeading");
@@ -1331,6 +1350,9 @@ export function ownerIntelligenceClientScript(): Response {
   var modelSelect=document.getElementById("modelSelect");
   var thinkingSelect=document.getElementById("thinkingSelect");
   var modelRetry=document.getElementById("modelRetry");
+  var newChatTopic=document.getElementById("newChatTopic");
+  var newTopicButton=document.getElementById("newTopic");
+  var renameTopicButton=document.getElementById("renameTopic");
   var modelLoadInProgress=false;
   var modelLoadMessage="Checking configured Gemini models…";
   var modelLoadController=null;
@@ -1627,6 +1649,42 @@ export function ownerIntelligenceClientScript(): Response {
     panel.appendChild(retry);
     history.appendChild(panel);
   }
+  async function refreshTopics(preferredId){
+    var result=await request(api+"/topics");
+    state.topics=result.topics||[];
+    var previous=preferredId!==undefined?preferredId:newChatTopic.value;
+    newChatTopic.replaceChildren(node("option","","Scratchpad"));
+    newChatTopic.options[0].value="";
+    state.topics.forEach(function(topic){
+      var option=node("option","",topic.title);
+      option.value=topic.id;
+      newChatTopic.appendChild(option);
+    });
+    newChatTopic.value=state.topics.some(function(topic){return topic.id===previous;})?previous:"";
+    renameTopicButton.disabled=!newChatTopic.value;
+  }
+  async function createTopic(){
+    var title=window.prompt("Name this topic");
+    if(title===null)return;
+    newTopicButton.disabled=true;
+    try{
+      var result=await request(api+"/topics",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
+      await refreshTopics(result.topic.id);
+    }catch(error){showHistoryError(error);}
+    finally{newTopicButton.disabled=false;}
+  }
+  async function renameSelectedTopic(){
+    var topic=state.topics.find(function(item){return item.id===newChatTopic.value;});
+    if(!topic)return;
+    var title=window.prompt("Rename topic",topic.title);
+    if(title===null)return;
+    renameTopicButton.disabled=true;
+    try{
+      var result=await request(api+"/topics/"+encodeURIComponent(topic.id),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({title:title})});
+      await refreshTopics(result.topic.id);
+    }catch(error){showHistoryError(error);}
+    finally{renameTopicButton.disabled=!newChatTopic.value;}
+  }
   function renderHistory(){
     history.replaceChildren();
     if(!state.conversations.length){history.appendChild(node("div","history-empty","Your saved conversations will appear here."));return;}
@@ -1656,7 +1714,10 @@ export function ownerIntelligenceClientScript(): Response {
   async function openConversation(id){
     var result=await request(api+"/"+encodeURIComponent(id));
     state.activeId=result.conversation.id;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
-    heading.textContent=result.conversation.title;
+    heading.replaceChildren(
+      node("span","conversation-scope",result.conversation.topic_title||"Scratchpad"),
+      node("span","conversation-title",result.conversation.title)
+    );
     renderHistory();renderSessionBudget();renderMessages(state.messages);
     updateComposer();
   }
@@ -1799,7 +1860,11 @@ export function ownerIntelligenceClientScript(): Response {
     button.disabled=true;
     button.setAttribute("aria-busy","true");
     try{
-      var result=await request(api,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({title:"New chat"})});
+      var conversationBody={title:"New chat"};
+      if(newChatTopic.value)conversationBody.topicId=newChatTopic.value;
+      var result=await request(api,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(conversationBody)});
+      newChatTopic.value="";
+      renameTopicButton.disabled=true;
       await refreshList(result.conversation.id);
       sidebar.classList.remove("open");
     }catch(error){showHistoryError(error);}
@@ -1829,6 +1894,9 @@ export function ownerIntelligenceClientScript(): Response {
     messages.replaceChildren(notice);
   }
   document.getElementById("newChat").addEventListener("click",newConversation);
+  newTopicButton.addEventListener("click",createTopic);
+  renameTopicButton.addEventListener("click",renameSelectedTopic);
+  newChatTopic.addEventListener("change",function(){renameTopicButton.disabled=!newChatTopic.value;});
   document.getElementById("mobileMenu").addEventListener("click",function(){sidebar.classList.toggle("open");});
   sendButton.addEventListener("click",function(){if(sending)stopGeneration();else saveMessage();});
   messageInput.addEventListener("input",updateComposer);
@@ -1846,6 +1914,7 @@ export function ownerIntelligenceClientScript(): Response {
   });
   modelRetry.addEventListener("click",function(){loadModels();});
   loadModels();
+  refreshTopics().catch(showHistoryError);
   refreshList().catch(showHistoryError);
 })();
 `;
