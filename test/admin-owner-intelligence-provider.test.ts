@@ -177,11 +177,9 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(failure).toMatchObject({
       status: 403,
       stage: "stream_generate_content",
-      message: expect.stringContaining("StreamGenerateContent request"),
     });
-    expect(failure).toMatchObject({
-      message: expect.stringContaining("permission aiplatform.endpoints.predict"),
-    });
+    expect((failure as Error).message).toContain("StreamGenerateContent request");
+    expect((failure as Error).message).toContain("permission aiplatform.endpoints.predict");
     expect((failure as Error).message).not.toContain("secret-project-id");
   });
 
@@ -215,8 +213,8 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(failure).toMatchObject({
       status: 403,
       stage: "stream_generate_content",
-      message: expect.stringContaining("permission aiplatform.endpoints.predict"),
     });
+    expect((failure as Error).message).toContain("permission aiplatform.endpoints.predict");
     expect((failure as Error).message).toContain("reason IAM_PERMISSION_DENIED");
     expect((failure as Error).message).not.toContain("secret-project-id");
     expect((failure as Error).message).not.toContain("aiplatform.googleapis.com/projects");
@@ -256,8 +254,8 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(failure).toMatchObject({
       status: 403,
       stage: "count_tokens_probe",
-      message: expect.stringContaining("Count Tokens availability probe"),
     });
+    expect((failure as Error).message).toContain("Count Tokens availability probe");
     expect((failure as Error).message).not.toContain("denied the GenerateContent request");
   });
 
