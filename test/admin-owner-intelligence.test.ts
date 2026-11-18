@@ -1,16 +1,24 @@
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/config/env";
 import worker from "../src";
 import { handleAdminLogin } from "../src/admin/auth";
 import {
   buildOwnerGeminiConversationContents,
   getOwnerIntelligenceSessionUsage,
-  handleOwnerIntelligenceApi,
   OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT,
   type OwnerIntelligenceMessage,
-  type OwnerIntelligenceProviderOverrides,
 } from "../src/admin/intelligence";
+import { countOwnerGeminiInputTokens, openOwnerGeminiStream } from "../src/admin/intelligence-provider";
+
+vi.mock("../src/admin/intelligence-provider", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/admin/intelligence-provider")>();
+  return {
+    ...actual,
+    countOwnerGeminiInputTokens: vi.fn(actual.countOwnerGeminiInputTokens),
+    openOwnerGeminiStream: vi.fn(actual.openOwnerGeminiStream),
+  };
+});
 
 type ConversationRow = {
   id: string;
@@ -375,23 +383,6 @@ async function call(
   return response;
 }
 
-async function callOwnerGenerationHandler(
-  env: Env,
-  path: string,
-  body: unknown,
-  provider: OwnerIntelligenceProviderOverrides,
-): Promise<Response> {
-  const url = new URL("https://parmar-ai.test" + path);
-  const request = new Request(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", Origin: url.origin },
-    body: JSON.stringify(body),
-  });
-  // Exercise the real Owner generation handler with deterministic provider
-  // responses. Owner-session authorization is covered by the Worker route tests.
-  return handleOwnerIntelligenceApi(request, env, url, provider);
-}
-
 describe("Owner Gemini conversation context builder", () => {
   it("omits failed and empty assistant rows and merges adjacent user turns after a failed generation", () => {
     const messages: OwnerIntelligenceMessage[] = [
@@ -711,25 +702,26 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     db.sessionUsage.get(id)!.used_tokens = OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 10;
 
     let requestedOutputLimit = 0;
-    const provider: OwnerIntelligenceProviderOverrides = {
-      countInputTokens: async () => 5,
-      openStream: async (_env, input) => {
-        requestedOutputLimit = input.maxOutputTokens ?? 0;
-        return (async function* () {
-          yield {
-            type: "done" as const,
-            usage: { promptTokens: 5, outputTokens: 5, totalTokens: 10 },
-            elapsedMs: 12,
-          };
-        })();
-      },
-    };
+    vi.mocked(countOwnerGeminiInputTokens).mockClear().mockResolvedValueOnce(5);
+    vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async (_env, input) => {
+      requestedOutputLimit = input.maxOutputTokens ?? 0;
+      return (async function* () {
+        yield {
+          type: "done" as const,
+          usage: { promptTokens: 5, outputTokens: 5, totalTokens: 10 },
+          elapsedMs: 12,
+        };
+      })();
+    });
     const path = "/admin/api/intelligence/conversations/" + id + "/generate";
-    const generated = await callOwnerGenerationHandler(env, path, {
-      content: "This request exactly fills the final ten tokens.",
-      modelId: "gemini-4-hydrogen",
-      thinkingLevel: "HIGH",
-    }, provider);
+    const generated = await call(env, path, ownerCookie, {
+      method: "POST", origin,
+      body: {
+        content: "This request exactly fills the final ten tokens.",
+        modelId: "gemini-4-hydrogen",
+        thinkingLevel: "HIGH",
+      },
+    });
     expect(generated.status).toBe(200);
     await generated.text();
 
@@ -746,11 +738,14 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     }));
 
     const countBeforeRejectedPrompt = [...db.messages.values()].filter((row) => row.role === "user").length;
-    const rejected = await callOwnerGenerationHandler(env, path, {
-      content: "This prompt must not be persisted after the exact budget is consumed.",
-      modelId: "gemini-4-hydrogen",
-      thinkingLevel: "HIGH",
-    }, provider);
+    const rejected = await call(env, path, ownerCookie, {
+      method: "POST", origin,
+      body: {
+        content: "This prompt must not be persisted after the exact budget is consumed.",
+        modelId: "gemini-4-hydrogen",
+        thinkingLevel: "HIGH",
+      },
+    });
     const rejectedBody = await rejected.json() as { error: string };
     expect(rejected.status).toBe(409);
     expect(rejectedBody.error).toBe("session_token_limit_reached");
@@ -770,22 +765,17 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     await getOwnerIntelligenceSessionUsage(env, id);
     db.sessionUsage.get(id)!.used_tokens = OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 10;
 
-    let streamCalled = false;
-    const provider: OwnerIntelligenceProviderOverrides = {
-      // Prompt itself uses all ten remaining tokens, leaving no required
-      // output capacity. The minimum valid generation needs eleven tokens.
-      countInputTokens: async () => 10,
-      openStream: async () => {
-        streamCalled = true;
-        return (async function* () {})();
-      },
-    };
+    vi.mocked(countOwnerGeminiInputTokens).mockClear().mockResolvedValueOnce(10);
+    vi.mocked(openOwnerGeminiStream).mockClear();
     const path = "/admin/api/intelligence/conversations/" + id + "/generate";
-    const response = await callOwnerGenerationHandler(env, path, {
-      content: "This request cannot fit the minimum one output token.",
-      modelId: "gemini-4-hydrogen",
-      thinkingLevel: "HIGH",
-    }, provider);
+    const response = await call(env, path, ownerCookie, {
+      method: "POST", origin,
+      body: {
+        content: "This request cannot fit the minimum one output token.",
+        modelId: "gemini-4-hydrogen",
+        thinkingLevel: "HIGH",
+      },
+    });
     const responseBody = await response.json() as { error: string; usage: { used_tokens: number; reserved_tokens: number; locked: boolean } };
 
     expect(response.status).toBe(409);
@@ -795,7 +785,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
       reserved_tokens: 0,
       locked: true,
     }));
-    expect(streamCalled).toBe(false);
+    expect(openOwnerGeminiStream).not.toHaveBeenCalled();
     expect(db.messages.size).toBe(0);
     expect(db.reservations.size).toBe(0);
   });
@@ -816,14 +806,18 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     let countCalls = 0;
     let releaseCountTokens!: () => void;
     const bothRequestsAtPreflight = new Promise<void>((resolve) => { releaseCountTokens = resolve; });
-    const provider: OwnerIntelligenceProviderOverrides = {
-      countInputTokens: async () => {
-        countCalls += 1;
-        if (countCalls === 2) releaseCountTokens();
-        await bothRequestsAtPreflight;
-        return 10;
-      },
-      openStream: async (_env, _input, signal) => (async function* () {
+    vi.mocked(countOwnerGeminiInputTokens).mockClear();
+    const synchronizedCount = async () => {
+      countCalls += 1;
+      if (countCalls === 2) releaseCountTokens();
+      await bothRequestsAtPreflight;
+      return 10;
+    };
+    vi.mocked(countOwnerGeminiInputTokens)
+      .mockImplementationOnce(synchronizedCount)
+      .mockImplementationOnce(synchronizedCount);
+    vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async (_env, _input, signal) =>
+      (async function* () {
         yield { type: "delta" as const, text: "partial output" };
         await new Promise<void>((resolve) => {
           if (signal.aborted) {
@@ -833,19 +827,17 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
           signal.addEventListener("abort", () => resolve(), { once: true });
         });
       })(),
-    };
+    );
     const path = "/admin/api/intelligence/conversations/" + id + "/generate";
     const requests = await Promise.all([
-      callOwnerGenerationHandler(env, path, {
-        content: "First concurrent request.",
-        modelId: "gemini-4-hydrogen",
-        thinkingLevel: "HIGH",
-      }, provider),
-      callOwnerGenerationHandler(env, path, {
-        content: "Second concurrent request.",
-        modelId: "gemini-4-hydrogen",
-        thinkingLevel: "HIGH",
-      }, provider),
+      call(env, path, ownerCookie, {
+        method: "POST", origin,
+        body: { content: "First concurrent request.", modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH" },
+      }),
+      call(env, path, ownerCookie, {
+        method: "POST", origin,
+        body: { content: "Second concurrent request.", modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH" },
+      }),
     ]);
 
     expect(countCalls).toBe(2);
