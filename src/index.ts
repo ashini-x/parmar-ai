@@ -56,6 +56,7 @@ import { answerQuizSession, createQuizSession, deleteQuizSession, getQuizSession
 import { adminDashboard, adminOverview, adminUsers, adminUserQuestions, adminUserDetail, adminAiUsage, adminLearning, adminActivity, adminAccess, adminAudit, adminSystem, adminExport, adminAction, adminTelegram } from "./admin/dashboard";
 import { clearAdminSession, getAdminSessionRole, handleAdminLogin, loginHtml, requireAdmin, requireOwner } from "./admin/auth";
 import { handleOwnerIntelligenceApi, ownerIntelligenceClientScript, ownerIntelligencePage } from "./admin/intelligence";
+import { handleOwnerIntelligenceGitHubApi, ownerIntelligenceGitHubCallback, ownerIntelligenceGitHubSetup } from "./admin/owner-intelligence-github";
 import { disableFatmanIndex, fatmanAdminPage, fatmanIndexStatus, finalizeFatmanIndex, prepareFatmanIndex, previewFatmanIndex, testFatmanVision, uploadFatmanPage } from "./fatman/admin";
 import { fatmanMonitorPage, fatmanMonitorStatus } from "./fatman/monitor";
 import { fatmanReleaseQaStatus, triggerFatmanReleaseQa } from "./fatman/qa-admin";
@@ -3145,6 +3146,18 @@ const worker = {
       // Provider callbacks are intentionally outside the admin-session cookie path:
       // SameSite=Strict cookies are not sent on a cross-site OAuth redirect. Each
       // callback instead consumes a 10-minute, single-use, cryptographically random state.
+      // Owner GitHub App callbacks also run outside the SameSite=Strict session path.
+      // They consume a single-use state bound to the configured Owner principal.
+      if (url.pathname === "/admin/intelligence/github/callback") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        return withRequestId(await ownerIntelligenceGitHubCallback(env, request), requestId);
+      }
+
+      if (url.pathname === "/admin/intelligence/github/setup") {
+        if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
+        return withRequestId(await ownerIntelligenceGitHubSetup(env, request), requestId);
+      }
+
       if (url.pathname === "/admin/brvin/connect/github/callback") {
         if (request.method !== "GET") return withRequestId(methodNotAllowed(["GET"]), requestId);
         return withRequestId(await completeBrvinGitHubManifest(env, request), requestId);
@@ -3191,6 +3204,9 @@ const worker = {
         if (!(await requireOwner(request, env))) {
           const status = (await requireAdmin(request, env)) ? 403 : 401;
           return withRequestId(json({ ok: false, error: status === 403 ? "owner_access_required" : "unauthorized" }, status), requestId);
+        }
+        if (url.pathname.startsWith("/admin/api/intelligence/github/")) {
+          return withRequestId(await handleOwnerIntelligenceGitHubApi(request, env, url), requestId);
         }
         return withRequestId(await handleOwnerIntelligenceApi(request, env, url), requestId);
       }
