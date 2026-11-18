@@ -1,3 +1,11 @@
+## 2026-11-18: Owner Intelligence M4.3 GitHub authorization and Save implementation started (not yet deployed)
+
+- Started M4.3 on feature branch feat/owner-intelligence-m4-3-github-memory. Added a dedicated Owner Gemini Intelligence GitHub App, separate from BRVIN Connect, requiring exactly Metadata: read and Contents: write and selected repositories only.
+- Added Owner-scoped D1 credential/state/preview tables; encrypted server-side private-key storage; hashed single-use callback state; runtime App/installation/permission verification; short-lived installation tokens; Owner-only status/repository/preview/confirm APIs.
+- Added editable Markdown preview, explicit confirmation, expected-base branch conflict checks, non-force Git ref update and commit/file read-back verification before Synced. D1 transcript and M4.1 200K ledger remain canonical and unchanged; Scratchpad promotion occurs only after verified save.
+- Added the Owner workspace Save dialog and initial authorization/CSRF/manifest/UI tests. The initial save draft is a bounded, provenance-labelled transcript excerpt/template; it is not a Gemini-generated summary and does not load Project Memory into model prompts.
+- PR validation, production deployment and authenticated Owner GitHub App installation/save acceptance are pending. Do not report M4.3 as complete until those gates pass.
+
 ## 2026-11-18: Owner Intelligence M4.2 Scratchpad/topic foundation deployed
 
 - PR [#343](https://github.com/ashini-x/parmar-ai/pull/343) merged as `5dfd42499fc9f14dfda915c3c264242af779dc2d`.
