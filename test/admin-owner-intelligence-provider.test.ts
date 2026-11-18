@@ -29,7 +29,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       calls.push({ url, body });
       return new Response(JSON.stringify({
-        totalTokens: String(body.contents).includes("Owner model availability check.") ? 1 : 12_345,
+        totalTokens: JSON.stringify(body.contents).includes("Owner model availability check.") ? 1 : 12_345,
       }), { status: 200, headers: { "content-type": "application/json" } });
     };
     const contents = [
