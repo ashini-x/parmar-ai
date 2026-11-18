@@ -1,5 +1,5 @@
 import type { Env } from "../config/env";
-import { ensureOwnerIntelligenceSchema } from "./intelligence";
+import { draftOwnerMemoryWithBudget, ensureOwnerIntelligenceSchema } from "./intelligence";
 import { json, methodNotAllowed, notFound } from "../http/response";
 
 const API = "https://api.github.com";
@@ -574,7 +574,7 @@ async function branchHead(token: string, owner: string, name: string, branch: st
   return sha;
 }
 function appendProgress(existing: string, conversationId: string, previewId: string, messages: OwnerMessage[]): string {
-  const marker = "owner-intelligence-" + conversationId + "-" + previewId.slice(0, 8);
+  const marker = "owner-intelligence-" + conversationId;
   const start = "<!-- " + marker + ":start -->";
   const end = "<!-- " + marker + ":end -->";
   const previous = existing.replace(new RegExp(start + "[\\s\\S]*?" + end, "gu"), "").trim();
@@ -698,8 +698,9 @@ async function createMemoryPreview(env: Env, request: Request, owner: string, co
   if (!validUuid(conversationId)) return notFound();
   let body: Record<string, unknown>;
   try { body = await request.json() as Record<string, unknown>; } catch { return json({ ok: false, error: "invalid_request" }, 400); }
-  if (!body || Object.keys(body).some((key) => key !== "topicId") || !validUuid(body.topicId)) {
-    return json({ ok: false, error: "invalid_request", message: "Select an Owner project topic for this conversation." }, 400);
+  if (!body || Object.keys(body).some((key) => !["topicId", "modelId", "thinkingLevel"].includes(key)) ||
+      !validUuid(body.topicId) || typeof body.modelId !== "string" || typeof body.thinkingLevel !== "string") {
+    return json({ ok: false, error: "invalid_request", message: "Select a project topic and a verified model/thinking level before preparing memory." }, 400);
   }
   const conversation = await loadConversationForSave(env, owner, conversationId);
   if (!conversation) return notFound();
@@ -733,12 +734,49 @@ async function createMemoryPreview(env: Env, request: Request, owner: string, co
   if (clean(branchResult.name, 180) !== branch) {
     return json({ ok: false, error: "branch_not_verified", message: "The attached Git branch could not be verified." }, 409);
   }
+  // Pin every source Markdown read to one immutable commit so the preview never
+  // mixes files from different branch heads.
   const baseCommit = await branchHead(token, topic.repository_owner, topic.repository_name, branch);
   const previewId = crypto.randomUUID();
-  const files = await buildMemoryFiles(
-    token, topic.repository_owner, topic.repository_name, branch, memoryRoot,
+  const starterFiles = await buildMemoryFiles(
+    token, topic.repository_owner, topic.repository_name, baseCommit, memoryRoot,
     topic.title, conversationId, previewId, conversation.messages,
   );
+  const currentMemory: Record<string, string> = {};
+  for (const name of ["project-memory.md", "progress.md", "decisions.md"]) {
+    const file = starterFiles.find((item) => item.name === name);
+    if (file) currentMemory[name] = file.content;
+  }
+  const generated = await draftOwnerMemoryWithBudget(env, conversationId, {
+    modelId: body.modelId,
+    thinkingLevel: body.thinkingLevel,
+    topicTitle: topic.title,
+    messages: conversation.messages,
+    currentMemory,
+  });
+  const draftText = generated.text.trim().replace(/^\x60{3}(?:json)?\s*/iu, "").replace(/\s*\x60{3}$/u, "");
+  let draftValue: Record<string, unknown>;
+  try {
+    draftValue = JSON.parse(draftText) as Record<string, unknown>;
+  } catch {
+    throw new Error("Gemini did not return the required structured memory draft. No GitHub files were written; review the token meter and retry.");
+  }
+  const draftFields = ["projectMemory", "progress", "decisions"];
+  if (Object.keys(draftValue).length !== 3 ||
+      draftFields.some((key) => typeof draftValue[key] !== "string" || !(draftValue[key] as string).trim())) {
+    throw new Error("Gemini's memory draft was incomplete. No GitHub files were written; review the token meter and retry.");
+  }
+  const files = starterFiles.map((file) => ({
+    ...file,
+    content: file.name === "project-memory.md" ? draftValue.projectMemory as string
+      : file.name === "progress.md" ? draftValue.progress as string
+      : file.name === "decisions.md" ? draftValue.decisions as string
+      : file.content,
+  }));
+  if (files.some((file) => file.content.length > PREVIEW_FILE_LIMIT) ||
+      files.reduce((sum, file) => sum + file.content.length, 0) > PREVIEW_TOTAL_LIMIT) {
+    throw new Error("Gemini's proposed Markdown exceeds the safe preview size. No GitHub files were written.");
+  }
   const now = Date.now();
   const expires = now + PREVIEW_TTL_MS;
   const inserted = await env.DB!.prepare(
@@ -754,7 +792,12 @@ async function createMemoryPreview(env: Env, request: Request, owner: string, co
     preview: {
       id: previewId, topicId: topic.id, topicTitle: topic.title, conversationId,
       repository: fullName, branch, memoryRoot, baseCommitSha: baseCommit, expiresAt: expires, files,
-      note: "This editable starter preserves current project Markdown and adds bounded, message-ID-linked D1 transcript excerpts. It is not a Gemini-generated summary. Nothing is written to GitHub until you explicitly confirm.",
+      draft: {
+        modelId: generated.modelId, thinkingLevel: generated.thinkingLevel,
+        promptTokens: generated.usage.promptTokens, outputTokens: generated.usage.outputTokens,
+        totalTokens: generated.usage.totalTokens, elapsedMs: generated.elapsedMs,
+      },
+      note: "Gemini prepared this editable candidate using the selected model and thinking level. The draft call was charged to this conversation's 200,000-token budget. Existing Markdown and bounded D1 transcript excerpts are included as source context. Review and edit every file; nothing is written to GitHub until explicit confirmation.",
     },
   }, 201);
 }
