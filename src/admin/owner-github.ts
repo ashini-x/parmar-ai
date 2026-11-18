@@ -1,7 +1,6 @@
 import type { Env } from "../config/env";
 import { ensureOwnerIntelligenceSchema } from "./intelligence";
 import { json, methodNotAllowed, notFound } from "../http/response";
-import { ensureOwnerIntelligenceSchema } from "./intelligence";
 
 const API = "https://api.github.com";
 const CALLBACK = "/admin/api/intelligence/github/callback";
