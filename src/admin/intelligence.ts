@@ -1296,7 +1296,7 @@ export function ownerIntelligenceClientScript(): Response {
     var reserved=Math.max(0,Number(usage.reserved_tokens)||0);
     var committed=Math.min(limit,used+reserved);
     var remaining=Math.max(0,Number.isFinite(Number(usage.remaining_tokens))?Number(usage.remaining_tokens):limit-committed);
-    var locked=usage.locked===true||remaining===0;
+    var locked=usage.locked===true;
     var percent=Math.min(100,committed/limit*100);
     sessionBudget.hidden=false;
     sessionBudgetValue.textContent=formatTokenCount(used)+" used"+(reserved?" · "+formatTokenCount(reserved)+" reserved":"")+" / "+formatTokenCount(limit);
