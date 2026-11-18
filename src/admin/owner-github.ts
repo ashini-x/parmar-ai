@@ -1,4 +1,5 @@
 import type { Env } from "../config/env";
+import { ensureOwnerIntelligenceSchema } from "./intelligence";
 import { json, methodNotAllowed, notFound } from "../http/response";
 
 const API = "https://api.github.com";
@@ -134,6 +135,7 @@ async function github<T>(path: string, token: string, method = "GET", body?: unk
 }
 async function ensureSchema(env: Env): Promise<void> {
   if (!env.DB) throw new Error("The Owner Intelligence database is not configured.");
+  await ensureOwnerIntelligenceSchema(env);
   const results = await env.DB.batch([
     env.DB.prepare("CREATE TABLE IF NOT EXISTS " + APP_TABLE + " (owner_id TEXT PRIMARY KEY, app_id INTEGER NOT NULL, app_slug TEXT NOT NULL, app_name TEXT NOT NULL, redirect_uri TEXT NOT NULL, secret_ciphertext TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'created', created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS " + INSTALL_TABLE + " (owner_id TEXT NOT NULL, installation_id INTEGER NOT NULL, app_id INTEGER NOT NULL, account_login TEXT NOT NULL, account_type TEXT NOT NULL DEFAULT '', repository_selection TEXT NOT NULL DEFAULT 'selected', status TEXT NOT NULL DEFAULT 'active', authorized_user TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY(owner_id, installation_id))"),
@@ -174,14 +176,14 @@ async function persistBundle(env: Env, owner: string, bundle: Bundle): Promise<v
     .bind(owner, bundle.appId, bundle.slug, bundle.name, bundle.redirectUri, encrypted, now, now).run();
   if (!result.success) throw new Error("D1 did not confirm the Owner GitHub App registration.");
 }
-async function createState(env: Env, owner: string, purpose: "manifest" | "installation", payload: Record<string, unknown>): Promise<string> {
+async function createState(env: Env, owner: string, purpose: "manifest" | "installation" | "user_authorization", payload: Record<string, unknown>): Promise<string> {
   const state = randomState(); const now = Date.now();
   const result = await env.DB!.prepare("INSERT INTO " + STATE_TABLE + " (state_hash, owner_id, purpose, payload_json, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)")
     .bind(await sha256(state), owner, purpose, JSON.stringify(payload), now, now + 10 * 60_000).run();
   if (!result.success) throw new Error("D1 did not confirm the one-time GitHub state.");
   return state;
 }
-async function consumeState(env: Env, state: string, purpose: "manifest" | "installation"): Promise<{ owner_id: string; payload: Record<string, unknown> } | null> {
+async function consumeState(env: Env, state: string, purpose: "manifest" | "installation" | "user_authorization"): Promise<{ owner_id: string; payload: Record<string, unknown> } | null> {
   if (!env.DB || state.length < 32 || state.length > 128) return null;
   const row = await env.DB.prepare("DELETE FROM " + STATE_TABLE + " WHERE state_hash=? AND purpose=? AND expires_at>? RETURNING owner_id, payload_json")
     .bind(await sha256(state), purpose, Date.now()).first<{ owner_id: string; payload_json: string }>();
@@ -198,6 +200,7 @@ function callbackResult(result: "app-created" | "installed" | "error"): Response
   } });
 }
 async function startManifest(env: Env, request: Request, owner: string): Promise<Response> {
+  if (new URL(request.url).protocol !== "https:") return json({ ok: false, error: "A secure HTTPS callback origin is required." }, 400);
   const current = await appRow(env, owner);
   if (current) return json({ ok: false, error: "github_app_already_configured", message: "An Owner Memory GitHub App already exists. Continue with its installation or disconnect it before replacing it." }, 409);
   const redirectUri = new URL(CALLBACK, new URL(request.url).origin).toString();
@@ -209,7 +212,7 @@ async function startManifest(env: Env, request: Request, owner: string): Promise
     redirect_url: redirectUri,
     setup_url: redirectUri,
     callback_urls: [redirectUri],
-    setup_on_update: false,
+    setup_on_update: true,
     public: false,
     default_permissions: { metadata: "read", contents: "write" },
     default_events: [],
@@ -385,6 +388,7 @@ async function installationToken(env: Env, owner: string, installationId: number
   if (!known) throw new Error("That GitHub installation has not been verified for this Owner.");
   const body: Record<string, unknown> = { permissions: { contents: "write" } };
   if (repositoryId !== undefined) body.repository_ids = [repositoryId];
+  body.permissions = { contents: "read" };
   const result = await github<{ token?: string }>("/app/installations/" + installationId + "/access_tokens", token, "POST", body);
   if (!result.data.token) throw new Error("GitHub did not issue a short-lived repository token.");
   void bundle;
