@@ -430,7 +430,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
         { role: "user", text: "Question two" },
       ],
     }, new AbortController().signal, dependencies(fetcher as unknown as typeof fetch))).rejects.toMatchObject({
-      message: expect.stringContaining("conversation context is invalid or too large"),
+      message: expect.stringContaining("non-empty alternating user/model turns"),
     });
     expect(fetcher).not.toHaveBeenCalled();
   });
