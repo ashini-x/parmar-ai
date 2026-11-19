@@ -105,8 +105,13 @@ class FakeOwnerD1 {
   }
   read(sql: string, values: unknown[]): Array<Record<string, unknown>> {
     if (sql.startsWith("PRAGMA table_info(owner_intelligence_conversations)")) {
-      return ["id", "owner_id", "title", "created_at", "updated_at", "topic_id", "session_kind", "lifecycle_status"]
+      return ["id", "owner_id", "title", "created_at", "updated_at", "topic_id", "session_kind", "lifecycle_status", "cross_project_memory_enabled"]
         .map((name) => ({ name }));
+    }
+    if (sql.includes("FROM owner_intelligence_conversation_memory_snapshots")) return [];
+    if (sql.includes("cross_project_memory_enabled")) {
+      const row = this.conversations.get(String(values[0]));
+      return row && row.owner_id === String(values[1]) ? [{ cross_project_memory_enabled: 0 }] : [];
     }
     if (sql.includes("FROM owner_intelligence_session_usage")) {
       const row = this.sessionUsage.get(String(values[0]));

@@ -2,6 +2,7 @@ import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types"
 import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
 import { countOwnerGeminiInputTokens, generateOwnerGeminiContent, openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiContent, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
+import { getOwnerConversationProjectMemoryInfo, loadOwnerConversationProjectMemoryPrompt, setOwnerConversationCrossProjectMemory } from "./owner-project-memory";
 
 export interface OwnerIntelligenceSessionUsage {
   limit_tokens: number;
@@ -636,7 +637,12 @@ export async function createOwnerIntelligenceConversation(
 export async function getOwnerIntelligenceConversation(
   env: Env,
   id: string,
-): Promise<{ conversation: OwnerIntelligenceConversation; messages: OwnerIntelligenceMessage[]; usage: OwnerIntelligenceSessionUsage | null } | null> {
+): Promise<{
+  conversation: OwnerIntelligenceConversation;
+  messages: OwnerIntelligenceMessage[];
+  usage: OwnerIntelligenceSessionUsage | null;
+  projectMemory: Awaited<ReturnType<typeof getOwnerConversationProjectMemoryInfo>>;
+} | null> {
   await ensureOwnerIntelligenceSchema(env);
   const ownerId = ownerPrincipal(env);
   const row = await env.DB!.prepare(
@@ -657,7 +663,8 @@ export async function getOwnerIntelligenceConversation(
      ORDER BY m.created_at ASC, m.id ASC`,
   ).bind(id, ownerId).all<OwnerMessageRow>();
   const usage = await getOwnerIntelligenceSessionUsage(env, id);
-  return { conversation: mapConversation(row), messages: (result.results ?? []).map(mapMessage), usage };
+  const projectMemory = await getOwnerConversationProjectMemoryInfo(env, ownerId, id);
+  return { conversation: mapConversation(row), messages: (result.results ?? []).map(mapMessage), usage, projectMemory };
 }
 
 export async function renameOwnerIntelligenceConversation(
@@ -1038,7 +1045,20 @@ async function handleOwnerGeneration(
   }
   if (!plan) return notFound();
 
+  let projectMemoryContext: Awaited<ReturnType<typeof loadOwnerConversationProjectMemoryPrompt>> = null;
+  try {
+    projectMemoryContext = await loadOwnerConversationProjectMemoryPrompt(env, ownerPrincipal(env), conversationId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The pinned Project Memory could not be loaded.";
+    return json({ ok: false, error: "project_memory_load_failed", message: message.slice(0, 300) }, 503);
+  }
   const contents = buildOwnerGeminiConversationContents(plan.messages);
+  if (projectMemoryContext && contents.length && contents[0].role === "user") {
+    contents[0] = {
+      ...contents[0],
+      text: projectMemoryContext.referenceText + "\n\n--- CURRENT CONVERSATION TRANSCRIPT ---\n\n" + contents[0].text,
+    };
+  }
   if (!contents.length || contents[contents.length - 1].role !== "user") {
     return json({ ok: false, error: "latest_message_missing" }, 409);
   }
@@ -1336,6 +1356,34 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
     return methodNotAllowed(["GET", "POST"]);
   }
 
+const memoryPreference = url.pathname.match(/^\/admin\/api\/intelligence\/conversations\/([0-9a-f-]{36})\/memory\/cross-project$/iu);
+  if (memoryPreference) {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+    const body = await readJsonBody(request);
+    if (!body || Object.keys(body).length !== 1 || typeof body.enabled !== "boolean") {
+      return json({ ok: false, error: "invalid_request" }, 400);
+    }
+    try {
+      const updated = await setOwnerConversationCrossProjectMemory(env, ownerPrincipal(env), memoryPreference[1], body.enabled);
+      return updated ? json({ ok: true, enabled: body.enabled }) : notFound();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The cross-project preference could not be saved.";
+      return json({ ok: false, error: "cross_project_update_failed", message }, 503);
+    }
+  }
+
+  if (url.pathname.endsWith("/memory")) {
+    const memoryMatch = url.pathname.match(/^\/admin\/api\/intelligence\/conversations\/([0-9a-f-]{36})\/memory$/iu);
+    if (!memoryMatch || request.method !== "GET") return notFound();
+    try {
+      const projectMemory = await getOwnerConversationProjectMemoryInfo(env, ownerPrincipal(env), memoryMatch[1]);
+      return json({ ok: true, projectMemory });
+    } catch {
+      return notFound();
+    }
+  }
+
   const prefix = root + "/";
   if (!url.pathname.startsWith(prefix)) return notFound();
   const suffix = url.pathname.slice(prefix.length).split("/");
@@ -1440,6 +1488,63 @@ function workspaceHtml(): string {
 .github-save-file label{font-size:9px;color:#bcbcbc;font-weight:650;overflow-wrap:anywhere}
 .github-save-file textarea{width:100%;min-height:130px;max-height:360px;resize:vertical;border:1px solid #414141;border-radius:7px;background:#171717;color:#e5e5e5;padding:8px;font:10px/1.5 ui-monospace,SFMono-Regular,monospace}
 
+.project-memory-panel{display:flex;flex-direction:column;gap:7px;margin-top:12px;padding:10px;border:1px solid #303030;border-radius:10px;background:#1d1d1d}.project-memory-title{font-size:9px;letter-spacing:.12em;font-weight:700;color:#929292}.project-memory-status{font-size:10px;color:#c6c6c6;line-height:1.45;overflow-wrap:anywhere;white-space:pre-wrap}.project-memory-field-label{font-size:8px;letter-spacing:.1em;color:#858585;font-weight:650;margin-top:3px}.project-memory-field{width:100%;min-width:0;border:1px solid #414141;border-radius:7px;background:#292929;color:#e5e5e5;padding:7px;font:inherit;font-size:10px}.project-memory-action{width:100%;border:1px solid #454545;border-radius:7px;background:#292929;color:#e3e3e3;padding:8px;font-size:10px}.project-memory-action:disabled{opacity:.4;cursor:not-allowed}.project-memory-options{display:flex;align-items:center;gap:7px;color:#bdbdbd;font-size:10px;line-height:1.4}.project-memory-options input{accent-color:#9c9c9c}.project-memory-snapshot{border-top:1px solid #343434;padding-top:8px;margin-top:2px;display:flex;flex-direction:column;gap:5px}.project-memory-snapshot strong{font-size:10px;color:#e1e1e1}.project-memory-snapshot span{font-size:9px;color:#9d9d9d;overflow-wrap:anywhere}.project-memory-snapshot code{font-size:9px;color:#c5c5c5;overflow-wrap:anywhere}.conversation-heading{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.conversation-scope{display:inline-flex;align-items:center;border:1px solid #454545;border-radius:999px;padding:3px 8px;background:#292929;color:#bdbdbd;font-size:9px;font-weight:650;letter-spacing:.08em;text-transform:uppercase}
+.conversation-title{color:#e4e4e4;font-size:13px;font-weight:550;letter-spacing:0}
+.section-label{font-size:10px;color:#858585;text-transform:uppercase;letter-spacing:.13em;padding:23px 9px 9px}
+.history{flex:0 0 auto;overflow:visible;min-height:0}.history-empty{font-size:12px;line-height:1.55;color:#777;padding:10px 9px}.history-item{display:flex;align-items:center;gap:4px;margin:2px 0;border-radius:9px;padding:3px}.history-item.active{background:#303030}.history-item:hover{background:#292929}.history-open{min-width:0;flex:1;border:0;background:none;text-align:left;padding:8px 7px;font-size:12px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:6px}.history-action{border:0;background:transparent;color:#8b8b8b;border-radius:6px;padding:5px 6px;font-size:12px}.history-action:hover{background:#414141;color:#fff}
+.side-footer{border-top:1px solid #303030;padding:12px 5px 2px}.owner-note{display:flex;align-items:center;gap:8px;padding:7px 7px 10px;font-size:11px;color:#a1a1a1}.owner-dot{width:7px;height:7px;border-radius:50%;background:#4dba87}.logout{width:100%;border:0;background:transparent;color:#aaa;text-align:left;padding:9px 8px;border-radius:8px;font-size:12px}.logout:hover{background:#292929;color:#fff}
+.main{display:flex;flex:1;min-width:0;min-height:0;flex-direction:column;position:relative}.topbar{height:60px;flex:0 0 60px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:12px}.top-left{display:flex;align-items:center;gap:11px;min-width:0}.mobile-menu{display:none;border:0;background:transparent;font-size:19px;padding:7px}.page-title{font-size:14px;font-weight:600;white-space:nowrap}.private-tag{font-size:10px;color:#9b9b9b;border:1px solid #404040;border-radius:20px;padding:5px 8px}.top-right{display:flex;align-items:center;gap:9px}.model-retry{border:1px solid #555;background:#303030;color:#e5e5e5;border-radius:8px;padding:7px 9px;font-size:10px;cursor:pointer}.model-retry:hover{background:#414141}.model-retry:disabled{opacity:.55;cursor:wait}.model-retry[hidden]{display:none}.model-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.model-label{font-size:9px;color:#888;letter-spacing:.1em}.model-picker select{max-width:178px;min-width:112px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.model-picker select:disabled,.thinking-picker select:disabled{opacity:.65;cursor:default}.thinking-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.thinking-picker select{max-width:110px;min-width:80px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.avatar{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#3d3d3d;color:#f0f0f0;font-size:11px;font-weight:700}
+.content{flex:1;min-height:0;overflow:hidden;display:flex;justify-content:center;padding:20px 22px 0}.stage{width:min(820px,100%);height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden}.conversation-heading{font-size:12px;color:#999;margin:0 0 22px;min-height:18px}.messages{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:22px;padding:12px 4px 24px;scrollbar-width:thin;scrollbar-color:#343434 transparent}.messages::-webkit-scrollbar{width:6px}.messages::-webkit-scrollbar-track{background:transparent}.messages::-webkit-scrollbar-thumb{background:#343434;border-radius:999px}.messages::-webkit-scrollbar-thumb:hover{background:#4a4a4a}.welcome{margin:auto auto 50px;width:min(600px,100%);text-align:center}.welcome-mark{width:56px;height:56px;border:1px solid #565656;border-radius:18px;display:grid;place-items:center;margin:0 auto 22px;font-size:22px;font-weight:700;letter-spacing:-2px;background:#282828}.welcome h1{font-size:27px;letter-spacing:-.04em;font-weight:600;margin:0 0 12px}.welcome p{font-size:13px;color:#a0a0a0;line-height:1.7;margin:0 auto;max-width:480px}.next-step{display:inline-flex;margin-top:22px;border:1px solid #464646;border-radius:20px;padding:7px 11px;font-size:10px;color:#aaa;letter-spacing:.02em}
+.message{display:flex;gap:14px;align-items:flex-start;max-width:100%;padding:0 5px}.message-avatar{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#383838;font-size:10px;font-weight:700}.message-body{min-width:0;flex:1;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:#e4e4e4}.message-user{justify-content:flex-end}.message-user .message-avatar{order:2;background:#343434}.message-user .message-body{flex:0 1 auto;max-width:min(78%,660px);background:#303030;border:1px solid #3b3b3b;border-radius:19px;padding:12px 16px}.message-assistant .message-body{background:linear-gradient(145deg,#252525,#222);border:1px solid #383838;border-radius:17px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,.13)}.message-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}.message-role{font-size:10px;color:#b7b7b7;text-transform:uppercase;letter-spacing:.08em;font-weight:650}.meta-pill,.status-pill{display:inline-flex;align-items:center;gap:5px;border:1px solid #464646;border-radius:999px;padding:3px 8px;font-size:10px;line-height:1.35;color:#c7c7c7;background:#2a2a2a;white-space:nowrap}.meta-pill.level{color:#d0c8ff;border-color:#534c78;background:#302c45}.status-pill.done{color:#a8edc5;border-color:#286447;background:#173b2b}.status-pill.partial{color:#f0d49b;border-color:#755b2c;background:#3b3020}.status-pill.failed{color:#f1aaaa;border-color:#714141;background:#3c2525}.message-detail{font-size:10px;color:#8f8f8f;margin-top:8px}.message-actions{display:flex;gap:7px;margin-top:10px}.message-action{border:1px solid #444;background:transparent;color:#aaa;border-radius:8px;padding:5px 9px;font-size:10px}.message-action:hover{background:#333;color:#fff}.message-status{font-size:10px;color:#a0a0a0;margin-top:6px}.activity-card{display:flex;flex-direction:column;gap:10px;margin:12px 0 2px;padding:12px 13px;border:1px solid #444;border-radius:13px;background:linear-gradient(135deg,#2b2b2b,#252525)}.activity-heading{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:650;color:#e8e8e8}.activity-spinner{width:14px;height:14px;border:2px solid #555;border-top-color:#c4b5fd;border-radius:50%;animation:activity-spin .85s linear infinite;flex:0 0 14px}.activity-card.streaming .activity-spinner{border-color:#397a59;border-top-color:#a8edc5}.activity-card.error .activity-spinner,.activity-card.stopped .activity-spinner{display:none}.activity-copy{font-size:11px;color:#aaa;line-height:1.5}.activity-chips{display:flex;gap:6px;flex-wrap:wrap}.activity-step{font-size:9px;color:#858585;border:1px solid #414141;border-radius:999px;padding:3px 7px}.activity-step.active{color:#d4caff;border-color:#635994;background:#342f49}.activity-step.done{color:#a8edc5;border-color:#286447;background:#173b2b}.activity-card .activity-error{font-size:11px;color:#f1aaaa;line-height:1.5}@keyframes activity-spin{to{transform:rotate(360deg)}}
+.composer-wrap{padding:6px 0 0}.composer{border:1px solid #484848;background:#2b2b2b;border-radius:20px;padding:8px 11px 7px;box-shadow:0 8px 30px rgba(0,0,0,.12)}.composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto;outline:none;border:0;background:transparent;color:#e5e5e5;font-size:13px;line-height:1.5;padding:3px 2px}.composer textarea::placeholder{color:#858585}.composer-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px}.composer-hint{font-size:10px;color:#848484}.send-action{border:0;background:#ececec;color:#171717;border-radius:10px;width:30px;height:30px;font-size:17px;font-weight:700;cursor:pointer}.send-action:disabled{background:#444;color:#8b8b8b;cursor:not-allowed}.send-action.stop{background:#d7d7d7;color:#171717}.send-action:not(:disabled):hover{background:#fff}.disclaimer{text-align:center;color:#777;font-size:10px;padding:10px 5px 0;line-height:1.5}
+.loading{color:#999;font-size:12px;padding:12px 8px}.error{color:#f2a4a4;font-size:12px;padding:12px 8px}.history-failure{padding:10px 8px;display:flex;flex-direction:column;gap:8px}.history-failure-title{font-size:12px;color:#e5b0b0}.history-failure-message{font-size:11px;line-height:1.5;color:#aaa;overflow-wrap:anywhere}.history-retry{align-self:flex-start;border:1px solid #555;background:#303030;color:#eee;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer}.history-retry:hover{background:#414141}.history-retry:disabled,.new-chat:disabled{opacity:.55;cursor:wait}
+@media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(320px,88vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.topbar{padding:0 13px}.content{padding:12px 16px 0}.bottom-dock{width:calc(100% - 32px);padding-bottom:8px}.welcome h1{font-size:24px}.model-picker,.thinking-picker{padding:6px 7px;gap:4px}.model-label{display:none}.model-picker select{max-width:122px;min-width:80px}.thinking-picker select{max-width:90px;min-width:64px}.private-tag{display:none}.composer-wrap{padding-top:4px}}
+@media(max-width:390px){.model-picker{max-width:122px}.model-picker select{max-width:94px;min-width:0}.thinking-picker{max-width:94px}.thinking-picker select{max-width:70px;min-width:0}.page-title{font-size:13px}.avatar{display:none}.composer{padding:7px 9px 6px}.composer textarea{font-size:12px}.bottom-dock{width:calc(100% - 24px)}}
+.session-budget{margin:0;padding:5px 10px 6px;border:1px solid #383838;border-radius:10px;background:#1d1d1d}.session-budget-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:#a8a8a8}.session-budget-label{font-size:9px;font-weight:700;letter-spacing:.12em;color:#858585}.session-budget-top strong{font-size:12px;font-weight:650;color:#e8e8e8;font-variant-numeric:tabular-nums}.session-budget-top span:last-child{margin-left:auto;font-variant-numeric:tabular-nums}.session-budget-track{height:6px;margin-top:10px;border-radius:999px;overflow:hidden;background:#363636}.session-budget-fill{display:block;width:0;height:100%;border-radius:999px;background:#6b91eb;transition:width .25s ease,background .2s ease}.session-budget.near-limit .session-budget-fill{background:#d6a34c}.session-budget.locked .session-budget-fill{background:#c66d6d}.session-budget-tip{margin:8px 0 0;color:#858585;font-size:10px;line-height:1.45}.session-budget-notice{margin-top:10px;padding:10px 11px;border:1px solid #684848;border-radius:9px;background:#2b2020;color:#f0c5c5;font-size:12px;line-height:1.5}.bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px));margin:0 auto;padding:4px 0 10px;background:transparent}.session-budget-tip{display:none}.session-budget-top{gap:8px;font-size:10px}.session-budget-label{font-size:8px}.session-budget-top strong{font-size:11px}.session-budget-track{height:3px;margin-top:5px}.session-budget-notice{margin-top:6px;padding:6px 8px;font-size:10px}.composer-bottom{padding-top:5px}.composer-hint{max-width:calc(100% - 44px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.disclaimer{padding-top:5px;font-size:9px}.content{padding-bottom:0}
+
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#1c1c1c;color:#ececec;font-synthesis:none}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{overflow:hidden;background:#1c1c1c}button,textarea{font:inherit}button{color:inherit;cursor:pointer}
+.app{display:flex;height:100dvh;min-height:480px;background:#1c1c1c}
+.sidebar{width:292px;flex:0 0 292px;background:#141414;border-right:1px solid #303030;display:flex;flex-direction:column;padding:16px 12px;z-index:5;min-height:0;overflow:hidden}
+.sidebar-scroll{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#343434 transparent}
+.sidebar-scroll::-webkit-scrollbar{width:6px}
+.sidebar-scroll::-webkit-scrollbar-track{background:transparent}
+.sidebar-scroll::-webkit-scrollbar-thumb{background:#343434;border-radius:999px}
+.sidebar-scroll::-webkit-scrollbar-thumb:hover{background:#4a4a4a}
+.brand{display:flex;align-items:center;gap:10px;padding:7px 8px 20px}.brand-mark{width:34px;height:34px;display:grid;place-items:center;border:1px solid #555;border-radius:11px;color:#fff;font-size:15px;font-weight:700;letter-spacing:-1px}.brand-name{font-size:15px;font-weight:650;letter-spacing:.02em}.brand-sub{color:#8a8a8a;font-size:10px;letter-spacing:.12em;margin-top:3px}
+.new-chat{display:flex;align-items:center;gap:10px;width:100%;border:1px solid #454545;background:#242424;border-radius:10px;padding:11px 12px;text-align:left;font-size:13px;font-weight:600}.new-chat:hover{background:#303030}.plus{font-size:19px;font-weight:300;line-height:14px}
+.new-chat-scope{display:flex;flex-direction:column;gap:7px;margin-top:9px;padding:9px;border:1px solid #303030;border-radius:10px;background:#1d1d1d}
+.new-chat-scope-label{font-size:9px;color:#858585;letter-spacing:.12em;font-weight:650}
+.new-chat-scope-controls{display:flex;align-items:center;gap:6px;min-width:0}
+.new-chat-scope select{min-width:0;flex:1;border:1px solid #414141;border-radius:7px;background:#292929;color:#e5e5e5;padding:7px 6px;font:inherit;font-size:11px}
+.new-topic-button,.rename-topic-button{border:1px solid #414141;border-radius:7px;background:#292929;color:#c9c9c9;padding:7px 8px;font-size:10px;white-space:nowrap}
+.new-topic-button:hover,.rename-topic-button:not(:disabled):hover{background:#363636;color:#fff}
+.rename-topic-button{align-self:flex-start;padding:5px 7px;font-size:9px}
+.rename-topic-button:disabled{opacity:.4;cursor:not-allowed}
+.topic-status{display:flex;flex-direction:column;gap:6px;font-size:10px;line-height:1.45;color:#e5b0b0;overflow-wrap:anywhere}.topic-status[hidden]{display:none}.topic-status-retry{align-self:flex-start;border:1px solid #555;background:#303030;color:#eee;border-radius:7px;padding:5px 9px;font-size:10px;cursor:pointer}.topic-status-retry:hover{background:#414141}.topic-status-retry:disabled{opacity:.55;cursor:wait}
+.github-panel{display:flex;flex-direction:column;gap:7px;margin-top:12px;padding:10px;border:1px solid #303030;border-radius:10px;background:#1d1d1d}
+.github-panel-title{font-size:9px;letter-spacing:.12em;font-weight:700;color:#929292}
+.github-panel-status{font-size:10px;color:#c6c6c6;line-height:1.4}
+.github-connect-button,.github-attach-button{width:100%;border:1px solid #454545;border-radius:7px;background:#292929;color:#e3e3e3;padding:8px;font-size:10px;text-align:center}
+.github-connect-button:hover,.github-attach-button:not(:disabled):hover{background:#3a3a3a}
+.github-attach-button:disabled{opacity:.4;cursor:not-allowed}
+.github-field-label{font-size:8px;letter-spacing:.1em;color:#858585;font-weight:650;margin-top:3px}
+.github-field{width:100%;min-width:0;border:1px solid #414141;border-radius:7px;background:#292929;color:#e5e5e5;padding:7px;font:inherit;font-size:10px}
+.github-hint{margin:0;color:#858585;font-size:9px;line-height:1.45;overflow-wrap:anywhere}
+.github-save{display:flex;flex-direction:column;gap:7px;margin-top:8px;padding-top:9px;border-top:1px solid #343434}
+.github-save select{width:100%;border:1px solid #414141;border-radius:7px;background:#292929;color:#e5e5e5;padding:7px;font:inherit;font-size:10px}
+.github-save-button,.github-confirm-button,.github-discard-button{border:1px solid #454545;border-radius:7px;background:#292929;color:#e3e3e3;padding:8px;font-size:10px}
+.github-save-button:not(:disabled):hover,.github-confirm-button:not(:disabled):hover,.github-discard-button:hover{background:#3a3a3a}
+.github-save-button:disabled,.github-confirm-button:disabled{opacity:.4;cursor:not-allowed}
+.github-save-status{font-size:10px;line-height:1.45;color:#b8b8b8;overflow-wrap:anywhere;white-space:pre-wrap}
+.github-save-preview{display:flex;flex-direction:column;gap:7px}
+.github-save-preview[hidden]{display:none}
+.github-save-files{display:flex;flex-direction:column;gap:8px}
+.github-save-file{display:flex;flex-direction:column;gap:4px}
+.github-save-file label{font-size:9px;color:#bcbcbc;font-weight:650;overflow-wrap:anywhere}
+.github-save-file textarea{width:100%;min-height:130px;max-height:360px;resize:vertical;border:1px solid #414141;border-radius:7px;background:#171717;color:#e5e5e5;padding:8px;font:10px/1.5 ui-monospace,SFMono-Regular,monospace}
+
 .conversation-heading{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .conversation-scope{display:inline-flex;align-items:center;border:1px solid #454545;border-radius:999px;padding:3px 8px;background:#292929;color:#bdbdbd;font-size:9px;font-weight:650;letter-spacing:.08em;text-transform:uppercase}
 .conversation-title{color:#e4e4e4;font-size:13px;font-weight:550;letter-spacing:0}
@@ -1454,6 +1559,7 @@ function workspaceHtml(): string {
 @media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(320px,88vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.content{padding:12px 16px 0}.bottom-dock{width:calc(100% - 32px);padding-bottom:8px}.welcome h1{font-size:24px}.composer-controls{gap:5px}.model-picker,.thinking-picker{padding:5px 6px;gap:4px}.model-label{display:none}.model-picker{flex:1;max-width:none}.model-picker select{max-width:100%;min-width:0;width:100%}.thinking-picker{flex:0 1 130px;max-width:130px}.thinking-picker select{max-width:100%;min-width:0;width:100%}.composer-wrap{padding-top:4px}}
 @media(max-width:390px){.mobile-menu{flex-basis:26px;width:26px;height:26px}.model-picker{max-width:none}.model-picker select{max-width:100%;min-width:0}.thinking-picker{flex:0 1 112px;max-width:112px}.thinking-picker select{max-width:100%;min-width:0}.composer{padding:7px 9px 6px}.composer textarea{font-size:12px}.bottom-dock{width:calc(100% - 24px)}}
 .session-budget{margin:0;padding:5px 10px 6px;border:1px solid #383838;border-radius:10px;background:#1d1d1d}.session-budget-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:#a8a8a8}.session-budget-label{font-size:9px;font-weight:700;letter-spacing:.12em;color:#858585}.session-budget-top strong{font-size:12px;font-weight:650;color:#e8e8e8;font-variant-numeric:tabular-nums}.session-budget-top span:last-child{margin-left:auto;font-variant-numeric:tabular-nums}.session-budget-track{height:6px;margin-top:10px;border-radius:999px;overflow:hidden;background:#363636}.session-budget-fill{display:block;width:0;height:100%;border-radius:999px;background:#6b91eb;transition:width .25s ease,background .2s ease}.session-budget.near-limit .session-budget-fill{background:#d6a34c}.session-budget.locked .session-budget-fill{background:#c66d6d}.session-budget-tip{margin:8px 0 0;color:#858585;font-size:10px;line-height:1.45}.session-budget-notice{margin-top:10px;padding:10px 11px;border:1px solid #684848;border-radius:9px;background:#2b2020;color:#f0c5c5;font-size:12px;line-height:1.5}.bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px));margin:0 auto;padding:4px 0 10px;background:transparent}.session-budget-tip{display:none}.session-budget-top{gap:8px;font-size:10px}.session-budget-label{font-size:8px}.session-budget-top strong{font-size:11px}.session-budget-track{height:3px;margin-top:5px}.session-budget-notice{margin-top:6px;padding:6px 8px;font-size:10px}.composer-bottom{padding-top:5px}.disclaimer{padding-top:5px;font-size:9px}.content{padding-bottom:0}
+
 </style>
 </head>
 <body>
@@ -1499,6 +1605,23 @@ function workspaceHtml(): string {
       </div>
     </section>
     <p class="github-hint" id="githubHint">Only the Owner can connect a private GitHub App. Project Memory loading and saving are separate steps.</p>
+  </section>
+  <section class="project-memory-panel" aria-label="Project context">
+    <div class="project-memory-title">PROJECT CONTEXT</div>
+    <div class="project-memory-status" id="projectMemoryStatus" aria-live="polite">No Project Memory attached</div>
+    <label class="project-memory-field-label" for="projectMemoryTopic">HUB CONNECTION TOPIC</label>
+    <select class="project-memory-field" id="projectMemoryTopic"><option value="">Choose a connected project topic</option></select>
+    <label class="project-memory-field-label" for="projectMemoryProject">PROJECT</label>
+    <select class="project-memory-field" id="projectMemoryProject" disabled><option value="">Choose a topic first</option></select>
+    <label class="project-memory-field-label" for="projectMemoryWorkstream">WORKSTREAM (OPTIONAL)</label>
+    <select class="project-memory-field" id="projectMemoryWorkstream" disabled><option value="">Project-wide memory</option></select>
+    <label class="project-memory-field-label" for="projectMemoryFeature">FEATURE (OPTIONAL)</label>
+    <select class="project-memory-field" id="projectMemoryFeature" disabled><option value="">Whole workstream</option></select>
+    <label class="project-memory-options"><input id="projectMemoryCrossProject" type="checkbox" disabled> Enable cross-project context</label>
+    <label class="project-memory-options"><input id="projectMemoryAdditional" type="checkbox" disabled> Add selected scope as secondary context</label>
+    <button class="project-memory-action" id="projectMemoryAttach" type="button" disabled>Attach pinned Project Memory</button>
+    <div class="project-memory-snapshot" id="projectMemorySnapshots"></div>
+    <p class="github-hint" id="projectMemoryHint">Only manifest-allowlisted Markdown is loaded. Each attachment pins an exact hub commit.</p>
   </section>
   <div class="section-label">Your conversations</div>
   <div class="history" id="history" aria-live="polite"><div class="loading">Loading conversations…</div></div>
@@ -1575,6 +1698,18 @@ export function ownerIntelligenceClientScript(): Response {
   var githubMemoryRoot=document.getElementById("githubMemoryRoot");
   var githubAttachTopic=document.getElementById("githubAttachTopic");
   var githubHint=document.getElementById("githubHint");
+  var projectMemoryStatus=document.getElementById("projectMemoryStatus");
+  var projectMemoryTopic=document.getElementById("projectMemoryTopic");
+  var projectMemoryProject=document.getElementById("projectMemoryProject");
+  var projectMemoryWorkstream=document.getElementById("projectMemoryWorkstream");
+  var projectMemoryFeature=document.getElementById("projectMemoryFeature");
+  var projectMemoryCrossProject=document.getElementById("projectMemoryCrossProject");
+  var projectMemoryAdditional=document.getElementById("projectMemoryAdditional");
+  var projectMemoryAttach=document.getElementById("projectMemoryAttach");
+  var projectMemorySnapshots=document.getElementById("projectMemorySnapshots");
+  var projectMemoryHint=document.getElementById("projectMemoryHint");
+  var projectMemoryCatalog=[];
+  var projectMemoryInfo={enabled:false,snapshots:[]};
   var githubSaveBox=document.getElementById("githubSaveBox");
   var githubSaveTopic=document.getElementById("githubSaveTopic");
   var githubPreviewSave=document.getElementById("githubPreviewSave");
@@ -2076,10 +2211,132 @@ export function ownerIntelligenceClientScript(): Response {
     }catch(error){githubHint.textContent=errorText(error);}
     finally{updateGithubAttachAvailability();}
   }
+  function projectMemoryWorkstreamChanged(){
+    var project=projectMemoryCatalog.find(function(item){return item.projectId===projectMemoryProject.value;});
+    projectMemoryWorkstream.replaceChildren(node("option","","Project-wide memory"));
+    projectMemoryWorkstream.options[0].value="";
+    projectMemoryFeature.replaceChildren(node("option","","Whole workstream"));
+    projectMemoryFeature.options[0].value="";
+    var streams=project&&project.workstreams||[];
+    streams.forEach(function(item){
+      var option=node("option","",item.displayName);option.value=item.workstreamId;projectMemoryWorkstream.appendChild(option);
+    });
+    projectMemoryWorkstream.disabled=!streams.length;
+    projectMemoryFeature.disabled=true;
+    updateProjectMemoryAttachAvailability();
+  }
+  function projectMemoryFeatureChanged(){
+    var project=projectMemoryCatalog.find(function(item){return item.projectId===projectMemoryProject.value;});
+    var stream=project&&(project.workstreams||[]).find(function(item){return item.workstreamId===projectMemoryWorkstream.value;});
+    projectMemoryFeature.replaceChildren(node("option","","Whole workstream"));
+    projectMemoryFeature.options[0].value="";
+    (stream&&stream.features||[]).forEach(function(item){
+      var option=node("option","",item.displayName);option.value=item.featureId;projectMemoryFeature.appendChild(option);
+    });
+    projectMemoryFeature.disabled=!(stream&&(stream.features||[]).length);
+    updateProjectMemoryAttachAvailability();
+  }
+  async function refreshProjectMemoryCatalog(){
+    var topicId=projectMemoryTopic.value;
+    projectMemoryCatalog=[];
+    projectMemoryProject.replaceChildren(node("option","","Loading project catalog…"));
+    projectMemoryProject.disabled=true;
+    projectMemoryWorkstream.replaceChildren(node("option","","Project-wide memory"));projectMemoryWorkstream.disabled=true;
+    projectMemoryFeature.replaceChildren(node("option","","Whole workstream"));projectMemoryFeature.disabled=true;
+    if(!topicId){projectMemoryProject.replaceChildren(node("option","","Choose a topic first"));updateProjectMemoryAttachAvailability();return;}
+    try{
+      var result=await request("/admin/api/intelligence/github/catalog?topicId="+encodeURIComponent(topicId),null,30000);
+      projectMemoryCatalog=result.projects||[];
+      projectMemoryProject.replaceChildren(node("option","","Choose a project"));
+      projectMemoryProject.options[0].value="";
+      projectMemoryCatalog.forEach(function(item){
+        var option=node("option","",item.displayName);option.value=item.projectId;projectMemoryProject.appendChild(option);
+      });
+      projectMemoryProject.disabled=false;
+      projectMemoryHint.textContent="Hub "+result.repository+" · "+result.branch+" · catalog commit "+result.commitSha.slice(0,12);
+    }catch(error){
+      projectMemoryProject.replaceChildren(node("option","","Catalog unavailable"));
+      projectMemoryHint.textContent=errorText(error);
+    }
+    updateProjectMemoryAttachAvailability();
+  }
+  function renderProjectMemoryInfo(info){
+    projectMemoryInfo=info||{enabled:false,snapshots:[]};
+    projectMemoryStatus.textContent=(projectMemoryInfo.snapshots||[]).length
+      ? (projectMemoryInfo.snapshots.length+" pinned Project Memory scope(s) attached")
+      : "No Project Memory attached · conversation is using its D1 transcript only";
+    projectMemoryCrossProject.checked=Boolean(projectMemoryInfo.enabled);
+    projectMemoryCrossProject.disabled=!(state.activeId&&(projectMemoryInfo.snapshots||[]).some(function(snapshot){return snapshot.primary;}));
+    projectMemoryAdditional.checked=false;
+    projectMemoryAdditional.disabled=!projectMemoryInfo.enabled;
+    projectMemorySnapshots.replaceChildren();
+    (projectMemoryInfo.snapshots||[]).forEach(function(snapshot){
+      var card=node("div","project-memory-snapshot");
+      var title=node("strong","",snapshot.primary?"Primary project scope":"Additional project scope");
+      var project=node("span","",(snapshot.displayName||"Project")+" · "+snapshot.projectId);
+      var scope=node("span","","Workstream "+(snapshot.workstreamId||"none")+" · Feature "+(snapshot.featureId||"none"));
+      var repo=node("span","",snapshot.repository+" · "+snapshot.branch);
+      var commit=node("code","",snapshot.commitSha);
+      var manifests=node("span","",(snapshot.scopeManifests||[]).map(function(item){return item.path+" @ "+String(item.blobSha).slice(0,12);}).join(" · "));
+      var files=node("span","",(snapshot.files||[]).map(function(file){return file.path+" @ "+String(file.blobSha).slice(0,12);}).join(" · "));
+      var tokens=node("span","",String(snapshot.tokenCount||0)+" estimated tokens · "+(snapshot.tokenModelId||"model unavailable"));
+      card.append(title,project,scope,repo,commit,manifests,files,tokens);
+      projectMemorySnapshots.appendChild(card);
+    });
+    updateProjectMemoryAttachAvailability();
+  }
+  function updateProjectMemoryAttachAvailability(){
+    projectMemoryAttach.disabled=!(state.activeId&&state.selectedModelId&&projectMemoryTopic.value&&projectMemoryProject.value);
+    projectMemoryAttach.textContent=projectMemoryAdditional.checked?"Add secondary Project Memory scope":"Attach primary Project Memory";
+  }
+  async function setCrossProjectMemory(enabled){
+    if(!state.activeId)return;
+    if(!enabled&&projectMemoryInfo.enabled&&!window.confirm("Disable cross-project context? Active secondary project scopes will be detached from future prompts.")){
+      projectMemoryCrossProject.checked=true;return;
+    }
+    projectMemoryCrossProject.disabled=true;
+    try{
+      await request("/admin/api/intelligence/conversations/"+encodeURIComponent(state.activeId)+"/memory/cross-project",{
+        method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({enabled:enabled})
+      });
+      projectMemoryInfo.enabled=enabled;
+      if(!enabled)projectMemoryAdditional.checked=false;
+      await openConversation(state.activeId);
+    }catch(error){projectMemoryHint.textContent=errorText(error);projectMemoryCrossProject.checked=Boolean(projectMemoryInfo.enabled);}
+    finally{projectMemoryCrossProject.disabled=false;}
+  }
+  async function attachProjectMemory(){
+    if(!state.activeId||!projectMemoryTopic.value||!projectMemoryProject.value||!state.selectedModelId)return;
+    projectMemoryAttach.disabled=true;
+    projectMemoryHint.textContent="Validating manifests, pinning the hub commit and counting selected memory…";
+    try{
+      await request("/admin/api/intelligence/github/conversations/"+encodeURIComponent(state.activeId)+"/memory/attach",{
+        method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({
+          topicId:projectMemoryTopic.value,projectId:projectMemoryProject.value,
+          workstreamId:projectMemoryWorkstream.value||undefined,
+          featureId:projectMemoryFeature.value||undefined,
+          modelId:state.selectedModelId,additionalContext:Boolean(projectMemoryAdditional.checked)
+        })
+      },60000);
+      projectMemoryHint.textContent="Pinned Project Memory attached successfully.";
+      await openConversation(state.activeId);
+    }catch(error){projectMemoryHint.textContent=errorText(error);}
+    finally{updateProjectMemoryAttachAvailability();}
+  }
+
   async function refreshTopics(preferredId){
     var result=await request(topicsApi);
     clearTopicError();
     state.topics=result.topics||[];
+    var memoryTopicPrevious=projectMemoryTopic.value;
+    projectMemoryTopic.replaceChildren(node("option","","Choose a connected project topic"));
+    projectMemoryTopic.options[0].value="";
+    state.topics.forEach(function(topic){var option=node("option","",topic.title);option.value=topic.id;projectMemoryTopic.appendChild(option);});
+    var activeForMemory=state.conversations.find(function(item){return item.id===state.activeId;});
+    projectMemoryTopic.value=state.topics.some(function(item){return item.id===memoryTopicPrevious;})?memoryTopicPrevious:
+      (activeForMemory&&activeForMemory.topic_id?activeForMemory.topic_id:"");
+    refreshProjectMemoryCatalog().catch(function(error){projectMemoryHint.textContent=errorText(error);});
     var previous=preferredId!==undefined?preferredId:newChatTopic.value;
     newChatTopic.replaceChildren(node("option","","Scratchpad"));
     newChatTopic.options[0].value="";
@@ -2154,6 +2411,10 @@ export function ownerIntelligenceClientScript(): Response {
   async function openConversation(id){
     var result=await request(api+"/"+encodeURIComponent(id));
     state.activeId=result.conversation.id;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
+    renderProjectMemoryInfo(result.projectMemory||{enabled:false,snapshots:[]});
+    if(result.conversation.topic_id&&state.topics.some(function(topic){return topic.id===result.conversation.topic_id;})){
+      if(projectMemoryTopic.value!==result.conversation.topic_id){projectMemoryTopic.value=result.conversation.topic_id;refreshProjectMemoryCatalog().catch(function(error){projectMemoryHint.textContent=errorText(error);});}
+    }
     githubSaveBox.hidden=false;
     var preferredTopic=result.conversation.topic_id||"";
     githubSaveTopic.value=state.topics.some(function(topic){return topic.id===preferredTopic;})?preferredTopic:githubSaveTopic.value;
@@ -2185,6 +2446,7 @@ export function ownerIntelligenceClientScript(): Response {
     modelSelect.disabled=sending||!state.models.length;
     thinkingSelect.disabled=sending||!state.selectedThinkingLevel;
     updateGithubSaveAvailability();
+    updateProjectMemoryAttachAvailability();
   }
 
   function stopGeneration(){
@@ -2344,6 +2606,13 @@ export function ownerIntelligenceClientScript(): Response {
   newTopicButton.addEventListener("click",createTopic);
   renameTopicButton.addEventListener("click",renameSelectedTopic);
   newChatTopic.addEventListener("change",function(){renameTopicButton.disabled=!newChatTopic.value;updateGithubAttachAvailability();});
+  projectMemoryTopic.addEventListener("change",refreshProjectMemoryCatalog);
+  projectMemoryProject.addEventListener("change",projectMemoryWorkstreamChanged);
+  projectMemoryWorkstream.addEventListener("change",projectMemoryFeatureChanged);
+  projectMemoryFeature.addEventListener("change",updateProjectMemoryAttachAvailability);
+  projectMemoryCrossProject.addEventListener("change",function(){setCrossProjectMemory(projectMemoryCrossProject.checked);});
+  projectMemoryAdditional.addEventListener("change",updateProjectMemoryAttachAvailability);
+  projectMemoryAttach.addEventListener("click",attachProjectMemory);
   githubConnect.addEventListener("click",beginGithubConnection);
   githubInstallation.addEventListener("change",refreshGithubRepositories);
   githubRepository.addEventListener("change",function(){
