@@ -482,6 +482,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain(".app,.main,.content,.stage,.messages{background:#000}");
     expect(html).toContain(".sidebar{background:#050505;border-right-color:#191919}");
     expect(html).toContain(".message-user .message-body{flex:0 1 min(78%,660px);width:min(78%,660px);min-width:min(240px,100%);max-width:min(78%,660px);background:#191919;border-color:#303030;overflow-wrap:anywhere}");
+    expect(html).toContain(".message-user .message-body{flex:0 1 min(78%,660px);width:min(78%,660px);min-width:min(240px,100%);max-width:min(78%,660px);background:#191919;border-color:#303030;overflow-wrap:anywhere}");
     expect(html).toContain("body{overflow:hidden;background:#1c1c1c}");
     expect(html).toContain(".sidebar{width:292px;flex:0 0 292px;background:#141414;");
     expect(html).toContain(".composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto");
@@ -575,7 +576,6 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("promptAccepted=true");
     expect(script).toContain("state.messages=state.messages.filter(function(item){return item.id!==optimisticMessageId;});");
     expect(script).toContain("editingMessageId=editTargetId");
-    expect(script).toContain("flex:0 1 min(78%,660px)");
     expect(script).toContain('messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});');
     expect(script).toContain("maxHeight=144");
     expect(script).toContain("try{await refreshList(conversationId);}catch(_error){}");
