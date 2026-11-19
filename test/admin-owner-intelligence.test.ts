@@ -542,9 +542,10 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("function renderRichMarkdown(target,markdown)");
     expect(script).toContain("function renderMarkdownTable(lines,start)");
     expect(script).toContain("function renderRichList(lines,start)");
+    expect(script).toContain('"md-callout-"+type');
+    expect(script).toContain("isMarkdownTableSeparator");
+    expect(script).toContain("isMarkdownBlockStart");
     expect(script).toContain("function buildResponseToolbar(item)");
-    expect(script).toContain("md-callout-success");
-    expect(script).toContain("md-callout-danger");
     expect(script).toContain("md-table-card");
     expect(script).toContain("navigator.clipboard.writeText(item.content||\"\")");
     expect(script).toContain("document.createTextNode(source.slice(cursor,match.index))");
