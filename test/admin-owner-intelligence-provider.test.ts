@@ -690,7 +690,8 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     });
   });
 
-  it("keeps Gemini 3 models at their native 65,536-token cap without continuation", async () => {
+  it.each(["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"])(
+    "keeps %s at its native 65,536-token cap without continuation", async (modelId) => {
     let requestUrl = "";
     let requestBody: Record<string, unknown> = {};
     const sse = "data: " + JSON.stringify({
@@ -707,7 +708,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     const stream = await openOwnerGeminiStream(
       configuredEnv,
       {
-        modelId: "gemini-3.8-flash",
+        modelId,
         thinkingLevel: "HIGH",
         maxOutputTokens: 131_072,
         contents: [{ role: "user", text: "Give me a detailed answer." }],
