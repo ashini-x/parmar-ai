@@ -4,10 +4,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-05",
   "workers_dev": true,
-  "assets": {
-    "directory": "./public/owner-fonts",
-    "not_found_handling": "404-page"
-  },
   "keep_vars": true,
   "observability": {
     "enabled": true,

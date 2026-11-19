@@ -7,8 +7,8 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 
 - Read [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md) before changing a product logo, font, typography token or UI text styles.
 - Owner-selected role split: AERUNO is the requested BRɅIN wordmark/display direction only; all ordinary product UI text targets the ChatGPT/OpenAI Sans visual style. Do not use the logo face for body text.
-- The uploaded AERUNO file is a personal-use trial and lacks the required U+0245 `Ʌ` glyph. Do not publish or deploy it. Obtain a commercial logo/brand license and create an outlined SVG wordmark with a custom/covered `Ʌ` before adding a public logo asset.
-- OpenAI Sans is proprietary. Use only official files with confirmed permission for BRɅIN product hosting/embedding; do not extract it from ChatGPT or the OpenAI CDN. The current OFL-licensed Poppins bundle remains in place as the legacy deployed UI font until an authorized replacement is ready.
+- The Owner clarified the immediate panel is private and Owner-only. Still, the supplied AERUNO Trial terms reserve company logo/app use as commercial and restrict font distribution; its archive's short MIT text does not override the distributor's terms. The trial file lacks U+0245 `Ʌ`. Do not commit or publish the trial font. Obtain written permission/full license and resolve the glyph before applying it to the company wordmark.
+- Poppins WOFF2 assets, license/readme files, preloads and `@font-face` declarations are removed in the typography-removal change. Owner UI text now declares `"OpenAI Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`; actual OpenAI Sans is not bundled, so browsers currently render their system fallback. Obtain the official OpenAI font package and confirm product-use/hosting permission before bundling it. Never extract files from ChatGPT/CDN assets.
 
 ### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
 
