@@ -1,6 +1,6 @@
 # Owner Intelligence — Memory and Token-Aware Context Architecture
 
-**Status:** M4.4 is closed. M4.5 rollover/handoff is merged and production deployed on 2026-11-20; CI, paired Worker release and read-only D1 schema verification passed; authenticated Owner browser acceptance remains pending. M4.6–M4.8 remain planned  
+**Status:** M4.4 is closed. M4.5 rollover/handoff is merged and production deployed on 2026-11-20; authenticated Owner browser acceptance remains pending. The initial all-model CountTokens-driven recent-context selector is now implemented separately from M4.6; the full M4.6 Context Replicator/relevance retrieval and M4.7–M4.8 remain planned  
 **Original approval:** 2026-11-18  
 **Central hub/collaboration amendment:** 2026-11-19 IST  
 **Parent roadmap:** [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md)  
@@ -25,8 +25,9 @@ M4.1 enforces 200,000 cumulative tokens per conversation. D1 is authoritative fo
 
 Current behaviour to preserve:
 
-- The Worker calls Vertex CountTokens before committing a new, edited or regenerated prompt.
-- D1 atomically reserves the prompt token count plus the permitted output allowance (currently up to 8,192 tokens), and the request's max output is bounded by the reservation.
+- The Worker normalizes the full transcript, attaches required pinned/handoff context to the current user turn, then calls the selected model's Vertex CountTokens before committing a new, edited or regenerated prompt. It expands older turns backward only while the exact prompt fits the remaining session budget and the selected model context.
+- The same final contents measured by CountTokens are sent to GenerateContent. The current user turn and required pinned context are never clipped to make a request fit; an oversized current turn is rejected clearly before D1 mutation. Older turns may be omitted from a request, but remain untouched in the canonical D1 transcript.
+- D1 atomically reserves the measured prompt cost (repeated for each Gemini 4 continuation segment where applicable) plus the permitted output allowance, and the request's max output is bounded by the reservation.
 - A conversation cannot reserve a second generation concurrently.
 - Vertex usageMetadata.totalTokenCount settles the reservation. If final usage metadata is missing, charge the reservation conservatively.
 - Editing or regenerating does not refund tokens already consumed. Each new conversation has a separate budget.
@@ -34,14 +35,16 @@ Current behaviour to preserve:
 
 Do not increase or silently change the limit during M4.2–M4.8.
 
-### 2.2 Per-request prompt/context budget — planned M4.6
+### 2.2 Per-request prompt/context budget — initial suffix selector deployed; full M4.6 remains planned
 
 A conversation can be well below 200,000 cumulative tokens and still have one prompt that is too large for its selected model/API. Conversely, a long-lived conversation can have a small current prompt if the right context is selected.
 
-Before a generation is committed, the server must measure the **complete effective request** for the exact selected model and API. This includes the application/Owner instruction, selected project-memory content, any retrieved historical messages, the bounded recent conversation, the current user turn, and any request-level material supported by that adapter. The measurement must match what will actually be sent to Vertex.
+The deployed initial selector normalizes the complete D1 transcript into alternating, non-empty user/model turns without a fixed character or turn-count truncation. It measures the latest user turn first, then expands backward over older complete turns using the exact selected-model Vertex CountTokens endpoint and the actual system instruction. It chooses the largest recent suffix that fits. The current user turn and required pinned/handoff context remain whole; when they alone cannot fit the model or remaining chat budget, the Worker returns an explicit error before committing the proposed message/edit. All D1 history remains intact.
 
-The builder must:
-1. Reserve the model/API's required output capacity and any mandatory request overhead.
+The complete M4.6 Context Replicator must additionally measure the **complete effective request** for the exact selected model and API. This includes the application/Owner instruction, selected project-memory content, relevant retrieved historical messages, bounded recent conversation, the current user turn and any request-level material supported by that adapter. The measurement must match what will actually be sent to Vertex.
+
+The full M4.6 builder must:
+1. Reserve the model/API's required output capacity and mandatory request overhead.
 2. Select the current turn and useful recent conversation turns.
 3. Add only manifest-selected active project-memory files.
 4. Add structured state and older exact messages only when relevant.
@@ -49,7 +52,7 @@ The builder must:
 6. If it does not fit, deterministically remove lower-priority optional context, re-count, and explain when relevant history or project notes were omitted.
 7. Persist a proposed new/edit/regenerate mutation only after successful preflight and a valid budget reservation, preserving the existing M4.1 ordering.
 
-Character count and a fixed number of turns may be used as cheap early bounds. They are not an authoritative fit check. Model context ceilings, input caps, output caps, reserved output and API behaviour must come from the currently verified server-side model registry, not a universal constant.
+Character counts and fixed turn counts are not model-fit checks. Any transport body guard exists only to protect Worker request buffering/parsing; selected-model CountTokens and verified model/API context ceilings determine prompt fit.
 
 ### 2.3 Pricing, quotas and provider caching
 
