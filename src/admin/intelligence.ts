@@ -1611,7 +1611,7 @@ function workspaceHtml(): string {
 
 /* Owner workspace: near-black canvas, prompt-sized fixed-width user messages */
 :root{background:#000;color:#ededed}
-html,body,body{background:#000}
+html,body{background:#000}
 .app,.main,.content,.stage,.messages{background:#000}
 .sidebar{background:#050505;border-right-color:#191919}
 .new-chat,.new-chat-scope,.github-panel,.project-memory-panel{background:#0b0b0b;border-color:#242424}
