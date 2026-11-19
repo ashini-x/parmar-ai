@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.4 acceptance closed. M4.4 Project Memory is merged, production deployed and authenticated-Owner accepted. **Next task: M4.5 — Automatic rollover and handoff.** M4.5–M4.8 remain approved, not implemented; M4.6-P0 is required before M4.6; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-20 IST — typography removal PR prepared;  Owner New Chat welcome simplified by PR #370; M4.4 authenticated attach/read and independent Scratchpad-isolation acceptance passed; M4.4 formally closed.  
+**Last updated:** 2026-11-20 IST — Poppins removed from Owner panel and production deployed via PR #374; Owner New Chat welcome simplified by PR #370; M4.4 authenticated attach/read and independent Scratchpad-isolation acceptance passed; M4.4 formally closed.  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -10,7 +10,15 @@
 
 ## 0. Shared BRɅIN brand and typography baseline
 
-All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md). The Owner-selected direction remains AERUNO-style lettering for the BRɅIN wordmark only and ChatGPT/OpenAI Sans visual styling for ordinary UI text. The Owner confirmed the current workspace is private and Owner-only; the supplied AERUNO Trial terms still distinguish personal use from company logo/app use and prohibit general font redistribution, so the trial binary is not bundled. Its missing U+0245 `Ʌ` glyph also remains unresolved. The Poppins bundle is being removed from the Owner runtime; the UI is moving to an OpenAI Sans-first system-font stack, with actual OpenAI Sans pending official access and confirmed use/hosting terms. Typography work must not alter Owner auth, model selection, Vertex, D1, token budgets, conversation semantics or student-facing behavior.
+All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md). The Owner-selected direction remains AERUNO-style lettering for the BRɅIN wordmark only and ChatGPT/OpenAI Sans visual styling for ordinary UI text. The Owner confirmed the current workspace is private and Owner-only; the supplied AERUNO Trial terms still distinguish personal use from company logo/app use and prohibit general font redistribution, so the trial binary is not bundled. Its missing U+0245 `Ʌ` glyph also remains unresolved. The Poppins bundle has been removed from the Owner runtime and production deployed by PR #374. The Owner UI declares an OpenAI Sans-first system-font stack; actual OpenAI Sans is not bundled yet, so a platform fallback is rendered until official files and confirmed product-use/hosting terms are available. The deployed release passed CI, root/health smoke, BRVIN binding and Fatman retrieval acceptance. Authenticated-browser visual confirmation remains pending. Typography work must not alter Owner auth, model selection, Vertex, D1, token budgets, conversation semantics or student-facing behavior.
+
+### Owner typography removal and production release — 2026-11-20 IST
+
+- PR [#374](https://github.com/ashini-x/parmar-ai/pull/374) merged as `45bdc5a8f48ad57f360e4340ff1d6216845a8b5a`.
+- Removed all 17 Poppins font/license/readme files, Owner-page font preloads and `@font-face` rules; removed the now-unused `public/owner-fonts` Worker asset binding.
+- Owner UI now uses the OpenAI Sans-first platform system stack. Actual OpenAI Sans font files are not bundled, and the AERUNO wordmark font remains pending permission/glyph coverage.
+- Release Validation [#44610099216](https://github.com/ashini-x/parmar-ai/actions/runs/44610099216) passed all test/build checks and production deployment acceptance. `parmar-ai` is at 100% on version `7a1c632b-d9c5-4fa2-9535-e0afb0e21b8f` / deployment `10460485-b57a-4857-97b0-350bcd3e0522`; `brvin-service` is at 100% on version `56a88525-e1b5-45f7-abfb-b65faa8b0d57` / deployment `c3d67fc7-a659-4722-9163-8f5692ae1a17`. Acceptance artifact `14571718100`.
+- CI and production root/health, BRVIN binding and Fatman retrieval checks passed. Authenticated Owner-browser visual confirmation remains pending.
 
 ## 1. Product goal
 
