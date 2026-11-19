@@ -1969,7 +1969,7 @@ export function ownerIntelligenceClientScript(): Response {
     try{
       var result=await request("/admin/api/intelligence/github/conversations/"+encodeURIComponent(state.activeId)+"/preview",{
         method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({topicId:githubSaveTopic.value,modelId:state.selectedModelId,thinkingLevel:state.selectedThinkingLevel})
-      },240000);
+      },360000);
       githubMemoryPreview=result.preview;
       githubPreviewSummary.textContent=
         "Destination: "+githubMemoryPreview.repository+" · "+githubMemoryPreview.branch+
