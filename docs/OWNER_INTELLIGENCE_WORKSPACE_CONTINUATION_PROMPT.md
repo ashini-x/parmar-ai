@@ -1,6 +1,6 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**. Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**, after M4.3 was fully closed by read-only production D1/GitHub reconciliation. **M4.3 is complete; M4.4 — Attach and load Project Memory — is the next task.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
 
 ## First action: recover the source of truth
 
@@ -8,14 +8,14 @@ Read these files from the latest `main` branch in this order:
 
 1. `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md` — authoritative milestone status and gate.
 2. `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md` — this handoff.
-3. `docs/OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md` — dated Owner live acceptance evidence and remaining closeout checks.
+3. `docs/OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md` — completed M4.3 live acceptance and final D1/GitHub closeout evidence; M4.3 is closed.
 4. `docs/OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md` — approved memory/context design and Owner Context Replicator.
 5. `docs/OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md` — Owner/Gemini/ChatGPT role split, central hub hierarchy and approval process.
 6. `docs/OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md` — locked single-provider decision and M4.6-P0 capacity gate.
 7. `docs/TEST_PLAN.md` and `docs/README.md`.
 8. Inspect relevant source, current D1 records (read-only), latest `owner-memory-hub` commit and Cloudflare deployment state before choosing the next action.
 
-Current code baseline at handoff: `3ae456188fb7535db47bcab2a7909cf333b59285` (M4.3 append-only preservation fix). Verify `main` first; a later commit may exist by the time this prompt is used.
+Runtime-code baseline at handoff: `3ae456188fb7535db47bcab2a7909cf333b59285` (M4.3 append-only preservation fix). Documentation-only commits follow that code baseline, including the M4.3 closeout record; the source runtime was not changed by this closeout. Verify latest `main`, production D1 and Cloudflare state before implementation.
 
 ## Product and security boundary — immutable
 
@@ -62,24 +62,44 @@ Test flow:
 
 This verifies append-only behaviour in the real production Owner flow, not only in unit tests. **Do not ask the Owner to repeat this test or click Save again merely for evidence.**
 
-### M4.3 closeout — one read-only reconciliation before M4.4
+### M4.3 final closeout — COMPLETE (2026-11-19 IST)
 
-The live save/preservation/read-back subtest is passed. The final closeout action is deliberately read-only: inspect current hub `main`, linked topic metadata/current commit, preview/save D1 records and token usage settlement to determine whether all existing acceptance criteria are already evidenced:
+M4.3 is fully accepted and closed. The remaining evidence was reconciled using read-only production D1 queries, Cloudflare deployment metadata and GitHub reads. Do not rerun the live Save flow, edit the hub directly, reinstall the Owner App or mutate D1 just to recreate acceptance evidence.
 
-- The chosen topic is attached to `ashini-x/owner-memory-hub`, branch `main`, unique root `projects/owner-intelligence/memory`.
-- An existing Scratchpad was promoted/associated with the topic only after exact five-file read-back and Synced.
-- Memory-draft CountTokens/reservation/settlement is present for the same chat and the UI meter refreshed.
-- The stale preview Conflict and fresh-preview recovery are retained as expected.
+**Production topic and installation**
+- Topic: `Owner Intelligence`, ID `a3a58a83-90a0-4c23-a9a4-46eaf2ae6709`.
+- Repository: private `ashini-x/owner-memory-hub`, repository ID `1463342529`; branch `main`; root `projects/owner-intelligence/memory`; installation ID `183469022`; manifest revision `owner-memory-v1`.
+- D1 installation is `active` and `repository_selection=selected`. The previously recorded Owner screenshot verified exact App permissions Metadata read + Contents write.
+- Tested conversation `43bca53d-baa1-4a49-a447-947f3fb8e243` is `session_kind=topic` and references the same topic ID. It was not a Scratchpad, so Scratchpad promotion is N/A for this specific journey. Conditional Scratchpad promotion remains covered by implementation/local-D1 tests and only follows verified read-back + Synced.
 
-This handoff has not independently queried current production D1 rows for all of those items. **Do not assume a missing record just because it was not queried here; inspect first.** If evidence is present, update the roadmap and mark M4.3 fully accepted without another live save. If precisely one item is absent, test only that item. Do not reinstall/recreate/broaden the GitHub App or weaken branch-head conflict safety.
+**Conflict, Save and commit verification**
+- Stale preview `46116e56-1890-4cf5-91b9-9a145b3c0510` is `conflict` after external commit `f41938e6b335162e3ef78bc76a259c27e128a0c6`.
+- Fresh preview `1a5f45c6-4b01-4f98-9758-bd87a8eec59b` used that external commit as its base and retained the Owner-authored marker.
+- Owner explicitly confirmed Save in the panel. Final Synced preview `86534fbd-05ce-43c3-ae8b-866758efbe62` records commit `b40e46c50ee4e7663f5d2c2dd6ad85725979b656`, which was the latest commit on hub `main` when checked.
+- All five persisted preview files (`index.md`, `project-memory.md`, `progress.md`, `decisions.md` and `sessions/2026-11-19-43bca53d-86534fbd.md`) matched byte-for-byte on both the saved commit and current `main`. The Owner's manual marker remains intact; generated progress is appended beneath it.
+- Topic `current_commit_sha` equals the Synced commit SHA.
 
-## Immediate next task and M4.4 transition
+**Same-chat usage settlement**
+- D1 session meter: **40,496 used / 200,000 limit / 0 reserved**.
+- All nine reservation rows for the same conversation are `settled`; their actual-token sum is exactly **40,496**, matching the session meter. The latest memory-draft reservation was settled using provider usage before the Synced preview was recorded.
+- No budget top-up or accounting mutation was needed. The 200,000-token cap is unchanged.
 
-1. Start with the read-only M4.3 closeout reconciliation. Use the already saved commit and existing D1 records; do not mutate production state.
-2. If all M4.3 criteria are evidenced, close M4.3 and begin **M4.4 — Attach and load Project Memory**. Otherwise complete only the exact missing check.
-3. Before M4.4 coding, inspect current source/schema/route/manifest code. Produce a concise implementation brief and review it against the collaboration protocol. Keep the first change narrow.
+**Production activation**
+- Cloudflare's latest deployment listings showed `parmar-ai` version `74fade9d-422e-4a91-8be4-f98340b76eb4` and `brvin-service` version `1999a4c1-9137-447e-8dc7-596f70a338b9` at 100% traffic.
+- PR #356 CI run [44455732385](https://github.com/ashini-x/parmar-ai/actions/runs/44455732385) passed checks/tests and three Worker dry-run builds. Do not represent that PR CI as a post-deploy production smoke test.
 
-M4.4 approved scope:
+**Result:** all M4.3 acceptance criteria applicable to the tested topic conversation passed. No production D1 records, Worker configuration, App permissions, credentials, Vertex model, quota, billing or student runtime were changed during closeout.
+
+## Immediate next task — M4.4 — Attach and load Project Memory
+1. Re-read the latest `main`, especially the roadmap, this prompt, M4.3 acceptance record, memory/context architecture, AI collaboration protocol, provider/infrastructure policy, TEST_PLAN and docs index.
+2. Inspect current source/schema/migrations/routes and the private hub's actual tree. Confirm what currently exists; do not assume the hub manifest/catalog or context loader exists.
+3. Prepare a bounded M4.4 implementation brief for Owner review. It should define versioned catalog/manifest schemas, stable project/workstream/feature IDs, pinned repository/branch/commit snapshots per conversation, manifest-allowlisted active-memory loading, visible context provenance, exact CountTokens/reservation ordering and strict cross-project isolation.
+4. Keep M4.4 narrow: no rollover, compaction, fork, historical D1 recall, semantic cache, background sync, or multi-writer/path-aware rebasing. Preserve M4.1's exact 200K cap and M4.3's strict branch-head Conflict guard.
+5. Do not start code changes until the implementation brief is consistent with the approved scope and Owner approval is recorded.
+
+
+
+## M4.4 approved scope
 - One private `owner-memory-hub` stores project catalog/manifests and curated Markdown; it does not contain/copy source-code trees.
 - Introduce stable project IDs and versioned catalog/manifest schemas. Projects may contain workstreams and optional feature scopes and may reference several independent source repositories.
 - Each conversation has at most one primary project/workstream/feature scope unless the Owner explicitly opts into cross-project context.
@@ -131,4 +151,4 @@ M4.4 does not implement rollover, compaction, fork, historical D1 recall, semant
 - Test plan: `docs/TEST_PLAN.md`
 - Documentation index: `docs/README.md`
 
-**New chat should begin with the read-only M4.3 closeout reconciliation, then proceed to M4.4 once the gate is evidenced. Do not restart M0–M4.2, rerun the accepted marker/save test, change the 200K budget, alter Google Cloud settings or touch the student Telegram runtime.**
+**New chat should begin with M4.4 source/schema/hub inspection and a bounded implementation brief for Owner review. M4.3 is fully closed; do not repeat the Save flow, revisit its acceptance gate, change the 200K budget, alter Google Cloud settings or touch the student Telegram runtime.**

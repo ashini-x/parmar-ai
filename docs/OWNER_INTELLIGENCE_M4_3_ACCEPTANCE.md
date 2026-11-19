@@ -3,7 +3,7 @@
 **Last updated:** 2026-11-19 IST  
 **Repository:** `ashini-x/parmar-ai`  
 **Owner Memory Hub:** `ashini-x/owner-memory-hub` (private), default branch `main`  
-**Status:** Live Save/read-back and append-only Owner-content preservation subtest passed. Final M4.3 closeout requires read-only reconciliation of topic promotion and usage-ledger evidence.
+**Status:** **M4.3 fully accepted and closed on 2026-11-19 IST.** Live Owner Save/read-back, stale-preview conflict protection, exact five-file GitHub verification, topic attachment and same-chat usage-ledger reconciliation are complete.
 
 ## Summary
 
@@ -21,9 +21,9 @@ This is a real Owner/browser acceptance result, not merely a unit-test assertion
 | Fresh preview incorporates external Owner edit | Fresh preview `1a5f45c6-4b01-4f98-9758-bd87a8eec59b`, base SHA `f41938e6b335162e3ef78bc76a259c27e128a0c6`, included the exact marker in its persisted preview files. | **Passed — preview evidence recorded** |
 | Explicit Save and GitHub read-back | Owner confirmed Save from the Owner panel to `main`, then fetched/opened `projects/owner-intelligence/memory/progress.md`; newly generated content was visible below the manually authored comment. | **Passed — Owner-confirmed 2026-11-19** |
 | Append-only preservation | Exact comment marker and Owner-authored content survived; generated content was added below it. PR #356 added byte-preserving, idempotent append logic and regression coverage. | **Passed — live and automated** |
-| Five-file commit verification | Runtime reads back every expected file at the exact commit SHA and compares bytes before marking Synced; Owner-visible save/read-back succeeded. | **Implementation verified; no separate manual inspection of every file is claimed here** |
-| Topic association / Scratchpad promotion | Runtime promotes the conversation only after successful byte-exact read-back. This documentation update did not independently query live D1 topic/conversation rows. | **Read-only evidence reconciliation required** |
-| Memory-draft usage settlement | Draft uses same conversation's M4.1 CountTokens/reservation ledger. Exact production D1 usage row was not independently queried in this documentation update. | **Read-only evidence reconciliation required** |
+| Five-file commit verification | The final Synced preview and its five expected paths were compared against GitHub at the exact saved commit and again at current `main`; every file matched byte-for-byte. | **Passed — independent read-only check** |
+| Topic association / Scratchpad promotion | D1 confirms the tested production conversation was already `session_kind=topic`, attached to the `Owner Intelligence` topic, so live Scratchpad promotion was not applicable to that journey. The local-D1 GitHub-save regression test creates a conversation without a topic, saves it to the selected topic, and asserts the post-Synced conversation has that topic ID and `session_kind=topic`. | **Passed — production topic attachment and automated promotion path** |
+| Memory-draft usage settlement | The same conversation has nine reservation rows, all `settled`; sum of actual tokens is 40,496, matching the D1 session meter. Reserved tokens are zero; the limit remains 200,000. | **Passed — production D1 reconciliation** |
 
 ## Exact Owner-authored marker
 
@@ -61,13 +61,36 @@ GitHub's rendered Markdown may hide HTML comments. Use Raw/source view when chec
 - Cloudflare reports `brvin-service` version `1999a4c1-9137-447e-8dc7-596f70a338b9` (version 220; deployment `a1b126fb-bf07-4cc2-8827-025d05b955a4`) at 100% traffic.
 - PR validation and production deployment activation are separate evidence. This record does not claim a post-#356 live smoke workflow unless a matching run is separately identified.
 
-## Required closeout action
+## Final M4.3 closeout reconciliation — completed 2026-11-19 IST
 
-1. Re-read current `main` and Cloudflare deployment state.
-2. Read topic attachment/saved commit metadata and corresponding D1 conversation/preview records with read-only queries only.
-3. Confirm the saved conversation is associated with the intended topic and that Scratchpad promotion (if this save originated in Scratchpad) happened only after exact five-file read-back and Synced.
-4. Inspect the same conversation's memory-draft usage record and reservation/settlement state. Do not change/top-up the budget.
-5. If both conditions are confirmed, mark M4.3 fully accepted and proceed to M4.4. Otherwise test only the missing item; do not repeat the successful save.
+All final checks below were read-only against the production D1 database and GitHub. No D1 rows, GitHub refs, App permissions, Worker bindings, secrets, models, billing settings or Google Cloud settings were changed.
+
+### Topic, installation and conversation association
+
+- Production topic: `Owner Intelligence` (`a3a58a83-90a0-4c23-a9a4-46eaf2ae6709`).
+- Topic attachment: private `ashini-x/owner-memory-hub` (repository ID `1463342529`), branch `main`, memory root `projects/owner-intelligence/memory`, installation `183469022`, manifest revision `owner-memory-v1`.
+- The installation is still `active` and `repository_selection=selected` for account/user `ashini-x`. The previously recorded Owner screenshot confirms the exact requested App permissions: Metadata read + Contents write.
+- Tested production conversation: `43bca53d-baa1-4a49-a447-947f3fb8e243`; D1 records `session_kind=topic` and the same `topic_id`. This journey did **not** start as a Scratchpad, so live promotion was not applicable. The local-D1 GitHub-save regression test separately creates a conversation without a topic, saves it to the selected topic and verifies the post-Synced topic association. The implementation only promotes after byte-exact verification and Synced.
+
+### Conflict, Save and five-file verification
+
+- Stale preview `46116e56-1890-4cf5-91b9-9a145b3c0510` is recorded as `conflict` after external edit commit `f41938e6b335162e3ef78bc76a259c27e128a0c6`.
+- Fresh preview `1a5f45c6-4b01-4f98-9758-bd87a8eec59b` used that external commit as its base and contained the manually authored marker.
+- The Owner explicitly confirmed Save in the Owner panel. Final Synced preview `86534fbd-05ce-43c3-ae8b-866758efbe62` records commit `b40e46c50ee4e7663f5d2c2dd6ad85725979b656` on `main`.
+- The saved commit is the latest commit returned for the private hub's `main` branch at the time of inspection. All five expected files — `index.md`, `project-memory.md`, `progress.md`, `decisions.md` and `sessions/2026-11-19-43bca53d-86534fbd.md` — matched the preview's persisted contents byte-for-byte both at the saved SHA and at current `main`. The Owner-authored progress marker remains present and generated content is appended below it.
+- Topic `current_commit_sha` matches `b40e46c50ee4e7663f5d2c2dd6ad85725979b656`.
+
+### Same-chat usage settlement
+
+- Conversation `43bca53d-baa1-4a49-a447-947f3fb8e243` session meter: **40,496 used / 200,000 limit / 0 reserved**.
+- All **nine** reservation rows for that same conversation are `settled`; their `actual_tokens` sum to exactly **40,496**, matching `owner_intelligence_session_usage.used_tokens`.
+- The latest memory-draft reservation in that sequence was settled with provider usage (`usage_is_estimated=0`) before the final Synced preview was recorded. No outstanding reservation or top-up is required.
+
+### Production activation check
+
+Cloudflare's latest deployment listings still show `parmar-ai` version `74fade9d-422e-4a91-8be4-f98340b76eb4` and `brvin-service` version `1999a4c1-9137-447e-8dc7-596f70a338b9` at 100% traffic. PR #356's CI evidence remains separate from production activation; no additional post-#356 smoke run is claimed.
+
+**Closeout decision:** Every M4.3 acceptance gate applicable to this saved Topic conversation is now evidenced. M4.3 is **Complete / Accepted**. M4.4 is unblocked and is the next task. Do not repeat the successful live Save, do not reinstall the GitHub App, and do not weaken the strict branch-head Conflict guard.
 
 ## M4.4 — next approved feature milestone
 

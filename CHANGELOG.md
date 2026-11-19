@@ -1,10 +1,17 @@
+## 2026-11-19 IST: Owner Intelligence M4.3 fully accepted and closed
+
+- Reconciled production D1 and GitHub evidence without mutating production: the Owner Intelligence conversation is linked to its Topic and the private ashini-x/owner-memory-hub; the active GitHub App installation remains selected-only.
+- Confirmed stale preview 46116e56-1890-4cf5-91b9-9a145b3c0510 reached Conflict after external commit f41938e6b335162e3ef78bc76a259c27e128a0c6; final preview 86534fbd-05ce-43c3-ae8b-866758efbe62 is Synced to b40e46c50ee4e7663f5d2c2dd6ad85725979b656.
+- Independently compared all five persisted preview files with GitHub at the exact saved commit and current hub main; every file matched byte-for-byte. The Topic's current commit SHA matches the Synced commit.
+- Reconciled the same conversation's token ledger: nine settled reservations sum to 40,496 actual tokens, matching D1 used_tokens; reserved_tokens=0 under the unchanged 200,000-token limit. This test conversation was already a Topic conversation, so Scratchpad promotion was not applicable.
+- Updated the M4.3 acceptance record, roadmap, continuation prompt (next task: M4.4), test plan, documentation index, memory/context architecture and collaboration protocol. No application code, production D1 rows, Worker configuration, secrets, App permissions, Vertex settings, billing or Google Cloud Console settings changed; no Worker deployment is required for this documentation-only closeout.
 ## 2026-11-19 IST: M4.3 live Owner save/read-back and append-only preservation accepted
 
 - Owner confirmed the production Owner-panel save to `main` and subsequent GitHub read-back: the external manually authored `progress.md` comment/marker remained intact and newly generated progress content appeared immediately below it.
 - This closes the live external-edit preservation/fresh-preview/explicit-save/commit-read-back subtest. The stale preview's Conflict status and fresh-preview recovery are recorded in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](docs/OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md).
 - PR [#355](https://github.com/ashini-x/parmar-ai/pull/355) hardened Vertex memory-draft timeout and explicit-429 retry behaviour. PR [#356](https://github.com/ashini-x/parmar-ai/pull/356), merged as `3ae456188fb7535db47bcab2a7909cf333b59285`, made generated Markdown and conversation checkpoints append-only. Its CI [44455732385](https://github.com/ashini-x/parmar-ai/actions/runs/44455732385) passed TypeScript/check, 513 Vitest tests/75 files, 62 Node tests/9 files and all three Worker dry-run builds.
 - Cloudflare confirms `parmar-ai` version `74fade9d-422e-4a91-8be4-f98340b76eb4` and `brvin-service` version `1999a4c1-9137-447e-8dc7-596f70a338b9` at 100% traffic.
-- Updated roadmap, continuation, M4.3 acceptance record, memory/context architecture, collaboration protocol, test plan and docs index. The docs change makes no runtime-code, D1, binding, secret, model, billing or Google Cloud Console change. Before M4.4, perform only a read-only audit of topic/Scratchpad promotion and memory-draft usage-ledger evidence; do not repeat the accepted save.
+- Updated roadmap, continuation, M4.3 acceptance record, memory/context architecture, collaboration protocol, test plan and docs index. The docs change made no runtime-code, D1, binding, secret, model, billing or Google Cloud Console change. This recorded the interim handoff at that time; the read-only topic/Scratchpad-promotion and usage-ledger audit was subsequently completed, as recorded in the newer M4.3 completion entry above.
 
 ## 2026-11-19 IST: Owner Memory append-only preservation fix
 
@@ -34,7 +41,7 @@
 - PR [#352](https://github.com/ashini-x/parmar-ai/pull/352) merged as `c555d9428421fbbe600a872093730fa3dce644e1`. It corrects the topic list/create/rename client URL to `/admin/api/intelligence/topics` and adds a topic-specific `Retry topics` action.
 - Validation and production release [44411119143](https://github.com/ashini-x/parmar-ai/actions/runs/44411119143) completed successfully: TypeScript, Vitest, Node tests, all three Worker dry-runs, paired Worker deployment, and root/BRVIN/Fatman smoke checks passed.
 - Cloudflare confirms `parmar-ai` version `1df8cbae-4777-44f9-87b4-e26dc6acde93` on deployment `582658d9-cd4c-4d2a-b2a8-4325c18591e0` at 100% traffic; `brvin-service` version `da8c9944-a349-4b74-a160-1582db9ec104` is also at 100%.
-- The production D1 query had confirmed the Owner's failed topic attempt created no row. The Owner must now hard-refresh and verify topic creation/listing in both dropdowns; then continue M4.3 attach/save/read-back/Conflict acceptance.
+- At the time of this entry, the production D1 query showed the failed topic attempt had created no row, so the next action was to hard-refresh and verify topic creation/listing. This was subsequently completed after PR #352; the live Save/Conflict/read-back and final D1/GitHub closeout are recorded in the newer completion entry above.
 - No topic row was manually inserted. No Memory Hub files or source-code repositories were changed by this fix.
 
 ## 2026-11-19 IST: Owner Intelligence topic creation route bug found; corrective fix under validation
@@ -49,8 +56,7 @@
 
 - Owner-provided production screenshot shows `Connected · 1 verified installation(s)`, account `ashini-x · User`, and repository `ashini-x/owner-memory-hub · Private`; branch field is `main`.
 - The selected-only GitHub App installation/PKCE verification sub-gate is therefore complete. Do not uninstall, recreate or reinstall the App.
-- The panel still says `Select a topic above`; topic attachment with a unique memory root, reviewed five-file Save, exact commit/file read-back, topic promotion and stale-branch Conflict acceptance remain pending for M4.3.
-- M4.4 stays blocked until these remaining M4.3 acceptance checks pass. No application code or deployment changed in this documentation update.
+- **Historical Owner-panel snapshot at this point in the setup:** the panel still said `Select a topic above`; the topic attachment, reviewed five-file Save, exact commit/file read-back and stale-branch Conflict checks had not yet been completed. The later live acceptance and final closeout entries above supersede this interim status. No application code or deployment changed in this documentation update.
 
 ## 2026-11-19 IST: Owner Memory Hub private and clean App reinstall selected
 

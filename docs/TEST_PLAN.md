@@ -272,7 +272,7 @@ PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/
 
 - **Owner-reported 2026-11-18:** the latest Hydrogen HIGH production request responds and no longer shows `RESOURCE_EXHAUSTED` after PR #338's bounded initial stream-open retry release. This is evidence of recovery on the tested request, not proof that shared Vertex capacity/rate limits can never recur. Keep the retry guard; do not switch model or endpoint silently. If the error recurs, capture the new provider diagnostic and then inspect project/model quota, billing tier and capacity.
 
-### M4.3 — GitHub authorization and reviewed Save to GitHub (implementation deployed; installation verified; save/conflict acceptance pending)
+### M4.3 — GitHub authorization and reviewed Save to GitHub (complete — live acceptance and production evidence reconciled 2026-11-19 IST)
 
 #### Automated local-D1 tests
 - Owner boundary: anonymous GitHub API calls return 401; non-Owner admin sessions return 403; all topic/conversation/preview D1 reads and writes are scoped to the configured Owner.
@@ -290,18 +290,14 @@ PR #320 validation workflow [44167885365](https://github.com/ashini-x/parmar-ai/
 - Idempotency: repeated confirmation after Synced returns the same stored commit result and does not mint a second write token or create another commit. Verifying/committing states retry the stored commit; conflicts require a fresh preview.
 - Transcript integrity: compare conversation/message IDs and content plus generation metadata before/after preview and save. GitHub save does not delete or rewrite D1 transcript messages. The draft generation alone adds its measured/estimated usage to the same 200K ledger.
 
-#### Owner-authenticated browser acceptance still required to complete M4.3
-1. Create the dedicated private App from the Owner workspace; verify GitHub lists only Metadata read + Contents write and no events.
-2. Install on selected repositories only. Complete the GitHub authorization round trip and confirm only installations verified for the authorized GitHub account appear.
-3. Attach one selected repository/branch/memory-root to a project topic.
-4. Open a Scratchpad and choose the project. Confirm the selected model/thinking level and draft-token cost are shown; confirm the meter increases; edit all files; discard once and verify no commit was made.
-5. Generate a new preview, confirm it and verify one commit SHA plus exact file contents by reading them from GitHub. Verify D1 promotes that existing conversation rather than creating a duplicate.
-6. Advance the branch externally between preview and confirm. Confirm Conflict is shown, the external edit remains intact and a new preview is required.
-7. Refresh the page and confirm Synced appears only for a verified commit; retry an interrupted verification without creating a second commit.
+#### Owner-authenticated browser acceptance — completed
 
-Current-head PR validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files, and all three Worker dry-run bundles. PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`. Production workflow [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment, root/health, BRVIN service binding, Fatman retrieval and release-acceptance checks. Deployed parmar-ai version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and brvin-service version `d43a9f7b-32b3-486f-9845-75ed11811165`, each at 100% traffic. The remaining gate is a real Owner-authenticated browser walkthrough of App creation/selected-only installation, topic attach, preview/edit/confirm, exact GitHub read-back and stale-branch Conflict handling.
+The live acceptance journey is complete. Evidence is recorded in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md): the dedicated App is installed selected-only on the private hub; the topic/repository/branch/root association is present in production D1; the external-edit stale preview reached Conflict; a fresh preview retained the Owner's marker; the Owner explicitly confirmed Save; and D1/GitHub both record the verified Synced commit. The saved production conversation was already a Topic conversation, so live Scratchpad promotion was not applicable to this run. The local-D1 GitHub-save regression creates a conversation without a topic, saves it to the selected topic and asserts the post-Synced topic association; promotion occurs only after exact read-back.
 
-## Owner Intelligence — project memory and token-aware continuity (M4.2–M4.3 implementation deployed; M4.3 live acceptance pending; M4.4–M4.8 planned)
+The post-save read-only reconciliation also compared all five preview files byte-for-byte at the saved commit SHA and current hub main, then reconciled nine same-chat settled reservation rows to the D1 meter: 40,496 used, zero reserved, under the unchanged 200,000-token limit. No production row was modified to obtain this evidence.
+Current-head PR validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files, and all three Worker dry-run bundles. PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`. Production workflow [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment, root/health, BRVIN service binding, Fatman retrieval and release-acceptance checks. Deployed parmar-ai version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and brvin-service version `d43a9f7b-32b3-486f-9845-75ed11811165`, each at 100% traffic. This historical PR #346 deployment record is superseded by the later #352, #355 and #356 fixes and the final live acceptance recorded below. The current production Worker versions and the read-only M4.3 closeout are recorded in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md).
+
+## Owner Intelligence — project memory and token-aware continuity (M4.3 complete; M4.4–M4.8 planned)
 
 The following are future acceptance criteria, not tests that have passed in the current release. See [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md).
 
@@ -433,38 +429,17 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 - Corrective source change introduces a dedicated `topicsApi`, routes list/create/rename to the Worker route, and uses a topic-specific `Retry topics` handler instead of incorrectly showing `Could not load conversations` and retrying only conversation history.
 - Regression test asserts the topic status container, correct GET/POST/PATCH endpoint strings, absence of the incorrect conversations/topics path, and topic-specific retry behavior.
 - **Automated fix validation and production deployment passed:** PR [#352](https://github.com/ashini-x/parmar-ai/pull/352), merge `c555d9428421fbbe600a872093730fa3dce644e1`; workflow [44411119143](https://github.com/ashini-x/parmar-ai/actions/runs/44411119143) succeeded. Cloudflare deployment `582658d9-cd4c-4d2a-b2a8-4325c18591e0` serves `parmar-ai` version `1df8cbae-4777-44f9-87b4-e26dc6acde93` at 100% traffic. The full workflow passed typecheck, Vitest, Node tests, three dry-run bundles, production deployment and root/BRVIN/Fatman smoke checks.
-- **Remaining live browser check:** hard-refresh Owner Intelligence, create `Owner Intelligence`, verify the topic appears in both dropdowns and confirm it is persisted in production D1. Then attach the Memory Hub and continue the M4.3 acceptance checklist below.
+- **Historical pending check — completed and superseded 2026-11-19:** following PR #352, the Owner created/attached the topic and the production D1 record now confirms `Owner Intelligence` is attached to `ashini-x/owner-memory-hub`, `main`, and `projects/owner-intelligence/memory`. The full final acceptance evidence follows below.
 
-### M4.3 Owner browser acceptance — current status (2026-11-19 IST)
+### M4.3 Owner acceptance and production closeout — COMPLETE (2026-11-19 IST)
 
-**Passed live Owner subtest:** the external-edit Conflict was preserved, a fresh Preview included the manually authored progress comment, the Owner explicitly confirmed Save to `main`, and the committed `progress.md` was fetched/read back. The Owner confirms newly generated content appears directly below the manual comment. See [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md) for preview IDs, external commit, CI and deployment evidence.
+**M4.3 is fully accepted and closed.** The complete dated evidence is in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md).
 
-The earlier screenshot-only note was historical: at that point the selector showed no topic. The subsequent successful live Save demonstrates that the Owner proceeded through the topic/project save flow. Do not use that old screenshot as current evidence of an unattached topic.
+- **Owner live test:** a stale preview after an external GitHub edit reached Conflict. A fresh Preview included the manual marker; the Owner explicitly confirmed Save to main; the Owner then confirmed generated progress was appended below the manual comment on GitHub read-back.
+- **Production D1 association:** conversation 43bca53d-baa1-4a49-a447-947f3fb8e243 has session_kind=topic and is associated with topic Owner Intelligence (a3a58a83-90a0-4c23-a9a4-46eaf2ae6709). Topic metadata pins the private ashini-x/owner-memory-hub, branch main, root projects/owner-intelligence/memory, and current commit b40e46c50ee4e7663f5d2c2dd6ad85725979b656. The installation is active and selected-only.
+- **Conflict and Synced evidence:** stale preview 46116e56-1890-4cf5-91b9-9a145b3c0510 is conflict; final preview 86534fbd-05ce-43c3-ae8b-866758efbe62 is synced to commit b40e46c50ee4e7663f5d2c2dd6ad85725979b656. All five persisted preview files match byte-for-byte at the saved SHA and current hub main.
+- **Scratchpad promotion scope:** this saved conversation was already a Topic conversation, so live promotion was not applicable to this particular journey. The local-D1 GitHub-save regression creates a conversation without a topic, saves it to the selected topic and asserts the post-Synced association; the implementation promotes only after exact five-file read-back.
+- **Usage ledger:** nine of nine reservation rows for this same conversation are settled; actual-token totals sum to 40,496, matching D1 session usage. The meter is 40,496 used / 200,000 limit / 0 reserved. No token top-up was made.
+- **Deployment and CI:** PR #356 CI [44455732385](https://github.com/ashini-x/parmar-ai/actions/runs/44455732385) passed typecheck/check, 513 Vitest tests across 75 files, 62 Node tests across 9 files, and all three Worker dry-run builds. Cloudflare deployment listings show parmar-ai version 74fade9d-422e-4a91-8be4-f98340b76eb4 and brvin-service version 1999a4c1-9137-447e-8dc7-596f70a338b9 at 100% traffic. PR CI and deployment activation are distinct; no additional post-#356 production smoke is claimed.
 
-**Do not repeat the accepted Preview/Save/read-back flow.** Remaining closeout is a read-only reconciliation of (1) saved topic/repository/branch/memory-root metadata and Scratchpad promotion, if applicable, and (2) the memory-draft reservation/usage settlement for the same conversation. If records confirm these, close M4.3; if a specific record is absent, test only that item. Preserve the 200,000-token cap and strict branch-head Conflict rule. Do not reinstall the App or mutate production D1 just to create evidence.
-
-## Owner Gemini Intelligence — M4.3 live acceptance addendum (2026-11-19 IST)
-
-The complete evidence and closeout boundary are maintained in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md). This addendum records the latest production test and does not assert that every M4.3 sub-criterion was independently queried again during this documentation update.
-
-### Automated regression and CI
-
-- PR [#355](https://github.com/ashini-x/parmar-ai/pull/355) covers memory-draft timeout/retry reliability. Only explicit HTTP 429 capacity responses are retried (maximum three total attempts); ambiguous 408/5xx/timeouts/lost connections are not replayed. The selected Gemini model and thinking level remain unchanged; definitive provider rejections release unused reservations.
-- PR [#356](https://github.com/ashini-x/parmar-ai/pull/356) covers append-only memory updates and checkpoint persistence. Tests verify exact preservation of existing project-memory/progress/decisions Markdown, an externally added Owner comment marker, Owner edits inside previous generated sections, append idempotency and empty-update handling.
-- PR #356 CI [44455732385](https://github.com/ashini-x/parmar-ai/actions/runs/44455732385) passed `npm run check`, 513 Vitest tests/75 files, 62 Node tests/9 files and three Worker dry-run builds. These tests do not make live Gemini calls or mutate production D1.
-
-### Manual production acceptance — passed subtest
-
-1. Create an initial memory Preview.
-2. Make a manual external GitHub edit to `projects/owner-intelligence/memory/progress.md` after the preview, including this marker:
-   `<!-- M4.3 stale-preview test marker: external GitHub edit made after Owner preview on 2026-11-19. -->`
-3. Confirm the stale preview becomes Conflict rather than overwriting the updated branch head. Recorded stale preview: `46116e56-1890-4cf5-91b9-9a145b3c0510`; external edit commit: `f41938e6b335162e3ef78bc76a259c27e128a0c6`.
-4. Generate a fresh preview. Recorded fresh preview: `1a5f45c6-4b01-4f98-9758-bd87a8eec59b`, base SHA `f41938e6b335162e3ef78bc76a259c27e128a0c6`. Verify that the marker and Owner-authored text are retained.
-5. Review and explicitly confirm Save from the Owner panel to `main`.
-6. Fetch/open committed `progress.md`. The Owner confirms newly generated content appears directly below the original manually authored comment.
-
-**Result:** the live Save/read-back and preservation subtest passed on 2026-11-19. Existing Owner-authored content survived the deployed Preview → explicit confirmation → commit → read-back flow.
-
-### Closeout evidence still to reconcile
-
-Use read-only D1 and GitHub checks to confirm the saved conversation's topic association/Scratchpad promotion and corresponding same-chat token reservation/settlement. Do not rerun the successful marker-preservation save, reinstall the App or make production D1 changes just to produce a screenshot. If these records are already correct, mark M4.3 fully accepted; otherwise test only the exact missing item. Preserve the 200,000-token per-chat cap and strict stale-branch Conflict guard.
+**Do not repeat** the accepted live Save, reinstall/broaden the App, or weaken the strict branch-head Conflict rule. M4.4 — Attach and load Project Memory — is now unblocked and is the next milestone.

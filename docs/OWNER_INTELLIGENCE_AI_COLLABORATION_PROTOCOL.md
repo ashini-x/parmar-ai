@@ -341,8 +341,8 @@ This decision refines the existing M4 continuity design; it does not renumber or
 | Work | Target | Status |
 |---|---|---|
 | Formalize hub, AI roles, exchange protocol and original-token constraints | Documentation amendment in this change | Approved documentation; no runtime feature |
-| Create private `owner-memory-hub` and restrict Owner App installation to it | Owner action before live M4.3 acceptance | Pending Owner |
-| M4.3 live acceptance | Verify selected-only installation, attach a project path in the hub, preview/edit/confirm/read-back and stale-branch Conflict | Deployed implementation; browser acceptance pending |
+| Create private `owner-memory-hub` and restrict Owner App installation to it | Owner action before live M4.3 acceptance | **Complete — private hub; active selected-only installation verified** |
+| M4.3 live acceptance | Verify selected-only installation, attach a project path in the hub, preview/edit/confirm/read-back and stale-branch Conflict | **Complete — Owner live acceptance and read-only D1/GitHub closeout passed 2026-11-19** |
 | M4.4 | Project catalog, hierarchical manifests, per-project/workstream/feature namespaces, exact pinned hub snapshots and scoped context loading; preserve Scratchpad/promotion | Planned, not implemented |
 | M4.4/M4.3 follow-up | Path-aware multi-writer conflict handling for the shared hub; no unsafe weakening of existing conflict checks | Planned, not implemented |
 | M4.5 | Project-aware rollover and durable handoff | Planned, not implemented |
@@ -351,9 +351,9 @@ This decision refines the existing M4 continuity design; it does not renumber or
 | M4.8 | Measured cache/retrieval optimizations with scope- and snapshot-isolated keys | Planned, not implemented |
 | ChatGPT implementation execution | Read approved brief, inspect code repositories, test, PR, merge/deploy when authorized, publish report | Operating convention; not an automatic integration |
 
-M4.4 must not begin before the real M4.3 selected-only hub installation/save/read-back/conflict acceptance passes. Do not migrate source code, provision new Cloudflare services, broaden the Owner App's permissions, or enable automatic AI-to-AI triggers as part of this documentation decision.
+The M4.3 selected-only hub installation, Save/read-back, conflict protection and final production evidence gates have all passed; M4.4 may now begin. Do not migrate source code, provision new Cloudflare services, broaden the Owner App's permissions, or enable automatic AI-to-AI triggers as part of this documentation decision.
 
-The 2026-11-19 single-provider/Cloudflare Free policy is also locked. Complete M4.6-P0 (capacity, cost and outbox-recovery assessment) before M4.6; it does not alter the ongoing M4.3 live acceptance gate or authorize a Cloudflare plan upgrade/resource provision.
+The 2026-11-19 single-provider/Cloudflare Free policy is also locked. Complete M4.6-P0 (capacity, cost and outbox-recovery assessment) before M4.6; it does not block M4.4/M4.5 or authorize a Cloudflare plan upgrade/resource provision.
 
 ## 10. Acceptance scenarios for the complete system
 
@@ -376,7 +376,7 @@ The future implementation is not complete until tests and Owner acceptance cover
 These are planned acceptance criteria, not claims of deployed functionality or tests already passed.
 
 
-## 11. Live hub, Owner App and M4.3 acceptance status — 2026-11-19 IST
+## 11. Live hub, Owner App and M4.3 acceptance status — 2026-11-19 IST (M4.3 fully accepted)
 
 GitHub metadata verifies `ashini-x/owner-memory-hub` exists (repository ID `1463342529`), has default branch `main`, contains README `# owner-memory-hub`, and is **Private**.
 
@@ -392,4 +392,4 @@ GitHub metadata verifies `ashini-x/owner-memory-hub` exists (repository ID `1463
 - PR #356 validation [44455732385](https://github.com/ashini-x/parmar-ai/actions/runs/44455732385) passed TypeScript/check, 513 Vitest tests/75 files, 62 Node tests/9 files and all three Worker dry-run builds.
 - Cloudflare verifies `parmar-ai` version `74fade9d-422e-4a91-8be4-f98340b76eb4` and `brvin-service` version `1999a4c1-9137-447e-8dc7-596f70a338b9` at 100% traffic.
 
-**M4.3 closeout:** the live Save/read-back and Owner-content preservation subtest is passed. Before closing the entire milestone and starting M4.4, use read-only inspection to confirm the saved topic association/Scratchpad promotion and memory-draft usage settlement. Do not repeat the successful Save test; do not weaken the strict branch-head Conflict rule. M4.4 remains unimplemented and must add hierarchical hub manifests, stable project/workstream/feature identifiers, manifest-selected memory loading, immutable per-conversation repository/branch/commit snapshots, strict project isolation and safe multi-writer/path-aware conflict handling.
+**M4.3 final closeout — complete:** production D1 confirms the tested conversation is associated with the Owner Intelligence topic and the active selected-only installation on the private hub. The final preview is Synced to `b40e46c50ee4e7663f5d2c2dd6ad85725979b656`; all five saved files match byte-for-byte at that SHA and current `main`. The same conversation's nine reservation rows are all settled and sum to the D1 usage meter: 40,496 / 200,000 used, 0 reserved. The production conversation was already `session_kind=topic`, so live Scratchpad promotion was not applicable to that journey. The local-D1 GitHub-save regression creates a conversation without a topic, saves it to the selected topic and asserts the post-Synced association; promotion remains conditional on exact read-back. M4.3 is fully accepted; M4.4 is unblocked. Do not repeat the successful Save or weaken the strict branch-head Conflict rule. M4.4 remains unimplemented and must add hierarchical hub manifests, stable project/workstream/feature identifiers, manifest-selected memory loading, immutable per-conversation repository/branch/commit snapshots, strict project isolation and safe multi-writer/path-aware conflict handling.
