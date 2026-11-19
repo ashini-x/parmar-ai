@@ -230,6 +230,26 @@ export async function ensureOwnerIntelligenceSchema(env: Env): Promise<void> {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_handoffs_owner_updated
       ON owner_intelligence_handoffs(owner_id, updated_at DESC)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_memory_jobs (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      topic_id TEXT,
+      source_conversation_id TEXT NOT NULL,
+      conversation_id TEXT NOT NULL,
+      job_type TEXT NOT NULL CHECK (job_type IN ('save','rollover','compact','index')),
+      idempotency_key TEXT NOT NULL,
+      payload_version INTEGER NOT NULL DEFAULT 1,
+      status TEXT NOT NULL DEFAULT 'pending_review' CHECK (status IN ('pending_review','synced','conflict','failed')),
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      base_commit_sha TEXT,
+      expected_commit_sha TEXT,
+      safe_diagnostic TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(owner_id, idempotency_key)
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_memory_jobs_pending
+      ON owner_intelligence_memory_jobs(owner_id, status, updated_at)`),
   ]);
   if (results.some((result) => !result.success)) {
     throw new Error("D1 did not confirm the Owner Intelligence schema.");
@@ -864,8 +884,9 @@ export async function rollOverOwnerIntelligenceConversation(env: Env, sourceId: 
     if (!detail?.handoff) throw new Error("The existing rollover record is incomplete; no second successor was created.");
     return { conversation: detail.conversation, handoff: detail.handoff, usage: detail.usage };
   }
-  const source = await env.DB!.prepare("SELECT id,title,lifecycle_status FROM owner_intelligence_conversations WHERE id=? AND owner_id=?")
-    .bind(sourceId, ownerId).first<{ id: string; title: string; lifecycle_status: string }>();
+  const source = await env.DB!.prepare("SELECT id,title,topic_id,lifecycle_status FROM owner_intelligence_conversations WHERE id=? AND owner_id=?")
+    .bind(sourceId, ownerId).first<{ id: string; title: string; topic_id: string | null; lifecycle_status: string }>();
+  const sourceTopicId = source?.topic_id ?? null;
   if (!source) throw new Error("conversation_not_found");
   if (source.lifecycle_status !== "active") throw new Error("conversation_archived: this source is already read-only.");
   const usage = await getOwnerIntelligenceSessionUsage(env, sourceId);
@@ -901,11 +922,14 @@ export async function rollOverOwnerIntelligenceConversation(env: Env, sourceId: 
     env.DB!.prepare("INSERT INTO owner_intelligence_handoffs (id,owner_id,source_conversation_id,successor_conversation_id,markdown,source_message_ids_json,snapshot_provenance_json,github_sync_status,github_commit_sha,created_at,updated_at) SELECT ?,?,?,?,?,?,?,'pending_review',NULL,?,? WHERE EXISTS (SELECT 1 FROM owner_intelligence_conversations WHERE id=? AND owner_id=?) AND NOT EXISTS (SELECT 1 FROM owner_intelligence_handoffs WHERE owner_id=? AND source_conversation_id=?)")
       .bind(handoffId, ownerId, sourceId, successorId, markdown, JSON.stringify(messages.map((m) => m.id)),
         JSON.stringify(snapshotProvenance), now, now, successorId, ownerId, ownerId, sourceId),
+    env.DB!.prepare("INSERT INTO owner_intelligence_memory_jobs (id,owner_id,topic_id,source_conversation_id,conversation_id,job_type,idempotency_key,payload_version,status,attempt_count,base_commit_sha,expected_commit_sha,safe_diagnostic,created_at,updated_at) SELECT ?,?,?,?,?, 'rollover',?,1,'pending_review',0,NULL,NULL,NULL,?,? WHERE EXISTS (SELECT 1 FROM owner_intelligence_handoffs WHERE id=? AND owner_id=?)")
+      .bind(crypto.randomUUID(), ownerId, sourceTopicId, sourceId, successorId, "rollover:" + sourceId, now, now, handoffId, ownerId),
   ];
   const results = await env.DB!.batch(statements);
   if (results.some((r) => !r.success)) throw new Error("D1 did not confirm the rollover transaction.");
   if (Number(results[0]?.meta?.changes ?? 0) !== 1 || Number(results[1]?.meta?.changes ?? 0) !== 1 ||
-      Number(results[2]?.meta?.changes ?? 0) !== 1 || Number(results[results.length - 1]?.meta?.changes ?? 0) !== 1) {
+      Number(results[2]?.meta?.changes ?? 0) !== 1 || Number(results[results.length - 2]?.meta?.changes ?? 0) !== 1 ||
+      Number(results[results.length - 1]?.meta?.changes ?? 0) !== 1) {
     const raced = await env.DB!.prepare("SELECT successor_conversation_id FROM owner_intelligence_handoffs WHERE owner_id=? AND source_conversation_id=?")
       .bind(ownerId, sourceId).first<{ successor_conversation_id: string }>();
     if (raced) {
