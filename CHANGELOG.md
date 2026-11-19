@@ -1,4 +1,3 @@
-
 ## 2026-11-20 IST: Owner central canvas welcome wordmark refresh
 
 - PR [#381](https://github.com/ashini-x/parmar-ai/pull/381) merged as `39fb48907090c42a80be678c789f3a0f9667a327`.
