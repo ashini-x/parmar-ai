@@ -88,7 +88,9 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Per-message expansion state persists across renderMessages rerenders so streaming updates do not unexpectedly re-collapse an expanded prompt. User bubble geometry, immediate send, optimistic rollback and fixed composer remain unchanged.
 - PR CI [44584214528](https://github.com/ashini-x/parmar-ai/actions/runs/44584214528) passed TypeScript, 521 tests, Node tests and all three dry-run Worker builds. Production release [44584471236](https://github.com/ashini-x/parmar-ai/actions/runs/44584471236) passed paired deployment, root/health smoke, BRVIN binding, Fatman retrieval and release acceptance.
 - Production versions at 100% traffic: `parmar-ai` `6a298521-1ea8-4713-9f8e-90b6cef3d6e2` (deployment `0db19fa3-2305-4b24-916f-523d92731096`); `brvin-service` `d9732a1b-09b3-489e-b9a3-b7ab5336973f` (deployment `30a5c772-1512-4f9d-8c3a-6e5a5dd61232`). Acceptance artifact: `14560047336`.
-- UI-only. No message-length cap, model/provider, adaptive response instruction, assistant renderer, backend persistence or token/session budget changes.### Owner Intelligence personal BRɅIN welcome screen — 2026-11-19 IST
+- UI-only. No message-length cap, model/provider, adaptive response instruction, assistant renderer, backend persistence or token/session budget changes.
+
+### Owner Intelligence personal BRɅIN welcome screen — 2026-11-19 IST
 
 - [PR #370](https://github.com/ashini-x/parmar-ai/pull/370) merged as `aa6596a425003c4314afdb2b69f576ae3cee1bbb`.
 - Initial welcome and New Chat now show a transparent BRɅIN text wordmark (no icon tile/background) with a subtle cool-blue glyph gradient and small accent rule.
@@ -97,7 +99,9 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Initial served HTML and `showWelcome()` use matching minimal content.
 - PR CI [44589507043](https://github.com/ashini-x/parmar-ai/actions/runs/44589507043) passed TypeScript, Vitest, Node tests and all three Worker dry-run builds. Production release [44589805660](https://github.com/ashini-x/parmar-ai/actions/runs/44589805660) passed paired deployment, root/health, BRVIN binding, Fatman retrieval and release acceptance.
 - Production versions at 100% traffic: `parmar-ai` `2ac68248-7705-44ac-8233-4acdb73e92c6` (deployment `1910b85b-d650-402f-8e15-9c137ce3659f`); `brvin-service` `88da7774-4820-4520-ae7b-5de780909371` (deployment `e6e3636d-7f69-46bb-ae61-fa77c2d0e9f2`). Acceptance artifact `14562042415`.
-- Scope is welcome presentation only; no model, prompt, token, sidebar, composer, response renderer, Project Memory or student behavior changes.## First action: recover the source of truth
+- Scope is welcome presentation only; no model, prompt, token, sidebar, composer, response renderer, Project Memory or student behavior changes.
+
+## First action: recover the source of truth
 
 Read these files from the latest `main` branch in this order:
 
