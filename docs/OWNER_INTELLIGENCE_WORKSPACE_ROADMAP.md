@@ -183,7 +183,7 @@ Google Gemini through Vertex AI is the **only AI provider inside Owner Intellige
 
 Cloudflare is the deterministic backend: Owner authentication/authorization, request validation, D1 transcript/usage/outbox, context assembly, transport, GitHub API operations, conflict-safe commit/read-back, idempotent retry and observability. It does not perform inference. ChatGPT Software Engineer remains a separate Owner-authorized implementation executor, not a Worker credential or runtime fallback. Use D1 FTS5/keyword retrieval first; model-based retrieval or new Cloudflare products require separate approval.
 
-The Owner confirms the Cloudflare account is on Workers Free. Its published limits and the service-specific Paid allowances are recorded in [OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md](OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md). Current account consumption/headroom has not been measured in this documentation change. Complete M4.6-P0 before M4.6 implementation; this does not block the ongoing M4.3 walkthrough or by itself require an upgrade. D1 remains authoritative when Queue/Workflow transport expires; do not depend on Free's 24-hour Queue retention as durable job storage.
+The Owner confirms the Cloudflare account is on Workers Free. Its published limits and service-specific Paid allowances are recorded in [OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md](OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md). Current account consumption/headroom has not been measured in this documentation change. Complete M4.6-P0 before M4.6 implementation; this does not block the remaining M4.3 evidence closeout or M4.4/M4.5, and does not by itself require an upgrade. D1 remains authoritative when Queue/Workflow transport expires; do not depend on Free's 24-hour Queue retention as durable job storage.
 
 ### Approved long-session continuity architecture (documentation-approved; not implemented)
 
@@ -197,7 +197,7 @@ The approved design is specified in [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHI
 - Context caching and semantic indexing are optional optimizations, never correctness dependencies. Enable them only after exact model/API support, privacy isolation, cache lifetime, pricing and measured benefit are verified.
 - No R2, KV, Vectorize or Workers AI resource is a prerequisite for M4.2–M4.8. Reinspect the live Cloudflare account before proposing any binding/resource change; the last account inspection found R2 not enabled, no KV namespaces and no Vectorize indexes.
 
-The continuity extension is nested under M4 so M5–M8 retain their original meaning and acceptance criteria. M4 and M4.1 acceptance are closed; M4.4–M4.8 are gated on the remaining M4.3 topic attachment, reviewed save/read-back and stale-branch-conflict acceptance.
+The continuity extension is nested under M4 so M5–M8 retain their original meaning and acceptance criteria. M4 and M4.1 acceptance are closed. M4.3 live save/read-back, external-edit Conflict and append-only preservation have been Owner-confirmed; M4.4–M4.8 remain gated only on read-only reconciliation of the saved topic/Scratchpad promotion and memory-draft usage-ledger records, as specified in the current checkpoint above.
 
 ## 5. Milestones and acceptance criteria
 
@@ -459,6 +459,8 @@ A task is not complete until the relevant code/test/deployment work and these do
 
 ## 2026-11-18: M4.3 reviewed GitHub Save implementation checkpoint
 
+> Historical implementation checkpoint as of 2026-11-18. Statements below about deployment or live acceptance being pending were accurate at that time and are superseded by the dated 2026-11-19 production acceptance record above and `docs/OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md`.
+
 - Consolidated the duplicate attempt into the existing safer PKCE implementation on PR #346 / branch feat/owner-intelligence-m4-3-github-app-auth. PR #347 (the duplicate manifest-only route attempt) was closed without merging.
 - Added the Owner-only preview/status/confirm APIs and workspace review UI. Gemini drafts project-memory.md, progress.md and decisions.md using current topic Markdown plus bounded source-linked D1 transcript excerpts; index.md is preserved and a dated conversation note is proposed. The Owner can edit all five files before confirming.
 - Draft generation preserves the current selected model and thinking level. Vertex CountTokens receives the same conversation content and fixed system instruction that GenerateContent receives. A bounded output reservation is taken from the same conversation's D1 200,000-token ledger and settled from Vertex usage; missing final usage is conservatively charged. The UI refreshes the meter after the draft attempt.
@@ -466,16 +468,18 @@ A task is not complete until the relevant code/test/deployment work and these do
 - Each preview is pinned to one base commit SHA, expires after 30 minutes, and allows only its exact five approved file paths within per-file/aggregate size limits. Confirmation requires confirmed=true and the complete reviewed file set. The write token is not minted before that confirmation.
 - Save records its generated commit SHA in D1 before updating the branch. It checks the expected head, uses a non-force ref update, and supports recovery from interrupted committing/verifying states. The commit and each expected file are fetched by exact commit SHA and compared byte-for-byte before D1 marks Synced or promotes an existing Scratchpad conversation into its topic.
 - Latest previously completed PR validation [44379838462](https://github.com/ashini-x/parmar-ai/actions/runs/44379838462) passed TypeScript/check, 505 Vitest tests across 74 files, 62 Node tests across 9 files and three Worker dry-run bundles at commit c6f2b2ed27f9fc134db268e8b5408c40b9eecfe7. Subsequent UI meter-refresh and secret-redaction test refinements have their own current-head CI run pending; do not cite the earlier run as validation of those later commits.
-- No production deployment or live Owner GitHub App registration/installation/save acceptance has happened yet. M4.3 remains in progress until the current-head checks, merge/deployment, production smoke and Owner browser acceptance are complete.
+- **Historical as of 2026-11-18:** no production deployment or live Owner GitHub App registration/installation/save acceptance had happened at the time this checkpoint was written. M4.3 was subsequently merged/deployed and its live Save/preservation subtest passed; see the current acceptance record.
 
 
 ## 2026-11-19 IST — M4.3 merged and production deployed
+
+> Initial deployment checkpoint. Its interim note below that live acceptance remained pending is superseded by the later 2026-11-19 live Save/read-back acceptance section above.
 
 - PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`.
 - Current-head PR validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests across 74 files, 62 Node tests across 9 files and all three Worker dry-run bundles.
 - PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`; validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files and three Worker dry-runs. Production release [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment and root/health, BRVIN binding, Fatman retrieval and release-acceptance checks. `parmar-ai` version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and `brvin-service` version `d43a9f7b-32b3-486f-9845-75ed11811165` are at 100% traffic; artifact [14464228113](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092/artifacts/14464228113).
 - The production workflow's paired deploy, smoke tests and release acceptance all passed. No rollback was triggered.
-- Remaining M4.3 acceptance is authenticated and manual: Owner creates/installs the dedicated App on selected repositories, attaches a topic, previews/edits/confirms a save, verifies exact commit/files in GitHub, and exercises a stale-branch conflict. M4.3 code is deployed; M4.3 live Owner acceptance is not yet recorded.
+- **Interim status at initial deployment:** authenticated Owner App installation and browser Save/Conflict acceptance remained pending. This was subsequently progressed; see the current M4.3 milestone row and the latest dated live acceptance record above.
 
 ## 2026-11-19 IST architecture decision — central Owner Memory Hub and ChatGPT execution boundary
 
@@ -511,9 +515,13 @@ All seven original Owner scenarios stay in scope: reviewed save; durable Scratch
 
 ### GitHub installation and current gate
 
-The Owner Memory App verification deliberately requires a **selected-repositories** installation, not GitHub's "All repositories" setting. The target setup is to install/configure that App for only the private `owner-memory-hub` repository with the existing exact permissions (Metadata read, Contents read/write) and no webhook events. The repository now exists as `ashini-x/owner-memory-hub` (ID `1463342529`, default branch `main`, README present), and GitHub metadata verifies it is **Private**. The Owner reports that the BRɅIN Owner Memory App is set to **Only select repositories** with only this hub selected. Owner Intelligence still reports installation required because its state-bound PKCE verification has not yet persisted an active installation row. Follow the fresh setup/PKCE round trip in the continuation prompt; do not uninstall/recreate until its callback path is diagnosed.
+The Owner Memory App verification uses a **selected-repositories** installation, not GitHub's "All repositories" setting. The target is the private `owner-memory-hub` repository with the existing exact permissions (Metadata read, Contents read/write) and no webhook events.
 
-M4.3 implementation remains deployed; live Owner acceptance remains pending. After the hub install, verify a real reviewed save to a project-specific memory root, exact commit/file read-back and stale-branch Conflict. Do not mark M4.3 accepted before that browser walkthrough. M4.4 then implements hierarchical manifests, pinned hub snapshots and scoped memory loading, plus safe path-aware multi-writer conflict handling. Existing branch-head protection must not be weakened; unrelated-path advances may be rebased only after all touched-file and manifest preconditions pass.
+GitHub metadata confirms `ashini-x/owner-memory-hub` (ID `1463342529`, default branch `main`) exists and is **Private**. The previously supplied production Owner screenshot showed `Connected · 1 verified installation(s)`, account `ashini-x · User`, and this private repository. The installation sub-gate is complete. Do not uninstall, recreate, reinstall or broaden the App.
+
+The topic API route defect was corrected in PR #352 and production-deployed. The Owner has now confirmed a real Preview → explicit Save to `main` → GitHub read-back: the manually added comment in `projects/owner-intelligence/memory/progress.md` remained present, and the newly generated update appeared immediately below it. The stale preview Conflict and fresh-preview recovery are also recorded. PR #355 fixed memory-draft reliability; PR #356 changed Gemini updates and conversation checkpoints to append-only. See [M4.3 live acceptance record](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md).
+
+**Current M4.3 closeout:** use read-only D1/GitHub evidence to reconcile the saved topic association, Scratchpad promotion (if applicable) and same-chat memory-draft usage reservation/settlement. Do not rerun the accepted Save test. Once existing records confirm the remaining acceptance items, mark M4.3 fully accepted and unlock M4.4. Do not weaken the branch-head Conflict rule.
 
 **Canonical protocol:** [OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md](OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md). This decision is approved at the documentation/architecture level only; it does not claim that the new repository, collaboration UI, automatic classification, prompt loader, path-aware merge or AI orchestration already exists.
 
@@ -522,7 +530,8 @@ M4.3 implementation remains deployed; live Owner acceptance remains pending. Aft
 ### Owner Memory Hub installation and live acceptance — 2026-11-19 IST
 
 - Verified GitHub repository: [`ashini-x/owner-memory-hub`](https://github.com/ashini-x/owner-memory-hub), repository ID `1463342529`, default branch `main`, README present, **Private**.
-- **Installation sub-gate complete by Owner browser screenshot:** panel reports `Connected · 1 verified installation(s)`; account `ashini-x · User`; repository `ashini-x/owner-memory-hub · Private`. Branch `main` and memory-root `memory` appear in the attachment form.
-- **Topic attachment has not yet been completed:** UI says `Select a topic above`. The current repository/branch/root form values are not proof of a saved topic mapping.
-- Remaining M4.3 actions: create/select a project topic; attach the hub, `main`, and a unique project memory root; generate and review/edit the five-file preview; confirm; verify exact commit/file read-back and topic association; test stale-branch Conflict without overwriting an external edit.
-- Do not uninstall/recreate the GitHub App. The private hub and selected-only installation are now connected and verified. M4.4 remains blocked until the remaining M4.3 Save/Conflict acceptance passes.
+- **Installation sub-gate complete:** earlier production screenshot showed `Connected · 1 verified installation(s)`, account `ashini-x · User`, repository `ashini-x/owner-memory-hub · Private`. Keep this selected-only installation and existing least-privilege permissions; do not reinstall or broaden it.
+- **Topic/save flow progressed after the initial screenshot:** the Owner subsequently completed a live Owner-panel preview, explicit Save to `main`, and GitHub read-back of `projects/owner-intelligence/memory/progress.md`. The manually authored external marker remained and the generated content appeared below it. Do not retain the earlier screenshot's `Select a topic above` state as the current state; it was a snapshot from before the subsequent successful save.
+- The exact external marker, stale preview/Conflict, fresh preview/base SHA, reliability and append-only fixes, CI, Worker versions and Owner-confirmed result are recorded in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md).
+- **Remaining closeout (read-only):** reconcile the saved topic association/current commit, Scratchpad promotion if the conversation originated as Scratchpad, and exact same-chat memory-draft usage/reservation/settlement. Do not repeat the successful save. M4.4 remains gated on evidence, not on rebuilding M4.3.
+
