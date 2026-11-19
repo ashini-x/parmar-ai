@@ -212,9 +212,10 @@ PR [#327](https://github.com/ashini-x/parmar-ai/pull/327), merge commit `dff54f7
 - A failed/empty assistant message is persisted for the UI, but must not be sent as a model turn. Exclude assistant rows with `pending` or `error` status and exclude any whitespace-only message.
 - Non-empty partial assistant replies may remain as context; complete user/model turns remain in chronological order.
 - After failed/empty rows are removed, adjacent messages with the same role are coalesced so Vertex receives a clean alternating user/model sequence and the newest prompt remains the final user turn.
-- Prompt assembly sends at most 49 turns and 300,000 characters, with each text part at most 50,000 characters. It selects a recent suffix and drops an orphaned leading model turn if context truncation starts mid-pair.
-- Context assembly does not delete or rewrite the Owner's complete D1 transcript. It only chooses a bounded model input for the current request, allowing the same conversation to move between supported models with different request constraints.
-- Provider validation independently rejects empty turns, repeated roles, non-user-led/non-user-ended contents, more than 50 turns, oversized parts and total context above 300,000 characters before calling Vertex.
+- Prompt assembly normalizes the complete transcript into non-empty alternating user/model turns. It does not clip messages by character count or stop at a fixed turn count.
+- Before committing a generation, the selector counts the current user turn first, then expands older turns backward with the selected model's exact Vertex CountTokens call and system instruction. It chooses the largest recent suffix that fits the available per-chat token budget and model context; the latest user turn and required pinned/handoff context remain whole.
+- The exact suffix measured by CountTokens is the one sent to GenerateContent. All original transcript messages remain untouched in D1; only older context is omitted from an individual request.
+- Provider validation still checks role shape and non-empty turns, but does not apply the former 50,000-character per-part, 300,000-character aggregate or fixed 50-turn app limits. The 8 MiB JSON-body guard is only a Worker buffering/parsing safety bound, not a Gemini input cap.
 - A Count Tokens probe may make a model selectable for token estimation but does not guarantee GenerateContent permission. A stream/generation 401/403 is a separate IAM/model access error; the UI message explicitly distinguishes it.
 - Regression tests reproduce the Owner screenshot sequence: successful earlier context, an empty failed assistant row, and a subsequent retry after switching models. Other tests verify bounded suffix selection, valid roles and GenerateContent 403 guidance.
 - Authenticated browser acceptance: reopen the affected conversation, retry with Hydrogen and verify history is retained without failed/empty rows poisoning the request; then test Carbon and follow the explicit Google Cloud access message if 403 remains.
@@ -505,5 +506,15 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 ### Owner assistant response persistence — 2026-11-20
 - Stream and persist an assistant answer exceeding 300,000 characters to prove the former response-only message-size cap is gone.
 - Verify the full assistant text is present in D1 after completion and the D1 conversation usage settles to provider-reported usage.
-- Preserve the separate 300,000-character early bound for Owner-supplied input/context; do not confuse it with an assistant response limit.
+- Verify Owner-supplied inputs beyond 300,000 characters pass application validation and the full prompt is preserved; the 8 MiB JSON transport safety bound remains distinct from model context.
 - Confirm the exact 200,000-token per-conversation reservation and hard lock remain authoritative.
+
+
+### Owner Gemini token-aware input/context selection — 2026-11-20
+- Verify new, edited and regenerated messages can exceed the former 300,000-character input cap within the request transport-safety boundary.
+- Verify the complete normalized D1 transcript can exceed 49 turns and individual user/model text parts can exceed 50,000 characters without application-side truncation or rejection.
+- Verify the current user turn and required pinned/handoff context are never clipped; if the current turn alone exceeds the selected model context or remaining 200,000-token budget, generation is rejected before the prompt mutation is committed.
+- Verify the selector calls the selected model's CountTokens endpoint on the exact prompt/system instruction, expands recent history to the largest fitting user-led suffix, and passes byte-for-byte equivalent contents to generation.
+- Exercise Hydrogen, Carbon, Argon and every registered Gemini 3.x model; verify actual context-window fit comes from the selected model registry/provider response, not a fixed character or turn threshold.
+- Keep the 200,000-token cumulative conversation budget, repeated Gemini 4 continuation prompt reservations, output ceilings, usage settlement and hard lock unchanged.
+- Keep the 8 MiB JSON request-buffer safety guard and verify it is reported as transport protection rather than a token/input-character cap.

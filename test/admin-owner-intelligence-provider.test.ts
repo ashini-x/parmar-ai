@@ -52,6 +52,33 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     })));
   });
 
+  it("passes long text parts and more than fifty turns to selected-model CountTokens", async () => {
+    const calls: Array<{ url: RequestInfo | URL; body: Record<string, unknown> }> = [];
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "unbounded-owner-context-project" } as Env;
+    const fetcher: typeof fetch = async (url, init) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      calls.push({ url, body });
+      return new Response(JSON.stringify({
+        totalTokens: JSON.stringify(body.contents).includes("Owner model availability check.") ? 8 : 42_000,
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+    const contents = Array.from({ length: 51 }, (_, index) => ({
+      role: index % 2 === 0 ? "user" as const : "model" as const,
+      text: index === 0 ? "L".repeat(60_001) : "turn-" + index,
+    }));
+    const tokens = await countOwnerGeminiInputTokens(
+      env,
+      { modelId: "gemini-4-hydrogen", contents },
+      dependencies(fetcher),
+    );
+    expect(tokens).toBe(42_000);
+    expect(calls).toHaveLength(2);
+    const actualRequest = calls[1].body.contents as Array<{ role: string; parts: Array<{ text: string }> }>;
+    expect(actualRequest).toHaveLength(51);
+    expect(actualRequest[0].parts[0].text).toHaveLength(60_001);
+    expect(actualRequest[50].role).toBe("user");
+  });
+
 
   beforeEach(() => vi.restoreAllMocks());
 
@@ -393,7 +420,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect((failure as Error).message).not.toContain("denied the GenerateContent request");
   });
 
-  it("rejects unpaired, repeated-role or oversized conversation turns before provider access", async () => {
+  it("rejects unpaired or repeated-role conversation turns before provider access", async () => {
     const fetcher = vi.fn();
     await expect(openOwnerGeminiStream(configuredEnv, {
       modelId: "gemini-4-hydrogen",
@@ -403,7 +430,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
         { role: "user", text: "Question two" },
       ],
     }, new AbortController().signal, dependencies(fetcher as unknown as typeof fetch))).rejects.toMatchObject({
-      message: expect.stringContaining("conversation context is invalid or too large"),
+      message: expect.stringContaining("non-empty alternating user/model turns"),
     });
     expect(fetcher).not.toHaveBeenCalled();
   });

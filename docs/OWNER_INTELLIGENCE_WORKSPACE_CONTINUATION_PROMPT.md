@@ -71,7 +71,7 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 
 - [PR #362](https://github.com/ashini-x/parmar-ai/pull/362) merged as `47ad8b51e25800fc9424a1222ea717defca6949a`.
 - Only the conversation messages scroll. Composer is docked at the bottom; compact session-token meter is fixed just above it and visible on blank/new chats with a default 0 / 200,000 display.
-- Composer starts at one line, auto-grows up to 144px and then scrolls internally. Frontend `maxlength` removed. Server message cap increased to 300,000 characters and JSON request body limit to 1,300,000 bytes; beyond-cap messages are rejected. 200,000-token session budget and provider context limits remain in force.
+- Composer starts at one line, auto-grows up to 144px and then scrolls internally. Frontend `maxlength` was removed. The later 2026-11-20 token-aware input release supersedes the former 300,000-character message/context cap and 1,300,000-character JSON-body guard: no app-owned message/turn character caps remain; an 8 MiB JSON request-buffer safety guard remains. The selected model's exact CountTokens measurement determines the recent history suffix sent to Vertex; the latest user turn and pinned context stay whole. The 200,000-token cumulative chat budget remains unchanged.
 - PR validation [44558021300](https://github.com/ashini-x/parmar-ai/actions/runs/44558021300) passed typecheck, Vitest, Node tests and all three dry-run Worker builds. Production release [44558249271](https://github.com/ashini-x/parmar-ai/actions/runs/44558249271) passed deployment, smoke and release acceptance.
 - Production versions at 100% traffic: `parmar-ai` `f318707c-611b-499f-b014-282c45b96059` (deployment `2b2ad42b-c070-4870-9047-afce3bd80817`); `brvin-service` `4ddd6b8f-e9d5-4bf8-88ec-78f72cfeb2cd` (deployment `b6fe71a1-aed4-4849-a58d-0adcf5e39217`). Acceptance artifact: `14545509079`.
 - This is UI/long-prompt handling maintenance; the session-token budget, model/provider configuration, Project Memory behavior, D1 schema and student-facing Telegram system are unchanged. Historical checkpoint: M4.4 remained the next task at this point; its authenticated production acceptance is now complete.
@@ -371,7 +371,8 @@ M4.4 does not implement rollover, compaction, fork, historical D1 recall, semant
 - Do not change the student/bot Vertex timeout or output settings.
 
 
-## Output persistence boundary clarification
-- The former 300,000-character assistant-response guard has been removed; streamed assistant output is no longer rejected just because its stored text exceeds that character count.
-- The 300,000-character early guard still applies to Owner-supplied input/context assembly. It is not the generated response limit.
-- Keep the 200,000-token cumulative per-conversation budget, exact D1 reservation/settlement, model-native/provider ceilings, and actual network/runtime cancellation boundaries.
+## Input and output boundary clarification — 2026-11-20
+- Owner-supplied messages and assistant responses have no app-owned character cap. The app normalizes all D1 turns without a fixed 49/50 turn cap and the provider adapter no longer rejects individual text parts at 50,000 characters or aggregate input at 300,000 characters.
+- Before committing a new/edit/regenerate operation, the Worker counts the exact selected-model prompt and selects the largest recent suffix that fits. The latest user message and attached pinned/handoff context are never silently truncated. The exact contents measured are passed to GenerateContent.
+- An 8 MiB JSON request-body safety bound remains solely to protect Worker buffering/parsing; it is not a model input limit. The selected model's context ceiling, Google request constraints, temporary provider failures and real transport/runtime boundaries still apply.
+- Preserve the 200,000-token cumulative per-conversation budget, exact D1 reservation/settlement, output ceilings/continuation logic and actual Stop/disconnect cancellation boundaries. The full transcript remains in D1 even when older turns are not included in one generation request.

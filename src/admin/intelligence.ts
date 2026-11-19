@@ -79,9 +79,9 @@ interface OwnerMessageRow extends OwnerIntelligenceMessage {
 
 const readyDatabases = new WeakSet<object>();
 const MAX_TITLE_LENGTH = 80;
-const MAX_OWNER_GEMINI_CONTEXT_CHARS = 300_000;
-const MAX_MESSAGE_LENGTH = MAX_OWNER_GEMINI_CONTEXT_CHARS;
-const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
+// Bound buffered JSON before parsing. This is a Worker transport/memory guard,
+// not a message-character or Gemini input-token limit.
+const MAX_OWNER_JSON_BODY_CHARS = 8 * 1024 * 1024;
 const MAX_CONVERSATIONS = 100;
 const MAX_TOPICS = 100;
 export const OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT = 200_000;
@@ -1065,9 +1065,9 @@ export async function appendOwnerIntelligenceMessage(
 ): Promise<OwnerIntelligenceMessage | null> {
   await ensureOwnerIntelligenceSchema(env);
   const status = input.status ?? "complete";
-  if (typeof input.content !== "string" || input.content.length > MAX_MESSAGE_LENGTH ||
+  if (typeof input.content !== "string" ||
       (input.content.length === 0 && !(input.role === "assistant" && status === "pending"))) {
-    throw new Error("Message content must contain between 1 and 300,000 characters.");
+    throw new Error("Message content must be non-empty except for a pending assistant response.");
   }
   if ((input.modelId && !input.thinkingLevel) || (!input.modelId && input.thinkingLevel)) {
     throw new Error("Generation metadata is incomplete.");
@@ -1206,8 +1206,8 @@ async function planOwnerPrompt(
   }
 
   if (input.editMessageId) {
-    if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
-      throw new Error("Enter a message between 1 and 300,000 characters.");
+    if (typeof input.content !== "string" || !input.content.trim()) {
+      throw new Error("Enter a non-empty message.");
     }
     const targetIndex = ordered.findIndex((row) => row.id === input.editMessageId && row.role === "user");
     if (targetIndex < 0) throw new Error("The user message to edit was not found.");
@@ -1234,8 +1234,8 @@ async function planOwnerPrompt(
     };
   }
 
-  if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
-    throw new Error("Enter a message between 1 and 300,000 characters.");
+  if (typeof input.content !== "string" || !input.content.trim()) {
+    throw new Error("Enter a non-empty message.");
   }
   const latest = ordered.reduce((value, row) => Math.max(value, Number(row.created_at)), 0);
   const plannedMessage: OwnerIntelligenceMessage = {
@@ -1268,11 +1268,12 @@ async function planOwnerPrompt(
 }
 
 /**
- * Build a clean, bounded Gemini context from the durable Owner transcript.
- * Failed/pending/empty assistant rows are UI state, not conversation turns.
- * Adjacent turns with the same role are coalesced after those rows are removed,
- * because GenerateContent requires a valid alternating user/model sequence.
- * The full transcript remains in D1; only a recent suffix is sent to Vertex.
+ * Normalize the complete durable Owner transcript. Failed/pending/empty
+ * assistant rows are UI state, not model turns. Adjacent same-role messages
+ * are coalesced to retain a valid alternating user/model request shape.
+ *
+ * No character or fixed-turn truncation occurs here. The selected-model
+ * CountTokens preflight chooses the largest recent suffix that fits.
  */
 export function buildOwnerGeminiConversationContents(
   messages: readonly OwnerIntelligenceMessage[],
@@ -1288,34 +1289,78 @@ export function buildOwnerGeminiConversationContents(
     if (previous?.role === role) previous.text += "\n\n" + text;
     else turns.push({ role, text });
   }
+  return turns;
+}
 
-  const normalized = turns
-    .slice(-MAX_OWNER_GEMINI_CONTEXT_TURNS)
-    .map((turn) => ({
-      role: turn.role,
-      // Each Vertex text part is independently bounded; preserve the newest
-      // part of a coalesced run (which includes the current user prompt).
-      text: turn.text.length > MAX_MESSAGE_LENGTH ? turn.text.slice(-MAX_MESSAGE_LENGTH) : turn.text,
-    }));
+export interface OwnerGeminiContextSelection {
+  contents: Array<{ role: "user" | "model"; text: string }>;
+  promptTokens: number;
+  fitsBudget: boolean;
+}
 
-  const selected: Array<{ role: "user" | "model"; text: string }> = [];
-  let usedChars = 0;
-  for (let index = normalized.length - 1; index >= 0; index -= 1) {
-    const turn = normalized[index];
-    const addedChars = turn.text.length + (selected.length ? 2 : 0);
-    if (selected.length && usedChars + addedChars > MAX_OWNER_GEMINI_CONTEXT_CHARS) break;
-    if (!selected.length && turn.text.length > MAX_OWNER_GEMINI_CONTEXT_CHARS) {
-      selected.unshift({ role: turn.role, text: turn.text.slice(-MAX_OWNER_GEMINI_CONTEXT_CHARS) });
-      break;
-    }
-    selected.unshift(turn);
-    usedChars += addedChars;
+/**
+ * Select the largest recent user-led transcript suffix using the exact token
+ * count for the chosen model, including the system instruction supplied by
+ * the caller. Start with the current user turn, then expand older turns
+ * exponentially. If an expanded window does not fit, binary-search the
+ * boundary. The newest user turn is always kept whole or rejected explicitly.
+ *
+ * A null count means the provider rejected that candidate as too large for
+ * the request/model. Other CountTokens failures are propagated unchanged.
+ */
+export async function selectOwnerGeminiConversationContents(
+  contents: readonly { role: "user" | "model"; text: string }[],
+  maxPromptTokens: number,
+  countTokens: (candidate: Array<{ role: "user" | "model"; text: string }>) => Promise<number | null>,
+): Promise<OwnerGeminiContextSelection | null> {
+  if (!contents.length || contents[0].role !== "user" || contents[contents.length - 1].role !== "user" ||
+      contents.some((turn, index) => !turn.text.trim() ||
+        (index > 0 && turn.role === contents[index - 1].role))) return null;
+
+  const userStarts: number[] = [];
+  for (let index = 0; index < contents.length; index += 1) {
+    if (contents[index].role === "user") userStarts.push(index);
   }
+  const measure = async (startOrdinal: number): Promise<OwnerGeminiContextSelection | null> => {
+    const candidate = contents.slice(userStarts[startOrdinal]).map((turn) => ({ ...turn }));
+    const promptTokens = await countTokens(candidate);
+    if (promptTokens === null || !Number.isSafeInteger(promptTokens) || promptTokens < 0) return null;
+    return { contents: candidate, promptTokens, fitsBudget: promptTokens <= maxPromptTokens };
+  };
 
-  // A truncated suffix must start with a user turn. Never send an orphaned
-  // model response without the user prompt that preceded it.
-  if (selected[0]?.role === "model") selected.shift();
-  return selected;
+  let bestOrdinal = userStarts.length - 1;
+  let best = await measure(bestOrdinal);
+  if (!best || !best.fitsBudget) return best;
+
+  let width = 2;
+  while (bestOrdinal > 0) {
+    const candidateOrdinal = Math.max(0, userStarts.length - width);
+    if (candidateOrdinal === bestOrdinal) break;
+    const candidate = await measure(candidateOrdinal);
+    if (candidate?.fitsBudget) {
+      best = candidate;
+      bestOrdinal = candidateOrdinal;
+      if (bestOrdinal === 0) break;
+      width *= 2;
+      continue;
+    }
+
+    let low = candidateOrdinal + 1;
+    let high = bestOrdinal - 1;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      const narrower = await measure(middle);
+      if (narrower?.fitsBudget) {
+        best = narrower;
+        bestOrdinal = middle;
+        high = middle - 1;
+      } else {
+        low = middle + 1;
+      }
+    }
+    break;
+  }
+  return best;
 }
 
 function isSameOriginMutation(request: Request): boolean {
@@ -1331,9 +1376,9 @@ function isSameOriginMutation(request: Request): boolean {
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown> | null> {
   const length = Number(request.headers.get("Content-Length") ?? "0");
-  if (length > 1_300_000) return null;
+  if (length > MAX_OWNER_JSON_BODY_CHARS) return null;
   const raw = await request.text();
-  if (raw.length > 1_300_000) return null;
+  if (raw.length > MAX_OWNER_JSON_BODY_CHARS) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
@@ -1403,11 +1448,13 @@ async function handleOwnerGeneration(
   const contents = buildOwnerGeminiConversationContents(plan.messages);
   const continuityReference = await loadOwnerConversationHandoffPrompt(env, ownerPrincipal(env), conversationId);
   const referenceBlocks = [continuityReference, projectMemoryContext?.referenceText].filter((value): value is string => Boolean(value));
-  if (referenceBlocks.length && contents.length && contents[0].role === "user") {
-    contents[0] = {
-      ...contents[0],
-      text: referenceBlocks.join("\n\n--- ADDITIONAL PINNED PROJECT CONTEXT ---\n\n") +
-        "\n\n--- CURRENT CONVERSATION TRANSCRIPT ---\n\n" + contents[0].text,
+  if (referenceBlocks.length && contents.length && contents[contents.length - 1].role === "user") {
+    const latestIndex = contents.length - 1;
+    contents[latestIndex] = {
+      ...contents[latestIndex],
+      text: contents[latestIndex].text +
+        "\n\n--- PINNED OWNER / PROJECT CONTEXT ---\n\n" +
+        referenceBlocks.join("\n\n--- ADDITIONAL PINNED PROJECT CONTEXT ---\n\n"),
     };
   }
   if (!contents.length || contents[contents.length - 1].role !== "user") {
@@ -1428,13 +1475,28 @@ async function handleOwnerGeneration(
     }, 409);
   }
 
-  let promptTokens: number;
+  const availableTokens = sessionUsage.remaining_tokens;
+  let contextSelection: OwnerGeminiContextSelection | null;
   try {
-    promptTokens = await countOwnerGeminiInputTokens(env, {
-      modelId: definition.id,
+    contextSelection = await selectOwnerGeminiConversationContents(
       contents,
-      systemInstruction: OWNER_INTELLIGENCE_RESPONSE_STYLE_INSTRUCTION,
-    });
+      Math.min(availableTokens - 1, definition.contextWindowTokens - 1),
+      async (candidate) => {
+        try {
+          return await countOwnerGeminiInputTokens(env, {
+            modelId: definition.id,
+            contents: candidate,
+            systemInstruction: OWNER_INTELLIGENCE_RESPONSE_STYLE_INSTRUCTION,
+          });
+        } catch (error) {
+          // INVALID_ARGUMENT / REQUEST_TOO_LARGE for an expanded suffix means
+          // that candidate cannot be counted; retry with fewer older turns.
+          if (error instanceof OwnerGeminiProviderError &&
+              (error.status === 400 || error.status === 413)) return null;
+          throw error;
+        }
+      },
+    );
   } catch (error) {
     const providerError = error instanceof OwnerGeminiProviderError ? error : null;
     const status = providerError?.status === 400 ? 400 :
@@ -1447,7 +1509,36 @@ async function handleOwnerGeneration(
     }, status);
   }
 
-  const availableTokens = sessionUsage.remaining_tokens;
+  if (!contextSelection) {
+    return json({
+      ok: false,
+      error: "input_context_exceeds_model_limit",
+      message: "The current message and required pinned context exceed what the selected Gemini model can accept. Nothing was saved or sent. Shorten the current message or remove optional attached context; the existing conversation history remains intact.",
+      usage: sessionUsage,
+    }, 413);
+  }
+
+  const promptTokens = contextSelection.promptTokens;
+  if (promptTokens >= definition.contextWindowTokens) {
+    return json({
+      ok: false,
+      error: "input_context_exceeds_model_limit",
+      message: "The current message and required pinned context exceed the selected Gemini model's input context. Nothing was saved or sent.",
+      usage: sessionUsage,
+    }, 413);
+  }
+  if (promptTokens >= availableTokens || !contextSelection.fitsBudget) {
+    sessionUsage = await lockOwnerIntelligenceSession(env, conversationId, "request_exceeds_remaining_budget") ?? sessionUsage;
+    return json({
+      ok: false,
+      error: "session_token_limit_reached",
+      message: "The current prompt alone exceeds this chat's remaining token budget. This chat is now read-only. Start a new chat and paste your GitHub Markdown checkpoint link to continue.",
+      usage: sessionUsage,
+    }, 409);
+  }
+
+  // Send exactly the contents measured by the successful CountTokens call.
+  const selectedContents = contextSelection.contents;
   let outputTokenLimit = 0;
   let outputReservationSegments = 1;
   if (definition.supportsLongDecode) {
@@ -1542,7 +1633,7 @@ async function handleOwnerGeneration(
     upstream = await openOwnerGeminiStream(env, {
       modelId: definition.id,
       thinkingLevel,
-      contents,
+      contents: selectedContents,
       systemInstruction: OWNER_INTELLIGENCE_RESPONSE_STYLE_INSTRUCTION,
       maxOutputTokens: outputTokenLimit,
     }, abortController.signal);

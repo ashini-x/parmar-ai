@@ -6,6 +6,7 @@ import worker from "../src";
 import { handleAdminLogin } from "../src/admin/auth";
 import {
   buildOwnerGeminiConversationContents,
+  selectOwnerGeminiConversationContents,
   getOwnerIntelligenceSessionUsage,
   OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT,
   OWNER_INTELLIGENCE_RESPONSE_STYLE_INSTRUCTION,
@@ -431,30 +432,62 @@ describe("Owner Gemini conversation context builder", () => {
     ]);
   });
 
-  it("keeps the newest valid user-led suffix within the context budget without deleting stored history", () => {
+  it("normalizes the full transcript without fixed turn or character truncation", () => {
     const messages: OwnerIntelligenceMessage[] = [];
-    for (let index = 0; index < 20; index += 1) {
+    for (let index = 0; index < 28; index += 1) {
       messages.push({
         id: "u" + index, conversation_id: "c", role: "user",
-        content: "U".repeat(25_000) + index, status: "complete", created_at: index * 2 + 1,
+        content: "U".repeat(60_000) + index, status: "complete", created_at: index * 2 + 1,
       });
       messages.push({
         id: "a" + index, conversation_id: "c", role: "assistant",
-        content: "A".repeat(25_000) + index, status: "complete", created_at: index * 2 + 2,
+        content: "A".repeat(60_000) + index, status: "complete", created_at: index * 2 + 2,
       });
     }
     messages.push({
       id: "latest", conversation_id: "c", role: "user",
-      content: "Newest prompt must remain.", status: "complete", created_at: 99,
+      content: "N".repeat(350_000), status: "complete", created_at: 99,
     });
     const contents = buildOwnerGeminiConversationContents(messages);
-    expect(contents[0]?.role).toBe("user");
-    expect(contents[contents.length - 1]).toEqual({ role: "user", text: "Newest prompt must remain." });
-    expect(contents.length).toBeLessThanOrEqual(49);
-    expect(contents.every((turn, index) => turn.text.length > 0 && turn.text.length <= 300_000 &&
+    expect(contents).toHaveLength(57);
+    expect(contents[0]).toEqual({ role: "user", text: "U".repeat(60_000) + "0" });
+    expect(contents[1]).toEqual({ role: "model", text: "A".repeat(60_000) + "0" });
+    expect(contents.at(-1)?.text).toHaveLength(350_000);
+    expect(contents.every((turn, index) => turn.text.length > 0 &&
       (index === 0 || turn.role !== contents[index - 1].role))).toBe(true);
-    expect(contents.reduce((total, turn) => total + turn.text.length, 0)).toBeLessThanOrEqual(300_000);
-    expect(messages).toHaveLength(41);
+    expect(messages).toHaveLength(57);
+  });
+
+  it("uses exact selected-model token counts to select the largest recent suffix", async () => {
+    const contents = [
+      { role: "user" as const, text: "U".repeat(1_000) },
+      { role: "model" as const, text: "A".repeat(1_000) },
+      { role: "user" as const, text: "U".repeat(1_000) },
+      { role: "model" as const, text: "A".repeat(1_000) },
+      { role: "user" as const, text: "CURRENT" },
+    ];
+    const countTokens = vi.fn(async (candidate: Array<{ role: "user" | "model"; text: string }>) =>
+      candidate.reduce((total, turn) => total + turn.text.length, 0));
+    const selected = await selectOwnerGeminiConversationContents(contents, 2_007, countTokens);
+    expect(selected).toEqual({
+      contents: contents.slice(2),
+      promptTokens: 2_007,
+      fitsBudget: true,
+    });
+    expect(countTokens).toHaveBeenCalledTimes(3);
+    expect(selected?.contents.at(-1)?.text).toBe("CURRENT");
+  });
+
+  it("never clips the current user turn when it exceeds the available budget", async () => {
+    const latest = { role: "user" as const, text: "CURRENT".repeat(50_000) };
+    const countTokens = vi.fn(async (candidate: Array<{ role: "user" | "model"; text: string }>) =>
+      candidate.reduce((total, turn) => total + turn.text.length, 0));
+    const selected = await selectOwnerGeminiConversationContents([latest], 100, countTokens);
+    expect(selected).toEqual({
+      contents: [latest],
+      promptTokens: latest.text.length,
+      fitsBudget: false,
+    });
   });
 });
 
@@ -752,7 +785,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
   });
 
 
-  it("accepts novel-length prompts up to the expanded 300,000-character limit", async () => {
+  it("persists Owner messages beyond the former 300,000-character cap", async () => {
     const env = appEnv();
     const ownerCookie = await login("owner", "owner-test-password", env);
     const origin = "https://parmar-ai.test";
@@ -761,23 +794,24 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     });
     const createdBody = await created.json() as { conversation: { id: string } };
     const id = createdBody.conversation.id;
-    const novel = "N".repeat(250_000);
+    const first = "N".repeat(350_000);
     const saved = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
-      method: "POST", origin, body: { content: novel },
+      method: "POST", origin, body: { content: first },
     });
     expect(saved.status, await saved.clone().text()).toBe(201);
     const savedBody = await saved.json() as { message: { content: string } };
-    expect(savedBody.message.content).toHaveLength(250_000);
-    expect(savedBody.message.content).toBe(novel);
+    expect(savedBody.message.content).toBe(first);
 
-    const tooLong = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
-      method: "POST", origin, body: { content: "N".repeat(300_001) },
+    const second = "M".repeat(300_001);
+    const savedSecond = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+      method: "POST", origin, body: { content: second },
     });
-    expect(tooLong.status).toBe(400);
+    expect(savedSecond.status, await savedSecond.clone().text()).toBe(201);
     const reopened = await call(env, "/admin/api/intelligence/conversations/" + id, ownerCookie);
     const reopenedBody = await reopened.json() as { messages: Array<{ content: string }> };
-    expect(reopenedBody.messages).toHaveLength(1);
-    expect(reopenedBody.messages[0].content).toHaveLength(250_000);
+    expect(reopenedBody.messages).toHaveLength(2);
+    expect(reopenedBody.messages[0].content).toBe(first);
+    expect(reopenedBody.messages[1].content).toBe(second);
   });
 
   it("keeps the streaming generation endpoint Owner-only and rejects unsupported model thinking levels", async () => {
