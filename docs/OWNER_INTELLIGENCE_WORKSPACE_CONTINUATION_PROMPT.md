@@ -151,4 +151,4 @@ M4.4 does not implement rollover, compaction, fork, historical D1 recall, semant
 - Test plan: `docs/TEST_PLAN.md`
 - Documentation index: `docs/README.md`
 
-**New chat should begin with the read-only M4.3 closeout reconciliation, then proceed to M4.4 once the gate is evidenced. Do not restart M0–M4.2, rerun the accepted marker/save test, change the 200K budget, alter Google Cloud settings or touch the student Telegram runtime.**
+**New chat should begin with M4.4 source/schema/hub inspection and a bounded implementation brief for Owner review. M4.3 is fully closed; do not repeat the Save flow, revisit its acceptance gate, change the 200K budget, alter Google Cloud settings or touch the student Telegram runtime.**
