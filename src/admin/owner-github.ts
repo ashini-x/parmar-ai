@@ -1,6 +1,7 @@
 import type { Env } from "../config/env";
 import { draftOwnerMemoryWithBudget, ensureOwnerIntelligenceSchema } from "./intelligence";
 import { json, methodNotAllowed, notFound } from "../http/response";
+import { appendOwnerMemorySection } from "./owner-memory-merge";
 
 const API = "https://api.github.com";
 const CALLBACK = "/admin/api/intelligence/github/callback";
@@ -584,23 +585,23 @@ async function branchHead(token: string, owner: string, name: string, branch: st
   return sha;
 }
 function appendProgress(existing: string, conversationId: string, previewId: string, messages: OwnerMessage[]): string {
-  const marker = "owner-intelligence-" + conversationId;
-  const start = "<!-- " + marker + ":start -->";
-  const end = "<!-- " + marker + ":end -->";
-  const previous = existing.replace(new RegExp(start + "[\\s\\S]*?" + end, "gu"), "").trim();
   const latestUser = [...messages].reverse().find((message) => message.role === "user");
   const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant" &&
     (message.status === "complete" || message.status === "partial"));
   const section = [
-    "## Conversation checkpoint",
-    "",
     "- Conversation ID: " + conversationId,
+    "- Preview ID: " + previewId,
     latestUser ? "- Latest Owner message ID: " + latestUser.id : "- No Owner message was found.",
     latestAssistant ? "- Latest assistant message ID: " + latestAssistant.id + " (" + latestAssistant.status + ")" : "- No completed assistant message was found.",
     "",
     "This is a source-linked checkpoint, not a complete summary of the transcript. Review and edit it before saving.",
   ].join("\n");
-  return [previous || "# Progress", start, section, end].join("\n\n") + "\n";
+  return appendOwnerMemorySection(
+    existing || "# Progress\n",
+    "owner-intelligence-checkpoint-" + conversationId + "-" + previewId,
+    "## Conversation checkpoint",
+    section,
+  );
 }
 async function buildMemoryFiles(
   token: string,
@@ -773,20 +774,28 @@ async function createMemoryPreview(env: Env, request: Request, owner: string, co
   } catch {
     throw new Error("Gemini did not return the required structured memory draft. No GitHub files were written; review the token meter and retry.");
   }
-  const draftFields = ["projectMemory", "progress", "decisions"];
+  const draftFields = ["projectMemoryUpdate", "progressUpdate", "decisionsUpdate"];
   if (Object.keys(draftValue).length !== 3 ||
-      draftFields.some((key) => typeof draftValue[key] !== "string" || !(draftValue[key] as string).trim())) {
-    throw new Error("Gemini's memory draft was incomplete. No GitHub files were written; review the token meter and retry.");
+      draftFields.some((key) => typeof draftValue[key] !== "string")) {
+    throw new Error("Gemini's additive memory draft was incomplete. No GitHub files were written; review the token meter and retry.");
   }
-  const files = starterFiles.map((file) => ({
-    ...file,
-    content: redactMemorySecrets(
-      file.name === "project-memory.md" ? draftValue.projectMemory as string
-        : file.name === "progress.md" ? draftValue.progress as string
-        : file.name === "decisions.md" ? draftValue.decisions as string
-        : file.content,
-    ),
-  }));
+  const updateByFile: Record<string, string> = {
+    "project-memory.md": draftValue.projectMemoryUpdate as string,
+    "progress.md": draftValue.progressUpdate as string,
+    "decisions.md": draftValue.decisionsUpdate as string,
+  };
+  const files = starterFiles.map((file) => {
+    const update = updateByFile[file.name];
+    const content = update === undefined || !update.trim()
+      ? file.content
+      : appendOwnerMemorySection(
+        file.content,
+        "owner-intelligence-gemini-" + file.name.replace(/\.md$/u, "").replace(/[^a-z0-9-]/giu, "-").toLowerCase() + "-" + previewId,
+        "## Gemini-proposed update · Owner review required",
+        update,
+      );
+    return { ...file, content: redactMemorySecrets(content) };
+  });
   if (files.some((file) => file.content.length > PREVIEW_FILE_LIMIT) ||
       files.reduce((sum, file) => sum + file.content.length, 0) > PREVIEW_TOTAL_LIMIT) {
     throw new Error("Gemini's proposed Markdown exceeds the safe preview size. No GitHub files were written.");
@@ -811,7 +820,7 @@ async function createMemoryPreview(env: Env, request: Request, owner: string, co
         promptTokens: generated.usage.promptTokens, outputTokens: generated.usage.outputTokens,
         totalTokens: generated.usage.totalTokens, elapsedMs: generated.elapsedMs,
       },
-      note: "Gemini prepared this editable candidate using the selected model and thinking level. The draft call was charged to this conversation's 200,000-token budget. Existing Markdown and bounded D1 transcript excerpts are included as source context; recognizable credential/token patterns are redacted before drafting and saving. Review and edit every file; nothing is written to GitHub until explicit confirmation.",
+      note: "Gemini prepared additive, editable suggestions using the selected model and thinking level. Existing GitHub Markdown is retained as the original source; Gemini cannot replace or rewrite it. New checkpoints and suggestions are appended in unique preview-scoped sections, so earlier Owner edits remain intact. The draft call was charged to this conversation's 200,000-token budget. Recognizable credential/token patterns are redacted before drafting and saving. Review and edit every file; nothing is written to GitHub until explicit confirmation.",
     },
   }, 201);
 }
