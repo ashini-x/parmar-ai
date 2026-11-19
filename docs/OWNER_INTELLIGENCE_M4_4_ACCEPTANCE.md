@@ -1,6 +1,6 @@
 # Owner Intelligence — M4.4 Project Memory Acceptance
 
-**Status:** Implementation merged and production deployed; authenticated Owner attach-and-read walkthrough pending
+**Status:** **ACCEPTED — implementation deployed and authenticated Owner production attach/read + Scratchpad-isolation walkthrough passed**
 **Date:** 2026-11-19 IST
 **Parent roadmap:** [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md)
 **Continuation:** [OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md](OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md)
@@ -30,19 +30,56 @@ Out of scope: archive/session search, automatic branch refresh, rollover, compac
 - M4.4 release versions: `parmar-ai` `fd932efb-9d97-4e8f-837f-79a460409495` (deployment `1f2b9b0e-8655-4158-b4a1-23b83ad89aba`); `brvin-service` `90b21e52-2a55-402e-8398-0c6e308d3a0e` (deployment `719cbe9a-435f-4080-ad8b-344ecf59320f`). Acceptance artifact [14552742089](https://github.com/ashini-x/parmar-ai/actions/runs/44568064917/artifacts/14552742089).
 - Current main later added PR #365's separate response renderer; latest workflow [44571138999](https://github.com/ashini-x/parmar-ai/actions/runs/44571138999) passed. Current versions at 100% traffic: `parmar-ai` `fccd13e6-1be3-4ecb-b1e6-d42d352cd1f8` (deployment `4e1185bf-e60c-4ad6-b003-0afea11f74f9`) and `brvin-service` `500709c7-b62a-4c6c-9613-159f77988310` (deployment `967d0804-a43f-4236-8284-ac900b1977b5`). Artifact [14553902907](https://github.com/ashini-x/parmar-ai/actions/runs/44571138999/artifacts/14553902907).
 
-These release smoke checks validate root and BRVIN-backed health. They do not sign in as the Owner or exercise Project Context. M4.4 is not marked fully accepted until the Owner walkthrough below is completed.
+These release smoke checks validate root and BRVIN-backed health; they do not sign in as the Owner or exercise Project Context. At the time of that release, the authenticated browser gate was still pending. The Owner's subsequent production walkthrough passed and is recorded in Section 4 below.
 
-## 4. Remaining authenticated Owner walkthrough
+## 4. Authenticated Owner production acceptance — PASSED (2026-11-19 IST)
 
-1. Sign in as the Owner and open `/admin/intelligence`.
-2. Open a conversation associated with the connected Owner Intelligence hub topic, or create a Scratchpad and select that topic.
-3. In the sidebar **PROJECT CONTEXT** panel, choose the Owner Intelligence hub topic and **Owner Gemini Intelligence** project. Leave optional Workstream and Feature at project-wide defaults.
-4. Keep **Enable cross-project context** and **Add selected scope as secondary context** unchecked. Press **Attach pinned Project Memory**.
-5. Verify the attached primary scope and inspect the repository, branch, exact commit SHA, governing manifest provenance and allowlisted active file names.
-6. Send a fresh prompt asking the selected Gemini model to summarize the attached project memory and identify the pinned commit. Verify the answer uses the Owner Gemini Intelligence scope and does not introduce unrelated project facts.
-7. Confirm a separate Scratchpad remains transcript-only until the Owner explicitly attaches a project.
+The Owner completed the production browser walkthrough in `/admin/intelligence` on 2026-11-19. The tested conversation began as a new Scratchpad; the Owner explicitly selected the connected Owner Intelligence topic and the **Owner Gemini Intelligence** project, left Workstream and Feature at project-wide defaults, kept both cross-project controls off, and selected **Attach pinned Project Memory**.
 
-Record the actual Owner observation and date here after the walkthrough. Do not enable cross-project mode or create production test projects merely to complete this default-path check.
+### 4.1 Attachment and pinned provenance observed
+
+The Project Context card showed:
+
+- Primary project: **Owner Gemini Intelligence**
+- Stable project ID: `6d0bf6d4-59a2-4df2-9389-6d04100d8d84`
+- Workstream: none; Feature: none
+- Hub repository: `ashini-x/owner-memory-hub`
+- Branch: `main`
+- Full pinned repository/catalog commit: `91e5c98cbc375b3c418207b6559021b16200e0b4`
+- Active allowlisted files: `projects/owner-intelligence/memory/project-memory.md`, `progress.md`, and `decisions.md`
+- The UI displayed source blob SHA identifiers for the three active files and an estimate of **2,599 tokens**.
+- The card also showed `Hub ashini-x/owner-memory-hub · main · catalog commit 91e5c98cbc37`; this shortened catalog commit matches the prefix of the full pinned SHA above.
+- The selected generation model was Gemini 4 Hydrogen (High thinking).
+
+The screenshots show the repository, branch, full pinned commit, active file paths/blob provenance and catalog-commit reference. The symbolic schema label `owner-memory-v1` was **not separately visible in the captured card**. The pinned catalog commit and per-file blob identifiers provide the visible provenance; the implementation's D1 snapshot retains the governing manifest provenance as described in Section 2. Do not claim that the UI visibly printed the symbolic revision label.
+
+### 4.2 Attach-and-read model test — PASSED
+
+The Owner sent a fresh prompt asking Gemini to use only the attached primary Project Memory, summarize the project purpose and current milestone state, identify the next task, reproduce the exact pinned commit SHA, and list the active memory files.
+
+The captured response excerpts:
+
+- Identified the Owner-only workspace and its governance/role separation.
+- Distinguished the private memory hub from independent source-code repositories.
+- Reproduced the full pinned commit SHA `91e5c98cbc375b3c418207b6559021b16200e0b4`.
+- Identified the three active memory files: `project-memory.md`, `progress.md`, and `decisions.md`.
+- Distinguished the pinned snapshot commit from a different historical commit mentioned inside `progress.md`.
+
+The Owner supplied excerpts rather than every response screenshot; the recorded observations are limited to details visible in the supplied captures and the Owner's confirmation that the remaining response was also received. This is production evidence that the selected memory was attached to the effective conversation and read by the selected Gemini model, not merely that the attachment button changed state.
+
+### 4.3 Independent Scratchpad isolation test — PASSED
+
+The Owner created a second, separate New Chat and left it as a Scratchpad. No topic, project or Project Memory was selected or attached. The Owner asked Gemini whether it could access the private Owner Gemini Intelligence Project Memory and requested the pinned commit SHA and active file names.
+
+Gemini answered that no Project Memory was attached in that conversation and that it could not verify or provide the SHA or file names. The response did not invent those values. This is the expected no-implicit-context behavior for an untouched Scratchpad.
+
+The two visible session meters were independent: **6,792 / 200,000** tokens in the attached-memory conversation and **1,050 / 200,000** in the separate Scratchpad at the time of the screenshots. These are UI observations, not a substitute for D1 accounting evidence. The 200,000-token per-conversation limit was not changed.
+
+### 4.4 Acceptance decision
+
+**M4.4 is formally accepted and closed as of 2026-11-19 IST.** The authenticated production default-path attach/read test and the independent Scratchpad-isolation test passed. Combined with the merged implementation, automated validation and production deployment recorded above, the M4.4 acceptance gate is satisfied.
+
+The acceptance did not exercise cross-project opt-in, historical archive/session retrieval, branch refresh, rollover, compaction, forks, or path-aware multi-writer rebasing; these remain outside M4.4. The Owner did not repeat the M4.3 Save flow, alter Google Cloud settings, change the 200K budget, or modify student-facing Telegram behavior.
 
 ## 5. Cloudflare capacity cleanup
 

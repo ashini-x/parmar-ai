@@ -1,3 +1,11 @@
+## 2026-11-19 IST: Owner Intelligence M4.4 Project Memory accepted and closed
+
+- Recorded the authenticated production Owner attach/read journey: a New Chat Scratchpad was explicitly attached to the Owner Intelligence topic and Owner Gemini Intelligence project, with Workstream/Feature unset and both cross-project controls off.
+- The Project Context card displayed private hub `ashini-x/owner-memory-hub`, branch `main`, pinned commit `91e5c98cbc375b3c418207b6559021b16200e0b4`, the three allowlisted active files with blob provenance, and a 2,599-token estimate. Gemini 4 Hydrogen / High reproduced the pinned SHA and active file names in its answer.
+- A second, unattached Scratchpad correctly received a no-access/no-memory response when asked for the private project's SHA and active files. This confirms the expected default Scratchpad isolation behavior.
+- The symbolic manifest label `owner-memory-v1` was not separately visible in the captured UI; the catalog commit prefix and file blob identifiers were visible. The acceptance record preserves this distinction rather than claiming an unseen UI label.
+- Updated the M4.4 acceptance record, roadmap, continuation prompt, architecture, AI collaboration protocol, test plan and documentation index. This is documentation-only: no Worker deployment, D1 mutation, Cloudflare configuration, Vertex/model/quota/billing change, M4.3 Save repetition or student Telegram runtime change.
+
 ## 2026-11-19 IST: Owner Intelligence M4.3 fully accepted and closed
 
 - Reconciled production D1 and GitHub evidence without mutating production: the Owner Intelligence conversation is linked to its Topic and the private ashini-x/owner-memory-hub; the active GitHub App installation remains selected-only.

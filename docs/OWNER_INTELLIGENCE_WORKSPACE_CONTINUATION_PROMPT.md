@@ -1,6 +1,6 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**. M4.3 is fully accepted. **M4.4 Project Memory implementation is merged and production deployed; its authenticated Owner attach-and-read walkthrough remains pending.** Current main includes Owner UI/response PRs #360–#365, adaptive response PR #367, dark-canvas/instant-send UI PR #368, collapsible user-message PR #369 and personal welcome PR #370; latest runtime commit is `aa6596a425003c4314afdb2b69f576ae3cee1bbb`. M4.5 — Automatic rollover and handoff — begins only after M4.4 Owner acceptance. Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**. **M4.3 and M4.4 are fully accepted and closed.** M4.4 Project Memory is merged, production deployed and verified in the authenticated Owner browser: the primary project-memory attach/read journey passed and a separate unattached Scratchpad correctly remained isolated. Current main includes Owner UI/response PRs #360–#365, adaptive response PR #367, dark-canvas/instant-send UI PR #368, collapsible user-message PR #369 and personal welcome PR #370; latest runtime commit is `aa6596a425003c4314afdb2b69f576ae3cee1bbb`. **The next task is M4.5 — Automatic rollover and handoff.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
 
 
 ### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
@@ -11,7 +11,7 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - PR validation [44549743114](https://github.com/ashini-x/parmar-ai/actions/runs/44549743114) passed. Production workflow [44550032756](https://github.com/ashini-x/parmar-ai/actions/runs/44550032756) passed both test suites, TypeScript checks, three Worker dry-run builds, production smoke and release acceptance.
 - Production versions at 100% traffic: `parmar-ai` `aeebb8e0-4443-418d-b768-0c2cfa0bec1a` (deployment `8f655927-c224-4d8b-841c-8a73a01b97b8`); `brvin-service` `ff4e3748-50fc-418e-823e-a04bde87f1c9` (deployment `4a1208a9-5664-4e68-957a-b9a40ba24af9`). Acceptance artifact: `14542491426`.
 - This was a presentation-only change. No API, D1, Vertex/model/provider, token-budget, Project Memory, BRVIN retrieval or student Telegram behavior changed. Reload `/admin/intelligence` in the Owner browser to visually confirm the new layout; automated production acceptance checks Worker health/bindings and does not perform a screenshot-based UI test.
-- M4.4 is still the immediate next task; do not treat this UI maintenance as progress on M4.4.
+- Historical checkpoint: M4.4 was still the immediate next task at this point; the Owner has since completed acceptance and M4.4 is closed.
 
 ### Owner Intelligence fixed composer and session-token dock — 2026-11-19 IST
 
@@ -20,7 +20,7 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Composer starts at one line, auto-grows up to 144px and then scrolls internally. Frontend `maxlength` removed. Server message cap increased to 300,000 characters and JSON request body limit to 1,300,000 bytes; beyond-cap messages are rejected. 200,000-token session budget and provider context limits remain in force.
 - PR validation [44558021300](https://github.com/ashini-x/parmar-ai/actions/runs/44558021300) passed typecheck, Vitest, Node tests and all three dry-run Worker builds. Production release [44558249271](https://github.com/ashini-x/parmar-ai/actions/runs/44558249271) passed deployment, smoke and release acceptance.
 - Production versions at 100% traffic: `parmar-ai` `f318707c-611b-499f-b014-282c45b96059` (deployment `2b2ad42b-c070-4870-9047-afce3bd80817`); `brvin-service` `4ddd6b8f-e9d5-4bf8-88ec-78f72cfeb2cd` (deployment `b6fe71a1-aed4-4849-a58d-0adcf5e39217`). Acceptance artifact: `14545509079`.
-- This is UI/long-prompt handling maintenance; the session-token budget, model/provider configuration, Project Memory behavior, D1 schema and student-facing Telegram system are unchanged. M4.4 — Attach and load Project Memory remains the immediate next task.
+- This is UI/long-prompt handling maintenance; the session-token budget, model/provider configuration, Project Memory behavior, D1 schema and student-facing Telegram system are unchanged. Historical checkpoint: M4.4 remained the next task at this point; its authenticated production acceptance is now complete.
 
 ### Owner Intelligence client runtime recovery and surface cleanup — 2026-11-19 IST
 
@@ -30,7 +30,7 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Visual: opaque dark `#111` dock fill removed (`background:transparent`); app background `#1c1c1c`, sidebar `#141414`. Fixed dock geometry, composer sizing, token meter and token/message budgets are unchanged.
 - Production workflow [44563162170](https://github.com/ashini-x/parmar-ai/actions/runs/44563162170) passed paired Worker deployments, root/health smoke, BRVIN binding and Fatman retrieval acceptance.
 - Production versions at 100% traffic: `parmar-ai` `de508364-6c7d-41ab-a8f2-f312f1d4306e` (deployment `666f0671-c569-4598-a9c4-bfd7df732843`); `brvin-service` `2e495fb3-2623-4439-8795-1abe5253b3bc` (deployment `326d5b90-6a66-492a-8fba-f8c24985f950`). Acceptance artifact `14549662593`.
-- No model/provider, API contract, D1, 200K token budget, 300K message cap, Project Memory or student-facing changes. M4.4 remains the immediate next task.
+- No model/provider, API contract, D1, 200K token budget, 300K message cap, Project Memory or student-facing changes. At this historical checkpoint M4.4 remained next; it is now accepted and closed.
 
 ### Owner Intelligence footer model controls and header removal — 2026-11-19 IST
 
@@ -39,7 +39,7 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Mobile sidebar menu trigger moved into that footer row and remains visible only at mobile widths. Model loading and selection JS/event handlers are unchanged.
 - PR CI [44565930824](https://github.com/ashini-x/parmar-ai/actions/runs/44565930824) passed typecheck, Vitest, Node tests and three Worker dry-run builds. Production release [44566219904](https://github.com/ashini-x/parmar-ai/actions/runs/44566219904) passed deployments, root/health smoke, BRVIN binding, Fatman retrieval and release acceptance.
 - Production versions at 100% traffic: `parmar-ai` `0f7a200e-8da1-4bbb-b536-66f2fbfc0b7e` (deployment `15b6902a-d085-4a97-93f7-c9706302baa0`); `brvin-service` `5ebb6c8e-8c47-4083-907b-c399bb7a320d` (deployment `aeb3bd9d-f890-43c1-9864-fe071de00a72`). Acceptance artifact: `14551768169`.
-- Presentation-only; no backend, API, model/provider, Vertex, D1, token-limit or Project Memory behavior changes. M4.4 — Attach and load Project Memory remains the next task.
+- Presentation-only; no backend, API, model/provider, Vertex, D1, token-limit or Project Memory behavior changes. At this historical PR #364 checkpoint M4.4 remained next; it is now accepted and M4.5 is next.
 
 ### M4.4 — Attach and load Project Memory implementation — 2026-11-19 IST
 
@@ -47,7 +47,7 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Adds immutable Owner-scoped D1 snapshots with hub repository/branch/commit, manifest provenance, allowlisted file blob SHAs and exact Markdown bytes; strict v1 hub/catalog/project/workstream/feature manifest validation; Owner-selected GitHub attachment APIs; selected-model Vertex CountTokens at attachment; and manifest-selected active-memory injection into the effective prompt before the existing M4.1 token reservation.
 - Archives, sessions and unlisted repository files are not loaded by default. Source Memory remains untrusted reference data. Cross-project context requires explicit Owner opt-in. The 200,000-token conversation budget and M4.3 preview/confirm Save rules are unchanged.
 - Production versions at 100% traffic at M4.4 deploy: parmar-ai 90b21e52-2a55-402e-8398-0c6e308d3a0e (deployment 1f2b9b0e-8655-4158-b4a1-23b83ad89aba); brvin-service fd932efb-9d97-4e8f-837f-79a460409495 (deployment 719cbe9a-435f-4080-ad8b-344ecf59320f). Acceptance artifact 14552742089.
-- The Owner still needs to confirm the project attachment/scope/pinned-provenance flow in the browser before M4.4 is treated as fully accepted. Then proceed to M4.5.
+- The authenticated Owner attach/read and independent Scratchpad-isolation walkthrough subsequently passed on 2026-11-19; M4.4 is closed. See the acceptance record below. M4.5 is next.
 
 ### Owner Intelligence ChatGPT-style rich response rendering — 2026-11-19 IST
 
@@ -88,7 +88,9 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Per-message expansion state persists across renderMessages rerenders so streaming updates do not unexpectedly re-collapse an expanded prompt. User bubble geometry, immediate send, optimistic rollback and fixed composer remain unchanged.
 - PR CI [44584214528](https://github.com/ashini-x/parmar-ai/actions/runs/44584214528) passed TypeScript, 521 tests, Node tests and all three dry-run Worker builds. Production release [44584471236](https://github.com/ashini-x/parmar-ai/actions/runs/44584471236) passed paired deployment, root/health smoke, BRVIN binding, Fatman retrieval and release acceptance.
 - Production versions at 100% traffic: `parmar-ai` `6a298521-1ea8-4713-9f8e-90b6cef3d6e2` (deployment `0db19fa3-2305-4b24-916f-523d92731096`); `brvin-service` `d9732a1b-09b3-489e-b9a3-b7ab5336973f` (deployment `30a5c772-1512-4f9d-8c3a-6e5a5dd61232`). Acceptance artifact: `14560047336`.
-- UI-only. No message-length cap, model/provider, adaptive response instruction, assistant renderer, backend persistence or token/session budget changes.### Owner Intelligence personal BRɅIN welcome screen — 2026-11-19 IST
+- UI-only. No message-length cap, model/provider, adaptive response instruction, assistant renderer, backend persistence or token/session budget changes.
+
+### Owner Intelligence personal BRɅIN welcome screen — 2026-11-19 IST
 
 - [PR #370](https://github.com/ashini-x/parmar-ai/pull/370) merged as `aa6596a425003c4314afdb2b69f576ae3cee1bbb`.
 - Initial welcome and New Chat now show a transparent BRɅIN text wordmark (no icon tile/background) with a subtle cool-blue glyph gradient and small accent rule.
@@ -97,7 +99,9 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Initial served HTML and `showWelcome()` use matching minimal content.
 - PR CI [44589507043](https://github.com/ashini-x/parmar-ai/actions/runs/44589507043) passed TypeScript, Vitest, Node tests and all three Worker dry-run builds. Production release [44589805660](https://github.com/ashini-x/parmar-ai/actions/runs/44589805660) passed paired deployment, root/health, BRVIN binding, Fatman retrieval and release acceptance.
 - Production versions at 100% traffic: `parmar-ai` `2ac68248-7705-44ac-8233-4acdb73e92c6` (deployment `1910b85b-d650-402f-8e15-9c137ce3659f`); `brvin-service` `88da7774-4820-4520-ae7b-5de780909371` (deployment `e6e3636d-7f69-46bb-ae61-fa77c2d0e9f2`). Acceptance artifact `14562042415`.
-- Scope is welcome presentation only; no model, prompt, token, sidebar, composer, response renderer, Project Memory or student behavior changes.## First action: recover the source of truth
+- Scope is welcome presentation only; no model, prompt, token, sidebar, composer, response renderer, Project Memory or student behavior changes.
+
+## First action: recover the source of truth
 
 Read these files from the latest `main` branch in this order:
 
@@ -185,21 +189,35 @@ M4.3 is fully accepted and closed. The remaining evidence was reconciled using r
 
 **Result:** all M4.3 acceptance criteria applicable to the tested topic conversation passed. No production D1 records, Worker configuration, App permissions, credentials, Vertex model, quota, billing or student runtime were changed during closeout.
 
-## Immediate next task — M4.4 production Owner acceptance
+## M4.4 authenticated Owner acceptance — COMPLETE (2026-11-19 IST)
 
-The implementation, CI and production rollout are complete. Do not create another M4.4 implementation PR or repeat the M4.3 Save/read-back flow.
+**Attached-memory test — passed**
+- The Owner created a New Chat Scratchpad, selected the connected **Owner Intelligence** topic and **Owner Gemini Intelligence** project, left Workstream/Feature at project-wide defaults, kept **Enable cross-project context** and **Add selected scope as secondary context** unchecked, and attached pinned Project Memory.
+- The card showed stable project ID `6d0bf6d4-59a2-4df2-9389-6d04100d8d84`, hub `ashini-x/owner-memory-hub`, branch `main`, pinned commit `91e5c98cbc375b3c418207b6559021b16200e0b4`, active `project-memory.md`, `progress.md`, and `decisions.md` paths with blob provenance, and 2,599 estimated tokens. Its displayed catalog commit prefix `91e5c98cbc37` matches the full pinned SHA.
+- Gemini 4 Hydrogen / High answered a prompt using only the attached primary Project Memory. Captured response excerpts identify the workspace purpose and role separation, the pinned commit SHA and active file names, and distinguish a historical commit mentioned in `progress.md` from the pinned snapshot.
+- The symbolic schema label `owner-memory-v1` was not separately visible in the captured card. The browser did show the catalog commit and file blob provenance; do not claim the symbolic label was printed.
 
-1. Sign in as the Owner and open `/admin/intelligence`.
-2. Open a conversation associated with the connected Owner Intelligence hub topic, or create a Scratchpad and select that topic.
-3. In the sidebar **PROJECT CONTEXT** panel, choose the Owner Intelligence hub connection topic, then the **Owner Gemini Intelligence** project. Leave optional Workstream and Feature at project-wide defaults.
-4. Keep **Enable cross-project context** and **Add selected scope as secondary context** unchecked. Select **Attach pinned Project Memory**.
-5. Verify the panel shows one pinned primary scope and displays the hub repository, branch, exact commit SHA, manifest provenance and allowlisted active file names.
-6. Send a fresh prompt asking the selected Gemini model to summarize the attached project memory and identify the pinned commit. Verify the response is grounded in the Owner Gemini Intelligence scope and does not pull in unrelated projects.
-7. Confirm a separate Scratchpad remains transcript-only until a project is explicitly attached.
+**Independent Scratchpad isolation test — passed**
+- The Owner created a second New Chat and left it as an untouched Scratchpad with no topic, project or memory attached.
+- Asked for access to the private Project Memory, its pinned SHA and active file names, Gemini replied that no Project Memory was attached and it could not verify/provide those details. It did not invent the values.
 
-Record the actual Owner result in `docs/OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md`. The generic root/health release smoke does not exercise this authenticated workflow. Do not enable cross-project mode or create production test projects merely to fill the acceptance gap. When the Owner confirms the flow, close M4.4 and proceed to M4.5 — Automatic rollover and handoff.
+**Acceptance:** M4.4 is formally closed. The 200,000-token cumulative per-chat budget is unchanged. No D1 or Cloudflare mutation, Google Cloud setting change, billing/quota change, M4.3 Save repetition, or student Telegram runtime change was part of this walkthrough.
 
+## Immediate next task — M4.5 Automatic rollover and handoff
 
+Begin with source-of-truth recovery, not implementation by assumption. M4.5 is approved but not started. Re-read the latest roadmap and M4.4 acceptance record, then inspect current `main`, relevant D1 schema/migrations and Owner conversation lifecycle, current UI/API flow, GitHub handoff/save contracts, tests, Cloudflare bindings and deployed versions.
+
+M4.5 scope:
+- Warn at **180,000** cumulative tokens (committed usage plus in-flight reservation).
+- Offer **Roll Over** at **190,000**; an optional **195,000** urgency state may be used, but the existing **200,000** server-side hard limit must remain authoritative.
+- Preserve the old conversation and its complete transcript; do not reset or re-use its budget.
+- Create a linked successor conversation with an independent 200,000-token budget and provenance-rich handoff (goal, accepted decisions, current technical/file state, blockers, next action, source conversation/message IDs and pinned project snapshot).
+- Keep D1 as the durable canonical transcript/handoff record. GitHub sync is a reviewed/verified persistence path, not a condition for opening a safe D1-backed successor.
+- Treat ambiguous job/network outcomes conservatively and use existing idempotency/outbox patterns; do not create new Cloudflare services without measurement and Owner approval.
+- Preserve the strict M4.3 branch-head Conflict behavior. Do not introduce path-aware multi-writer rebasing as part of M4.5 unless separately approved.
+- Keep Vertex AI as the sole inference provider; do not change the selected-model contract, 200K cap, student Telegram system, or Google Cloud IAM/billing/settings.
+
+M4.6-P0 remains a mandatory measured capacity/cost/durability gate **before M4.6**, not before M4.5.
 
 ## M4.4 approved scope
 - One private `owner-memory-hub` stores project catalog/manifests and curated Markdown; it does not contain/copy source-code trees.
@@ -254,7 +272,7 @@ M4.4 does not implement rollover, compaction, fork, historical D1 recall, semant
 - Test plan: `docs/TEST_PLAN.md`
 - Documentation index: `docs/README.md`
 
-**New chat should begin with the authenticated M4.4 Project Context attach-and-read walkthrough above, not new implementation work. M4.3 is fully closed and M4.4 is deployed; do not repeat the Save flow, change the 200K budget, alter Google Cloud settings or touch the student Telegram runtime. After Owner acceptance, proceed to M4.5.**
+**New chat should begin with M4.5 source-of-truth recovery and rollover/handoff inspection. M4.3 and M4.4 are fully closed; do not repeat their acceptance flows, change the 200K budget, alter Google Cloud settings or touch the student Telegram runtime. M4.6-P0 remains a required gate only before M4.6.**
 
 ## M4.4 implementation and production release checkpoint — 2026-11-19 IST
 
@@ -264,4 +282,4 @@ M4.4 does not implement rollover, compaction, fork, historical D1 recall, semant
 - CI [44568064917](https://github.com/ashini-x/parmar-ai/actions/runs/44568064917) passed 521 Vitest tests/76 files, 62 Node tests/9 files, TypeScript and all three Worker dry runs. The same workflow deployed both Workers and passed root, BRVIN-backed health and release acceptance.
 - M4.4 release versions: `parmar-ai` `fd932efb-9d97-4e8f-837f-79a460409495`, deployment `1f2b9b0e-8655-4158-b4a1-23b83ad89aba`; `brvin-service` `90b21e52-2a55-402e-8398-0c6e308d3a0e`, deployment `719cbe9a-435f-4080-ad8b-344ecf59320f`.
 - The latest separate PR #365 response-renderer deployment is on main commit `f7d1dbe79c880a8e43eebab230908fc6a07484bf`; production versions are `parmar-ai` `fccd13e6-1be3-4ecb-b1e6-d42d352cd1f8` and `brvin-service` `500709c7-b62a-4c6c-9613-159f77988310`, both at 100% traffic.
-- Deployment health checks are not a substitute for authenticated Owner acceptance of Project Context. The only remaining M4.4 task is the walkthrough above.
+- Deployment health checks are not a substitute for authenticated Owner acceptance. The M4.4 authenticated Owner attach/read and independent Scratchpad-isolation acceptance is now complete and recorded above.

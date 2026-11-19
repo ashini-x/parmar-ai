@@ -144,7 +144,7 @@ owner-memory-hub/
       archive/
 ```
 
-This is a logical target. Do not pre-create empty trees by hand, and do not let an AI invent a new schema ad hoc. M4.4 must define and validate versioned JSON manifest schemas before relying on them at runtime. Markdown remains the human-reviewable content format.
+This is a logical target. Do not pre-create empty trees by hand, and do not let an AI invent a new schema ad hoc. M4.4 has since defined and validated versioned JSON manifest schemas for runtime use. Markdown remains the human-reviewable content format.
 
 ### 3.1 Stable identity
 
@@ -195,7 +195,7 @@ The deployed M4.3 save flow attaches a GitHub repository, branch and memory-root
 - Project B: `projects/<project-id>/memory`
 - A future workstream-specific save, after scope support is implemented: `projects/<project-id>/workstreams/<workstream-id>/memory`
 
-For the transition, use one Owner topic per project, the same hub repository and a unique project memory-root path. Do not create a separate GitHub repository for each project. Do not claim that current production topics already support hierarchical workstream/feature manifests; M4.4 must add that model and load it safely.
+For the transition, use one Owner topic per project, the same hub repository and a unique project memory-root path. Do not create a separate GitHub repository for each project. M4.4 has since added and production-deployed the hierarchical catalog/workstream/feature manifest model and pinned scoped memory loader; authenticated Owner acceptance is recorded in Section 13.
 
 M4.3 currently uses a branch-head conflict check. This is safe against overwriting external changes, but it can report a conflict when an unrelated path changed. Do not weaken that check to hide conflicts. The future hub writer must add path-aware optimistic concurrency before enabling concurrent writers: validate the expected blob SHA for every touched path and relevant manifest; if only unrelated paths changed, rebase/rebuild the proposed tree on the latest head under a bounded retry and non-force ref update; if a touched file or governing manifest changed, stop and request review. Never force-push or silently discard an external change.
 
@@ -343,7 +343,7 @@ This decision refines the existing M4 continuity design; it does not renumber or
 | Formalize hub, AI roles, exchange protocol and original-token constraints | Documentation amendment in this change | Approved documentation; no runtime feature |
 | Create private `owner-memory-hub` and restrict Owner App installation to it | Owner action before live M4.3 acceptance | **Complete — private hub; active selected-only installation verified** |
 | M4.3 live acceptance | Verify selected-only installation, attach a project path in the hub, preview/edit/confirm/read-back and stale-branch Conflict | **Complete — Owner live acceptance and read-only D1/GitHub closeout passed 2026-11-19** |
-| M4.4 | Project catalog, versioned hierarchical manifests, exact pinned hub snapshots, manifest-allowlisted active-memory loading and explicit cross-project opt-in | **Implemented and production deployed; automated acceptance passed; authenticated Owner walkthrough pending** |
+| M4.4 | Project catalog, versioned hierarchical manifests, exact pinned hub snapshots, manifest-allowlisted active-memory loading and explicit cross-project opt-in | **Complete — implemented/deployed; authenticated Owner attach/read and independent Scratchpad-isolation acceptance passed 2026-11-19** |
 | M4.4/M4.3 follow-up | Path-aware multi-writer conflict handling for the shared hub; no unsafe weakening of existing conflict checks | Planned, not implemented |
 | M4.5 | Project-aware rollover and durable handoff | Planned, not implemented |
 | M4.6 | Cloudflare Owner Context Replicator, exact historical recall, collaboration artifact retrieval and fixed-B O(N) input acceptance | Planned, not implemented |
@@ -351,9 +351,9 @@ This decision refines the existing M4 continuity design; it does not renumber or
 | M4.8 | Measured cache/retrieval optimizations with scope- and snapshot-isolated keys | Planned, not implemented |
 | ChatGPT implementation execution | Read approved brief, inspect code repositories, test, PR, merge/deploy when authorized, publish report | Operating convention; not an automatic integration |
 
-The M4.3 selected-only hub installation, Save/read-back, conflict protection and final production evidence gates have passed. M4.4 is implemented and production deployed; only the authenticated Owner attach-and-read walkthrough remains. PR #361 and hub PR #1 add versioned manifests, pinned Owner-scoped snapshots and strict scope isolation. Do not migrate source code, provision new Cloudflare services, broaden the Owner App's permissions, or enable automatic AI-to-AI triggers.
+The M4.3 selected-only hub installation, Save/read-back, conflict protection and final production evidence gates have passed. M4.4 is implemented, production deployed and authenticated-Owner accepted: the Owner attached the primary project memory, verified the pinned repository/branch/commit and active file provenance, observed Gemini read the selected project memory, and confirmed that an independent unattached Scratchpad could not access it. PR #361 and hub PR #1 add versioned manifests, pinned Owner-scoped snapshots and strict scope isolation. Do not migrate source code, provision new Cloudflare services, broaden the Owner App's permissions, or enable automatic AI-to-AI triggers.
 
-The 2026-11-19 single-provider/Cloudflare Free policy is also locked. Complete M4.6-P0 (capacity, cost and outbox-recovery assessment) before M4.6; it does not block M4.4/M4.5 or authorize a Cloudflare plan upgrade/resource provision.
+The 2026-11-19 single-provider/Cloudflare Free policy is also locked. Complete M4.6-P0 (capacity, cost and outbox-recovery assessment) before M4.6; it does not block M4.5 or authorize a Cloudflare plan upgrade/resource provision.
 
 ## 10. Acceptance scenarios for the complete system
 
@@ -392,7 +392,7 @@ GitHub metadata verifies `ashini-x/owner-memory-hub` exists (repository ID `1463
 - PR #356 validation [44455732385](https://github.com/ashini-x/parmar-ai/actions/runs/44455732385) passed TypeScript/check, 513 Vitest tests/75 files, 62 Node tests/9 files and all three Worker dry-run builds.
 - Cloudflare verifies `parmar-ai` version `74fade9d-422e-4a91-8be4-f98340b76eb4` and `brvin-service` version `1999a4c1-9137-447e-8dc7-596f70a338b9` at 100% traffic.
 
-**M4.3 final closeout — complete:** production D1 confirms the tested conversation is associated with the Owner Intelligence topic and the active selected-only installation on the private hub. The final preview is Synced to `b40e46c50ee4e7663f5d2c2dd6ad85725979b656`; all five saved files match byte-for-byte at that SHA and current `main`. The same conversation's nine reservation rows are all settled and sum to the D1 usage meter: 40,496 / 200,000 used, 0 reserved. The production conversation was already `session_kind=topic`, so live Scratchpad promotion was not applicable to that journey. The local-D1 GitHub-save regression creates a conversation without a topic, saves it to the selected topic and asserts the post-Synced association; promotion remains conditional on exact read-back. M4.3 is fully accepted. M4.4's manifests, pinned Project Memory loading, scope isolation and production deployment are complete; only the authenticated Owner Project Context walkthrough remains. Do not repeat the successful Save or weaken the strict branch-head Conflict rule. Path-aware multi-writer conflict handling remains future work and is not part of M4.4.
+**M4.3 final closeout — complete:** production D1 confirms the tested conversation is associated with the Owner Intelligence topic and the active selected-only installation on the private hub. The final preview is Synced to `b40e46c50ee4e7663f5d2c2dd6ad85725979b656`; all five saved files match byte-for-byte at that SHA and current `main`. The same conversation's nine reservation rows are all settled and sum to the D1 usage meter: 40,496 / 200,000 used, 0 reserved. The production conversation was already `session_kind=topic`, so live Scratchpad promotion was not applicable to that journey. The local-D1 GitHub-save regression creates a conversation without a topic, saves it to the selected topic and asserts the post-Synced association; promotion remains conditional on exact read-back. M4.3 is fully accepted. M4.4's manifests, pinned Project Memory loading, scope isolation and production deployment are complete; the authenticated Owner Project Context walkthrough subsequently passed. M4.4 is closed; see `OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md`. Do not repeat the successful Save or weaken the strict branch-head Conflict rule. Path-aware multi-writer conflict handling remains future work and is not part of M4.4.
 
 ## 12. M4.4 implementation and production release — 2026-11-19 IST
 
@@ -402,4 +402,11 @@ The hub now has version-1 hub/catalog/project/workstream/feature schemas and a s
 
 Validation workflow [44568064917](https://github.com/ashini-x/parmar-ai/actions/runs/44568064917) passed TypeScript, 521 Vitest tests/76 files, 62 Node tests/9 files and three Worker dry runs. Production paired deployment, root/BRVIN health and release acceptance passed. M4.4 versions: `parmar-ai` `fd932efb-9d97-4e8f-837f-79a460409495`; `brvin-service` `90b21e52-2a55-402e-8398-0c6e308d3a0e`.
 
-Latest main also includes PR #365's separate response renderer and is deployed at `parmar-ai` `fccd13e6-1be3-4ecb-b1e6-d42d352cd1f8` and `brvin-service` `500709c7-b62a-4c6c-9613-159f77988310`, both at 100% traffic (workflow [44571138999](https://github.com/ashini-x/parmar-ai/actions/runs/44571138999)). Automated deployment smoke does not replace the remaining authenticated Owner Project Context walkthrough.
+Latest main also includes PR #365's separate response renderer and later Owner UI PRs #368–#370. Automated deployment smoke does not replace authenticated acceptance; the Owner's Project Context attach/read and independent Scratchpad-isolation tests subsequently passed on 2026-11-19. M4.4 is closed; M4.5 is next.
+
+
+## 13. M4.4 authenticated Owner acceptance — complete (2026-11-19 IST)
+
+The Owner's production walkthrough is recorded in [OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md). The Owner explicitly attached **Owner Gemini Intelligence** as the primary scope from a Scratchpad with cross-project controls off. The Project Context card showed private hub `ashini-x/owner-memory-hub`, branch `main`, pinned commit `91e5c98cbc375b3c418207b6559021b16200e0b4`, active `project-memory.md`, `progress.md`, and `decisions.md` files with blob provenance, and a 2,599-token estimate. Gemini 4 Hydrogen / High reproduced the pinned commit and active file list in its answer. A second, unattached Scratchpad correctly reported that no Project Memory was available and did not invent the commit or file names.
+
+The symbolic manifest revision label `owner-memory-v1` was not separately visible in the screenshots; the panel displayed the catalog commit prefix and file blob identifiers. Do not overstate what the UI visibly rendered. M4.4 is closed. M4.5 is the next milestone; M4.6-P0 remains required before M4.6 and does not block M4.5.
