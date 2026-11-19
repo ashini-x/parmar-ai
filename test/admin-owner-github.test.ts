@@ -415,7 +415,16 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     expect(preview.files).toHaveLength(5);
     expect(preview.files.some((file) => file.name === "sessions/" + new Date().toISOString().slice(0, 10) + "-" +
       conversation.id.slice(0, 8) + "-" + preview.id.slice(0, 8) + ".md")).toBe(true);
-    expect(preview.note).toContain("Gemini prepared this editable candidate");
+    expect(preview.note).toContain("Gemini prepared additive, editable suggestions");
+    expect(preview.note).toContain("Gemini cannot replace or rewrite it");
+    const previewProjectMemory = preview.files.find((file) => file.name === "project-memory.md")?.content ?? "";
+    const previewProgress = preview.files.find((file) => file.name === "progress.md")?.content ?? "";
+    const previewDecisions = preview.files.find((file) => file.name === "decisions.md")?.content ?? "";
+    expect(previewProjectMemory).toContain(ownerAuthoredProjectMemory);
+    expect(previewProgress).toContain(ownerAuthoredProgress);
+    expect(previewProgress).toContain(ownerAddedProgressComment);
+    expect(previewProgress).toContain("The current reviewed save flow is progressing with append-only memory updates.");
+    expect(previewDecisions).toContain(ownerAuthoredDecisions);
     const usageAfterDraft = await env.DB!.prepare("SELECT used_tokens FROM owner_intelligence_session_usage WHERE conversation_id=? AND owner_id=?")
       .bind(conversation.id, env.OWNER_DASHBOARD_USER).first<{ used_tokens: number }>();
     expect(usageAfterDraft?.used_tokens).toBe(1620);
