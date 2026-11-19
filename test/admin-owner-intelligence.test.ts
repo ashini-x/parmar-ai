@@ -478,6 +478,11 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto");
     expect(html).toContain(".bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px));margin:0 auto;padding:4px 0 10px;background:transparent}");
     expect(html).toContain("background:#1c1c1c;color:#ececec");
+    expect(html).toContain(":root{background:#000;color:#ededed}");
+    expect(html).toContain(".app,.main,.content,.stage,.messages{background:#000}");
+    expect(html).toContain(".sidebar{background:#050505;border-right-color:#191919}");
+    expect(html).toContain(".message-user .message-body{flex:0 1 min(78%,660px);width:min(78%,660px);min-width:min(240px,100%);max-width:min(78%,660px);background:#191919;border-color:#303030;overflow-wrap:anywhere}");
+    expect(html).toContain(".message-user .message-body{flex:0 1 min(78%,660px);width:min(78%,660px);min-width:min(240px,100%);max-width:min(78%,660px);background:#191919;border-color:#303030;overflow-wrap:anywhere}");
     expect(html).toContain("body{overflow:hidden;background:#1c1c1c}");
     expect(html).toContain(".sidebar{width:292px;flex:0 0 292px;background:#141414;");
     expect(html).toContain(".composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto");
@@ -547,6 +552,12 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("isMarkdownTableSeparator");
     expect(script).toContain("isMarkdownBlockStart");
     expect(script).toContain("function buildResponseToolbar(item)");
+    expect(script).not.toContain("Good response");
+    expect(script).not.toContain("Needs improvement");
+    expect(script).not.toContain("👍");
+    expect(script).not.toContain("👎");
+    expect(script).toContain('node("button","response-tool","Copy")');
+    expect(script).toContain('node("button","response-tool","↻")');
     expect(script).toContain("md-table-card");
     expect(script).toContain("navigator.clipboard.writeText(item.content||\"\")");
     expect(script).toContain("document.createTextNode(source.slice(cursor,match.index))");
@@ -560,6 +571,11 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).not.toContain("composerHint");
     expect(script).toContain('document.getElementById("mobileMenu").addEventListener');
     expect(script).toContain("function resizeComposerInput()");
+    expect(script).toContain('optimisticMessageId="optimistic-"+crypto.randomUUID()');
+    expect(script).toContain("messageInput.value=\"\";\n      resizeComposerInput();");
+    expect(script).toContain("promptAccepted=true");
+    expect(script).toContain("state.messages=state.messages.filter(function(item){return item.id!==optimisticMessageId;});");
+    expect(script).toContain("editingMessageId=editTargetId");
     expect(script).toContain('messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});');
     expect(script).toContain("maxHeight=144");
     expect(script).toContain("try{await refreshList(conversationId);}catch(_error){}");
