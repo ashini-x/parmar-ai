@@ -427,7 +427,14 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       { ...configuredEnv, GEMINI_LOCATION: "asia-south1" } as Env,
       { modelId: "gemini-3.8-flash", contents: [{ role: "user", text: "Hi" }] },
       dependencies(fetcher),
-    )).rejects.toMatchObject({ retryable: true, message: "This model has not been confirmed for the configured Vertex AI project and location." });
+    )).rejects.toMatchObject({
+      status: 403,
+      stage: "count_tokens_probe",
+      retryable: false,
+      message: "Vertex AI denied the Count Tokens availability probe for this model/project. No GenerateContent request was sent; this is a model-eligibility check failure.",
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("/models/gemini-3.8-flash:countTokens");
     expect(calls.some((url) => url.endsWith(":generateContent"))).toBe(false);
   });
 
