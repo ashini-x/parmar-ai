@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.3 acceptance closed; M4.4 Project Memory implementation merged and production deployed. M4.4 automated validation and Worker release acceptance passed; the Owner's live browser acceptance of project-scope attachment/context loading remains to be confirmed. **Next approved task after M4.4 Owner acceptance: M4.5 — Automatic rollover and handoff.** M4.5–M4.8 remain approved, not implemented; M4.6-P0 is required before M4.6; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-19 IST — Owner user messages now preserve authored spacing and collapse long prompts into a compact Show more/Show less preview; PR #369 deployed  
+**Last updated:** 2026-11-19 IST — Owner New Chat welcome simplified to transparent BRɅIN wordmark and personal greeting; PR #370 deployed  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -635,3 +635,14 @@ The topic API route defect was corrected in PR #352 and production-deployed. The
 - **Validation:** PR workflow [44584214528](https://github.com/ashini-x/parmar-ai/actions/runs/44584214528) passed TypeScript, 521 tests, Node tests and all three Worker dry-run builds. Production release [44584471236](https://github.com/ashini-x/parmar-ai/actions/runs/44584471236) passed paired Worker deployments, root/health smoke, BRVIN service binding, Fatman retrieval readiness and production release acceptance.
 - **Production evidence:** `brvin-service` version `d9732a1b-09b3-489e-b9a3-b7ab5336973f`, deployment `30a5c772-1512-4f9d-8c3a-6e5a5dd61232`, at 100% traffic; `parmar-ai` version `6a298521-1ea8-4713-9f8e-90b6cef3d6e2`, deployment `0db19fa3-2305-4b24-916f-523d92731096`, at 100% traffic. Acceptance artifact `14560047336`.
 - **Scope:** Owner UI only. No backend, D1 schema, token accounting, 200K session budget, long-message character limit, Vertex model/provider, Project Memory or student-facing behaviour changed.
+
+### Owner Intelligence personal BRɅIN welcome screen — 2026-11-19 IST
+
+- **Merged:** [PR #370](https://github.com/ashini-x/parmar-ai/pull/370), runtime source revision `aa6596a425003c4314afdb2b69f576ae3cee1bbb`.
+- Replaced the boxed BɅ tile with the standalone transparent-text BRɅIN wordmark. The glyphs use a restrained cool-blue gradient and a subtle 36px accent line; there is no tile, border or background panel behind the wordmark.
+- The only welcome sentence is now: **Welcome back Sir. What are we hunting today?**
+- Removed the old “Your thinking space.” heading, descriptive paragraph and “PRIVATE OWNER WORKSPACE” pill.
+- Initial HTML and the `showWelcome()` New Chat path use matching content so opening the Owner panel and clicking New Chat show the same minimalist layout.
+- **Validation:** PR workflow [44589507043](https://github.com/ashini-x/parmar-ai/actions/runs/44589507043) passed TypeScript, Vitest, Node tests and all three Worker dry-run builds. Production release [44589805660](https://github.com/ashini-x/parmar-ai/actions/runs/44589805660) passed both Worker deployments, root/health smoke, BRVIN service binding, Fatman retrieval readiness and release acceptance.
+- **Production evidence:** `brvin-service` version `88da7774-4820-4520-ae7b-5de780909371`, deployment `e6e3636d-7f69-46bb-ae61-fa77c2d0e9f2`, at 100% traffic; `parmar-ai` version `2ac68248-7705-44ac-8233-4acdb73e92c6`, deployment `1910b85b-d650-402f-8e15-9c137ce3659f`, at 100% traffic. Acceptance artifact `14562042415`.
+- **Scope:** Owner Intelligence empty/new-chat welcome presentation only. Sidebar, composer, token meter, rich response rendering, adaptive Gemini behaviour, token budget, Project Memory and student-facing behaviour are unchanged.
