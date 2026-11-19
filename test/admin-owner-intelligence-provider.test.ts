@@ -512,6 +512,53 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(attempts).toBe(3);
     expect(delays).toEqual([1_000, 2_000]);
   });
+
+  it("does not replay an ambiguous GenerateContent 503 response", async () => {
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "owner-generate-ambiguous-503-project" } as Env;
+    let attempts = 0;
+    const fetcher: typeof fetch = async (url) => {
+      if (String(url).endsWith(":countTokens")) {
+        return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      }
+      attempts += 1;
+      return new Response(JSON.stringify({
+        error: { code: 503, status: "UNAVAILABLE", message: "temporary service error" },
+      }), { status: 503, headers: { "content-type": "application/json" } });
+    };
+
+    await expect(generateOwnerGeminiContent(
+      env,
+      { modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Do not replay an ambiguous failure." }] },
+      { ...dependencies(fetcher), sleep: async () => undefined, random: () => 0.5 },
+    )).rejects.toMatchObject({ status: 503, stage: "generate_content", retryable: true });
+    expect(attempts).toBe(1);
+  });
+
+  it("checks only the Owner-selected model before non-stream memory generation", async () => {
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "owner-selected-model-only-probe-project" } as Env;
+    const countUrls: string[] = [];
+    const fetcher: typeof fetch = async (url) => {
+      const value = String(url);
+      if (value.endsWith(":countTokens")) {
+        countUrls.push(value);
+        return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        candidates: [{ content: { role: "model", parts: [{ text: "Draft." }] } }],
+        usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+
+    await generateOwnerGeminiContent(
+      env,
+      { modelId: "gemini-4-carbon", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Draft memory." }] },
+      dependencies(fetcher),
+    );
+
+    expect(countUrls).toHaveLength(1);
+    expect(countUrls[0]).toContain("/models/gemini-4-carbon:countTokens");
+    expect(countUrls.some((url) => !url.includes("/models/gemini-4-carbon:countTokens"))).toBe(false);
+  });
 });
 
 
