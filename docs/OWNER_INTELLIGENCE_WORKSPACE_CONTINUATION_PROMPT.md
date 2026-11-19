@@ -3,6 +3,13 @@
 Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**. **M4.3 and M4.4 are fully accepted and closed.** M4.4 Project Memory is merged, production deployed and verified in the authenticated Owner browser: the primary project-memory attach/read journey passed and a separate unattached Scratchpad correctly remained isolated. Current main includes Owner UI/response PRs #360–#365, adaptive response PR #367, dark-canvas/instant-send UI PR #368, collapsible user-message PR #369 and personal welcome PR #370; latest runtime commit is `aa6596a425003c4314afdb2b69f576ae3cee1bbb`. **The next task is M4.5 — Automatic rollover and handoff.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
 
 
+### Shared BRɅIN brand and typography baseline — 2026-11-20 IST
+
+- Read [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md) before changing a product logo, font, typography token or UI text styles.
+- Owner-selected role split: AERUNO is the requested BRɅIN wordmark/display direction only; all ordinary product UI text targets the ChatGPT/OpenAI Sans visual style. Do not use the logo face for body text.
+- The uploaded AERUNO file is a personal-use trial and lacks the required U+0245 `Ʌ` glyph. Do not publish or deploy it. Obtain a commercial logo/brand license and create an outlined SVG wordmark with a custom/covered `Ʌ` before adding a public logo asset.
+- OpenAI Sans is proprietary. Use only official files with confirmed permission for BRɅIN product hosting/embedding; do not extract it from ChatGPT or the OpenAI CDN. The current OFL-licensed Poppins bundle remains in place as the legacy deployed UI font until an authorized replacement is ready.
+
 ### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
 
 - [PR #360](https://github.com/ashini-x/parmar-ai/pull/360) merged as `4cc3e1e0b29c7baf40c37a161eb0c6d2175b4a8a`.
