@@ -8,7 +8,7 @@ Read these files from the latest `main` branch in this order:
 
 1. `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md` — authoritative milestone status and gate.
 2. `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md` — this handoff.
-3. `docs/OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md` — dated Owner live acceptance evidence and remaining closeout checks.
+3. `docs/OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md` — completed M4.3 live acceptance and final D1/GitHub closeout evidence; M4.3 is closed.
 4. `docs/OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md` — approved memory/context design and Owner Context Replicator.
 5. `docs/OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md` — Owner/Gemini/ChatGPT role split, central hub hierarchy and approval process.
 6. `docs/OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md` — locked single-provider decision and M4.6-P0 capacity gate.
@@ -98,10 +98,6 @@ M4.3 is fully accepted and closed. The remaining evidence was reconciled using r
 5. Do not start code changes until the implementation brief is consistent with the approved scope and Owner approval is recorded.
 
 
-
-1. Start with the read-only M4.3 closeout reconciliation. Use the already saved commit and existing D1 records; do not mutate production state.
-2. If all M4.3 criteria are evidenced, close M4.3 and begin **M4.4 — Attach and load Project Memory**. Otherwise complete only the exact missing check.
-3. Before M4.4 coding, inspect current source/schema/route/manifest code. Produce a concise implementation brief and review it against the collaboration protocol. Keep the first change narrow.
 
 M4.4 approved scope:
 - One private `owner-memory-hub` stores project catalog/manifests and curated Markdown; it does not contain/copy source-code trees.
