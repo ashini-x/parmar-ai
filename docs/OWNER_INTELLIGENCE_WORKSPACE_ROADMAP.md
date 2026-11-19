@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.3 complete. M4.3 implementation, timeout/retry hardening, append-only preservation and live Owner acceptance are merged/deployed and fully reconciled against production D1 and GitHub evidence. **Next approved task: M4.4 — Attach and load Project Memory.** M4.4–M4.8 remain planned, not implemented; M4.6-P0 is required before M4.6; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-19 IST — M4.3 closeout completed; Owner Intelligence sidebar UI maintenance deployed; M4.4 remains next  
+**Last updated:** 2026-11-19 IST — M4.3 closeout completed; sidebar and fixed composer/token dock UI maintenance deployed; M4.4 remains next  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -544,3 +544,14 @@ The topic API route defect was corrected in PR #352 and production-deployed. The
 - **Production evidence:** `brvin-service` version `ff4e3748-50fc-418e-823e-a04bde87f1c9`, deployment `4a1208a9-5664-4e68-957a-b9a40ba24af9`, at 100% traffic; `parmar-ai` version `aeebb8e0-4443-418d-b768-0c2cfa0bec1a`, deployment `8f655927-c224-4d8b-841c-8a73a01b97b8`, at 100% traffic. Production acceptance manifest: artifact `14542491426`.
 - **Scope guard:** no Owner Intelligence API, D1 schema/data, model/provider, Vertex configuration, 200K per-chat token budget, Project Memory behavior, BRVIN retrieval behavior or student Telegram code was changed by this UI task. The production smoke/acceptance checks are Worker-level checks; they are not a substitute for the Owner's own browser visual check after reloading `/admin/intelligence`.
 - **Milestone order unchanged:** M4.3 remains complete; M4.4 — Attach and load Project Memory — remains the next approved task. This UI maintenance does not implement or advance M4.4.
+
+### Owner Intelligence fixed composer and session-token dock — 2026-11-19 IST
+
+- **Merged:** [PR #362](https://github.com/ashini-x/parmar-ai/pull/362), runtime source revision `47ad8b51e25800fc9424a1222ea717defca6949a`.
+- **Layout:** only the conversation messages scroll. The compact message composer stays docked to the bottom, and the session-token meter stays directly above it, always visible even for blank/new chats (default `0 / 200,000`). Both remain visible regardless of conversation scroll position.
+- **Composer:** ChatGPT-familiar compact rounded surface. Textarea starts at one line, grows to 144px, then scrolls internally. The HTML `maxlength` restriction is removed; there is no frontend character cap.
+- **Long prompts:** backend accepted user/assistant message length increased from 50,000 to 300,000 characters (aligned with `MAX_OWNER_GEMINI_CONTEXT_CHARS`); JSON body-size guard increased to 1,300,000 bytes to support large UTF-8 prompts. Messages over the practical 300,000-character server limit are rejected. The 200,000-token per-chat session budget and provider/context limits remain unchanged—this is not literally infinite model context. Regression test persists a 250,000-character prompt and rejects 300,001.
+- **Validation:** PR validation [44558021300](https://github.com/ashini-x/parmar-ai/actions/runs/44558021300) passed typecheck, Vitest, Node tests, and three Worker dry-run builds. Production release [44558249271](https://github.com/ashini-x/parmar-ai/actions/runs/44558249271) passed both Worker deployments, root/health smoke, BRVIN binding and Fatman retrieval readiness, and final release acceptance.
+- **Production evidence:** `brvin-service` version `4ddd6b8f-e9d5-4bf8-88ec-78f72cfeb2cd`, deployment `b6fe71a1-aed4-4849-a58d-0adcf5e39217`, at 100% traffic; `parmar-ai` version `f318707c-611b-499f-b014-282c45b96059`, deployment `2b2ad42b-c070-4870-9047-afce3bd80817`, at 100% traffic. Acceptance artifact `14545509079`.
+- **Scope:** presentation/long-prompt handling only. No token-accounting limit, model/provider selection, D1 schema, Project Memory behavior, student Telegram system or retrieval architecture changed.
+- **Next milestone unchanged:** M4.4 — Attach and load Project Memory remains next; PR #362 does not advance it.
