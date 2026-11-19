@@ -498,7 +498,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).not.toContain('maxlength="50000"');
     expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto");
     expect(html).toContain(".bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px));margin:0 auto;padding:4px 0 10px;background:transparent}");
-    expect(html).toContain("background:#1c1c1c;color:#ececec");
+    expect(html).toContain("background:#000;color:#ededed");
     expect(html).toContain(":root{background:#000;color:#ededed}");
     expect(html).toContain(".app,.main,.content,.stage,.messages{background:#000}");
     expect(html).toContain(".sidebar{background:#050505;border-right-color:#191919}");
@@ -509,7 +509,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain(".user-message-toggle[hidden]{display:none}");
 
     expect(html).toContain(".message-user .message-body{flex:0 1 min(78%,660px);width:min(78%,660px);min-width:min(240px,100%);max-width:min(78%,660px);background:#191919;border-color:#303030;overflow-wrap:anywhere}");
-    expect(html).toContain("body{overflow:hidden;background:#1c1c1c}");
+    expect(html).toContain("body{overflow:hidden;background:#000}");
     expect(html).toContain(".sidebar{width:292px;flex:0 0 292px;background:#141414;");
     expect(html).toContain(".composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto");
     const dockStart = html.indexOf('<div class="bottom-dock" id="bottomDock">');
