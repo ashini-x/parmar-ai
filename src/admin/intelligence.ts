@@ -1045,7 +1045,7 @@ async function handleOwnerGeneration(
   }
   if (!plan) return notFound();
 
-let projectMemoryContext: Awaited<ReturnType<typeof loadOwnerConversationProjectMemoryPrompt>> = null;
+  let projectMemoryContext: Awaited<ReturnType<typeof loadOwnerConversationProjectMemoryPrompt>> = null;
   try {
     projectMemoryContext = await loadOwnerConversationProjectMemoryPrompt(env, ownerPrincipal(env), conversationId);
   } catch (error) {
@@ -1059,7 +1059,6 @@ let projectMemoryContext: Awaited<ReturnType<typeof loadOwnerConversationProject
       text: projectMemoryContext.referenceText + "\n\n--- CURRENT CONVERSATION TRANSCRIPT ---\n\n" + contents[0].text,
     };
   }
-  const contents = buildOwnerGeminiConversationContents(plan.messages);
   if (!contents.length || contents[contents.length - 1].role !== "user") {
     return json({ ok: false, error: "latest_message_missing" }, 409);
   }
