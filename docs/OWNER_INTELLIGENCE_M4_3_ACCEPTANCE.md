@@ -22,7 +22,7 @@ This is a real Owner/browser acceptance result, not merely a unit-test assertion
 | Explicit Save and GitHub read-back | Owner confirmed Save from the Owner panel to `main`, then fetched/opened `projects/owner-intelligence/memory/progress.md`; newly generated content was visible below the manually authored comment. | **Passed — Owner-confirmed 2026-11-19** |
 | Append-only preservation | Exact comment marker and Owner-authored content survived; generated content was added below it. PR #356 added byte-preserving, idempotent append logic and regression coverage. | **Passed — live and automated** |
 | Five-file commit verification | The final Synced preview and its five expected paths were compared against GitHub at the exact saved commit and again at current `main`; every file matched byte-for-byte. | **Passed — independent read-only check** |
-| Topic association / Scratchpad promotion | D1 confirms the tested conversation was already `session_kind=topic`, attached to the `Owner Intelligence` topic. Its latest preview is Synced only after verification. Scratchpad promotion is **not applicable to this conversation** because it did not originate as a Scratchpad. | **Passed — topic attachment verified; conditional promotion N/A** |
+| Topic association / Scratchpad promotion | D1 confirms the tested production conversation was already `session_kind=topic`, attached to the `Owner Intelligence` topic, so live Scratchpad promotion was not applicable to that journey. The local-D1 GitHub-save regression test creates a conversation without a topic, saves it to the selected topic, and asserts the post-Synced conversation has that topic ID and `session_kind=topic`. | **Passed — production topic attachment and automated promotion path** |
 | Memory-draft usage settlement | The same conversation has nine reservation rows, all `settled`; sum of actual tokens is 40,496, matching the D1 session meter. Reserved tokens are zero; the limit remains 200,000. | **Passed — production D1 reconciliation** |
 
 ## Exact Owner-authored marker
@@ -70,7 +70,7 @@ All final checks below were read-only against the production D1 database and Git
 - Production topic: `Owner Intelligence` (`a3a58a83-90a0-4c23-a9a4-46eaf2ae6709`).
 - Topic attachment: private `ashini-x/owner-memory-hub` (repository ID `1463342529`), branch `main`, memory root `projects/owner-intelligence/memory`, installation `183469022`, manifest revision `owner-memory-v1`.
 - The installation is still `active` and `repository_selection=selected` for account/user `ashini-x`. The previously recorded Owner screenshot confirms the exact requested App permissions: Metadata read + Contents write.
-- Tested conversation: `43bca53d-baa1-4a49-a447-947f3fb8e243`; D1 records `session_kind=topic` and the same `topic_id`. This journey did **not** start as a Scratchpad, so Scratchpad promotion was not applicable. The implementation's Scratchpad promotion remains conditional on the same successful byte-exact verification and Synced result.
+- Tested production conversation: `43bca53d-baa1-4a49-a447-947f3fb8e243`; D1 records `session_kind=topic` and the same `topic_id`. This journey did **not** start as a Scratchpad, so live promotion was not applicable. The local-D1 GitHub-save regression test separately creates a conversation without a topic, saves it to the selected topic and verifies the post-Synced topic association. The implementation only promotes after byte-exact verification and Synced.
 
 ### Conflict, Save and five-file verification
 
