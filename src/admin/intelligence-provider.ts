@@ -66,7 +66,8 @@ const defaultDependencies: OwnerProviderDependencies = {
 const PROBE_TIMEOUT_MS = 8_000;
 const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
 const MAX_CONVERSATION_CONTEXT_CHARS = 300_000;
-const GENERATION_TIMEOUT_MS = 35_000;
+const GENERATION_TIMEOUT_MS = 90_000;
+const GENERATION_MAX_ATTEMPTS = 3;
 const CATALOGUE_CACHE_MS = 90_000;
 // Interactive chat retries the initial stream-open response at most twice.
 // Retries happen only before a successful SSE response/body has been accepted.
@@ -417,8 +418,10 @@ function providerStatusMessage(
         ? "Vertex AI rate-limited the StreamGenerateContent request."
         : "Vertex AI rate-limited the GenerateContent request.";
   } else if (status >= 500) {
-    message = "Vertex AI is temporarily unavailable during " +
-      (stage === "count_tokens_probe" ? "the Count Tokens availability check." : "StreamGenerateContent.");
+    const operation = stage === "count_tokens_probe"
+      ? "the Count Tokens availability check"
+      : stage === "stream_generate_content" ? "StreamGenerateContent" : "GenerateContent";
+    message = "Vertex AI is temporarily unavailable during " + operation + ".";
   } else {
     message = "The Vertex AI request could not be completed during " +
       (stage === "count_tokens_probe" ? "the Count Tokens availability check." : "GenerateContent.");
@@ -461,98 +464,99 @@ export async function generateOwnerGeminiContent(
   if (!definition.thinkingLevels.includes(thinkingLevel)) {
     throw new OwnerGeminiProviderError("The selected thinking level is not supported by this model.");
   }
-  // Public catalogue membership does not establish project entitlement.
-  // Require a recent successful project/location capability probe before generation.
-  const catalogue = await listOwnerGeminiModels(env, dependencies);
-  const confirmedModel = catalogue.models.find((model) => model.id === definition.id && model.selectable);
-  if (!catalogue.ok || !confirmedModel) {
-    throw new OwnerGeminiProviderError(
-      catalogue.ok
-        ? "This model has not been confirmed for the configured Vertex AI project and location."
-        : "Vertex AI model availability could not be verified for the Owner workspace.",
-      undefined,
-      true,
-    );
-  }
-
+  // Verify only the exact Owner-selected model. A full catalogue refresh here
+  // would fan out CountTokens probes to every model and needlessly add pressure
+  // to a project/model capacity pool during an already rate-limited draft.
+  const token = await getVerifiedModelAccessToken(env, definition, dependencies);
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
     ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
     : Math.min(definition.singleRequestOutputTokens, 8_192);
-
-  let token: string;
-  try {
-    token = await dependencies.getAccessToken(env);
-  } catch {
-    throw new OwnerGeminiProviderError("Google authentication for Vertex AI is currently unavailable.", undefined, true);
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
   const startedAt = Date.now();
-  try {
-    const body: Record<string, unknown> = {
-      contents: input.contents.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
-      generationConfig: { maxOutputTokens, thinkingConfig: { thinkingLevel } },
-    };
-    if (input.systemInstruction?.trim()) {
-      body.systemInstruction = { parts: [{ text: input.systemInstruction }] };
-    }
-    const response = await dependencies.fetch(
-      `${vertexBase(location)}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(definition.id)}:generateContent`,
-      {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      },
-    );
-    if (!response.ok) {
-      const diagnostic = await safeVertexErrorDiagnostic(response);
-      throw new OwnerGeminiProviderError(
-        providerStatusMessage(response.status, "generate_content", diagnostic),
-        response.status,
-        response.status === 408 || response.status === 429 || response.status >= 500,
-        "generate_content",
-      );
-    }
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = await response.json() as Record<string, unknown>;
-    } catch {
-      throw new OwnerGeminiProviderError("Vertex AI returned an invalid response.");
-    }
-    const candidates = Array.isArray(parsed.candidates) ? parsed.candidates as Array<Record<string, unknown>> : [];
-    const candidate = candidates[0];
-    const content = candidate && typeof candidate.content === "object" && candidate.content !== null
-      ? candidate.content as Record<string, unknown> : null;
-    const parts = content && Array.isArray(content.parts) ? content.parts as Array<Record<string, unknown>> : [];
-    const text = parts.map((part) => typeof part.text === "string" ? part.text : "").join("").trim();
-    if (!text) throw new OwnerGeminiProviderError("Vertex AI completed without a text response.");
-    const usage = typeof parsed.usageMetadata === "object" && parsed.usageMetadata !== null
-      ? parsed.usageMetadata as Record<string, unknown> : {};
-    return {
-      modelId: definition.id,
-      thinkingLevel,
-      text,
-      usage: {
-        promptTokens: Number(usage.promptTokenCount ?? 0),
-        outputTokens: Number(usage.candidatesTokenCount ?? 0),
-        totalTokens: Number(usage.totalTokenCount ?? 0),
-      },
-      elapsedMs: Date.now() - startedAt,
-      rawResponse: parsed,
-    };
-  } catch (error) {
-    if (error instanceof OwnerGeminiProviderError) throw error;
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new OwnerGeminiProviderError("The Vertex AI request timed out.", undefined, true);
-    }
-    throw new OwnerGeminiProviderError("The Vertex AI request failed. Please retry without changing the selected model.", undefined, true);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
 
+  for (let attempt = 1; attempt <= GENERATION_MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
+    let retryDelay: number | undefined;
+    try {
+      const body: Record<string, unknown> = {
+        contents: input.contents.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
+        generationConfig: { maxOutputTokens, thinkingConfig: { thinkingLevel } },
+      };
+      if (input.systemInstruction?.trim()) {
+        body.systemInstruction = { parts: [{ text: input.systemInstruction }] };
+      }
+      const response = await dependencies.fetch(
+        `${vertexBase(location)}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(definition.id)}:generateContent`,
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        },
+      );
+
+      if (!response.ok) {
+        const diagnostic = await safeVertexErrorDiagnostic(response);
+        const failure = new OwnerGeminiProviderError(
+          providerStatusMessage(response.status, "generate_content", diagnostic),
+          response.status,
+          isRetryableStreamOpenStatus(response.status),
+          "generate_content",
+        );
+        if (failure.retryable && attempt < GENERATION_MAX_ATTEMPTS) {
+          // Retry only an explicit transient HTTP rejection. A timeout or lost
+          // connection is ambiguous and is deliberately never replayed.
+          retryDelay = streamOpenRetryDelayMs(response, attempt, dependencies.random ?? Math.random);
+          try { await response.body?.cancel(); } catch { /* discard retryable response body */ }
+        } else {
+          throw failure;
+        }
+      } else {
+        let parsed: Record<string, unknown>;
+        try {
+          parsed = await response.json() as Record<string, unknown>;
+        } catch {
+          throw new OwnerGeminiProviderError("Vertex AI returned an invalid response.");
+        }
+        const candidates = Array.isArray(parsed.candidates) ? parsed.candidates as Array<Record<string, unknown>> : [];
+        const candidate = candidates[0];
+        const responseContent = candidate && typeof candidate.content === "object" && candidate.content !== null
+          ? candidate.content as Record<string, unknown> : null;
+        const parts = responseContent && Array.isArray(responseContent.parts) ? responseContent.parts as Array<Record<string, unknown>> : [];
+        const text = parts.map((part) => typeof part.text === "string" ? part.text : "").join("").trim();
+        if (!text) throw new OwnerGeminiProviderError("Vertex AI completed without a text response.");
+        const usage = typeof parsed.usageMetadata === "object" && parsed.usageMetadata !== null
+          ? parsed.usageMetadata as Record<string, unknown> : {};
+        return {
+          modelId: definition.id,
+          thinkingLevel,
+          text,
+          usage: {
+            promptTokens: Number(usage.promptTokenCount ?? 0),
+            outputTokens: Number(usage.candidatesTokenCount ?? 0),
+            totalTokens: Number(usage.totalTokenCount ?? 0),
+          },
+          elapsedMs: Date.now() - startedAt,
+          rawResponse: parsed,
+        };
+      }
+    } catch (error) {
+      if (error instanceof OwnerGeminiProviderError) throw error;
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new OwnerGeminiProviderError("The Vertex AI request timed out after 90 seconds.", undefined, true, "generate_content");
+      }
+      throw new OwnerGeminiProviderError("The Vertex AI request failed. Please retry without changing the selected model.", undefined, true, "generate_content");
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (retryDelay !== undefined) {
+      await waitForStreamRetry(retryDelay, controller.signal, dependencies);
+    }
+  }
+
+  throw new OwnerGeminiProviderError("Vertex AI could not complete the memory-draft request after bounded retries.", undefined, true, "generate_content");
+}
 
 async function getVerifiedModelAccessToken(
   env: Env,
