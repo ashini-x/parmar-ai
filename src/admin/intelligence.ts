@@ -976,9 +976,9 @@ function isSameOriginMutation(request: Request): boolean {
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown> | null> {
   const length = Number(request.headers.get("Content-Length") ?? "0");
-  if (length > 205_000) return null;
+  if (length > 1_300_000) return null;
   const raw = await request.text();
-  if (raw.length > 205_000) return null;
+  if (raw.length > 1_300_000) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
