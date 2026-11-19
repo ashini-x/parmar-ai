@@ -46,7 +46,7 @@ Fill these fields only from the final current PR head and corresponding workflow
 - `parmar-ai`: version `d3ce5347-b00d-45d7-88eb-7ef69322eedf`, deployment `5a19528f-83c6-4a68-83ed-14e531d8ad31`, **100% traffic**.
 - `brvin-service`: version `feb592eb-7356-486f-a746-4116a1d7d182`, deployment `923dea74-a28c-4125-8ed9-b630bdd0e42f`, **100% traffic**.
 - Production release smoke: root, health, BRVIN connectivity and Fatman source readiness passed. Release acceptance artifact: [14576848791](https://github.com/ashini-x/parmar-ai/actions/runs/44620959101/artifacts/14576848791). Source release artifact: `14577800205`.
-- Production D1 `parmar-ai-admin-prod` (`1c033fb8-10aa-4bee-a294-4dbc899c09f7)) was inspected read-only. `owner_intelligence_conversations`, `owner_intelligence_handoffs` and `owner_intelligence_memory_jobs` exist. Both new owner-scoped lookup indexes and uniqueness autoindexes exist. The two schema queries reported 154 and 158 rows read respectively, **0 rows written**, and `changed_db=false`.
+- Production D1 `parmar-ai-admin-prod` (`1c033fb8-10aa-4bee-a294-4dbc899c09f7`) was inspected read-only. `owner_intelligence_conversations`, `owner_intelligence_handoffs` and `owner_intelligence_memory_jobs` exist. Both new owner-scoped lookup indexes and uniqueness autoindexes exist. The two schema queries reported 154 and 158 rows read respectively, **0 rows written**, and `changed_db=false`.
 
 ## Authenticated Owner acceptance — pending
 
