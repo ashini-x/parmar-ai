@@ -482,6 +482,11 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain(".app,.main,.content,.stage,.messages{background:#000}");
     expect(html).toContain(".sidebar{background:#050505;border-right-color:#191919}");
     expect(html).toContain(".message-user .message-body{flex:0 1 min(78%,660px);width:min(78%,660px);min-width:min(240px,100%);max-width:min(78%,660px);background:#191919;border-color:#303030;overflow-wrap:anywhere}");
+    expect(html).toContain(".user-message-content.is-collapsed{max-height:112px;overflow:hidden;position:relative}");
+    expect(html).toContain(".user-message-content{white-space:pre-wrap!important;overflow-wrap:anywhere;line-height:1.65}");
+    expect(html).toContain("background:linear-gradient(180deg,rgba(25,25,25,0),#191919)");
+    expect(html).toContain(".user-message-toggle[hidden]{display:none}");
+
     expect(html).toContain(".message-user .message-body{flex:0 1 min(78%,660px);width:min(78%,660px);min-width:min(240px,100%);max-width:min(78%,660px);background:#191919;border-color:#303030;overflow-wrap:anywhere}");
     expect(html).toContain("body{overflow:hidden;background:#1c1c1c}");
     expect(html).toContain(".sidebar{width:292px;flex:0 0 292px;background:#141414;");
@@ -546,6 +551,14 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("Could not load conversations");
     expect(script).toContain("appendActivityCard");
     expect(script).toContain("function renderRichMarkdown(target,markdown)");
+    expect(script).toContain("var expandedUserMessageIds=Object.create(null)");
+    expect(script).toContain("var USER_MESSAGE_PREVIEW_HEIGHT=112");
+    expect(script).toContain('richContent.classList.add("user-message-content","is-collapsed")');
+    expect(script).toContain('node("button","user-message-toggle","Show more ↓")');
+    expect(script).toContain('toggle.textContent=expanded?"Show less ↑":"Show more ↓"');
+    expect(script).toContain("richContent.scrollHeight>richContent.clientHeight+2");
+    expect(script).toContain("delete expandedUserMessageIds[item.id]");
+
     expect(script).toContain("function renderMarkdownTable(lines,start)");
     expect(script).toContain("function renderRichList(lines,start)");
     expect(script).toContain('"md-callout md-callout-"+type');
