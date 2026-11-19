@@ -1,6 +1,6 @@
 # Owner Intelligence — Memory and Token-Aware Context Architecture
 
-**Status:** M4.4 Project Memory implementation, production release and authenticated Owner attach/read + Scratchpad-isolation acceptance completed on 2026-11-19; M4.4 closed; M4.5–M4.8 remain planned  
+**Status:** M4.4 is closed. M4.5 rollover/handoff is merged and production deployed on 2026-11-20; CI, paired Worker release and read-only D1 schema verification passed; authenticated Owner browser acceptance remains pending. M4.6–M4.8 remain planned  
 **Original approval:** 2026-11-18  
 **Central hub/collaboration amendment:** 2026-11-19 IST  
 **Parent roadmap:** [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md)  
@@ -215,7 +215,7 @@ The D1 rollover transaction:
 
 The D1 memory-job row remains the durable outbox source of truth. It begins `pending_review`; the existing Owner-reviewed GitHub Save flow writes the complete handoff as `handoffs/<date>-<successor-prefix>.md` plus the standard memory/session files. That handoff path is an explicit archive artifact, not an active-manifest memory file and not automatically loaded on future turns. The existing branch-head Conflict precondition remains strict. Only successful commit and exact file read-back set the handoff/job to Synced. If Save is not available or its outcome is ambiguous, D1 stays canonical and the job stays pending until the Owner reopens/reviews the Save flow. No Queue, Workflow or new Cloudflare resource is provisioned for M4.5.
 
-This section describes the PR implementation contract; release/deployment and authenticated Owner acceptance state live in [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md).
+**Production release (2026-11-20 IST):** PR #375 merged as `a712a69cc46b5d9c4d249871a89e4084edd95b36`. PR validation #44620484798 and production release #44620959101 passed. The release passed 522 Vitest tests/76 files, 62 Node tests/9 files, TypeScript, three Worker dry runs, root/health smoke, BRVIN connectivity and Fatman readiness. `parmar-ai` version `d3ce5347-b00d-45d7-88eb-7ef69322eedf` / deployment `5a19528f-83c6-4a68-83ed-14e531d8ad31`; `brvin-service` version `feb592eb-7356-486f-a746-4116a1d7d182` / deployment `923dea74-a28c-4125-8ed9-b630bdd0e42f`; both 100% traffic. Read-only production D1 queries confirmed handoff/outbox tables and indexes with 0 rows written. The authenticated Owner browser rollover/continuity walkthrough remains the final M4.5 closure gate; see [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md).
 
 ## 6. Token-aware context assembly and historical recall
 
