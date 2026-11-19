@@ -485,7 +485,7 @@ export async function draftOwnerMemoryWithBudget(
     // retain conservative accounting for timeouts, lost connections and 5xx
     // responses where provider-side execution is ambiguous.
     const definitivelyRejected = error instanceof OwnerGeminiProviderError &&
-      error.stage === "generate_content" &&
+      (error.stage === "generate_content" || error.stage === "count_tokens_probe") &&
       [400, 401, 403, 404, 429].includes(Number(error.status));
     await settleOwnerIntelligenceSessionReservation(
       env, conversationId, reservationId, undefined, definitivelyRejected,
