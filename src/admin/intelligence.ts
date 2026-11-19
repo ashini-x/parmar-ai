@@ -1452,7 +1452,7 @@ async function handleOwnerGeneration(
   let outputTokenLimit = 0;
   let outputReservationSegments = 1;
   if (definition.supportsLongDecode) {
-    const maxSegments = Math.ceil(definition.modelMaxOutputTokens / definition.singleRequestOutputTokens);
+    const maxSegments = Math.ceil(definition.modelMaxOutputTokens / definition.singleStreamingOutputTokens);
     for (let segments = 1; segments <= maxSegments; segments += 1) {
       // Each v1beta1 continuation repeats the original prompt. Reserve that
       // prompt cost once per segment as well as the total decode allowance.
