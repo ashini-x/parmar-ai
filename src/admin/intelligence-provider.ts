@@ -754,7 +754,7 @@ export async function openOwnerGeminiStream(
     ? Math.min(outputCeiling, Math.max(1, input.maxOutputTokens!))
     : definition.singleStreamingOutputTokens;
   const useLongDecode = definition.supportsLongDecode === true &&
-    maxOutputTokens > definition.singleRequestOutputTokens;
+    maxOutputTokens > definition.singleStreamingOutputTokens;
   const apiVersion = useLongDecode ? "v1beta1" : definition.apiVersion;
 
   const token = await getVerifiedModelAccessToken(env, definition, dependencies);
