@@ -66,7 +66,6 @@ const defaultDependencies: OwnerProviderDependencies = {
 const PROBE_TIMEOUT_MS = 8_000;
 const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
 const MAX_CONVERSATION_CONTEXT_CHARS = 300_000;
-const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_ATTEMPTS = 3;
 const CATALOGUE_CACHE_MS = 90_000;
 // Interactive chat retries the initial stream-open response at most twice.
@@ -352,12 +351,28 @@ export class OwnerGeminiProviderError extends Error {
   readonly status?: number;
   readonly retryable: boolean;
   readonly stage?: OwnerGeminiProviderStage;
-  constructor(message: string, status?: number, retryable = false, stage?: OwnerGeminiProviderStage) {
+  readonly usage?: { promptTokens: number; outputTokens: number; totalTokens: number };
+  readonly elapsedMs?: number;
+  readonly finishReason?: string;
+  constructor(
+    message: string,
+    status?: number,
+    retryable = false,
+    stage?: OwnerGeminiProviderStage,
+    details: {
+      usage?: { promptTokens: number; outputTokens: number; totalTokens: number };
+      elapsedMs?: number;
+      finishReason?: string;
+    } = {},
+  ) {
     super(message);
     this.name = "OwnerGeminiProviderError";
     this.status = status;
     this.retryable = retryable;
     this.stage = stage;
+    this.usage = details.usage;
+    this.elapsedMs = details.elapsedMs;
+    this.finishReason = details.finishReason;
   }
 }
 
@@ -470,12 +485,11 @@ export async function generateOwnerGeminiContent(
   const token = await getVerifiedModelAccessToken(env, definition, dependencies);
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
     ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
-    : Math.min(definition.singleRequestOutputTokens, 8_192);
+    : definition.singleRequestOutputTokens;
   const startedAt = Date.now();
 
   for (let attempt = 1; attempt <= GENERATION_MAX_ATTEMPTS; attempt += 1) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
     let retryDelay: number | undefined;
     try {
       const body: Record<string, unknown> = {
@@ -524,31 +538,40 @@ export async function generateOwnerGeminiContent(
         const responseContent = candidate && typeof candidate.content === "object" && candidate.content !== null
           ? candidate.content as Record<string, unknown> : null;
         const parts = responseContent && Array.isArray(responseContent.parts) ? responseContent.parts as Array<Record<string, unknown>> : [];
-        const text = parts.map((part) => typeof part.text === "string" ? part.text : "").join("").trim();
-        if (!text) throw new OwnerGeminiProviderError("Vertex AI completed without a text response.");
+        const text = parts.map((part) => typeof part.text === "string" && part.thought !== true ? part.text : "").join("").trim();
         const usage = typeof parsed.usageMetadata === "object" && parsed.usageMetadata !== null
           ? parsed.usageMetadata as Record<string, unknown> : {};
+        const usageSummary = {
+          promptTokens: Number(usage.promptTokenCount ?? 0),
+          outputTokens: Number(usage.candidatesTokenCount ?? 0),
+          totalTokens: Number(usage.totalTokenCount ?? 0),
+        };
+        const elapsedMs = Date.now() - startedAt;
+        const finishReason = typeof candidate?.finishReason === "string" ? candidate.finishReason : undefined;
+        if (!text || finishReason === "MAX_TOKENS") {
+          const message = finishReason === "MAX_TOKENS"
+            ? "Gemini reached the selected model's single-response output limit before completing the response. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level."
+            : `Vertex AI completed without a text response${finishReason ? " (finish reason: " + finishReason + ")" : ""}.`;
+          throw new OwnerGeminiProviderError(message, undefined, false, "generate_content", {
+            usage: usageSummary, elapsedMs, finishReason,
+          });
+        }
         return {
           modelId: definition.id,
           thinkingLevel,
           text,
-          usage: {
-            promptTokens: Number(usage.promptTokenCount ?? 0),
-            outputTokens: Number(usage.candidatesTokenCount ?? 0),
-            totalTokens: Number(usage.totalTokenCount ?? 0),
-          },
-          elapsedMs: Date.now() - startedAt,
+          usage: usageSummary,
+          elapsedMs,
           rawResponse: parsed,
         };
       }
     } catch (error) {
       if (error instanceof OwnerGeminiProviderError) throw error;
       if (error instanceof Error && error.name === "AbortError") {
-        throw new OwnerGeminiProviderError("The Vertex AI request timed out after 90 seconds.", undefined, true, "generate_content");
+        throw new OwnerGeminiProviderError("The Vertex AI request was interrupted before completion. Please retry without changing the selected model.", undefined, true, "generate_content");
       }
       throw new OwnerGeminiProviderError("The Vertex AI request failed. Please retry without changing the selected model.", undefined, true, "generate_content");
     } finally {
-      clearTimeout(timeout);
     }
 
     if (retryDelay !== undefined) {
@@ -724,7 +747,7 @@ export async function openOwnerGeminiStream(
   const location = configuredLocation(env);
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
     ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
-    : Math.min(definition.singleRequestOutputTokens, 8_192);
+    : definition.singleRequestOutputTokens;
 
   const token = await getVerifiedModelAccessToken(env, definition, dependencies);
 
@@ -732,7 +755,6 @@ export async function openOwnerGeminiStream(
   const abortFromCaller = () => controller.abort();
   if (signal.aborted) controller.abort();
   else signal.addEventListener("abort", abortFromCaller, { once: true });
-  const timeout = setTimeout(() => controller.abort(), 8 * 60_000);
   const startedAt = Date.now();
   const body: Record<string, unknown> = {
     contents: input.contents.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
@@ -773,7 +795,6 @@ export async function openOwnerGeminiStream(
       throw new OwnerGeminiProviderError("The Vertex AI streaming request returned no response.", undefined, true, "stream_generate_content");
     }
     if (!response.ok) {
-      clearTimeout(timeout);
       signal.removeEventListener("abort", abortFromCaller);
       const diagnostic = await safeVertexErrorDiagnostic(response);
       throw new OwnerGeminiProviderError(
@@ -784,16 +805,14 @@ export async function openOwnerGeminiStream(
       );
     }
     if (!response.body) {
-      clearTimeout(timeout);
       signal.removeEventListener("abort", abortFromCaller);
       throw new OwnerGeminiProviderError("Vertex AI returned an empty response stream.");
     }
   } catch (error) {
-    clearTimeout(timeout);
     signal.removeEventListener("abort", abortFromCaller);
     if (error instanceof OwnerGeminiProviderError) throw error;
     if (error instanceof Error && error.name === "AbortError") {
-      throw new OwnerGeminiProviderError("The Vertex AI stream was cancelled or timed out.", undefined, true);
+      throw new OwnerGeminiProviderError("The Vertex AI stream was stopped or the connection was interrupted.", undefined, true);
     }
     throw new OwnerGeminiProviderError("The Vertex AI streaming request failed. Please retry without changing the selected model.", undefined, true);
   }
@@ -804,6 +823,7 @@ export async function openOwnerGeminiStream(
     let buffer = "";
     let fullText = "";
     let usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0 };
+    let finishReason: string | undefined;
     let finished = false;
 
     async function* parseBlock(block: string): AsyncGenerator<OwnerGeminiStreamEvent> {
@@ -826,6 +846,7 @@ export async function openOwnerGeminiStream(
       }
       const candidates = Array.isArray(parsed.candidates) ? parsed.candidates as Array<Record<string, unknown>> : [];
       const candidate = candidates[0];
+      if (typeof candidate?.finishReason === "string") finishReason = candidate.finishReason;
       const content = candidate && typeof candidate.content === "object" && candidate.content !== null
         ? candidate.content as Record<string, unknown> : null;
       const parts = content && Array.isArray(content.parts) ? content.parts as Array<Record<string, unknown>> : [];
@@ -850,7 +871,20 @@ export async function openOwnerGeminiStream(
         if (next.done) break;
       }
       if (buffer.trim()) yield* parseBlock(buffer);
-      if (!fullText.trim()) throw new OwnerGeminiProviderError("Vertex AI completed without a text response.");
+      if (finishReason === "MAX_TOKENS") {
+        const message = fullText.trim()
+          ? "Gemini reached the selected model's single-response output limit before completing the answer. The partial text has been retained. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level."
+          : "Gemini reached the selected model's single-response output limit before producing visible text. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level.";
+        throw new OwnerGeminiProviderError(message, undefined, false, "stream_generate_content", {
+          usage, elapsedMs: Date.now() - startedAt, finishReason,
+        });
+      }
+      if (!fullText.trim()) {
+        const message = `Vertex AI completed without a text response${finishReason ? " (finish reason: " + finishReason + ")" : ""}.`;
+        throw new OwnerGeminiProviderError(message, undefined, false, "stream_generate_content", {
+          usage, elapsedMs: Date.now() - startedAt, finishReason,
+        });
+      }
       finished = true;
       yield { type: "done", usage, elapsedMs: Date.now() - startedAt };
     } catch (error) {
@@ -863,7 +897,6 @@ export async function openOwnerGeminiStream(
       if (!finished) {
         try { await reader.cancel(); } catch { /* the upstream may already be closed */ }
       }
-      clearTimeout(timeout);
       signal.removeEventListener("abort", abortFromCaller);
       reader.releaseLock();
     }
