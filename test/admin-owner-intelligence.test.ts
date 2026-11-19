@@ -106,9 +106,10 @@ class FakeOwnerD1 {
   }
   read(sql: string, values: unknown[]): Array<Record<string, unknown>> {
     if (sql.startsWith("PRAGMA table_info(owner_intelligence_conversations)")) {
-      return ["id", "owner_id", "title", "created_at", "updated_at", "topic_id", "session_kind", "lifecycle_status", "cross_project_memory_enabled"]
+      return ["id", "owner_id", "title", "created_at", "updated_at", "topic_id", "session_kind", "lifecycle_status", "cross_project_memory_enabled", "parent_conversation_id", "rollover_handoff_id"]
         .map((name) => ({ name }));
     }
+    if (sql.includes("FROM owner_intelligence_handoffs")) return [];
     if (sql.includes("FROM owner_intelligence_conversation_memory_snapshots")) return [];
     if (sql.includes("cross_project_memory_enabled")) {
       const row = this.conversations.get(String(values[0]));
@@ -801,6 +802,139 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(db.messages.get(savedBody.message.id)?.content).toBe("Original question");
     expect([...db.messages.values()].filter((row) => row.role === "assistant")).toHaveLength(1);
     expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
+  });
+
+
+  it("warns before rollover, rejects in-flight work, then creates one provenance-rich linked successor", async () => {
+    const env = appEnv({ DB: (workerTestBindings as unknown as Env).DB });
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const db = env.DB!;
+    const topicResponse = await call(env, "/admin/api/intelligence/topics", ownerCookie, {
+      method: "POST", origin, body: { title: "Rollover acceptance topic" },
+    });
+    const topicBody = await topicResponse.json() as { topic: { id: string } };
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "M4.5 source chat", topicId: topicBody.topic.id },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const sourceId = createdBody.conversation.id;
+
+    // Initialise the M4.4 snapshot schema, then attach a deterministic pinned snapshot fixture.
+    const memoryInfo = await call(env, "/admin/api/intelligence/conversations/" + sourceId + "/memory", ownerCookie);
+    expect(memoryInfo.status).toBe(200);
+    const snapshotId = crypto.randomUUID();
+    const commitSha = "a".repeat(40);
+    const blobSha = "b".repeat(40);
+    const now = Date.now();
+    const filesJson = JSON.stringify([{ path: "project-memory.md", blobSha, content: "# Pinned project memory\n\nAccepted scope." }]);
+    await db.prepare(
+      "INSERT INTO owner_intelligence_conversation_memory_snapshots (snapshot_id,owner_id,conversation_id,project_id,project_name,workstream_id,feature_id,is_primary,is_active,hub_repository_id,hub_repository_owner,hub_repository_name,hub_branch,hub_commit_sha,hub_manifest_path,hub_manifest_blob_sha,catalog_entry_path,catalog_entry_blob_sha,project_manifest_path,project_manifest_blob_sha,scope_manifest_path,scope_manifest_blob_sha,scope_manifests_json,manifest_schema_version,files_json,token_count,token_model_id,cross_project_opt_in,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    ).bind(snapshotId, "owner", sourceId, "project-m45", "M4.5 fixture", null, null, 1, 1, 1463342529,
+      "ashini-x", "owner-memory-hub", "main", commitSha, "hub.yaml", blobSha, "catalog/projects.yaml", blobSha,
+      "projects/m45/project.yaml", blobSha, null, null, "[]", 1, filesJson, 12, "gemini-4-hydrogen", 0, now).run();
+
+    const userMessageId = crypto.randomUUID();
+    const assistantMessageId = crypto.randomUUID();
+    await db.batch([
+      db.prepare("INSERT INTO owner_intelligence_messages (id,conversation_id,owner_id,role,content,status,created_at) VALUES (?,?,?,'user',?,'complete',?)")
+        .bind(userMessageId, sourceId, "owner", "Continue the M4.5 automatic rollover and handoff milestone.", now + 1),
+      db.prepare("INSERT INTO owner_intelligence_messages (id,conversation_id,owner_id,role,content,status,created_at) VALUES (?,?,?,'assistant',?,'complete',?)")
+        .bind(assistantMessageId, sourceId, "owner", "Keep the 200,000-token cap and retain the source transcript. The project is pinned to owner-memory-hub main.", now + 2),
+      db.prepare("UPDATE owner_intelligence_session_usage SET used_tokens=189999,reserved_tokens=0 WHERE conversation_id=? AND owner_id=?")
+        .bind(sourceId, "owner"),
+    ]);
+
+    const belowThreshold = await call(env, "/admin/api/intelligence/conversations/" + sourceId + "/rollover", ownerCookie, {
+      method: "POST", origin, body: {},
+    });
+    expect(belowThreshold.status).toBe(409);
+    expect((await belowThreshold.json() as { error: string }).error).toBe("rollover_threshold_not_reached");
+
+    await db.prepare("UPDATE owner_intelligence_session_usage SET used_tokens=190000,reserved_tokens=25 WHERE conversation_id=? AND owner_id=?")
+      .bind(sourceId, "owner").run();
+    const busy = await call(env, "/admin/api/intelligence/conversations/" + sourceId + "/rollover", ownerCookie, {
+      method: "POST", origin, body: {},
+    });
+    expect(busy.status).toBe(409);
+    expect((await busy.json() as { error: string }).error).toBe("generation_in_progress");
+
+    await db.prepare("UPDATE owner_intelligence_session_usage SET reserved_tokens=0 WHERE conversation_id=? AND owner_id=?")
+      .bind(sourceId, "owner").run();
+    const rolled = await call(env, "/admin/api/intelligence/conversations/" + sourceId + "/rollover", ownerCookie, {
+      method: "POST", origin, body: {},
+    });
+    const rolledBody = await rolled.json() as {
+      conversation: { id: string; lifecycle_status: string; parent_conversation_id: string | null; topic_id: string | null };
+      handoff: { id: string; markdown: string; source_message_ids: string[]; github_sync_status: string };
+      usage: { limit_tokens: number; used_tokens: number; reserved_tokens: number; remaining_tokens: number };
+    };
+    expect(rolled.status).toBe(200);
+    expect(rolledBody.conversation.id).not.toBe(sourceId);
+    expect(rolledBody.conversation.lifecycle_status).toBe("active");
+    expect(rolledBody.conversation.parent_conversation_id).toBe(sourceId);
+    expect(rolledBody.conversation.topic_id).toBe(topicBody.topic.id);
+    expect(rolledBody.usage).toEqual(expect.objectContaining({
+      limit_tokens: 200000, used_tokens: 0, reserved_tokens: 0, remaining_tokens: 200000,
+    }));
+    expect(rolledBody.handoff.github_sync_status).toBe("pending_review");
+    expect(rolledBody.handoff.source_message_ids).toEqual([userMessageId, assistantMessageId]);
+    expect(rolledBody.handoff.markdown).toContain("Continue the M4.5 automatic rollover");
+    expect(rolledBody.handoff.markdown).toContain(commitSha);
+    expect(rolledBody.handoff.markdown).toContain(userMessageId);
+
+    const sourceDetail = await call(env, "/admin/api/intelligence/conversations/" + sourceId, ownerCookie);
+    const sourceBody = await sourceDetail.json() as {
+      conversation: { lifecycle_status: string; successor_conversation_id: string };
+      messages: Array<{ id: string; content: string }>;
+      usage: { used_tokens: number; limit_tokens: number };
+    };
+    expect(sourceBody.conversation.lifecycle_status).toBe("archived");
+    expect(sourceBody.conversation.successor_conversation_id).toBe(rolledBody.conversation.id);
+    expect(sourceBody.messages.map((message) => message.id)).toEqual([userMessageId, assistantMessageId]);
+    expect(sourceBody.usage).toEqual(expect.objectContaining({ used_tokens: 190000, limit_tokens: 200000 }));
+
+    const successorDetail = await call(env, "/admin/api/intelligence/conversations/" + rolledBody.conversation.id, ownerCookie);
+    const successorBody = await successorDetail.json() as {
+      projectMemory: { snapshots: Array<{ commitSha: string; files: Array<{ path: string; blobSha: string }> }> };
+      handoff: { id: string; markdown: string };
+    };
+    expect(successorBody.projectMemory.snapshots).toHaveLength(1);
+    expect(successorBody.projectMemory.snapshots[0].commitSha).toBe(commitSha);
+    expect(successorBody.projectMemory.snapshots[0].files).toEqual([{ path: "project-memory.md", blobSha }]);
+    expect(successorBody.handoff.id).toBe(rolledBody.handoff.id);
+
+    const retry = await call(env, "/admin/api/intelligence/conversations/" + sourceId + "/rollover", ownerCookie, {
+      method: "POST", origin, body: {},
+    });
+    expect(retry.status).toBe(200);
+    expect((await retry.json() as { conversation: { id: string } }).conversation.id).toBe(rolledBody.conversation.id);
+    const successorCount = await db.prepare("SELECT COUNT(*) AS count FROM owner_intelligence_conversations WHERE owner_id=? AND parent_conversation_id=?")
+      .bind("owner", sourceId).first<{ count: number }>();
+    expect(Number(successorCount?.count)).toBe(1);
+
+    const blockedSourceAppend = await call(env, "/admin/api/intelligence/conversations/" + sourceId + "/messages", ownerCookie, {
+      method: "POST", origin, body: { content: "This must not alter the archived transcript." },
+    });
+    expect(blockedSourceAppend.status).toBe(404);
+
+    let countedHandoffPrompt = "";
+    vi.mocked(countOwnerGeminiInputTokens).mockClear().mockImplementationOnce(async (_env, input) => {
+      countedHandoffPrompt = input.contents[0]?.text || "";
+      return 5;
+    });
+    vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async () => (async function* () {
+      yield { type: "done" as const, usage: { promptTokens: 5, outputTokens: 5, totalTokens: 10 }, elapsedMs: 5 };
+    })());
+    const continued = await call(env, "/admin/api/intelligence/conversations/" + rolledBody.conversation.id + "/generate", ownerCookie, {
+      method: "POST", origin,
+      body: { content: "Continue from the handoff now.", modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH" },
+    });
+    expect(continued.status).toBe(200);
+    await continued.text();
+    expect(countedHandoffPrompt).toContain("ROLLOVER HANDOFF REFERENCE DATA");
+    expect(countedHandoffPrompt).toContain(commitSha);
+    expect(countedHandoffPrompt).toContain(userMessageId);
   });
 
   it("keeps a 200,000-token budget per conversation and blocks a full session server-side", async () => {
