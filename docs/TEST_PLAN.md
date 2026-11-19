@@ -492,3 +492,11 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 5. The Owner created a second Scratchpad with no topic, project or Project Memory attached. Gemini explicitly said it had no access and could not verify the private project SHA or active files.
 6. This authenticated browser test complements, but does not replace, automated M4.4 validation and release checks; those checks alone do not exercise authenticated Project Context. The M4.4 acceptance record contains the complete observation and limitations.
 7. **Result:** M4.4 is accepted and closed. M4.5 is next; M4.6-P0 remains required before M4.6 only.
+
+
+### Owner Gemini all-model response allowance — 2026-11-20
+- Verify Gemini 4 Hydrogen, Carbon and Argon all select `v1beta1` when the funded streaming output allowance exceeds 65,536 tokens, follow `CONTINUATION` tokens and aggregate usage across segments.
+- Verify Carbon and Argon use 65,536 tokens for streaming segments while retaining their separate 32,768-token non-streaming GenerateContent limit.
+- Verify every registered Gemini 3.x model can reserve up to its native 65,536-token output maximum, remains on `v1` and never sends a continuation token.
+- Verify D1 reserves repeated prompt tokens for every Gemini 4 continuation segment and total reservation remains within the existing 200,000-token conversation balance.
+- Preserve the 200,000-token conversation lock, CountTokens preflight, exact usage settlement, explicit Stop/disconnect cancellation, and bounded retry only for explicit initial 429 capacity rejections.
