@@ -458,7 +458,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("content-security-policy")).toContain("script-src 'self'");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(html).toContain("BRɅIN Intelligence");
+    expect(html).not.toContain('class="topbar"');
+    expect(html).not.toContain('class="avatar"');
     expect(html).toContain("New chat");
     expect(html).toContain("Your conversations");
     expect(html).toContain('id="bottomDock"');
@@ -493,6 +494,18 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain('id="modelSelect"');
     expect(html).toContain('id="modelRetry"');
     expect(html).toContain('id="thinkingSelect"');
+    expect(html).not.toContain('id="composerHint"');
+    expect(html).toContain('<div class="composer-controls">');
+    const composerControlsStart = html.indexOf('<div class="composer-controls">');
+    const composerBottomStart = html.indexOf('<div class="composer-bottom">');
+    const modelChooserStart = html.indexOf('<label class="model-picker">', composerControlsStart);
+    const thinkingChooserStart = html.indexOf('<label class="thinking-picker">', composerControlsStart);
+    const menuButtonStart = html.indexOf('id="mobileMenu"', composerControlsStart);
+    expect(composerControlsStart).toBeGreaterThan(composerBottomStart);
+    expect(menuButtonStart).toBeGreaterThan(composerControlsStart);
+    expect(modelChooserStart).toBeGreaterThan(menuButtonStart);
+    expect(thinkingChooserStart).toBeGreaterThan(modelChooserStart);
+    expect(html.indexOf('<header class="topbar">')).toBe(-1);
     expect(html).toContain("Responses stream from your selected model.");
     expect(html).toContain('<script src="/admin/intelligence.js" defer></script>');
     expect(html).not.toContain("<script nonce=");
@@ -523,6 +536,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("The model is sending response text.");
     expect(script).toContain("Vertex AI has accepted the request");
     expect(script).toContain("meta-pill level");
+    expect(script).not.toContain("composerHint");
+    expect(script).toContain('document.getElementById("mobileMenu").addEventListener');
     expect(script).toContain("function resizeComposerInput()");
     expect(script).toContain('messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});');
     expect(script).toContain("maxHeight=144");
