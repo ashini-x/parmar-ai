@@ -30,7 +30,7 @@ Out of scope: archive/session search, automatic branch refresh, rollover, compac
 - M4.4 release versions: `parmar-ai` `fd932efb-9d97-4e8f-837f-79a460409495` (deployment `1f2b9b0e-8655-4158-b4a1-23b83ad89aba`); `brvin-service` `90b21e52-2a55-402e-8398-0c6e308d3a0e` (deployment `719cbe9a-435f-4080-ad8b-344ecf59320f`). Acceptance artifact [14552742089](https://github.com/ashini-x/parmar-ai/actions/runs/44568064917/artifacts/14552742089).
 - Current main later added PR #365's separate response renderer; latest workflow [44571138999](https://github.com/ashini-x/parmar-ai/actions/runs/44571138999) passed. Current versions at 100% traffic: `parmar-ai` `fccd13e6-1be3-4ecb-b1e6-d42d352cd1f8` (deployment `4e1185bf-e60c-4ad6-b003-0afea11f74f9`) and `brvin-service` `500709c7-b62a-4c6c-9613-159f77988310` (deployment `967d0804-a43f-4236-8284-ac900b1977b5`). Artifact [14553902907](https://github.com/ashini-x/parmar-ai/actions/runs/44571138999/artifacts/14553902907).
 
-These release smoke checks validate root and BRVIN-backed health. They do not sign in as the Owner or exercise Project Context. M4.4 is not marked fully accepted until the Owner walkthrough below is completed.
+These release smoke checks validate root and BRVIN-backed health; they do not sign in as the Owner or exercise Project Context. At the time of that release, the authenticated browser gate was still pending. The Owner's subsequent production walkthrough passed and is recorded in Section 4 below.
 
 ## 4. Authenticated Owner production acceptance — PASSED (2026-11-19 IST)
 
