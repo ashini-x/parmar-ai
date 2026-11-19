@@ -699,7 +699,20 @@ async function loadConversationForSave(env: Env, owner: string, conversationId: 
   const result = await env.DB!.prepare(
     "SELECT id,role,content,status,created_at FROM owner_intelligence_messages WHERE conversation_id=? AND owner_id=? AND role IN ('user','assistant') ORDER BY created_at DESC,id DESC LIMIT 18",
   ).bind(conversationId, owner).all<OwnerMessage>();
-  return { ...conversation, messages: (result.results ?? []).reverse() };
+  const messages = (result.results ?? []).reverse();
+  const handoff = await env.DB!.prepare(
+    "SELECT id,markdown,created_at FROM owner_intelligence_handoffs WHERE owner_id=? AND successor_conversation_id=?",
+  ).bind(owner, conversationId).first<{ id: string; markdown: string; created_at: number }>();
+  if (handoff) {
+    messages.push({
+      id: "handoff-" + handoff.id,
+      role: "assistant",
+      content: handoff.markdown,
+      status: "complete",
+      created_at: Math.max(Date.now(), Number(handoff.created_at)),
+    });
+  }
+  return { ...conversation, messages };
 }
 type TopicMemoryRow = {
   id: string; title: string; github_installation_id: number | null; repository_id: number | null;
@@ -884,6 +897,9 @@ async function finishVerifiedSave(env: Env, owner: string, preview: PreviewRow, 
     env.DB!.prepare(
       "UPDATE owner_intelligence_github_previews SET status='synced',files_json=?,updated_at=? WHERE id=? AND owner_id=? AND status='verifying' AND commit_sha=?",
     ).bind(JSON.stringify(files), now, preview.id, owner, preview.commit_sha),
+    env.DB!.prepare(
+      "UPDATE owner_intelligence_handoffs SET github_sync_status='synced',github_commit_sha=?,updated_at=? WHERE owner_id=? AND successor_conversation_id=? AND github_sync_status='pending_review'",
+    ).bind(preview.commit_sha, now, owner, preview.conversation_id),
   ]);
   if (result.some((entry) => !entry.success) ||
       Number(result[0]?.meta?.changes || 0) !== 1 ||
