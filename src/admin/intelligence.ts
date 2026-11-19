@@ -85,7 +85,6 @@ const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
 const MAX_CONVERSATIONS = 100;
 const MAX_TOPICS = 100;
 export const OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT = 200_000;
-const OWNER_INTELLIGENCE_DEFAULT_OUTPUT_RESERVATION = 8_192;
 /**
  * Makes response presentation an automatic model decision for every Owner turn.
  * Keep this instruction in both CountTokens preflight and StreamGenerateContent
@@ -592,8 +591,12 @@ export async function draftOwnerMemoryWithBudget(
     const definitivelyRejected = error instanceof OwnerGeminiProviderError &&
       (error.stage === "generate_content" || error.stage === "count_tokens_probe") &&
       [400, 401, 403, 404, 429].includes(Number(error.status));
+    const reportedTokens = error instanceof OwnerGeminiProviderError
+      ? error.usage?.totalTokens : undefined;
     await settleOwnerIntelligenceSessionReservation(
-      env, conversationId, reservationId, undefined, definitivelyRejected,
+      env, conversationId, reservationId,
+      Number.isSafeInteger(reportedTokens) && Number(reportedTokens) > 0 ? Number(reportedTokens) : undefined,
+      definitivelyRejected,
     );
     throw error;
   }
@@ -1421,7 +1424,7 @@ async function handleOwnerGeneration(
   }
 
   const availableTokens = sessionUsage.remaining_tokens;
-  const outputTokenLimit = Math.min(OWNER_INTELLIGENCE_DEFAULT_OUTPUT_RESERVATION, availableTokens - promptTokens);
+  const outputTokenLimit = Math.min(definition.singleRequestOutputTokens, availableTokens - promptTokens);
   if (outputTokenLimit < 1) {
     sessionUsage = await lockOwnerIntelligenceSession(env, conversationId, "request_exceeds_remaining_budget") ?? sessionUsage;
     return json({
@@ -1575,7 +1578,9 @@ async function handleOwnerGeneration(
           const stopped = abortController.signal.aborted ||
             (error instanceof OwnerGeminiProviderError && error.message === "Generation was stopped.");
           const status: OwnerIntelligenceMessage["status"] = generatedText ? "partial" : "error";
-          finalMessage = await finalize(status);
+          const providerUsage = error instanceof OwnerGeminiProviderError && error.usage && error.elapsedMs !== undefined
+            ? { ...error.usage, elapsedMs: error.elapsedMs } : undefined;
+          finalMessage = await finalize(status, providerUsage);
           if (!stopped) {
             const message = error instanceof OwnerGeminiProviderError
               ? error.message : "The response stream failed. Any received text has been retained.";
