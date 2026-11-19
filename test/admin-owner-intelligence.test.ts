@@ -479,7 +479,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain('font-display:block');
     expect(html).toContain('/admin/intelligence-fonts/brain-universal-devanagari-400.woff2');
     expect(html).not.toContain('font-family:Inter,ui-sans-serif,system-ui');
-    expect(html).toContain('font-src \'self\'');
+    expect(response.headers.get("content-security-policy")).toContain("font-src 'self'");
     expect(html).toContain('Welcome back Sir.</h1>');
     expect(html).toContain('<div class="welcome"><div class="welcome-brand" aria-label="BRɅIN">BRɅIN</div><h1>Welcome back Sir.</h1></div>');
     expect(html).toContain(".welcome-brand{margin:0 0 19px");
