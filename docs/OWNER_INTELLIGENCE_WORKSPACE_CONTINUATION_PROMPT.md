@@ -248,6 +248,18 @@ M4.3 is fully accepted and closed. The remaining evidence was reconciled using r
 
 **Acceptance:** M4.4 is formally closed. The 200,000-token cumulative per-chat budget is unchanged. No D1 or Cloudflare mutation, Google Cloud setting change, billing/quota change, M4.3 Save repetition, or student Telegram runtime change was part of this walkthrough.
 
+## Immediate prerequisite — merge and deploy Owner generation reliability correction
+
+Before the remaining authenticated M4.5 browser walkthrough, finish PR validation and production deployment for branch `fix/owner-intelligence-response-limits-final2`. The Owner reported a Gemini 4 Hydrogen XHIGH turn ending with "Vertex AI completed without a text response" while the cumulative session meter showed only 9,671 / 200,000. Source inspection found the ordinary chat's fixed 8,192-token per-response reservation, an application-owned 8-minute streaming deadline, and no preservation of Vertex finishReason/usage when the stream produced no visible text.
+
+The correction under review:
+- Keep the exact **200,000 cumulative token per-conversation ledger, 180K warning, 190K rollover gate, source-preservation and successor behavior unchanged**.
+- Reserve up to the selected model's `singleRequestOutputTokens` for ordinary chat, bounded by the counted prompt and remaining 200K session balance. Gemini 4 Hydrogen can use up to 65,536 output tokens in one foreground streaming segment; XHIGH reasoning tokens count against that output allowance.
+- Remove app-owned 8-minute streaming and 90-second non-stream generation deadlines. Preserve explicit Stop and client-disconnect cancellation. A 60-second heartbeat renews the D1 reservation lease while generation is active; 10-minute stale recovery applies only after heartbeats stop. Keep the 8-second CountTokens and 12-second Google access-token preflight timeouts; these occur before generation.
+- Preserve Vertex `finishReason` and usage metadata when no user-visible text is produced. Surface `MAX_TOKENS` clearly and settle reported usage rather than charging the full reservation when the provider supplies usage data.
+- Do not claim infinite output: model/API limits, network/provider failures, browser disconnects and Worker runtime interruptions still exist. The current v1 streaming adapter does not implement Gemini long-decode continuation.
+- Validate, merge and verify the paired production Worker release before asking the Owner to test. Record actual PR, CI, production workflow and Worker versions in the policy, roadmap, test plan and M4.5 acceptance record.
+
 ## Immediate current task — complete M4.5 authenticated Owner acceptance
 
 M4.5 is merged and production deployed. Runtime release commit: `a712a69cc46b5d9c4d249871a89e4084edd95b36`. PR [#375](https://github.com/ashini-x/parmar-ai/pull/375), reconciled CI [#44620484798](https://github.com/ashini-x/parmar-ai/actions/runs/44620484798), and production release [#44620959101](https://github.com/ashini-x/parmar-ai/actions/runs/44620959101) all passed. Exact worker versions, deployments, release artifact and read-only D1 schema evidence are recorded in [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md).
