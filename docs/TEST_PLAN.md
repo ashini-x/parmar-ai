@@ -435,25 +435,13 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 - **Automated fix validation and production deployment passed:** PR [#352](https://github.com/ashini-x/parmar-ai/pull/352), merge `c555d9428421fbbe600a872093730fa3dce644e1`; workflow [44411119143](https://github.com/ashini-x/parmar-ai/actions/runs/44411119143) succeeded. Cloudflare deployment `582658d9-cd4c-4d2a-b2a8-4325c18591e0` serves `parmar-ai` version `1df8cbae-4777-44f9-87b4-e26dc6acde93` at 100% traffic. The full workflow passed typecheck, Vitest, Node tests, three dry-run bundles, production deployment and root/BRVIN/Fatman smoke checks.
 - **Remaining live browser check:** hard-refresh Owner Intelligence, create `Owner Intelligence`, verify the topic appears in both dropdowns and confirm it is persisted in production D1. Then attach the Memory Hub and continue the M4.3 acceptance checklist below.
 
-### M4.3 Owner browser acceptance status — 2026-11-19 IST
+### M4.3 Owner browser acceptance — current status (2026-11-19 IST)
 
-**Owner-provided production screenshot confirms the installation sub-gate passed:**
-- Panel: `Connected · 1 verified installation(s)`.
-- Account: `ashini-x · User`.
-- Repository: `ashini-x/owner-memory-hub · Private`.
-- Branch field: `main`; memory-root field currently displays `memory`.
-- The UI still says `Select a topic above`; no topic attachment is evidenced by this screenshot.
+**Passed live Owner subtest:** the external-edit Conflict was preserved, a fresh Preview included the manually authored progress comment, the Owner explicitly confirmed Save to `main`, and the committed `progress.md` was fetched/read back. The Owner confirms newly generated content appears directly below the manual comment. See [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md) for preview IDs, external commit, CI and deployment evidence.
 
-**Remaining manual acceptance (not yet passed):**
-- [ ] Create a project topic and attach the verified hub with a unique project memory-root path.
-- [ ] Create/open a conversation in that topic and select it in Save Current Chat to Project.
-- [ ] Generate the Save preview and review/edit each of the five files.
-- [ ] Confirm the save; verify commit SHA and byte-exact read-back of all five files.
-- [ ] Verify topic association/promotion and the same conversation's 200K token accounting.
-- [ ] Advance a touched destination path after preview; confirming the stale preview must return Conflict and preserve the external edit.
-- [ ] Create a fresh preview and complete a normal successful verified save.
+The earlier screenshot-only note was historical: at that point the selector showed no topic. The subsequent successful live Save demonstrates that the Owner proceeded through the topic/project save flow. Do not use that old screenshot as current evidence of an unattached topic.
 
-Do not uninstall/reinstall the App. Do not mark M4.3 complete or start M4.4 until the remaining manual checks pass.
+**Do not repeat the accepted Preview/Save/read-back flow.** Remaining closeout is a read-only reconciliation of (1) saved topic/repository/branch/memory-root metadata and Scratchpad promotion, if applicable, and (2) the memory-draft reservation/usage settlement for the same conversation. If records confirm these, close M4.3; if a specific record is absent, test only that item. Preserve the 200,000-token cap and strict branch-head Conflict rule. Do not reinstall the App or mutate production D1 just to create evidence.
 
 ## Owner Gemini Intelligence — M4.3 live acceptance addendum (2026-11-19 IST)
 
