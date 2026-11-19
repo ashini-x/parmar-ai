@@ -66,7 +66,6 @@ const defaultDependencies: OwnerProviderDependencies = {
 const PROBE_TIMEOUT_MS = 8_000;
 const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
 const MAX_CONVERSATION_CONTEXT_CHARS = 300_000;
-const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_ATTEMPTS = 3;
 const CATALOGUE_CACHE_MS = 90_000;
 // Interactive chat retries the initial stream-open response at most twice.
@@ -470,12 +469,11 @@ export async function generateOwnerGeminiContent(
   const token = await getVerifiedModelAccessToken(env, definition, dependencies);
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
     ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
-    : Math.min(definition.singleRequestOutputTokens, 8_192);
+    : definition.singleRequestOutputTokens;
   const startedAt = Date.now();
 
   for (let attempt = 1; attempt <= GENERATION_MAX_ATTEMPTS; attempt += 1) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
     let retryDelay: number | undefined;
     try {
       const body: Record<string, unknown> = {
@@ -544,11 +542,10 @@ export async function generateOwnerGeminiContent(
     } catch (error) {
       if (error instanceof OwnerGeminiProviderError) throw error;
       if (error instanceof Error && error.name === "AbortError") {
-        throw new OwnerGeminiProviderError("The Vertex AI request timed out after 90 seconds.", undefined, true, "generate_content");
+        throw new OwnerGeminiProviderError("The Vertex AI request was interrupted before completion. Please retry without changing the selected model.", undefined, true, "generate_content");
       }
       throw new OwnerGeminiProviderError("The Vertex AI request failed. Please retry without changing the selected model.", undefined, true, "generate_content");
     } finally {
-      clearTimeout(timeout);
     }
 
     if (retryDelay !== undefined) {
@@ -732,7 +729,6 @@ export async function openOwnerGeminiStream(
   const abortFromCaller = () => controller.abort();
   if (signal.aborted) controller.abort();
   else signal.addEventListener("abort", abortFromCaller, { once: true });
-  const timeout = setTimeout(() => controller.abort(), 8 * 60_000);
   const startedAt = Date.now();
   const body: Record<string, unknown> = {
     contents: input.contents.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
@@ -773,7 +769,6 @@ export async function openOwnerGeminiStream(
       throw new OwnerGeminiProviderError("The Vertex AI streaming request returned no response.", undefined, true, "stream_generate_content");
     }
     if (!response.ok) {
-      clearTimeout(timeout);
       signal.removeEventListener("abort", abortFromCaller);
       const diagnostic = await safeVertexErrorDiagnostic(response);
       throw new OwnerGeminiProviderError(
@@ -784,16 +779,14 @@ export async function openOwnerGeminiStream(
       );
     }
     if (!response.body) {
-      clearTimeout(timeout);
       signal.removeEventListener("abort", abortFromCaller);
       throw new OwnerGeminiProviderError("Vertex AI returned an empty response stream.");
     }
   } catch (error) {
-    clearTimeout(timeout);
     signal.removeEventListener("abort", abortFromCaller);
     if (error instanceof OwnerGeminiProviderError) throw error;
     if (error instanceof Error && error.name === "AbortError") {
-      throw new OwnerGeminiProviderError("The Vertex AI stream was cancelled or timed out.", undefined, true);
+      throw new OwnerGeminiProviderError("The Vertex AI stream was stopped or the connection was interrupted.", undefined, true);
     }
     throw new OwnerGeminiProviderError("The Vertex AI streaming request failed. Please retry without changing the selected model.", undefined, true);
   }
@@ -863,7 +856,6 @@ export async function openOwnerGeminiStream(
       if (!finished) {
         try { await reader.cancel(); } catch { /* the upstream may already be closed */ }
       }
-      clearTimeout(timeout);
       signal.removeEventListener("abort", abortFromCaller);
       reader.releaseLock();
     }
