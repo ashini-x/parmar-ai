@@ -591,8 +591,12 @@ export async function draftOwnerMemoryWithBudget(
     const definitivelyRejected = error instanceof OwnerGeminiProviderError &&
       (error.stage === "generate_content" || error.stage === "count_tokens_probe") &&
       [400, 401, 403, 404, 429].includes(Number(error.status));
+    const reportedTokens = error instanceof OwnerGeminiProviderError
+      ? error.usage?.totalTokens : undefined;
     await settleOwnerIntelligenceSessionReservation(
-      env, conversationId, reservationId, undefined, definitivelyRejected,
+      env, conversationId, reservationId,
+      Number.isSafeInteger(reportedTokens) && Number(reportedTokens) > 0 ? Number(reportedTokens) : undefined,
+      definitivelyRejected,
     );
     throw error;
   }
@@ -1574,7 +1578,9 @@ async function handleOwnerGeneration(
           const stopped = abortController.signal.aborted ||
             (error instanceof OwnerGeminiProviderError && error.message === "Generation was stopped.");
           const status: OwnerIntelligenceMessage["status"] = generatedText ? "partial" : "error";
-          finalMessage = await finalize(status);
+          const providerUsage = error instanceof OwnerGeminiProviderError && error.usage && error.elapsedMs !== undefined
+            ? { ...error.usage, elapsedMs: error.elapsedMs } : undefined;
+          finalMessage = await finalize(status, providerUsage);
           if (!stopped) {
             const message = error instanceof OwnerGeminiProviderError
               ? error.message : "The response stream failed. Any received text has been retained.";
