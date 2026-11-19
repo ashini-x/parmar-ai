@@ -10,7 +10,7 @@
 
 ## 0. Shared BRɅIN brand and typography baseline
 
-All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md). The Owner-selected direction remains AERUNO-style lettering for the BRɅIN wordmark only and ChatGPT/OpenAI Sans visual styling for ordinary UI text. The Owner confirmed the current workspace is private and Owner-only; the supplied AERUNO Trial terms still distinguish personal use from company logo/app use and prohibit general font redistribution, so the trial binary is not bundled. Its missing U+0245 `Ʌ` glyph also remains unresolved. The Poppins bundle has been removed from the Owner runtime and production deployed by PR #374. The Owner UI declares an OpenAI Sans-first system-font stack; actual OpenAI Sans is not bundled yet, so a platform fallback is rendered until official files and confirmed product-use/hosting terms are available. The deployed release passed CI, root/health smoke, BRVIN binding and Fatman retrieval acceptance. Authenticated-browser visual confirmation remains pending. Typography work must not alter Owner auth, model selection, Vertex, D1, token budgets, conversation semantics or student-facing behavior.
+All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md). The Owner-selected direction remains AERUNO-style lettering for the BRɅIN wordmark only and ChatGPT/OpenAI Sans visual styling for ordinary UI text. The Owner confirmed the current workspace is private and Owner-only; the supplied AERUNO Trial terms still distinguish personal use from company logo/app use and prohibit general font redistribution, so the trial binary is not bundled. Its missing U+0245 `Ʌ` glyph also remains unresolved. The Poppins bundle has been removed from the Owner runtime and production deployed by PR #374. The Owner UI declares an OpenAI Sans-first system-font stack; actual OpenAI Sans is not bundled yet, so a platform fallback is rendered until the official package is available. The BRɅIN wordmark and sidebar monogram are now AERUNO-derived SVG outlines inside the authenticated Owner Intelligence panel only; the trial OTF itself is not shipped. The deployed release passed CI, root/health smoke, BRVIN binding and Fatman retrieval acceptance. Authenticated-browser visual confirmation remains pending. Typography work must not alter Owner auth, model selection, Vertex, D1, token budgets, conversation semantics or student-facing behavior.
 
 ### Owner typography removal and production release — 2026-11-20 IST
 
@@ -19,6 +19,14 @@ All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN
 - Owner UI now uses the OpenAI Sans-first platform system stack. Actual OpenAI Sans font files are not bundled, and the AERUNO wordmark font remains pending permission/glyph coverage.
 - Release Validation [#44610099216](https://github.com/ashini-x/parmar-ai/actions/runs/44610099216) passed all test/build checks and production deployment acceptance. `parmar-ai` is at 100% on version `7a1c632b-d9c5-4fa2-9535-e0afb0e21b8f` / deployment `10460485-b57a-4857-97b0-350bcd3e0522`; `brvin-service` is at 100% on version `56a88525-e1b5-45f7-abfb-b65faa8b0d57` / deployment `c3d67fc7-a659-4722-9163-8f5692ae1a17`. Acceptance artifact `14571718100`.
 - CI and production root/health, BRVIN binding and Fatman retrieval checks passed. Authenticated Owner-browser visual confirmation remains pending.
+
+### AERUNO-derived Owner-only wordmark — 2026-11-20 IST
+
+- The Owner panel now renders the BRɅIN welcome wordmark, sidebar wordmark and sidebar monogram as SVG outlines derived from the supplied AERUNO Trial.
+- The source OTF is not stored in the public repository, shipped in the Worker bundle, or exposed through a static asset URL. The path markup is rendered only as part of the protected Owner HTML/JS endpoints.
+- Because the trial lacks U+0245 `Ʌ`, its angular, crossbar-free `A` outline is mapped to the BRɅIN `Ʌ` glyph.
+- All normal text remains on the OpenAI Sans-first system stack. Actual OpenAI Sans font files remain unbundled.
+- Scope is restricted to Owner Intelligence; no BRVIN Teachers, public website or other product logo changed.
 
 ## 1. Product goal
 

@@ -1,6 +1,6 @@
 # BRɅIN Brand Typography and Asset Policy
 
-**Status:** Poppins removed from the Owner runtime and production deployed on 2026-11-20 IST; AERUNO and actual OpenAI Sans font assets remain pending  
+**Status:** Poppins removed from Owner runtime; outlined AERUNO-style wordmark now implemented only inside authenticated Owner Intelligence; actual OpenAI Sans font assets remain pending  
 **Last updated:** 2026-11-20 IST  
 **Canonical repository:** `ashini-x/parmar-ai`  
 **Applies to:** BRɅIN brand identity and product UI, including Owner Gemini Intelligence and BRVIN Teachers
@@ -60,7 +60,7 @@ OpenAI Sans is a proprietary brand typeface, not an open-source font that BRɅIN
 - The previous Poppins WOFF2 bundle, its OFL/readme files, the Owner page's font preloads and its `@font-face` rules are removed by the typography-removal change.
 - The Owner page now uses the stack `"OpenAI Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`. This is **OpenAI Sans-first**, but until the official font package is obtained and authorized, browsers use their platform system-font fallback. Do not describe the fallback as the actual OpenAI Sans file.
 - This is consistent with OpenAI's published guidance for ChatGPT-integrated UI surfaces, which recommends platform-native system fonts rather than custom fonts. A self-hosted OpenAI Sans package must still come through the official access route with confirmed rights for the target product.
-- The Owner wordmark remains text rendered by the active UI stack. AERUNO is not embedded or applied until the appropriate use is cleared and the required `Ʌ` glyph is available.
+- The authenticated Owner Intelligence page now renders the BRɅIN wordmark and sidebar monogram as SVG outlines derived locally from the supplied AERUNO Trial. The font file itself is not shipped, bundled, served, stored in Cloudflare assets or committed. The trial has no U+0245 (`Ʌ`) glyph; for the private Owner-only wordmark, its angular crossbar-free uppercase A outline is intentionally mapped to the brand's `Ʌ`. This treatment is restricted to the protected `/admin/intelligence` page and its separately protected `/admin/intelligence.js` endpoint, both gated by `requireOwner`. Do not reuse this artwork in public marketing, public website logos or BRVIN Teachers without separately reviewing the applicable font-use terms.
 
 ## 4. Current font asset inventory
 
@@ -97,7 +97,7 @@ The repository previously used a Poppins CSS alias called **BRɅIN universal fon
 - [x] Owner's role split recorded: AERUNO-style logo; ChatGPT/OpenAI Sans-style ordinary UI typography.
 - [ ] Obtain AERUNO full-family or written permission covering the intended private/company wordmark use, including a usable `Ʌ` glyph or permission for a custom glyph.
 - [ ] Obtain official OpenAI Sans files from the signed-in design-guidelines portal and verify the applicable product-use/hosting terms.
-- [ ] Produce and visually approve the outlined BRɅIN SVG wordmark once AERUNO use and glyph coverage are resolved.
+- [x] Generate and apply outlined AERUNO-derived BRɅIN SVG wordmark/monogram in the authenticated Owner Intelligence panel only; the angular A glyph is intentionally mapped to `Ʌ` because the trial font lacks U+0245.
 - [x] Remove Poppins WOFF2 assets, OFL/readme files, preloads and Owner-page `@font-face` rules from the repository/runtime source.
 - [x] Change Owner UI typography to an OpenAI Sans-first, platform-native system stack. Actual OpenAI Sans is not bundled yet; the current browser rendering uses its system fallback.
 - [x] Verify the change through CI and production deployment/release acceptance.
