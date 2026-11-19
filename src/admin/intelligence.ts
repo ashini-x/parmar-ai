@@ -61,8 +61,8 @@ interface OwnerMessageRow extends OwnerIntelligenceMessage {
 
 const readyDatabases = new WeakSet<object>();
 const MAX_TITLE_LENGTH = 80;
-const MAX_MESSAGE_LENGTH = MAX_OWNER_GEMINI_CONTEXT_CHARS;
 const MAX_OWNER_GEMINI_CONTEXT_CHARS = 300_000;
+const MAX_MESSAGE_LENGTH = MAX_OWNER_GEMINI_CONTEXT_CHARS;
 const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
 const MAX_CONVERSATIONS = 100;
 const MAX_TOPICS = 100;
