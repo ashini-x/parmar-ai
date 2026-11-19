@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.4 acceptance closed. M4.4 Project Memory is merged, production deployed and authenticated-Owner accepted. **Next task: M4.5 — Automatic rollover and handoff.** M4.5–M4.8 remain approved, not implemented; M4.6-P0 is required before M4.6; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-20 IST — Owner New Chat welcome simplified by PR #370; M4.4 authenticated attach/read and independent Scratchpad-isolation acceptance passed; M4.4 formally closed.  
+**Last updated:** 2026-11-20 IST — typography removal PR prepared;  Owner New Chat welcome simplified by PR #370; M4.4 authenticated attach/read and independent Scratchpad-isolation acceptance passed; M4.4 formally closed.  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -10,7 +10,7 @@
 
 ## 0. Shared BRɅIN brand and typography baseline
 
-All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md). The Owner-selected direction is AERUNO-style lettering for the BRɅIN wordmark only and the ChatGPT/OpenAI Sans visual style for all ordinary UI text. The uploaded AERUNO Trial file is not cleared for commercial use and lacks the special `Ʌ` glyph; do not commit or deploy it. OpenAI Sans must be obtained through its official access route and used only with confirmed product hosting/embedding permission. Existing OFL-licensed Poppins assets remain the current/legacy deployed UI font until a compliant migration is ready. Typography work must not alter Owner auth, model selection, Vertex, D1, token budgets, conversation semantics or student-facing behavior.
+All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md). The Owner-selected direction remains AERUNO-style lettering for the BRɅIN wordmark only and ChatGPT/OpenAI Sans visual styling for ordinary UI text. The Owner confirmed the current workspace is private and Owner-only; the supplied AERUNO Trial terms still distinguish personal use from company logo/app use and prohibit general font redistribution, so the trial binary is not bundled. Its missing U+0245 `Ʌ` glyph also remains unresolved. The Poppins bundle is being removed from the Owner runtime; the UI is moving to an OpenAI Sans-first system-font stack, with actual OpenAI Sans pending official access and confirmed use/hosting terms. Typography work must not alter Owner auth, model selection, Vertex, D1, token budgets, conversation semantics or student-facing behavior.
 
 ## 1. Product goal
 

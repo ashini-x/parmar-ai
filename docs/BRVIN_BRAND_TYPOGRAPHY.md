@@ -1,6 +1,6 @@
 # BRɅIN Brand Typography and Asset Policy
 
-**Status:** Owner-selected direction recorded; production font assets are not yet cleared for distribution  
+**Status:** Poppins asset bundle removed from Owner runtime in the current typography-removal change; AERUNO and OpenAI Sans remain pending authorized font access  
 **Last updated:** 2026-11-20 IST  
 **Canonical repository:** `ashini-x/parmar-ai`  
 **Applies to:** BRɅIN brand identity and product UI, including Owner Gemini Intelligence and BRVIN Teachers
@@ -26,7 +26,7 @@ Sources:
 - [AERUNO trial listing and personal-use-only terms — 1001 Fonts](https://www.1001fonts.com/aeruno-font.html)
 - [AERUNO commercial family and separate Desktop, Webfont and App licensing options — MyFonts](https://www.myfonts.com/collections/aeruno-font-omzen-type)
 
-**Decision:** Do not commit, publish, serve, bundle or deploy the supplied AERUNO Trial OTF/ZIP/RAR or converted font files to the public GitHub repository, Cloudflare Pages/Workers assets, R2, GCS, a CDN or an application. Do not treat the archive's one-line MIT text as a sufficient license grant. The product and logo are commercial brand use, so the personal-use trial is not appropriate.
+**Decision:** The Owner has clarified that the immediate workspace is private and Owner-only. However, the trial's published terms expressly classify logos and company apps as commercial use, and separately restrict publication/distribution of the font. A private login does not by itself grant a broader company-logo or redistribution right. Do not upload the trial binary to the public GitHub repository or shared Cloudflare asset pipeline. Revisit AERUNO once the Owner obtains the full family or written permission covering the intended internal/company wordmark use and the missing `Ʌ` glyph.
 
 Before using AERUNO for the BRɅIN identity, obtain the full font and a written/purchased license whose terms cover the intended company logo/brand identity use. The MyFonts listing distinguishes Desktop logo/brand-identity use from Webfont and App embedding; choose the license based on the actual use and read the applicable EULA. Do not assume a Desktop license also permits hosting or embedding the font.
 
@@ -55,34 +55,18 @@ OpenAI Sans is a proprietary brand typeface, not an open-source font that BRɅIN
 
 **Implementation gate:** do not download/extract/rehost OpenAI Sans from a live ChatGPT client, inspect or copy its private asset URLs, or commit unofficial font binaries. Once authorized files and terms are available, self-host only the permitted font files and weights in the approved product asset pipeline.
 
-### Fallback while authorization is pending
+### Current runtime typography while authorized font files are unavailable
 
-- Preserve the currently deployed Poppins WOFF2 files under `public/owner-fonts/admin/intelligence-fonts/`; they are distributed under the SIL Open Font License 1.1 and may still be referenced by the existing Owner UI.
-- Treat the current CSS alias `BRɅIN universal font` (Poppins) as the **legacy/current deployed UI font**, not the new long-term typography decision.
-- Do not delete, rename or replace the Poppins files until the UI font migration is implemented, tested and released.
-- For new UI work before OpenAI Sans is authorized, use an approved open-license sans-serif fallback such as Inter, with system sans-serif fallbacks. This is a temporary visual substitute, not a claim that Inter is the exact ChatGPT font.
-- Preserve script coverage. Where OpenAI Sans or the selected Latin fallback does not contain a user's writing system, provide a deliberate compatible script font fallback instead of relying on accidental browser fallback.
+- The previous Poppins WOFF2 bundle, its OFL/readme files, the Owner page's font preloads and its `@font-face` rules are removed by the typography-removal change.
+- The Owner page now uses the stack `"OpenAI Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`. This is **OpenAI Sans-first**, but until the official font package is obtained and authorized, browsers use their platform system-font fallback. Do not describe the fallback as the actual OpenAI Sans file.
+- This is consistent with OpenAI's published guidance for ChatGPT-integrated UI surfaces, which recommends platform-native system fonts rather than custom fonts. A self-hosted OpenAI Sans package must still come through the official access route with confirmed rights for the target product.
+- The Owner wordmark remains text rendered by the active UI stack. AERUNO is not embedded or applied until the appropriate use is cleared and the required `Ʌ` glyph is available.
 
-A suggested future CSS stack, only after licensed OpenAI Sans files are installed, is:
+## 4. Current font asset inventory
 
-```css
-font-family: "OpenAI Sans", Inter, ui-sans-serif, system-ui, -apple-system,
-  BlinkMacSystemFont, "Segoe UI", sans-serif;
-```
+The Core Worker no longer has an `assets.directory` binding for the removed `public/owner-fonts` bundle. There are no Poppins font binaries or Poppins `@font-face` declarations in the Owner HTML after this change. Future font assets must be deliberately added only after the font-use and hosting permissions are verified.
 
-The CSS declaration alone does not provide the font. The authorized font files must be present and loaded; verify the browser's rendered font rather than assuming the first family won.
-
-## 4. Existing font asset inventory
-
-The repository currently contains:
-
-- `public/owner-fonts/admin/intelligence-fonts/brain-universal-*.woff2`
-- Latin, Latin Extended and Devanagari subsets
-- Weights 300, 400, 500, 600 and 700
-- `public/owner-fonts/OFL.txt` — SIL Open Font License 1.1
-- `public/owner-fonts/README.md` — existing Poppins attribution and CSS alias record
-
-Those Poppins assets were previously named **BRɅIN universal font** as a product CSS-family alias. Preserve their upstream Poppins attribution and OFL text. The new role split in this document supersedes any interpretation that the logo and every future interface surface must use the same typeface.
+The repository previously used a Poppins CSS alias called **BRɅIN universal font**. That legacy alias and its font files are removed; do not recreate them.
 
 ## 5. Future implementation rules
 
@@ -100,10 +84,11 @@ Those Poppins assets were previously named **BRɅIN universal font** as a produc
 - [x] Licensing conflict recorded; public/commercial deployment blocked pending proper license.
 - [x] Missing U+0245 (`Ʌ`) glyph recorded.
 - [x] Owner's role split recorded: AERUNO-style logo; ChatGPT/OpenAI Sans-style ordinary UI typography.
-- [ ] Obtain an AERUNO license covering BRɅIN logo/brand identity use.
-- [ ] Obtain official OpenAI Sans files and verify BRɅIN is authorized to use/self-host them, or select an explicitly approved alternative.
-- [ ] Produce and visually approve the outlined BRɅIN SVG wordmark.
-- [ ] Migrate product UI typography from legacy Poppins only after the authorized font files and implementation are ready.
-- [ ] Verify all product surfaces and deployed assets.
+- [ ] Obtain AERUNO full-family or written permission covering the intended private/company wordmark use, including a usable `Ʌ` glyph or permission for a custom glyph.
+- [ ] Obtain official OpenAI Sans files from the signed-in design-guidelines portal and verify the applicable product-use/hosting terms.
+- [ ] Produce and visually approve the outlined BRɅIN SVG wordmark once AERUNO use and glyph coverage are resolved.
+- [x] Remove Poppins WOFF2 assets, OFL/readme files, preloads and Owner-page `@font-face` rules from the repository/runtime source.
+- [x] Change Owner UI typography to an OpenAI Sans-first, platform-native system stack. Actual OpenAI Sans is not bundled yet; the current browser rendering uses its system fallback.
+- [ ] Verify the typography change in the authenticated Owner browser and through CI/deployment evidence.
 
-**No production font binary was uploaded or deployed as part of this documentation update.**
+**No AERUNO or OpenAI Sans font binary was added or deployed.**
