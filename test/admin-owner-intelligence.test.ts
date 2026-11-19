@@ -987,7 +987,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     });
     expect(continued.status).toBe(200);
     await continued.text();
-    expect(requestedSuccessorOutputLimit).toBe(65_536);
+    expect(requestedSuccessorOutputLimit).toBe(199_980);
     expect(countedHandoffPrompt).toContain("ROLLOVER HANDOFF REFERENCE DATA");
     expect(countedHandoffPrompt).toContain(commitSha);
     expect(countedHandoffPrompt).toContain(userMessageId);
