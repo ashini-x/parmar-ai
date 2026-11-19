@@ -79,7 +79,7 @@ The Owner-only workspace uses Google Gemini through Vertex AI as its sole infere
 |---|---|
 | [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md) | Authoritative current state, milestone gates, decisions and task log. |
 | [OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md](OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md) | Copyable new-chat prompt with exact current checkpoint and next task. |
-| [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md) | Live M4.3 acceptance evidence, PR/CI/deployment details and remaining closeout checks. |
+| [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md) | Completed M4.3 live acceptance, production D1/GitHub reconciliation, PR/CI and deployment evidence. |
 | [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md) | Approved long-session context and Owner Context Replicator design; M4.4–M4.8 are not shipped. |
 | [OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md](OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md) | Owner/Gemini/ChatGPT role split, hub hierarchy and approval process. |
 | [OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md](OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md) | Sole Vertex provider, Cloudflare Free/Paid limits and M4.6-P0 gate. |
