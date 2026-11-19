@@ -12,8 +12,9 @@ For BRVIN work, read the current versions on `main` before coding:
 4. `docs/BRVIN_2_ARCHITECTURE_DECISIONS.md` — accepted decisions and superseded proposals.
 5. `docs/BRVIN_SYSTEM_REFERENCE.md` — as-built implementation and trust boundaries.
 6. `docs/BRVIN_2_RPC_V2_CONTRACT.md` — frozen private consumer contract.
-7. The relevant Core admin, operations, ingestion, migration or benchmark runbook.
-8. For coordinated consumer work, inspect `ashini-x/brvin-teachers` and its `AGENTS.md` / compatibility guide.
+7. `docs/BRVIN_BRAND_TYPOGRAPHY.md` — canonical cross-product brand, logo, UI typography and font-licensing authority; required for any brand/font/visual UI work.
+8. The relevant Core admin, operations, ingestion, migration or benchmark runbook.
+9. For coordinated consumer work, inspect `ashini-x/brvin-teachers` and its `AGENTS.md` / compatibility guide.
 
 Read repository-local instructions in any nested `AGENTS.md` before editing that directory. When documents disagree, prefer live code/Cloudflare state for deployed facts, the frozen v2 contract for RPC behavior, the migration plan for provider acceptance, and the master plan for current task order. Record unresolved contradictions rather than silently reconciling them.
 
