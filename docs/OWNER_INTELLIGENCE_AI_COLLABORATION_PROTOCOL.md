@@ -195,7 +195,7 @@ The deployed M4.3 save flow attaches a GitHub repository, branch and memory-root
 - Project B: `projects/<project-id>/memory`
 - A future workstream-specific save, after scope support is implemented: `projects/<project-id>/workstreams/<workstream-id>/memory`
 
-For the transition, use one Owner topic per project, the same hub repository and a unique project memory-root path. Do not create a separate GitHub repository for each project. Do not claim that current production topics already support hierarchical workstream/feature manifests; M4.4 must add that model and load it safely.
+For the transition, use one Owner topic per project, the same hub repository and a unique project memory-root path. Do not create a separate GitHub repository for each project. M4.4 has since added and production-deployed the hierarchical catalog/workstream/feature manifest model and pinned scoped memory loader; authenticated Owner acceptance is recorded in Section 13.
 
 M4.3 currently uses a branch-head conflict check. This is safe against overwriting external changes, but it can report a conflict when an unrelated path changed. Do not weaken that check to hide conflicts. The future hub writer must add path-aware optimistic concurrency before enabling concurrent writers: validate the expected blob SHA for every touched path and relevant manifest; if only unrelated paths changed, rebase/rebuild the proposed tree on the latest head under a bounded retry and non-force ref update; if a touched file or governing manifest changed, stop and request review. Never force-push or silently discard an external change.
 
