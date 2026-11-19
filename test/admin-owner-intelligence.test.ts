@@ -556,7 +556,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain('richContent.classList.add("user-message-content","is-collapsed")');
     expect(script).toContain('node("button","user-message-toggle","Show more ↓")');
     expect(script).toContain('userMessageToggle.textContent=expanded?"Show less ↑":"Show more ↓"');
-    expect(script).toContain("richContent.scrollHeight>richContent.clientHeight+2");
+    expect(script).toContain("richContent.scrollHeight>USER_MESSAGE_PREVIEW_HEIGHT+2");
     expect(script).toContain("delete expandedUserMessageIds[item.id]");
 
     expect(script).toContain("function renderMarkdownTable(lines,start)");
