@@ -1,3 +1,11 @@
+## 2026-11-19 IST: Owner Intelligence memory-draft Vertex reliability fix
+
+- Raised the memory-draft GenerateContent attempt timeout from 35 to 90 seconds and extended the browser's preview request deadline to cover bounded transient retries.
+- Added at most three attempts with truncated exponential backoff/jitter for explicit retryable Vertex HTTP responses, including 429 RESOURCE_EXHAUSTED. Ambiguous timeouts and lost connections are not replayed.
+- Memory drafts now revalidate only the selected Gemini model rather than probing the full model catalogue during the draft operation.
+- Definitive provider rejections (400/401/403/404/429) release the unused D1 token reservation; ambiguous failures remain conservatively accounted. This preserves the 200,000-token cap and does not alter model/provider selection.
+- Added regression coverage for retry recovery, retry exhaustion and budget release; updated M4.3 test/provider policy docs. No Google Cloud quota, billing, model or location setting is changed by this code fix.
+
 ## 2026-11-19 IST: Owner Intelligence single-provider and Cloudflare capacity policy finalized
 
 - Locked Google Gemini through Vertex AI as the only AI provider inside Owner Intelligence. Cloudflare Workers/D1 perform deterministic backend, storage, context orchestration and GitHub operations; Workers AI and alternate/hidden model providers are out of scope. ChatGPT Software Engineer remains a separate Owner-authorized code executor, not a runtime fallback.
