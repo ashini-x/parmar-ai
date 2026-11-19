@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.3 complete. M4.3 implementation, timeout/retry hardening, append-only preservation and live Owner acceptance are merged/deployed and fully reconciled against production D1 and GitHub evidence. **Next approved task: M4.4 — Attach and load Project Memory.** M4.4–M4.8 remain planned, not implemented; M4.6-P0 is required before M4.6; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-19 IST — M4.3 closeout completed; sidebar and fixed composer/token dock UI maintenance deployed; M4.4 remains next  
+**Last updated:** 2026-11-19 IST — Owner workspace fixed composer, client runtime recovery and surface cleanup deployed; M4.4 remains next  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -555,3 +555,14 @@ The topic API route defect was corrected in PR #352 and production-deployed. The
 - **Production evidence:** `brvin-service` version `4ddd6b8f-e9d5-4bf8-88ec-78f72cfeb2cd`, deployment `b6fe71a1-aed4-4849-a58d-0adcf5e39217`, at 100% traffic; `parmar-ai` version `f318707c-611b-499f-b014-282c45b96059`, deployment `2b2ad42b-c070-4870-9047-afce3bd80817`, at 100% traffic. Acceptance artifact `14545509079`.
 - **Scope:** presentation/long-prompt handling only. No token-accounting limit, model/provider selection, D1 schema, Project Memory behavior, student Telegram system or retrieval architecture changed.
 - **Next milestone unchanged:** M4.4 — Attach and load Project Memory remains next; PR #362 does not advance it.
+
+### Owner Intelligence client runtime recovery and surface cleanup — 2026-11-19 IST
+
+- **Merged:** [PR #363](https://github.com/ashini-x/parmar-ai/pull/363), runtime source revision `599441d0faf4c41fda2e5852b9b4c87300d62285`.
+- **Root cause:** a missing closing brace in `generateMessage()`'s `finally` block left the `refreshList(conversationId)` try/catch syntactically invalid. The entire Owner Intelligence client script therefore failed to parse; model loading, conversation-list initialization, and composer event wiring never ran. This was an actual JavaScript syntax failure, not an API/model outage.
+- **Repair and regression guard:** restored `try{await refreshList(conversationId);}catch(_error){}`. The browser-script test now parses the complete served client JavaScript with the JavaScript Function parser so malformed scripts fail CI.
+- **Visual refinement:** removed the opaque `#111` fill from `.bottom-dock` (transparent page surface); darkened the overall base from `#212121` to `#1c1c1c` and sidebar from `#171717` to `#141414`. Existing composer/token meter sizing and placement remain unchanged.
+- **Validation:** PR workflow [44562953383](https://github.com/ashini-x/parmar-ai/actions/runs/44562953383) passed `npm run check`, `npm test`, `npm run test:node`, and all three Worker dry-run builds. Production workflow [44563162170](https://github.com/ashini-x/parmar-ai/actions/runs/44563162170) passed paired Worker deployments, root/health smoke, BRVIN service binding, Fatman retrieval readiness, and production release acceptance.
+- **Production evidence:** `brvin-service` version `2e495fb3-2623-4439-8795-1abe5253b3bc`, deployment `326d5b90-6a66-492a-8fba-f8c24985f950`, at 100% traffic; `parmar-ai` version `de508364-6c7d-41ab-a8f2-f312f1d4306e`, deployment `666f0671-c569-4598-a9c4-bfd7df732843`, at 100% traffic. Acceptance artifact `14549662593`.
+- **Scope:** frontend runtime parse repair and visual surfaces only. No model/provider configuration, API contract, D1 schema, 200,000-token session budget, 300,000-character message cap, Project Memory or student-facing behavior changed.
+- **Next milestone unchanged:** M4.4 — Attach and load Project Memory remains next; PR #363 does not advance it.
