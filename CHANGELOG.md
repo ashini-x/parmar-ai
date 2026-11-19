@@ -1,3 +1,10 @@
+## 2026-11-19 IST: Owner Intelligence M4.3 fully accepted and closed
+
+- Reconciled production D1 and GitHub evidence without mutating production: the Owner Intelligence conversation is linked to its Topic and the private ashini-x/owner-memory-hub; the active GitHub App installation remains selected-only.
+- Confirmed stale preview 46116e56-1890-4cf5-91b9-9a145b3c0510 reached Conflict after external commit f41938e6b335162e3ef78bc76a259c27e128a0c6; final preview 86534fbd-05ce-43c3-ae8b-866758efbe62 is Synced to b40e46c50ee4e7663f5d2c2dd6ad85725979b656.
+- Independently compared all five persisted preview files with GitHub at the exact saved commit and current hub main; every file matched byte-for-byte. The Topic's current commit SHA matches the Synced commit.
+- Reconciled the same conversation's token ledger: nine settled reservations sum to 40,496 actual tokens, matching D1 used_tokens; reserved_tokens=0 under the unchanged 200,000-token limit. This test conversation was already a Topic conversation, so Scratchpad promotion was not applicable.
+- Updated the M4.3 acceptance record, roadmap, continuation prompt (next task: M4.4), test plan, documentation index, memory/context architecture and collaboration protocol. No application code, production D1 rows, Worker configuration, secrets, App permissions, Vertex settings, billing or Google Cloud Console settings changed; no Worker deployment is required for this documentation-only closeout.
 ## 2026-11-19 IST: M4.3 live Owner save/read-back and append-only preservation accepted
 
 - Owner confirmed the production Owner-panel save to `main` and subsequent GitHub read-back: the external manually authored `progress.md` comment/marker remained intact and newly generated progress content appeared immediately below it.
