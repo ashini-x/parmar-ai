@@ -475,6 +475,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain('font-family:"BRɅIN Universal Font"');
     expect(html).toContain('/admin/intelligence-fonts/brain-universal-latin-400.woff2');
     expect(html).toContain('/admin/intelligence-fonts/brain-universal-latin-ext-300.woff2');
+    expect(html).toContain('/admin/intelligence-fonts/brain-universal-latin-ext-500.woff2');
+    expect(html).toContain('font-display:block');
     expect(html).toContain('/admin/intelligence-fonts/brain-universal-devanagari-400.woff2');
     expect(html).not.toContain('font-family:Inter,ui-sans-serif,system-ui');
     expect(html).toContain('font-src \'self\'');
