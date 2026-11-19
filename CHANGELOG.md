@@ -1,3 +1,10 @@
+## 2026-11-19 IST: Owner Memory append-only preservation fix
+
+- Changed the Gemini memory draft contract from complete-file replacements to additive Markdown fragments only. Empty fragments are allowed when a file has no new supported information.
+- The Worker now preserves existing project-memory, progress and decisions Markdown and appends proposed updates under unique preview-scoped markers. Conversation checkpoints are also append-only; no earlier generated or Owner-edited section is removed on a later preview.
+- Added regression coverage for an external Owner-authored progress line and HTML-comment marker, exact preview/save persistence, and preservation of an Owner edit inside a prior generated section on a subsequent preview.
+- The existing 200,000-token ledger, selected Vertex model/thinking level, secret redaction, review/edit step, explicit confirmation and stale-branch conflict protection remain unchanged.
+
 ## 2026-11-19 IST: Owner Intelligence memory-draft Vertex reliability fix
 
 - Raised the memory-draft GenerateContent attempt timeout from 35 to 90 seconds and extended the browser's preview request deadline to cover bounded transient retries.
