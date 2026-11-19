@@ -133,7 +133,7 @@ function parseFiles(value: string): OwnerProjectMemoryFileSnapshot[] {
     if (typeof row.path !== "string" || typeof row.blobSha !== "string" || typeof row.content !== "string" ||
         !/^[0-9a-f]{40}$/iu.test(row.blobSha) || !row.path.endsWith(".md") ||
         row.path.startsWith("/") || row.path.split("/").some((part) => !part || part === "." || part === "..") ||
-        /(?:^|\\/)(?:archive|sessions|handoffs|collaboration)(?:\\/|$)/iu.test(row.path)) {
+        /(?:^|[/])(?:archive|sessions|handoffs|collaboration)(?:[/]|$)/iu.test(row.path)) {
       throw new Error("The pinned Project Memory snapshot contains an unsafe file reference.");
     }
     if (row.content.length > 32_000) throw new Error("A pinned Project Memory file exceeds the supported size.");
