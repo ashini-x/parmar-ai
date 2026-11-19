@@ -503,9 +503,10 @@ export async function generateOwnerGeminiContent(
           isRetryableStreamOpenStatus(response.status),
           "generate_content",
         );
-        if (failure.retryable && attempt < GENERATION_MAX_ATTEMPTS) {
-          // Retry only an explicit transient HTTP rejection. A timeout or lost
-          // connection is ambiguous and is deliberately never replayed.
+        if (response.status === 429 && attempt < GENERATION_MAX_ATTEMPTS) {
+          // Google explicitly documents a 429 capacity rejection as safe to
+          // retry. Do not replay 408/5xx or transport timeouts: those outcomes
+          // can be ambiguous with respect to provider-side execution/usage.
           retryDelay = streamOpenRetryDelayMs(response, attempt, dependencies.random ?? Math.random);
           try { await response.body?.cancel(); } catch { /* discard retryable response body */ }
         } else {
