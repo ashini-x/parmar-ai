@@ -165,7 +165,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(body.contents).toEqual([{ role: "user", parts: [{ text: "What is a black hole?" }] }]);
     expect(body.systemInstruction.parts[0].text).toBe("You are a general-purpose assistant.");
     expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "HIGH" });
-    expect(body.generationConfig.maxOutputTokens).toBe(8_192);
+    expect(body.generationConfig.maxOutputTokens).toBe(65_536);
     expect(JSON.stringify(body)).not.toContain("AnswerPacket");
     expect(JSON.stringify(body)).not.toContain("SSC");
   });
@@ -301,7 +301,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect(streamRequests[1]?.body).toEqual(streamRequests[0]?.body);
     expect(streamRequests[2]?.body).toEqual(streamRequests[0]?.body);
     expect(streamRequests[0]?.body.generationConfig).toEqual({
-      maxOutputTokens: 8_192,
+      maxOutputTokens: 65_536,
       thinkingConfig: { thinkingLevel: "HIGH" },
     });
     expect(streamRequests[0].url).toContain("/locations/global/publishers/google/models/gemini-4-hydrogen:streamGenerateContent");
@@ -579,6 +579,42 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       message: "The selected thinking level is not supported by this model.",
     });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("reports MAX_TOKENS and preserves usage when XHIGH thinking consumes the response allowance", async () => {
+    const sse = "data: " + JSON.stringify({
+      candidates: [{
+        finishReason: "MAX_TOKENS",
+        content: { role: "model", parts: [{ text: "private reasoning", thought: true }] },
+      }],
+      usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 0, totalTokenCount: 1_200, thoughtsTokenCount: 1_188 },
+    }) + "\r\n\r\n";
+    const fetcher: typeof fetch = async (url) => {
+      if (String(url).endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 12 }), { status: 200 });
+      return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
+    };
+    const stream = await openOwnerGeminiStream(
+      configuredEnv,
+      {
+        modelId: "gemini-4-hydrogen",
+        thinkingLevel: "XHIGH",
+        contents: [{ role: "user", text: "Solve this difficult proof." }],
+      },
+      new AbortController().signal,
+      dependencies(fetcher),
+    );
+    let failure: unknown;
+    try {
+      for await (const event of stream) void event;
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({
+      finishReason: "MAX_TOKENS",
+      usage: { promptTokens: 12, totalTokens: 1_200 },
+    });
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain("Thinking tokens count toward this limit");
   });
 
   it("streams text deltas, excludes thought parts and returns usage with the selected thinking level", async () => {
