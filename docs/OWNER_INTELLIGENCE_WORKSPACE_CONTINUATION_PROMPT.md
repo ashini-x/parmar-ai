@@ -39,7 +39,7 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Mobile sidebar menu trigger moved into that footer row and remains visible only at mobile widths. Model loading and selection JS/event handlers are unchanged.
 - PR CI [44565930824](https://github.com/ashini-x/parmar-ai/actions/runs/44565930824) passed typecheck, Vitest, Node tests and three Worker dry-run builds. Production release [44566219904](https://github.com/ashini-x/parmar-ai/actions/runs/44566219904) passed deployments, root/health smoke, BRVIN binding, Fatman retrieval and release acceptance.
 - Production versions at 100% traffic: `parmar-ai` `0f7a200e-8da1-4bbb-b536-66f2fbfc0b7e` (deployment `15b6902a-d085-4a97-93f7-c9706302baa0`); `brvin-service` `5ebb6c8e-8c47-4083-907b-c399bb7a320d` (deployment `aeb3bd9d-f890-43c1-9864-fe071de00a72`). Acceptance artifact: `14551768169`.
-- Presentation-only; no backend, API, model/provider, Vertex, D1, token-limit or Project Memory behavior changes. M4.4 — Attach and load Project Memory remains the next task.
+- Presentation-only; no backend, API, model/provider, Vertex, D1, token-limit or Project Memory behavior changes. At this historical PR #364 checkpoint, M4.4 remained next; its authenticated acceptance is now complete and M4.5 is next.
 
 ### M4.4 — Attach and load Project Memory implementation — 2026-11-19 IST
 
