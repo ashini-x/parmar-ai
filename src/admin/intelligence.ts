@@ -2302,7 +2302,7 @@ export function ownerIntelligenceClientScript(): Response {
       }
       wrap.appendChild(body);messages.appendChild(wrap);
       if(userMessageToggle){
-        var userMessageIsLong=richContent.scrollHeight>richContent.clientHeight+2;
+        var userMessageIsLong=richContent.scrollHeight>USER_MESSAGE_PREVIEW_HEIGHT+2;
         if(userMessageIsLong){
           var userMessageExpanded=Boolean(expandedUserMessageIds[item.id]);
           richContent.classList.toggle("is-collapsed",!userMessageExpanded);
