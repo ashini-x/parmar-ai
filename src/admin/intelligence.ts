@@ -31,6 +31,22 @@ export interface OwnerIntelligenceConversation {
   topic_title?: string | null;
   session_kind: "scratchpad" | "topic";
   lifecycle_status: "active" | "archived";
+  parent_conversation_id?: string | null;
+  rollover_handoff_id?: string | null;
+  successor_conversation_id?: string | null;
+}
+
+export interface OwnerIntelligenceHandoff {
+  id: string;
+  source_conversation_id: string;
+  successor_conversation_id: string;
+  markdown: string;
+  source_message_ids: string[];
+  snapshot_provenance: Array<Record<string, unknown>>;
+  github_sync_status: "pending_review" | "synced";
+  github_commit_sha: string | null;
+  created_at: number;
+  updated_at: number;
 }
 
 export interface OwnerIntelligenceMessage {
@@ -197,6 +213,23 @@ export async function ensureOwnerIntelligenceSchema(env: Env): Promise<void> {
     )`),
     db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_reservations_session
       ON owner_intelligence_token_reservations(owner_id, conversation_id, status, created_at)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS owner_intelligence_handoffs (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL,
+      source_conversation_id TEXT NOT NULL,
+      successor_conversation_id TEXT NOT NULL,
+      markdown TEXT NOT NULL,
+      source_message_ids_json TEXT NOT NULL,
+      snapshot_provenance_json TEXT NOT NULL,
+      github_sync_status TEXT NOT NULL DEFAULT 'pending_review' CHECK (github_sync_status IN ('pending_review','synced')),
+      github_commit_sha TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      UNIQUE(owner_id, source_conversation_id),
+      UNIQUE(owner_id, successor_conversation_id)
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS idx_owner_intelligence_handoffs_owner_updated
+      ON owner_intelligence_handoffs(owner_id, updated_at DESC)`),
   ]);
   if (results.some((result) => !result.success)) {
     throw new Error("D1 did not confirm the Owner Intelligence schema.");
@@ -212,6 +245,8 @@ export async function ensureOwnerIntelligenceSchema(env: Env): Promise<void> {
     ["topic_id", "ALTER TABLE owner_intelligence_conversations ADD COLUMN topic_id TEXT"],
     ["session_kind", "ALTER TABLE owner_intelligence_conversations ADD COLUMN session_kind TEXT NOT NULL DEFAULT 'scratchpad'"],
     ["lifecycle_status", "ALTER TABLE owner_intelligence_conversations ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'active'"],
+    ["parent_conversation_id", "ALTER TABLE owner_intelligence_conversations ADD COLUMN parent_conversation_id TEXT"],
+    ["rollover_handoff_id", "ALTER TABLE owner_intelligence_conversations ADD COLUMN rollover_handoff_id TEXT"],
   ] as const;
   for (const [column, statement] of additions) {
     if (knownColumns.has(column)) continue;
@@ -556,6 +591,9 @@ function mapConversation(row: OwnerConversationRow): OwnerIntelligenceConversati
     ...(row.topic_title ? { topic_title: row.topic_title } : {}),
     session_kind: row.session_kind === "topic" || topicId ? "topic" : "scratchpad",
     lifecycle_status: row.lifecycle_status === "archived" ? "archived" : "active",
+    parent_conversation_id: row.parent_conversation_id ?? null,
+    rollover_handoff_id: row.rollover_handoff_id ?? null,
+    successor_conversation_id: row.successor_conversation_id ?? null,
   };
 }
 
@@ -628,11 +666,14 @@ function mapMessage(row: OwnerMessageRow): OwnerIntelligenceMessage {
 export async function listOwnerIntelligenceConversations(env: Env): Promise<OwnerIntelligenceConversation[]> {
   await ensureOwnerIntelligenceSchema(env);
   const result = await env.DB!.prepare(
-    `SELECT id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status,
+    `SELECT c.id, c.owner_id, c.title, c.created_at, c.updated_at, c.topic_id, c.session_kind, c.lifecycle_status,
+      c.parent_conversation_id, c.rollover_handoff_id,
+      (SELECT h.successor_conversation_id FROM owner_intelligence_handoffs h
+       WHERE h.source_conversation_id = c.id AND h.owner_id = c.owner_id) AS successor_conversation_id,
       (SELECT t.title FROM owner_intelligence_topics t
-       WHERE t.id = owner_intelligence_conversations.topic_id AND t.owner_id = owner_intelligence_conversations.owner_id) AS topic_title
-     FROM owner_intelligence_conversations
-     WHERE owner_id = ? ORDER BY updated_at DESC, created_at DESC LIMIT ?`,
+       WHERE t.id = c.topic_id AND t.owner_id = c.owner_id) AS topic_title
+     FROM owner_intelligence_conversations c
+     WHERE c.owner_id = ? ORDER BY c.updated_at DESC, c.created_at DESC LIMIT ?`,
   ).bind(ownerPrincipal(env), MAX_CONVERSATIONS).all<OwnerConversationRow>();
   return (result.results ?? []).map(mapConversation);
 }
@@ -684,10 +725,13 @@ export async function getOwnerIntelligenceConversation(
   await ensureOwnerIntelligenceSchema(env);
   const ownerId = ownerPrincipal(env);
   const row = await env.DB!.prepare(
-    `SELECT id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status,
+    `SELECT c.id, c.owner_id, c.title, c.created_at, c.updated_at, c.topic_id, c.session_kind, c.lifecycle_status,
+      c.parent_conversation_id, c.rollover_handoff_id,
+      (SELECT h.successor_conversation_id FROM owner_intelligence_handoffs h
+       WHERE h.source_conversation_id = c.id AND h.owner_id = c.owner_id) AS successor_conversation_id,
       (SELECT t.title FROM owner_intelligence_topics t
-       WHERE t.id = owner_intelligence_conversations.topic_id AND t.owner_id = owner_intelligence_conversations.owner_id) AS topic_title
-     FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?`,
+       WHERE t.id = c.topic_id AND t.owner_id = c.owner_id) AS topic_title
+     FROM owner_intelligence_conversations c WHERE c.id = ? AND c.owner_id = ?`,
   ).bind(id, ownerId).first<OwnerConversationRow>();
   if (!row) return null;
 
@@ -702,7 +746,8 @@ export async function getOwnerIntelligenceConversation(
   ).bind(id, ownerId).all<OwnerMessageRow>();
   const usage = await getOwnerIntelligenceSessionUsage(env, id);
   const projectMemory = await getOwnerConversationProjectMemoryInfo(env, ownerId, id);
-  return { conversation: mapConversation(row), messages: (result.results ?? []).map(mapMessage), usage, projectMemory };
+  const handoff = await loadOwnerIntelligenceHandoff(env, ownerId, id);
+  return { conversation: mapConversation(row), messages: (result.results ?? []).map(mapMessage), usage, projectMemory, handoff };
 }
 
 export async function renameOwnerIntelligenceConversation(
@@ -763,7 +808,7 @@ export async function appendOwnerIntelligenceMessage(
   }
   const ownerId = ownerPrincipal(env);
   const conversation = await env.DB!.prepare(
-    "SELECT id FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
+    "SELECT id FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ? AND lifecycle_status = 'active'",
   ).bind(input.conversationId, ownerId).first<{ id: string }>();
   if (!conversation) return null;
 
@@ -865,7 +910,7 @@ async function planOwnerPrompt(
   await ensureOwnerIntelligenceSchema(env);
   const ownerId = ownerPrincipal(env);
   const conversation = await env.DB!.prepare(
-    "SELECT id, title FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
+    "SELECT id, title FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ? AND lifecycle_status = 'active'",
   ).bind(conversationId, ownerId).first<{ id: string; title: string }>();
   if (!conversation) return null;
   const result = await env.DB!.prepare(
@@ -1091,10 +1136,13 @@ async function handleOwnerGeneration(
     return json({ ok: false, error: "project_memory_load_failed", message: message.slice(0, 300) }, 503);
   }
   const contents = buildOwnerGeminiConversationContents(plan.messages);
-  if (projectMemoryContext && contents.length && contents[0].role === "user") {
+  const continuityReference = await loadOwnerConversationHandoffPrompt(env, ownerPrincipal(env), conversationId);
+  const referenceBlocks = [continuityReference, projectMemoryContext?.referenceText].filter((value): value is string => Boolean(value));
+  if (referenceBlocks.length && contents.length && contents[0].role === "user") {
     contents[0] = {
       ...contents[0],
-      text: projectMemoryContext.referenceText + "\n\n--- CURRENT CONVERSATION TRANSCRIPT ---\n\n" + contents[0].text,
+      text: referenceBlocks.join("\n\n--- ADDITIONAL PINNED PROJECT CONTEXT ---\n\n") +
+        "\n\n--- CURRENT CONVERSATION TRANSCRIPT ---\n\n" + contents[0].text,
     };
   }
   if (!contents.length || contents[contents.length - 1].role !== "user") {
@@ -1427,6 +1475,25 @@ const memoryPreference = url.pathname.match(/^\/admin\/api\/intelligence\/conver
     }
   }
 
+  const rolloverMatch = url.pathname.match(/^\/admin\/api\/intelligence\/conversations\/([0-9a-f-]{36})\/rollover$/iu);
+  if (rolloverMatch && validConversationId(rolloverMatch[1])) {
+    if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+    const body = await readJsonBody(request);
+    if (!body || Object.keys(body).length !== 0) return json({ ok: false, error: "invalid_request" }, 400);
+    try {
+      const result = await rollOverOwnerIntelligenceConversation(env, rolloverMatch[1]);
+      if (!result) return notFound();
+      return json({ ok: true, ...result }, 200);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The conversation could not be rolled over.";
+      const code = message.startsWith("generation_in_progress") ? "generation_in_progress" :
+        message.startsWith("rollover_threshold_not_reached") ? "rollover_threshold_not_reached" :
+        message.startsWith("conversation_archived") ? "conversation_archived" : "rollover_failed";
+      return json({ ok: false, error: code, message }, code === "rollover_failed" ? 503 : 409);
+    }
+  }
+
   const prefix = root + "/";
   if (!url.pathname.startsWith(prefix)) return notFound();
   const suffix = url.pathname.slice(prefix.length).split("/");
@@ -1736,7 +1803,7 @@ html,body{background:#000}
     <section class="session-budget" id="sessionBudget" aria-label="Chat session token budget">
       <div class="session-budget-top"><span class="session-budget-label">SESSION TOKENS</span><strong id="sessionBudgetValue">0 used / 200,000</strong><span id="sessionBudgetRemaining">200,000 left</span></div>
       <div class="session-budget-track" id="sessionBudgetTrack" role="progressbar" aria-label="Tokens used in this chat" aria-valuemin="0" aria-valuemax="200000" aria-valuenow="0"><span class="session-budget-fill" id="sessionBudgetFill"></span></div>
-      <div class="session-budget-notice" id="sessionBudgetNotice" hidden>This chat has reached its 200,000-token budget and is now read-only. Start a new chat, then paste your GitHub Markdown checkpoint link to continue.</div>
+      <div class="session-budget-notice" id="sessionBudgetNotice" hidden><span id="sessionBudgetNoticeText">This chat is approaching its session limit.</span><button class="session-rollover-action" id="rolloverButton" type="button" hidden>Roll Over</button></div>
     </section>
     <div class="composer-wrap">
       <div class="composer"><textarea id="messageInput" disabled rows="1" placeholder="Write a message…"></textarea><div class="composer-bottom">
@@ -1764,7 +1831,7 @@ export function ownerIntelligenceClientScript(): Response {
   "use strict";
   var api="/admin/api/intelligence/conversations";
   var topicsApi="/admin/api/intelligence/topics";
-  var state={conversations:[],topics:[],githubInstallations:[],githubRepositories:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
+  var state={conversations:[],topics:[],githubInstallations:[],githubRepositories:[],activeId:null,activeConversation:null,handoff:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
   var history=document.getElementById("history");
   var messages=document.getElementById("messages");
   var heading=document.getElementById("conversationHeading");
@@ -1777,6 +1844,8 @@ export function ownerIntelligenceClientScript(): Response {
   var sessionBudgetTrack=document.getElementById("sessionBudgetTrack");
   var sessionBudgetFill=document.getElementById("sessionBudgetFill");
   var sessionBudgetNotice=document.getElementById("sessionBudgetNotice");
+  var sessionBudgetNoticeText=document.getElementById("sessionBudgetNoticeText");
+  var rolloverButton=document.getElementById("rolloverButton");
   var modelSelect=document.getElementById("modelSelect");
   var thinkingSelect=document.getElementById("thinkingSelect");
   var modelRetry=document.getElementById("modelRetry");
@@ -1970,6 +2039,9 @@ export function ownerIntelligenceClientScript(): Response {
     var committed=Math.min(limit,used+reserved);
     var remaining=Math.max(0,Number.isFinite(Number(usage.remaining_tokens))?Number(usage.remaining_tokens):limit-committed);
     var locked=usage.locked===true;
+    var archived=Boolean(state.activeConversation&&state.activeConversation.lifecycle_status==="archived");
+    var successor=state.activeConversation&&state.activeConversation.successor_conversation_id;
+    var busy=reserved>0;
     var percent=Math.min(100,committed/limit*100);
     sessionBudget.hidden=false;
     sessionBudgetValue.textContent=formatTokenCount(used)+" used"+(reserved?" · "+formatTokenCount(reserved)+" reserved":"")+" / "+formatTokenCount(limit);
@@ -1978,9 +2050,30 @@ export function ownerIntelligenceClientScript(): Response {
     sessionBudgetTrack.setAttribute("aria-valuemax",String(limit));
     sessionBudgetTrack.setAttribute("aria-valuenow",String(committed));
     sessionBudgetTrack.setAttribute("aria-valuetext",formatTokenCount(committed)+" of "+formatTokenCount(limit)+" tokens used or reserved");
-    sessionBudget.classList.toggle("near-limit",percent>=80&&!locked);
-    sessionBudget.classList.toggle("locked",locked);
-    sessionBudgetNotice.hidden=!locked;
+    sessionBudget.classList.toggle("near-limit",percent>=90&&!locked);
+    sessionBudget.classList.toggle("locked",locked||archived);
+    sessionBudgetNotice.hidden=!(archived||committed>=180000||locked);
+    if(archived){
+      sessionBudgetNoticeText.textContent=successor
+        ?"This original conversation is preserved as read-only. Continue in its linked successor."
+        :"This conversation is preserved as read-only.";
+      rolloverButton.hidden=!successor;
+      rolloverButton.disabled=false;
+      rolloverButton.textContent="Open successor";
+    }else if(committed>=190000||locked){
+      sessionBudgetNoticeText.textContent=busy
+        ?"The rollover threshold is reached. Let the current response finish before rolling over."
+        :"This chat is nearing its 200,000-token cap. Roll over to preserve it and continue in a fresh chat.";
+      rolloverButton.hidden=false;
+      rolloverButton.disabled=busy;
+      rolloverButton.textContent="Roll Over";
+    }else if(committed>=180000){
+      sessionBudgetNoticeText.textContent="You have used 180,000 tokens. This is a heads-up; Roll Over becomes available at 190,000.";
+      rolloverButton.hidden=true;
+    }else{
+      sessionBudgetNoticeText.textContent="";
+      rolloverButton.hidden=true;
+    }
   }
   function showWelcome(){
     if(!state.activeId)heading.textContent="";
@@ -2257,10 +2350,11 @@ export function ownerIntelligenceClientScript(): Response {
     if(!items.length&&!generationActivity){showWelcome();return;}
     var pendingActivityRendered=false;
     items.forEach(function(item,index){
-      var wrap=node("article","message "+(item.role==="user"?"message-user":"message-assistant"));
+      var isHandoff=String(item.id||"").indexOf("rollover-handoff-")===0;
+      var wrap=node("article","message "+(item.role==="user"?"message-user":"message-assistant")+(isHandoff?" message-handoff":""));
       wrap.appendChild(node("div","message-avatar",item.role==="assistant"?"BɅ":item.role==="system"?"·":"O"));
       var body=node("div","message-body");
-      var roleLabel=item.role;
+      var roleLabel=isHandoff?"ROLLOVER HANDOFF":item.role;
       var model=state.models.find(function(entry){return entry.id===item.model_id;});
       if(item.role==="assistant"&&item.model_id)roleLabel=model?model.label:item.model_id;
       var meta=node("div","message-meta");
@@ -2316,7 +2410,7 @@ export function ownerIntelligenceClientScript(): Response {
           editingMessageId=item.id;messageInput.value=item.content;resizeComposerInput();messageInput.focus();updateComposer();
         });
         var actions=node("div","message-actions");actions.appendChild(edit);body.appendChild(actions);
-      }else if(item.role==="assistant"&&item.status!=="pending"&&!sending&&!sessionLocked&&!sessionBusy&&index===items.length-1){
+      }else if(item.role==="assistant"&&!isHandoff&&item.status!=="pending"&&!sending&&!sessionLocked&&!sessionBusy&&index===items.length-1){
         body.appendChild(buildResponseToolbar(item));
       }
       wrap.appendChild(body);messages.appendChild(wrap);
@@ -2727,8 +2821,8 @@ export function ownerIntelligenceClientScript(): Response {
     history.replaceChildren();
     if(!state.conversations.length){history.appendChild(node("div","history-empty","Your saved conversations will appear here."));return;}
     state.conversations.forEach(function(conversation){
-      var row=node("div","history-item"+(conversation.id===state.activeId?" active":""));
-      var open=node("button","history-open",conversation.title);
+      var row=node("div","history-item"+(conversation.id===state.activeId?" active":"")+(conversation.lifecycle_status==="archived"?" archived":""));
+      var open=node("button","history-open",conversation.title+(conversation.lifecycle_status==="archived"?" · Rolled over":""));
       open.type="button";open.title=conversation.title;
       open.addEventListener("click",function(){openConversation(conversation.id);sidebar.classList.remove("open");});
       row.appendChild(open);
@@ -2751,7 +2845,18 @@ export function ownerIntelligenceClientScript(): Response {
   }
   async function openConversation(id){
     var result=await request(api+"/"+encodeURIComponent(id));
-    state.activeId=result.conversation.id;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
+    state.activeId=result.conversation.id;state.activeConversation=result.conversation;state.handoff=result.handoff||null;
+    state.messages=result.messages||[];state.sessionUsage=result.usage||null;
+    if(state.handoff){
+      state.messages.unshift({
+        id:"rollover-handoff-"+state.handoff.id,
+        conversation_id:result.conversation.id,
+        role:"assistant",
+        content:state.handoff.markdown,
+        status:"complete",
+        created_at:state.handoff.created_at
+      });
+    }
     renderProjectMemoryInfo(result.projectMemory||{enabled:false,snapshots:[]});
     if(result.conversation.topic_id&&state.topics.some(function(topic){return topic.id===result.conversation.topic_id;})){
       if(projectMemoryTopic.value!==result.conversation.topic_id){projectMemoryTopic.value=result.conversation.topic_id;refreshProjectMemoryCatalog().catch(function(error){projectMemoryHint.textContent=errorText(error);});}
@@ -2776,8 +2881,9 @@ export function ownerIntelligenceClientScript(): Response {
   }
   function updateComposer(){
     var hasText=messageInput.value.trim().length>0;
-    var canGenerate=Boolean(state.activeId&&state.selectedModelId&&state.selectedThinkingLevel);
-    var sessionLocked=Boolean(state.sessionUsage&&state.sessionUsage.locked);
+    var isArchived=Boolean(state.activeConversation&&state.activeConversation.lifecycle_status==="archived");
+    var canGenerate=Boolean(state.activeId&&!isArchived&&state.selectedModelId&&state.selectedThinkingLevel);
+    var sessionLocked=isArchived||Boolean(state.sessionUsage&&state.sessionUsage.locked);
     var sessionBusy=Boolean(state.sessionUsage&&Number(state.sessionUsage.reserved_tokens)>0);
     sendButton.disabled=sending?false:(!canGenerate||!hasText||sessionLocked||sessionBusy);
     sendButton.textContent=sending?"■":"↑";
@@ -2941,6 +3047,36 @@ export function ownerIntelligenceClientScript(): Response {
 
   function saveMessage(){return generateMessage({});}
 
+  async function rollOverConversation(){
+    if(!state.activeId)return;
+    if(state.activeConversation&&state.activeConversation.lifecycle_status==="archived"){
+      if(state.activeConversation.successor_conversation_id){
+        await openConversation(state.activeConversation.successor_conversation_id);
+      }
+      return;
+    }
+    if(rolloverButton.disabled)return;
+    var sourceId=state.activeId;
+    rolloverButton.disabled=true;
+    rolloverButton.textContent="Preparing…";
+    sessionBudgetNoticeText.textContent="Creating a durable, source-linked handoff and a fresh 200,000-token successor…";
+    try{
+      var result=await request(api+"/"+encodeURIComponent(sourceId)+"/rollover",{
+        method:"POST",headers:{"content-type":"application/json"},body:"{}"
+      },30000);
+      await refreshList(result.conversation.id);
+      sidebar.classList.remove("open");
+    }catch(error){
+      sessionBudgetNoticeText.textContent=errorText(error);
+      rolloverButton.disabled=false;
+      rolloverButton.textContent="Retry Roll Over";
+    }finally{
+      if(state.activeConversation&&state.activeConversation.lifecycle_status!=="archived"){
+        renderSessionBudget();
+      }
+    }
+  }
+
   async function newConversation(){
     var button=document.getElementById("newChat");
     if(button.disabled)return;
@@ -3015,6 +3151,7 @@ export function ownerIntelligenceClientScript(): Response {
   githubDiscardPreview.addEventListener("click",discardGithubMemoryPreview);
   document.getElementById("mobileMenu").addEventListener("click",function(){sidebar.classList.toggle("open");});
   sendButton.addEventListener("click",function(){if(sending)stopGeneration();else saveMessage();});
+  rolloverButton.addEventListener("click",rollOverConversation);
   messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});
   messageInput.addEventListener("keydown",function(event){
     if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();if(sending)return;saveMessage();}
