@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.3 acceptance closed; M4.4 Project Memory implementation merged and production deployed. M4.4 automated validation and Worker release acceptance passed; the Owner's live browser acceptance of project-scope attachment/context loading remains to be confirmed. **Next approved task after M4.4 Owner acceptance: M4.5 — Automatic rollover and handoff.** M4.5–M4.8 remain approved, not implemented; M4.6-P0 is required before M4.6; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-19 IST — Owner workspace near-black surfaces, immediate send/empty composer, fixed-width user bubbles and removal of response feedback controls deployed; adaptive response behaviour retained  
+**Last updated:** 2026-11-19 IST — Owner user messages now preserve authored spacing and collapse long prompts into a compact Show more/Show less preview; PR #369 deployed  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -624,3 +624,14 @@ The topic API route defect was corrected in PR #352 and production-deployed. The
 - **Validation:** PR workflow [44580306903](https://github.com/ashini-x/parmar-ai/actions/runs/44580306903) passed TypeScript, 521 tests, Node tests and all three Worker dry-run builds. Production release [44580570767](https://github.com/ashini-x/parmar-ai/actions/runs/44580570767) passed both Worker deployments, root/health smoke, BRVIN service binding, Fatman retrieval readiness and final release acceptance.
 - **Production evidence:** `brvin-service` version `7fbe0a53-9892-4ef9-b9df-cabe7d34230f`, deployment `aa0b89d8-58a8-4cbb-a3ea-7865b374ab8e`, at 100% traffic; `parmar-ai` version `297e1ec3-d98f-47a7-aa07-ab7add0b30e3`, deployment `0620ba05-39fc-441d-9ca6-245c5bb1cb26`, at 100% traffic. Acceptance artifact `14559300763`.
 - **Scope:** Owner UI only. Model selection, adaptive Gemini response instruction, response Markdown renderer, Vertex CountTokens accounting, 200,000-token session budget, 300,000-character prompt cap, Project Memory and student-facing Telegram behaviour are unchanged.
+
+### Owner Intelligence collapsible long user messages — 2026-11-19 IST
+
+- **Merged:** [PR #369](https://github.com/ashini-x/parmar-ai/pull/369), runtime source revision `60c02b7aebd7d7fb6cdb817adffec504b31125c2`.
+- Owner-authored messages remain plain text and preserve their entered whitespace exactly: explicit line breaks, blank lines, repeated spaces, indentation and literal Markdown characters. User messages are not passed through the assistant Markdown renderer.
+- Long user prompts are initially clipped to a 112px preview (roughly five lines with current typography), with a soft bottom fade and a small **Show more** control. Expanding reveals the full message and switches the control to **Show less**. Short messages do not show a control.
+- Overflow is measured from rendered content, so messages with manual line breaks and messages that wrap naturally both collapse correctly. Expanded/collapsed state is retained by message ID across message-list rerenders.
+- Applies only to user messages. Assistant rich Markdown rendering, adaptive Gemini response instructions, the instant-send/empty-composer flow, fixed-width user bubbles, fixed composer and token meter remain unchanged.
+- **Validation:** PR workflow [44584214528](https://github.com/ashini-x/parmar-ai/actions/runs/44584214528) passed TypeScript, 521 tests, Node tests and all three Worker dry-run builds. Production release [44584471236](https://github.com/ashini-x/parmar-ai/actions/runs/44584471236) passed paired Worker deployments, root/health smoke, BRVIN service binding, Fatman retrieval readiness and production release acceptance.
+- **Production evidence:** `brvin-service` version `d9732a1b-09b3-489e-b9a3-b7ab5336973f`, deployment `30a5c772-1512-4f9d-8c3a-6e5a5dd61232`, at 100% traffic; `parmar-ai` version `6a298521-1ea8-4713-9f8e-90b6cef3d6e2`, deployment `0db19fa3-2305-4b24-916f-523d92731096`, at 100% traffic. Acceptance artifact `14560047336`.
+- **Scope:** Owner UI only. No backend, D1 schema, token accounting, 200K session budget, long-message character limit, Vertex model/provider, Project Memory or student-facing behaviour changed.
