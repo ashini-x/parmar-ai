@@ -1,11 +1,12 @@
-## 2026-11-20 IST: Owner central canvas welcome wordmark refresh
+## 2026-11-20 IST: Owner central canvas welcome wordmark alignment correction
 
-- PR [#381](https://github.com/ashini-x/parmar-ai/pull/381) merged as `39fb48907090c42a80be678c789f3a0f9667a327`.
-- The central canvas now uses the existing outlined BRɅIN wordmark followed by a small, thin, uppercase `WELCOME BACK` subtitle with letter spacing. The separate “Welcome back Sir.” heading and its heading styles are removed. No boxed BA monogram or `PRIVATE` label is added. The initial server-rendered welcome and JavaScript-rendered empty-chat welcome match.
-- PR validation [#44627078553](https://github.com/ashini-x/parmar-ai/actions/runs/44627078553) passed TypeScript, 522 Vitest tests across 76 files, 62 Node tests across 9 files and all three Worker dry-run builds.
-- Main Release Validation [#44627265096](https://github.com/ashini-x/parmar-ai/actions/runs/44627265096) passed full checks, paired production deployment, root/BRVIN-backed health smoke and release acceptance. `parmar-ai` is at 100% traffic on version `bc01d6cc-a725-4721-a173-63ce0c051d01` / deployment `840db1a5-cfc0-461d-917f-fa9b3c6758ae`; `brvin-service` is at 100% on version `074f945e-7d73-43fc-939e-45e72e7aefe3` / deployment `21d6f135-2332-4349-91dd-e894b0474c10`. Production acceptance artifact: `14580226261`.
-- The standalone public BRɅIN website deployment was skipped because no website files changed. This is an Owner-only front-end presentation change; no API, D1, Vertex/model/provider, token-budget, Project Memory, retrieval or student-facing behavior changed.
-
+- PR [#383](https://github.com/ashini-x/parmar-ai/pull/383) merged as `512e4ca984cbabb11fb50bbb16067720946b185e`.
+- The final subtitle is exactly `INTELLIGENCE · WELCOME BACK`. `INTELLIGENCE` is retained and only `PRIVATE` is replaced by `WELCOME BACK`.
+- The subtitle uses the same responsive width as the BRɅIN wordmark and is left-aligned, so its first `I` starts at the same left edge as the wordmark's `B`. Thin, small uppercase typography and letter spacing remain.
+- Both initial server-rendered and JavaScript-rendered empty-chat states use the exact same design. The central BA monogram, `PRIVATE` label and “Welcome back Sir.” heading remain absent.
+- PR validation [#44628847172](https://github.com/ashini-x/parmar-ai/actions/runs/44628847172) passed TypeScript, 522 Vitest tests across 76 files, 62 Node tests across 9 files and all three Worker dry-run builds.
+- Main Release Validation [#44629040564](https://github.com/ashini-x/parmar-ai/actions/runs/44629040564) passed typecheck/test/build, paired production deployment, root/BRVIN-backed health smoke on the first attempt and production release acceptance. Acceptance artifact: `14580762674`. The public website was unchanged and its deployment was skipped.
+- Owner-only front-end change; no API, D1, Vertex/model/provider, token-budget, Project Memory, retrieval or student-facing behavior changed.
 ## 2026-11-19 IST: Owner Intelligence M4.4 Project Memory accepted and closed
 
 - Recorded the authenticated production Owner attach/read journey: a New Chat Scratchpad was explicitly attached to the Owner Intelligence topic and Owner Gemini Intelligence project, with Workstream/Feature unset and both cross-project controls off.
