@@ -3,7 +3,7 @@ import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
 import { countOwnerGeminiInputTokens, generateOwnerGeminiContent, openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiContent, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
 import { getOwnerConversationProjectMemoryInfo, loadOwnerConversationProjectMemoryPrompt, setOwnerConversationCrossProjectMemory } from "./owner-project-memory";
-import { OWNER_INTELLIGENCE_MONOGRAM_SVG, OWNER_INTELLIGENCE_SIDEBAR_WORDMARK_SVG, OWNER_INTELLIGENCE_WORDMARK_GLYPHS, OWNER_INTELLIGENCE_WORDMARK_SVG } from "./owner-wordmark";
+import { OWNER_INTELLIGENCE_SIDEBAR_WORDMARK_SVG, OWNER_INTELLIGENCE_WORDMARK_GLYPHS, OWNER_INTELLIGENCE_WORDMARK_SVG } from "./owner-wordmark";
 
 export interface OwnerIntelligenceSessionUsage {
   limit_tokens: number;
@@ -1500,7 +1500,7 @@ function workspaceHtml(): string {
 .sidebar-scroll::-webkit-scrollbar-track{background:transparent}
 .sidebar-scroll::-webkit-scrollbar-thumb{background:#343434;border-radius:999px}
 .sidebar-scroll::-webkit-scrollbar-thumb:hover{background:#4a4a4a}
-.brand{display:flex;align-items:center;gap:10px;padding:7px 8px 20px}.brand-mark{width:34px;height:34px;display:grid;place-items:center;border:1px solid #555;border-radius:11px;color:#fff}.brand-mark svg{display:block;width:23px;height:auto}.brand-name{display:flex;align-items:center}.brand-name svg{display:block;width:86px;height:auto}.brand-sub{color:#8a8a8a;font-size:10px;letter-spacing:.12em;margin-top:3px}
+.brand{display:flex;align-items:center;padding:7px 8px 20px}.brand svg{display:block;width:120px;height:auto}
 .new-chat{display:flex;align-items:center;gap:10px;width:100%;border:1px solid #454545;background:#242424;border-radius:10px;padding:11px 12px;text-align:left;font-size:13px;font-weight:600}.new-chat:hover{background:#303030}.plus{font-size:19px;font-weight:300;line-height:14px}
 .new-chat-scope{display:flex;flex-direction:column;gap:7px;margin-top:9px;padding:9px;border:1px solid #303030;border-radius:10px;background:#1d1d1d}
 .new-chat-scope-label{font-size:9px;color:#858585;letter-spacing:.12em;font-weight:650}
@@ -1557,7 +1557,7 @@ function workspaceHtml(): string {
 .sidebar-scroll::-webkit-scrollbar-track{background:transparent}
 .sidebar-scroll::-webkit-scrollbar-thumb{background:#343434;border-radius:999px}
 .sidebar-scroll::-webkit-scrollbar-thumb:hover{background:#4a4a4a}
-.brand{display:flex;align-items:center;gap:10px;padding:7px 8px 20px}.brand-mark{width:34px;height:34px;display:grid;place-items:center;border:1px solid #555;border-radius:11px;color:#fff}.brand-mark svg{display:block;width:23px;height:auto}.brand-name{display:flex;align-items:center}.brand-name svg{display:block;width:86px;height:auto}.brand-sub{color:#8a8a8a;font-size:10px;letter-spacing:.12em;margin-top:3px}
+.brand{display:flex;align-items:center;padding:7px 8px 20px}.brand svg{display:block;width:120px;height:auto}
 .new-chat{display:flex;align-items:center;gap:10px;width:100%;border:1px solid #454545;background:#242424;border-radius:10px;padding:11px 12px;text-align:left;font-size:13px;font-weight:600}.new-chat:hover{background:#303030}.plus{font-size:19px;font-weight:300;line-height:14px}
 .new-chat-scope{display:flex;flex-direction:column;gap:7px;margin-top:9px;padding:9px;border:1px solid #303030;border-radius:10px;background:#1d1d1d}
 .new-chat-scope-label{font-size:9px;color:#858585;letter-spacing:.12em;font-weight:650}
@@ -1643,7 +1643,7 @@ html,body{background:#000}
 <div class="app">
 <aside class="sidebar" id="sidebar" aria-label="Conversation sidebar">
   <div class="sidebar-scroll" id="sidebarScroll">
-  <div class="brand"><div class="brand-mark">${OWNER_INTELLIGENCE_MONOGRAM_SVG}</div><div><div class="brand-name">${OWNER_INTELLIGENCE_SIDEBAR_WORDMARK_SVG}</div><div class="brand-sub">INTELLIGENCE · PRIVATE</div></div></div>
+  <div class="brand">${OWNER_INTELLIGENCE_SIDEBAR_WORDMARK_SVG}</div>
   <button class="new-chat" id="newChat" type="button"><span class="plus">＋</span><span>New chat</span></button>
   <div class="new-chat-scope">
     <label class="new-chat-scope-label" for="newChatTopic">START NEW CHAT IN</label>
