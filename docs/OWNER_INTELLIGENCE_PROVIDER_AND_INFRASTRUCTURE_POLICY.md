@@ -1,6 +1,6 @@
 # Owner Intelligence — Provider and Cloudflare Infrastructure Policy
 
-**Status:** Approved architecture decision; documentation only; no application-code or production configuration change  
+**Status:** Approved architecture and operational reliability policy; runtime reliability implementation tracked in the corresponding M4.3 fix PR  
 **Approved:** 2026-11-19 IST  
 **Applies to:** Owner Gemini Intelligence in `ashini-x/parmar-ai`  
 **Parent:** [Owner workspace roadmap](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md)  
@@ -29,6 +29,13 @@ Cloudflare responsibilities include Owner authentication and authorization, same
 GitHub is the versioned destination for Owner-reviewed curated memory and collaboration artifacts. The Worker uses only its dedicated, least-privilege Owner Memory App credentials. ChatGPT Software Engineer is a separate, Owner-authorized engineering executor with separate credentials; it is not a runtime fallback provider and its connector credentials are never available to Cloudflare.
 
 Do not provision Workers AI, R2, KV, Vectorize, AI Search, a new Queue or another Cloudflare product merely because it exists. Use the current Worker + D1 + existing Vertex REST/SSE adapter and D1 FTS5/keyword search first. A new resource requires a task-specific design, verified account availability, capacity/cost justification and explicit Owner approval.
+
+### 1.3 Memory-draft request reliability
+
+- A Save-to-GitHub memory draft must verify only the exact Owner-selected model; it must not fan out fresh CountTokens probes across the entire model catalogue immediately before GenerateContent.
+- GenerateContent uses a 90-second per-attempt deadline and at most three attempts for explicit retryable HTTP responses (408/429/500/502/503/504), with truncated exponential backoff and jitter. It must not replay a timeout or lost connection because the provider may have accepted the request even when the response was not received.
+- A definitive validation, authentication, model-not-found or capacity rejection (400/401/403/404/429) releases the unused D1 token reservation. A timeout, lost connection or ambiguous server failure remains conservatively accounted when exact provider usage is unavailable.
+- A 429/RESOURCE_EXHAUSTED response must be diagnosed before changing Cloud billing or quotas. It can mean project/model quota exhaustion or temporary shared serving capacity (DSQ). A quota increase helps only when the applicable quota metric is actually exhausted; it does not create shared model capacity. Prefer the global endpoint when supported by the selected model; do not silently change the configured location. See Google's [429 troubleshooting guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/deploy/error-code-429).
 
 ### 1.3 Non-negotiable accounting and reliability boundaries
 
