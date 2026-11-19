@@ -8,6 +8,10 @@
 
 > This is a separate owner-only feature. It does not replace or broaden the student-facing परमार्थAI Telegram tutor.
 
+## 0. Shared BRɅIN brand and typography baseline
+
+All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md). The Owner-selected direction is AERUNO-style lettering for the BRɅIN wordmark only and the ChatGPT/OpenAI Sans visual style for all ordinary UI text. The uploaded AERUNO Trial file is not cleared for commercial use and lacks the special `Ʌ` glyph; do not commit or deploy it. OpenAI Sans must be obtained through its official access route and used only with confirmed product hosting/embedding permission. Existing OFL-licensed Poppins assets remain the current/legacy deployed UI font until a compliant migration is ready. Typography work must not alter Owner auth, model selection, Vertex, D1, token budgets, conversation semantics or student-facing behavior.
+
 ## 1. Product goal
 
 Build a private, general-purpose Gemini workspace for the Owner inside the existing protected Admin Control Center. The Owner signs in once, chooses a Gemini model that is actually available to the configured Google Cloud / Vertex AI project and location, and asks open-ended questions without going to Google Cloud Console, AI Studio or a separate Gemini chat interface.
