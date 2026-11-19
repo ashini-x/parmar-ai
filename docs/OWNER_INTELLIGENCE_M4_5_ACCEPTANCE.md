@@ -52,9 +52,9 @@ Fill these fields only from the final current PR head and corresponding workflow
 
 Before the authenticated rollover walkthrough, the Owner separately reported a Gemini stream ending with "Vertex AI completed without a text response." The code audit found an 8,192-token application chat-output reservation and an 8-minute application streaming timeout. The selected Gemini 4 Hydrogen model supports a 65,536-token single foreground output segment, and XHIGH reasoning tokens count against the output allowance. The generic parser error did not preserve `finishReason` or usage metadata.
 
-A dedicated correction is being validated on branch `fix/owner-intelligence-response-limits`:
+A dedicated correction is being validated on branch `fix/owner-intelligence-response-limits-release`:
 - Ordinary chat reserves the selected model's single-request maximum, bounded by the unchanged 200,000-token session balance.
-- Application-owned 8-minute streaming and 90-second non-stream generation deadlines are removed. Stop/disconnect cancellation and bounded preflight checks remain.
+- Application-owned 8-minute streaming and 90-second non-stream generation deadlines are removed. Stop/disconnect cancellation and bounded preflight checks remain. The D1 lease refreshes every 60 seconds while generation is active; the 10-minute recovery expires only after heartbeats stop.
 - Empty-response errors retain `finishReason` and actual usage metadata; `MAX_TOKENS` is diagnosed explicitly and the D1 ledger settles reported usage when available.
 - Provider ceilings remain. Gemini 4 Hydrogen's current streaming single-segment output ceiling is 65,536 tokens; the app does not claim infinite output or implement long-decode continuation.
 
