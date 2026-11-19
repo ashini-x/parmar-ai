@@ -1,6 +1,6 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-20 IST**. **M4.3 and M4.4 are fully accepted and closed.** M4.4 Project Memory is merged, production deployed and verified in the authenticated Owner browser. Main includes Owner UI/response PRs #360–#365, adaptive response PR #367, dark-canvas/instant-send UI PR #368, collapsible user-message PR #369, welcome PR #370, typography removal PR #374 and AERUNO-derived Owner SVG wordmark PR #376; latest verified main commit is `edaf98fb8d19ff3ac5853e3cc7a5c8bf29c245d8`. **M4.5 — Automatic rollover and handoff — is being implemented in PR #375.** See [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md) for the current head, checks, merge, production release and Owner walkthrough. Re-read GitHub, D1 and Cloudflare before acting; this prompt is a navigation aid, not a substitute for live evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-20 IST**. **M4.3 and M4.4 are fully accepted and closed.** M4.4 Project Memory is merged, production deployed and authenticated-Owner accepted. Main includes Owner UI/response PRs #360–#365, adaptive response PR #367, dark-canvas/instant-send UI PR #368, collapsible user-message PR #369, welcome PR #370, typography removal PR #374 and AERUNO-derived Owner SVG wordmark PR #376; latest main commit is `f3cdff013ff28a68f9827229855545d27530e784`. **M4.5 — Automatic rollover and handoff — is being implemented in PR #375.** See [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md) for current head, checks, merge, production release and Owner walkthrough. Re-read GitHub, D1 and Cloudflare before acting; this prompt is a navigation aid, not a substitute for live evidence.
 
 
 ### Owner typography removal and production release — 2026-11-20 IST
@@ -230,13 +230,13 @@ M4.5 implementation includes:
 - 180,000 used-plus-reserved warning; 190,000 Roll Over action; optional 195K urgency was not added.
 - D1-first idempotent rollover: preserve source transcript and old ledger read-only; atomically create one linked successor, fresh 200,000-token budget, clone immutable active Project Memory snapshot(s), and store deterministic source-linked Markdown handoff plus unique D1 memory-job/outbox row.
 - Reject archived source writes/generation and block token reservation when the conversation is no longer active, including a request that passed preflight before rollover.
-- Display handoff in the successor and include it as untrusted historical reference data in the exact selected-Vertex CountTokens/GenerateContent prompt.
+- Display the handoff in the successor and include it as untrusted historical reference data in the exact selected-Vertex CountTokens/GenerateContent prompt.
 - Existing Owner-reviewed GitHub Save preview adds the full handoff as `handoffs/<date>-<successor-prefix>.md`, outside the active-memory manifest allowlist. Synced follows verified commit and exact file read-back; D1 remains canonical if GitHub is unreachable.
 - Preserve strict M4.3 branch-head Conflict behavior; no new Queue/Workflow/service or Cloudflare plan change.
 
 Required execution sequence:
-1. Inspect the latest PR #375 head and mergeability. Wait for current-head TypeScript, Vitest, Node tests and all three Worker dry-run builds; do not rely on cancelled/older runs.
-2. Confirm latest main reconciliation retained the deployed AERUNO-derived SVG wordmark and OpenAI Sans-first platform fallback. Do not revert current typography changes.
+1. Inspect latest PR #375 head, mergeability and current-head TypeScript, Vitest, Node tests and all three Worker dry-run builds; do not rely on cancelled/older runs.
+2. Confirm latest main reconciliation retained the AERUNO-derived SVG wordmark and OpenAI Sans-first platform fallback. Do not revert the current typography release.
 3. Mark PR ready and merge only after current-head validation passes.
 4. Verify the post-merge main commit and paired production release workflow. Record exact run, deployment IDs/versions, smoke/acceptance artifact and 100% traffic only when directly observed.
 5. Run read-only production D1 schema queries. Open/reload the authenticated Owner page to ensure lazy schema initialization has run; confirm handoff/outbox tables without mutating usage or manufacturing a threshold.
