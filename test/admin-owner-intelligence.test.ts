@@ -472,22 +472,21 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain('id="bottomDock"');
     expect(html).toContain('id="sessionBudget"');
     expect(html).toContain("SESSION TOKENS");
-    expect(html).toContain('@font-face{font-family:"BRɅIN universal font"');
-    expect(html).toContain('font-family:"BRɅIN universal font"');
-    expect(html).toContain('/admin/intelligence-fonts/brain-universal-latin-400.woff2');
-    expect(html).toContain('/admin/intelligence-fonts/brain-universal-latin-ext-300.woff2');
-    expect(html).toContain('/admin/intelligence-fonts/brain-universal-latin-ext-500.woff2');
-    expect(html).toContain('font-display:block');
-    expect(html).toContain('/admin/intelligence-fonts/brain-universal-devanagari-400.woff2');
-    expect(html).not.toContain('font-family:Inter,ui-sans-serif,system-ui');
+    expect(html).not.toContain("@font-face");
+    expect(html).not.toContain("brain-universal");
+    expect(html).not.toContain("/admin/intelligence-fonts/");
+    expect(html).not.toContain("Poppins");
+    expect(html).toContain('font-family:"OpenAI Sans",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
     expect(response.headers.get("content-security-policy")).toContain("font-src 'self'");
     expect(html).toContain('Welcome back Sir.</h1>');
-    expect(html).toContain('<div class="welcome"><div class="welcome-brand" aria-label="BRɅIN">BRɅIN</div><h1>Welcome back Sir.</h1></div>');
-    expect(html).toContain(".welcome-brand{margin:0 0 19px");
-    expect(html).toContain('font-size:clamp(48px,7vw,68px);font-weight:500;letter-spacing:.13em');
+    expect(html).toContain('<div class="welcome"><div class="welcome-brand" aria-label="BRɅIN"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7197 1446"');
+    expect(html).toContain('viewBox="0 0 3470 1446"');
+    expect(html).toContain('class="brand-mark"><svg xmlns="http://www.w3.org/2000/svg"');
+    expect(html).toContain('.welcome-brand svg{display:block;width:clamp(230px,34vw,320px);height:auto');
+    expect(html).toContain('.brand-name svg{display:block;width:86px;height:auto}');
     expect(html).toContain('font-size:clamp(16px,2vw,20px);letter-spacing:.025em;font-weight:300');
     expect(html).not.toContain(".welcome-brand::after");
-    expect(html).toContain("background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent");
+    expect(html).toContain('linearGradient id="owner-intelligence-wordmark-fill"');
     expect(html).not.toContain("Your thinking space.");
     expect(html).not.toContain("A private workspace for research");
     expect(html).not.toContain("PRIVATE OWNER WORKSPACE");
@@ -572,7 +571,11 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("The Owner workspace request timed out");
     expect(script).toContain("Could not load conversations");
     expect(script).toContain("appendActivityCard");
-    expect(script).toContain('node("div","welcome-brand","BRɅIN")');
+    expect(script).toContain("welcomeBrand.appendChild(buildOwnerWordmarkSvgNode())");
+    expect(script).toContain('var ownerWordmarkGlyphs = [{');
+    expect(script).toContain('document.createElementNS(ns,"svg")');
+    expect(script).toContain('viewBox","0 0 7197 1446"');
+    expect(script).not.toContain(".innerHTML");
     expect(script).toContain('Welcome back Sir.');
     expect(script).not.toContain('What are we hunting today?');
     expect(script).not.toContain("Your thinking space.");
@@ -803,7 +806,6 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect([...db.messages.values()].filter((row) => row.role === "assistant")).toHaveLength(1);
     expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
   });
-
 
   it("warns before rollover, rejects in-flight work, then creates one provenance-rich linked successor", async () => {
     const env = appEnv({ DB: (workerTestBindings as unknown as Env).DB });
