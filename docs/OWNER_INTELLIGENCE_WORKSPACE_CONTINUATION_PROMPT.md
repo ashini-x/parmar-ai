@@ -1,6 +1,6 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**. **M4.3 and M4.4 are fully accepted and closed.** M4.4 Project Memory is merged, production deployed and verified in the authenticated Owner browser: the primary project-memory attach/read journey passed and a separate unattached Scratchpad correctly remained isolated. Current main includes Owner UI/response PRs #360–#365, adaptive response PR #367, dark-canvas/instant-send UI PR #368, collapsible user-message PR #369 and personal welcome PR #370; latest runtime commit is `aa6596a425003c4314afdb2b69f576ae3cee1bbb`. **The next task is M4.5 — Automatic rollover and handoff.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-20 IST**. **M4.3 and M4.4 are fully accepted and closed.** M4.4 Project Memory is merged, production deployed and authenticated-Owner accepted. Main includes Owner UI/response PRs #360–#365, adaptive response PR #367, dark-canvas/instant-send UI PR #368, collapsible user-message PR #369, welcome PR #370 and typography PRs #372–#374; latest verified main documentation commit before M4.5 branch work is `56c55b2aadfdeb58ff8978b35d67dba6c46e9325`. **M4.5 — Automatic rollover and handoff — is being implemented in PR #375.** See [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md) for live PR/CI/deployment status. Always refresh GitHub, D1 and Cloudflare before acting; this prompt is a navigation aid, not a substitute for current evidence.
 
 
 ### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
@@ -203,22 +203,28 @@ M4.3 is fully accepted and closed. The remaining evidence was reconciled using r
 
 **Acceptance:** M4.4 is formally closed. The 200,000-token cumulative per-chat budget is unchanged. No D1 or Cloudflare mutation, Google Cloud setting change, billing/quota change, M4.3 Save repetition, or student Telegram runtime change was part of this walkthrough.
 
-## Immediate next task — M4.5 Automatic rollover and handoff
+## Immediate current task — finish M4.5 PR #375, deploy and verify
 
-Begin with source-of-truth recovery, not implementation by assumption. M4.5 is approved but not started. Re-read the latest roadmap and M4.4 acceptance record, then inspect current `main`, relevant D1 schema/migrations and Owner conversation lifecycle, current UI/API flow, GitHub handoff/save contracts, tests, Cloudflare bindings and deployed versions.
+Implementation is in [PR #375](https://github.com/ashini-x/parmar-ai/pull/375) on branch `feat/m4-5-owner-intelligence-rollover`. Re-read the current PR diff, current-head workflow run and branch tip before acting; older CI runs may have been cancelled by later pushes. The implementation and acceptance scope are recorded in [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md).
 
-M4.5 scope:
-- Warn at **180,000** cumulative tokens (committed usage plus in-flight reservation).
-- Offer **Roll Over** at **190,000**; an optional **195,000** urgency state may be used, but the existing **200,000** server-side hard limit must remain authoritative.
-- Preserve the old conversation and its complete transcript; do not reset or re-use its budget.
-- Create a linked successor conversation with an independent 200,000-token budget and provenance-rich handoff (goal, accepted decisions, current technical/file state, blockers, next action, source conversation/message IDs and pinned project snapshot).
-- Keep D1 as the durable canonical transcript/handoff record. GitHub sync is a reviewed/verified persistence path, not a condition for opening a safe D1-backed successor.
-- Treat ambiguous job/network outcomes conservatively and use existing idempotency/outbox patterns; do not create new Cloudflare services without measurement and Owner approval.
-- Preserve the strict M4.3 branch-head Conflict behavior. Do not introduce path-aware multi-writer rebasing as part of M4.5 unless separately approved.
-- Keep Vertex AI as the sole inference provider; do not change the selected-model contract, 200K cap, student Telegram system, or Google Cloud IAM/billing/settings.
+M4.5 implementation includes:
+- 180,000 used-plus-reserved warning; 190,000 Roll Over action; the optional 195K state was not added.
+- D1-first idempotent rollover: preserve the source transcript and old ledger read-only; atomically create one linked successor, fresh 200,000-token budget, cloned immutable active Project Memory snapshot(s), provenance-rich deterministic handoff and unique D1 memory-job/outbox record.
+- Reject archived source edits/generation and block token reservation if the conversation is no longer active, including a request that passed preflight before rollover.
+- Show the handoff in the successor and include it as untrusted historical reference data in the exact selected-Vertex CountTokens/GenerateContent prompt.
+- Existing reviewed GitHub Save includes the full handoff Markdown file at `handoffs/<date>-<successor-prefix>.md`. D1 remains canonical; GitHub is marked Synced only after the existing Save path confirms commit and exact read-back. The new handoff file is not part of the active Project Memory allowlist.
+- Preserve strict M4.3 branch-head Conflict behavior. No new Queue/Workflow/service or Cloudflare plan change.
 
-M4.6-P0 remains a mandatory measured capacity/cost/durability gate **before M4.6**, not before M4.5.
+Required execution sequence:
+1. Inspect the latest PR #375 head, mergeability and current-head TypeScript/Vitest/Node/three Worker dry-run results. Fix any current-head failures and wait for the corresponding latest run; do not rely on cancelled/older runs.
+2. Mark PR ready and merge only after all current-head validation passes.
+3. Verify the post-merge main commit and the paired production release workflow. Record exact run, deployment IDs/versions, production smoke/acceptance artifact and 100% traffic only when directly observed.
+4. Perform read-only production D1 schema checks. Open/reload the authenticated Owner page to ensure lazy D1 schema initialization has run; confirm the handoff and memory-job tables exist without mutating usage or manufacturing a threshold.
+5. Ask the Owner to verify the deployed 180K/190K UI in a safe test conversation. Do not consume 190K production tokens solely to reproduce the threshold; deterministic local-D1 tests cover it. Verify one test rollover, read-only source, linked successor, zeroed 200K meter, handoff prompt provenance and pinned snapshot.
+6. Do not confirm a GitHub Save on behalf of the Owner. The Owner must review the complete preview, including the full `handoffs/` Markdown file; Synced must follow the exact commit/read-back verification.
+7. Close M4.5 only after current-head CI, production release/acceptance, read-only D1 schema verification and authenticated Owner continuity walkthrough are recorded in the acceptance document and roadmap.
 
+M4.6-P0 remains a mandatory measured capacity/cost/durability gate **before M4.6**, not before M4.5. No Google Cloud settings, Vertex model/provider, 200K budget, BRVIN retrieval or student Telegram behavior should change.
 ## M4.4 approved scope
 - One private `owner-memory-hub` stores project catalog/manifests and curated Markdown; it does not contain/copy source-code trees.
 - Introduce stable project IDs and versioned catalog/manifest schemas. Projects may contain workstreams and optional feature scopes and may reference several independent source repositories.
