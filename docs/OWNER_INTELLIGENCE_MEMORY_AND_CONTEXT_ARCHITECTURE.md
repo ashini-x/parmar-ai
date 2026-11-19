@@ -1,6 +1,6 @@
 # Owner Intelligence — Memory and Token-Aware Context Architecture
 
-**Status:** M4.4 Project Memory implementation merged and production deployed on 2026-11-19; automated acceptance passed; authenticated Owner attach-and-read acceptance pending; M4.5–M4.8 remain planned  
+**Status:** M4.4 Project Memory implementation, production release and authenticated Owner attach/read + Scratchpad-isolation acceptance completed on 2026-11-19; M4.4 closed; M4.5–M4.8 remain planned  
 **Original approval:** 2026-11-18  
 **Central hub/collaboration amendment:** 2026-11-19 IST  
 **Parent roadmap:** [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md)  
@@ -11,7 +11,7 @@
 
 Extend the deployed Owner Gemini chat so a project discussion can be saved, reopened after weeks, continued across independent chats, compacted safely, forked for experiments, and rolled over before the per-chat budget is exhausted.
 
-This is a design specification for the capabilities that extend the deployed Owner workspace. M0–M4.4 implementation is merged and deployed. M4.3 is fully accepted as of 2026-11-19; its live Save/read-back and append-only preservation evidence is in [M4.3 acceptance record](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md). M4.4 adds versioned hub/project/workstream/feature manifests, pinned Owner-scoped D1 snapshots and manifest-allowlisted active-memory loading. Automated validation and production release acceptance passed. The authenticated Owner Project Context attach-and-read walkthrough remains pending; M4.5–M4.8 are future work.
+This is a design specification for the capabilities that extend the deployed Owner workspace. M0–M4.4 implementation is merged and deployed. M4.3 is fully accepted as of 2026-11-19; its live Save/read-back and append-only preservation evidence is in [M4.3 acceptance record](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md). M4.4 adds versioned hub/project/workstream/feature manifests, pinned Owner-scoped D1 snapshots and manifest-allowlisted active-memory loading. Automated validation, production release acceptance and the authenticated Owner Project Context attach/read + independent Scratchpad-isolation walkthrough passed on 2026-11-19; M4.4 is closed. See [M4.4 acceptance record](OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md). M4.5–M4.8 are future work.
 
 The implementation must preserve the existing Owner-only Admin Control Center, Vertex authentication and SSE path, selected-model behaviour, D1 conversation storage, and the student/BRɅIN security boundaries. It must not rebuild the chat UI or replace the current provider adapter.
 
@@ -442,9 +442,9 @@ Preserve the original M4.1 200,000-token cumulative conversation budget unchange
 
 M4.3's strict branch-head Conflict behavior remains in force until path-aware multi-writer preconditions are implemented. Future unrelated-path rebasing must verify all touched-file and governing-manifest blob SHAs, use bounded retries and a non-force ref update. Same-path or manifest conflicts require review. No application code, new repository, hierarchical loader or collaboration automation is created by this architecture amendment.
 
-## 2026-11-19 IST — M4.4 implementation and release status
+## 2026-11-19 IST — M4.4 implementation, release and Owner acceptance — COMPLETE
 
-M4.4 is implemented and production deployed. Do not treat earlier planning paragraphs that describe M4.4 as unimplemented as current state.
+M4.4 is implemented, production deployed and authenticated-Owner accepted. Do not treat earlier planning paragraphs that describe M4.4 as unimplemented or pending as current state.
 
 ### Shipped
 - Hub manifest and project catalog with version-1 schemas for hub, catalog entry, project, workstream and feature manifests.
@@ -461,6 +461,16 @@ M4.4 is implemented and production deployed. Do not treat earlier planning parag
 - Workflow [44568064917](https://github.com/ashini-x/parmar-ai/actions/runs/44568064917) passed TypeScript, 521 Vitest tests/76 files, 62 Node tests/9 files and all three Worker dry-run builds. The same workflow deployed both Workers and passed root/BRVIN health/release acceptance.
 - M4.4 release versions: `parmar-ai` `fd932efb-9d97-4e8f-837f-79a460409495`; `brvin-service` `90b21e52-2a55-402e-8398-0c6e308d3a0e`.
 - Latest main additionally includes response renderer PR #365 and is deployed at `parmar-ai` `fccd13e6-1be3-4ecb-b1e6-d42d352cd1f8` and `brvin-service` `500709c7-b62a-4c6c-9613-159f77988310`, both at 100% traffic; workflow [44571138999](https://github.com/ashini-x/parmar-ai/actions/runs/44571138999) passed.
-- Automated release smoke confirms root and BRVIN-backed health, not authenticated Project Context. M4.4 becomes fully accepted only after the Owner attaches the project to a production conversation, checks pinned provenance and verifies a fresh model response uses the attached memory.
+- Automated release smoke confirms root and BRVIN-backed health; it does not exercise authenticated Project Context. The Owner subsequently completed the production attach/read and independent Scratchpad-isolation walkthrough on 2026-11-19. See the dedicated acceptance record. M4.4 is closed; M4.5 is next.
 
 M4.4 does not include archive/session search, automatic branch refresh, rollover, compaction, forks, historical D1 recall, semantic caching or path-aware multi-writer rebasing. M4.3 strict branch-head Conflict protection remains unchanged.
+
+
+### Authenticated Owner acceptance evidence — 2026-11-19 IST
+
+- **Attach path:** the Owner created a New Chat Scratchpad, explicitly selected the connected Owner Intelligence topic and Owner Gemini Intelligence project, left Workstream/Feature at none and both cross-project controls unchecked, then attached pinned Project Memory.
+- **Visible pin:** the Project Context card displayed `ashini-x/owner-memory-hub`, `main`, pinned commit `91e5c98cbc375b3c418207b6559021b16200e0b4`, the three allowlisted active file paths and their blob provenance, and a 2,599-token estimate. The displayed catalog commit prefix matched the pinned commit.
+- **Model read:** Gemini 4 Hydrogen / High returned project-specific content and reproduced the exact pinned commit and active file names. Captured excerpts show the selected project purpose/role boundaries and a distinction between the pinned snapshot and a historical commit mentioned in progress memory.
+- **Isolation:** a second Scratchpad with no selected topic/project or attached memory received an answer that it had no access to the private Project Memory and could not verify the SHA/file names.
+- **UI provenance note:** the screenshots did not separately display the symbolic manifest revision label `owner-memory-v1`; they did show the catalog commit and per-file blob identifiers. The immutable D1 snapshot's manifest provenance remains part of the shipped implementation contract.
+- **Decision:** M4.4 is accepted and closed. M4.5 is next; M4.6-P0 remains required before M4.6 only.
