@@ -454,3 +454,29 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 - [ ] Create a fresh preview and complete a normal successful verified save.
 
 Do not uninstall/reinstall the App. Do not mark M4.3 complete or start M4.4 until the remaining manual checks pass.
+
+## Owner Gemini Intelligence — M4.3 live acceptance addendum (2026-11-19 IST)
+
+The complete evidence and closeout boundary are maintained in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md). This addendum records the latest production test and does not assert that every M4.3 sub-criterion was independently queried again during this documentation update.
+
+### Automated regression and CI
+
+- PR [#355](https://github.com/ashini-x/parmar-ai/pull/355) covers memory-draft timeout/retry reliability. Only explicit HTTP 429 capacity responses are retried (maximum three total attempts); ambiguous 408/5xx/timeouts/lost connections are not replayed. The selected Gemini model and thinking level remain unchanged; definitive provider rejections release unused reservations.
+- PR [#356](https://github.com/ashini-x/parmar-ai/pull/356) covers append-only memory updates and checkpoint persistence. Tests verify exact preservation of existing project-memory/progress/decisions Markdown, an externally added Owner comment marker, Owner edits inside previous generated sections, append idempotency and empty-update handling.
+- PR #356 CI [44455732385](https://github.com/ashini-x/parmar-ai/actions/runs/44455732385) passed `npm run check`, 513 Vitest tests/75 files, 62 Node tests/9 files and three Worker dry-run builds. These tests do not make live Gemini calls or mutate production D1.
+
+### Manual production acceptance — passed subtest
+
+1. Create an initial memory Preview.
+2. Make a manual external GitHub edit to `projects/owner-intelligence/memory/progress.md` after the preview, including this marker:
+   `<!-- M4.3 stale-preview test marker: external GitHub edit made after Owner preview on 2026-11-19. -->`
+3. Confirm the stale preview becomes Conflict rather than overwriting the updated branch head. Recorded stale preview: `46116e56-1890-4cf5-91b9-9a145b3c0510`; external edit commit: `f41938e6b335162e3ef78bc76a259c27e128a0c6`.
+4. Generate a fresh preview. Recorded fresh preview: `1a5f45c6-4b01-4f98-9758-bd87a8eec59b`, base SHA `f41938e6b335162e3ef78bc76a259c27e128a0c6`. Verify that the marker and Owner-authored text are retained.
+5. Review and explicitly confirm Save from the Owner panel to `main`.
+6. Fetch/open committed `progress.md`. The Owner confirms newly generated content appears directly below the original manually authored comment.
+
+**Result:** the live Save/read-back and preservation subtest passed on 2026-11-19. Existing Owner-authored content survived the deployed Preview → explicit confirmation → commit → read-back flow.
+
+### Closeout evidence still to reconcile
+
+Use read-only D1 and GitHub checks to confirm the saved conversation's topic association/Scratchpad promotion and corresponding same-chat token reservation/settlement. Do not rerun the successful marker-preservation save, reinstall the App or make production D1 changes just to produce a screenshot. If these records are already correct, mark M4.3 fully accepted; otherwise test only the exact missing item. Preserve the 200,000-token per-chat cap and strict stale-branch Conflict guard.
