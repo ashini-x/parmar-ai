@@ -487,7 +487,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).not.toContain('class="brand-sub"');
     expect(html).not.toContain("INTELLIGENCE · PRIVATE");
     expect(html).toContain('.welcome-brand svg{display:block;width:clamp(230px,34vw,320px);height:auto}');
-    expect(html).toContain('.welcome .welcome-tagline{display:block;width:clamp(230px,34vw,320px);font-size:9px;font-weight:300;letter-spacing:.16em;line-height:1.25;color:#858585;text-transform:uppercase;text-align:left;margin:0}');
+    expect(html).toContain('.welcome .welcome-tagline{display:block;width:clamp(230px,34vw,320px);font-size:clamp(13px,.95vw,15px);font-weight:400;letter-spacing:.10em;line-height:1.35;color:#b0b0b0;text-transform:uppercase;text-align:left;margin:0}');
+    expect(html).not.toContain('font-size:9px;font-weight:300');
     expect(html).not.toContain('.welcome h1{');
     expect(html).not.toContain('.welcome-mark{');
     expect(html).toContain('.sidebar-header{flex:0 0 auto;padding:7px 8px 24px}');
