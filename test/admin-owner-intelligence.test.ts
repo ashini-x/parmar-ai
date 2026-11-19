@@ -468,8 +468,6 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto");
     expect(html).toContain(".bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px))");
     expect(html).toContain(".composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto");
-    expect(html).toContain("function resizeComposerInput()");
-    expect(html).toContain('messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});');
     const dockStart = html.indexOf('<div class="bottom-dock" id="bottomDock">');
     const composerStart = html.indexOf('<textarea id="messageInput"');
     const messagesStart = html.indexOf('<div class="messages" id="messages"');
@@ -519,6 +517,9 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("The model is sending response text.");
     expect(script).toContain("Vertex AI has accepted the request");
     expect(script).toContain("meta-pill level");
+    expect(script).toContain("function resizeComposerInput()");
+    expect(script).toContain('messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});
+    expect(script).toContain("maxHeight=144");
   });
 
   it("creates, lists, reopens, renames and deletes only the Owner's conversations and messages", async () => {
