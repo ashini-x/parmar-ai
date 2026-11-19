@@ -8,6 +8,7 @@ import {
   buildOwnerGeminiConversationContents,
   getOwnerIntelligenceSessionUsage,
   OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT,
+  OWNER_INTELLIGENCE_RESPONSE_STYLE_INSTRUCTION,
   type OwnerIntelligenceMessage,
 } from "../src/admin/intelligence";
 import { countOwnerGeminiInputTokens, openOwnerGeminiStream } from "../src/admin/intelligence-provider";
@@ -806,9 +807,15 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     ).bind(OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT - 10, id, "owner").run();
 
     let requestedOutputLimit = 0;
-    vi.mocked(countOwnerGeminiInputTokens).mockClear().mockResolvedValueOnce(5);
+    let countedSystemInstruction = "";
+    let streamedSystemInstruction = "";
+    vi.mocked(countOwnerGeminiInputTokens).mockClear().mockImplementationOnce(async (_env, input) => {
+      countedSystemInstruction = input.systemInstruction ?? "";
+      return 5;
+    });
     vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async (_env, input) => {
       requestedOutputLimit = input.maxOutputTokens ?? 0;
+      streamedSystemInstruction = input.systemInstruction ?? "";
       return (async function* () {
         yield {
           type: "done" as const,
@@ -830,6 +837,12 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     await generated.text();
 
     expect(requestedOutputLimit).toBe(5);
+    expect(countedSystemInstruction).toBe(OWNER_INTELLIGENCE_RESPONSE_STYLE_INSTRUCTION);
+    expect(streamedSystemInstruction).toBe(OWNER_INTELLIGENCE_RESPONSE_STYLE_INSTRUCTION);
+    expect(countedSystemInstruction).toContain("independently choose the clearest response structure");
+    expect(countedSystemInstruction).toContain("Markdown comparison table automatically");
+    expect(countedSystemInstruction).toContain("> [!SUCCESS]");
+    expect(countedSystemInstruction).toContain("Do not force every response to contain every format");
     const messagesAfterCompletion = await db.prepare(
       "SELECT role, status FROM owner_intelligence_messages WHERE conversation_id = ? AND owner_id = ? ORDER BY created_at ASC",
     ).bind(id, "owner").all<{ role: string; status: string }>();
