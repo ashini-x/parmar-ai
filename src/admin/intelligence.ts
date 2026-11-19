@@ -2,6 +2,7 @@ import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types"
 import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
 import { countOwnerGeminiInputTokens, generateOwnerGeminiContent, openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiContent, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
+import { getOwnerConversationProjectMemoryInfo, loadOwnerConversationProjectMemoryPrompt, setOwnerConversationCrossProjectMemory } from "./owner-project-memory";
 
 export interface OwnerIntelligenceSessionUsage {
   limit_tokens: number;
@@ -657,7 +658,8 @@ export async function getOwnerIntelligenceConversation(
      ORDER BY m.created_at ASC, m.id ASC`,
   ).bind(id, ownerId).all<OwnerMessageRow>();
   const usage = await getOwnerIntelligenceSessionUsage(env, id);
-  return { conversation: mapConversation(row), messages: (result.results ?? []).map(mapMessage), usage };
+  const projectMemory = await getOwnerConversationProjectMemoryInfo(env, ownerId, id);
+  return { conversation: mapConversation(row), messages: (result.results ?? []).map(mapMessage), usage, projectMemory };
 }
 
 export async function renameOwnerIntelligenceConversation(
@@ -1038,7 +1040,20 @@ async function handleOwnerGeneration(
   }
   if (!plan) return notFound();
 
+  let projectMemoryContext: Awaited<ReturnType<typeof loadOwnerConversationProjectMemoryPrompt>> = null;
+  try {
+    projectMemoryContext = await loadOwnerConversationProjectMemoryPrompt(env, ownerPrincipal(env), conversationId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The pinned Project Memory could not be loaded.";
+    return json({ ok: false, error: "project_memory_load_failed", message: message.slice(0, 300) }, 503);
+  }
   const contents = buildOwnerGeminiConversationContents(plan.messages);
+  if (projectMemoryContext && contents.length && contents[0].role === "user") {
+    contents[0] = {
+      ...contents[0],
+      text: projectMemoryContext.referenceText + "\n\n--- CURRENT CONVERSATION TRANSCRIPT ---\n\n" + contents[0].text,
+    };
+  }
   if (!contents.length || contents[contents.length - 1].role !== "user") {
     return json({ ok: false, error: "latest_message_missing" }, 409);
   }
@@ -1191,6 +1206,7 @@ async function handleOwnerGeneration(
         message: assistantMessage,
         model: definition.label,
         thinkingLevel,
+        projectMemory: projectMemoryContext?.snapshots ?? [],
       });
       void (async () => {
         let completed = false;
@@ -1336,6 +1352,34 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
     return methodNotAllowed(["GET", "POST"]);
   }
 
+  const memoryPreference = url.pathname.match(/^\/admin\/api\/intelligence\/conversations\/([0-9a-f-]{36})\/memory\/cross-project$/iu);
+  if (memoryPreference) {
+    if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
+    if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
+    const body = await readJsonBody(request);
+    if (!body || Object.keys(body).length !== 1 || typeof body.enabled !== "boolean") {
+      return json({ ok: false, error: "invalid_request" }, 400);
+    }
+    try {
+      const updated = await setOwnerConversationCrossProjectMemory(env, ownerPrincipal(env), memoryPreference[1], body.enabled);
+      return updated ? json({ ok: true, enabled: body.enabled }) : notFound();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The cross-project preference could not be saved.";
+      return json({ ok: false, error: "cross_project_update_failed", message }, 503);
+    }
+  }
+
+  if (url.pathname.endsWith("/memory")) {
+    const memoryMatch = url.pathname.match(/^\/admin\/api\/intelligence\/conversations\/([0-9a-f-]{36})\/memory$/iu);
+    if (!memoryMatch || request.method !== "GET") return notFound();
+    try {
+      const projectMemory = await getOwnerConversationProjectMemoryInfo(env, ownerPrincipal(env), memoryMatch[1]);
+      return json({ ok: true, projectMemory });
+    } catch {
+      return notFound();
+    }
+  }
+
   const prefix = root + "/";
   if (!url.pathname.startsWith(prefix)) return notFound();
   const suffix = url.pathname.slice(prefix.length).split("/");
@@ -1435,7 +1479,7 @@ function workspaceHtml(): string {
 .github-save-file label{font-size:9px;color:#bcbcbc;font-weight:650;overflow-wrap:anywhere}
 .github-save-file textarea{width:100%;min-height:130px;max-height:360px;resize:vertical;border:1px solid #414141;border-radius:7px;background:#171717;color:#e5e5e5;padding:8px;font:10px/1.5 ui-monospace,SFMono-Regular,monospace}
 
-.conversation-heading{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.project-memory-panel{display:flex;flex-direction:column;gap:7px;margin-top:12px;padding:10px;border:1px solid #303030;border-radius:10px;background:#1d1d1d}.project-memory-title{font-size:9px;letter-spacing:.12em;font-weight:700;color:#929292}.project-memory-status{font-size:10px;color:#c6c6c6;line-height:1.45;overflow-wrap:anywhere;white-space:pre-wrap}.project-memory-field-label{font-size:8px;letter-spacing:.1em;color:#858585;font-weight:650;margin-top:3px}.project-memory-field{width:100%;min-width:0;border:1px solid #414141;border-radius:7px;background:#292929;color:#e5e5e5;padding:7px;font:inherit;font-size:10px}.project-memory-action{width:100%;border:1px solid #454545;border-radius:7px;background:#292929;color:#e3e3e3;padding:8px;font-size:10px}.project-memory-action:disabled{opacity:.4;cursor:not-allowed}.project-memory-options{display:flex;align-items:center;gap:7px;color:#bdbdbd;font-size:10px;line-height:1.4}.project-memory-options input{accent-color:#9c9c9c}.project-memory-snapshot{border-top:1px solid #343434;padding-top:8px;margin-top:2px;display:flex;flex-direction:column;gap:5px}.project-memory-snapshot strong{font-size:10px;color:#e1e1e1}.project-memory-snapshot span{font-size:9px;color:#9d9d9d;overflow-wrap:anywhere}.project-memory-snapshot code{font-size:9px;color:#c5c5c5;overflow-wrap:anywhere}.conversation-heading{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .conversation-scope{display:inline-flex;align-items:center;border:1px solid #454545;border-radius:999px;padding:3px 8px;background:#292929;color:#bdbdbd;font-size:9px;font-weight:650;letter-spacing:.08em;text-transform:uppercase}
 .conversation-title{color:#e4e4e4;font-size:13px;font-weight:550;letter-spacing:0}
 .section-label{font-size:10px;color:#858585;text-transform:uppercase;letter-spacing:.13em;padding:23px 9px 9px}
@@ -1494,7 +1538,23 @@ function workspaceHtml(): string {
     </section>
     <p class="github-hint" id="githubHint">Only the Owner can connect a private GitHub App. Project Memory loading and saving are separate steps.</p>
   </section>
-  <div class="section-label">Your conversations</div>
+  <section class="project-memory-panel" aria-label="Project context">
+    <div class="project-memory-title">PROJECT CONTEXT</div>
+    <div class="project-memory-status" id="projectMemoryStatus" aria-live="polite">No Project Memory attached</div>
+    <label class="project-memory-field-label" for="projectMemoryTopic">HUB CONNECTION TOPIC</label>
+    <select class="project-memory-field" id="projectMemoryTopic"><option value="">Choose a connected project topic</option></select>
+    <label class="project-memory-field-label" for="projectMemoryProject">PROJECT</label>
+    <select class="project-memory-field" id="projectMemoryProject" disabled><option value="">Choose a topic first</option></select>
+    <label class="project-memory-field-label" for="projectMemoryWorkstream">WORKSTREAM (OPTIONAL)</label>
+    <select class="project-memory-field" id="projectMemoryWorkstream" disabled><option value="">Project-wide memory</option></select>
+    <label class="project-memory-field-label" for="projectMemoryFeature">FEATURE (OPTIONAL)</label>
+    <select class="project-memory-field" id="projectMemoryFeature" disabled><option value="">Whole workstream</option></select>
+    <label class="project-memory-options"><input id="projectMemoryCrossProject" type="checkbox" disabled> Enable cross-project context</label>
+    <label class="project-memory-options"><input id="projectMemoryAdditional" type="checkbox" disabled> Add selected scope as secondary context</label>
+    <button class="project-memory-action" id="projectMemoryAttach" type="button" disabled>Attach pinned Project Memory</button>
+    <div class="project-memory-snapshot" id="projectMemorySnapshots"></div>
+    <p class="github-hint" id="projectMemoryHint">Only manifest-allowlisted Markdown is loaded. Each attachment pins an exact hub commit.</p>
+  </section>\n  <div class="section-label">Your conversations</div>
   <div class="history" id="history" aria-live="polite"><div class="loading">Loading conversations…</div></div>
   <div class="side-footer"><div class="owner-note"><span class="owner-dot"></span><span>Owner workspace · Private</span></div><form method="post" action="/admin/logout"><button class="logout" type="submit">↗&nbsp; Sign out</button></form></div>
 </aside>
@@ -1564,6 +1624,18 @@ export function ownerIntelligenceClientScript(): Response {
   var githubMemoryRoot=document.getElementById("githubMemoryRoot");
   var githubAttachTopic=document.getElementById("githubAttachTopic");
   var githubHint=document.getElementById("githubHint");
+  var projectMemoryStatus=document.getElementById("projectMemoryStatus");
+  var projectMemoryTopic=document.getElementById("projectMemoryTopic");
+  var projectMemoryProject=document.getElementById("projectMemoryProject");
+  var projectMemoryWorkstream=document.getElementById("projectMemoryWorkstream");
+  var projectMemoryFeature=document.getElementById("projectMemoryFeature");
+  var projectMemoryCrossProject=document.getElementById("projectMemoryCrossProject");
+  var projectMemoryAdditional=document.getElementById("projectMemoryAdditional");
+  var projectMemoryAttach=document.getElementById("projectMemoryAttach");
+  var projectMemorySnapshots=document.getElementById("projectMemorySnapshots");
+  var projectMemoryHint=document.getElementById("projectMemoryHint");
+  var projectMemoryCatalog=[];
+  var projectMemoryInfo={enabled:false,snapshots:[]};
   var githubSaveBox=document.getElementById("githubSaveBox");
   var githubSaveTopic=document.getElementById("githubSaveTopic");
   var githubPreviewSave=document.getElementById("githubPreviewSave");
@@ -2070,10 +2142,132 @@ export function ownerIntelligenceClientScript(): Response {
     }catch(error){githubHint.textContent=errorText(error);}
     finally{updateGithubAttachAvailability();}
   }
+
+  function projectMemoryWorkstreamChanged(){
+    var project=projectMemoryCatalog.find(function(item){return item.projectId===projectMemoryProject.value;});
+    projectMemoryWorkstream.replaceChildren(node("option","","Project-wide memory"));
+    projectMemoryWorkstream.options[0].value="";
+    projectMemoryFeature.replaceChildren(node("option","","Whole workstream"));
+    projectMemoryFeature.options[0].value="";
+    var streams=project&&project.workstreams||[];
+    streams.forEach(function(item){
+      var option=node("option","",item.displayName);option.value=item.workstreamId;projectMemoryWorkstream.appendChild(option);
+    });
+    projectMemoryWorkstream.disabled=!streams.length;
+    projectMemoryFeature.disabled=true;
+    updateProjectMemoryAttachAvailability();
+  }
+  function projectMemoryFeatureChanged(){
+    var project=projectMemoryCatalog.find(function(item){return item.projectId===projectMemoryProject.value;});
+    var stream=project&&(project.workstreams||[]).find(function(item){return item.workstreamId===projectMemoryWorkstream.value;});
+    projectMemoryFeature.replaceChildren(node("option","","Whole workstream"));
+    projectMemoryFeature.options[0].value="";
+    (stream&&stream.features||[]).forEach(function(item){
+      var option=node("option","",item.displayName);option.value=item.featureId;projectMemoryFeature.appendChild(option);
+    });
+    projectMemoryFeature.disabled=!(stream&&(stream.features||[]).length);
+    updateProjectMemoryAttachAvailability();
+  }
+  async function refreshProjectMemoryCatalog(){
+    var topicId=projectMemoryTopic.value;
+    projectMemoryCatalog=[];
+    projectMemoryProject.replaceChildren(node("option","","Loading project catalog…"));
+    projectMemoryProject.disabled=true;
+    projectMemoryWorkstream.replaceChildren(node("option","","Project-wide memory"));projectMemoryWorkstream.disabled=true;
+    projectMemoryFeature.replaceChildren(node("option","","Whole workstream"));projectMemoryFeature.disabled=true;
+    if(!topicId){projectMemoryProject.replaceChildren(node("option","","Choose a topic first"));updateProjectMemoryAttachAvailability();return;}
+    try{
+      var result=await request("/admin/api/intelligence/github/catalog?topicId="+encodeURIComponent(topicId),null,30000);
+      projectMemoryCatalog=result.projects||[];
+      projectMemoryProject.replaceChildren(node("option","","Choose a project"));
+      projectMemoryProject.options[0].value="";
+      projectMemoryCatalog.forEach(function(item){
+        var option=node("option","",item.displayName);option.value=item.projectId;projectMemoryProject.appendChild(option);
+      });
+      projectMemoryProject.disabled=false;
+      projectMemoryHint.textContent="Hub "+result.repository+" · "+result.branch+" · catalog commit "+result.commitSha.slice(0,12);
+    }catch(error){
+      projectMemoryProject.replaceChildren(node("option","","Catalog unavailable"));
+      projectMemoryHint.textContent=errorText(error);
+    }
+    updateProjectMemoryAttachAvailability();
+  }
+  function renderProjectMemoryInfo(info){
+    projectMemoryInfo=info||{enabled:false,snapshots:[]};
+    projectMemoryStatus.textContent=(projectMemoryInfo.snapshots||[]).length
+      ? (projectMemoryInfo.snapshots.length+" pinned Project Memory scope(s) attached")
+      : "No Project Memory attached · conversation is using its D1 transcript only";
+    projectMemoryCrossProject.checked=Boolean(projectMemoryInfo.enabled);
+    projectMemoryCrossProject.disabled=!state.activeId;
+    projectMemoryAdditional.disabled=!projectMemoryInfo.enabled;
+    projectMemorySnapshots.replaceChildren();
+    (projectMemoryInfo.snapshots||[]).forEach(function(snapshot){
+      var card=node("div","project-memory-snapshot");
+      var title=node("strong","",snapshot.primary?"Primary project scope":"Additional project scope");
+      var project=node("span","",(snapshot.displayName||"Project")+" · "+snapshot.projectId);
+      var scope=node("span","","Workstream "+(snapshot.workstreamId||"none")+" · Feature "+(snapshot.featureId||"none"));
+      var repo=node("span","",snapshot.repository+" · "+snapshot.branch);
+      var commit=node("code","",snapshot.commitSha);
+      var manifests=node("span","",(snapshot.scopeManifests||[]).map(function(item){return item.path+" @ "+String(item.blobSha).slice(0,12);}).join(" · "));
+      var files=node("span","",(snapshot.files||[]).map(function(file){return file.path+" @ "+String(file.blobSha).slice(0,12);}).join(" · "));
+      var tokens=node("span","",String(snapshot.tokenCount||0)+" estimated tokens · "+(snapshot.tokenModelId||"model unavailable"));
+      card.append(title,project,scope,repo,commit,manifests,files,tokens);
+      projectMemorySnapshots.appendChild(card);
+    });
+    updateProjectMemoryAttachAvailability();
+  }
+  function updateProjectMemoryAttachAvailability(){
+    projectMemoryAttach.disabled=!(state.activeId&&state.selectedModelId&&projectMemoryTopic.value&&projectMemoryProject.value);
+    projectMemoryAttach.textContent=projectMemoryAdditional.checked?"Add secondary Project Memory scope":"Attach primary Project Memory";
+  }
+  async function setCrossProjectMemory(enabled){
+    if(!state.activeId)return;
+    if(!enabled&&projectMemoryInfo.enabled&&!window.confirm("Disable cross-project context? Active secondary project scopes will be detached from future prompts.")){
+      projectMemoryCrossProject.checked=true;return;
+    }
+    projectMemoryCrossProject.disabled=true;
+    try{
+      await request("/admin/api/intelligence/conversations/"+encodeURIComponent(state.activeId)+"/memory/cross-project",{
+        method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({enabled:enabled})
+      });
+      projectMemoryInfo.enabled=enabled;
+      if(!enabled)projectMemoryAdditional.checked=false;
+      await openConversation(state.activeId);
+    }catch(error){projectMemoryHint.textContent=errorText(error);projectMemoryCrossProject.checked=Boolean(projectMemoryInfo.enabled);}
+    finally{projectMemoryCrossProject.disabled=false;}
+  }
+  async function attachProjectMemory(){
+    if(!state.activeId||!projectMemoryTopic.value||!projectMemoryProject.value||!state.selectedModelId)return;
+    projectMemoryAttach.disabled=true;
+    projectMemoryHint.textContent="Validating manifests, pinning the hub commit and counting selected memory…";
+    try{
+      await request("/admin/api/intelligence/github/conversations/"+encodeURIComponent(state.activeId)+"/memory/attach",{
+        method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({
+          topicId:projectMemoryTopic.value,projectId:projectMemoryProject.value,
+          workstreamId:projectMemoryWorkstream.value||undefined,
+          featureId:projectMemoryFeature.value||undefined,
+          modelId:state.selectedModelId,additionalContext:Boolean(projectMemoryAdditional.checked)
+        })
+      },60000);
+      projectMemoryHint.textContent="Pinned Project Memory attached successfully.";
+      await openConversation(state.activeId);
+    }catch(error){projectMemoryHint.textContent=errorText(error);}
+    finally{updateProjectMemoryAttachAvailability();}
+  }
+
   async function refreshTopics(preferredId){
     var result=await request(topicsApi);
     clearTopicError();
     state.topics=result.topics||[];
+    var memoryTopicPrevious=projectMemoryTopic.value;
+    projectMemoryTopic.replaceChildren(node("option","","Choose a connected project topic"));
+    projectMemoryTopic.options[0].value="";
+    state.topics.forEach(function(topic){var option=node("option","",topic.title);option.value=topic.id;projectMemoryTopic.appendChild(option);});
+    var activeForMemory=state.conversations.find(function(item){return item.id===state.activeId;});
+    projectMemoryTopic.value=state.topics.some(function(item){return item.id===memoryTopicPrevious;})?memoryTopicPrevious:
+      (activeForMemory&&activeForMemory.topic_id?activeForMemory.topic_id:"");
+    refreshProjectMemoryCatalog().catch(function(error){projectMemoryHint.textContent=errorText(error);});
     var previous=preferredId!==undefined?preferredId:newChatTopic.value;
     newChatTopic.replaceChildren(node("option","","Scratchpad"));
     newChatTopic.options[0].value="";
@@ -2148,6 +2342,7 @@ export function ownerIntelligenceClientScript(): Response {
   async function openConversation(id){
     var result=await request(api+"/"+encodeURIComponent(id));
     state.activeId=result.conversation.id;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
+    renderProjectMemoryInfo(result.projectMemory||{enabled:false,snapshots:[]});
     githubSaveBox.hidden=false;
     var preferredTopic=result.conversation.topic_id||"";
     githubSaveTopic.value=state.topics.some(function(topic){return topic.id===preferredTopic;})?preferredTopic:githubSaveTopic.value;
@@ -2340,6 +2535,13 @@ export function ownerIntelligenceClientScript(): Response {
   newTopicButton.addEventListener("click",createTopic);
   renameTopicButton.addEventListener("click",renameSelectedTopic);
   newChatTopic.addEventListener("change",function(){renameTopicButton.disabled=!newChatTopic.value;updateGithubAttachAvailability();});
+  projectMemoryTopic.addEventListener("change",refreshProjectMemoryCatalog);
+  projectMemoryProject.addEventListener("change",projectMemoryWorkstreamChanged);
+  projectMemoryWorkstream.addEventListener("change",projectMemoryFeatureChanged);
+  projectMemoryFeature.addEventListener("change",updateProjectMemoryAttachAvailability);
+  projectMemoryCrossProject.addEventListener("change",function(){setCrossProjectMemory(projectMemoryCrossProject.checked);});
+  projectMemoryAdditional.addEventListener("change",updateProjectMemoryAttachAvailability);
+  projectMemoryAttach.addEventListener("click",attachProjectMemory);
   githubConnect.addEventListener("click",beginGithubConnection);
   githubInstallation.addEventListener("change",refreshGithubRepositories);
   githubRepository.addEventListener("change",function(){
