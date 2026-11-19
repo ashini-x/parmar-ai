@@ -1118,7 +1118,6 @@ async function updateOwnerAssistantMessage(
   usage?: { promptTokens: number; outputTokens: number; totalTokens: number; elapsedMs: number },
 ): Promise<OwnerIntelligenceMessage | null> {
   await ensureOwnerIntelligenceSchema(env);
-  if (content.length > MAX_MESSAGE_LENGTH) throw new Error("The generated response exceeded the supported message size.");
   const ownerId = ownerPrincipal(env);
   const results = await env.DB!.batch([
     env.DB!.prepare(
@@ -1452,23 +1451,23 @@ async function handleOwnerGeneration(
   let outputTokenLimit = 0;
   let outputReservationSegments = 1;
   if (definition.supportsLongDecode) {
-    const maxSegments = Math.ceil(definition.modelMaxOutputTokens / definition.singleRequestOutputTokens);
+    const maxSegments = Math.ceil(definition.modelMaxOutputTokens / definition.singleStreamingOutputTokens);
     for (let segments = 1; segments <= maxSegments; segments += 1) {
       // Each v1beta1 continuation repeats the original prompt. Reserve that
       // prompt cost once per segment as well as the total decode allowance.
       const candidate = Math.min(
         definition.modelMaxOutputTokens,
-        segments * definition.singleRequestOutputTokens,
+        segments * definition.singleStreamingOutputTokens,
         availableTokens - promptTokens * segments,
       );
-      if (candidate < 1 || Math.ceil(candidate / definition.singleRequestOutputTokens) > segments) continue;
+      if (candidate < 1 || Math.ceil(candidate / definition.singleStreamingOutputTokens) > segments) continue;
       if (candidate > outputTokenLimit) {
         outputTokenLimit = candidate;
-        outputReservationSegments = Math.ceil(candidate / definition.singleRequestOutputTokens);
+        outputReservationSegments = Math.ceil(candidate / definition.singleStreamingOutputTokens);
       }
     }
   } else {
-    outputTokenLimit = Math.min(definition.singleRequestOutputTokens, availableTokens - promptTokens);
+    outputTokenLimit = Math.min(definition.singleStreamingOutputTokens, availableTokens - promptTokens);
   }
   if (outputTokenLimit < 1) {
     sessionUsage = await lockOwnerIntelligenceSession(env, conversationId, "request_exceeds_remaining_budget") ?? sessionUsage;
@@ -1602,9 +1601,6 @@ async function handleOwnerGeneration(
           for await (const event of upstream) {
             if (event.type === "delta") {
               generatedText += event.text;
-              if (generatedText.length > MAX_MESSAGE_LENGTH) {
-                throw new OwnerGeminiProviderError("The response exceeded the supported 300,000-character message size.");
-              }
               if (generatedText.length - lastPersistedLength >= 1_024 || Date.now() - lastPersistedAt >= 1_000) {
                 await updateOwnerAssistantMessage(env, assistantMessage!.id, generatedText, "partial");
                 lastPersistedLength = generatedText.length;

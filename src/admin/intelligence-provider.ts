@@ -14,6 +14,7 @@ export interface OwnerGeminiModelDefinition {
   contextWindowTokens: number;
   modelMaxOutputTokens: number;
   singleRequestOutputTokens: number;
+  singleStreamingOutputTokens: number;
   supportsLongDecode?: boolean;
   thinkingLevels: readonly OwnerThinkingLevel[];
   defaultThinkingLevel: OwnerThinkingLevel;
@@ -25,14 +26,14 @@ export interface OwnerGeminiModelDefinition {
  * project/location passes the live countTokens capability probe.
  */
 export const OWNER_GEMINI_MODEL_REGISTRY: readonly OwnerGeminiModelDefinition[] = [
-  { id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 65_536, supportsLongDecode: true, thinkingLevels: ["LOW", "MEDIUM", "HIGH", "XHIGH"], defaultThinkingLevel: "HIGH" },
-  { id: "gemini-4-carbon", label: "Gemini 4 Carbon", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 32_768, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-4-argon", label: "Gemini 4 Argon", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 32_768, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-3.6-flash", label: "Gemini 3.6 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
-  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MINIMAL" },
+  { id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 65_536, singleStreamingOutputTokens: 65_536, supportsLongDecode: true, thinkingLevels: ["LOW", "MEDIUM", "HIGH", "XHIGH"], defaultThinkingLevel: "HIGH" },
+  { id: "gemini-4-carbon", label: "Gemini 4 Carbon", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 32_768, singleStreamingOutputTokens: 65_536, supportsLongDecode: true, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-4-argon", label: "Gemini 4 Argon", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 32_768, singleStreamingOutputTokens: 65_536, supportsLongDecode: true, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, singleStreamingOutputTokens: 65_536, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-3.7-flash", label: "Gemini 3.7 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, singleStreamingOutputTokens: 65_536, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-3.6-flash", label: "Gemini 3.6 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, singleStreamingOutputTokens: 65_536, thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-3.5-flash", label: "Gemini 3.5 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, singleStreamingOutputTokens: 65_536, thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
+  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, singleStreamingOutputTokens: 65_536, thinkingLevels: ["MINIMAL", "LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MINIMAL" },
 ] as const;
 
 export type OwnerModelAvailability = "available" | "unavailable" | "unverified";
@@ -748,12 +749,12 @@ export async function openOwnerGeminiStream(
   const location = configuredLocation(env);
   const outputCeiling = definition.supportsLongDecode
     ? definition.modelMaxOutputTokens
-    : definition.singleRequestOutputTokens;
+    : definition.singleStreamingOutputTokens;
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
     ? Math.min(outputCeiling, Math.max(1, input.maxOutputTokens!))
-    : definition.singleRequestOutputTokens;
+    : definition.singleStreamingOutputTokens;
   const useLongDecode = definition.supportsLongDecode === true &&
-    maxOutputTokens > definition.singleRequestOutputTokens;
+    maxOutputTokens > definition.singleStreamingOutputTokens;
   const apiVersion = useLongDecode ? "v1beta1" : definition.apiVersion;
 
   const token = await getVerifiedModelAccessToken(env, definition, dependencies);
@@ -827,7 +828,7 @@ export async function openOwnerGeminiStream(
     const usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0 };
     let finished = false;
     const maxSegments = useLongDecode
-      ? Math.max(1, Math.ceil(maxOutputTokens / definition.singleRequestOutputTokens) + 1)
+      ? Math.max(1, Math.ceil(maxOutputTokens / definition.singleStreamingOutputTokens) + 1)
       : 1;
 
     type SegmentResult = {

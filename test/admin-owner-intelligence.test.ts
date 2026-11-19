@@ -850,6 +850,34 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect([...db.messages.values()].filter((row) => row.role === "user")).toHaveLength(1);
   });
 
+  it("persists assistant output beyond the user-message character limit without cutting off the response", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Long assistant response" },
+    });
+    const id = (await created.json() as { conversation: { id: string } }).conversation.id;
+    vi.mocked(countOwnerGeminiInputTokens).mockClear().mockResolvedValueOnce(5);
+    const longResponse = "x".repeat(300_001);
+    vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async () => (async function* () {
+      yield { type: "delta" as const, text: longResponse };
+      yield { type: "done" as const, usage: { promptTokens: 5, outputTokens: 100, totalTokens: 105 }, elapsedMs: 10 };
+    })());
+    const generated = await call(env, "/admin/api/intelligence/conversations/" + id + "/generate", ownerCookie, {
+      method: "POST", origin,
+      body: { content: "Produce a long answer.", modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH" },
+    });
+    expect(generated.status).toBe(200);
+    await generated.text();
+    const db = env.DB as unknown as FakeOwnerD1;
+    const assistant = [...db.messages.values()].find(message => message.role === "assistant");
+    expect(assistant?.content).toHaveLength(300_001);
+    expect(assistant?.status).toBe("complete");
+    const usage = await getOwnerIntelligenceSessionUsage(env, id);
+    expect(usage).toEqual(expect.objectContaining({ used_tokens: 105, reserved_tokens: 0, limit_tokens: 200_000 }));
+  });
+
   it("warns before rollover, rejects in-flight work, then creates one provenance-rich linked successor", async () => {
     const env = appEnv({ DB: (workerTestBindings as unknown as Env).DB });
     const ownerCookie = await login("owner", "owner-test-password", env);
@@ -1000,6 +1028,66 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(countedHandoffPrompt).toContain(commitSha);
     expect(countedHandoffPrompt).toContain(userMessageId);
   });
+
+  it.each(["gemini-4-carbon", "gemini-4-argon"])(
+    "reserves multi-segment chat output for %s within the 200K conversation budget", async (modelId) => {
+      const env = appEnv();
+      const ownerCookie = await login("owner", "owner-test-password", env);
+      const origin = "https://parmar-ai.test";
+      const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+        method: "POST", origin, body: { title: "Long decode model budget" },
+      });
+      const id = (await created.json() as { conversation: { id: string } }).conversation.id;
+      await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+        method: "POST", origin, body: { content: "Use the full model-supported response allowance." },
+      });
+      vi.mocked(countOwnerGeminiInputTokens).mockClear().mockResolvedValueOnce(5);
+      let requestedOutputLimit = 0;
+      vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async (_env, input) => {
+        requestedOutputLimit = input.maxOutputTokens ?? 0;
+        return (async function* () {
+          yield { type: "done" as const, usage: { promptTokens: 5, outputTokens: 8, totalTokens: 13 }, elapsedMs: 5 };
+        })();
+      });
+      const response = await call(env, "/admin/api/intelligence/conversations/" + id + "/generate", ownerCookie, {
+        method: "POST", origin,
+        body: { content: "Continue with this model.", modelId, thinkingLevel: "HIGH" },
+      });
+      expect(response.status).toBe(200);
+      await response.text();
+      expect(requestedOutputLimit).toBe(199_980);
+    },
+  );
+
+  it.each(["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"])(
+    "uses the complete native streaming allowance for %s", async (modelId) => {
+      const env = appEnv();
+      const ownerCookie = await login("owner", "owner-test-password", env);
+      const origin = "https://parmar-ai.test";
+      const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+        method: "POST", origin, body: { title: "Native model budget" },
+      });
+      const id = (await created.json() as { conversation: { id: string } }).conversation.id;
+      await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+        method: "POST", origin, body: { content: "Use the full native output allowance." },
+      });
+      vi.mocked(countOwnerGeminiInputTokens).mockClear().mockResolvedValueOnce(5);
+      let requestedOutputLimit = 0;
+      vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async (_env, input) => {
+        requestedOutputLimit = input.maxOutputTokens ?? 0;
+        return (async function* () {
+          yield { type: "done" as const, usage: { promptTokens: 5, outputTokens: 8, totalTokens: 13 }, elapsedMs: 5 };
+        })();
+      });
+      const response = await call(env, "/admin/api/intelligence/conversations/" + id + "/generate", ownerCookie, {
+        method: "POST", origin,
+        body: { content: "Continue with this model.", modelId, thinkingLevel: modelId.includes("3.8") || modelId.includes("3.7") ? "HIGH" : "MEDIUM" },
+      });
+      expect(response.status).toBe(200);
+      await response.text();
+      expect(requestedOutputLimit).toBe(65_536);
+    },
+  );
 
   it("renews a live generation reservation beyond the 10-minute stale-recovery window", async () => {
     const env = appEnv();

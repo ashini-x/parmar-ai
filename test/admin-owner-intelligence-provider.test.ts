@@ -617,7 +617,8 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect((failure as Error).message).toContain("reserved response-token budget");
   });
 
-  it("continues Gemini 4 Hydrogen long decode across v1beta1 segments and sums usage", async () => {
+  it.each(["gemini-4-hydrogen", "gemini-4-carbon", "gemini-4-argon"])(
+    "continues %s long decode across v1beta1 segments and sums usage", async (modelId) => {
     const first = {
       candidates: [{
         finishReason: "CONTINUATION",
@@ -661,8 +662,8 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     const stream = await openOwnerGeminiStream(
       configuredEnv,
       {
-        modelId: "gemini-4-hydrogen",
-        thinkingLevel: "XHIGH",
+        modelId,
+        thinkingLevel: "HIGH",
         maxOutputTokens: 131_072,
         contents: [{ role: "user", text: "Prove the difficult result." }],
       },
@@ -687,6 +688,41 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       type: "done",
       usage: { promptTokens: 10, outputTokens: 65_566, totalTokens: 65_576 },
     });
+  });
+
+  it.each(["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"])(
+    "keeps %s at its native 65,536-token cap without continuation", async (modelId) => {
+    let requestUrl = "";
+    let requestBody: Record<string, unknown> = {};
+    const sse = "data: " + JSON.stringify({
+      candidates: [{ finishReason: "STOP", content: { role: "model", parts: [{ text: "Native-limit response." }] } }],
+      usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 8, totalTokenCount: 11 },
+    }) + "\r\n\r\n";
+    const fetcher: typeof fetch = async (url, init) => {
+      const value = String(url);
+      if (value.endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 3 }), { status: 200 });
+      requestUrl = value;
+      requestBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
+    };
+    const stream = await openOwnerGeminiStream(
+      configuredEnv,
+      {
+        modelId,
+        thinkingLevel: "HIGH",
+        maxOutputTokens: 131_072,
+        contents: [{ role: "user", text: "Give me a detailed answer." }],
+      },
+      new AbortController().signal,
+      dependencies(fetcher),
+    );
+    const events: OwnerGeminiStreamEvent[] = [];
+    for await (const event of stream) events.push(event);
+    expect(requestUrl).toContain("/v1/projects/");
+    expect(requestUrl).not.toContain("/v1beta1/");
+    expect((requestBody.generationConfig as Record<string, unknown>).maxOutputTokens).toBe(65_536);
+    expect(requestBody).not.toHaveProperty("continuationToken");
+    expect(events[events.length - 1]).toMatchObject({ type: "done", usage: { totalTokens: 11 } });
   });
 
   it("streams text deltas, excludes thought parts and returns usage with the selected thinking level", async () => {

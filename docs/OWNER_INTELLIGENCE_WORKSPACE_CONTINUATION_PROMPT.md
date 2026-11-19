@@ -361,3 +361,17 @@ M4.4 does not implement rollover, compaction, fork, historical D1 recall, semant
 - M4.4 release versions: `parmar-ai` `fd932efb-9d97-4e8f-837f-79a460409495`, deployment `1f2b9b0e-8655-4158-b4a1-23b83ad89aba`; `brvin-service` `90b21e52-2a55-402e-8398-0c6e308d3a0e`, deployment `719cbe9a-435f-4080-ad8b-344ecf59320f`.
 - The latest separate PR #365 response-renderer deployment is on main commit `f7d1dbe79c880a8e43eebab230908fc6a07484bf`; production versions are `parmar-ai` `fccd13e6-1be3-4ecb-b1e6-d42d352cd1f8` and `brvin-service` `500709c7-b62a-4c6c-9613-159f77988310`, both at 100% traffic.
 - Deployment health checks are not a substitute for authenticated Owner acceptance. The M4.4 authenticated Owner attach/read and independent Scratchpad-isolation acceptance is now complete and recorded above.
+
+
+## Follow-up — apply long-decode allowance to all Owner models
+- The Owner registry contains Gemini 4 Hydrogen, Carbon and Argon plus Gemini 3.x Flash models.
+- All Gemini 4 models use `v1beta1` continuation-token streaming when the funded output allowance exceeds the 65,536-token streaming segment size. Carbon/Argon non-streaming direct HTTP allowance remains 32,768 tokens; streamed Owner chat can use 65,536-token segments.
+- Gemini 3.x models use the full native 65,536-token output limit and must not be sent continuation tokens.
+- Preserve D1 pre-reservation of repeated prompt cost for Gemini 4 continuations, exact 200K per-chat hard lock, explicit Stop/disconnect cancellation and no application-owned generation deadline.
+- Do not change the student/bot Vertex timeout or output settings.
+
+
+## Output persistence boundary clarification
+- The former 300,000-character assistant-response guard has been removed; streamed assistant output is no longer rejected just because its stored text exceeds that character count.
+- The 300,000-character early guard still applies to Owner-supplied input/context assembly. It is not the generated response limit.
+- Keep the 200,000-token cumulative per-conversation budget, exact D1 reservation/settlement, model-native/provider ceilings, and actual network/runtime cancellation boundaries.
