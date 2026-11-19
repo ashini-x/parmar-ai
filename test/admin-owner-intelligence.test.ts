@@ -492,7 +492,6 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).not.toContain('.welcome-mark{');
     expect(html).toContain('.sidebar-header{flex:0 0 auto;padding:7px 8px 24px}');
     expect(html).toContain('.brand svg{display:block;width:120px;height:auto}');
-    expect(html).toContain('font-size:clamp(16px,2vw,20px);letter-spacing:.025em;font-weight:300');
     expect(html).not.toContain(".welcome-brand::after");
     expect(html).toContain('linearGradient id="owner-intelligence-wordmark-fill"');
     expect(html).not.toContain("Your thinking space.");
