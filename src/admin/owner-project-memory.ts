@@ -75,6 +75,10 @@ export async function ensureOwnerProjectMemorySchema(env: Env): Promise<void> {
     db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_memory_snapshots_one_primary
       ON owner_intelligence_conversation_memory_snapshots(owner_id, conversation_id)
       WHERE is_active = 1 AND is_primary = 1`),
+    db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_memory_snapshots_one_active_scope
+      ON owner_intelligence_conversation_memory_snapshots(
+        owner_id, conversation_id, project_id, IFNULL(workstream_id, ''), IFNULL(feature_id, '')
+      ) WHERE is_active = 1`),
   ]);
   if (results.some((result) => !result.success)) {
     throw new Error("D1 did not confirm the Owner Project Memory schema.");
@@ -114,6 +118,7 @@ type SnapshotRow = {
   token_count: number;
   token_model_id: string;
   created_at: number;
+  cross_project_opt_in: number;
 };
 
 function parseFiles(value: string): OwnerProjectMemoryFileSnapshot[] {
@@ -128,7 +133,7 @@ function parseFiles(value: string): OwnerProjectMemoryFileSnapshot[] {
     if (typeof row.path !== "string" || typeof row.blobSha !== "string" || typeof row.content !== "string" ||
         !/^[0-9a-f]{40}$/iu.test(row.blobSha) || !row.path.endsWith(".md") ||
         row.path.startsWith("/") || row.path.split("/").some((part) => !part || part === "." || part === "..") ||
-        row.path.toLowerCase().includes("/archive/") || row.path.toLowerCase().includes("/sessions/")) {
+        /(?:^|\\/)(?:archive|sessions|handoffs|collaboration)(?:\\/|$)/iu.test(row.path)) {
       throw new Error("The pinned Project Memory snapshot contains an unsafe file reference.");
     }
     if (row.content.length > 32_000) throw new Error("A pinned Project Memory file exceeds the supported size.");
@@ -164,18 +169,29 @@ function mapInfo(row: SnapshotRow): OwnerProjectMemoryInfo {
 async function readActiveRows(env: Env, ownerId: string, conversationId: string): Promise<SnapshotRow[]> {
   await ensureOwnerProjectMemorySchema(env);
   const conversation = await env.DB!.prepare(
-    "SELECT id FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
-  ).bind(conversationId, ownerId).first<{ id: string }>();
+    "SELECT id, cross_project_memory_enabled FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?",
+  ).bind(conversationId, ownerId).first<{ id: string; cross_project_memory_enabled: number }>();
   if (!conversation) throw new Error("The conversation is not available to this Owner.");
   const result = await env.DB!.prepare(
     `SELECT snapshot_id, project_id, project_name, workstream_id, feature_id, is_primary,
        hub_repository_id, hub_repository_owner, hub_repository_name, hub_branch, hub_commit_sha,
-       manifest_schema_version, scope_manifests_json, files_json, token_count, token_model_id, created_at
+       manifest_schema_version, scope_manifests_json, files_json, token_count, token_model_id, created_at, cross_project_opt_in
      FROM owner_intelligence_conversation_memory_snapshots
      WHERE owner_id = ? AND conversation_id = ? AND is_active = 1
      ORDER BY is_primary DESC, created_at ASC`,
   ).bind(ownerId, conversationId).all<SnapshotRow>();
-  return result.results ?? [];
+  const rows = result.results ?? [];
+  if (!rows.length) return rows;
+  const primaryRows = rows.filter((row) => Number(row.is_primary) === 1);
+  if (primaryRows.length !== 1) throw new Error("The active Project Memory snapshot set has no unique primary project.");
+  const secondaryRows = rows.filter((row) => Number(row.is_primary) !== 1);
+  if (secondaryRows.length && Number(conversation.cross_project_memory_enabled) !== 1) {
+    throw new Error("Cross-project Project Memory is not enabled for this conversation.");
+  }
+  if (secondaryRows.some((row) => Number(row.cross_project_opt_in) !== 1)) {
+    throw new Error("A secondary Project Memory snapshot is missing explicit Owner opt-in.");
+  }
+  return rows;
 }
 
 export async function getOwnerConversationProjectMemoryInfo(
@@ -244,6 +260,12 @@ export async function setOwnerConversationCrossProjectMemory(
     "SELECT id FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ? AND lifecycle_status = 'active'",
   ).bind(conversationId, ownerId).first<{ id: string }>();
   if (!conversation) return false;
+  if (enabled) {
+    const primary = await env.DB!.prepare(
+      "SELECT snapshot_id FROM owner_intelligence_conversation_memory_snapshots WHERE conversation_id = ? AND owner_id = ? AND is_active = 1 AND is_primary = 1",
+    ).bind(conversationId, ownerId).first<{ snapshot_id: string }>();
+    if (!primary) throw new Error("Attach a primary Project Memory scope before enabling cross-project context.");
+  }
   const statements = [
     env.DB!.prepare(
       "UPDATE owner_intelligence_conversations SET cross_project_memory_enabled = ?, updated_at = ? WHERE id = ? AND owner_id = ?",

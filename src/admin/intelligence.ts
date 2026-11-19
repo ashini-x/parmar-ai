@@ -62,8 +62,8 @@ interface OwnerMessageRow extends OwnerIntelligenceMessage {
 
 const readyDatabases = new WeakSet<object>();
 const MAX_TITLE_LENGTH = 80;
-const MAX_MESSAGE_LENGTH = 50_000;
 const MAX_OWNER_GEMINI_CONTEXT_CHARS = 300_000;
+const MAX_MESSAGE_LENGTH = MAX_OWNER_GEMINI_CONTEXT_CHARS;
 const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
 const MAX_CONVERSATIONS = 100;
 const MAX_TOPICS = 100;
@@ -718,7 +718,7 @@ export async function appendOwnerIntelligenceMessage(
   const status = input.status ?? "complete";
   if (typeof input.content !== "string" || input.content.length > MAX_MESSAGE_LENGTH ||
       (input.content.length === 0 && !(input.role === "assistant" && status === "pending"))) {
-    throw new Error("Message content must contain between 1 and 50,000 characters.");
+    throw new Error("Message content must contain between 1 and 300,000 characters.");
   }
   if ((input.modelId && !input.thinkingLevel) || (!input.modelId && input.thinkingLevel)) {
     throw new Error("Generation metadata is incomplete.");
@@ -859,7 +859,7 @@ async function planOwnerPrompt(
 
   if (input.editMessageId) {
     if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
-      throw new Error("Enter a message between 1 and 50,000 characters.");
+      throw new Error("Enter a message between 1 and 300,000 characters.");
     }
     const targetIndex = ordered.findIndex((row) => row.id === input.editMessageId && row.role === "user");
     if (targetIndex < 0) throw new Error("The user message to edit was not found.");
@@ -887,7 +887,7 @@ async function planOwnerPrompt(
   }
 
   if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
-    throw new Error("Enter a message between 1 and 50,000 characters.");
+    throw new Error("Enter a message between 1 and 300,000 characters.");
   }
   const latest = ordered.reduce((value, row) => Math.max(value, Number(row.created_at)), 0);
   const plannedMessage: OwnerIntelligenceMessage = {
@@ -983,9 +983,9 @@ function isSameOriginMutation(request: Request): boolean {
 
 async function readJsonBody(request: Request): Promise<Record<string, unknown> | null> {
   const length = Number(request.headers.get("Content-Length") ?? "0");
-  if (length > 205_000) return null;
+  if (length > 1_300_000) return null;
   const raw = await request.text();
-  if (raw.length > 205_000) return null;
+  if (raw.length > 1_300_000) return null;
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
@@ -1045,7 +1045,7 @@ async function handleOwnerGeneration(
   }
   if (!plan) return notFound();
 
-  let projectMemoryContext: Awaited<ReturnType<typeof loadOwnerConversationProjectMemoryPrompt>> = null;
+let projectMemoryContext: Awaited<ReturnType<typeof loadOwnerConversationProjectMemoryPrompt>> = null;
   try {
     projectMemoryContext = await loadOwnerConversationProjectMemoryPrompt(env, ownerPrincipal(env), conversationId);
   } catch (error) {
@@ -1059,6 +1059,7 @@ async function handleOwnerGeneration(
       text: projectMemoryContext.referenceText + "\n\n--- CURRENT CONVERSATION TRANSCRIPT ---\n\n" + contents[0].text,
     };
   }
+  const contents = buildOwnerGeminiConversationContents(plan.messages);
   if (!contents.length || contents[contents.length - 1].role !== "user") {
     return json({ ok: false, error: "latest_message_missing" }, 409);
   }
@@ -1211,7 +1212,6 @@ async function handleOwnerGeneration(
         message: assistantMessage,
         model: definition.label,
         thinkingLevel,
-        projectMemory: projectMemoryContext?.snapshots ?? [],
       });
       void (async () => {
         let completed = false;
@@ -1220,7 +1220,7 @@ async function handleOwnerGeneration(
             if (event.type === "delta") {
               generatedText += event.text;
               if (generatedText.length > MAX_MESSAGE_LENGTH) {
-                throw new OwnerGeminiProviderError("The response exceeded the supported 50,000-character message size.");
+                throw new OwnerGeminiProviderError("The response exceeded the supported 300,000-character message size.");
               }
               if (generatedText.length - lastPersistedLength >= 1_024 || Date.now() - lastPersistedAt >= 1_000) {
                 await updateOwnerAssistantMessage(env, assistantMessage!.id, generatedText, "partial");
@@ -1357,7 +1357,7 @@ export async function handleOwnerIntelligenceApi(request: Request, env: Env, url
     return methodNotAllowed(["GET", "POST"]);
   }
 
-  const memoryPreference = url.pathname.match(/^\/admin\/api\/intelligence\/conversations\/([0-9a-f-]{36})\/memory\/cross-project$/iu);
+const memoryPreference = url.pathname.match(/^\/admin\/api\/intelligence\/conversations\/([0-9a-f-]{36})\/memory\/cross-project$/iu);
   if (memoryPreference) {
     if (request.method !== "PATCH") return methodNotAllowed(["PATCH"]);
     if (!isSameOriginMutation(request)) return json({ ok: false, error: "same_origin_required" }, 403);
@@ -1447,10 +1447,10 @@ function workspaceHtml(): string {
 <meta name="theme-color" content="#171717">
 <title>BRɅIN Intelligence</title>
 <style>
-:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#212121;color:#ececec;font-synthesis:none}
-*{box-sizing:border-box}html,body{height:100%;margin:0}body{overflow:hidden;background:#212121}button,textarea{font:inherit}button{color:inherit;cursor:pointer}
-.app{display:flex;height:100dvh;min-height:480px;background:#212121}
-.sidebar{width:292px;flex:0 0 292px;background:#171717;border-right:1px solid #303030;display:flex;flex-direction:column;padding:16px 12px;z-index:5;min-height:0;overflow:hidden}
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#1c1c1c;color:#ececec;font-synthesis:none}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{overflow:hidden;background:#1c1c1c}button,textarea{font:inherit}button{color:inherit;cursor:pointer}
+.app{display:flex;height:100dvh;min-height:480px;background:#1c1c1c}
+.sidebar{width:292px;flex:0 0 292px;background:#141414;border-right:1px solid #303030;display:flex;flex-direction:column;padding:16px 12px;z-index:5;min-height:0;overflow:hidden}
 .sidebar-scroll{display:flex;flex-direction:column;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#343434 transparent}
 .sidebar-scroll::-webkit-scrollbar{width:6px}
 .sidebar-scroll::-webkit-scrollbar-track{background:transparent}
@@ -1495,14 +1495,14 @@ function workspaceHtml(): string {
 .section-label{font-size:10px;color:#858585;text-transform:uppercase;letter-spacing:.13em;padding:23px 9px 9px}
 .history{flex:0 0 auto;overflow:visible;min-height:0}.history-empty{font-size:12px;line-height:1.55;color:#777;padding:10px 9px}.history-item{display:flex;align-items:center;gap:4px;margin:2px 0;border-radius:9px;padding:3px}.history-item.active{background:#303030}.history-item:hover{background:#292929}.history-open{min-width:0;flex:1;border:0;background:none;text-align:left;padding:8px 7px;font-size:12px;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:6px}.history-action{border:0;background:transparent;color:#8b8b8b;border-radius:6px;padding:5px 6px;font-size:12px}.history-action:hover{background:#414141;color:#fff}
 .side-footer{border-top:1px solid #303030;padding:12px 5px 2px}.owner-note{display:flex;align-items:center;gap:8px;padding:7px 7px 10px;font-size:11px;color:#a1a1a1}.owner-dot{width:7px;height:7px;border-radius:50%;background:#4dba87}.logout{width:100%;border:0;background:transparent;color:#aaa;text-align:left;padding:9px 8px;border-radius:8px;font-size:12px}.logout:hover{background:#292929;color:#fff}
-.main{display:flex;flex:1;min-width:0;flex-direction:column;position:relative}.topbar{height:60px;flex:0 0 60px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:12px}.top-left{display:flex;align-items:center;gap:11px;min-width:0}.mobile-menu{display:none;border:0;background:transparent;font-size:19px;padding:7px}.page-title{font-size:14px;font-weight:600;white-space:nowrap}.private-tag{font-size:10px;color:#9b9b9b;border:1px solid #404040;border-radius:20px;padding:5px 8px}.top-right{display:flex;align-items:center;gap:9px}.model-retry{border:1px solid #555;background:#303030;color:#e5e5e5;border-radius:8px;padding:7px 9px;font-size:10px;cursor:pointer}.model-retry:hover{background:#414141}.model-retry:disabled{opacity:.55;cursor:wait}.model-retry[hidden]{display:none}.model-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.model-label{font-size:9px;color:#888;letter-spacing:.1em}.model-picker select{max-width:178px;min-width:112px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.model-picker select:disabled,.thinking-picker select:disabled{opacity:.65;cursor:default}.thinking-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.thinking-picker select{max-width:110px;min-width:80px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.avatar{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#3d3d3d;color:#f0f0f0;font-size:11px;font-weight:700}
-.content{flex:1;overflow:auto;display:flex;justify-content:center;padding:36px 22px 18px}.stage{width:min(820px,100%);min-height:100%;display:flex;flex-direction:column}.conversation-heading{font-size:12px;color:#999;margin:0 0 22px;min-height:18px}.messages{flex:1;display:flex;flex-direction:column;gap:22px;padding-bottom:30px}.welcome{margin:auto auto 50px;width:min(600px,100%);text-align:center}.welcome-mark{width:56px;height:56px;border:1px solid #565656;border-radius:18px;display:grid;place-items:center;margin:0 auto 22px;font-size:22px;font-weight:700;letter-spacing:-2px;background:#282828}.welcome h1{font-size:27px;letter-spacing:-.04em;font-weight:600;margin:0 0 12px}.welcome p{font-size:13px;color:#a0a0a0;line-height:1.7;margin:0 auto;max-width:480px}.next-step{display:inline-flex;margin-top:22px;border:1px solid #464646;border-radius:20px;padding:7px 11px;font-size:10px;color:#aaa;letter-spacing:.02em}
+.main{display:flex;flex:1;min-width:0;min-height:0;flex-direction:column;position:relative}.topbar{height:60px;flex:0 0 60px;border-bottom:1px solid #333;display:flex;align-items:center;justify-content:space-between;padding:0 24px;gap:12px}.top-left{display:flex;align-items:center;gap:11px;min-width:0}.mobile-menu{display:none;border:0;background:transparent;font-size:19px;padding:7px}.page-title{font-size:14px;font-weight:600;white-space:nowrap}.private-tag{font-size:10px;color:#9b9b9b;border:1px solid #404040;border-radius:20px;padding:5px 8px}.top-right{display:flex;align-items:center;gap:9px}.model-retry{border:1px solid #555;background:#303030;color:#e5e5e5;border-radius:8px;padding:7px 9px;font-size:10px;cursor:pointer}.model-retry:hover{background:#414141}.model-retry:disabled{opacity:.55;cursor:wait}.model-retry[hidden]{display:none}.model-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.model-label{font-size:9px;color:#888;letter-spacing:.1em}.model-picker select{max-width:178px;min-width:112px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.model-picker select:disabled,.thinking-picker select:disabled{opacity:.65;cursor:default}.thinking-picker{display:flex;align-items:center;gap:7px;border:1px solid #444;border-radius:9px;background:#252525;padding:6px 9px;min-width:0}.thinking-picker select{max-width:110px;min-width:80px;border:0;outline:none;background:transparent;color:#e8e8e8;font-size:11px;font-weight:600}.avatar{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#3d3d3d;color:#f0f0f0;font-size:11px;font-weight:700}
+.content{flex:1;min-height:0;overflow:hidden;display:flex;justify-content:center;padding:20px 22px 0}.stage{width:min(820px,100%);height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden}.conversation-heading{font-size:12px;color:#999;margin:0 0 22px;min-height:18px}.messages{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:22px;padding:12px 4px 24px;scrollbar-width:thin;scrollbar-color:#343434 transparent}.messages::-webkit-scrollbar{width:6px}.messages::-webkit-scrollbar-track{background:transparent}.messages::-webkit-scrollbar-thumb{background:#343434;border-radius:999px}.messages::-webkit-scrollbar-thumb:hover{background:#4a4a4a}.welcome{margin:auto auto 50px;width:min(600px,100%);text-align:center}.welcome-mark{width:56px;height:56px;border:1px solid #565656;border-radius:18px;display:grid;place-items:center;margin:0 auto 22px;font-size:22px;font-weight:700;letter-spacing:-2px;background:#282828}.welcome h1{font-size:27px;letter-spacing:-.04em;font-weight:600;margin:0 0 12px}.welcome p{font-size:13px;color:#a0a0a0;line-height:1.7;margin:0 auto;max-width:480px}.next-step{display:inline-flex;margin-top:22px;border:1px solid #464646;border-radius:20px;padding:7px 11px;font-size:10px;color:#aaa;letter-spacing:.02em}
 .message{display:flex;gap:14px;align-items:flex-start;max-width:100%;padding:0 5px}.message-avatar{flex:0 0 30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#383838;font-size:10px;font-weight:700}.message-body{min-width:0;flex:1;font-size:14px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;color:#e4e4e4}.message-user{justify-content:flex-end}.message-user .message-avatar{order:2;background:#343434}.message-user .message-body{flex:0 1 auto;max-width:min(78%,660px);background:#303030;border:1px solid #3b3b3b;border-radius:19px;padding:12px 16px}.message-assistant .message-body{background:linear-gradient(145deg,#252525,#222);border:1px solid #383838;border-radius:17px;padding:14px 16px;box-shadow:0 8px 28px rgba(0,0,0,.13)}.message-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}.message-role{font-size:10px;color:#b7b7b7;text-transform:uppercase;letter-spacing:.08em;font-weight:650}.meta-pill,.status-pill{display:inline-flex;align-items:center;gap:5px;border:1px solid #464646;border-radius:999px;padding:3px 8px;font-size:10px;line-height:1.35;color:#c7c7c7;background:#2a2a2a;white-space:nowrap}.meta-pill.level{color:#d0c8ff;border-color:#534c78;background:#302c45}.status-pill.done{color:#a8edc5;border-color:#286447;background:#173b2b}.status-pill.partial{color:#f0d49b;border-color:#755b2c;background:#3b3020}.status-pill.failed{color:#f1aaaa;border-color:#714141;background:#3c2525}.message-detail{font-size:10px;color:#8f8f8f;margin-top:8px}.message-actions{display:flex;gap:7px;margin-top:10px}.message-action{border:1px solid #444;background:transparent;color:#aaa;border-radius:8px;padding:5px 9px;font-size:10px}.message-action:hover{background:#333;color:#fff}.message-status{font-size:10px;color:#a0a0a0;margin-top:6px}.activity-card{display:flex;flex-direction:column;gap:10px;margin:12px 0 2px;padding:12px 13px;border:1px solid #444;border-radius:13px;background:linear-gradient(135deg,#2b2b2b,#252525)}.activity-heading{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:650;color:#e8e8e8}.activity-spinner{width:14px;height:14px;border:2px solid #555;border-top-color:#c4b5fd;border-radius:50%;animation:activity-spin .85s linear infinite;flex:0 0 14px}.activity-card.streaming .activity-spinner{border-color:#397a59;border-top-color:#a8edc5}.activity-card.error .activity-spinner,.activity-card.stopped .activity-spinner{display:none}.activity-copy{font-size:11px;color:#aaa;line-height:1.5}.activity-chips{display:flex;gap:6px;flex-wrap:wrap}.activity-step{font-size:9px;color:#858585;border:1px solid #414141;border-radius:999px;padding:3px 7px}.activity-step.active{color:#d4caff;border-color:#635994;background:#342f49}.activity-step.done{color:#a8edc5;border-color:#286447;background:#173b2b}.activity-card .activity-error{font-size:11px;color:#f1aaaa;line-height:1.5}@keyframes activity-spin{to{transform:rotate(360deg)}}
-.composer-wrap{padding:12px 0 5px}.composer{border:1px solid #484848;background:#2b2b2b;border-radius:17px;padding:12px 13px 9px;box-shadow:0 8px 30px rgba(0,0,0,.12)}.composer textarea{display:block;width:100%;resize:none;min-height:42px;max-height:130px;outline:none;border:0;background:transparent;color:#aaa;font-size:13px;line-height:1.5}.composer textarea::placeholder{color:#858585}.composer-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px}.composer-hint{font-size:10px;color:#848484}.send-action{border:0;background:#ececec;color:#171717;border-radius:10px;width:30px;height:30px;font-size:17px;font-weight:700;cursor:pointer}.send-action:disabled{background:#444;color:#8b8b8b;cursor:not-allowed}.send-action.stop{background:#d7d7d7;color:#171717}.send-action:not(:disabled):hover{background:#fff}.disclaimer{text-align:center;color:#777;font-size:10px;padding:10px 5px 0;line-height:1.5}
+.composer-wrap{padding:6px 0 0}.composer{border:1px solid #484848;background:#2b2b2b;border-radius:20px;padding:8px 11px 7px;box-shadow:0 8px 30px rgba(0,0,0,.12)}.composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto;outline:none;border:0;background:transparent;color:#e5e5e5;font-size:13px;line-height:1.5;padding:3px 2px}.composer textarea::placeholder{color:#858585}.composer-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding-top:8px}.composer-hint{font-size:10px;color:#848484}.send-action{border:0;background:#ececec;color:#171717;border-radius:10px;width:30px;height:30px;font-size:17px;font-weight:700;cursor:pointer}.send-action:disabled{background:#444;color:#8b8b8b;cursor:not-allowed}.send-action.stop{background:#d7d7d7;color:#171717}.send-action:not(:disabled):hover{background:#fff}.disclaimer{text-align:center;color:#777;font-size:10px;padding:10px 5px 0;line-height:1.5}
 .loading{color:#999;font-size:12px;padding:12px 8px}.error{color:#f2a4a4;font-size:12px;padding:12px 8px}.history-failure{padding:10px 8px;display:flex;flex-direction:column;gap:8px}.history-failure-title{font-size:12px;color:#e5b0b0}.history-failure-message{font-size:11px;line-height:1.5;color:#aaa;overflow-wrap:anywhere}.history-retry{align-self:flex-start;border:1px solid #555;background:#303030;color:#eee;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer}.history-retry:hover{background:#414141}.history-retry:disabled,.new-chat:disabled{opacity:.55;cursor:wait}
-@media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(320px,88vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.topbar{padding:0 13px}.content{padding:28px 16px 12px}.welcome h1{font-size:24px}.model-picker,.thinking-picker{padding:6px 7px;gap:4px}.model-label{display:none}.model-picker select{max-width:122px;min-width:80px}.thinking-picker select{max-width:90px;min-width:64px}.private-tag{display:none}.composer-wrap{padding-top:18px}}
-@media(max-width:390px){.model-picker{max-width:122px}.model-picker select{max-width:94px;min-width:0}.thinking-picker{max-width:94px}.thinking-picker select{max-width:70px;min-width:0}.page-title{font-size:13px}.avatar{display:none}}
-.session-budget{margin:0 0 16px;padding:12px 14px;border:1px solid #383838;border-radius:12px;background:#1d1d1d}.session-budget-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:#a8a8a8}.session-budget-label{font-size:9px;font-weight:700;letter-spacing:.12em;color:#858585}.session-budget-top strong{font-size:12px;font-weight:650;color:#e8e8e8;font-variant-numeric:tabular-nums}.session-budget-top span:last-child{margin-left:auto;font-variant-numeric:tabular-nums}.session-budget-track{height:6px;margin-top:10px;border-radius:999px;overflow:hidden;background:#363636}.session-budget-fill{display:block;width:0;height:100%;border-radius:999px;background:#6b91eb;transition:width .25s ease,background .2s ease}.session-budget.near-limit .session-budget-fill{background:#d6a34c}.session-budget.locked .session-budget-fill{background:#c66d6d}.session-budget-tip{margin:8px 0 0;color:#858585;font-size:10px;line-height:1.45}.session-budget-notice{margin-top:10px;padding:10px 11px;border:1px solid #684848;border-radius:9px;background:#2b2020;color:#f0c5c5;font-size:12px;line-height:1.5}
+@media(max-width:760px){.sidebar{position:fixed;inset:0 auto 0 0;width:min(320px,88vw);transform:translateX(-101%);transition:transform .2s ease;box-shadow:none}.sidebar.open{transform:translateX(0);box-shadow:20px 0 60px rgba(0,0,0,.35)}.mobile-menu{display:inline-grid;place-items:center}.topbar{padding:0 13px}.content{padding:12px 16px 0}.bottom-dock{width:calc(100% - 32px);padding-bottom:8px}.welcome h1{font-size:24px}.model-picker,.thinking-picker{padding:6px 7px;gap:4px}.model-label{display:none}.model-picker select{max-width:122px;min-width:80px}.thinking-picker select{max-width:90px;min-width:64px}.private-tag{display:none}.composer-wrap{padding-top:4px}}
+@media(max-width:390px){.model-picker{max-width:122px}.model-picker select{max-width:94px;min-width:0}.thinking-picker{max-width:94px}.thinking-picker select{max-width:70px;min-width:0}.page-title{font-size:13px}.avatar{display:none}.composer{padding:7px 9px 6px}.composer textarea{font-size:12px}.bottom-dock{width:calc(100% - 24px)}}
+.session-budget{margin:0;padding:5px 10px 6px;border:1px solid #383838;border-radius:10px;background:#1d1d1d}.session-budget-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;color:#a8a8a8}.session-budget-label{font-size:9px;font-weight:700;letter-spacing:.12em;color:#858585}.session-budget-top strong{font-size:12px;font-weight:650;color:#e8e8e8;font-variant-numeric:tabular-nums}.session-budget-top span:last-child{margin-left:auto;font-variant-numeric:tabular-nums}.session-budget-track{height:6px;margin-top:10px;border-radius:999px;overflow:hidden;background:#363636}.session-budget-fill{display:block;width:0;height:100%;border-radius:999px;background:#6b91eb;transition:width .25s ease,background .2s ease}.session-budget.near-limit .session-budget-fill{background:#d6a34c}.session-budget.locked .session-budget-fill{background:#c66d6d}.session-budget-tip{margin:8px 0 0;color:#858585;font-size:10px;line-height:1.45}.session-budget-notice{margin-top:10px;padding:10px 11px;border:1px solid #684848;border-radius:9px;background:#2b2020;color:#f0c5c5;font-size:12px;line-height:1.5}.bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px));margin:0 auto;padding:4px 0 10px;background:transparent}.session-budget-tip{display:none}.session-budget-top{gap:8px;font-size:10px}.session-budget-label{font-size:8px}.session-budget-top strong{font-size:11px}.session-budget-track{height:3px;margin-top:5px}.session-budget-notice{margin-top:6px;padding:6px 8px;font-size:10px}.composer-bottom{padding-top:5px}.composer-hint{max-width:calc(100% - 44px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.disclaimer{padding-top:5px;font-size:9px}.content{padding-bottom:0}
 </style>
 </head>
 <body>
@@ -1565,7 +1565,8 @@ function workspaceHtml(): string {
     <button class="project-memory-action" id="projectMemoryAttach" type="button" disabled>Attach pinned Project Memory</button>
     <div class="project-memory-snapshot" id="projectMemorySnapshots"></div>
     <p class="github-hint" id="projectMemoryHint">Only manifest-allowlisted Markdown is loaded. Each attachment pins an exact hub commit.</p>
-  </section>\n  <div class="section-label">Your conversations</div>
+  </section>
+  <div class="section-label">Your conversations</div>
   <div class="history" id="history" aria-live="polite"><div class="loading">Loading conversations…</div></div>
   </div>
   <div class="side-footer"><div class="owner-note"><span class="owner-dot"></span><span>Owner workspace · Private</span></div><form method="post" action="/admin/logout"><button class="logout" type="submit">↗&nbsp; Sign out</button></form></div>
@@ -1578,21 +1579,22 @@ function workspaceHtml(): string {
   <section class="content" aria-label="Conversation workspace">
     <div class="stage">
       <div class="conversation-heading" id="conversationHeading"></div>
-      <section class="session-budget" id="sessionBudget" hidden aria-label="Chat session token budget">
-        <div class="session-budget-top"><span class="session-budget-label">CHAT SESSION BUDGET</span><strong id="sessionBudgetValue">0 / 200,000 tokens</strong><span id="sessionBudgetRemaining">200,000 left</span></div>
-        <div class="session-budget-track" id="sessionBudgetTrack" role="progressbar" aria-label="Tokens used in this chat" aria-valuemin="0" aria-valuemax="200000" aria-valuenow="0"><span class="session-budget-fill" id="sessionBudgetFill"></span></div>
-        <p class="session-budget-tip">To continue in a new chat, save a Markdown checkpoint in GitHub and paste its link into that chat. Context is not transferred automatically.</p>
-        <div class="session-budget-notice" id="sessionBudgetNotice" hidden>This chat has reached its 200,000-token budget and is now read-only. Start a new chat, then paste your GitHub Markdown checkpoint link to continue.</div>
-      </section>
       <div class="messages" id="messages" aria-live="polite">
         <div class="welcome"><div class="welcome-mark">BɅ</div><h1>Your thinking space.</h1><p>A private workspace for research, reasoning, writing, mathematics, coding and ideas. Your conversations are stored separately from the student learning system.</p><span class="next-step">PRIVATE OWNER WORKSPACE</span></div>
       </div>
-      <div class="composer-wrap">
-        <div class="composer"><textarea id="messageInput" disabled rows="1" maxlength="50000" placeholder="Write a message…"></textarea><div class="composer-bottom"><span class="composer-hint" id="composerHint">Choose a verified Gemini model and thinking level to begin.</span><button class="send-action" id="sendMessage" type="button" disabled aria-label="Send message">↑</button></div></div>
-        <div class="disclaimer">Responses stream from your selected model. Thinking tokens, quotas and billing remain subject to Google Cloud limits.</div>
-      </div>
     </div>
   </section>
+  <div class="bottom-dock" id="bottomDock">
+    <section class="session-budget" id="sessionBudget" aria-label="Chat session token budget">
+      <div class="session-budget-top"><span class="session-budget-label">SESSION TOKENS</span><strong id="sessionBudgetValue">0 used / 200,000</strong><span id="sessionBudgetRemaining">200,000 left</span></div>
+      <div class="session-budget-track" id="sessionBudgetTrack" role="progressbar" aria-label="Tokens used in this chat" aria-valuemin="0" aria-valuemax="200000" aria-valuenow="0"><span class="session-budget-fill" id="sessionBudgetFill"></span></div>
+      <div class="session-budget-notice" id="sessionBudgetNotice" hidden>This chat has reached its 200,000-token budget and is now read-only. Start a new chat, then paste your GitHub Markdown checkpoint link to continue.</div>
+    </section>
+    <div class="composer-wrap">
+      <div class="composer"><textarea id="messageInput" disabled rows="1" placeholder="Write a message…"></textarea><div class="composer-bottom"><span class="composer-hint" id="composerHint">Choose a verified Gemini model and thinking level to begin.</span><button class="send-action" id="sendMessage" type="button" disabled aria-label="Send message">↑</button></div></div>
+      <div class="disclaimer">Responses stream from your selected model. Thinking tokens, quotas and billing remain subject to Google Cloud limits.</div>
+    </div>
+  </div>
 </main>
 </div>
 <script src="/admin/intelligence.js" defer></script>
@@ -1804,12 +1806,7 @@ export function ownerIntelligenceClientScript(): Response {
     return number.toLocaleString();
   }
   function renderSessionBudget(){
-    var usage=state.sessionUsage;
-    if(!state.activeId||!usage){
-      sessionBudget.hidden=true;
-      sessionBudget.classList.remove("near-limit","locked");
-      return;
-    }
+    var usage=state.sessionUsage||{limit_tokens:200000,used_tokens:0,reserved_tokens:0,remaining_tokens:200000,locked:false};
     var limit=Math.max(1,Number(usage.limit_tokens)||200000);
     var used=Math.max(0,Number(usage.used_tokens)||0);
     var reserved=Math.max(0,Number(usage.reserved_tokens)||0);
@@ -1926,7 +1923,7 @@ export function ownerIntelligenceClientScript(): Response {
       if(item.role==="user"&&!sending&&!sessionLocked&&!sessionBusy){
         var edit=node("button","message-action","Edit");
         edit.type="button";edit.addEventListener("click",function(){
-          editingMessageId=item.id;messageInput.value=item.content;messageInput.focus();updateComposer();
+          editingMessageId=item.id;messageInput.value=item.content;resizeComposerInput();messageInput.focus();updateComposer();
         });
         var actions=node("div","message-actions");actions.appendChild(edit);body.appendChild(actions);
       }else if(item.role==="assistant"&&item.status!=="pending"&&!sending&&!sessionLocked&&!sessionBusy&&index===items.length-1){
@@ -2154,7 +2151,6 @@ export function ownerIntelligenceClientScript(): Response {
     }catch(error){githubHint.textContent=errorText(error);}
     finally{updateGithubAttachAvailability();}
   }
-
   function projectMemoryWorkstreamChanged(){
     var project=projectMemoryCatalog.find(function(item){return item.projectId===projectMemoryProject.value;});
     projectMemoryWorkstream.replaceChildren(node("option","","Project-wide memory"));
@@ -2210,7 +2206,7 @@ export function ownerIntelligenceClientScript(): Response {
       ? (projectMemoryInfo.snapshots.length+" pinned Project Memory scope(s) attached")
       : "No Project Memory attached · conversation is using its D1 transcript only";
     projectMemoryCrossProject.checked=Boolean(projectMemoryInfo.enabled);
-    projectMemoryCrossProject.disabled=!state.activeId;
+    projectMemoryCrossProject.disabled=!(state.activeId&&(projectMemoryInfo.snapshots||[]).some(function(snapshot){return snapshot.primary;}));
     projectMemoryAdditional.checked=false;
     projectMemoryAdditional.disabled=!projectMemoryInfo.enabled;
     projectMemorySnapshots.replaceChildren();
@@ -2370,6 +2366,13 @@ export function ownerIntelligenceClientScript(): Response {
     renderHistory();renderSessionBudget();renderMessages(state.messages);
     updateComposer();
   }
+  function resizeComposerInput(){
+    messageInput.style.height="auto";
+    var maxHeight=144;
+    var nextHeight=Math.min(messageInput.scrollHeight,maxHeight);
+    messageInput.style.height=Math.max(34,nextHeight)+"px";
+    messageInput.style.overflowY=messageInput.scrollHeight>maxHeight?"auto":"hidden";
+  }
   function updateComposer(){
     var hasText=messageInput.value.trim().length>0;
     var canGenerate=Boolean(state.activeId&&state.selectedModelId&&state.selectedThinkingLevel);
@@ -2496,7 +2499,7 @@ export function ownerIntelligenceClientScript(): Response {
       }else if(!(error&&error.name==="AbortError")&&error&&error.message){showError(error);}
     }finally{
       sending=false;activeAbortController=null;editingMessageId=null;
-      messageInput.value="";
+      messageInput.value="";resizeComposerInput();
       try{await refreshList(conversationId);}catch(_error){}
       generationActivity=null;
       updateComposer();
@@ -2579,7 +2582,7 @@ export function ownerIntelligenceClientScript(): Response {
   githubDiscardPreview.addEventListener("click",discardGithubMemoryPreview);
   document.getElementById("mobileMenu").addEventListener("click",function(){sidebar.classList.toggle("open");});
   sendButton.addEventListener("click",function(){if(sending)stopGeneration();else saveMessage();});
-  messageInput.addEventListener("input",updateComposer);
+  messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});
   messageInput.addEventListener("keydown",function(event){
     if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();if(sending)return;saveMessage();}
   });
@@ -2593,6 +2596,7 @@ export function ownerIntelligenceClientScript(): Response {
     updateComposer();
   });
   modelRetry.addEventListener("click",function(){loadModels();});
+  resizeComposerInput();
   loadModels();
   refreshTopics().catch(showTopicError);
   refreshGithubStatus().catch(function(error){githubStatus.textContent="Connection status unavailable";githubHint.textContent=errorText(error);});

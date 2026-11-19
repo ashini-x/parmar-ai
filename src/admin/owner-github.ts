@@ -1398,15 +1398,7 @@ async function attachProjectMemory(
   const snapshotId = crypto.randomUUID();
   const now = Date.now();
   const snapshotFiles = files.map(({ path, blobSha, content }) => ({ path, blobSha, content }));
-  const insert = env.DB!.prepare(
-    `INSERT INTO owner_intelligence_conversation_memory_snapshots
-      (snapshot_id,owner_id,conversation_id,project_id,project_name,workstream_id,feature_id,is_primary,is_active,
-       hub_repository_id,hub_repository_owner,hub_repository_name,hub_branch,hub_commit_sha,
-       hub_manifest_path,hub_manifest_blob_sha,catalog_entry_path,catalog_entry_blob_sha,
-       project_manifest_path,project_manifest_blob_sha,scope_manifest_path,scope_manifest_blob_sha,scope_manifests_json,
-       manifest_schema_version,files_json,token_count,token_model_id,cross_project_opt_in,created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-  ).bind(
+  const insertValues = [
     snapshotId, owner, conversationId, project.projectId, project.displayName,
     typeof body.workstreamId === "string" ? body.workstreamId : null,
     typeof body.featureId === "string" ? body.featureId : null,
@@ -1415,7 +1407,24 @@ async function attachProjectMemory(
     "hub-manifest.json", catalog.hubManifest.blobSha, project.catalogPath, project.catalogBlobSha,
     project.manifestPath, project.projectManifestBlobSha, scopeManifestPath, scopeManifestBlobSha,
     JSON.stringify(scopeManifestRefs), 1, JSON.stringify(snapshotFiles), tokenCount, definition.id, body.additionalContext ? 1 : 0, now,
-  );
+  ];
+  const insertColumns = "(snapshot_id,owner_id,conversation_id,project_id,project_name,workstream_id,feature_id,is_primary,is_active," +
+    "hub_repository_id,hub_repository_owner,hub_repository_name,hub_branch,hub_commit_sha," +
+    "hub_manifest_path,hub_manifest_blob_sha,catalog_entry_path,catalog_entry_blob_sha," +
+    "project_manifest_path,project_manifest_blob_sha,scope_manifest_path,scope_manifest_blob_sha,scope_manifests_json," +
+    "manifest_schema_version,files_json,token_count,token_model_id,cross_project_opt_in,created_at)";
+  const placeholders = insertValues.map(() => "?").join(",");
+  const insert = body.additionalContext
+    ? env.DB!.prepare(
+        "INSERT INTO owner_intelligence_conversation_memory_snapshots " + insertColumns +
+        " SELECT " + placeholders +
+        " WHERE EXISTS (SELECT 1 FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ? AND cross_project_memory_enabled = 1)",
+      ).bind(...insertValues, conversationId, owner)
+    : env.DB!.prepare(
+        "INSERT INTO owner_intelligence_conversation_memory_snapshots " + insertColumns +
+        " VALUES (" + placeholders + ")",
+      ).bind(...insertValues);
+
   const statements = [];
   if (!body.additionalContext) {
     statements.push(env.DB!.prepare(
@@ -1429,7 +1438,12 @@ async function attachProjectMemory(
   }
   statements.push(insert);
   const saved = await env.DB!.batch(statements);
-  if (saved.some((item) => !item.success)) throw new Error("D1 did not confirm the immutable Project Memory snapshot.");
+  const inserted = Number(saved[saved.length - 1]?.meta?.changes ?? 0);
+  if (saved.some((item) => !item.success) || inserted !== 1) {
+    throw new Error(body.additionalContext
+      ? "Cross-project context was disabled before this secondary scope could be attached."
+      : "D1 did not confirm the immutable Project Memory snapshot.");
+  }
   const info = {
     snapshotId, projectId: project.projectId, displayName: project.displayName,
     scopeManifests: scopeManifestRefs,

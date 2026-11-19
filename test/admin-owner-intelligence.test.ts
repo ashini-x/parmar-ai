@@ -431,7 +431,7 @@ describe("Owner Gemini conversation context builder", () => {
     expect(contents[0]?.role).toBe("user");
     expect(contents[contents.length - 1]).toEqual({ role: "user", text: "Newest prompt must remain." });
     expect(contents.length).toBeLessThanOrEqual(49);
-    expect(contents.every((turn, index) => turn.text.length > 0 && turn.text.length <= 50_000 &&
+    expect(contents.every((turn, index) => turn.text.length > 0 && turn.text.length <= 300_000 &&
       (index === 0 || turn.role !== contents[index - 1].role))).toBe(true);
     expect(contents.reduce((total, turn) => total + turn.text.length, 0)).toBeLessThanOrEqual(300_000);
     expect(messages).toHaveLength(41);
@@ -466,6 +466,24 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain("BRɅIN Intelligence");
     expect(html).toContain("New chat");
     expect(html).toContain("Your conversations");
+    expect(html).toContain('id="bottomDock"');
+    expect(html).toContain('id="sessionBudget"');
+    expect(html).toContain("SESSION TOKENS");
+    expect(html).toContain("200,000 left");
+    expect(html).not.toContain('id="sessionBudget" hidden');
+    expect(html).toContain('id="messageInput" disabled rows="1" placeholder="Write a message…"');
+    expect(html).not.toContain('maxlength="50000"');
+    expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto");
+    expect(html).toContain(".bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px));margin:0 auto;padding:4px 0 10px;background:transparent}");
+    expect(html).toContain("background:#1c1c1c;color:#ececec");
+    expect(html).toContain("body{overflow:hidden;background:#1c1c1c}");
+    expect(html).toContain(".sidebar{width:292px;flex:0 0 292px;background:#141414;");
+    expect(html).toContain(".composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto");
+    const dockStart = html.indexOf('<div class="bottom-dock" id="bottomDock">');
+    const composerStart = html.indexOf('<textarea id="messageInput"');
+    const messagesStart = html.indexOf('<div class="messages" id="messages"');
+    expect(dockStart).toBeGreaterThan(messagesStart);
+    expect(composerStart).toBeGreaterThan(dockStart);
     expect(html).toContain('<div class="sidebar-scroll" id="sidebarScroll">');
     expect(html).toContain("width:292px;flex:0 0 292px");
     expect(html).toContain("overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#343434 transparent");
@@ -510,6 +528,12 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("The model is sending response text.");
     expect(script).toContain("Vertex AI has accepted the request");
     expect(script).toContain("meta-pill level");
+    expect(script).toContain("function resizeComposerInput()");
+    expect(script).toContain('messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});');
+    expect(script).toContain("maxHeight=144");
+    expect(script).toContain("try{await refreshList(conversationId);}catch(_error){}");
+    expect(() => new Function(script)).not.toThrow();
+    expect(script).toContain("state.sessionUsage||{limit_tokens:200000,used_tokens:0,reserved_tokens:0,remaining_tokens:200000,locked:false}");
   });
 
   it("creates, lists, reopens, renames and deletes only the Owner's conversations and messages", async () => {
@@ -594,6 +618,34 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect([...actualDb.messages.values()].filter((message) => message.conversation_id === id)).toHaveLength(0);
   });
 
+
+  it("accepts novel-length prompts up to the expanded 300,000-character limit", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Long novel input" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const novel = "N".repeat(250_000);
+    const saved = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+      method: "POST", origin, body: { content: novel },
+    });
+    expect(saved.status, await saved.clone().text()).toBe(201);
+    const savedBody = await saved.json() as { message: { content: string } };
+    expect(savedBody.message.content).toHaveLength(250_000);
+    expect(savedBody.message.content).toBe(novel);
+
+    const tooLong = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+      method: "POST", origin, body: { content: "N".repeat(300_001) },
+    });
+    expect(tooLong.status).toBe(400);
+    const reopened = await call(env, "/admin/api/intelligence/conversations/" + id, ownerCookie);
+    const reopenedBody = await reopened.json() as { messages: Array<{ content: string }> };
+    expect(reopenedBody.messages).toHaveLength(1);
+    expect(reopenedBody.messages[0].content).toHaveLength(250_000);
+  });
 
   it("keeps the streaming generation endpoint Owner-only and rejects unsupported model thinking levels", async () => {
     const env = appEnv();

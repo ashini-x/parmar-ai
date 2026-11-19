@@ -23,6 +23,7 @@ type Snapshot = {
   hub_commit_sha: string;
   manifest_schema_version: number;
   scope_manifests_json: string;
+  cross_project_opt_in: number;
   files_json: string;
   token_count: number;
   token_model_id: string;
@@ -86,7 +87,7 @@ class MemoryD1 {
       this.enabled = Number(values[0]);
       return 1;
     }
-    if (sql.includes("UPDATE owner_intelligence_conversation_memory_snapshots SET is_active=0")) {
+    if (/UPDATE owner_intelligence_conversation_memory_snapshots\s+SET\s+is_active\s*=\s*0/iu.test(sql)) {
       let changes = 0;
       for (const row of this.snapshots) {
         if (row.conversation_id === String(values[0]) && row.owner_id === String(values[1]) &&
@@ -124,6 +125,7 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     hub_commit_sha: COMMIT,
     manifest_schema_version: 1,
     scope_manifests_json: "[]",
+    cross_project_opt_in: 0,
     files_json: JSON.stringify([{
       path: "projects/brvin/memory/project-memory.md",
       blobSha: BLOB,
@@ -171,12 +173,57 @@ describe("Owner Project Memory snapshots", () => {
       .rejects.toThrow("The conversation is not available to this Owner.");
   });
 
+  it("fails closed when a secondary snapshot exists without conversation opt-in", async () => {
+    const db = new MemoryD1(OWNER, CONVERSATION, [
+      snapshot(),
+      snapshot({
+        snapshot_id: "88888888-8888-4888-8888-888888888888",
+        project_id: "99999999-9999-4999-8999-999999999999",
+        is_primary: 0,
+        cross_project_opt_in: 1,
+      }),
+    ]);
+    await expect(loadOwnerConversationProjectMemoryPrompt(env(db), OWNER, CONVERSATION))
+      .rejects.toThrow("Cross-project Project Memory is not enabled");
+  });
+
+  it("requires explicit per-snapshot opt-in even when cross-project context is enabled", async () => {
+    const db = new MemoryD1(OWNER, CONVERSATION, [
+      snapshot(),
+      snapshot({
+        snapshot_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        project_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        is_primary: 0,
+        cross_project_opt_in: 0,
+      }),
+    ]);
+    db.enabled = 1;
+    await expect(loadOwnerConversationProjectMemoryPrompt(env(db), OWNER, CONVERSATION))
+      .rejects.toThrow("missing explicit Owner opt-in");
+  });
+
+  it("rejects archive, session, handoff and collaboration paths from a pinned snapshot", async () => {
+    for (const path of [
+      "projects/brvin/memory/archive/old.md",
+      "projects/brvin/memory/sessions/old.md",
+      "projects/brvin/memory/handoffs/old.md",
+      "projects/brvin/memory/collaboration/old.md",
+    ]) {
+      const db = new MemoryD1(OWNER, CONVERSATION, [snapshot({
+        files_json: JSON.stringify([{ path, blobSha: BLOB, content: "untrusted" }]),
+      })]);
+      await expect(loadOwnerConversationProjectMemoryPrompt(env(db), OWNER, CONVERSATION))
+        .rejects.toThrow("unsafe file reference");
+    }
+  });
+
   it("disables secondary scopes without disabling the primary snapshot", async () => {
     const primary = snapshot();
     const secondary = snapshot({
       snapshot_id: "66666666-6666-4666-8666-666666666666",
       project_id: "77777777-7777-4777-8777-777777777777",
       is_primary: 0,
+      cross_project_opt_in: 1,
     });
     const db = new MemoryD1(OWNER, CONVERSATION, [primary, secondary]);
     db.enabled = 1;

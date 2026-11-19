@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.3 complete. M4.3 implementation, timeout/retry hardening, append-only preservation and live Owner acceptance are merged/deployed and fully reconciled against production D1 and GitHub evidence. **Next approved task: M4.4 — Attach and load Project Memory.** M4.4–M4.8 remain planned, not implemented; M4.6-P0 is required before M4.6; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-19 IST — M4.3 closeout completed; M4.4 unblocked  
+**Last updated:** 2026-11-19 IST — Owner workspace fixed composer, client runtime recovery and surface cleanup deployed; M4.4 remains next  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -535,3 +535,34 @@ The topic API route defect was corrected in PR #352 and production-deployed. The
 - The exact external marker, stale preview/Conflict, fresh preview/base SHA, reliability and append-only fixes, CI, Worker versions and Owner-confirmed result are recorded in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md).
 - **Final M4.3 closeout — complete:** the production topic/installation, Synced commit, five-file byte match and same-chat reservation settlement are reconciled. Scratchpad promotion was not applicable to the live production conversation; the local-D1 save regression covers promotion of a new unassociated conversation after Synced. M4.4 is unblocked.
 
+### Owner Intelligence sidebar usability maintenance — 2026-11-19 IST
+
+- **Merged:** [PR #360](https://github.com/ashini-x/parmar-ai/pull/360), production source revision `4cc3e1e0b29c7baf40c37a161eb0c6d2175b4a8a`; implementation is limited to `src/admin/intelligence.ts` and regression coverage in `test/admin-owner-intelligence.test.ts`.
+- **UI behavior:** the brand, new-chat/topic controls, GitHub project controls and conversation history now share one vertically scrollable sidebar region. The Owner/privacy and sign-out footer remains outside that region and pinned. Scrolling is independent from the main conversation workspace.
+- **Visual treatment:** 6px rounded muted-grey scrollbar thumb on a transparent track, with a restrained hover state. Desktop sidebar width is 292px (previously 274px); mobile drawer is `min(320px, 88vw)`.
+- **Validation:** PR workflow [44549743114](https://github.com/ashini-x/parmar-ai/actions/runs/44549743114) passed; merged-main release workflow [44550032756](https://github.com/ashini-x/parmar-ai/actions/runs/44550032756) passed `npm run check`, `npm test`, `npm run test:node`, all three Worker dry-run builds, production smoke verification and production release acceptance.
+- **Production evidence:** `brvin-service` version `ff4e3748-50fc-418e-823e-a04bde87f1c9`, deployment `4a1208a9-5664-4e68-957a-b9a40ba24af9`, at 100% traffic; `parmar-ai` version `aeebb8e0-4443-418d-b768-0c2cfa0bec1a`, deployment `8f655927-c224-4d8b-841c-8a73a01b97b8`, at 100% traffic. Production acceptance manifest: artifact `14542491426`.
+- **Scope guard:** no Owner Intelligence API, D1 schema/data, model/provider, Vertex configuration, 200K per-chat token budget, Project Memory behavior, BRVIN retrieval behavior or student Telegram code was changed by this UI task. The production smoke/acceptance checks are Worker-level checks; they are not a substitute for the Owner's own browser visual check after reloading `/admin/intelligence`.
+- **Milestone order unchanged:** M4.3 remains complete; M4.4 — Attach and load Project Memory — remains the next approved task. This UI maintenance does not implement or advance M4.4.
+
+### Owner Intelligence fixed composer and session-token dock — 2026-11-19 IST
+
+- **Merged:** [PR #362](https://github.com/ashini-x/parmar-ai/pull/362), runtime source revision `47ad8b51e25800fc9424a1222ea717defca6949a`.
+- **Layout:** only the conversation messages scroll. The compact message composer stays docked to the bottom, and the session-token meter stays directly above it, always visible even for blank/new chats (default `0 / 200,000`). Both remain visible regardless of conversation scroll position.
+- **Composer:** ChatGPT-familiar compact rounded surface. Textarea starts at one line, grows to 144px, then scrolls internally. The HTML `maxlength` restriction is removed; there is no frontend character cap.
+- **Long prompts:** backend accepted user/assistant message length increased from 50,000 to 300,000 characters (aligned with `MAX_OWNER_GEMINI_CONTEXT_CHARS`); JSON body-size guard increased to 1,300,000 bytes to support large UTF-8 prompts. Messages over the practical 300,000-character server limit are rejected. The 200,000-token per-chat session budget and provider/context limits remain unchanged—this is not literally infinite model context. Regression test persists a 250,000-character prompt and rejects 300,001.
+- **Validation:** PR validation [44558021300](https://github.com/ashini-x/parmar-ai/actions/runs/44558021300) passed typecheck, Vitest, Node tests, and three Worker dry-run builds. Production release [44558249271](https://github.com/ashini-x/parmar-ai/actions/runs/44558249271) passed both Worker deployments, root/health smoke, BRVIN binding and Fatman retrieval readiness, and final release acceptance.
+- **Production evidence:** `brvin-service` version `4ddd6b8f-e9d5-4bf8-88ec-78f72cfeb2cd`, deployment `b6fe71a1-aed4-4849-a58d-0adcf5e39217`, at 100% traffic; `parmar-ai` version `f318707c-611b-499f-b014-282c45b96059`, deployment `2b2ad42b-c070-4870-9047-afce3bd80817`, at 100% traffic. Acceptance artifact `14545509079`.
+- **Scope:** presentation/long-prompt handling only. No token-accounting limit, model/provider selection, D1 schema, Project Memory behavior, student Telegram system or retrieval architecture changed.
+- **Next milestone unchanged:** M4.4 — Attach and load Project Memory remains next; PR #362 does not advance it.
+
+### Owner Intelligence client runtime recovery and surface cleanup — 2026-11-19 IST
+
+- **Merged:** [PR #363](https://github.com/ashini-x/parmar-ai/pull/363), runtime source revision `599441d0faf4c41fda2e5852b9b4c87300d62285`.
+- **Root cause:** a missing closing brace in `generateMessage()`'s `finally` block left the `refreshList(conversationId)` try/catch syntactically invalid. The entire Owner Intelligence client script therefore failed to parse; model loading, conversation-list initialization, and composer event wiring never ran. This was an actual JavaScript syntax failure, not an API/model outage.
+- **Repair and regression guard:** restored `try{await refreshList(conversationId);}catch(_error){}`. The browser-script test now parses the complete served client JavaScript with the JavaScript Function parser so malformed scripts fail CI.
+- **Visual refinement:** removed the opaque `#111` fill from `.bottom-dock` (transparent page surface); darkened the overall base from `#212121` to `#1c1c1c` and sidebar from `#171717` to `#141414`. Existing composer/token meter sizing and placement remain unchanged.
+- **Validation:** PR workflow [44562953383](https://github.com/ashini-x/parmar-ai/actions/runs/44562953383) passed `npm run check`, `npm test`, `npm run test:node`, and all three Worker dry-run builds. Production workflow [44563162170](https://github.com/ashini-x/parmar-ai/actions/runs/44563162170) passed paired Worker deployments, root/health smoke, BRVIN service binding, Fatman retrieval readiness, and production release acceptance.
+- **Production evidence:** `brvin-service` version `2e495fb3-2623-4439-8795-1abe5253b3bc`, deployment `326d5b90-6a66-492a-8fba-f8c24985f950`, at 100% traffic; `parmar-ai` version `de508364-6c7d-41ab-a8f2-f312f1d4306e`, deployment `666f0671-c569-4598-a9c4-bfd7df732843`, at 100% traffic. Acceptance artifact `14549662593`.
+- **Scope:** frontend runtime parse repair and visual surfaces only. No model/provider configuration, API contract, D1 schema, 200,000-token session budget, 300,000-character message cap, Project Memory or student-facing behavior changed.
+- **Next milestone unchanged:** M4.4 — Attach and load Project Memory remains next; PR #363 does not advance it.
