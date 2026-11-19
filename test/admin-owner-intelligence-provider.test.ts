@@ -439,8 +439,12 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     await expect(generateOwnerGeminiContent(
       { ...configuredEnv, GEMINI_LOCATION: "asia-southeast1" } as Env,
       { modelId: "gemini-3.8-flash", contents: [{ role: "user", text: "Hi" }] },
-      dependencies(fetcher),
-    )).rejects.toMatchObject({ status: 429, retryable: true, message: "Vertex AI rate-limited the GenerateContent request." });
+      {
+        ...dependencies(fetcher),
+        sleep: async () => undefined,
+        random: () => 0.5,
+      },
+    )).rejects.toMatchObject({ status: 429, stage: "generate_content", retryable: true, message: "Vertex AI rate-limited the GenerateContent request." });
   });
 
   it("retries GenerateContent RESOURCE_EXHAUSTED with bounded backoff and the same selected-model payload", async () => {
