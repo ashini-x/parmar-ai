@@ -61,7 +61,7 @@ interface OwnerMessageRow extends OwnerIntelligenceMessage {
 
 const readyDatabases = new WeakSet<object>();
 const MAX_TITLE_LENGTH = 80;
-const MAX_MESSAGE_LENGTH = 50_000;
+const MAX_MESSAGE_LENGTH = MAX_OWNER_GEMINI_CONTEXT_CHARS;
 const MAX_OWNER_GEMINI_CONTEXT_CHARS = 300_000;
 const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
 const MAX_CONVERSATIONS = 100;
@@ -711,7 +711,7 @@ export async function appendOwnerIntelligenceMessage(
   const status = input.status ?? "complete";
   if (typeof input.content !== "string" || input.content.length > MAX_MESSAGE_LENGTH ||
       (input.content.length === 0 && !(input.role === "assistant" && status === "pending"))) {
-    throw new Error("Message content must contain between 1 and 50,000 characters.");
+    throw new Error("Message content must contain between 1 and 300,000 characters.");
   }
   if ((input.modelId && !input.thinkingLevel) || (!input.modelId && input.thinkingLevel)) {
     throw new Error("Generation metadata is incomplete.");
@@ -852,7 +852,7 @@ async function planOwnerPrompt(
 
   if (input.editMessageId) {
     if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
-      throw new Error("Enter a message between 1 and 50,000 characters.");
+      throw new Error("Enter a message between 1 and 300,000 characters.");
     }
     const targetIndex = ordered.findIndex((row) => row.id === input.editMessageId && row.role === "user");
     if (targetIndex < 0) throw new Error("The user message to edit was not found.");
@@ -880,7 +880,7 @@ async function planOwnerPrompt(
   }
 
   if (typeof input.content !== "string" || !input.content.trim() || input.content.length > MAX_MESSAGE_LENGTH) {
-    throw new Error("Enter a message between 1 and 50,000 characters.");
+    throw new Error("Enter a message between 1 and 300,000 characters.");
   }
   const latest = ordered.reduce((value, row) => Math.max(value, Number(row.created_at)), 0);
   const plannedMessage: OwnerIntelligenceMessage = {
@@ -1199,7 +1199,7 @@ async function handleOwnerGeneration(
             if (event.type === "delta") {
               generatedText += event.text;
               if (generatedText.length > MAX_MESSAGE_LENGTH) {
-                throw new OwnerGeminiProviderError("The response exceeded the supported 50,000-character message size.");
+                throw new OwnerGeminiProviderError("The response exceeded the supported 300,000-character message size.");
               }
               if (generatedText.length - lastPersistedLength >= 1_024 || Date.now() - lastPersistedAt >= 1_000) {
                 await updateOwnerAssistantMessage(env, assistantMessage!.id, generatedText, "partial");
