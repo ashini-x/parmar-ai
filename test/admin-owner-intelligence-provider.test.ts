@@ -617,7 +617,8 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     expect((failure as Error).message).toContain("reserved response-token budget");
   });
 
-  it("continues Gemini 4 Hydrogen long decode across v1beta1 segments and sums usage", async () => {
+  it.each(["gemini-4-hydrogen", "gemini-4-carbon", "gemini-4-argon"])(
+    "continues %s long decode across v1beta1 segments and sums usage", async (modelId) => {
     const first = {
       candidates: [{
         finishReason: "CONTINUATION",
@@ -661,8 +662,8 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     const stream = await openOwnerGeminiStream(
       configuredEnv,
       {
-        modelId: "gemini-4-hydrogen",
-        thinkingLevel: "XHIGH",
+        modelId,
+        thinkingLevel: "HIGH",
         maxOutputTokens: 131_072,
         contents: [{ role: "user", text: "Prove the difficult result." }],
       },
