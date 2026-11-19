@@ -1,6 +1,6 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**. M4.3 is fully accepted. **M4.4 Project Memory implementation is merged and production deployed; its authenticated Owner attach-and-read walkthrough remains pending.** Current main includes PRs #360–#365; latest runtime commit is `f7d1dbe79c880a8e43eebab230908fc6a07484bf`. M4.5 — Automatic rollover and handoff — begins only after M4.4 Owner acceptance. Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**. M4.3 is fully accepted. **M4.4 Project Memory implementation is merged and production deployed; its authenticated Owner attach-and-read walkthrough remains pending.** Current main includes Owner UI/response PRs #360–#365 and adaptive response PR #367; latest runtime commit is `38731a71b4c8252d11524f3c8d15cc5d30119c5c`. M4.5 — Automatic rollover and handoff — begins only after M4.4 Owner acceptance. Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
 
 
 ### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
@@ -59,6 +59,16 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Production versions: parmar-ai fccd13e6-1be3-4ecb-b1e6-d42d352cd1f8; brvin-service 500709c7-b62a-4c6c-9613-159f77988310, both at 100% traffic. Acceptance artifact: 14553902907.
 - Presentation only; no provider/model, API, D1, token budget, message cap, Project Memory or student-facing changes. Owner browser visual check remains pending after hard refresh.
 
+### Owner Intelligence adaptive response presentation — 2026-11-19 IST
+
+- [PR #367](https://github.com/ashini-x/parmar-ai/pull/367) merged as 38731a71b4c8252d11524f3c8d15cc5d30119c5c.
+- A trusted system instruction now reaches every normal Owner chat generation. The selected Gemini model independently chooses the best presentation for each question: prose for simple exchanges; headings/paragraphs for multi-part explanations; bullets for unordered collections; numbered steps for sequences/procedures; Markdown tables for meaningful comparisons/structured records; checklists for actionable work; code fences for code; and status callouts only when warranted. The Owner does not ask for a specific format.
+- The instruction says to combine structures only when useful and not force all formats into every answer. It preserves the user's language, avoids unnecessary decorative structure, and reinforces evidence-based status claims.
+- The exact instruction is passed to both Vertex CountTokens preflight and StreamGenerateContent, so its tokens are counted against the existing 200K per-chat budget. No second formatting pass is run.
+- The Owner-selected model/thinking level, provider boundary, session budget, long-message allowance, Project Memory rules and student system remain unchanged.
+- PR CI [44576001581](https://github.com/ashini-x/parmar-ai/actions/runs/44576001581) passed TypeScript, Vitest, Node tests and all three dry-run Worker builds. Production release [44576276901](https://github.com/ashini-x/parmar-ai/actions/runs/44576276901) passed paired deployments and root/health/BRVIN/Fatman acceptance.
+- Production versions at 100% traffic: parmar-ai 83639d71-ae95-4c59-9661-4ffc0a601305 (deployment ed08b76f-5693-478c-b7e4-34c144904f3f); brvin-service 95321210-5ac5-4ad6-8f76-5b6e570ac561 (deployment 14bba055-4a0c-447b-a91b-7974263829ed). Acceptance artifact: 14556142262.
+- Browser confirmation: hard-refresh /admin/intelligence and ask a normal open-ended question; verify Gemini selects structure on its own and that the PR #365 renderer displays it. Automated release checks validate Workers and bindings, not the visual answer screenshot.
 ## First action: recover the source of truth
 
 Read these files from the latest `main` branch in this order:
@@ -72,7 +82,7 @@ Read these files from the latest `main` branch in this order:
 7. `docs/TEST_PLAN.md` and `docs/README.md`.
 8. Inspect relevant source, current D1 records (read-only), latest `owner-memory-hub` commit and Cloudflare deployment state before choosing the next action.
 
-Runtime-code baseline at handoff: `f7d1dbe79c880a8e43eebab230908fc6a07484bf` (Owner Intelligence UI refinements, M4.4 Project Memory implementation and rich response rendering). M4.3 backend behavior remains based on `3ae456188fb7535db47bcab2a7909cf333b59285`; PR #360 changed sidebar presentation, PR #362 changed the fixed composer/token dock and long-prompt size guard, PR #363 repaired the malformed browser try/catch and cleaned the surface, PR #364 moved model/thinking controls into the composer footer, PR #361 shipped pinned Project Memory loading, and PR #365 added rich response rendering. Verify latest `main`, production D1 and Cloudflare state before implementation.
+Runtime-code baseline at handoff: `38731a71b4c8252d11524f3c8d15cc5d30119c5c` (Owner Intelligence UI refinements, M4.4 Project Memory implementation, rich response rendering and adaptive response decision instructions). M4.3 backend behavior remains based on `3ae456188fb7535db47bcab2a7909cf333b59285`; PR #360 changed sidebar presentation, PR #362 changed the fixed composer/token dock and long-prompt size guard, PR #363 repaired the malformed browser try/catch and cleaned the surface, PR #364 moved model/thinking controls into the composer footer, PR #361 shipped pinned Project Memory loading, PR #365 added rich response rendering, and PR #367 taught the selected Gemini model to choose response presentation while including the exact instruction in CountTokens and streaming. Verify latest `main`, production D1 and Cloudflare state before implementation.
 
 ## Product and security boundary — immutable
 
