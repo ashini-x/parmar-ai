@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.3 complete. M4.3 implementation, timeout/retry hardening, append-only preservation and live Owner acceptance are merged/deployed and fully reconciled against production D1 and GitHub evidence. **Next approved task: M4.4 — Attach and load Project Memory.** M4.4–M4.8 remain planned, not implemented; M4.6-P0 is required before M4.6; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-19 IST — M4.3 closeout completed; M4.4 unblocked  
+**Last updated:** 2026-11-19 IST — M4.3 closeout completed; Owner Intelligence sidebar UI maintenance deployed; M4.4 remains next  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -535,3 +535,12 @@ The topic API route defect was corrected in PR #352 and production-deployed. The
 - The exact external marker, stale preview/Conflict, fresh preview/base SHA, reliability and append-only fixes, CI, Worker versions and Owner-confirmed result are recorded in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md).
 - **Final M4.3 closeout — complete:** the production topic/installation, Synced commit, five-file byte match and same-chat reservation settlement are reconciled. Scratchpad promotion was not applicable to the live production conversation; the local-D1 save regression covers promotion of a new unassociated conversation after Synced. M4.4 is unblocked.
 
+### Owner Intelligence sidebar usability maintenance — 2026-11-19 IST
+
+- **Merged:** [PR #360](https://github.com/ashini-x/parmar-ai/pull/360), production source revision `4cc3e1e0b29c7baf40c37a161eb0c6d2175b4a8a`; implementation is limited to `src/admin/intelligence.ts` and regression coverage in `test/admin-owner-intelligence.test.ts`.
+- **UI behavior:** the brand, new-chat/topic controls, GitHub project controls and conversation history now share one vertically scrollable sidebar region. The Owner/privacy and sign-out footer remains outside that region and pinned. Scrolling is independent from the main conversation workspace.
+- **Visual treatment:** 6px rounded muted-grey scrollbar thumb on a transparent track, with a restrained hover state. Desktop sidebar width is 292px (previously 274px); mobile drawer is `min(320px, 88vw)`.
+- **Validation:** PR workflow [44549743114](https://github.com/ashini-x/parmar-ai/actions/runs/44549743114) passed; merged-main release workflow [44550032756](https://github.com/ashini-x/parmar-ai/actions/runs/44550032756) passed `npm run check`, `npm test`, `npm run test:node`, all three Worker dry-run builds, production smoke verification and production release acceptance.
+- **Production evidence:** `brvin-service` version `ff4e3748-50fc-418e-823e-a04bde87f1c9`, deployment `4a1208a9-5664-4e68-957a-b9a40ba24af9`, at 100% traffic; `parmar-ai` version `aeebb8e0-4443-418d-b768-0c2cfa0bec1a`, deployment `8f655927-c224-4d8b-841c-8a73a01b97b8`, at 100% traffic. Production acceptance manifest: artifact `14542491426`.
+- **Scope guard:** no Owner Intelligence API, D1 schema/data, model/provider, Vertex configuration, 200K per-chat token budget, Project Memory behavior, BRVIN retrieval behavior or student Telegram code was changed by this UI task. The production smoke/acceptance checks are Worker-level checks; they are not a substitute for the Owner's own browser visual check after reloading `/admin/intelligence`.
+- **Milestone order unchanged:** M4.3 remains complete; M4.4 — Attach and load Project Memory — remains the next approved task. This UI maintenance does not implement or advance M4.4.
