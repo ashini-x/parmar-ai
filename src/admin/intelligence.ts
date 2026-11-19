@@ -2211,6 +2211,7 @@ export function ownerIntelligenceClientScript(): Response {
       : "No Project Memory attached · conversation is using its D1 transcript only";
     projectMemoryCrossProject.checked=Boolean(projectMemoryInfo.enabled);
     projectMemoryCrossProject.disabled=!state.activeId;
+    projectMemoryAdditional.checked=false;
     projectMemoryAdditional.disabled=!projectMemoryInfo.enabled;
     projectMemorySnapshots.replaceChildren();
     (projectMemoryInfo.snapshots||[]).forEach(function(snapshot){
@@ -2355,6 +2356,9 @@ export function ownerIntelligenceClientScript(): Response {
     var result=await request(api+"/"+encodeURIComponent(id));
     state.activeId=result.conversation.id;state.messages=result.messages||[];state.sessionUsage=result.usage||null;
     renderProjectMemoryInfo(result.projectMemory||{enabled:false,snapshots:[]});
+    if(result.conversation.topic_id&&state.topics.some(function(topic){return topic.id===result.conversation.topic_id;})){
+      if(projectMemoryTopic.value!==result.conversation.topic_id){projectMemoryTopic.value=result.conversation.topic_id;refreshProjectMemoryCatalog().catch(function(error){projectMemoryHint.textContent=errorText(error);});}
+    }
     githubSaveBox.hidden=false;
     var preferredTopic=result.conversation.topic_id||"";
     githubSaveTopic.value=state.topics.some(function(topic){return topic.id===preferredTopic;})?preferredTopic:githubSaveTopic.value;
@@ -2388,6 +2392,7 @@ export function ownerIntelligenceClientScript(): Response {
       :editingMessageId?"Editing a previous message · sending will replace it and remove later turns"
       :"Your selected model and thinking level will be used for this response.";
     updateGithubSaveAvailability();
+    updateProjectMemoryAttachAvailability();
   }
 
   function stopGeneration(){

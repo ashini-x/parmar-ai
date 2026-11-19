@@ -105,8 +105,13 @@ class FakeOwnerD1 {
   }
   read(sql: string, values: unknown[]): Array<Record<string, unknown>> {
     if (sql.startsWith("PRAGMA table_info(owner_intelligence_conversations)")) {
-      return ["id", "owner_id", "title", "created_at", "updated_at", "topic_id", "session_kind", "lifecycle_status"]
+      return ["id", "owner_id", "title", "created_at", "updated_at", "topic_id", "session_kind", "lifecycle_status", "cross_project_memory_enabled"]
         .map((name) => ({ name }));
+    }
+    if (sql.includes("FROM owner_intelligence_conversation_memory_snapshots")) return [];
+    if (sql.includes("cross_project_memory_enabled")) {
+      const row = this.conversations.get(String(values[0]));
+      return row && row.owner_id === String(values[1]) ? [{ cross_project_memory_enabled: 0 }] : [];
     }
     if (sql.includes("FROM owner_intelligence_session_usage")) {
       const row = this.sessionUsage.get(String(values[0]));
@@ -461,6 +466,17 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain("BRɅIN Intelligence");
     expect(html).toContain("New chat");
     expect(html).toContain("Your conversations");
+    expect(html).toContain('<div class="sidebar-scroll" id="sidebarScroll">');
+    expect(html).toContain("width:292px;flex:0 0 292px");
+    expect(html).toContain("overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#343434 transparent");
+    expect(html).toContain(".sidebar-scroll::-webkit-scrollbar{width:6px}");
+    expect(html).toContain("width:min(320px,88vw)");
+    const scrollRegionStart = html.indexOf('<div class="sidebar-scroll" id="sidebarScroll">');
+    const footerStart = html.indexOf('<div class="side-footer">');
+    const scrollRegionEnd = html.indexOf('</div>\n  <div class="side-footer">', scrollRegionStart);
+    expect(scrollRegionStart).toBeGreaterThanOrEqual(0);
+    expect(scrollRegionEnd).toBeGreaterThan(scrollRegionStart);
+    expect(footerStart).toBeGreaterThan(scrollRegionEnd);
     expect(html).toContain('id="modelSelect"');
     expect(html).toContain('id="modelRetry"');
     expect(html).toContain('id="thinkingSelect"');
