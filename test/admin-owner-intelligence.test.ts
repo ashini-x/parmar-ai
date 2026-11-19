@@ -461,6 +461,17 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain("BRɅIN Intelligence");
     expect(html).toContain("New chat");
     expect(html).toContain("Your conversations");
+    expect(html).toContain('<div class="sidebar-scroll" id="sidebarScroll">');
+    expect(html).toContain("width:292px;flex:0 0 292px");
+    expect(html).toContain("overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#343434 transparent");
+    expect(html).toContain(".sidebar-scroll::-webkit-scrollbar{width:6px}");
+    expect(html).toContain("width:min(320px,88vw)");
+    const scrollRegionStart = html.indexOf('<div class="sidebar-scroll" id="sidebarScroll">');
+    const footerStart = html.indexOf('<div class="side-footer">');
+    const scrollRegionEnd = html.indexOf('</div>\n  <div class="side-footer">', scrollRegionStart);
+    expect(scrollRegionStart).toBeGreaterThanOrEqual(0);
+    expect(scrollRegionEnd).toBeGreaterThan(scrollRegionStart);
+    expect(footerStart).toBeGreaterThan(scrollRegionEnd);
     expect(html).toContain('id="modelSelect"');
     expect(html).toContain('id="modelRetry"');
     expect(html).toContain('id="thinkingSelect"');
