@@ -99,7 +99,7 @@ M4.3 is fully accepted and closed. The remaining evidence was reconciled using r
 
 
 
-M4.4 approved scope:
+## M4.4 approved scope
 - One private `owner-memory-hub` stores project catalog/manifests and curated Markdown; it does not contain/copy source-code trees.
 - Introduce stable project IDs and versioned catalog/manifest schemas. Projects may contain workstreams and optional feature scopes and may reference several independent source repositories.
 - Each conversation has at most one primary project/workstream/feature scope unless the Owner explicitly opts into cross-project context.
