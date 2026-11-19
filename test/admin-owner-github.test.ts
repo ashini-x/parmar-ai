@@ -83,6 +83,15 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     const savedCommitSha = "b".repeat(40);
     let currentBranchHead = baseCommitSha;
     const savedFiles = new Map<string, string>();
+    const ownerAddedProgressComment = "<!-- M4.3 stale-preview test marker: external GitHub edit made after Owner preview on 2026-11-19. -->";
+    const ownerAuthoredProjectMemory = "# BRɅIN\n\nOwner-authored project note: preserve this exact sentence.\n";
+    const ownerAuthoredProgress = "# Progress\n\nOwner-authored progress line: preserve this exact sentence.\n" + ownerAddedProgressComment + "\n";
+    const ownerAuthoredDecisions = "# Accepted decisions\n\nOwner-authored decision: preserve this exact sentence.\n";
+    const existingFiles = new Map<string, string>([
+      ["memory/project-memory.md", ownerAuthoredProjectMemory],
+      ["memory/progress.md", ownerAuthoredProgress],
+      ["memory/decisions.md", ownerAuthoredDecisions],
+    ]);
     const fakeGitHubToken = "ghp_" + "x".repeat(30);
     let forceGenerateResourceExhausted = false;
     let generateFailureAttempts = 0;
@@ -194,7 +203,14 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
         return new Response(JSON.stringify({ sha: baseCommitSha, tree: { sha: "d".repeat(40) } }), { status: 200 });
       }
       if (url.includes("/contents/memory/") && url.includes("?ref=" + baseCommitSha)) {
-        return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
+        const path = decodeURIComponent(new URL(url).pathname.split("/contents/")[1] ?? "");
+        const content = existingFiles.get(path);
+        if (content === undefined) return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
+        let binary = "";
+        for (const byte of new TextEncoder().encode(content)) binary += String.fromCharCode(byte);
+        return new Response(JSON.stringify({ type: "file", encoding: "base64", content: btoa(binary) }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
       }
       if (url === "https://api.github.com/repos/ashini-x/parmar-ai/git/trees" && method === "POST") {
         expect(new Headers(init?.headers).get("authorization")).toBe("Bearer ghs-short-lived-installation-token");
