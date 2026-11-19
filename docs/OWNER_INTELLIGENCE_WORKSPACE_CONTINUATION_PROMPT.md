@@ -254,10 +254,10 @@ Before the remaining authenticated M4.5 browser walkthrough, finish PR validatio
 
 The correction under review:
 - Keep the exact **200,000 cumulative token per-conversation ledger, 180K warning, 190K rollover gate, source-preservation and successor behavior unchanged**.
-- Reserve up to the selected model's `singleRequestOutputTokens` for ordinary chat, bounded by the counted prompt and remaining 200K session balance. Gemini 4 Hydrogen can use up to 65,536 output tokens in one foreground streaming segment; XHIGH reasoning tokens count against that output allowance.
+- Reserve the selected model's output allowance for ordinary chat, bounded by the counted prompt and remaining 200K session balance. Gemini 4 Hydrogen uses `v1beta1` continuation tokens across 65,536-token segments when the session can fund more output. D1 reserves the prompt cost repeated for each segment plus the full output allowance, so cumulative usage cannot exceed 200K. XHIGH reasoning tokens count against the output allowance.
 - Remove app-owned 8-minute streaming and 90-second non-stream generation deadlines. Preserve explicit Stop and client-disconnect cancellation. A 60-second heartbeat renews the D1 reservation lease while generation is active; 10-minute stale recovery applies only after heartbeats stop. Keep the 8-second CountTokens and 12-second Google access-token preflight timeouts; these occur before generation.
 - Preserve Vertex `finishReason` and usage metadata when no user-visible text is produced. Surface `MAX_TOKENS` clearly and settle reported usage rather than charging the full reservation when the provider supplies usage data.
-- Do not claim infinite output: model/API limits, network/provider failures, browser disconnects and Worker runtime interruptions still exist. The current v1 streaming adapter does not implement Gemini long-decode continuation.
+- Do not claim infinite output: Hydrogen's 1,048,576-token unified input/output context ceiling, 65,536-token foreground segment cap, repeated prompt cost, unchanged 200K session budget, network/provider failures, browser disconnects and Worker runtime interruptions still apply. The adapter uses the documented `v1beta1` continuation-token loop.
 - Validate, merge and verify the paired production Worker release before asking the Owner to test. Record actual PR, CI, production workflow and Worker versions in the policy, roadmap, test plan and M4.5 acceptance record.
 
 ## Immediate current task — complete M4.5 authenticated Owner acceptance
