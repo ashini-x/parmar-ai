@@ -85,7 +85,6 @@ const MAX_OWNER_GEMINI_CONTEXT_TURNS = 49;
 const MAX_CONVERSATIONS = 100;
 const MAX_TOPICS = 100;
 export const OWNER_INTELLIGENCE_SESSION_TOKEN_LIMIT = 200_000;
-const OWNER_INTELLIGENCE_DEFAULT_OUTPUT_RESERVATION = 8_192;
 /**
  * Makes response presentation an automatic model decision for every Owner turn.
  * Keep this instruction in both CountTokens preflight and StreamGenerateContent
@@ -1421,7 +1420,7 @@ async function handleOwnerGeneration(
   }
 
   const availableTokens = sessionUsage.remaining_tokens;
-  const outputTokenLimit = Math.min(OWNER_INTELLIGENCE_DEFAULT_OUTPUT_RESERVATION, availableTokens - promptTokens);
+  const outputTokenLimit = Math.min(definition.singleRequestOutputTokens, availableTokens - promptTokens);
   if (outputTokenLimit < 1) {
     sessionUsage = await lockOwnerIntelligenceSession(env, conversationId, "request_exceeds_remaining_budget") ?? sessionUsage;
     return json({
