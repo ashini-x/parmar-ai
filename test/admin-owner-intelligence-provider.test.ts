@@ -697,7 +697,7 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     const sse = "data: " + JSON.stringify({
       candidates: [{ finishReason: "STOP", content: { role: "model", parts: [{ text: "Native-limit response." }] } }],
       usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 8, totalTokenCount: 11 },
-    }) + "\\r\\n\\r\\n";
+    }) + "\r\n\r\n";
     const fetcher: typeof fetch = async (url, init) => {
       const value = String(url);
       if (value.endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 3 }), { status: 200 });
