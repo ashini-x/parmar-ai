@@ -666,14 +666,14 @@ function mapMessage(row: OwnerMessageRow): OwnerIntelligenceMessage {
 export async function listOwnerIntelligenceConversations(env: Env): Promise<OwnerIntelligenceConversation[]> {
   await ensureOwnerIntelligenceSchema(env);
   const result = await env.DB!.prepare(
-    `SELECT c.id, c.owner_id, c.title, c.created_at, c.updated_at, c.topic_id, c.session_kind, c.lifecycle_status,
-      c.parent_conversation_id, c.rollover_handoff_id,
+    `SELECT id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status,
+      parent_conversation_id, rollover_handoff_id,
       (SELECT h.successor_conversation_id FROM owner_intelligence_handoffs h
-       WHERE h.source_conversation_id = c.id AND h.owner_id = c.owner_id) AS successor_conversation_id,
+       WHERE h.source_conversation_id = owner_intelligence_conversations.id AND h.owner_id = owner_intelligence_conversations.owner_id) AS successor_conversation_id,
       (SELECT t.title FROM owner_intelligence_topics t
-       WHERE t.id = c.topic_id AND t.owner_id = c.owner_id) AS topic_title
-     FROM owner_intelligence_conversations c
-     WHERE c.owner_id = ? ORDER BY c.updated_at DESC, c.created_at DESC LIMIT ?`,
+       WHERE t.id = owner_intelligence_conversations.topic_id AND t.owner_id = owner_intelligence_conversations.owner_id) AS topic_title
+     FROM owner_intelligence_conversations
+     WHERE owner_id = ? ORDER BY updated_at DESC, created_at DESC LIMIT ?`,
   ).bind(ownerPrincipal(env), MAX_CONVERSATIONS).all<OwnerConversationRow>();
   return (result.results ?? []).map(mapConversation);
 }
@@ -925,13 +925,13 @@ export async function getOwnerIntelligenceConversation(
   await ensureOwnerIntelligenceSchema(env);
   const ownerId = ownerPrincipal(env);
   const row = await env.DB!.prepare(
-    `SELECT c.id, c.owner_id, c.title, c.created_at, c.updated_at, c.topic_id, c.session_kind, c.lifecycle_status,
-      c.parent_conversation_id, c.rollover_handoff_id,
+    `SELECT id, owner_id, title, created_at, updated_at, topic_id, session_kind, lifecycle_status,
+      parent_conversation_id, rollover_handoff_id,
       (SELECT h.successor_conversation_id FROM owner_intelligence_handoffs h
-       WHERE h.source_conversation_id = c.id AND h.owner_id = c.owner_id) AS successor_conversation_id,
+       WHERE h.source_conversation_id = owner_intelligence_conversations.id AND h.owner_id = owner_intelligence_conversations.owner_id) AS successor_conversation_id,
       (SELECT t.title FROM owner_intelligence_topics t
-       WHERE t.id = c.topic_id AND t.owner_id = c.owner_id) AS topic_title
-     FROM owner_intelligence_conversations c WHERE c.id = ? AND c.owner_id = ?`,
+       WHERE t.id = owner_intelligence_conversations.topic_id AND t.owner_id = owner_intelligence_conversations.owner_id) AS topic_title
+     FROM owner_intelligence_conversations WHERE id = ? AND owner_id = ?`,
   ).bind(id, ownerId).first<OwnerConversationRow>();
   if (!row) return null;
 
