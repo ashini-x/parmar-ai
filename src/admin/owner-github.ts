@@ -684,6 +684,15 @@ async function buildMemoryFiles(
     { name: "decisions.md", content: decisions },
     { name: sessionPath, content: sessionLines.join("\n").slice(0, 20_000) },
   ];
+  const rolloverHandoff = messages.find((message) => message.id.startsWith("handoff-"));
+  if (rolloverHandoff) {
+    const handoffPath = "handoffs/" + new Date().toISOString().slice(0, 10) + "-" +
+      conversationId.slice(0, 8) + ".md";
+    files.push({
+      name: handoffPath,
+      content: redactMemorySecrets(rolloverHandoff.content),
+    });
+  }
   if (files.some((file) => file.content.length > PREVIEW_FILE_LIMIT) ||
       files.reduce((sum, file) => sum + file.content.length, 0) > PREVIEW_TOTAL_LIMIT) {
     throw new Error("The selected project memory is too large for one review. Edit or archive the existing memory before saving.");
