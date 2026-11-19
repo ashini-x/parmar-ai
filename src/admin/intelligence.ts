@@ -1458,17 +1458,17 @@ async function handleOwnerGeneration(
       // prompt cost once per segment as well as the total decode allowance.
       const candidate = Math.min(
         definition.modelMaxOutputTokens,
-        segments * definition.singleRequestOutputTokens,
+        segments * definition.singleStreamingOutputTokens,
         availableTokens - promptTokens * segments,
       );
-      if (candidate < 1 || Math.ceil(candidate / definition.singleRequestOutputTokens) > segments) continue;
+      if (candidate < 1 || Math.ceil(candidate / definition.singleStreamingOutputTokens) > segments) continue;
       if (candidate > outputTokenLimit) {
         outputTokenLimit = candidate;
-        outputReservationSegments = Math.ceil(candidate / definition.singleRequestOutputTokens);
+        outputReservationSegments = Math.ceil(candidate / definition.singleStreamingOutputTokens);
       }
     }
   } else {
-    outputTokenLimit = Math.min(definition.singleRequestOutputTokens, availableTokens - promptTokens);
+    outputTokenLimit = Math.min(definition.singleStreamingOutputTokens, availableTokens - promptTokens);
   }
   if (outputTokenLimit < 1) {
     sessionUsage = await lockOwnerIntelligenceSession(env, conversationId, "request_exceeds_remaining_budget") ?? sessionUsage;
