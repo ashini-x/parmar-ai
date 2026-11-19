@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.4 acceptance closed. M4.5 automatic rollover and durable handoff implementation is in PR [#375](https://github.com/ashini-x/parmar-ai/pull/375), reconciled with latest main and awaiting final current-head CI, merge and production deployment. M4.6-P0 is required before M4.6 only; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-20 IST — Poppins removed by PR #374; AERUNO-derived Owner-only wordmark deployed via PR #376; Owner New Chat welcome simplified by PR #370; M4.4 authenticated attach/read and independent Scratchpad-isolation acceptance passed; M4.4 formally closed.  
+**Last updated:** 2026-11-20 IST — Poppins removed by PR #374; AERUNO-derived Owner-only wordmark deployed via PR #376; Owner New Chat welcome simplified by PR #370; sidebar wordmark-only cleanup deployed via PR #377; fixed sidebar brand header and independent scrolling deployed via PR #378; M4.4 authenticated attach/read and independent Scratchpad-isolation acceptance passed; M4.4 formally closed.  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -10,7 +10,7 @@
 
 ## 0. Shared BRɅIN brand and typography baseline
 
-All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md). The Owner-selected direction remains AERUNO-style lettering for the BRɅIN wordmark only and ChatGPT/OpenAI Sans visual styling for ordinary UI text. The Owner confirmed the current workspace is private and Owner-only. The supplied AERUNO Trial file is used only to derive the Owner-only vector outlines; the OTF is not bundled or served. It lacks U+0245 `Ʌ`, so the angular, crossbar-free A glyph is mapped to the displayed brand glyph. The Poppins bundle has been removed from the Owner runtime and production deployed by PR #374. The Owner UI declares an OpenAI Sans-first system-font stack; actual OpenAI Sans is not bundled yet, so a platform fallback is rendered until the official package is available. The BRɅIN welcome wordmark, sidebar wordmark and sidebar monogram are now AERUNO-derived SVG outlines inside the authenticated Owner Intelligence panel only; the trial OTF itself is not shipped. PR #376 is merged and production deployed. The deployed release passed CI, root/health smoke, BRVIN binding and Fatman retrieval acceptance. Authenticated-browser visual confirmation remains pending. Typography work must not alter Owner auth, model selection, Vertex, D1, token budgets, conversation semantics or student-facing behavior.
+All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md). The Owner-selected direction remains AERUNO-style lettering for the BRɅIN wordmark only and ChatGPT/OpenAI Sans visual styling for ordinary UI text. The Owner confirmed the current workspace is private and Owner-only. The supplied AERUNO Trial file is used only to derive the Owner-only vector outlines; the OTF is not bundled or served. It lacks U+0245 `Ʌ`, so the angular, crossbar-free A glyph is mapped to the displayed brand glyph. The Poppins bundle has been removed from the Owner runtime and production deployed by PR #374. The Owner UI declares an OpenAI Sans-first system-font stack; actual OpenAI Sans is not bundled yet, so a platform fallback is rendered until the official package is available. The BRɅIN welcome and sidebar wordmarks are AERUNO-derived SVG outlines inside the authenticated Owner Intelligence panel only; the trial OTF itself is not shipped. PR #376 is merged and production deployed. The sidebar wordmark now sits in a dedicated non-scrolling header above independently scrollable controls; PR #377 removed the former boxed monogram and secondary caption, and PR #378 added the fixed header and 24px separation before New chat. The deployed releases passed CI, root/health smoke, BRVIN binding and Fatman retrieval acceptance. Authenticated-browser visual confirmation remains a separate manual check. Typography work must not alter Owner auth, model selection, Vertex, D1, token budgets, conversation semantics or student-facing behavior.
 
 ### Owner typography removal and production release — 2026-11-20 IST
 
@@ -31,6 +31,15 @@ All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN
 - Because the trial lacks U+0245 `Ʌ`, its angular, crossbar-free `A` outline is mapped to the BRɅIN `Ʌ` glyph.
 - All normal text remains on the OpenAI Sans-first system stack. Actual OpenAI Sans font files remain unbundled.
 - Scope is restricted to Owner Intelligence; no BRVIN Teachers, public website or other product logo changed.
+
+### Owner sidebar fixed wordmark header and independent scroll — 2026-11-20 IST
+
+- PR [#377](https://github.com/ashini-x/parmar-ai/pull/377) removed the boxed monogram and secondary caption, leaving the main BRɅIN wordmark as the only sidebar brand element. PR [#378](https://github.com/ashini-x/parmar-ai/pull/378) moved that wordmark into a dedicated non-scrolling header sibling before the `.sidebar-scroll` region.
+- The fixed header uses `flex: 0 0 auto` and 24px of bottom padding, providing clear space before the New chat button. The wordmark remains 120px wide. New chat, topic controls, GitHub project controls and conversation history remain inside the independently scrollable region. The Owner/privacy and Sign out footer remains pinned outside that region.
+- The same layout applies to the responsive mobile sidebar drawer. The public BRɅIN website is unchanged.
+- PR validation [#44620951271](https://github.com/ashini-x/parmar-ai/actions/runs/44620951271) passed TypeScript, Vitest, Node tests and all three Worker dry-run builds. Main-branch Release Validation [#44621181772](https://github.com/ashini-x/parmar-ai/actions/runs/44621181772) passed the same checks, paired production deployment, root/BRVIN-backed health smoke and production release acceptance.
+- Production `parmar-ai` is at 100% traffic on version `d70b6dee-6c4b-4c0e-82b2-2c35a24bc486` / deployment `e7ae2e38-4afd-4a62-af4d-0c82b2d51a59`; `brvin-service` is at 100% on version `b9a5d977-57f0-4e49-892c-2e2f92cd9553` / deployment `f4a5ef79-87d8-4342-b8ff-d473ee203610`. Production acceptance artifact: `14576764257`.
+- Presentation-only change. No API, D1, Gemini/Vertex model, provider, token-budget, Project Memory, retrieval or student-facing behavior changed.
 
 ## 1. Product goal
 
