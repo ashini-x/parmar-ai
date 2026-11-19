@@ -500,3 +500,10 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 - Verify every registered Gemini 3.x model can reserve up to its native 65,536-token output maximum, remains on `v1` and never sends a continuation token.
 - Verify D1 reserves repeated prompt tokens for every Gemini 4 continuation segment and total reservation remains within the existing 200,000-token conversation balance.
 - Preserve the 200,000-token conversation lock, CountTokens preflight, exact usage settlement, explicit Stop/disconnect cancellation, and bounded retry only for explicit initial 429 capacity rejections.
+
+
+### Owner assistant response persistence — 2026-11-20
+- Stream and persist an assistant answer exceeding 300,000 characters to prove the former response-only message-size cap is gone.
+- Verify the full assistant text is present in D1 after completion and the D1 conversation usage settles to provider-reported usage.
+- Preserve the separate 300,000-character early bound for Owner-supplied input/context; do not confuse it with an assistant response limit.
+- Confirm the exact 200,000-token per-conversation reservation and hard lock remain authoritative.
