@@ -471,8 +471,21 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain('id="bottomDock"');
     expect(html).toContain('id="sessionBudget"');
     expect(html).toContain("SESSION TOKENS");
-    expect(html).toContain('<div class="welcome"><div class="welcome-brand" aria-label="BRɅIN">BRɅIN</div><h1>Welcome back Sir. What are we hunting today?</h1></div>');
-    expect(html).toContain(".welcome-brand{position:relative;margin:0 0 23px");
+    expect(html).toContain('@font-face{font-family:"BRɅIN universal font"');
+    expect(html).toContain('font-family:"BRɅIN universal font"');
+    expect(html).toContain('/admin/intelligence-fonts/brain-universal-latin-400.woff2');
+    expect(html).toContain('/admin/intelligence-fonts/brain-universal-latin-ext-300.woff2');
+    expect(html).toContain('/admin/intelligence-fonts/brain-universal-latin-ext-500.woff2');
+    expect(html).toContain('font-display:block');
+    expect(html).toContain('/admin/intelligence-fonts/brain-universal-devanagari-400.woff2');
+    expect(html).not.toContain('font-family:Inter,ui-sans-serif,system-ui');
+    expect(response.headers.get("content-security-policy")).toContain("font-src 'self'");
+    expect(html).toContain('Welcome back Sir.</h1>');
+    expect(html).toContain('<div class="welcome"><div class="welcome-brand" aria-label="BRɅIN">BRɅIN</div><h1>Welcome back Sir.</h1></div>');
+    expect(html).toContain(".welcome-brand{margin:0 0 19px");
+    expect(html).toContain('font-size:clamp(48px,7vw,68px);font-weight:500;letter-spacing:.13em');
+    expect(html).toContain('font-size:clamp(16px,2vw,20px);letter-spacing:.025em;font-weight:300');
+    expect(html).not.toContain(".welcome-brand::after");
     expect(html).toContain("background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent");
     expect(html).not.toContain("Your thinking space.");
     expect(html).not.toContain("A private workspace for research");
@@ -485,7 +498,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).not.toContain('maxlength="50000"');
     expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto");
     expect(html).toContain(".bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px));margin:0 auto;padding:4px 0 10px;background:transparent}");
-    expect(html).toContain("background:#1c1c1c;color:#ececec");
+    expect(html).toContain("background:#000;color:#ededed");
     expect(html).toContain(":root{background:#000;color:#ededed}");
     expect(html).toContain(".app,.main,.content,.stage,.messages{background:#000}");
     expect(html).toContain(".sidebar{background:#050505;border-right-color:#191919}");
@@ -496,7 +509,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain(".user-message-toggle[hidden]{display:none}");
 
     expect(html).toContain(".message-user .message-body{flex:0 1 min(78%,660px);width:min(78%,660px);min-width:min(240px,100%);max-width:min(78%,660px);background:#191919;border-color:#303030;overflow-wrap:anywhere}");
-    expect(html).toContain("body{overflow:hidden;background:#1c1c1c}");
+    expect(html).toContain("body{overflow:hidden;background:#000}");
     expect(html).toContain(".sidebar{width:292px;flex:0 0 292px;background:#141414;");
     expect(html).toContain(".composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto");
     const dockStart = html.indexOf('<div class="bottom-dock" id="bottomDock">');
@@ -559,7 +572,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("Could not load conversations");
     expect(script).toContain("appendActivityCard");
     expect(script).toContain('node("div","welcome-brand","BRɅIN")');
-    expect(script).toContain('Welcome back Sir. What are we hunting today?');
+    expect(script).toContain('Welcome back Sir.');
+    expect(script).not.toContain('What are we hunting today?');
     expect(script).not.toContain("Your thinking space.");
     expect(script).not.toContain("PRIVATE OWNER WORKSPACE");
     expect(script).toContain("function renderRichMarkdown(target,markdown)");
