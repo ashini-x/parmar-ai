@@ -465,8 +465,6 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain('id="sessionBudget"');
     expect(html).toContain('id="messageInput" disabled rows="1" placeholder="Write a message…"');
     expect(html).not.toContain('maxlength="50000"');
-    expect(html).toContain("const MAX_MESSAGE_LENGTH = MAX_OWNER_GEMINI_CONTEXT_CHARS");
-    expect(html).toContain("Message content must contain between 1 and 300,000 characters.");
     expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto");
     expect(html).toContain(".bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px))");
     expect(html).toContain(".composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto");
@@ -605,6 +603,34 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect([...actualDb.messages.values()].filter((message) => message.conversation_id === id)).toHaveLength(0);
   });
 
+
+  it("accepts novel-length prompts up to the expanded 300,000-character limit", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Long novel input" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    const novel = "N".repeat(250_000);
+    const saved = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+      method: "POST", origin, body: { content: novel },
+    });
+    expect(saved.status, await saved.clone().text()).toBe(201);
+    const savedBody = await saved.json() as { message: { content: string } };
+    expect(savedBody.message.content).toHaveLength(250_000);
+    expect(savedBody.message.content).toBe(novel);
+
+    const tooLong = await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+      method: "POST", origin, body: { content: "N".repeat(300_001) },
+    });
+    expect(tooLong.status).toBe(400);
+    const reopened = await call(env, "/admin/api/intelligence/conversations/" + id, ownerCookie);
+    const reopenedBody = await reopened.json() as { messages: Array<{ content: string }> };
+    expect(reopenedBody.messages).toHaveLength(1);
+    expect(reopenedBody.messages[0].content).toHaveLength(250_000);
+  });
 
   it("keeps the streaming generation endpoint Owner-only and rejects unsupported model thinking levels", async () => {
     const env = appEnv();
