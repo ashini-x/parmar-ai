@@ -479,7 +479,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain('font-family:"OpenAI Sans",system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
     expect(response.headers.get("content-security-policy")).toContain("font-src 'self'");
     expect(html).not.toContain('Welcome back Sir.');
-    expect(html).toContain('<p class="welcome-tagline">WELCOME BACK</p>');
+    expect(html).toContain('<p class="welcome-tagline">INTELLIGENCE · WELCOME BACK</p>');
     expect(html).toContain('<div class="welcome"><div class="welcome-brand" aria-label="BRɅIN"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7197 1446"');
     expect(html).not.toContain('viewBox="0 0 3470 1446"');
     expect(html).toContain('<header class="sidebar-header"><div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7197 1446"');
@@ -487,7 +487,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).not.toContain('class="brand-sub"');
     expect(html).not.toContain("INTELLIGENCE · PRIVATE");
     expect(html).toContain('.welcome-brand svg{display:block;width:clamp(230px,34vw,320px);height:auto}');
-    expect(html).toContain('.welcome .welcome-tagline{font-size:9px;font-weight:300;letter-spacing:.16em;line-height:1.25;color:#858585;text-transform:uppercase;margin:0}');
+    expect(html).toContain('.welcome .welcome-tagline{display:block;width:clamp(230px,34vw,320px);font-size:9px;font-weight:300;letter-spacing:.16em;line-height:1.25;color:#858585;text-transform:uppercase;text-align:left;margin:0}');
     expect(html).not.toContain('.welcome h1{');
     expect(html).not.toContain('.welcome-mark{');
     expect(html).toContain('.sidebar-header{flex:0 0 auto;padding:7px 8px 24px}');
@@ -592,7 +592,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain('viewBox","0 0 7197 1446"');
     expect(script).not.toContain(".innerHTML");
     expect(script).not.toContain('Welcome back Sir.');
-    expect(script).toContain('node("p","welcome-tagline","WELCOME BACK")');
+    expect(script).toContain('node("p","welcome-tagline","INTELLIGENCE · WELCOME BACK")');
     expect(script).not.toContain('What are we hunting today?');
     expect(script).not.toContain("Your thinking space.");
     expect(script).not.toContain("PRIVATE OWNER WORKSPACE");
