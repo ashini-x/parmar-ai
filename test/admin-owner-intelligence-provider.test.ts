@@ -614,7 +614,79 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       usage: { promptTokens: 12, totalTokens: 1_200 },
     });
     expect(failure).toBeInstanceOf(Error);
-    expect((failure as Error).message).toContain("Thinking tokens count toward this limit");
+    expect((failure as Error).message).toContain("reserved response-token budget");
+  });
+
+  it("continues Gemini 4 Hydrogen long decode across v1beta1 segments and sums usage", async () => {
+    const first = {
+      candidates: [{
+        finishReason: "CONTINUATION",
+        continuationToken: "opaque-next-segment-token",
+        content: { role: "model", parts: [{ text: "hidden reasoning", thought: true }] },
+      }],
+      usageMetadata: {
+        promptTokenCount: 5,
+        candidatesTokenCount: 0,
+        thoughtsTokenCount: 65_536,
+        totalTokenCount: 65_541,
+      },
+    };
+    const second = {
+      candidates: [{
+        finishReason: "STOP",
+        content: { role: "model", parts: [{ text: "The final answer." }] },
+      }],
+      usageMetadata: {
+        promptTokenCount: 5,
+        candidatesTokenCount: 20,
+        thoughtsTokenCount: 10,
+        totalTokenCount: 35,
+      },
+    };
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const fetcher: typeof fetch = async (url, init) => {
+      const value = String(url);
+      if (value.endsWith(":countTokens")) {
+        return new Response(JSON.stringify({ totalTokens: 5 }), { status: 200 });
+      }
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      requests.push({ url: value, body });
+      const chunk = requests.length === 1 ? first : second;
+      return new Response(
+        "data: " + JSON.stringify(chunk) + "\r\n\r\n",
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    };
+
+    const stream = await openOwnerGeminiStream(
+      configuredEnv,
+      {
+        modelId: "gemini-4-hydrogen",
+        thinkingLevel: "XHIGH",
+        maxOutputTokens: 131_072,
+        contents: [{ role: "user", text: "Prove the difficult result." }],
+      },
+      new AbortController().signal,
+      dependencies(fetcher),
+    );
+    const events: OwnerGeminiStreamEvent[] = [];
+    for await (const event of stream) events.push(event);
+
+    expect(requests).toHaveLength(2);
+    expect(requests[0].url).toContain("/v1beta1/projects/");
+    expect(requests[0].url).toContain(":streamGenerateContent?alt=sse");
+    expect(requests[1].body.continuationToken).toBe("opaque-next-segment-token");
+    expect(requests[1].body.contents).toEqual(requests[0].body.contents);
+    expect(requests[1].body.systemInstruction).toEqual(requests[0].body.systemInstruction);
+    expect((requests[0].body.generationConfig as Record<string, unknown>).maxOutputTokens).toBe(131_072);
+    expect((requests[1].body.generationConfig as Record<string, unknown>).maxOutputTokens).toBe(131_072);
+    expect(events.filter((event) => event.type === "delta").map((event) => event.type === "delta" ? event.text : "")).toEqual([
+      "The final answer.",
+    ]);
+    expect(events[events.length - 1]).toMatchObject({
+      type: "done",
+      usage: { promptTokens: 10, outputTokens: 65_566, totalTokens: 65_576 },
+    });
   });
 
   it("streams text deltas, excludes thought parts and returns usage with the selected thinking level", async () => {
