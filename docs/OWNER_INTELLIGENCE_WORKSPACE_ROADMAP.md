@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.4 acceptance closed. M4.5 rollover/handoff (PR [#375](https://github.com/ashini-x/parmar-ai/pull/375)) and the Owner Gemini response-reliability correction (PR [#386](https://github.com/ashini-x/parmar-ai/pull/386)) are merged and production deployed. The latest paired Worker release passed; authenticated Owner M4.5 browser acceptance remains pending. M4.6-P0 is required before M4.6 only; automatic in-place stream reconnect after a dropped connection remains deferred.
-**Last updated:** 2026-11-20 IST — M4.5 PR #375 and Owner response-reliability PR #386 are merged and production deployed. Owner sidebar fixed wordmark header PR #378 and central `INTELLIGENCE · WELCOME BACK` wordmark with left-edge-aligned tagline PR #383 are also deployed. Authenticated Owner rollover walkthrough remains pending.  
+**Last updated:** 2026-11-20 IST — M4.5 PR #375 and Owner response-reliability PR #386 are merged and production deployed. Owner sidebar fixed wordmark header PR #378, central `INTELLIGENCE · WELCOME BACK` wordmark PR #383, and chat bottom-follow streaming scroll fix PR #387 are also merged and production deployed. Authenticated Owner rollover walkthrough remains pending.  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -57,6 +57,15 @@ All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN
 - PR validation [#44628847172](https://github.com/ashini-x/parmar-ai/actions/runs/44628847172) passed 522 Vitest tests across 76 files, 62 Node tests across 9 files, TypeScript and all three Worker dry-run builds.
 - Main Release Validation [#44629040564](https://github.com/ashini-x/parmar-ai/actions/runs/44629040564) passed typecheck/test/build, paired production deployment, root/BRVIN-backed health smoke on the first attempt and production release acceptance. Production acceptance artifact: `14580762674`. The public BRɅIN website was unchanged and its isolated deployment was skipped.
 - Owner-only presentation change; no API, D1, Gemini/Vertex, model/provider, token-budget, Project Memory, retrieval or student-facing behavior changed.
+
+### Owner chat bottom-follow and streaming scroll fix — 2026-11-20 IST
+
+- PR [#387](https://github.com/ashini-x/parmar-ai/pull/387) merged as `398e02ea78f470c92d86adda80febe42fd79fd31`.
+- Root cause: `renderMessages()` clears and rebuilds the messages viewport on every state/stream update, resetting its scroll position. The renderer now captures the prior scroll state and restores it after rebuilding. When already near the bottom, when opening a saved conversation, or while generating/streaming, it follows `scrollHeight` so the newest user/assistant content remains visible. During active generation, bottom-follow is forced so each streamed chunk advances the viewport rather than jumping to the top. Idle re-renders preserve the existing position.
+- Native `overflow-anchor` is disabled on the messages viewport so browser scroll anchoring does not compete with explicit scroll restoration.
+- PR Release Validation [#44634185100](https://github.com/ashini-x/parmar-ai/actions/runs/44634185100) passed TypeScript, Vitest, Node tests and all three Worker bundle validations. Main Release Validation [#44634414785](https://github.com/ashini-x/parmar-ai/actions/runs/44634414785) passed typecheck/test/build, paired production deployment, root/BRVIN-backed health smoke on the first attempt and production release acceptance. Acceptance artifact: `14582474145`.
+- Production `brvin-service`: version `b1806c28-52b7-4c47-9d8e-8a20a78939c9`, deployment `48d8b765-3a21-4aa0-93aa-f3c14163aad2`, 100% traffic. `parmar-ai`: version `521f1ed9-0ccd-41f3-9e67-bf3930e3f56c`, deployment `0d4f0461-1b71-4f69-bac7-c28cff7bbb9c`, 100% traffic.
+- Owner-only front-end scroll behavior. No API, D1, Gemini/provider, token budget, Project Memory, retrieval or student-facing changes.
 
 ## 1. Product goal
 
