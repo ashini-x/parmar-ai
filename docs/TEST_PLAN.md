@@ -297,9 +297,9 @@ The live acceptance journey is complete. Evidence is recorded in [OWNER_INTELLIG
 The post-save read-only reconciliation also compared all five preview files byte-for-byte at the saved commit SHA and current hub main, then reconciled nine same-chat settled reservation rows to the D1 meter: 40,496 used, zero reserved, under the unchanged 200,000-token limit. No production row was modified to obtain this evidence.
 Current-head PR validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files, and all three Worker dry-run bundles. PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`. Production workflow [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment, root/health, BRVIN service binding, Fatman retrieval and release-acceptance checks. Deployed parmar-ai version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and brvin-service version `d43a9f7b-32b3-486f-9845-75ed11811165`, each at 100% traffic. This historical PR #346 deployment record is superseded by the later #352, #355 and #356 fixes and the final live acceptance recorded below. The current production Worker versions and the read-only M4.3 closeout are recorded in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md).
 
-## Owner Intelligence — project memory and token-aware continuity (M4.4 deployed; Owner walkthrough pending; M4.5–M4.8 planned)
+## Owner Intelligence — project memory and token-aware continuity (M4.4 accepted; M4.5–M4.8 planned)
 
-M4.3 is fully accepted. M4.4 implementation, automated validation and production release are complete; the authenticated Owner attach-and-read journey listed below has not yet been observed. M4.5–M4.8 remain future milestones. See [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md) and [M4.4 acceptance record](OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md).
+M4.3 and M4.4 are fully accepted. M4.4 implementation, automated validation, production release and authenticated Owner attach/read plus independent Scratchpad-isolation walkthrough passed on 2026-11-19. M4.5–M4.8 remain future milestones. See [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md) and [M4.4 acceptance record](OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md).
 
 ### M4.2 — Scratchpad and topic foundation
 - New Chat creates a D1-backed Scratchpad with no forced project selection.
@@ -314,7 +314,7 @@ M4.3 is fully accepted. M4.4 implementation, automated validation and production
 - Multi-file save is one conflict-aware atomic commit; after commit, the app reads back/validates the expected commit SHA and file set.
 - The original D1 transcript is unchanged by summarization or GitHub sync.
 
-### M4.4 — Attach and load Project Memory (implementation/CI passed; Owner walkthrough pending)
+### M4.4 — Attach and load Project Memory (implementation/CI and authenticated Owner acceptance passed)
 - **Manifest validation:** versioned hub/catalog/project/workstream/feature manifests are schema- and identity-validated; invalid IDs, paths, namespaces, unsupported versions and unlisted memory references fail closed.
 - **Allowlist:** only project-memory.md, progress.md and decisions.md are implicitly loadable for Owner Gemini Intelligence. Archive, session notes, handoff/collaboration folders and unlisted files are excluded.
 - **Pinned snapshot integrity:** each attachment persists Owner and conversation scope, stable project/workstream/feature IDs, exact hub repository/branch/commit, governing manifest blob SHAs, active file blob SHAs and immutable Markdown content in D1.
