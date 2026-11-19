@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.3 complete. M4.3 implementation, timeout/retry hardening, append-only preservation and live Owner acceptance are merged/deployed and fully reconciled against production D1 and GitHub evidence. **Next approved task: M4.4 — Attach and load Project Memory.** M4.4–M4.8 remain planned, not implemented; M4.6-P0 is required before M4.6; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-19 IST — Owner workspace fixed composer, client runtime recovery and surface cleanup deployed; M4.4 remains next  
+**Last updated:** 2026-11-19 IST — Owner workspace header removal and footer model/thinking controls deployed; M4.4 remains next  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -566,3 +566,14 @@ The topic API route defect was corrected in PR #352 and production-deployed. The
 - **Production evidence:** `brvin-service` version `2e495fb3-2623-4439-8795-1abe5253b3bc`, deployment `326d5b90-6a66-492a-8fba-f8c24985f950`, at 100% traffic; `parmar-ai` version `de508364-6c7d-41ab-a8f2-f312f1d4306e`, deployment `666f0671-c569-4598-a9c4-bfd7df732843`, at 100% traffic. Acceptance artifact `14549662593`.
 - **Scope:** frontend runtime parse repair and visual surfaces only. No model/provider configuration, API contract, D1 schema, 200,000-token session budget, 300,000-character message cap, Project Memory or student-facing behavior changed.
 - **Next milestone unchanged:** M4.4 — Attach and load Project Memory remains next; PR #363 does not advance it.
+
+### Owner Intelligence footer model controls and header removal — 2026-11-19 IST
+
+- **Merged:** [PR #364](https://github.com/ashini-x/parmar-ai/pull/364), runtime source revision `0b5559eccbd3a7785757abcaa677b693e1a8ad63`.
+- Removed the full top header, including the BRɅIN Intelligence title, OWNER ONLY badge, model controls and Owner `O` avatar.
+- Moved the existing Gemini model selector, model Retry action and thinking-level selector into the bottom composer control row, replacing the redundant helper/highlighter note. Send/stop remains aligned on the right.
+- Moved the mobile sidebar menu trigger into this same control row (visible only at mobile widths), preserving access to the sidebar after removing the header.
+- Model IDs, provider/model loading, default model selection, thinking level state and event handlers are unchanged. No API, D1, Vertex, 200,000-token session budget or long-prompt limit changes.
+- **Validation:** PR workflow [44565930824](https://github.com/ashini-x/parmar-ai/actions/runs/44565930824) passed TypeScript, Vitest, Node tests and all three Worker dry-run builds. Production release [44566219904](https://github.com/ashini-x/parmar-ai/actions/runs/44566219904) passed paired Worker deployment, root/health smoke, BRVIN service binding, Fatman retrieval readiness and final production acceptance.
+- **Production evidence:** `brvin-service` version `5ebb6c8e-8c47-4083-907b-c399bb7a320d`, deployment `aeb3bd9d-f890-43c1-9864-fe071de00a72`, at 100% traffic; `parmar-ai` version `0f7a200e-8da1-4bbb-b536-66f2fbfc0b7e`, deployment `15b6902a-d085-4a97-93f7-c9706302baa0`, at 100% traffic. Acceptance artifact `14551768169`.
+- **Milestone order unchanged:** M4.4 — Attach and load Project Memory remains next; this is a frontend presentation adjustment only.
