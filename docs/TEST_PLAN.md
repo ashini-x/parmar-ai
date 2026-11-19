@@ -447,15 +447,14 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 - **Usage ledger:** nine of nine reservation rows for this same conversation are settled; actual-token totals sum to 40,496, matching D1 session usage. The meter is 40,496 used / 200,000 limit / 0 reserved. No token top-up was made.
 - **Deployment and CI:** PR #356 CI [44455732385](https://github.com/ashini-x/parmar-ai/actions/runs/44455732385) passed typecheck/check, 513 Vitest tests across 75 files, 62 Node tests across 9 files, and all three Worker dry-run builds. Cloudflare deployment listings show parmar-ai version 74fade9d-422e-4a91-8be4-f98340b76eb4 and brvin-service version 1999a4c1-9137-447e-8dc7-596f70a338b9 at 100% traffic. PR CI and deployment activation are distinct; no additional post-#356 production smoke is claimed.
 
-**Do not repeat** the accepted live Save, reinstall/broaden the App, or weaken the strict branch-head Conflict rule. M4.4 — Attach and load Project Memory — is now unblocked and is the next milestone.
+**Do not repeat** the accepted live Save, reinstall/broaden the App, or weaken the strict branch-head Conflict rule. M4.3 and M4.4 are closed. M4.5 — Automatic rollover and handoff — is now the next milestone.
 
-### M4.4 authenticated production Owner walkthrough (pending)
-1. Sign in as the Owner and open /admin/intelligence.
-2. Open a conversation associated with the connected Owner Intelligence hub topic, or create a Scratchpad and choose that topic.
-3. In the sidebar Project Context panel, choose the Owner Intelligence hub topic and Owner Gemini Intelligence project. Leave Workstream and Feature at project-wide defaults.
-4. Keep Enable cross-project context and Add selected scope as secondary context unchecked; click Attach pinned Project Memory.
-5. Verify the attached primary scope and inspect repository, branch, exact commit SHA, manifest provenance and active memory file list.
-6. Send a fresh prompt asking the selected Gemini model to summarize the memory and identify the pinned commit. Confirm the reply uses the selected project and does not introduce unrelated project content.
-7. Confirm a separate Scratchpad remains transcript-only until the Owner explicitly attaches a project.
+### M4.4 authenticated production Owner acceptance (PASSED 2026-11-19 IST)
 
-Record the actual Owner observation and date in OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md. Do not create production test projects or enable cross-project context just to fill this default-path gate.
+1. The Owner created a New Chat Scratchpad, selected the connected Owner Intelligence topic and Owner Gemini Intelligence project, left Workstream and Feature at none, kept both cross-project controls unchecked and selected Attach pinned Project Memory.
+2. The Project Context card displayed the stable project, private hub `ashini-x/owner-memory-hub`, branch `main`, full pinned commit `91e5c98cbc375b3c418207b6559021b16200e0b4`, the three active allowlisted file paths (`project-memory.md`, `progress.md`, `decisions.md`), file blob identifiers and 2,599 estimated tokens.
+3. Gemini 4 Hydrogen / High answered a fresh prompt using the attached Project Memory and reproduced the exact pinned SHA and active file names. Captured excerpts also showed project purpose/governance and distinguished a historical commit mentioned in `progress.md` from the pinned snapshot.
+4. The symbolic `owner-memory-v1` label was not separately visible in the captured panel; the catalog-commit prefix and file blob provenance were visible. Do not claim the symbolic label was displayed.
+5. The Owner created a second Scratchpad with no topic, project or Project Memory attached. Gemini explicitly said it had no access and could not verify the private project SHA or active files.
+6. This authenticated browser test complements, but does not replace, automated M4.4 validation and release checks; those checks alone do not exercise authenticated Project Context. The M4.4 acceptance record contains the complete observation and limitations.
+7. **Result:** M4.4 is accepted and closed. M4.5 is next; M4.6-P0 remains required before M4.6 only.
