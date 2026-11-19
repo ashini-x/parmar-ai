@@ -429,25 +429,31 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
       .bind(conversation.id, env.OWNER_DASHBOARD_USER).first<{ used_tokens: number }>();
     expect(usageAfterDraft?.used_tokens).toBe(1620);
     const writeTokenCountBefore = tokenRequests.filter((entry) => entry.body.permissions?.contents === "write").length;
+    const ownerEditedPriorSuggestion = "Owner-edited prior suggestion: retain this exact sentence on every later preview.";
+    const reviewedFiles = preview.files.map((file) => file.name === "progress.md"
+      ? { ...file, content: file.content + "\n" + ownerEditedPriorSuggestion + "\n" }
+      : file);
 
     const notConfirmed = await call(env, "/admin/api/intelligence/github/previews/" + preview.id + "/confirm", cookie, {
-      method: "POST", body: { confirmed: false, files: preview.files },
+      method: "POST", body: { confirmed: false, files: reviewedFiles },
     });
     expect(notConfirmed.status).toBe(400);
     expect(tokenRequests.filter((entry) => entry.body.permissions?.contents === "write")).toHaveLength(writeTokenCountBefore);
 
     const saved = await call(env, "/admin/api/intelligence/github/previews/" + preview.id + "/confirm", cookie, {
-      method: "POST", body: { confirmed: true, files: preview.files },
+      method: "POST", body: { confirmed: true, files: reviewedFiles },
     });
     expect(saved.status, await saved.clone().text()).toBe(200);
     const savedBody = await saved.json() as { status: string; commitSha: string; topicId: string; files: string[] };
     expect(savedBody).toMatchObject({ status: "synced", commitSha: savedCommitSha, topicId: topic.id });
     expect(savedBody.files).toHaveLength(5);
+    expect(savedFiles.get("memory/progress.md")).toContain(ownerAddedProgressComment);
+    expect(savedFiles.get("memory/progress.md")).toContain(ownerEditedPriorSuggestion);
     expect(tokenRequests.filter((entry) => entry.body.permissions?.contents === "write")).toHaveLength(writeTokenCountBefore + 1);
     expect(tokenRequests.at(-1)?.body).toEqual({ permissions: { contents: "write" }, repository_ids: [repositoryId] });
 
     const syncedAgain = await call(env, "/admin/api/intelligence/github/previews/" + preview.id + "/confirm", cookie, {
-      method: "POST", body: { confirmed: true, files: preview.files },
+      method: "POST", body: { confirmed: true, files: reviewedFiles },
     });
     expect(syncedAgain.status).toBe(200);
     expect((await syncedAgain.json() as { idempotent?: boolean }).idempotent).toBe(true);
