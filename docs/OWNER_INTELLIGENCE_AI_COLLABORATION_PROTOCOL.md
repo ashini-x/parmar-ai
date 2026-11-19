@@ -376,21 +376,20 @@ The future implementation is not complete until tests and Owner acceptance cover
 These are planned acceptance criteria, not claims of deployed functionality or tests already passed.
 
 
-## 11. Live hub and Owner App installation status — 2026-11-19 IST
+## 11. Live hub, Owner App and M4.3 acceptance status — 2026-11-19 IST
 
 GitHub metadata verifies `ashini-x/owner-memory-hub` exists (repository ID `1463342529`), has default branch `main`, contains README `# owner-memory-hub`, and is **Private**.
 
-**Owner browser evidence (2026-11-19):** the production Owner Intelligence panel displays `Connected · 1 verified installation(s)`, account `ashini-x · User`, and repository `ashini-x/owner-memory-hub · Private`. The branch field shows `main` and the memory-root field shows the UI default `memory`. This confirms the selected-only installation and GitHub user/PKCE verification reached the deployed Owner UI. The screenshot also shows `Select a topic above`; therefore no topic/repository/path attachment has been completed yet. The displayed `main` and `memory` values are form defaults/current selections, not proof of a saved topic attachment.
+**Owner browser evidence:** the production Owner Intelligence panel previously displayed `Connected · 1 verified installation(s)`, account `ashini-x · User`, and repository `ashini-x/owner-memory-hub · Private`. The dedicated Owner App is installed only on this private hub with the exact permissions: repository Metadata read + Contents write. Do not uninstall, recreate, reinstall or broaden it.
 
-**M4.3 installation sub-gate: complete.** Do not uninstall, recreate or reinstall the GitHub App. Keep the App installed only on the private `owner-memory-hub` repository with the existing exact permissions.
+**Topic route:** PR [#352](https://github.com/ashini-x/parmar-ai/pull/352), merge `c555d9428421fbbe600a872093730fa3dce644e1`, fixed topic list/create/rename to `/admin/api/intelligence/topics` and deployed in workflow [44411119143](https://github.com/ashini-x/parmar-ai/actions/runs/44411119143).
 
-**Remaining M4.3 live acceptance:**
-1. Create a project topic using `+ Topic` (start with a real project or a temporary acceptance topic).
-2. Select that topic under `Start New Chat In`. Attach `ashini-x/owner-memory-hub`, branch `main`, and a project-specific memory root. For example, use `projects/owner-intelligence/memory` for an Owner Intelligence project topic; do not use the same root for multiple projects.
-3. Open a conversation in that topic and select it in `Save Current Chat to Project`.
-4. Generate a Save preview, inspect and edit all five files, then explicitly confirm. Verify the exact GitHub commit and all five file contents at that commit, the D1 topic association/promotion, and the same conversation's token meter.
-5. Exercise stale-branch conflict handling: advance a touched destination file after preview and before confirmation. Confirm the save returns Conflict and does not overwrite the external edit. Then create a fresh preview and complete a normal verified save.
+**Live Save acceptance, Owner-confirmed 2026-11-19:** an external edit to `projects/owner-intelligence/memory/progress.md` was made after a previous preview. That stale preview reached Conflict. The exact comment marker was present in a fresh preview; the Owner explicitly saved from the panel to `main`, then fetched/opened the committed file and confirmed the newly generated progress content appeared immediately below the manually authored comment. This demonstrates append-only preservation in the real Owner flow. Full sequence, preview IDs, external commit and code evidence are in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md).
 
-The topic route/list/create/rename defect was fixed in PR [#352](https://github.com/ashini-x/parmar-ai/pull/352), merge `c555d9428421fbbe600a872093730fa3dce644e1`, and production-deployed by [workflow 44411119143](https://github.com/ashini-x/parmar-ai/actions/runs/44411119143). Cloudflare confirms `parmar-ai` version `1df8cbae-4777-44f9-87b4-e26dc6acde93` is at 100% traffic. The Owner must now hard-refresh and verify topic creation in both selectors before attaching the hub.
-  
-Only after topic attachment, reviewed Save/read-back, Scratchpad promotion/token accounting, stale-branch Conflict and recovery pass is M4.3 fully accepted and M4.4 unlocked. M4.4 remains unimplemented and must add hierarchical hub manifests, project/workstream/feature cataloguing, manifest-selected memory loading, immutable per-conversation repository/branch/commit snapshots, strict project isolation and safe multi-writer/path-aware conflict handling.
+**Implementation fixes:**
+- PR [#355](https://github.com/ashini-x/parmar-ai/pull/355) merged as `64c8559ce92413ea46dfa96f77133e0786da001d` and hardened memory-draft timeouts, selected-model verification, explicit-429-only bounded retry and definitive-rejection reservation release.
+- PR [#356](https://github.com/ashini-x/parmar-ai/pull/356) merged as `3ae456188fb7535db47bcab2a7909cf333b59285` and made proposed Markdown updates/checkpoints append-only, idempotent and protective of prior Owner edits.
+- PR #356 validation [44455732385](https://github.com/ashini-x/parmar-ai/actions/runs/44455732385) passed TypeScript/check, 513 Vitest tests/75 files, 62 Node tests/9 files and all three Worker dry-run builds.
+- Cloudflare verifies `parmar-ai` version `74fade9d-422e-4a91-8be4-f98340b76eb4` and `brvin-service` version `1999a4c1-9137-447e-8dc7-596f70a338b9` at 100% traffic.
+
+**M4.3 closeout:** the live Save/read-back and Owner-content preservation subtest is passed. Before closing the entire milestone and starting M4.4, use read-only inspection to confirm the saved topic association/Scratchpad promotion and memory-draft usage settlement. Do not repeat the successful Save test; do not weaken the strict branch-head Conflict rule. M4.4 remains unimplemented and must add hierarchical hub manifests, stable project/workstream/feature identifiers, manifest-selected memory loading, immutable per-conversation repository/branch/commit snapshots, strict project isolation and safe multi-writer/path-aware conflict handling.
