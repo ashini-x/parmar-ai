@@ -328,11 +328,20 @@ M4.3 and M4.4 are fully accepted. M4.4 implementation, automated validation, pro
 
 ### Owner Gemini response allowance and stream completion correction — 2026-11-20
 
+#### Production release evidence — PR #386
+
+- PR [#386](https://github.com/ashini-x/parmar-ai/pull/386) merged as `4301e897c7cec83baffc46d89fd0eab1ebc46369`.
+- PR validation [#44633594780](https://github.com/ashini-x/parmar-ai/actions/runs/44633594780) passed TypeScript, 525 Vitest tests / 76 files, 62 Node tests / 9 files and three Worker dry-run builds.
+- Production release [#44633961543](https://github.com/ashini-x/parmar-ai/actions/runs/44633961543) passed paired deployment, root/health, BRVIN service binding and Fatman retrieval readiness.
+- `parmar-ai`: version `be331408-b293-47f7-9687-d95e9fd60ded` / deployment `4a2ac2b5-ec46-4e00-a947-9472d609f0a1`; `brvin-service`: version `f7736eb2-7692-4d3b-b030-51d519feec45` / deployment `5cc0c8a2-45e4-4139-a7e9-2df95d651a99`. Cloudflare read-only verification confirmed 100% traffic for both. Acceptance artifact [14581423939](https://github.com/ashini-x/parmar-ai/actions/runs/44633961543/artifacts/14581423939).
+
+
+
 - Gemini 4 Hydrogen long decode: when the selected output allowance exceeds 65,536, use `v1beta1` and follow `candidates[0].continuationToken` for each `finishReason: CONTINUATION`, even when that segment emitted no user-visible text. The same original prompt/system instruction and `maxOutputTokens` are repeated for each segment. Sum usage metadata across segments; verify visible deltas stream continuously and no thought parts are exposed.
 - Long-decode D1 reservation: reserve `promptTokens × plannedSegmentCount + totalOutputAllowance` before the first segment. Test that a 5-token prompt with 200,000 remaining reserves 199,980 output tokens across four segments (total 200,000 reserved), and that the existing hard lock rejects any additional usage beyond the budget.
 
 
-- The Owner chat reserves the exact selected model's `singleRequestOutputTokens`, bounded by remaining session budget after CountTokens preflight. Gemini 4 Hydrogen requests up to 65,536 output tokens per streamed segment; Carbon/Argon and other models retain their own registry ceilings. The 200,000 cumulative token meter and hard lock must remain unchanged.
+- The Owner chat reserves the selected model's output allowance, bounded by remaining session budget after CountTokens preflight. Gemini 4 Hydrogen may continue across 65,536-token segments on `v1beta1`; Carbon/Argon and other models retain their own registry ceilings. The 200,000 cumulative token meter and hard lock must remain unchanged.
 - XHIGH/HIGH reasoning tokens are included in the model output allowance. A stream that returns `finishReason: MAX_TOKENS` with only hidden thought parts must surface a specific diagnostic without exposing thought text.
 - A no-visible-text completion must preserve provider usage metadata and settle actual `totalTokenCount`; when metadata is absent, conservative reserved-token settlement remains. The stream must not mark an empty answer complete.
 - No application-owned timeout may abort accepted Owner chat or memory-generation requests. Explicit Stop and client disconnect still cancel the upstream stream. The D1 reservation heartbeat refreshes every 60 seconds during generation, so a live stream remains reserved beyond ten minutes; stale recovery still expires a lease after ten minutes without heartbeats. Google access-token and CountTokens preflight timeouts remain bounded and do not apply after generation begins.
