@@ -67,7 +67,6 @@ const defaultDependencies: OwnerProviderDependencies = {
 };
 const PROBE_TIMEOUT_MS = 8_000;
 const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
-const MAX_CONVERSATION_CONTEXT_CHARS = 300_000;
 const GENERATION_MAX_ATTEMPTS = 3;
 const CATALOGUE_CACHE_MS = 90_000;
 // Interactive chat retries the initial stream-open response at most twice.
@@ -464,14 +463,13 @@ export async function generateOwnerGeminiContent(
     throw new OwnerGeminiProviderError("Vertex AI is not configured for the Owner workspace.");
   }
   const contents = Array.isArray(input.contents) ? input.contents : [];
-  const validTurnShape = contents.length >= 1 && contents.length <= 50 &&
+  const validTurnShape = contents.length >= 1 &&
     contents[0]?.role === "user" && contents[contents.length - 1]?.role === "user" &&
     contents.every((item, index) => item && (item.role === "user" || item.role === "model") &&
-      typeof item.text === "string" && Boolean(item.text.trim()) && item.text.length <= 50_000 &&
+      typeof item.text === "string" && Boolean(item.text.trim()) &&
       (index === 0 || item.role !== contents[index - 1]?.role));
-  const contextChars = contents.reduce((total, item) => total + (typeof item?.text === "string" ? item.text.length : 0), 0);
-  if (!validTurnShape || contextChars > MAX_CONVERSATION_CONTEXT_CHARS) {
-    throw new OwnerGeminiProviderError("The conversation context is invalid or too large. BRɅIN keeps your full history, but only a clean recent section can be sent to this model.");
+  if (!validTurnShape) {
+    throw new OwnerGeminiProviderError("The conversation context must contain non-empty alternating user/model turns, starting and ending with a user turn.");
   }
   if (input.systemInstruction !== undefined &&
       (typeof input.systemInstruction !== "string" || input.systemInstruction.length > 20_000)) {
@@ -648,16 +646,15 @@ export async function countOwnerGeminiInputTokens(
   const definition = OWNER_GEMINI_MODEL_REGISTRY.find((model) => model.id === input.modelId);
   if (!definition) throw new OwnerGeminiProviderError("The requested model is not in the Owner model registry.");
   const contents = Array.isArray(input.contents) ? input.contents : [];
-  const validTurnShape = contents.length >= 1 && contents.length <= 50 &&
+  const validTurnShape = contents.length >= 1 &&
     contents[0]?.role === "user" && contents[contents.length - 1]?.role === "user" &&
     contents.every((item, index) => item && (item.role === "user" || item.role === "model") &&
-      typeof item.text === "string" && Boolean(item.text.trim()) && item.text.length <= 50_000 &&
+      typeof item.text === "string" && Boolean(item.text.trim()) &&
       (index === 0 || item.role !== contents[index - 1]?.role));
-  const contextChars = contents.reduce((total, item) => total + (typeof item?.text === "string" ? item.text.length : 0), 0);
-  if (!validTurnShape || contextChars > MAX_CONVERSATION_CONTEXT_CHARS ||
+  if (!validTurnShape ||
       (input.systemInstruction !== undefined &&
         (typeof input.systemInstruction !== "string" || input.systemInstruction.length > 20_000))) {
-    throw new OwnerGeminiProviderError("The conversation context or system instruction is invalid or too large.");
+    throw new OwnerGeminiProviderError("The conversation context or system instruction is invalid.");
   }
 
   const project = configuredProject(env);
@@ -730,14 +727,13 @@ export async function openOwnerGeminiStream(
     throw new OwnerGeminiProviderError("The selected thinking level is not supported by this model.");
   }
   const contents = Array.isArray(input.contents) ? input.contents : [];
-  const validTurnShape = contents.length >= 1 && contents.length <= 50 &&
+  const validTurnShape = contents.length >= 1 &&
     contents[0]?.role === "user" && contents[contents.length - 1]?.role === "user" &&
     contents.every((item, index) => item && (item.role === "user" || item.role === "model") &&
-      typeof item.text === "string" && Boolean(item.text.trim()) && item.text.length <= 50_000 &&
+      typeof item.text === "string" && Boolean(item.text.trim()) &&
       (index === 0 || item.role !== contents[index - 1]?.role));
-  const contextChars = contents.reduce((total, item) => total + (typeof item?.text === "string" ? item.text.length : 0), 0);
-  if (!validTurnShape || contextChars > MAX_CONVERSATION_CONTEXT_CHARS) {
-    throw new OwnerGeminiProviderError("The conversation context is invalid or too large. BRɅIN keeps your full history, but only a clean recent section can be sent to this model.");
+  if (!validTurnShape) {
+    throw new OwnerGeminiProviderError("The conversation context must contain non-empty alternating user/model turns, starting and ending with a user turn.");
   }
   if (input.systemInstruction !== undefined &&
       (typeof input.systemInstruction !== "string" || input.systemInstruction.length > 20_000)) {
