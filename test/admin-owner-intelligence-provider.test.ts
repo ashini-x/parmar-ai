@@ -427,7 +427,14 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       { ...configuredEnv, GEMINI_LOCATION: "asia-south1" } as Env,
       { modelId: "gemini-3.8-flash", contents: [{ role: "user", text: "Hi" }] },
       dependencies(fetcher),
-    )).rejects.toMatchObject({ retryable: true, message: "This model has not been confirmed for the configured Vertex AI project and location." });
+    )).rejects.toMatchObject({
+      status: 403,
+      stage: "count_tokens_probe",
+      retryable: false,
+      message: "Vertex AI denied the Count Tokens availability probe for this model/project. No GenerateContent request was sent; this is a model-eligibility check failure.",
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("/models/gemini-3.8-flash:countTokens");
     expect(calls.some((url) => url.endsWith(":generateContent"))).toBe(false);
   });
 
@@ -439,8 +446,125 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     await expect(generateOwnerGeminiContent(
       { ...configuredEnv, GEMINI_LOCATION: "asia-southeast1" } as Env,
       { modelId: "gemini-3.8-flash", contents: [{ role: "user", text: "Hi" }] },
+      {
+        ...dependencies(fetcher),
+        sleep: async () => undefined,
+        random: () => 0.5,
+      },
+    )).rejects.toMatchObject({ status: 429, stage: "generate_content", retryable: true, message: "Vertex AI rate-limited the GenerateContent request." });
+  });
+
+  it("retries GenerateContent RESOURCE_EXHAUSTED with bounded backoff and the same selected-model payload", async () => {
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "owner-generate-retry-success-project" } as Env;
+    const delays: number[] = [];
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+    let attempts = 0;
+    const fetcher: typeof fetch = async (url, init) => {
+      const value = String(url);
+      if (value.endsWith(":countTokens")) {
+        return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      }
+      attempts += 1;
+      requests.push({ url: value, body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+      if (attempts < 3) {
+        return new Response(JSON.stringify({
+          error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "temporary shared capacity contention" },
+        }), { status: 429, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        candidates: [{ content: { role: "model", parts: [{ text: "Draft recovered." }] } }],
+        usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 7, totalTokenCount: 19 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+
+    const result = await generateOwnerGeminiContent(
+      env,
+      { modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Prepare a concise memory draft." }] },
+      { ...dependencies(fetcher), sleep: async (milliseconds) => { delays.push(milliseconds); }, random: () => 0.5 },
+    );
+
+    expect(result.text).toBe("Draft recovered.");
+    expect(result.usage.totalTokens).toBe(19);
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([1_000, 2_000]);
+    expect(requests.every((entry) => entry.url.endsWith(":generateContent"))).toBe(true);
+    expect(requests[1]?.body).toEqual(requests[0]?.body);
+    expect(requests[2]?.body).toEqual(requests[0]?.body);
+  });
+
+  it("caps GenerateContent RESOURCE_EXHAUSTED retries and preserves the safe diagnostic", async () => {
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "owner-generate-retry-exhausted-project" } as Env;
+    const delays: number[] = [];
+    let attempts = 0;
+    const fetcher: typeof fetch = async (url) => {
+      if (String(url).endsWith(":countTokens")) {
+        return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      }
+      attempts += 1;
+      return new Response(JSON.stringify({
+        error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "temporary capacity; do not expose project details" },
+      }), { status: 429, headers: { "content-type": "application/json" } });
+    };
+
+    await expect(generateOwnerGeminiContent(
+      env,
+      { modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Retry this memory draft." }] },
+      { ...dependencies(fetcher), sleep: async (milliseconds) => { delays.push(milliseconds); }, random: () => 0.5 },
+    )).rejects.toMatchObject({
+      status: 429,
+      stage: "generate_content",
+      retryable: true,
+      message: expect.stringContaining("RESOURCE_EXHAUSTED"),
+    });
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([1_000, 2_000]);
+  });
+
+  it("does not replay an ambiguous GenerateContent 503 response", async () => {
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "owner-generate-ambiguous-503-project" } as Env;
+    let attempts = 0;
+    const fetcher: typeof fetch = async (url) => {
+      if (String(url).endsWith(":countTokens")) {
+        return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      }
+      attempts += 1;
+      return new Response(JSON.stringify({
+        error: { code: 503, status: "UNAVAILABLE", message: "temporary service error" },
+      }), { status: 503, headers: { "content-type": "application/json" } });
+    };
+
+    await expect(generateOwnerGeminiContent(
+      env,
+      { modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Do not replay an ambiguous failure." }] },
+      { ...dependencies(fetcher), sleep: async () => undefined, random: () => 0.5 },
+    )).rejects.toMatchObject({ status: 503, stage: "generate_content", retryable: true });
+    expect(attempts).toBe(1);
+  });
+
+  it("checks only the Owner-selected model before non-stream memory generation", async () => {
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "owner-selected-model-only-probe-project" } as Env;
+    const countUrls: string[] = [];
+    const fetcher: typeof fetch = async (url) => {
+      const value = String(url);
+      if (value.endsWith(":countTokens")) {
+        countUrls.push(value);
+        return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        candidates: [{ content: { role: "model", parts: [{ text: "Draft." }] } }],
+        usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+
+    await generateOwnerGeminiContent(
+      env,
+      { modelId: "gemini-4-carbon", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Draft memory." }] },
       dependencies(fetcher),
-    )).rejects.toMatchObject({ status: 429, retryable: true, message: "Vertex AI rate-limited the GenerateContent request." });
+    );
+
+    expect(countUrls).toHaveLength(1);
+    expect(countUrls[0]).toContain("/models/gemini-4-carbon:countTokens");
+    expect(countUrls.some((url) => !url.includes("/models/gemini-4-carbon:countTokens"))).toBe(false);
   });
 });
 

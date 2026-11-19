@@ -480,9 +480,16 @@ export async function draftOwnerMemoryWithBudget(
       elapsedMs: result.elapsedMs || Date.now() - startedAt,
     };
   } catch (error) {
-    // As with chat generation, a missing final provider usage event is charged
-    // conservatively at the reserved amount rather than treated as free.
-    await settleOwnerIntelligenceSessionReservation(env, conversationId, reservationId);
+    // A definite HTTP rejection means Vertex did not return a generated result.
+    // Release the reservation for validation/auth/model/capacity rejections;
+    // retain conservative accounting for timeouts, lost connections and 5xx
+    // responses where provider-side execution is ambiguous.
+    const definitivelyRejected = error instanceof OwnerGeminiProviderError &&
+      (error.stage === "generate_content" || error.stage === "count_tokens_probe") &&
+      [400, 401, 403, 404, 429].includes(Number(error.status));
+    await settleOwnerIntelligenceSessionReservation(
+      env, conversationId, reservationId, undefined, definitivelyRejected,
+    );
     throw error;
   }
 }
@@ -1962,7 +1969,7 @@ export function ownerIntelligenceClientScript(): Response {
     try{
       var result=await request("/admin/api/intelligence/github/conversations/"+encodeURIComponent(state.activeId)+"/preview",{
         method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({topicId:githubSaveTopic.value,modelId:state.selectedModelId,thinkingLevel:state.selectedThinkingLevel})
-      },60000);
+      },360000);
       githubMemoryPreview=result.preview;
       githubPreviewSummary.textContent=
         "Destination: "+githubMemoryPreview.repository+" · "+githubMemoryPreview.branch+

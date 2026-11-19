@@ -84,6 +84,8 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     let currentBranchHead = baseCommitSha;
     const savedFiles = new Map<string, string>();
     const fakeGitHubToken = "ghp_" + "x".repeat(30);
+    let forceGenerateResourceExhausted = false;
+    let generateFailureAttempts = 0;
 
     const githubFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -102,6 +104,12 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
         return new Response(JSON.stringify({ totalTokens: 1200 }), { status: 200 });
       }
       if (url.includes(":generateContent") && method === "POST") {
+        if (forceGenerateResourceExhausted) {
+          generateFailureAttempts += 1;
+          return new Response(JSON.stringify({
+            error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "temporary shared capacity contention" },
+          }), { status: 429, headers: { "content-type": "application/json" } });
+        }
         const generationBody = JSON.parse(String(init?.body ?? "{}")) as { contents?: Array<{ parts?: Array<{ text?: string }> }>; systemInstruction?: { parts?: Array<{ text?: string }> } };
         const generationPrompt = JSON.stringify(generationBody);
         expect(generationPrompt).not.toContain(fakeGitHubToken);
@@ -354,6 +362,22 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
       method: "POST", body: { content: "Please preserve this tested checkpoint and redact this token: " + fakeGitHubToken },
     });
     expect(message.status).toBe(201);
+
+    // A definitive 429 must not consume the reserved conversation budget.
+    forceGenerateResourceExhausted = true;
+    const failedDraft = await call(
+      env,
+      "/admin/api/intelligence/github/conversations/" + conversation.id + "/preview",
+      cookie,
+      { method: "POST", body: { topicId: topic.id, modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH" } },
+    );
+    expect(failedDraft.status).toBe(502);
+    expect((await failedDraft.json() as { message: string }).message).toContain("RESOURCE_EXHAUSTED");
+    expect(generateFailureAttempts).toBe(3);
+    const usageAfterRejectedDraft = await env.DB!.prepare("SELECT used_tokens,reserved_tokens FROM owner_intelligence_session_usage WHERE conversation_id=? AND owner_id=?")
+      .bind(conversation.id, env.OWNER_DASHBOARD_USER).first<{ used_tokens: number; reserved_tokens: number }>();
+    expect(usageAfterRejectedDraft).toEqual({ used_tokens: 0, reserved_tokens: 0 });
+    forceGenerateResourceExhausted = false;
 
     const previewResponse = await call(
       env,

@@ -1,6 +1,6 @@
 # Owner Intelligence — Provider and Cloudflare Infrastructure Policy
 
-**Status:** Approved architecture decision; documentation only; no application-code or production configuration change  
+**Status:** Approved architecture and operational reliability policy; runtime reliability implementation tracked in the corresponding M4.3 fix PR  
 **Approved:** 2026-11-19 IST  
 **Applies to:** Owner Gemini Intelligence in `ashini-x/parmar-ai`  
 **Parent:** [Owner workspace roadmap](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md)  
@@ -30,7 +30,14 @@ GitHub is the versioned destination for Owner-reviewed curated memory and collab
 
 Do not provision Workers AI, R2, KV, Vectorize, AI Search, a new Queue or another Cloudflare product merely because it exists. Use the current Worker + D1 + existing Vertex REST/SSE adapter and D1 FTS5/keyword search first. A new resource requires a task-specific design, verified account availability, capacity/cost justification and explicit Owner approval.
 
-### 1.3 Non-negotiable accounting and reliability boundaries
+### 1.3 Memory-draft request reliability
+
+- A Save-to-GitHub memory draft must verify only the exact Owner-selected model; it must not fan out fresh CountTokens probes across the entire model catalogue immediately before GenerateContent.
+- GenerateContent uses a 90-second per-attempt deadline and at most three attempts only for an explicit HTTP 429 capacity rejection, with truncated exponential backoff and jitter. It must not replay 408/5xx responses, a timeout or a lost connection because the provider may have accepted the request even when the response was not received.
+- A definitive validation, authentication, model-not-found or capacity rejection (400/401/403/404/429) releases the unused D1 token reservation. A timeout, lost connection or ambiguous server failure remains conservatively accounted when exact provider usage is unavailable.
+- A 429/RESOURCE_EXHAUSTED response must be diagnosed before changing Cloud billing or quotas. It can mean project/model quota exhaustion or temporary shared serving capacity (DSQ). A quota increase helps only when the applicable quota metric is actually exhausted; it does not create shared model capacity. Prefer the global endpoint when supported by the selected model; do not silently change the configured location. See Google's [429 troubleshooting guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/deploy/error-code-429).
+
+### 1.4 Non-negotiable accounting and reliability boundaries
 
 - Preserve M4.1's exact **200,000 cumulative tokens per conversation**, CountTokens preflight, atomic D1 reservation, output cap, usage settlement, concurrency controls and read-only hard lock. This is distinct from model context-window limits, per-request budget B, Google quotas and billing.
 - M4.6's per-request input budget B is separate. Project memory, retrieved D1 history, recent turns, collaboration artifacts, instructions and the current turn all share one exact selected-model/API-specific B and final Vertex CountTokens measurement.
