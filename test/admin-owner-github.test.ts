@@ -476,6 +476,9 @@ describe("Owner Intelligence M4.3 GitHub App authorization", () => {
     );
     expect(stalePreviewResponse.status).toBe(201);
     const stalePreview = (await stalePreviewResponse.json() as { preview: { id: string; files: Array<{ name: string; content: string }> } }).preview;
+    const staleProgress = stalePreview.files.find((file) => file.name === "progress.md")?.content ?? "";
+    expect(staleProgress).toContain(ownerAddedProgressComment);
+    expect(staleProgress).toContain(ownerEditedPriorSuggestion);
     currentBranchHead = "c".repeat(40);
     const writeCountBeforeConflict = tokenRequests.filter((entry) => entry.body.permissions?.contents === "write").length;
     const conflict = await call(env, "/admin/api/intelligence/github/previews/" + stalePreview.id + "/confirm", cookie, {
