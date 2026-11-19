@@ -1676,7 +1676,6 @@ export function ownerIntelligenceClientScript(): Response {
   var sidebar=document.getElementById("sidebar");
   var messageInput=document.getElementById("messageInput");
   var sendButton=document.getElementById("sendMessage");
-  var composerHint=document.getElementById("composerHint");
   var sessionBudget=document.getElementById("sessionBudget");
   var sessionBudgetValue=document.getElementById("sessionBudgetValue");
   var sessionBudgetRemaining=document.getElementById("sessionBudgetRemaining");
@@ -2446,15 +2445,6 @@ export function ownerIntelligenceClientScript(): Response {
     messageInput.disabled=!state.activeId||sending||sessionLocked||sessionBusy;
     modelSelect.disabled=sending||!state.models.length;
     thinkingSelect.disabled=sending||!state.selectedThinkingLevel;
-    if(composerHint)composerHint.textContent=sending
-      ?"Generating with "+state.selectedModelId+" · "+state.selectedThinkingLevel+" · select Stop to keep the partial answer"
-      :sessionLocked
-        ?"This chat is read-only after its 200,000-token budget. Start a new chat to continue from a GitHub Markdown checkpoint."
-      :sessionBusy
-        ?"A response is already being generated in this chat. Wait for it to finish before sending another message."
-      :modelLoadMessage?modelLoadMessage
-      :editingMessageId?"Editing a previous message · sending will replace it and remove later turns"
-      :"Your selected model and thinking level will be used for this response.";
     updateGithubSaveAvailability();
     updateProjectMemoryAttachAvailability();
   }
