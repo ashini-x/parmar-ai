@@ -369,3 +369,9 @@ M4.4 does not implement rollover, compaction, fork, historical D1 recall, semant
 - Gemini 3.x models use the full native 65,536-token output limit and must not be sent continuation tokens.
 - Preserve D1 pre-reservation of repeated prompt cost for Gemini 4 continuations, exact 200K per-chat hard lock, explicit Stop/disconnect cancellation and no application-owned generation deadline.
 - Do not change the student/bot Vertex timeout or output settings.
+
+
+## Output persistence boundary clarification
+- The former 300,000-character assistant-response guard has been removed; streamed assistant output is no longer rejected just because its stored text exceeds that character count.
+- The 300,000-character early guard still applies to Owner-supplied input/context assembly. It is not the generated response limit.
+- Keep the 200,000-token cumulative per-conversation budget, exact D1 reservation/settlement, model-native/provider ceilings, and actual network/runtime cancellation boundaries.
