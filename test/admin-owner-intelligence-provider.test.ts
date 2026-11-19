@@ -690,6 +690,40 @@ describe("Owner Vertex AI provider registry and adapter", () => {
     });
   });
 
+  it("keeps Gemini 3 models at their native 65,536-token cap without continuation", async () => {
+    let requestUrl = "";
+    let requestBody: Record<string, unknown> = {};
+    const sse = "data: " + JSON.stringify({
+      candidates: [{ finishReason: "STOP", content: { role: "model", parts: [{ text: "Native-limit response." }] } }],
+      usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 8, totalTokenCount: 11 },
+    }) + "\\r\\n\\r\\n";
+    const fetcher: typeof fetch = async (url, init) => {
+      const value = String(url);
+      if (value.endsWith(":countTokens")) return new Response(JSON.stringify({ totalTokens: 3 }), { status: 200 });
+      requestUrl = value;
+      requestBody = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+      return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
+    };
+    const stream = await openOwnerGeminiStream(
+      configuredEnv,
+      {
+        modelId: "gemini-3.8-flash",
+        thinkingLevel: "HIGH",
+        maxOutputTokens: 131_072,
+        contents: [{ role: "user", text: "Give me a detailed answer." }],
+      },
+      new AbortController().signal,
+      dependencies(fetcher),
+    );
+    const events: OwnerGeminiStreamEvent[] = [];
+    for await (const event of stream) events.push(event);
+    expect(requestUrl).toContain("/v1/projects/");
+    expect(requestUrl).not.toContain("/v1beta1/");
+    expect((requestBody.generationConfig as Record<string, unknown>).maxOutputTokens).toBe(65_536);
+    expect(requestBody).not.toHaveProperty("continuationToken");
+    expect(events[events.length - 1]).toMatchObject({ type: "done", usage: { totalTokens: 11 } });
+  });
+
   it("streams text deltas, excludes thought parts and returns usage with the selected thinking level", async () => {
     const sse = [
       { candidates: [{ content: { role: "model", parts: [
