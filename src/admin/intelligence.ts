@@ -581,6 +581,9 @@ export async function draftOwnerMemoryWithBudget(
       : "The conversation no longer has enough available token budget for this memory draft.");
   }
   const startedAt = Date.now();
+  const reservationHeartbeat = setInterval(() => {
+    void heartbeatOwnerIntelligenceSessionReservation(env, conversationId, reservationId).catch(() => undefined);
+  }, OWNER_INTELLIGENCE_RESERVATION_HEARTBEAT_MS);
   try {
     const result = await generateOwnerGeminiContent(env, {
       modelId: definition.id,
@@ -619,6 +622,8 @@ export async function draftOwnerMemoryWithBudget(
       definitivelyRejected,
     );
     throw error;
+  } finally {
+    clearInterval(reservationHeartbeat);
   }
 }
 
