@@ -1,6 +1,6 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**, after M4.3 was fully closed by read-only production D1/GitHub reconciliation and Owner Intelligence sidebar plus fixed composer/token dock UI maintenance in PRs #360 and #362 was deployed with production acceptance. **M4.3 is complete; M4.4 — Attach and load Project Memory — is the next task.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**, after M4.3 was fully closed by read-only production D1/GitHub reconciliation and Owner Intelligence sidebar, fixed composer/token dock and browser-runtime recovery/surface cleanup in PRs #360, #362 and #363 were deployed with production acceptance. **M4.3 is complete; M4.4 — Attach and load Project Memory — is the next task.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
 
 
 ### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
@@ -22,6 +22,16 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Production versions at 100% traffic: `parmar-ai` `f318707c-611b-499f-b014-282c45b96059` (deployment `2b2ad42b-c070-4870-9047-afce3bd80817`); `brvin-service` `4ddd6b8f-e9d5-4bf8-88ec-78f72cfeb2cd` (deployment `b6fe71a1-aed4-4849-a58d-0adcf5e39217`). Acceptance artifact: `14545509079`.
 - This is UI/long-prompt handling maintenance; the session-token budget, model/provider configuration, Project Memory behavior, D1 schema and student-facing Telegram system are unchanged. M4.4 — Attach and load Project Memory remains the immediate next task.
 
+### Owner Intelligence client runtime recovery and surface cleanup — 2026-11-19 IST
+
+- [PR #363](https://github.com/ashini-x/parmar-ai/pull/363) merged as `599441d0faf4c41fda2e5852b9b4c87300d62285`.
+- Root cause of models/history/composer not loading: a missing `}` in `generateMessage()`'s finally-block try/catch caused a client-script parse error, so none of the browser initialization ran. Fixed with `try{await refreshList(conversationId);}catch(_error){}`.
+- Regression test parses the complete served browser script via JavaScript Function parser. CI passed typecheck, Vitest, Node tests and three Worker dry-run builds.
+- Visual: opaque dark `#111` dock fill removed (`background:transparent`); app background `#1c1c1c`, sidebar `#141414`. Fixed dock geometry, composer sizing, token meter and token/message budgets are unchanged.
+- Production workflow [44563162170](https://github.com/ashini-x/parmar-ai/actions/runs/44563162170) passed paired Worker deployments, root/health smoke, BRVIN binding and Fatman retrieval acceptance.
+- Production versions at 100% traffic: `parmar-ai` `de508364-6c7d-41ab-a8f2-f312f1d4306e` (deployment `666f0671-c569-4598-a9c4-bfd7df732843`); `brvin-service` `2e495fb3-2623-4439-8795-1abe5253b3bc` (deployment `326d5b90-6a66-492a-8fba-f8c24985f950`). Acceptance artifact `14549662593`.
+- No model/provider, API contract, D1, 200K token budget, 300K message cap, Project Memory or student-facing changes. M4.4 remains the immediate next task.
+
 ## First action: recover the source of truth
 
 Read these files from the latest `main` branch in this order:
@@ -35,7 +45,7 @@ Read these files from the latest `main` branch in this order:
 7. `docs/TEST_PLAN.md` and `docs/README.md`.
 8. Inspect relevant source, current D1 records (read-only), latest `owner-memory-hub` commit and Cloudflare deployment state before choosing the next action.
 
-Runtime-code baseline at handoff: `47ad8b51e25800fc9424a1222ea717defca6949a` (M4.3 code plus Owner Intelligence UI refinements from PRs #360 and #362). M4.3 backend behavior remains based on `3ae456188fb7535db47bcab2a7909cf333b59285`; PR #360 changed sidebar presentation, and PR #362 changed the fixed composer/token dock plus the long-prompt size guard. Production release for #362 is verified below. Verify latest `main`, production D1 and Cloudflare state before implementation.
+Runtime-code baseline at handoff: `599441d0faf4c41fda2e5852b9b4c87300d62285` (M4.3 code plus Owner Intelligence UI refinements and client-runtime repair from PRs #360, #362 and #363). M4.3 backend behavior remains based on `3ae456188fb7535db47bcab2a7909cf333b59285`; PR #360 changed sidebar presentation, PR #362 changed the fixed composer/token dock and long-prompt size guard, and PR #363 repaired the malformed browser try/catch and removed the opaque dock fill/darkened surfaces. Production release for #363 is verified below. Verify latest `main`, production D1 and Cloudflare state before implementation.
 
 ## Product and security boundary — immutable
 
