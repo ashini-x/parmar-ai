@@ -14,6 +14,7 @@ export interface OwnerGeminiModelDefinition {
   contextWindowTokens: number;
   modelMaxOutputTokens: number;
   singleRequestOutputTokens: number;
+  supportsLongDecode?: boolean;
   thinkingLevels: readonly OwnerThinkingLevel[];
   defaultThinkingLevel: OwnerThinkingLevel;
 }
@@ -24,7 +25,7 @@ export interface OwnerGeminiModelDefinition {
  * project/location passes the live countTokens capability probe.
  */
 export const OWNER_GEMINI_MODEL_REGISTRY: readonly OwnerGeminiModelDefinition[] = [
-  { id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 65_536, thinkingLevels: ["LOW", "MEDIUM", "HIGH", "XHIGH"], defaultThinkingLevel: "HIGH" },
+  { id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 65_536, supportsLongDecode: true, thinkingLevels: ["LOW", "MEDIUM", "HIGH", "XHIGH"], defaultThinkingLevel: "HIGH" },
   { id: "gemini-4-carbon", label: "Gemini 4 Carbon", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 32_768, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
   { id: "gemini-4-argon", label: "Gemini 4 Argon", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 1_048_576, singleRequestOutputTokens: 32_768, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
   { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", lifecycle: "GA", apiVersion: "v1", inputModalities: ["text"], outputModalities: ["text"], contextWindowTokens: 1_048_576, modelMaxOutputTokens: 65_536, singleRequestOutputTokens: 65_536, thinkingLevels: ["LOW", "MEDIUM", "HIGH"], defaultThinkingLevel: "MEDIUM" },
@@ -66,7 +67,6 @@ const defaultDependencies: OwnerProviderDependencies = {
 const PROBE_TIMEOUT_MS = 8_000;
 const ACCESS_TOKEN_TIMEOUT_MS = 12_000;
 const MAX_CONVERSATION_CONTEXT_CHARS = 300_000;
-const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_ATTEMPTS = 3;
 const CATALOGUE_CACHE_MS = 90_000;
 // Interactive chat retries the initial stream-open response at most twice.
@@ -352,12 +352,28 @@ export class OwnerGeminiProviderError extends Error {
   readonly status?: number;
   readonly retryable: boolean;
   readonly stage?: OwnerGeminiProviderStage;
-  constructor(message: string, status?: number, retryable = false, stage?: OwnerGeminiProviderStage) {
+  readonly usage?: { promptTokens: number; outputTokens: number; totalTokens: number };
+  readonly elapsedMs?: number;
+  readonly finishReason?: string;
+  constructor(
+    message: string,
+    status?: number,
+    retryable = false,
+    stage?: OwnerGeminiProviderStage,
+    details: {
+      usage?: { promptTokens: number; outputTokens: number; totalTokens: number };
+      elapsedMs?: number;
+      finishReason?: string;
+    } = {},
+  ) {
     super(message);
     this.name = "OwnerGeminiProviderError";
     this.status = status;
     this.retryable = retryable;
     this.stage = stage;
+    this.usage = details.usage;
+    this.elapsedMs = details.elapsedMs;
+    this.finishReason = details.finishReason;
   }
 }
 
@@ -470,12 +486,11 @@ export async function generateOwnerGeminiContent(
   const token = await getVerifiedModelAccessToken(env, definition, dependencies);
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
     ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
-    : Math.min(definition.singleRequestOutputTokens, 8_192);
+    : definition.singleRequestOutputTokens;
   const startedAt = Date.now();
 
   for (let attempt = 1; attempt <= GENERATION_MAX_ATTEMPTS; attempt += 1) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
     let retryDelay: number | undefined;
     try {
       const body: Record<string, unknown> = {
@@ -524,31 +539,40 @@ export async function generateOwnerGeminiContent(
         const responseContent = candidate && typeof candidate.content === "object" && candidate.content !== null
           ? candidate.content as Record<string, unknown> : null;
         const parts = responseContent && Array.isArray(responseContent.parts) ? responseContent.parts as Array<Record<string, unknown>> : [];
-        const text = parts.map((part) => typeof part.text === "string" ? part.text : "").join("").trim();
-        if (!text) throw new OwnerGeminiProviderError("Vertex AI completed without a text response.");
+        const text = parts.map((part) => typeof part.text === "string" && part.thought !== true ? part.text : "").join("").trim();
         const usage = typeof parsed.usageMetadata === "object" && parsed.usageMetadata !== null
           ? parsed.usageMetadata as Record<string, unknown> : {};
+        const usageSummary = {
+          promptTokens: Number(usage.promptTokenCount ?? 0),
+          outputTokens: Number(usage.candidatesTokenCount ?? 0),
+          totalTokens: Number(usage.totalTokenCount ?? 0),
+        };
+        const elapsedMs = Date.now() - startedAt;
+        const finishReason = typeof candidate?.finishReason === "string" ? candidate.finishReason : undefined;
+        if (!text || finishReason === "MAX_TOKENS") {
+          const message = finishReason === "MAX_TOKENS"
+            ? "Gemini reached the selected model's single-response output limit before completing the response. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level."
+            : `Vertex AI completed without a text response${finishReason ? " (finish reason: " + finishReason + ")" : ""}.`;
+          throw new OwnerGeminiProviderError(message, undefined, false, "generate_content", {
+            usage: usageSummary, elapsedMs, finishReason,
+          });
+        }
         return {
           modelId: definition.id,
           thinkingLevel,
           text,
-          usage: {
-            promptTokens: Number(usage.promptTokenCount ?? 0),
-            outputTokens: Number(usage.candidatesTokenCount ?? 0),
-            totalTokens: Number(usage.totalTokenCount ?? 0),
-          },
-          elapsedMs: Date.now() - startedAt,
+          usage: usageSummary,
+          elapsedMs,
           rawResponse: parsed,
         };
       }
     } catch (error) {
       if (error instanceof OwnerGeminiProviderError) throw error;
       if (error instanceof Error && error.name === "AbortError") {
-        throw new OwnerGeminiProviderError("The Vertex AI request timed out after 90 seconds.", undefined, true, "generate_content");
+        throw new OwnerGeminiProviderError("The Vertex AI request was interrupted before completion. Please retry without changing the selected model.", undefined, true, "generate_content");
       }
       throw new OwnerGeminiProviderError("The Vertex AI request failed. Please retry without changing the selected model.", undefined, true, "generate_content");
     } finally {
-      clearTimeout(timeout);
     }
 
     if (retryDelay !== undefined) {
@@ -722,9 +746,15 @@ export async function openOwnerGeminiStream(
   const project = configuredProject(env);
   if (!project) throw new OwnerGeminiProviderError("Vertex AI is not configured for the Owner workspace.");
   const location = configuredLocation(env);
+  const outputCeiling = definition.supportsLongDecode
+    ? definition.modelMaxOutputTokens
+    : definition.singleRequestOutputTokens;
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
-    ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
-    : Math.min(definition.singleRequestOutputTokens, 8_192);
+    ? Math.min(outputCeiling, Math.max(1, input.maxOutputTokens!))
+    : definition.singleRequestOutputTokens;
+  const useLongDecode = definition.supportsLongDecode === true &&
+    maxOutputTokens > definition.singleRequestOutputTokens;
+  const apiVersion = useLongDecode ? "v1beta1" : definition.apiVersion;
 
   const token = await getVerifiedModelAccessToken(env, definition, dependencies);
 
@@ -732,8 +762,9 @@ export async function openOwnerGeminiStream(
   const abortFromCaller = () => controller.abort();
   if (signal.aborted) controller.abort();
   else signal.addEventListener("abort", abortFromCaller, { once: true });
-  const timeout = setTimeout(() => controller.abort(), 8 * 60_000);
   const startedAt = Date.now();
+  const streamUrl =
+    `${vertexBase(location)}/${apiVersion}/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(definition.id)}:streamGenerateContent?alt=sse`;
   const body: Record<string, unknown> = {
     contents: input.contents.map((item) => ({ role: item.role, parts: [{ text: item.text }] })),
     generationConfig: {
@@ -745,36 +776,28 @@ export async function openOwnerGeminiStream(
     body.systemInstruction = { parts: [{ text: input.systemInstruction }] };
   }
 
-  let response: Response | undefined;
-  try {
-    const streamUrl =
-      `${vertexBase(location)}/v1/projects/${encodeURIComponent(project)}/locations/${encodeURIComponent(location)}/publishers/google/models/${encodeURIComponent(definition.id)}:streamGenerateContent?alt=sse`;
+  const openSegment = async (continuationToken?: string): Promise<Response> => {
+    const requestBody = continuationToken ? { ...body, continuationToken } : body;
     const streamRequest: RequestInit = {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "text/event-stream" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(requestBody),
       signal: controller.signal,
     };
-
+    let response: Response | undefined;
     for (let attempt = 1; attempt <= STREAM_OPEN_MAX_ATTEMPTS; attempt += 1) {
       response = await dependencies.fetch(streamUrl, streamRequest);
-      if (response.ok || !isRetryableStreamOpenStatus(response.status) || attempt === STREAM_OPEN_MAX_ATTEMPTS) {
-        break;
-      }
-
-      // A non-2xx response means no SSE stream has been accepted. Retry only
-      // this initial response; never restart a stream after text has begun.
+      // Only an explicit 429 is a definitive capacity rejection that is safe
+      // to retry. Do not replay 408/5xx or ambiguous network outcomes.
+      if (response.ok || response.status !== 429 || attempt === STREAM_OPEN_MAX_ATTEMPTS) break;
       const delay = streamOpenRetryDelayMs(response, attempt, dependencies.random ?? Math.random);
-      try { await response.body?.cancel(); } catch { /* discard a retryable error body */ }
+      try { await response.body?.cancel(); } catch { /* discard retryable rejection body */ }
       await waitForStreamRetry(delay, controller.signal, dependencies);
     }
-
     if (!response) {
       throw new OwnerGeminiProviderError("The Vertex AI streaming request returned no response.", undefined, true, "stream_generate_content");
     }
     if (!response.ok) {
-      clearTimeout(timeout);
-      signal.removeEventListener("abort", abortFromCaller);
       const diagnostic = await safeVertexErrorDiagnostic(response);
       throw new OwnerGeminiProviderError(
         providerStatusMessage(response.status, "stream_generate_content", diagnostic),
@@ -783,76 +806,171 @@ export async function openOwnerGeminiStream(
         "stream_generate_content",
       );
     }
-    if (!response.body) {
-      clearTimeout(timeout);
-      signal.removeEventListener("abort", abortFromCaller);
-      throw new OwnerGeminiProviderError("Vertex AI returned an empty response stream.");
-    }
+    if (!response.body) throw new OwnerGeminiProviderError("Vertex AI returned an empty response stream.");
+    return response;
+  };
+
+  let firstResponse: Response;
+  try {
+    firstResponse = await openSegment();
   } catch (error) {
-    clearTimeout(timeout);
     signal.removeEventListener("abort", abortFromCaller);
     if (error instanceof OwnerGeminiProviderError) throw error;
     if (error instanceof Error && error.name === "AbortError") {
-      throw new OwnerGeminiProviderError("The Vertex AI stream was cancelled or timed out.", undefined, true);
+      throw new OwnerGeminiProviderError("The Vertex AI stream was stopped or the connection was interrupted.", undefined, true);
     }
     throw new OwnerGeminiProviderError("The Vertex AI streaming request failed. Please retry without changing the selected model.", undefined, true);
   }
 
   return (async function* (): AsyncGenerator<OwnerGeminiStreamEvent> {
-    const reader = response.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
     let fullText = "";
-    let usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0 };
+    const usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0 };
     let finished = false;
+    const maxSegments = useLongDecode
+      ? Math.max(1, Math.ceil(maxOutputTokens / definition.singleRequestOutputTokens) + 1)
+      : 1;
 
-    async function* parseBlock(block: string): AsyncGenerator<OwnerGeminiStreamEvent> {
-      const data = block.split(/\r?\n/u)
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trim())
-        .join("\n");
-      if (!data || data === "[DONE]") return;
-      let parsed: Record<string, unknown>;
-      try { parsed = JSON.parse(data) as Record<string, unknown>; }
-      catch { throw new OwnerGeminiProviderError("Vertex AI returned an invalid streaming event."); }
-      const usageValue = typeof parsed.usageMetadata === "object" && parsed.usageMetadata !== null
-        ? parsed.usageMetadata as Record<string, unknown> : null;
-      if (usageValue) {
-        usage = {
-          promptTokens: Number(usageValue.promptTokenCount ?? usage.promptTokens),
-          outputTokens: Number(usageValue.candidatesTokenCount ?? usage.outputTokens),
-          totalTokens: Number(usageValue.totalTokenCount ?? usage.totalTokens),
-        };
+    type SegmentResult = {
+      usage?: { promptTokens: number; outputTokens: number; totalTokens: number };
+      finishReason?: string;
+      continuationToken?: string;
+    };
+
+    async function* consumeSegment(
+      segmentResponse: Response,
+    ): AsyncGenerator<OwnerGeminiStreamEvent, SegmentResult> {
+      if (!segmentResponse.body) throw new OwnerGeminiProviderError("Vertex AI returned an empty response stream.");
+      const reader = segmentResponse.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let segmentUsage: SegmentResult["usage"];
+      let finishReason: string | undefined;
+      let continuationToken: string | undefined;
+      let segmentFinished = false;
+
+      async function* parseBlock(block: string): AsyncGenerator<OwnerGeminiStreamEvent> {
+        const data = block.split(/\r?\n/u)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim())
+          .join("\n");
+        if (!data || data === "[DONE]") return;
+        let parsed: Record<string, unknown>;
+        try { parsed = JSON.parse(data) as Record<string, unknown>; }
+        catch { throw new OwnerGeminiProviderError("Vertex AI returned an invalid streaming event."); }
+
+        const usageValue = typeof parsed.usageMetadata === "object" && parsed.usageMetadata !== null
+          ? parsed.usageMetadata as Record<string, unknown> : null;
+        if (usageValue) {
+          const promptTokens = Number(usageValue.promptTokenCount ?? 0);
+          const outputTokens = Number(usageValue.candidatesTokenCount ?? 0) + Number(usageValue.thoughtsTokenCount ?? 0);
+          const totalTokens = Number(usageValue.totalTokenCount ?? (promptTokens + outputTokens));
+          segmentUsage = {
+            promptTokens: Number.isSafeInteger(promptTokens) && promptTokens >= 0 ? promptTokens : 0,
+            outputTokens: Number.isSafeInteger(outputTokens) && outputTokens >= 0 ? outputTokens : 0,
+            totalTokens: Number.isSafeInteger(totalTokens) && totalTokens >= 0 ? totalTokens : 0,
+          };
+        }
+
+        const candidates = Array.isArray(parsed.candidates) ? parsed.candidates as Array<Record<string, unknown>> : [];
+        const candidate = candidates[0];
+        if (typeof candidate?.finishReason === "string") finishReason = candidate.finishReason;
+        if (typeof candidate?.continuationToken === "string" && candidate.continuationToken.trim()) {
+          continuationToken = candidate.continuationToken;
+        }
+        const content = candidate && typeof candidate.content === "object" && candidate.content !== null
+          ? candidate.content as Record<string, unknown> : null;
+        const parts = content && Array.isArray(content.parts) ? content.parts as Array<Record<string, unknown>> : [];
+        for (const part of parts) {
+          if (part.thought === true || typeof part.text !== "string" || !part.text) continue;
+          fullText += part.text;
+          yield { type: "delta", text: part.text };
+        }
       }
-      const candidates = Array.isArray(parsed.candidates) ? parsed.candidates as Array<Record<string, unknown>> : [];
-      const candidate = candidates[0];
-      const content = candidate && typeof candidate.content === "object" && candidate.content !== null
-        ? candidate.content as Record<string, unknown> : null;
-      const parts = content && Array.isArray(content.parts) ? content.parts as Array<Record<string, unknown>> : [];
-      for (const part of parts) {
-        if (part.thought === true || typeof part.text !== "string" || !part.text) continue;
-        fullText += part.text;
-        yield { type: "delta", text: part.text };
+
+      try {
+        while (true) {
+          const next = await reader.read();
+          buffer += decoder.decode(next.value, { stream: !next.done });
+          let boundary = /\r?\n\r?\n/u.exec(buffer);
+          while (boundary) {
+            const block = buffer.slice(0, boundary.index);
+            buffer = buffer.slice(boundary.index + boundary[0].length);
+            yield* parseBlock(block);
+            boundary = /\r?\n\r?\n/u.exec(buffer);
+          }
+          if (next.done) break;
+        }
+        if (buffer.trim()) yield* parseBlock(buffer);
+        segmentFinished = true;
+        return { usage: segmentUsage, finishReason, continuationToken };
+      } finally {
+        if (!segmentFinished) {
+          try { await reader.cancel(); } catch { /* the upstream may already be closed */ }
+        }
+        reader.releaseLock();
       }
     }
 
     try {
+      let segmentResponse = firstResponse;
+      let segmentNumber = 0;
       while (true) {
-        const next = await reader.read();
-        buffer += decoder.decode(next.value, { stream: !next.done });
-        let boundary = /\r?\n\r?\n/u.exec(buffer);
-        while (boundary) {
-          const block = buffer.slice(0, boundary.index);
-          buffer = buffer.slice(boundary.index + boundary[0].length);
-          yield* parseBlock(block);
-          boundary = /\r?\n\r?\n/u.exec(buffer);
+        segmentNumber += 1;
+        const segment = yield* consumeSegment(segmentResponse);
+        if (segment.usage) {
+          usage.promptTokens += segment.usage.promptTokens;
+          usage.outputTokens += segment.usage.outputTokens;
+          usage.totalTokens += segment.usage.totalTokens;
         }
-        if (next.done) break;
+
+        if (segment.finishReason === "CONTINUATION") {
+          if (!useLongDecode || !segment.continuationToken) {
+            throw new OwnerGeminiProviderError(
+              "Gemini signalled that this response needs continuation, but this request cannot safely continue it.",
+              undefined, false, "stream_generate_content",
+              { usage, elapsedMs: Date.now() - startedAt, finishReason: segment.finishReason },
+            );
+          }
+          if (segmentNumber >= maxSegments) {
+            throw new OwnerGeminiProviderError(
+              "Gemini exceeded the maximum number of continuation segments allowed by the current chat budget.",
+              undefined, false, "stream_generate_content",
+              { usage, elapsedMs: Date.now() - startedAt, finishReason: segment.finishReason },
+            );
+          }
+          try {
+            segmentResponse = await openSegment(segment.continuationToken);
+          } catch (error) {
+            if (error instanceof OwnerGeminiProviderError) {
+              throw new OwnerGeminiProviderError(
+                error.message, error.status, error.retryable, error.stage,
+                { usage, elapsedMs: Date.now() - startedAt, finishReason: error.finishReason },
+              );
+            }
+            throw error;
+          }
+          continue;
+        }
+
+        if (segment.finishReason === "MAX_TOKENS") {
+          const message = fullText.trim()
+            ? "Gemini reached the reserved response-token budget before completing the answer. Partial text has been retained. The 200,000-token conversation cap remains in force."
+            : "Gemini used the reserved response-token budget on reasoning before producing visible text. The 200,000-token conversation cap remains in force.";
+          throw new OwnerGeminiProviderError(message, undefined, false, "stream_generate_content", {
+            usage, elapsedMs: Date.now() - startedAt, finishReason: segment.finishReason,
+          });
+        }
+        if (!fullText.trim()) {
+          const message = `Vertex AI completed without a text response${segment.finishReason ? " (finish reason: " + segment.finishReason + ")" : ""}.`;
+          throw new OwnerGeminiProviderError(message, undefined, false, "stream_generate_content", {
+            usage, elapsedMs: Date.now() - startedAt, finishReason: segment.finishReason,
+          });
+        }
+
+        finished = true;
+        yield { type: "done", usage, elapsedMs: Date.now() - startedAt };
+        break;
       }
-      if (buffer.trim()) yield* parseBlock(buffer);
-      if (!fullText.trim()) throw new OwnerGeminiProviderError("Vertex AI completed without a text response.");
-      finished = true;
-      yield { type: "done", usage, elapsedMs: Date.now() - startedAt };
     } catch (error) {
       if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) {
         throw new OwnerGeminiProviderError("Generation was stopped.", undefined, false);
@@ -860,12 +978,10 @@ export async function openOwnerGeminiStream(
       if (error instanceof OwnerGeminiProviderError) throw error;
       throw new OwnerGeminiProviderError("The Vertex AI stream failed. Any received text has been retained.", undefined, true);
     } finally {
-      if (!finished) {
-        try { await reader.cancel(); } catch { /* the upstream may already be closed */ }
+      if (!finished && !controller.signal.aborted) {
+        try { await firstResponse.body?.cancel(); } catch { /* the upstream may already be closed */ }
       }
-      clearTimeout(timeout);
       signal.removeEventListener("abort", abortFromCaller);
-      reader.releaseLock();
     }
   })();
 }

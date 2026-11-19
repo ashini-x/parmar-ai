@@ -189,6 +189,13 @@ class FakeOwnerD1 {
       const [charge, reserved, updatedAt, conversationId, ownerId] = values;
       const row = this.sessionUsage.get(String(conversationId));
       if (!row || row.owner_id !== String(ownerId)) return 0;
+      if (sql.includes("updated_at <= ?")) {
+        const cutoff = Number(values[5]);
+        const hasStaleReservation = [...this.reservations.values()].some((reservation) =>
+          reservation.conversation_id === String(conversationId) && reservation.owner_id === String(ownerId) &&
+          reservation.status === "reserved" && reservation.created_at <= Number(values[8]));
+        if (row.updated_at > cutoff || !hasStaleReservation) return 0;
+      }
       row.used_tokens += Number(charge);
       row.reserved_tokens = Math.max(0, row.reserved_tokens - Number(reserved));
       row.updated_at = Number(updatedAt);
@@ -211,7 +218,18 @@ class FakeOwnerD1 {
       });
       return 1;
     }
+    if (sql.startsWith("UPDATE owner_intelligence_session_usage SET updated_at = ?")) {
+      const [updatedAt, conversationId, ownerId, reservationId] = values;
+      const usage = this.sessionUsage.get(String(conversationId));
+      const reservation = this.reservations.get(String(reservationId));
+      if (!usage || usage.owner_id !== String(ownerId) || !reservation ||
+          reservation.conversation_id !== String(conversationId) || reservation.owner_id !== String(ownerId) ||
+          reservation.status !== "reserved") return 0;
+      usage.updated_at = Number(updatedAt);
+      return 1;
+    }
     if (sql.startsWith("UPDATE owner_intelligence_token_reservations SET status = 'expired'")) {
+      if (previousChanges !== 1) return 0;
       const [settledAt, conversationId, ownerId, cutoff] = values;
       let changes = 0;
       for (const row of this.reservations.values()) {
@@ -956,18 +974,73 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
       countedHandoffPrompt = input.contents[0]?.text || "";
       return 5;
     });
-    vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async () => (async function* () {
-      yield { type: "done" as const, usage: { promptTokens: 5, outputTokens: 5, totalTokens: 10 }, elapsedMs: 5 };
-    })());
+    let requestedSuccessorOutputLimit = 0;
+    vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async (_env, input) => {
+      requestedSuccessorOutputLimit = input.maxOutputTokens ?? 0;
+      return (async function* () {
+        yield { type: "done" as const, usage: { promptTokens: 5, outputTokens: 5, totalTokens: 10 }, elapsedMs: 5 };
+      })();
+    });
     const continued = await call(env, "/admin/api/intelligence/conversations/" + rolledBody.conversation.id + "/generate", ownerCookie, {
       method: "POST", origin,
       body: { content: "Continue from the handoff now.", modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH" },
     });
     expect(continued.status).toBe(200);
     await continued.text();
+    expect(requestedSuccessorOutputLimit).toBe(199_980);
     expect(countedHandoffPrompt).toContain("ROLLOVER HANDOFF REFERENCE DATA");
     expect(countedHandoffPrompt).toContain(commitSha);
     expect(countedHandoffPrompt).toContain(userMessageId);
+  });
+
+  it("renews a live generation reservation beyond the 10-minute stale-recovery window", async () => {
+    const env = appEnv();
+    const ownerCookie = await login("owner", "owner-test-password", env);
+    const origin = "https://parmar-ai.test";
+    const created = await call(env, "/admin/api/intelligence/conversations", ownerCookie, {
+      method: "POST", origin, body: { title: "Long-running live generation" },
+    });
+    const createdBody = await created.json() as { conversation: { id: string } };
+    const id = createdBody.conversation.id;
+    await call(env, "/admin/api/intelligence/conversations/" + id + "/messages", ownerCookie, {
+      method: "POST", origin, body: { content: "Continue thinking for a while." },
+    });
+
+    let releaseProvider!: () => void;
+    const providerGate = new Promise<void>((resolve) => { releaseProvider = resolve; });
+    vi.mocked(countOwnerGeminiInputTokens).mockClear().mockResolvedValueOnce(5);
+    vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async () => (async function* () {
+      await providerGate;
+      yield { type: "done" as const, usage: { promptTokens: 5, outputTokens: 12, totalTokens: 17 }, elapsedMs: 660_000 };
+    })());
+
+    let responseText: Promise<string> | undefined;
+    vi.useFakeTimers();
+    try {
+      const generated = await call(env, "/admin/api/intelligence/conversations/" + id + "/generate", ownerCookie, {
+        method: "POST", origin,
+        body: { content: "Think for more than ten minutes.", modelId: "gemini-4-hydrogen", thinkingLevel: "XHIGH" },
+      });
+      expect(generated.status).toBe(200);
+      responseText = generated.text();
+      await vi.advanceTimersByTimeAsync(11 * 60_000);
+
+      const detail = await call(env, "/admin/api/intelligence/conversations/" + id, ownerCookie);
+      const body = await detail.json() as { usage: { used_tokens: number; reserved_tokens: number } };
+      expect(body.usage.reserved_tokens).toBeGreaterThan(0);
+      const db = env.DB as unknown as FakeOwnerD1;
+      expect([...db.reservations.values()].some((reservation) => reservation.status === "reserved")).toBe(true);
+
+      releaseProvider();
+      expect(await responseText).toContain("event: done");
+      const completed = await call(env, "/admin/api/intelligence/conversations/" + id, ownerCookie);
+      const completedBody = await completed.json() as { usage: { used_tokens: number; reserved_tokens: number } };
+      expect(completedBody.usage).toEqual(expect.objectContaining({ used_tokens: 17, reserved_tokens: 0 }));
+    } finally {
+      releaseProvider();
+      if (responseText) await responseText.catch(() => undefined);
+      vi.useRealTimers();
+    }
   });
 
   it("keeps a 200,000-token budget per conversation and blocks a full session server-side", async () => {
