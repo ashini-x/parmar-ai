@@ -1,6 +1,6 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**, after M4.3 was fully closed by read-only production D1/GitHub reconciliation and Owner Intelligence sidebar, fixed composer/token dock, browser-runtime recovery/surface cleanup and footer model/thinking controls in PRs #360, #362, #363 and #364 were deployed with production acceptance. **M4.3 is complete; M4.4 — Attach and load Project Memory — is the next task.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**, after M4.3 was fully closed by read-only production D1/GitHub reconciliation and Owner Intelligence sidebar, fixed composer/token dock, browser-runtime recovery/surface cleanup, footer model/thinking controls, Project Memory implementation and ChatGPT-style rich response rendering in PRs #360–#365 were merged/deployed with production acceptance. **M4.3 is closed; M4.4 implementation is deployed and awaits Owner browser acceptance; M4.5 — Automatic rollover and handoff — is next after that gate.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
 
 
 ### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
@@ -41,6 +41,24 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - Production versions at 100% traffic: `parmar-ai` `0f7a200e-8da1-4bbb-b536-66f2fbfc0b7e` (deployment `15b6902a-d085-4a97-93f7-c9706302baa0`); `brvin-service` `5ebb6c8e-8c47-4083-907b-c399bb7a320d` (deployment `aeb3bd9d-f890-43c1-9864-fe071de00a72`). Acceptance artifact: `14551768169`.
 - Presentation-only; no backend, API, model/provider, Vertex, D1, token-limit or Project Memory behavior changes. M4.4 — Attach and load Project Memory remains the next task.
 
+### M4.4 — Attach and load Project Memory implementation — 2026-11-19 IST
+
+- [PR #361](https://github.com/ashini-x/parmar-ai/pull/361) merged as cd54375690b3e5d3ecc566f83be7711b48c58443 and production deployed. CI [44567467867](https://github.com/ashini-x/parmar-ai/actions/runs/44567467867) and production release [44568064917](https://github.com/ashini-x/parmar-ai/actions/runs/44568064917) passed.
+- Adds immutable Owner-scoped D1 snapshots with hub repository/branch/commit, manifest provenance, allowlisted file blob SHAs and exact Markdown bytes; strict v1 hub/catalog/project/workstream/feature manifest validation; Owner-selected GitHub attachment APIs; selected-model Vertex CountTokens at attachment; and manifest-selected active-memory injection into the effective prompt before the existing M4.1 token reservation.
+- Archives, sessions and unlisted repository files are not loaded by default. Source Memory remains untrusted reference data. Cross-project context requires explicit Owner opt-in. The 200,000-token conversation budget and M4.3 preview/confirm Save rules are unchanged.
+- Production versions at 100% traffic at M4.4 deploy: parmar-ai 90b21e52-2a55-402e-8398-0c6e308d3a0e (deployment 1f2b9b0e-8655-4158-b4a1-23b83ad89aba); brvin-service fd932efb-9d97-4e8f-837f-79a460409495 (deployment 719cbe9a-435f-4080-ad8b-344ecf59320f). Acceptance artifact 14552742089.
+- The Owner still needs to confirm the project attachment/scope/pinned-provenance flow in the browser before M4.4 is treated as fully accepted. Then proceed to M4.5.
+
+### Owner Intelligence ChatGPT-style rich response rendering — 2026-11-19 IST
+
+- [PR #365](https://github.com/ashini-x/parmar-ai/pull/365) merged as f7d1dbe79c880a8e43eebab230908fc6a07484bf.
+- Assistant Markdown now renders as headings, paragraphs, emphasis, links/HTTPS images, nested lists, task checklists, bordered table cards, blockquote/callout cards, horizontal rules and fenced code cards with Copy. Tables are scrollable on narrow screens.
+- Callout syntax: > [!NOTE], > [!TIP], > [!SUCCESS], > [!WARNING], > [!CAUTION], > [!IMPORTANT], > [!DANGER] or > [!ERROR]. Simple paragraph prefixes Important/Warning/Caution/Success/Recommended/Error also become callouts.
+- Assistant answer surface is text-first/unboxed; toolbar provides Copy, local thumbs-up/down selection and Regenerate. Raw HTML is not injected; DOM nodes and textContent are used, with scheme-checked links.
+- PR CI [44570854402](https://github.com/ashini-x/parmar-ai/actions/runs/44570854402) passed typecheck, Vitest, Node tests and all three Worker dry-run builds. Production release [44571138999](https://github.com/ashini-x/parmar-ai/actions/runs/44571138999) passed deployments and root/health/BRVIN/Fatman release acceptance.
+- Production versions: parmar-ai fccd13e6-1be3-4ecb-b1e6-d42d352cd1f8; brvin-service 500709c7-b62a-4c6c-9613-159f77988310, both at 100% traffic. Acceptance artifact: 14553902907.
+- Presentation only; no provider/model, API, D1, token budget, message cap, Project Memory or student-facing changes. Owner browser visual check remains pending after hard refresh.
+
 ## First action: recover the source of truth
 
 Read these files from the latest `main` branch in this order:
@@ -54,7 +72,7 @@ Read these files from the latest `main` branch in this order:
 7. `docs/TEST_PLAN.md` and `docs/README.md`.
 8. Inspect relevant source, current D1 records (read-only), latest `owner-memory-hub` commit and Cloudflare deployment state before choosing the next action.
 
-Runtime-code baseline at handoff: `0b5559eccbd3a7785757abcaa677b693e1a8ad63` (M4.3 code plus Owner Intelligence UI refinements and client-runtime repair from PRs #360, #362, #363 and #364). M4.3 backend behavior remains based on `3ae456188fb7535db47bcab2a7909cf333b59285`; PR #360 changed sidebar presentation, PR #362 changed the fixed composer/token dock and long-prompt size guard, PR #363 repaired the malformed browser try/catch and cleaned the surface, and PR #364 removed the top header and moved model/thinking controls into the composer footer. Production release for #364 is verified below. Verify latest `main`, production D1 and Cloudflare state before implementation.
+Runtime-code baseline at handoff: `f7d1dbe79c880a8e43eebab230908fc6a07484bf` (Owner Intelligence UI refinements, M4.4 Project Memory implementation and rich response rendering). M4.3 backend behavior remains based on `3ae456188fb7535db47bcab2a7909cf333b59285`; PR #360 changed sidebar presentation, PR #362 changed the fixed composer/token dock and long-prompt size guard, PR #363 repaired the malformed browser try/catch and cleaned the surface, PR #364 moved model/thinking controls into the composer footer, PR #361 shipped pinned Project Memory loading, and PR #365 added rich response rendering. Verify latest `main`, production D1 and Cloudflare state before implementation.
 
 ## Product and security boundary — immutable
 
