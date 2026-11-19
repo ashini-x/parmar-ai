@@ -471,6 +471,14 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain('id="bottomDock"');
     expect(html).toContain('id="sessionBudget"');
     expect(html).toContain("SESSION TOKENS");
+    expect(html).toContain('<div class="welcome"><div class="welcome-brand" aria-label="BRɅIN">BRɅIN</div><h1>Welcome back Sir. What are we hunting today?</h1></div>');
+    expect(html).toContain(".welcome-brand{position:relative;margin:0 0 23px");
+    expect(html).toContain("background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent");
+    expect(html).not.toContain("Your thinking space.");
+    expect(html).not.toContain("A private workspace for research");
+    expect(html).not.toContain("PRIVATE OWNER WORKSPACE");
+    expect(html).not.toContain('class="welcome-mark"');
+    expect(html).not.toContain('class="next-step"');
     expect(html).toContain("200,000 left");
     expect(html).not.toContain('id="sessionBudget" hidden');
     expect(html).toContain('id="messageInput" disabled rows="1" placeholder="Write a message…"');
@@ -550,6 +558,10 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("The Owner workspace request timed out");
     expect(script).toContain("Could not load conversations");
     expect(script).toContain("appendActivityCard");
+    expect(script).toContain('node("div","welcome-brand","BRɅIN")');
+    expect(script).toContain('Welcome back Sir. What are we hunting today?');
+    expect(script).not.toContain("Your thinking space.");
+    expect(script).not.toContain("PRIVATE OWNER WORKSPACE");
     expect(script).toContain("function renderRichMarkdown(target,markdown)");
     expect(script).toContain("var expandedUserMessageIds=Object.create(null)");
     expect(script).toContain("var USER_MESSAGE_PREVIEW_HEIGHT=112");
