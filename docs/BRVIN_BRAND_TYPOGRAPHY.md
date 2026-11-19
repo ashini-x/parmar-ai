@@ -1,6 +1,6 @@
 # BRɅIN Brand Typography and Asset Policy
 
-**Status:** Poppins asset bundle removed from Owner runtime in the current typography-removal change; AERUNO and OpenAI Sans remain pending authorized font access  
+**Status:** Poppins removed from the Owner runtime and production deployed on 2026-11-20 IST; AERUNO and actual OpenAI Sans font assets remain pending  
 **Last updated:** 2026-11-20 IST  
 **Canonical repository:** `ashini-x/parmar-ai`  
 **Applies to:** BRɅIN brand identity and product UI, including Owner Gemini Intelligence and BRVIN Teachers
@@ -80,6 +80,17 @@ The repository previously used a Poppins CSS alias called **BRɅIN universal fon
 
 ## 6. Current completion status
 
+### Production typography-removal release — 2026-11-20 IST
+
+- PR [#374](https://github.com/ashini-x/parmar-ai/pull/374) merged to `main` as `45bdc5a8f48ad57f360e4340ff1d6216845a8b5a`.
+- GitHub Actions Release Validation run [#44610099216](https://github.com/ashini-x/parmar-ai/actions/runs/44610099216) passed typecheck, full tests, Node tests, private BRVIN service dry-run, Parmar AI Worker dry-run and isolated website Worker dry-run.
+- The production deploy job passed. Root and `/health` smoke checks passed; BRVIN service binding and Fatman retrieval acceptance passed.
+- Production `parmar-ai`: version `7a1c632b-d9c5-4fa2-9535-e0afb0e21b8f`, deployment `10460485-b57a-4857-97b0-350bcd3e0522`, 100% traffic.
+- Production `brvin-service`: version `56a88525-e1b5-45f7-abfb-b65faa8b0d57`, deployment `c3d67fc7-a659-4722-9163-8f5692ae1a17`, 100% traffic.
+- Production acceptance artifact: `14571718100`.
+- This validates deployment and service health. A screenshot/visual check in the authenticated Owner browser remains outstanding.
+
+
 - [x] Uploaded archive inspected and internal font family identified as AERUNO Trial.
 - [x] Licensing conflict recorded; public/commercial deployment blocked pending proper license.
 - [x] Missing U+0245 (`Ʌ`) glyph recorded.
@@ -89,6 +100,7 @@ The repository previously used a Poppins CSS alias called **BRɅIN universal fon
 - [ ] Produce and visually approve the outlined BRɅIN SVG wordmark once AERUNO use and glyph coverage are resolved.
 - [x] Remove Poppins WOFF2 assets, OFL/readme files, preloads and Owner-page `@font-face` rules from the repository/runtime source.
 - [x] Change Owner UI typography to an OpenAI Sans-first, platform-native system stack. Actual OpenAI Sans is not bundled yet; the current browser rendering uses its system fallback.
-- [ ] Verify the typography change in the authenticated Owner browser and through CI/deployment evidence.
+- [x] Verify the change through CI and production deployment/release acceptance.
+- [ ] Visually confirm the Owner welcome wordmark and interface typography in the authenticated Owner browser.
 
 **No AERUNO or OpenAI Sans font binary was added or deployed.**
