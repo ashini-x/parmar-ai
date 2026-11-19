@@ -339,6 +339,13 @@ M4.3 and M4.4 are fully accepted. M4.4 implementation, automated validation, pro
 - Set handoff/job Synced only after the existing Save flow commits and reads back every preview file byte-for-byte. If GitHub is unreachable, D1 remains canonical and the UI shows Sync pending review; the user can continue in the D1-backed successor and retry through the reviewed Save flow.
 - Tests must also cover Owner/same-origin authorization, below-threshold rejection, zero reservation at rollover, D1 atomicity, fresh budget, snapshot clone, idempotent retry, source transcript preservation and pending/synced state. Do not mutate production token usage to manufacture thresholds.
 
+### M4.5 current deployment evidence — 2026-11-20 IST
+
+- Reconciled PR validation [#44620484798](https://github.com/ashini-x/parmar-ai/actions/runs/44620484798) passed current-head TypeScript, 522 Vitest tests/76 files, 62 Node tests/9 files and all three Worker dry-run builds.
+- Merged main release [#44620959101](https://github.com/ashini-x/parmar-ai/actions/runs/44620959101) passed the same validation and deployed both Workers. Root/health smoke, BRVIN connectivity and Fatman source readiness passed.
+- Production D1 read-only schema checks confirmed `owner_intelligence_handoffs`, `owner_intelligence_memory_jobs`, uniqueness constraints and owner/status indexes. The schema queries wrote zero rows; no usage, transcript or conversation data was modified.
+- **Still required:** authenticated Owner browser verification of the 180K warning/190K action when an eligible test conversation exists, one linked successor, old transcript read-only preservation, fresh 0/200K usage, pinned snapshot/handoff visibility and the complete reviewed GitHub handoff artifact. Do not modify production usage to manufacture a threshold, and do not confirm Save on the Owner's behalf.
+
 ### M4.6 — Token-aware context builder and historical recall
 - The exact complete prompt—including all application instructions, project context, retrieved history, current history and new user turn—is measured for the chosen model/API before the user turn mutation is committed.
 - Context selection is token-based, respects that model's real context/output constraints and reserves output capacity; character counts and fixed turn counts are only early filters, never final acceptance checks.
