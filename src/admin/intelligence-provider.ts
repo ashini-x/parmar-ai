@@ -548,9 +548,9 @@ export async function generateOwnerGeminiContent(
         };
         const elapsedMs = Date.now() - startedAt;
         const finishReason = typeof candidate?.finishReason === "string" ? candidate.finishReason : undefined;
-        if (!text) {
+        if (!text || finishReason === "MAX_TOKENS") {
           const message = finishReason === "MAX_TOKENS"
-            ? "Gemini reached the selected model's single-response output limit before producing visible text. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level."
+            ? "Gemini reached the selected model's single-response output limit before completing the response. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level."
             : `Vertex AI completed without a text response${finishReason ? " (finish reason: " + finishReason + ")" : ""}.`;
           throw new OwnerGeminiProviderError(message, undefined, false, "generate_content", {
             usage: usageSummary, elapsedMs, finishReason,
@@ -871,10 +871,16 @@ export async function openOwnerGeminiStream(
         if (next.done) break;
       }
       if (buffer.trim()) yield* parseBlock(buffer);
+      if (finishReason === "MAX_TOKENS") {
+        const message = fullText.trim()
+          ? "Gemini reached the selected model's single-response output limit before completing the answer. The partial text has been retained. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level."
+          : "Gemini reached the selected model's single-response output limit before producing visible text. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level.";
+        throw new OwnerGeminiProviderError(message, undefined, false, "stream_generate_content", {
+          usage, elapsedMs: Date.now() - startedAt, finishReason,
+        });
+      }
       if (!fullText.trim()) {
-        const message = finishReason === "MAX_TOKENS"
-          ? "Gemini reached the selected model's single-response output limit before producing visible text. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level."
-          : `Vertex AI completed without a text response${finishReason ? " (finish reason: " + finishReason + ")" : ""}.`;
+        const message = `Vertex AI completed without a text response${finishReason ? " (finish reason: " + finishReason + ")" : ""}.`;
         throw new OwnerGeminiProviderError(message, undefined, false, "stream_generate_content", {
           usage, elapsedMs: Date.now() - startedAt, finishReason,
         });
