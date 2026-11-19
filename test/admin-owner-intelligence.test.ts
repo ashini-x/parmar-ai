@@ -469,7 +469,10 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain('id="messageInput" disabled rows="1" placeholder="Write a message…"');
     expect(html).not.toContain('maxlength="50000"');
     expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto");
-    expect(html).toContain(".bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px))");
+    expect(html).toContain(".bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px));margin:0 auto;padding:4px 0 10px;background:transparent}");
+    expect(html).toContain("background:#1c1c1c;color:#ececec");
+    expect(html).toContain("body{overflow:hidden;background:#1c1c1c}");
+    expect(html).toContain(".sidebar{width:292px;flex:0 0 292px;background:#141414;");
     expect(html).toContain(".composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto");
     const dockStart = html.indexOf('<div class="bottom-dock" id="bottomDock">');
     const composerStart = html.indexOf('<textarea id="messageInput"');
@@ -523,6 +526,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("function resizeComposerInput()");
     expect(script).toContain('messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});');
     expect(script).toContain("maxHeight=144");
+    expect(script).toContain("try{await refreshList(conversationId);}catch(_error){}");
+    expect(() => new Function(script)).not.toThrow();
     expect(script).toContain("state.sessionUsage||{limit_tokens:200000,used_tokens:0,reserved_tokens:0,remaining_tokens:200000,locked:false}");
   });
 
