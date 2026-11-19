@@ -71,7 +71,7 @@ The BRVIN retrieval-provider modernization is coordinated across both repositori
 
 ## Owner Gemini Intelligence — private Owner workspace
 
-**Current handoff:** [OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md](OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md). Read the [Owner Intelligence roadmap](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md) first. M4.3 implementation, timeout/retry hardening and append-only preservation are merged and deployed. The Owner confirmed the live Preview → explicit Save to GitHub `main` → read-back test: the manually authored comment in `progress.md` survived and newly generated progress content appeared below it. The dated [M4.3 acceptance record](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md) distinguishes confirmed live evidence from final read-only topic/Scratchpad-promotion and token-ledger closeout checks.
+**Current handoff:** [OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md](OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md). Read the [Owner Intelligence roadmap](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md) first. **M4.3 is fully complete and accepted.** The Owner confirmed the live Preview → explicit Save to GitHub `main` → read-back test, including append-only preservation after an external edit. Final read-only production D1/GitHub reconciliation verified the active selected-only App installation, topic/repository/branch/root association, Synced commit, exact five-file byte match at the saved SHA/current `main`, and same-chat token ledger. See the [M4.3 acceptance record](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md). The next task is **M4.4 — Attach and load Project Memory**.
 
 The Owner-only workspace uses Google Gemini through Vertex AI as its sole inference provider; Cloudflare Workers/D1 are the deterministic backend and canonical transcript/usage store. Preserve the exact 200,000-token cumulative budget per conversation. Workers Free is the Owner-confirmed current plan; account-wide headroom remains unmeasured. M4.6-P0 capacity/durability readiness is required before M4.6, but does not block M4.4/M4.5.
 
@@ -84,7 +84,7 @@ The Owner-only workspace uses Google Gemini through Vertex AI as its sole infere
 | [OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md](OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md) | Owner/Gemini/ChatGPT role split, hub hierarchy and approval process. |
 | [OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md](OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md) | Sole Vertex provider, Cloudflare Free/Paid limits and M4.6-P0 gate. |
 
-M4.3's successful live save/preservation test must not be repeated just to regenerate evidence. New sessions should do a read-only M4.3 closeout audit and, once all criteria are evidenced, proceed to M4.4 manifest-selected Project Memory and immutable pinned snapshots. The student-facing परमार्थAI runtime remains outside this Owner workspace.
+M4.3's successful live save/preservation test must not be repeated. Its final closeout is complete; the next session should start M4.4 source/schema/hub inspection and prepare a bounded implementation brief. M4.4 will add manifest-selected Project Memory and immutable pinned snapshots. The student-facing परमार्थAI runtime remains outside this Owner workspace.
 
 **Historical implementation timeline (retained for provenance; not the current M4.3 status).** For authoritative current state and next task, use the roadmap, continuation prompt and M4.3 acceptance record above.
 
