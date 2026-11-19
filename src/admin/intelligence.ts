@@ -402,7 +402,13 @@ async function reserveOwnerIntelligenceSessionTokens(
        SET reserved_tokens = reserved_tokens + ?, updated_at = ?
        WHERE conversation_id = ? AND owner_id = ? AND reserved_tokens = 0
          AND used_tokens + reserved_tokens + ? <= token_limit
-         AND (locked_reason IS NULL OR locked_reason = '')`,
+         AND (locked_reason IS NULL OR locked_reason = '')
+         AND EXISTS (
+           SELECT 1 FROM owner_intelligence_conversations c
+           WHERE c.id = owner_intelligence_session_usage.conversation_id
+             AND c.owner_id = owner_intelligence_session_usage.owner_id
+             AND c.lifecycle_status = 'active'
+         )`,
     ).bind(reservedTokens, now, conversationId, usage.owner_id, reservedTokens),
     env.DB!.prepare(
       `INSERT INTO owner_intelligence_token_reservations
@@ -756,7 +762,7 @@ function buildOwnerRolloverHandoffMarkdown(input: {
     if (/\b(?:approved|approve|accepted|accept|agreed|agree|go ahead|proceed|finalized|finalised|confirmed|locked in)\b/iu.test(m.content)) {
       const proposal = [...valid.slice(0, i)].reverse().find((x) => x.role === "assistant");
       approvals.push((proposal ? "- Assistant proposal [" + proposal.id + "]: " + handoffExcerpt(proposal.content, 650) + "\n" : "") +
-        "- Owner confirmation [" + m.id + "]: " + handoffExcerpt(m.content, 450));
+        "- Owner message containing approval-language [" + m.id + "] — candidate only: " + handoffExcerpt(m.content, 450));
     }
     if (/\b(?:must|must not|do not|don't|never|keep|preserve|only|always|out of scope|not allowed|should not)\b/iu.test(m.content)) {
       constraints.push("- [" + m.id + "]: " + handoffExcerpt(m.content, 550));
@@ -784,7 +790,7 @@ function buildOwnerRolloverHandoffMarkdown(input: {
     latestUser ? "Latest Owner request [" + latestUser.id + "]:\n\n" + handoffQuote(latestUser.content, 3_000)
       : "No Owner message was available; review the source transcript to establish the next objective.",
     "",
-    "## 2. Owner-confirmed decisions",
+    "## 2. Potential Owner decisions (verify the complete source message before treating as accepted)",
     "",
     ...(approvals.length ? approvals.slice(-8) : ["No explicit approval phrase was detected. Do not treat assistant suggestions as accepted decisions."]),
     "",
@@ -807,7 +813,7 @@ function buildOwnerRolloverHandoffMarkdown(input: {
       "",
     ]) : ["No Project Memory snapshot was attached to the source conversation."]),
     ...(paths.size ? ["Transcript-mentioned paths (verify against repository):", ...[...paths].sort().map((p) => "- " + p), ""] : []),
-    "## 5. Reported blockers and unresolved states",
+    "## 5. Messages mentioning blockers or unresolved states (verify current status)",
     "",
     ...(blockers.length ? blockers.slice(-8) : ["No explicit blocker phrase was detected; this does not prove no blocker exists."]),
     "",
