@@ -42,6 +42,8 @@ Do not provision Workers AI, R2, KV, Vectorize, AI Search, a new Queue or anothe
 - A definitive validation, authentication, model-not-found or capacity rejection (400/401/403/404/429) releases the unused D1 token reservation. A lost connection or ambiguous server failure remains conservatively accounted when exact provider usage is unavailable.
 - A 429/RESOURCE_EXHAUSTED response must be diagnosed before changing Cloud billing or quotas. It can mean project/model quota exhaustion or temporary shared serving capacity (DSQ). A quota increase helps only when the applicable quota metric is actually exhausted; it does not create shared model capacity. Prefer the global endpoint when supported by the selected model; do not silently change the configured location. See Google's [429 troubleshooting guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/deploy/error-code-429).
 
+- The shared Worker's existing `VERTEX_TIMEOUT_MS=25000` and `MAX_OUTPUT_TOKENS=1200` settings remain scoped to the separate student/bot `src/ai/gemini.ts` request path. Owner Intelligence calls its dedicated `src/admin/intelligence-provider.ts` adapter and does not read either setting. Do not remove or relax the student-path settings as part of Owner generation work; this deployment intentionally preserves them.
+
 ### 1.4 Non-negotiable accounting and reliability boundaries
 
 - Preserve M4.1's exact **200,000 cumulative tokens per conversation**, CountTokens preflight, atomic D1 reservation, selected-model/API output ceiling, usage settlement, concurrency controls and read-only hard lock. This is distinct from model context-window limits, per-request budget B, Google quotas and billing.
