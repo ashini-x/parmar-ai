@@ -442,6 +442,72 @@ describe("Owner Vertex AI provider registry and adapter", () => {
       dependencies(fetcher),
     )).rejects.toMatchObject({ status: 429, retryable: true, message: "Vertex AI rate-limited the GenerateContent request." });
   });
+
+  it("retries GenerateContent RESOURCE_EXHAUSTED with bounded backoff and the same selected-model payload", async () => {
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "owner-generate-retry-success-project" } as Env;
+    const delays: number[] = [];
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+    let attempts = 0;
+    const fetcher: typeof fetch = async (url, init) => {
+      const value = String(url);
+      if (value.endsWith(":countTokens")) {
+        return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      }
+      attempts += 1;
+      requests.push({ url: value, body: JSON.parse(String(init?.body)) as Record<string, unknown> });
+      if (attempts < 3) {
+        return new Response(JSON.stringify({
+          error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "temporary shared capacity contention" },
+        }), { status: 429, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify({
+        candidates: [{ content: { role: "model", parts: [{ text: "Draft recovered." }] } }],
+        usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 7, totalTokenCount: 19 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    };
+
+    const result = await generateOwnerGeminiContent(
+      env,
+      { modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Prepare a concise memory draft." }] },
+      { ...dependencies(fetcher), sleep: async (milliseconds) => { delays.push(milliseconds); }, random: () => 0.5 },
+    );
+
+    expect(result.text).toBe("Draft recovered.");
+    expect(result.usage.totalTokens).toBe(19);
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([1_000, 2_000]);
+    expect(requests.every((entry) => entry.url.endsWith(":generateContent"))).toBe(true);
+    expect(requests[1]?.body).toEqual(requests[0]?.body);
+    expect(requests[2]?.body).toEqual(requests[0]?.body);
+  });
+
+  it("caps GenerateContent RESOURCE_EXHAUSTED retries and preserves the safe diagnostic", async () => {
+    const env = { ...configuredEnv, GCP_PROJECT_ID: "owner-generate-retry-exhausted-project" } as Env;
+    const delays: number[] = [];
+    let attempts = 0;
+    const fetcher: typeof fetch = async (url) => {
+      if (String(url).endsWith(":countTokens")) {
+        return new Response(JSON.stringify({ totalTokens: 1 }), { status: 200 });
+      }
+      attempts += 1;
+      return new Response(JSON.stringify({
+        error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "temporary capacity; do not expose project details" },
+      }), { status: 429, headers: { "content-type": "application/json" } });
+    };
+
+    await expect(generateOwnerGeminiContent(
+      env,
+      { modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH", contents: [{ role: "user", text: "Retry this memory draft." }] },
+      { ...dependencies(fetcher), sleep: async (milliseconds) => { delays.push(milliseconds); }, random: () => 0.5 },
+    )).rejects.toMatchObject({
+      status: 429,
+      stage: "generate_content",
+      retryable: true,
+      message: expect.stringContaining("RESOURCE_EXHAUSTED"),
+    });
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([1_000, 2_000]);
+  });
 });
 
 
