@@ -606,6 +606,14 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("richContent.scrollHeight>USER_MESSAGE_PREVIEW_HEIGHT+2");
     expect(script).toContain("delete expandedUserMessageIds[item.id]");
 
+    expect(script).toContain("function scrollMessagesToBottom(){");
+    expect(script).toContain("messages.scrollTop=messages.scrollHeight");
+    expect(script).toContain("function restoreMessagesScroll(shouldFollowBottom,previousScrollTop)");
+    expect(script).toContain("var wasAtBottom=messages.scrollHeight-messages.clientHeight-messages.scrollTop<=48");
+    expect(script).toContain("var shouldFollowBottom=Boolean(forceBottom)||sending||wasAtBottom");
+    expect(script).toContain("restoreMessagesScroll(shouldFollowBottom,previousScrollTop)");
+    expect(script).toContain("renderMessages(state.messages,true)");
+    expect(script).toContain("overflow-anchor:none");
     expect(script).toContain("function renderMarkdownTable(lines,start)");
     expect(script).toContain("function renderRichList(lines,start)");
     expect(script).toContain('"md-callout md-callout-"+type');
