@@ -1519,7 +1519,7 @@ function workspaceHtml(): string {
     </div>
   </section>
   <div class="bottom-dock" id="bottomDock">
-    <section class="session-budget" id="sessionBudget" hidden aria-label="Chat session token budget">
+    <section class="session-budget" id="sessionBudget" aria-label="Chat session token budget">
       <div class="session-budget-top"><span class="session-budget-label">SESSION TOKENS</span><strong id="sessionBudgetValue">0 used / 200,000</strong><span id="sessionBudgetRemaining">200,000 left</span></div>
       <div class="session-budget-track" id="sessionBudgetTrack" role="progressbar" aria-label="Tokens used in this chat" aria-valuemin="0" aria-valuemax="200000" aria-valuenow="0"><span class="session-budget-fill" id="sessionBudgetFill"></span></div>
       <div class="session-budget-notice" id="sessionBudgetNotice" hidden>This chat has reached its 200,000-token budget and is now read-only. Start a new chat, then paste your GitHub Markdown checkpoint link to continue.</div>
@@ -1728,12 +1728,7 @@ export function ownerIntelligenceClientScript(): Response {
     return number.toLocaleString();
   }
   function renderSessionBudget(){
-    var usage=state.sessionUsage;
-    if(!state.activeId||!usage){
-      sessionBudget.hidden=true;
-      sessionBudget.classList.remove("near-limit","locked");
-      return;
-    }
+    var usage=state.sessionUsage||{limit_tokens:200000,used_tokens:0,reserved_tokens:0,remaining_tokens:200000,locked:false};
     var limit=Math.max(1,Number(usage.limit_tokens)||200000);
     var used=Math.max(0,Number(usage.used_tokens)||0);
     var reserved=Math.max(0,Number(usage.reserved_tokens)||0);
