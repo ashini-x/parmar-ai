@@ -48,6 +48,18 @@ Fill these fields only from the final current PR head and corresponding workflow
 - Production release smoke: root, health, BRVIN connectivity and Fatman source readiness passed. Release acceptance artifact: [14576848791](https://github.com/ashini-x/parmar-ai/actions/runs/44620959101/artifacts/14576848791). Source release artifact: `14577800205`.
 - Production D1 `parmar-ai-admin-prod` (`1c033fb8-10aa-4bee-a294-4dbc899c09f7`) was inspected read-only. `owner_intelligence_conversations`, `owner_intelligence_handoffs` and `owner_intelligence_memory_jobs` exist. Both new owner-scoped lookup indexes and uniqueness autoindexes exist. The two schema queries reported 154 and 158 rows read respectively, **0 rows written**, and `changed_db=false`.
 
+## Owner generation reliability correction — 2026-11-20
+
+Before the authenticated rollover walkthrough, the Owner separately reported a Gemini stream ending with "Vertex AI completed without a text response." The code audit found an 8,192-token application chat-output reservation and an 8-minute application streaming timeout. The selected Gemini 4 Hydrogen model supports a 65,536-token single foreground output segment, and XHIGH reasoning tokens count against the output allowance. The generic parser error did not preserve `finishReason` or usage metadata.
+
+A dedicated correction is being validated on branch `fix/owner-intelligence-response-limits-final2`:
+- Ordinary chat reserves the selected model's single-request maximum, bounded by the unchanged 200,000-token session balance.
+- Application-owned 8-minute streaming and 90-second non-stream generation deadlines are removed. Stop/disconnect cancellation and bounded preflight checks remain. The D1 lease refreshes every 60 seconds while generation is active; the 10-minute recovery expires only after heartbeats stop.
+- Empty-response errors retain `finishReason` and actual usage metadata; `MAX_TOKENS` is diagnosed explicitly and the D1 ledger settles reported usage when available.
+- Provider ceilings remain. Gemini 4 Hydrogen's current streaming single-segment output ceiling is 65,536 tokens; the app does not claim infinite output or implement long-decode continuation.
+
+Update this section with PR, CI, merge, production worker versions and release acceptance only after verified completion. The M4.5 200K per-conversation meter, 180K warning, 190K rollover threshold and rollover data invariants are unchanged.
+
 ## Authenticated Owner acceptance — pending
 
 After deployment, hard-refresh `/admin/intelligence` and verify:
