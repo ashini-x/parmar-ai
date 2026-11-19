@@ -518,7 +518,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("Vertex AI has accepted the request");
     expect(script).toContain("meta-pill level");
     expect(script).toContain("function resizeComposerInput()");
-    expect(script).toContain('messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});
+    expect(script).toContain('messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});');
     expect(script).toContain("maxHeight=144");
   });
 
