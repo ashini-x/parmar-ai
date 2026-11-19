@@ -512,6 +512,10 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(thinkingChooserStart).toBeGreaterThan(modelChooserStart);
     expect(html.indexOf('<header class="topbar">')).toBe(-1);
     expect(html).toContain("Responses stream from your selected model.");
+    expect(html).toContain(".message-assistant .message-body{background:transparent;border:0;border-radius:0;padding:0;box-shadow:none}");
+    expect(html).toContain(".md-table-card");
+    expect(html).toContain(".md-callout-success");
+    expect(html).toContain(".md-callout-danger");
     expect(html).toContain('<script src="/admin/intelligence.js" defer></script>');
     expect(html).not.toContain("<script nonce=");
   });
@@ -535,6 +539,17 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("The Owner workspace request timed out");
     expect(script).toContain("Could not load conversations");
     expect(script).toContain("appendActivityCard");
+    expect(script).toContain("function renderRichMarkdown(target,markdown)");
+    expect(script).toContain("function renderMarkdownTable(lines,start)");
+    expect(script).toContain("function renderRichList(lines,start)");
+    expect(script).toContain('"md-callout md-callout-"+type');
+    expect(script).toContain("isMarkdownTableSeparator");
+    expect(script).toContain("isMarkdownBlockStart");
+    expect(script).toContain("function buildResponseToolbar(item)");
+    expect(script).toContain("md-table-card");
+    expect(script).toContain("navigator.clipboard.writeText(item.content||\"\")");
+    expect(script).toContain("document.createTextNode(source.slice(cursor,match.index))");
+    expect(script).not.toContain(".innerHTML");
     expect(script).toContain("Gemini is working");
     expect(script).toContain("Response is streaming");
     expect(script).toContain("✓ Completed");
