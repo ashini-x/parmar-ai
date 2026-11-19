@@ -1,7 +1,26 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-20 IST**. **M4.3 and M4.4 are fully accepted and closed.** M4.4 Project Memory is merged, production deployed and authenticated-Owner accepted. Main includes Owner UI/response PRs #360–#365, adaptive response PR #367, dark-canvas/instant-send UI PR #368, collapsible user-message PR #369, welcome PR #370 and typography PRs #372–#374; latest verified main documentation commit before M4.5 branch work is `56c55b2aadfdeb58ff8978b35d67dba6c46e9325`. **M4.5 — Automatic rollover and handoff — is being implemented in PR #375.** See [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md) for live PR/CI/deployment status. Always refresh GitHub, D1 and Cloudflare before acting; this prompt is a navigation aid, not a substitute for current evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-20 IST**. **M4.3 and M4.4 are fully accepted and closed.** M4.4 Project Memory is merged, production deployed and verified in the authenticated Owner browser. Main includes Owner UI/response PRs #360–#365, adaptive response PR #367, dark-canvas/instant-send UI PR #368, collapsible user-message PR #369, welcome PR #370, typography removal PR #374 and AERUNO-derived Owner SVG wordmark PR #376; latest verified main commit is `edaf98fb8d19ff3ac5853e3cc7a5c8bf29c245d8`. **M4.5 — Automatic rollover and handoff — is being implemented in PR #375.** See [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md) for the current head, checks, merge, production release and Owner walkthrough. Re-read GitHub, D1 and Cloudflare before acting; this prompt is a navigation aid, not a substitute for live evidence.
 
+
+### Owner typography removal and production release — 2026-11-20 IST
+
+- PR [#374](https://github.com/ashini-x/parmar-ai/pull/374) merged to `main` as `45bdc5a8f48ad57f360e4340ff1d6216845a8b5a`; all Poppins assets and Owner-page references are removed.
+- Release Validation [#44610099216](https://github.com/ashini-x/parmar-ai/actions/runs/44610099216) passed full checks and production deployment. `parmar-ai` version `7a1c632b-d9c5-4fa2-9535-e0afb0e21b8f` / deployment `10460485-b57a-4857-97b0-350bcd3e0522`; `brvin-service` version `56a88525-e1b5-45f7-abfb-b65faa8b0d57` / deployment `c3d67fc7-a659-4722-9163-8f5692ae1a17`. Both 100% traffic. Root/health, BRVIN binding and Fatman retrieval acceptance passed; artifact `14571718100`.
+- Actual OpenAI Sans is not bundled; the current OpenAI Sans-first declaration uses the platform system fallback. The Owner-only welcome wordmark, sidebar wordmark and monogram use AERUNO-derived SVG outlines; PR #376 is merged and production deployed. The OTF itself is not shipped or served. The trial lacks U+0245, so its angular crossbar-free A glyph is deliberately mapped to `Ʌ`. This artwork is for the `requireOwner`-protected Owner Intelligence routes only, not public marketing or BRVIN Teachers. The standalone public BRɅIN website was unchanged. Authenticated browser visual confirmation remains pending.
+
+### AERUNO-derived Owner wordmark production release — 2026-11-20 IST
+
+- PR [#376](https://github.com/ashini-x/parmar-ai/pull/376) merged to `main` as `edaf98fb8d19ff3ac5853e3cc7a5c8bf29c245d8`.
+- Release Validation [#44616326497](https://github.com/ashini-x/parmar-ai/actions/runs/44616326497) passed all checks and production release acceptance. `parmar-ai` version `300a3056-f4b8-4763-85f2-91dbb0ed6c9b` / deployment `5e5d6c0f-b1de-4ad7-bd68-128196c582da`; `brvin-service` version `5af6a338-3668-4f7b-a9c2-9f5e1114a3a5` / deployment `c5cfe19f-e0d8-4ef4-88ba-ae71e9b9775a`. Both 100% traffic. Root/health smoke, BRVIN binding and Fatman retrieval checks passed. Acceptance artifact `14575955229`.
+- The SVG outlines appear only in the `requireOwner`-protected Owner Intelligence HTML and JS. The AERUNO OTF is not included in the public repo or Worker assets. The actual OpenAI Sans binary remains pending; ordinary text uses the OpenAI Sans-first platform fallback. Visual confirmation in the authenticated Owner browser remains pending.
+
+### Shared BRɅIN brand and typography baseline — 2026-11-20 IST
+
+- Read [`docs/BRVIN_BRAND_TYPOGRAPHY.md`](BRVIN_BRAND_TYPOGRAPHY.md) before changing a product logo, font, typography token or UI text styles.
+- Owner-selected role split: AERUNO-derived outline artwork is used for the BRɅIN wordmark/monogram only inside the authenticated Owner panel; all ordinary product UI text targets the ChatGPT/OpenAI Sans visual style. Do not use the logo face for body text.
+- The Owner clarified the immediate panel is private and Owner-only. The trial font is used only to derive vector outline artwork locally; no OTF/TTF font binary is committed, uploaded to Cloudflare or served. The supplied font lacks U+0245 `Ʌ`; the angular, crossbar-free A outline is intentionally mapped to the brand's `Ʌ` in this Owner-only mark. Keep this derived wordmark restricted to the protected Owner Intelligence routes and do not reuse it publicly or in Teachers without separately reviewing the applicable terms.
+- Poppins WOFF2 assets, license/readme files, preloads and `@font-face` declarations were removed by PR #374, merged to `main` as `45bdc5a8f48ad57f360e4340ff1d6216845a8b5a` and production deployed on 2026-11-20 IST. Owner UI declares `"OpenAI Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`; actual OpenAI Sans is not bundled, so browsers render the platform fallback. Release Validation [#44610099216](https://github.com/ashini-x/parmar-ai/actions/runs/44610099216) passed; production `parmar-ai` is version `7a1c632b-d9c5-4fa2-9535-e0afb0e21b8f` / deployment `10460485-b57a-4857-97b0-350bcd3e0522`, and `brvin-service` is version `56a88525-e1b5-45f7-abfb-b65faa8b0d57` / deployment `c3d67fc7-a659-4722-9163-8f5692ae1a17`.. Use only official OpenAI font files and confirmed product-use/hosting permissions; never extract from ChatGPT/CDN assets.
 
 ### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
 
@@ -205,24 +224,25 @@ M4.3 is fully accepted and closed. The remaining evidence was reconciled using r
 
 ## Immediate current task — finish M4.5 PR #375, deploy and verify
 
-Implementation is in [PR #375](https://github.com/ashini-x/parmar-ai/pull/375) on branch `feat/m4-5-owner-intelligence-rollover`. Re-read the current PR diff, current-head workflow run and branch tip before acting; older CI runs may have been cancelled by later pushes. The implementation and acceptance scope are recorded in [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md).
+Implementation is in [PR #375](https://github.com/ashini-x/parmar-ai/pull/375), branch `feat/m4-5-owner-intelligence-rollover`. Re-read the latest PR head, mergeability and current-head workflow before acting; older PR runs were cancelled by later pushes. The implementation and acceptance scope are in [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md).
 
 M4.5 implementation includes:
-- 180,000 used-plus-reserved warning; 190,000 Roll Over action; the optional 195K state was not added.
-- D1-first idempotent rollover: preserve the source transcript and old ledger read-only; atomically create one linked successor, fresh 200,000-token budget, cloned immutable active Project Memory snapshot(s), provenance-rich deterministic handoff and unique D1 memory-job/outbox record.
-- Reject archived source edits/generation and block token reservation if the conversation is no longer active, including a request that passed preflight before rollover.
-- Show the handoff in the successor and include it as untrusted historical reference data in the exact selected-Vertex CountTokens/GenerateContent prompt.
-- Existing reviewed GitHub Save includes the full handoff Markdown file at `handoffs/<date>-<successor-prefix>.md`. D1 remains canonical; GitHub is marked Synced only after the existing Save path confirms commit and exact read-back. The new handoff file is not part of the active Project Memory allowlist.
-- Preserve strict M4.3 branch-head Conflict behavior. No new Queue/Workflow/service or Cloudflare plan change.
+- 180,000 used-plus-reserved warning; 190,000 Roll Over action; optional 195K urgency was not added.
+- D1-first idempotent rollover: preserve source transcript and old ledger read-only; atomically create one linked successor, fresh 200,000-token budget, clone immutable active Project Memory snapshot(s), and store deterministic source-linked Markdown handoff plus unique D1 memory-job/outbox row.
+- Reject archived source writes/generation and block token reservation when the conversation is no longer active, including a request that passed preflight before rollover.
+- Display handoff in the successor and include it as untrusted historical reference data in the exact selected-Vertex CountTokens/GenerateContent prompt.
+- Existing Owner-reviewed GitHub Save preview adds the full handoff as `handoffs/<date>-<successor-prefix>.md`, outside the active-memory manifest allowlist. Synced follows verified commit and exact file read-back; D1 remains canonical if GitHub is unreachable.
+- Preserve strict M4.3 branch-head Conflict behavior; no new Queue/Workflow/service or Cloudflare plan change.
 
 Required execution sequence:
-1. Inspect the latest PR #375 head, mergeability and current-head TypeScript/Vitest/Node/three Worker dry-run results. Fix any current-head failures and wait for the corresponding latest run; do not rely on cancelled/older runs.
-2. Mark PR ready and merge only after all current-head validation passes.
-3. Verify the post-merge main commit and the paired production release workflow. Record exact run, deployment IDs/versions, production smoke/acceptance artifact and 100% traffic only when directly observed.
-4. Perform read-only production D1 schema checks. Open/reload the authenticated Owner page to ensure lazy D1 schema initialization has run; confirm the handoff and memory-job tables exist without mutating usage or manufacturing a threshold.
-5. Ask the Owner to verify the deployed 180K/190K UI in a safe test conversation. Do not consume 190K production tokens solely to reproduce the threshold; deterministic local-D1 tests cover it. Verify one test rollover, read-only source, linked successor, zeroed 200K meter, handoff prompt provenance and pinned snapshot.
-6. Do not confirm a GitHub Save on behalf of the Owner. The Owner must review the complete preview, including the full `handoffs/` Markdown file; Synced must follow the exact commit/read-back verification.
-7. Close M4.5 only after current-head CI, production release/acceptance, read-only D1 schema verification and authenticated Owner continuity walkthrough are recorded in the acceptance document and roadmap.
+1. Inspect the latest PR #375 head and mergeability. Wait for current-head TypeScript, Vitest, Node tests and all three Worker dry-run builds; do not rely on cancelled/older runs.
+2. Confirm latest main reconciliation retained the deployed AERUNO-derived SVG wordmark and OpenAI Sans-first platform fallback. Do not revert current typography changes.
+3. Mark PR ready and merge only after current-head validation passes.
+4. Verify the post-merge main commit and paired production release workflow. Record exact run, deployment IDs/versions, smoke/acceptance artifact and 100% traffic only when directly observed.
+5. Run read-only production D1 schema queries. Open/reload the authenticated Owner page to ensure lazy schema initialization has run; confirm handoff/outbox tables without mutating usage or manufacturing a threshold.
+6. Ask the Owner to verify the deployed warning/action and successor journey in a safe test conversation. Do not consume 190K production tokens solely to reproduce the threshold; deterministic local-D1 tests cover it.
+7. Do not confirm GitHub Save on the Owner's behalf. The Owner must review the complete preview, including the full `handoffs/` Markdown file; Synced follows exact commit/read-back verification only.
+8. Close M4.5 only after current-head CI, production release/acceptance, read-only D1 schema verification and authenticated Owner continuity walkthrough are recorded in [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md) and the roadmap.
 
 M4.6-P0 remains a mandatory measured capacity/cost/durability gate **before M4.6**, not before M4.5. No Google Cloud settings, Vertex model/provider, 200K budget, BRVIN retrieval or student Telegram behavior should change.
 ## M4.4 approved scope
