@@ -297,9 +297,9 @@ The live acceptance journey is complete. Evidence is recorded in [OWNER_INTELLIG
 The post-save read-only reconciliation also compared all five preview files byte-for-byte at the saved commit SHA and current hub main, then reconciled nine same-chat settled reservation rows to the D1 meter: 40,496 used, zero reserved, under the unchanged 200,000-token limit. No production row was modified to obtain this evidence.
 Current-head PR validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files, and all three Worker dry-run bundles. PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`. Production workflow [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment, root/health, BRVIN service binding, Fatman retrieval and release-acceptance checks. Deployed parmar-ai version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and brvin-service version `d43a9f7b-32b3-486f-9845-75ed11811165`, each at 100% traffic. This historical PR #346 deployment record is superseded by the later #352, #355 and #356 fixes and the final live acceptance recorded below. The current production Worker versions and the read-only M4.3 closeout are recorded in [OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md).
 
-## Owner Intelligence — project memory and token-aware continuity (M4.3 complete; M4.4–M4.8 planned)
+## Owner Intelligence — project memory and token-aware continuity (M4.4 deployed; Owner walkthrough pending; M4.5–M4.8 planned)
 
-The following are future acceptance criteria, not tests that have passed in the current release. See [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md).
+M4.3 is fully accepted. M4.4 implementation, automated validation and production release are complete; the authenticated Owner attach-and-read journey listed below has not yet been observed. M4.5–M4.8 remain future milestones. See [OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md](OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md) and [M4.4 acceptance record](OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md).
 
 ### M4.2 — Scratchpad and topic foundation
 - New Chat creates a D1-backed Scratchpad with no forced project selection.
@@ -314,12 +314,17 @@ The following are future acceptance criteria, not tests that have passed in the 
 - Multi-file save is one conflict-aware atomic commit; after commit, the app reads back/validates the expected commit SHA and file set.
 - The original D1 transcript is unchanged by summarization or GitHub sync.
 
-### M4.4 — Attach and load Project Memory
-- A new Scratchpad can optionally attach a project; selecting a project loads only manifest-listed active memory files.
-- Archived notes and old session notes are excluded by default and can be searched/opened on demand.
-- The loaded project snapshot records the GitHub repository, branch and exact commit SHA; a chat's snapshot does not silently change when the branch moves.
-- Vertex CountTokens measures the actual effective prompt for the selected model/API; project-memory estimates are shown separately from cumulative chat usage before sent.
-- Markdown prompt-injection content is treated as untrusted reference data and cannot override Owner policy or application instructions.
+### M4.4 — Attach and load Project Memory (implementation/CI passed; Owner walkthrough pending)
+- **Manifest validation:** versioned hub/catalog/project/workstream/feature manifests are schema- and identity-validated; invalid IDs, paths, namespaces, unsupported versions and unlisted memory references fail closed.
+- **Allowlist:** only project-memory.md, progress.md and decisions.md are implicitly loadable for Owner Gemini Intelligence. Archive, session notes, handoff/collaboration folders and unlisted files are excluded.
+- **Pinned snapshot integrity:** each attachment persists Owner and conversation scope, stable project/workstream/feature IDs, exact hub repository/branch/commit, governing manifest blob SHAs, active file blob SHAs and immutable Markdown content in D1.
+- **No silent refresh:** a later hub main update does not change an existing conversation's pinned prompt context.
+- **Isolation:** cross-Owner snapshot reads are denied. One primary project scope is allowed by default. A secondary scope requires both the conversation-level cross-project switch and explicit per-snapshot Owner opt-in. Disabling cross-project mode deactivates secondary scope without deleting the primary snapshot.
+- **Prompt accounting:** pinned memory is included in the exact effective prompt measured by selected-model Vertex CountTokens before existing M4.1 prompt/output reservation. The 200,000-token conversation budget is unchanged and project-memory estimates do not increment cumulative chat usage until turns are sent.
+- **Trust boundary:** memory Markdown remains untrusted reference data and cannot override application or Owner policy.
+- **CI evidence:** workflow [44568064917](https://github.com/ashini-x/parmar-ai/actions/runs/44568064917) passed TypeScript, 521 Vitest tests/76 files, 62 Node tests/9 files and three Worker dry-run builds.
+- **Deployment evidence:** workflow 44568064917 deployed both Workers and passed root, BRVIN-backed health and release acceptance. M4.4 versions: parmar-ai fd932efb-9d97-4e8f-837f-79a460409495; brvin-service 90b21e52-2a55-402e-8398-0c6e308d3a0e.
+- **Remaining Owner browser acceptance:** attach Owner Gemini Intelligence to a real production conversation with cross-project controls off, inspect the pinned repo/branch/commit and active file provenance, ask a fresh question grounded in that memory, and confirm an untouched Scratchpad remains transcript-only until explicitly attached. General root/health smoke does not perform this journey.
 
 ### M4.5 — Automatic rollover
 - The UI warns at 180,000 cumulative tokens and offers a rollover action at 190,000; 195,000 may show an urgent state but does not replace the hard cap.
@@ -443,3 +448,14 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 - **Deployment and CI:** PR #356 CI [44455732385](https://github.com/ashini-x/parmar-ai/actions/runs/44455732385) passed typecheck/check, 513 Vitest tests across 75 files, 62 Node tests across 9 files, and all three Worker dry-run builds. Cloudflare deployment listings show parmar-ai version 74fade9d-422e-4a91-8be4-f98340b76eb4 and brvin-service version 1999a4c1-9137-447e-8dc7-596f70a338b9 at 100% traffic. PR CI and deployment activation are distinct; no additional post-#356 production smoke is claimed.
 
 **Do not repeat** the accepted live Save, reinstall/broaden the App, or weaken the strict branch-head Conflict rule. M4.4 — Attach and load Project Memory — is now unblocked and is the next milestone.
+
+### M4.4 authenticated production Owner walkthrough (pending)
+1. Sign in as the Owner and open /admin/intelligence.
+2. Open a conversation associated with the connected Owner Intelligence hub topic, or create a Scratchpad and choose that topic.
+3. In the sidebar Project Context panel, choose the Owner Intelligence hub topic and Owner Gemini Intelligence project. Leave Workstream and Feature at project-wide defaults.
+4. Keep Enable cross-project context and Add selected scope as secondary context unchecked; click Attach pinned Project Memory.
+5. Verify the attached primary scope and inspect repository, branch, exact commit SHA, manifest provenance and active memory file list.
+6. Send a fresh prompt asking the selected Gemini model to summarize the memory and identify the pinned commit. Confirm the reply uses the selected project and does not introduce unrelated project content.
+7. Confirm a separate Scratchpad remains transcript-only until the Owner explicitly attaches a project.
+
+Record the actual Owner observation and date in OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md. Do not create production test projects or enable cross-project context just to fill this default-path gate.

@@ -1,6 +1,6 @@
 # Owner Intelligence — Memory and Token-Aware Context Architecture
 
-**Status:** M4.3 implementation deployed and fully accepted on 2026-11-19; approved central Owner Memory Hub, AI collaboration and single-provider/Cloudflare capacity design; M4.4–M4.8 not implemented  
+**Status:** M4.4 Project Memory implementation merged and production deployed on 2026-11-19; automated acceptance passed; authenticated Owner attach-and-read acceptance pending; M4.5–M4.8 remain planned  
 **Original approval:** 2026-11-18  
 **Central hub/collaboration amendment:** 2026-11-19 IST  
 **Parent roadmap:** [OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md](OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md)  
@@ -11,7 +11,7 @@
 
 Extend the deployed Owner Gemini chat so a project discussion can be saved, reopened after weeks, continued across independent chats, compacted safely, forked for experiments, and rolled over before the per-chat budget is exhausted.
 
-This is a design specification for the capabilities that extend the deployed Owner workspace. M0–M4.3 implementation is merged and deployed, and M4.3 is fully accepted as of 2026-11-19. The Owner confirmed the live Save/read-back and append-only preservation test; final read-only production D1/GitHub checks verified topic association, selected-only installation, Synced commit, all five files byte-for-byte at the saved SHA/current hub `main`, and the same-chat usage ledger. See [M4.3 acceptance record](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md). Automatic Project Memory prompt loading, hierarchical hub manifests, immutable per-conversation snapshots, rollover, historical recall, compaction, fork and AI collaboration exchange are not yet shipped; M4.4 is next.
+This is a design specification for the capabilities that extend the deployed Owner workspace. M0–M4.4 implementation is merged and deployed. M4.3 is fully accepted as of 2026-11-19; its live Save/read-back and append-only preservation evidence is in [M4.3 acceptance record](OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md). M4.4 adds versioned hub/project/workstream/feature manifests, pinned Owner-scoped D1 snapshots and manifest-allowlisted active-memory loading. Automated validation and production release acceptance passed. The authenticated Owner Project Context attach-and-read walkthrough remains pending; M4.5–M4.8 are future work.
 
 The implementation must preserve the existing Owner-only Admin Control Center, Vertex authentication and SSE path, selected-model behaviour, D1 conversation storage, and the student/BRɅIN security boundaries. It must not rebuild the chat UI or replace the current provider adapter.
 
@@ -428,7 +428,7 @@ M4.3 implementation is merged and deployed. PR #352 fixed the topic API route; P
 
 PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`. Current-head validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files and all three Worker dry-runs. Production workflow [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed. PR #346 merged as `4291a8a63d44bdc035a97d4a72b9edafda24b60c`; validation [44382449397](https://github.com/ashini-x/parmar-ai/actions/runs/44382449397) passed TypeScript/check, 505 Vitest tests/74 files, 62 Node tests/9 files and three Worker dry-runs. Production release [44383000092](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092) passed paired deployment and root/health, BRVIN binding, Fatman retrieval and release-acceptance checks. `parmar-ai` version `393f0844-3f65-4275-90b1-f6d5cca4f2d3` and `brvin-service` version `d43a9f7b-32b3-486f-9845-75ed11811165` are at 100% traffic; artifact [14464228113](https://github.com/ashini-x/parmar-ai/actions/runs/44383000092/artifacts/14464228113).
 
-M4.3 live Owner acceptance and final D1/GitHub evidence reconciliation are complete. M4.4 remains unimplemented and must separately add manifest-selected prompt loading and per-conversation pinned repository/branch/commit snapshots.
+M4.3 live Owner acceptance and final D1/GitHub evidence reconciliation are complete. This earlier planning statement is superseded: M4.4 manifest-selected Project Memory, pinned per-conversation snapshots and scoped loading are now implemented and deployed; only authenticated Owner browser acceptance remains. See the M4.4 release status at the end of this document.
 
 ## 2026-11-19 architecture amendment — central hub and AI collaboration
 
@@ -441,3 +441,26 @@ Gemini Owner Intelligence is the architect/planner/reviewer and curator of appro
 Preserve the original M4.1 200,000-token cumulative conversation budget unchanged. The M4.6 Cloudflare Owner Context Replicator still owns the quadratic-growth fix: one complete per-request budget B, exact CountTokens of the final prompt, selective project/workstream/collaboration memory and historical D1 retrieval, per-request input ≤ B and aggregate prompt input ≤ N × B = O(N) for fixed B. Collaboration artifacts are included in B, not given a separate context allowance. All seven Owner scenarios already recorded in this architecture remain acceptance requirements.
 
 M4.3's strict branch-head Conflict behavior remains in force until path-aware multi-writer preconditions are implemented. Future unrelated-path rebasing must verify all touched-file and governing-manifest blob SHAs, use bounded retries and a non-force ref update. Same-path or manifest conflicts require review. No application code, new repository, hierarchical loader or collaboration automation is created by this architecture amendment.
+
+## 2026-11-19 IST — M4.4 implementation and release status
+
+M4.4 is implemented and production deployed. Do not treat earlier planning paragraphs that describe M4.4 as unimplemented as current state.
+
+### Shipped
+- Hub manifest and project catalog with version-1 schemas for hub, catalog entry, project, workstream and feature manifests.
+- Stable Owner Gemini Intelligence project ID `6d0bf6d4-59a2-4df2-9389-6d04100d8d84`; source code remains in source repositories and is not copied into the hub.
+- Active-memory allowlist: `project-memory.md`, `progress.md` and `decisions.md`. Session notes, archive, handoff/collaboration folders and unlisted files are not implicit context.
+- Owner-scoped immutable D1 snapshots pin the conversation, project/workstream/feature, hub repository/branch/commit, governing manifest provenance, file blob SHAs and Markdown bytes.
+- Prompt loading uses only the pinned active-memory snapshot. A later hub branch update does not silently change an existing conversation.
+- One primary project scope is the default. Secondary scopes require both the conversation-level cross-project switch and explicit per-snapshot Owner opt-in; disabling cross-project mode deactivates secondary scopes while retaining the primary.
+- Pinned memory enters the exact effective prompt before selected-model Vertex CountTokens and the existing M4.1 reservation. The 200,000-token conversation budget and canonical D1 transcript are unchanged.
+- The Project Context panel displays attached scopes and pinned repository/branch/commit and manifest/file provenance.
+
+### Validation and release
+- PR #361 merged as `cd54375690b3e5d3ecc566f83be7711b48c58443`; Owner Memory Hub PR #1 merged as `91e5c98cbc375b3c418207b6559021b16200e0b4`.
+- Workflow [44568064917](https://github.com/ashini-x/parmar-ai/actions/runs/44568064917) passed TypeScript, 521 Vitest tests/76 files, 62 Node tests/9 files and all three Worker dry-run builds. The same workflow deployed both Workers and passed root/BRVIN health/release acceptance.
+- M4.4 release versions: `parmar-ai` `fd932efb-9d97-4e8f-837f-79a460409495`; `brvin-service` `90b21e52-2a55-402e-8398-0c6e308d3a0e`.
+- Latest main additionally includes response renderer PR #365 and is deployed at `parmar-ai` `fccd13e6-1be3-4ecb-b1e6-d42d352cd1f8` and `brvin-service` `500709c7-b62a-4c6c-9613-159f77988310`, both at 100% traffic; workflow [44571138999](https://github.com/ashini-x/parmar-ai/actions/runs/44571138999) passed.
+- Automated release smoke confirms root and BRVIN-backed health, not authenticated Project Context. M4.4 becomes fully accepted only after the Owner attaches the project to a production conversation, checks pinned provenance and verifies a fresh model response uses the attached memory.
+
+M4.4 does not include archive/session search, automatic branch refresh, rollover, compaction, forks, historical D1 recall, semantic caching or path-aware multi-writer rebasing. M4.3 strict branch-head Conflict protection remains unchanged.

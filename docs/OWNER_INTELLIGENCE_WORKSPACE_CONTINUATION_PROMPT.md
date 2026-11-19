@@ -1,6 +1,6 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**, after M4.3 was fully closed by read-only production D1/GitHub reconciliation and Owner Intelligence sidebar, fixed composer/token dock, browser-runtime recovery/surface cleanup, footer model/thinking controls, Project Memory implementation and ChatGPT-style rich response rendering in PRs #360–#365 were merged/deployed with production acceptance. **M4.3 is closed; M4.4 implementation is deployed and awaits Owner browser acceptance; M4.5 — Automatic rollover and handoff — is next after that gate.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**. M4.3 is fully accepted. **M4.4 Project Memory implementation is merged and production deployed; its authenticated Owner attach-and-read walkthrough remains pending.** Current main includes PRs #360–#365; latest runtime commit is `f7d1dbe79c880a8e43eebab230908fc6a07484bf`. M4.5 — Automatic rollover and handoff — begins only after M4.4 Owner acceptance. Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
 
 
 ### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
@@ -147,12 +147,19 @@ M4.3 is fully accepted and closed. The remaining evidence was reconciled using r
 
 **Result:** all M4.3 acceptance criteria applicable to the tested topic conversation passed. No production D1 records, Worker configuration, App permissions, credentials, Vertex model, quota, billing or student runtime were changed during closeout.
 
-## Immediate next task — M4.4 — Attach and load Project Memory
-1. Re-read the latest `main`, especially the roadmap, this prompt, M4.3 acceptance record, memory/context architecture, AI collaboration protocol, provider/infrastructure policy, TEST_PLAN and docs index.
-2. Inspect current source/schema/migrations/routes and the private hub's actual tree. Confirm what currently exists; do not assume the hub manifest/catalog or context loader exists.
-3. Prepare a bounded M4.4 implementation brief for Owner review. It should define versioned catalog/manifest schemas, stable project/workstream/feature IDs, pinned repository/branch/commit snapshots per conversation, manifest-allowlisted active-memory loading, visible context provenance, exact CountTokens/reservation ordering and strict cross-project isolation.
-4. Keep M4.4 narrow: no rollover, compaction, fork, historical D1 recall, semantic cache, background sync, or multi-writer/path-aware rebasing. Preserve M4.1's exact 200K cap and M4.3's strict branch-head Conflict guard.
-5. Do not start code changes until the implementation brief is consistent with the approved scope and Owner approval is recorded.
+## Immediate next task — M4.4 production Owner acceptance
+
+The implementation, CI and production rollout are complete. Do not create another M4.4 implementation PR or repeat the M4.3 Save/read-back flow.
+
+1. Sign in as the Owner and open `/admin/intelligence`.
+2. Open a conversation associated with the connected Owner Intelligence hub topic, or create a Scratchpad and select that topic.
+3. In the sidebar **PROJECT CONTEXT** panel, choose the Owner Intelligence hub connection topic, then the **Owner Gemini Intelligence** project. Leave optional Workstream and Feature at project-wide defaults.
+4. Keep **Enable cross-project context** and **Add selected scope as secondary context** unchecked. Select **Attach pinned Project Memory**.
+5. Verify the panel shows one pinned primary scope and displays the hub repository, branch, exact commit SHA, manifest provenance and allowlisted active file names.
+6. Send a fresh prompt asking the selected Gemini model to summarize the attached project memory and identify the pinned commit. Verify the response is grounded in the Owner Gemini Intelligence scope and does not pull in unrelated projects.
+7. Confirm a separate Scratchpad remains transcript-only until a project is explicitly attached.
+
+Record the actual Owner result in `docs/OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md`. The generic root/health release smoke does not exercise this authenticated workflow. Do not enable cross-project mode or create production test projects merely to fill the acceptance gap. When the Owner confirms the flow, close M4.4 and proceed to M4.5 — Automatic rollover and handoff.
 
 
 
@@ -202,10 +209,21 @@ M4.4 does not implement rollover, compaction, fork, historical D1 recall, semant
 - Roadmap: `docs/OWNER_INTELLIGENCE_WORKSPACE_ROADMAP.md`
 - Continuation prompt: `docs/OWNER_INTELLIGENCE_WORKSPACE_CONTINUATION_PROMPT.md`
 - Acceptance record: `docs/OWNER_INTELLIGENCE_M4_3_ACCEPTANCE.md`
+- M4.4 acceptance: `docs/OWNER_INTELLIGENCE_M4_4_ACCEPTANCE.md`
 - Memory/context architecture: `docs/OWNER_INTELLIGENCE_MEMORY_AND_CONTEXT_ARCHITECTURE.md`
 - AI collaboration protocol: `docs/OWNER_INTELLIGENCE_AI_COLLABORATION_PROTOCOL.md`
 - Provider/infrastructure policy: `docs/OWNER_INTELLIGENCE_PROVIDER_AND_INFRASTRUCTURE_POLICY.md`
 - Test plan: `docs/TEST_PLAN.md`
 - Documentation index: `docs/README.md`
 
-**New chat should begin with M4.4 source/schema/hub inspection and a bounded implementation brief for Owner review. M4.3 is fully closed; do not repeat the Save flow, revisit its acceptance gate, change the 200K budget, alter Google Cloud settings or touch the student Telegram runtime.**
+**New chat should begin with the authenticated M4.4 Project Context attach-and-read walkthrough above, not new implementation work. M4.3 is fully closed and M4.4 is deployed; do not repeat the Save flow, change the 200K budget, alter Google Cloud settings or touch the student Telegram runtime. After Owner acceptance, proceed to M4.5.**
+
+## M4.4 implementation and production release checkpoint — 2026-11-19 IST
+
+- Owner Memory Hub PR #1 merged as `91e5c98cbc375b3c418207b6559021b16200e0b4`; Worker PR #361 merged as `cd54375690b3e5d3ecc566f83be7711b48c58443`.
+- Versioned hub/catalog/project/workstream/feature manifests and stable Owner Gemini Intelligence project ID `6d0bf6d4-59a2-4df2-9389-6d04100d8d84` are live in the private hub.
+- The Worker pins exact repository/branch/commit and manifest/file provenance in Owner-scoped D1 snapshots; only manifest-allowlisted active memory files are loaded. Secondary project context requires two explicit Owner opt-ins.
+- CI [44568064917](https://github.com/ashini-x/parmar-ai/actions/runs/44568064917) passed 521 Vitest tests/76 files, 62 Node tests/9 files, TypeScript and all three Worker dry runs. The same workflow deployed both Workers and passed root, BRVIN-backed health and release acceptance.
+- M4.4 release versions: `parmar-ai` `fd932efb-9d97-4e8f-837f-79a460409495`, deployment `1f2b9b0e-8655-4158-b4a1-23b83ad89aba`; `brvin-service` `90b21e52-2a55-402e-8398-0c6e308d3a0e`, deployment `719cbe9a-435f-4080-ad8b-344ecf59320f`.
+- The latest separate PR #365 response-renderer deployment is on main commit `f7d1dbe79c880a8e43eebab230908fc6a07484bf`; production versions are `parmar-ai` `fccd13e6-1be3-4ecb-b1e6-d42d352cd1f8` and `brvin-service` `500709c7-b62a-4c6c-9613-159f77988310`, both at 100% traffic.
+- Deployment health checks are not a substitute for authenticated Owner acceptance of Project Context. The only remaining M4.4 task is the walkthrough above.
