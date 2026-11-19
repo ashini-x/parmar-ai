@@ -1118,7 +1118,6 @@ async function updateOwnerAssistantMessage(
   usage?: { promptTokens: number; outputTokens: number; totalTokens: number; elapsedMs: number },
 ): Promise<OwnerIntelligenceMessage | null> {
   await ensureOwnerIntelligenceSchema(env);
-  if (content.length > MAX_MESSAGE_LENGTH) throw new Error("The generated response exceeded the supported message size.");
   const ownerId = ownerPrincipal(env);
   const results = await env.DB!.batch([
     env.DB!.prepare(
@@ -1602,9 +1601,6 @@ async function handleOwnerGeneration(
           for await (const event of upstream) {
             if (event.type === "delta") {
               generatedText += event.text;
-              if (generatedText.length > MAX_MESSAGE_LENGTH) {
-                throw new OwnerGeminiProviderError("The response exceeded the supported 300,000-character message size.");
-              }
               if (generatedText.length - lastPersistedLength >= 1_024 || Date.now() - lastPersistedAt >= 1_000) {
                 await updateOwnerAssistantMessage(env, assistantMessage!.id, generatedText, "partial");
                 lastPersistedLength = generatedText.length;
