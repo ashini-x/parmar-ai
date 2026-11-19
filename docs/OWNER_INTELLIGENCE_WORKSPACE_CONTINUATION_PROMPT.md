@@ -1,6 +1,17 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**, after M4.3 was fully closed by read-only production D1/GitHub reconciliation. **M4.3 is complete; M4.4 — Attach and load Project Memory — is the next task.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**, after M4.3 was fully closed by read-only production D1/GitHub reconciliation and the sidebar-only UI maintenance in PR #360 was deployed with production acceptance. **M4.3 is complete; M4.4 — Attach and load Project Memory — is the next task.** Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
+
+
+### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
+
+- [PR #360](https://github.com/ashini-x/parmar-ai/pull/360) merged as `4cc3e1e0b29c7baf40c37a161eb0c6d2175b4a8a`.
+- One independently scrollable sidebar content region now contains the brand, new-chat/topic controls, GitHub project controls and conversation history; the Owner/privacy and sign-out footer stays pinned outside it. The main workspace scroll remains independent.
+- Reference-style scrollbar: 6px, rounded, muted-grey thumb and transparent track. Desktop width: 292px; mobile drawer: `min(320px, 88vw)`.
+- PR validation [44549743114](https://github.com/ashini-x/parmar-ai/actions/runs/44549743114) passed. Production workflow [44550032756](https://github.com/ashini-x/parmar-ai/actions/runs/44550032756) passed both test suites, TypeScript checks, three Worker dry-run builds, production smoke and release acceptance.
+- Production versions at 100% traffic: `parmar-ai` `aeebb8e0-4443-418d-b768-0c2cfa0bec1a` (deployment `8f655927-c224-4d8b-841c-8a73a01b97b8`); `brvin-service` `ff4e3748-50fc-418e-823e-a04bde87f1c9` (deployment `4a1208a9-5664-4e68-957a-b9a40ba24af9`). Acceptance artifact: `14542491426`.
+- This was a presentation-only change. No API, D1, Vertex/model/provider, token-budget, Project Memory, BRVIN retrieval or student Telegram behavior changed. Reload `/admin/intelligence` in the Owner browser to visually confirm the new layout; automated production acceptance checks Worker health/bindings and does not perform a screenshot-based UI test.
+- M4.4 is still the immediate next task; do not treat this UI maintenance as progress on M4.4.
 
 ## First action: recover the source of truth
 
@@ -15,7 +26,7 @@ Read these files from the latest `main` branch in this order:
 7. `docs/TEST_PLAN.md` and `docs/README.md`.
 8. Inspect relevant source, current D1 records (read-only), latest `owner-memory-hub` commit and Cloudflare deployment state before choosing the next action.
 
-Runtime-code baseline at handoff: `3ae456188fb7535db47bcab2a7909cf333b59285` (M4.3 append-only preservation fix). Documentation-only commits follow that code baseline, including the M4.3 closeout record; the source runtime was not changed by this closeout. Verify latest `main`, production D1 and Cloudflare state before implementation.
+Runtime-code baseline at handoff: `4cc3e1e0b29c7baf40c37a161eb0c6d2175b4a8a` (M4.3 code plus the UI-only Owner sidebar refinement from PR #360). M4.3 backend behavior remains based on `3ae456188fb7535db47bcab2a7909cf333b59285`; PR #360 changed only the Owner workspace HTML/CSS and UI regression assertions. Its paired production release is verified below. Verify latest `main`, production D1 and Cloudflare state before implementation.
 
 ## Product and security boundary — immutable
 
