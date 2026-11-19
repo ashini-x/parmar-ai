@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.3 acceptance closed; M4.4 Project Memory implementation merged and production deployed. M4.4 automated validation and Worker release acceptance passed; the Owner's live browser acceptance of project-scope attachment/context loading remains to be confirmed. **Next approved task after M4.4 Owner acceptance: M4.5 — Automatic rollover and handoff.** M4.5–M4.8 remain approved, not implemented; M4.6-P0 is required before M4.6; automatic stream reconnection remains deferred.
-**Last updated:** 2026-11-19 IST — Adaptive response presentation deployed; Gemini now chooses suitable prose, tables, steps, lists and status callouts; M4.4 Owner browser acceptance pending  
+**Last updated:** 2026-11-19 IST — Owner workspace near-black surfaces, immediate send/empty composer, fixed-width user bubbles and removal of response feedback controls deployed; adaptive response behaviour retained  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -612,3 +612,15 @@ The topic API route defect was corrected in PR #352 and production-deployed. The
 - **Validation:** PR workflow [44576001581](https://github.com/ashini-x/parmar-ai/actions/runs/44576001581) passed TypeScript, Vitest, Node tests and all three Worker dry-run builds. Production release [44576276901](https://github.com/ashini-x/parmar-ai/actions/runs/44576276901) passed both Worker deployments, root/health smoke, BRVIN service binding, Fatman retrieval readiness and production release acceptance.
 - **Production evidence:** brvin-service version 95321210-5ac5-4ad6-8f76-5b6e570ac561, deployment 14bba055-4a0c-447b-a91b-7974263829ed, at 100% traffic; parmar-ai version 83639d71-ae95-4c59-9661-4ffc0a601305, deployment ed08b76f-5693-478c-b7e4-34c144904f3f, at 100% traffic. Acceptance artifact 14556142262.
 - **Owner visual acceptance:** hard-refresh /admin/intelligence and ask an ordinary open-ended question. Verify that the selected model naturally chooses an appropriate mix of prose, headings, tables, steps, lists and status cards without a format request. Worker release acceptance does not perform screenshot-based UI validation.
+
+### Owner Intelligence black canvas and instant user-message send — 2026-11-19 IST
+
+- **Merged:** [PR #368](https://github.com/ashini-x/parmar-ai/pull/368), runtime source revision `e5382a38a9eceba4d83cc9d5c5c3397f8531efb8`.
+- Darkened the entire Owner workspace canvas to black (`#000`), with a near-black sidebar (`#050505`) and darker project/history panels, composer, session meter and activity surface.
+- Removed response like/dislike controls. Copy and Regenerate remain available.
+- Normal send is now optimistic: the submitted user prompt appears immediately in the transcript and the composer clears before the network/model wait. Once the server accepts the request, the stored transcript replaces the temporary optimistic message.
+- If the request is rejected before acceptance, the temporary bubble is removed and the user's text is restored to the composer. Edit mode is restored for a rejected edit. If streaming fails after the server accepted the user prompt, the prompt stays in the conversation rather than returning to the composer.
+- User prompt bubbles use a consistent width of up to 78% of the conversation column, capped at 660px, with a 240px minimum when the viewport allows; one-word messages no longer collapse into tiny bubbles.
+- **Validation:** PR workflow [44580306903](https://github.com/ashini-x/parmar-ai/actions/runs/44580306903) passed TypeScript, 521 tests, Node tests and all three Worker dry-run builds. Production release [44580570767](https://github.com/ashini-x/parmar-ai/actions/runs/44580570767) passed both Worker deployments, root/health smoke, BRVIN service binding, Fatman retrieval readiness and final release acceptance.
+- **Production evidence:** `brvin-service` version `7fbe0a53-9892-4ef9-b9df-cabe7d34230f`, deployment `aa0b89d8-58a8-4cbb-a3ea-7865b374ab8e`, at 100% traffic; `parmar-ai` version `297e1ec3-d98f-47a7-aa07-ab7add0b30e3`, deployment `0620ba05-39fc-441d-9ca6-245c5bb1cb26`, at 100% traffic. Acceptance artifact `14559300763`.
+- **Scope:** Owner UI only. Model selection, adaptive Gemini response instruction, response Markdown renderer, Vertex CountTokens accounting, 200,000-token session budget, 300,000-character prompt cap, Project Memory and student-facing Telegram behaviour are unchanged.
