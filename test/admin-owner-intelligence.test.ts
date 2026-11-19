@@ -463,6 +463,9 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain("Your conversations");
     expect(html).toContain('id="bottomDock"');
     expect(html).toContain('id="sessionBudget"');
+    expect(html).toContain("SESSION TOKENS");
+    expect(html).toContain("200,000 left");
+    expect(html).not.toContain('id="sessionBudget" hidden');
     expect(html).toContain('id="messageInput" disabled rows="1" placeholder="Write a message…"');
     expect(html).not.toContain('maxlength="50000"');
     expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto");
@@ -520,6 +523,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("function resizeComposerInput()");
     expect(script).toContain('messageInput.addEventListener("input",function(){resizeComposerInput();updateComposer();});');
     expect(script).toContain("maxHeight=144");
+    expect(script).toContain("state.sessionUsage||{limit_tokens:200000,used_tokens:0,reserved_tokens:0,remaining_tokens:200000,locked:false}");
   });
 
   it("creates, lists, reopens, renames and deletes only the Owner's conversations and messages", async () => {
