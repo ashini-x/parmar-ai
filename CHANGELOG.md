@@ -41,7 +41,7 @@
 - PR [#352](https://github.com/ashini-x/parmar-ai/pull/352) merged as `c555d9428421fbbe600a872093730fa3dce644e1`. It corrects the topic list/create/rename client URL to `/admin/api/intelligence/topics` and adds a topic-specific `Retry topics` action.
 - Validation and production release [44411119143](https://github.com/ashini-x/parmar-ai/actions/runs/44411119143) completed successfully: TypeScript, Vitest, Node tests, all three Worker dry-runs, paired Worker deployment, and root/BRVIN/Fatman smoke checks passed.
 - Cloudflare confirms `parmar-ai` version `1df8cbae-4777-44f9-87b4-e26dc6acde93` on deployment `582658d9-cd4c-4d2a-b2a8-4325c18591e0` at 100% traffic; `brvin-service` version `da8c9944-a349-4b74-a160-1582db9ec104` is also at 100%.
-- The production D1 query had confirmed the Owner's failed topic attempt created no row. The Owner must now hard-refresh and verify topic creation/listing in both dropdowns; then continue M4.3 attach/save/read-back/Conflict acceptance.
+- At the time of this entry, the production D1 query showed the failed topic attempt had created no row, so the next action was to hard-refresh and verify topic creation/listing. This was subsequently completed after PR #352; the live Save/Conflict/read-back and final D1/GitHub closeout are recorded in the newer completion entry above.
 - No topic row was manually inserted. No Memory Hub files or source-code repositories were changed by this fix.
 
 ## 2026-11-19 IST: Owner Intelligence topic creation route bug found; corrective fix under validation
@@ -56,8 +56,7 @@
 
 - Owner-provided production screenshot shows `Connected · 1 verified installation(s)`, account `ashini-x · User`, and repository `ashini-x/owner-memory-hub · Private`; branch field is `main`.
 - The selected-only GitHub App installation/PKCE verification sub-gate is therefore complete. Do not uninstall, recreate or reinstall the App.
-- The panel still says `Select a topic above`; topic attachment with a unique memory root, reviewed five-file Save, exact commit/file read-back, topic promotion and stale-branch Conflict acceptance remain pending for M4.3.
-- M4.4 stays blocked until these remaining M4.3 acceptance checks pass. No application code or deployment changed in this documentation update.
+- **Historical Owner-panel snapshot at this point in the setup:** the panel still said `Select a topic above`; the topic attachment, reviewed five-file Save, exact commit/file read-back and stale-branch Conflict checks had not yet been completed. The later live acceptance and final closeout entries above supersede this interim status. No application code or deployment changed in this documentation update.
 
 ## 2026-11-19 IST: Owner Memory Hub private and clean App reinstall selected
 
