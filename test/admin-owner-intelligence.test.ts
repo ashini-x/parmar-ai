@@ -426,7 +426,7 @@ describe("Owner Gemini conversation context builder", () => {
     expect(contents[0]?.role).toBe("user");
     expect(contents[contents.length - 1]).toEqual({ role: "user", text: "Newest prompt must remain." });
     expect(contents.length).toBeLessThanOrEqual(49);
-    expect(contents.every((turn, index) => turn.text.length > 0 && turn.text.length <= 50_000 &&
+    expect(contents.every((turn, index) => turn.text.length > 0 && turn.text.length <= 300_000 &&
       (index === 0 || turn.role !== contents[index - 1].role))).toBe(true);
     expect(contents.reduce((total, turn) => total + turn.text.length, 0)).toBeLessThanOrEqual(300_000);
     expect(messages).toHaveLength(41);
@@ -465,6 +465,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain('id="sessionBudget"');
     expect(html).toContain('id="messageInput" disabled rows="1" placeholder="Write a message…"');
     expect(html).not.toContain('maxlength="50000"');
+    expect(html).toContain("const MAX_MESSAGE_LENGTH = MAX_OWNER_GEMINI_CONTEXT_CHARS");
+    expect(html).toContain("Message content must contain between 1 and 300,000 characters.");
     expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto");
     expect(html).toContain(".bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px))");
     expect(html).toContain(".composer textarea{display:block;width:100%;resize:none;min-height:34px;max-height:144px;overflow-y:auto");
