@@ -6,7 +6,6 @@
   "workers_dev": true,
   "assets": {
     "directory": "./public/owner-fonts",
-    "base_path": "/admin/intelligence-fonts",
     "not_found_handling": "404-page"
   },
   "keep_vars": true,
