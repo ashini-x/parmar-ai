@@ -570,9 +570,11 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("The Owner workspace request timed out");
     expect(script).toContain("Could not load conversations");
     expect(script).toContain("appendActivityCard");
-    expect(script).toContain('welcomeBrand.innerHTML=ownerWordmarkSvg');
-    expect(script).toContain('var ownerWordmarkSvg = "<svg xmlns=\\"http://www.w3.org/2000/svg\\"');
-    expect(script).toContain('viewBox=\\"0 0 7197 1446\\"');
+    expect(script).toContain("welcomeBrand.appendChild(buildOwnerWordmarkSvgNode())");
+    expect(script).toContain('var ownerWordmarkGlyphs = [{');
+    expect(script).toContain('document.createElementNS(ns,"svg")');
+    expect(script).toContain('viewBox","0 0 7197 1446"');
+    expect(script).not.toContain(".innerHTML");
     expect(script).toContain('Welcome back Sir.');
     expect(script).not.toContain('What are we hunting today?');
     expect(script).not.toContain("Your thinking space.");

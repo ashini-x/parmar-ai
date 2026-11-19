@@ -3,7 +3,7 @@ import type { Env } from "../config/env";
 import { json, methodNotAllowed, notFound } from "../http/response";
 import { countOwnerGeminiInputTokens, generateOwnerGeminiContent, openOwnerGeminiStream, ownerIntelligenceModelsResponse, OWNER_GEMINI_MODEL_REGISTRY, OwnerGeminiProviderError, type OwnerGeminiContent, type OwnerGeminiStreamEvent, type OwnerThinkingLevel } from "./intelligence-provider";
 import { getOwnerConversationProjectMemoryInfo, loadOwnerConversationProjectMemoryPrompt, setOwnerConversationCrossProjectMemory } from "./owner-project-memory";
-import { OWNER_INTELLIGENCE_MONOGRAM_SVG, OWNER_INTELLIGENCE_SIDEBAR_WORDMARK_SVG, OWNER_INTELLIGENCE_WORDMARK_SVG } from "./owner-wordmark";
+import { OWNER_INTELLIGENCE_MONOGRAM_SVG, OWNER_INTELLIGENCE_SIDEBAR_WORDMARK_SVG, OWNER_INTELLIGENCE_WORDMARK_GLYPHS, OWNER_INTELLIGENCE_WORDMARK_SVG } from "./owner-wordmark";
 
 export interface OwnerIntelligenceSessionUsage {
   limit_tokens: number;
@@ -1744,7 +1744,7 @@ export function ownerIntelligenceClientScript(): Response {
   const source = String.raw`
 (function(){
   "use strict";
-  var ownerWordmarkSvg = __OWNER_INTELLIGENCE_WORDMARK_SVG_JSON__;
+  var ownerWordmarkGlyphs = __OWNER_INTELLIGENCE_WORDMARK_GLYPHS_JSON__;
   var api="/admin/api/intelligence/conversations";
   var topicsApi="/admin/api/intelligence/topics";
   var state={conversations:[],topics:[],githubInstallations:[],githubRepositories:[],activeId:null,messages:[],selectedModelId:null,selectedThinkingLevel:null,models:[],sessionUsage:null};
@@ -1809,6 +1809,31 @@ export function ownerIntelligenceClientScript(): Response {
   var expandedUserMessageIds=Object.create(null);
   var USER_MESSAGE_PREVIEW_HEIGHT=112;
   function node(tag,className,text){var el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=text;return el;}
+  function buildOwnerWordmarkSvgNode(){
+    var ns="http://www.w3.org/2000/svg";
+    var svg=document.createElementNS(ns,"svg");
+    svg.setAttribute("viewBox","0 0 7197 1446");
+    svg.setAttribute("role","img");
+    svg.setAttribute("aria-label","BRɅIN");
+    svg.setAttribute("focusable","false");
+    var title=document.createElementNS(ns,"title");title.textContent="BRɅIN";svg.appendChild(title);
+    var defs=document.createElementNS(ns,"defs");
+    var gradient=document.createElementNS(ns,"linearGradient");
+    gradient.setAttribute("id","owner-intelligence-wordmark-fill");
+    gradient.setAttribute("x1","0");gradient.setAttribute("y1","0");gradient.setAttribute("x2","0");gradient.setAttribute("y2","1");
+    [["0","#ffffff"],["0.44","#f1f2f4"],["1","#aeb3bb"]].forEach(function(stopData){
+      var stop=document.createElementNS(ns,"stop");stop.setAttribute("offset",stopData[0]);stop.setAttribute("stop-color",stopData[1]);gradient.appendChild(stop);
+    });
+    defs.appendChild(gradient);svg.appendChild(defs);
+    var group=document.createElementNS(ns,"g");
+    group.setAttribute("fill","url(#owner-intelligence-wordmark-fill)");
+    group.setAttribute("transform","translate(0 1446) scale(1 -1)");
+    ownerWordmarkGlyphs.forEach(function(glyph){
+      var path=document.createElementNS(ns,"path");path.setAttribute("d",glyph.d);path.setAttribute("transform","translate("+glyph.x+" 0)");group.appendChild(path);
+    });
+    svg.appendChild(group);
+    return svg;
+  }
   function errorText(error){return error&&error.message?error.message:"Something went wrong. Please retry.";}
   async function request(path,options,timeoutMs){
     var controller=new AbortController();
@@ -1974,7 +1999,7 @@ export function ownerIntelligenceClientScript(): Response {
     var welcome=node("div","welcome");
     var welcomeBrand=node("div","welcome-brand");
     welcomeBrand.setAttribute("aria-label","BRɅIN");
-    welcomeBrand.innerHTML=ownerWordmarkSvg;
+    welcomeBrand.appendChild(buildOwnerWordmarkSvgNode());
     welcome.appendChild(welcomeBrand);
     welcome.appendChild(node("h1","","Welcome back Sir."));
     messages.appendChild(welcome);
@@ -3027,7 +3052,7 @@ export function ownerIntelligenceClientScript(): Response {
   refreshList().catch(showHistoryError);
 })();
 `;
-  const clientSource = source.replace("__OWNER_INTELLIGENCE_WORDMARK_SVG_JSON__", JSON.stringify(OWNER_INTELLIGENCE_WORDMARK_SVG));
+  const clientSource = source.replace("__OWNER_INTELLIGENCE_WORDMARK_GLYPHS_JSON__", JSON.stringify(OWNER_INTELLIGENCE_WORDMARK_GLYPHS));
   return new Response(clientSource, {
     headers: {
       "content-type": "application/javascript; charset=utf-8",
