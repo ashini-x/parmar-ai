@@ -1449,7 +1449,27 @@ async function handleOwnerGeneration(
   }
 
   const availableTokens = sessionUsage.remaining_tokens;
-  const outputTokenLimit = Math.min(definition.singleRequestOutputTokens, availableTokens - promptTokens);
+  let outputTokenLimit = 0;
+  let outputReservationSegments = 1;
+  if (definition.supportsLongDecode) {
+    const maxSegments = Math.ceil(definition.modelMaxOutputTokens / definition.singleRequestOutputTokens);
+    for (let segments = 1; segments <= maxSegments; segments += 1) {
+      // Each v1beta1 continuation repeats the original prompt. Reserve that
+      // prompt cost once per segment as well as the total decode allowance.
+      const candidate = Math.min(
+        definition.modelMaxOutputTokens,
+        segments * definition.singleRequestOutputTokens,
+        availableTokens - promptTokens * segments,
+      );
+      if (candidate < 1 || Math.ceil(candidate / definition.singleRequestOutputTokens) > segments) continue;
+      if (candidate > outputTokenLimit) {
+        outputTokenLimit = candidate;
+        outputReservationSegments = Math.ceil(candidate / definition.singleRequestOutputTokens);
+      }
+    }
+  } else {
+    outputTokenLimit = Math.min(definition.singleRequestOutputTokens, availableTokens - promptTokens);
+  }
   if (outputTokenLimit < 1) {
     sessionUsage = await lockOwnerIntelligenceSession(env, conversationId, "request_exceeds_remaining_budget") ?? sessionUsage;
     return json({
@@ -1461,7 +1481,7 @@ async function handleOwnerGeneration(
   }
 
   const reservationId = crypto.randomUUID();
-  const reservedTokens = promptTokens + outputTokenLimit;
+  const reservedTokens = promptTokens * outputReservationSegments + outputTokenLimit;
   const reserved = await reserveOwnerIntelligenceSessionTokens(env, conversationId, reservationId, reservedTokens);
   if (!reserved) {
     sessionUsage = await getOwnerIntelligenceSessionUsage(env, conversationId) ?? sessionUsage;
