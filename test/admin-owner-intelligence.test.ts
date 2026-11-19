@@ -109,7 +109,7 @@ class FakeOwnerD1 {
       return ["id", "owner_id", "title", "created_at", "updated_at", "topic_id", "session_kind", "lifecycle_status", "cross_project_memory_enabled", "parent_conversation_id", "rollover_handoff_id"]
         .map((name) => ({ name }));
     }
-    if (sql.includes("FROM owner_intelligence_handoffs")) return [];
+    if (sql.includes("FROM owner_intelligence_handoffs") && sql.includes("successor_conversation_id=?")) return [];
     if (sql.includes("FROM owner_intelligence_conversation_memory_snapshots")) return [];
     if (sql.includes("cross_project_memory_enabled")) {
       const row = this.conversations.get(String(values[0]));
