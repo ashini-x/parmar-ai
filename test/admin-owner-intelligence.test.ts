@@ -912,6 +912,20 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     const successorCount = await db.prepare("SELECT COUNT(*) AS count FROM owner_intelligence_conversations WHERE owner_id=? AND parent_conversation_id=?")
       .bind("owner", sourceId).first<{ count: number }>();
     expect(Number(successorCount?.count)).toBe(1);
+    const memoryJob = await db.prepare(
+      "SELECT status,idempotency_key,attempt_count FROM owner_intelligence_memory_jobs WHERE owner_id=? AND source_conversation_id=? AND job_type='rollover'",
+    ).bind("owner", sourceId).first<{ status: string; idempotency_key: string; attempt_count: number }>();
+    expect(memoryJob).toEqual(expect.objectContaining({
+      status: "pending_review", idempotency_key: "rollover:" + sourceId, attempt_count: 0,
+    }));
+
+    vi.mocked(countOwnerGeminiInputTokens).mockClear();
+    const archivedGeneration = await call(env, "/admin/api/intelligence/conversations/" + sourceId + "/generate", ownerCookie, {
+      method: "POST", origin,
+      body: { content: "This archived source must reject a request.", modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH" },
+    });
+    expect(archivedGeneration.status).toBe(404);
+    expect(countOwnerGeminiInputTokens).not.toHaveBeenCalled();
 
     const blockedSourceAppend = await call(env, "/admin/api/intelligence/conversations/" + sourceId + "/messages", ownerCookie, {
       method: "POST", origin, body: { content: "This must not alter the archived transcript." },
