@@ -590,6 +590,7 @@ async function branchHead(token: string, owner: string, name: string, branch: st
 function appendProgress(existing: string, conversationId: string, previewId: string, messages: OwnerMessage[]): string {
   const latestUser = [...messages].reverse().find((message) => message.role === "user");
   const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant" &&
+    !message.id.startsWith("handoff-") &&
     (message.status === "complete" || message.status === "partial"));
   const section = [
     "- Conversation ID: " + conversationId,
@@ -683,6 +684,15 @@ async function buildMemoryFiles(
     { name: "decisions.md", content: decisions },
     { name: sessionPath, content: sessionLines.join("\n").slice(0, 20_000) },
   ];
+  const rolloverHandoff = messages.find((message) => message.id.startsWith("handoff-"));
+  if (rolloverHandoff) {
+    const handoffPath = "handoffs/" + new Date().toISOString().slice(0, 10) + "-" +
+      conversationId.slice(0, 8) + ".md";
+    files.push({
+      name: handoffPath,
+      content: redactMemorySecrets(rolloverHandoff.content),
+    });
+  }
   if (files.some((file) => file.content.length > PREVIEW_FILE_LIMIT) ||
       files.reduce((sum, file) => sum + file.content.length, 0) > PREVIEW_TOTAL_LIMIT) {
     throw new Error("The selected project memory is too large for one review. Edit or archive the existing memory before saving.");
@@ -699,7 +709,20 @@ async function loadConversationForSave(env: Env, owner: string, conversationId: 
   const result = await env.DB!.prepare(
     "SELECT id,role,content,status,created_at FROM owner_intelligence_messages WHERE conversation_id=? AND owner_id=? AND role IN ('user','assistant') ORDER BY created_at DESC,id DESC LIMIT 18",
   ).bind(conversationId, owner).all<OwnerMessage>();
-  return { ...conversation, messages: (result.results ?? []).reverse() };
+  const messages = (result.results ?? []).reverse();
+  const handoff = await env.DB!.prepare(
+    "SELECT id,markdown,created_at FROM owner_intelligence_handoffs WHERE owner_id=? AND successor_conversation_id=?",
+  ).bind(owner, conversationId).first<{ id: string; markdown: string; created_at: number }>();
+  if (handoff) {
+    messages.push({
+      id: "handoff-" + handoff.id,
+      role: "assistant",
+      content: handoff.markdown,
+      status: "complete",
+      created_at: Math.max(Date.now(), Number(handoff.created_at)),
+    });
+  }
+  return { ...conversation, messages };
 }
 type TopicMemoryRow = {
   id: string; title: string; github_installation_id: number | null; repository_id: number | null;
@@ -884,6 +907,12 @@ async function finishVerifiedSave(env: Env, owner: string, preview: PreviewRow, 
     env.DB!.prepare(
       "UPDATE owner_intelligence_github_previews SET status='synced',files_json=?,updated_at=? WHERE id=? AND owner_id=? AND status='verifying' AND commit_sha=?",
     ).bind(JSON.stringify(files), now, preview.id, owner, preview.commit_sha),
+    env.DB!.prepare(
+      "UPDATE owner_intelligence_handoffs SET github_sync_status='synced',github_commit_sha=?,updated_at=? WHERE owner_id=? AND successor_conversation_id=? AND github_sync_status='pending_review'",
+    ).bind(preview.commit_sha, now, owner, preview.conversation_id),
+    env.DB!.prepare(
+      "UPDATE owner_intelligence_memory_jobs SET status='synced',expected_commit_sha=?,attempt_count=attempt_count+1,updated_at=?,safe_diagnostic=NULL WHERE owner_id=? AND conversation_id=? AND job_type='rollover' AND status='pending_review'",
+    ).bind(preview.commit_sha, now, owner, preview.conversation_id),
   ]);
   if (result.some((entry) => !entry.success) ||
       Number(result[0]?.meta?.changes || 0) !== 1 ||

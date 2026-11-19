@@ -21,3 +21,4 @@ function wordmarkSvg(fillId: string): string {
 
 export const OWNER_INTELLIGENCE_WORDMARK_SVG = wordmarkSvg("owner-intelligence-wordmark-fill");
 export const OWNER_INTELLIGENCE_SIDEBAR_WORDMARK_SVG = wordmarkSvg("owner-intelligence-sidebar-wordmark-fill");
+

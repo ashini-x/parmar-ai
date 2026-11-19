@@ -200,7 +200,22 @@ A rollover handoff should include:
 
 Keep the old chat read-only but fully accessible. Create a new conversation with a new zeroed 200K budget, link it to the previous chat/topic and attach the selected project snapshot. Do not delete or mutate the prior transcript.
 
-If GitHub is unavailable, retain the handoff in D1 and show an honest **Sync pending** status with retry. The user can still continue from the D1 handoff. Never lose the handoff just because external sync failed. Do not guarantee a sub-three-second rollover: Gemini summarisation, network latency and GitHub commit time vary. Maintain compact structured state during normal work when it is safe; rollover should only need to reconcile the recent tail when such state is current and provenance-checked.
+If GitHub is unavailable, retain the handoff and its idempotent job row in D1 and show an honest **Sync pending review** status. The successor remains usable directly from D1. Retry persistence through the existing Owner-reviewed GitHub Save preview/confirm/read-back flow; no external sync is required to open the successor. Never lose the handoff because GitHub is unavailable. Do not guarantee a sub-three-second rollover: network latency and D1 work vary. Maintain compact structured state during normal work when it is safe; rollover should only need to reconcile the recent tail when such state is current and provenance-checked.
+
+### M4.5 implementation contract (PR #375)
+
+The M4.5 implementation uses a deterministic, source-linked handoff rather than an implicit Gemini summarization pass. It includes the latest Owner goal, candidate approval-language messages (never promoted automatically to accepted decisions), explicit Owner constraints, transcript-mentioned file paths, unresolved-state mentions, a next-action reminder, recent bounded source excerpts, the complete ordered source-message ID list, and the full immutable Project Memory snapshot provenance. Each extracted statement links back to the original message ID; excerpts are untrusted historical reference data.
+
+The D1 rollover transaction:
+- Requires at least 190,000 committed-plus-reserved tokens (or an already reached server lock) and zero in-flight reservation.
+- Archives the active source with an immutable lineage/handoff link; creates one successor preserving topic/session kind and cross-project opt-in; inserts a fresh 200,000-token ledger; clones the source's active immutable snapshot rows; and inserts the handoff and unique rollover memory-job row.
+- Uses a unique Owner/source handoff and `rollover:<source-conversation-id>` outbox idempotency key. A retry after a timeout returns the same successor; concurrent duplicates cannot create a second one.
+- Preserves every original source message, generation-metadata row and usage/reservation record. Archived chats reject prompt edits/appends/generation, and the atomic token-reservation update independently requires an active conversation to close a stale-preflight race.
+- Injects the handoff into the successor's exact selected-Vertex CountTokens and GenerateContent input as untrusted historical data. Handoff construction itself invokes no model and consumes no extra tokens.
+
+The D1 memory-job row remains the durable outbox source of truth. It begins `pending_review`; the existing Owner-reviewed GitHub Save flow writes the complete handoff as `handoffs/<date>-<successor-prefix>.md` plus the standard memory/session files. That handoff path is an explicit archive artifact, not an active-manifest memory file and not automatically loaded on future turns. The existing branch-head Conflict precondition remains strict. Only successful commit and exact file read-back set the handoff/job to Synced. If Save is not available or its outcome is ambiguous, D1 stays canonical and the job stays pending until the Owner reopens/reviews the Save flow. No Queue, Workflow or new Cloudflare resource is provisioned for M4.5.
+
+This section describes the PR implementation contract; release/deployment and authenticated Owner acceptance state live in [M4.5 acceptance](OWNER_INTELLIGENCE_M4_5_ACCEPTANCE.md).
 
 ## 6. Token-aware context assembly and historical recall
 
@@ -374,7 +389,8 @@ All records remain scoped to the configured Owner principal and are additive to 
 - `owner_intelligence_topics`: topic UUID, owner ID, title/slug, selected repository owner/name, branch, memory root, current manifest revision/commit SHA, lifecycle/status and optional explicit retention settings.
 - Extend `owner_intelligence_conversations`: nullable topic ID (null = Scratchpad), session kind, lifecycle status, optional expires/trash timestamps only when the recoverable retention feature is approved, parent conversation ID/fork lineage, and pinned project-memory snapshot reference.
 - `owner_intelligence_project_memory_snapshots`: topic/repository/branch/commit SHA, selected paths, source token estimate and creation timestamp.
-- `owner_intelligence_memory_jobs`: Owner/topic/conversation IDs, job type (save/rollover/compact/index), idempotency key, status, attempt count, base/expected SHA and safe diagnostics.
+- `owner_intelligence_memory_jobs`: Owner/topic/source/successor conversation IDs, job type (save/rollover/compact/index), unique idempotency key, payload version, status, attempt count, base/expected SHA and safe diagnostics. M4.5 creates a rollover row in `pending_review`; the D1 row is durable even when no Queue/Workflow is provisioned.
+- `owner_intelligence_handoffs`: unique Owner/source/successor IDs, exact deterministic Markdown handoff, complete ordered source-message IDs, immutable pinned-snapshot provenance, GitHub sync state/commit and timestamps.
 - Keep current `owner_intelligence_session_usage`, `owner_intelligence_token_reservations` and generation metadata semantics independent per conversation.
 
 Do not implement these schema names/columns until the current migrations and D1 initialization are inspected. Preserve backward compatibility and provide a migration/rollback strategy. Existing chats must not be reset to zero or silently assigned unrelated project context.
