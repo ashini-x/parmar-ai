@@ -747,7 +747,7 @@ export async function openOwnerGeminiStream(
   const location = configuredLocation(env);
   const maxOutputTokens = Number.isSafeInteger(input.maxOutputTokens)
     ? Math.min(definition.singleRequestOutputTokens, Math.max(1, input.maxOutputTokens!))
-    : Math.min(definition.singleRequestOutputTokens, 8_192);
+    : definition.singleRequestOutputTokens;
 
   const token = await getVerifiedModelAccessToken(env, definition, dependencies);
 
