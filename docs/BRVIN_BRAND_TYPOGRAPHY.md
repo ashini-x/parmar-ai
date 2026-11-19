@@ -1,6 +1,6 @@
 # BRɅIN Brand Typography and Asset Policy
 
-**Status:** Poppins removed from Owner runtime; outlined AERUNO-style wordmark now implemented only inside authenticated Owner Intelligence; actual OpenAI Sans font assets remain pending  
+**Status:** Poppins removed; AERUNO-derived outline wordmark production deployed only in authenticated Owner Intelligence; actual OpenAI Sans font files remain pending  
 **Last updated:** 2026-11-20 IST  
 **Canonical repository:** `ashini-x/parmar-ai`  
 **Applies to:** BRɅIN brand identity and product UI, including Owner Gemini Intelligence and BRVIN Teachers
@@ -28,20 +28,17 @@ Sources:
 
 **Decision:** The Owner has clarified that the immediate workspace is private and Owner-only. However, the trial's published terms expressly classify logos and company apps as commercial use, and separately restrict publication/distribution of the font. A private login does not by itself grant a broader company-logo or redistribution right. Do not upload the trial binary to the public GitHub repository or shared Cloudflare asset pipeline. Revisit AERUNO once the Owner obtains the full family or written permission covering the intended internal/company wordmark use and the missing `Ʌ` glyph.
 
-Before using AERUNO for the BRɅIN identity, obtain the full font and a written/purchased license whose terms cover the intended company logo/brand identity use. The MyFonts listing distinguishes Desktop logo/brand-identity use from Webfont and App embedding; choose the license based on the actual use and read the applicable EULA. Do not assume a Desktop license also permits hosting or embedding the font.
+For public-facing BRɅIN company branding, marketing artwork, customer-facing apps or arbitrary live-text embedding, obtain the full font and a written/purchased license whose terms cover that exact use. The MyFonts listing distinguishes Desktop logo/brand-identity use from Webfont and App embedding; choose the license based on the actual use and read the applicable EULA. Do not assume a Desktop license also permits hosting or embedding the font. The current Owner-only panel uses only locally derived vector outlines; the OTF itself is not embedded or redistributed.
 
 ### Glyph coverage limitation
 
 The supplied AERUNO Trial font does not contain Unicode U+0245 (`Ʌ`). It contains the ordinary Latin letters in `BRɅIN`, but not the special `Ʌ` character used in the BRɅIN brand spelling. A final vector wordmark therefore needs either a properly licensed font/version that includes the required glyph or a separately designed custom vector `Ʌ`. Do not silently replace `Ʌ` with an ordinary `A`.
 
-### Correct asset strategy after licensing
+### Current Owner-only vector implementation and future public asset strategy
 
-For the logo-only use case, prefer a **static vector wordmark with text converted to outlines**, rather than shipping the underlying font file. The intended public asset location is:
+The private Owner Intelligence page uses outlined SVG paths in `src/admin/owner-wordmark.ts`; this keeps the source OTF out of GitHub assets, Cloudflare static assets, R2 and the deployed Worker font directory. The SVG is inserted only into the `/admin/intelligence` HTML and `/admin/intelligence.js` response paths, both protected by `requireOwner`.
 
-- `public/brand/brain-wordmark.svg` — canonical outline wordmark
-- Optional light/dark variants only if the final design genuinely requires separate artwork.
-
-This allows the finished logo artwork to be reused across web/app surfaces without distributing the source font. Keep the licensed source font with the authorized design workstation/license holder. If a product later needs to render arbitrary live text in AERUNO, obtain the specific Webfont/App license before embedding it.
+For any future public BRɅIN logo asset, keep the static vector wordmark as the preferred output, but review the applicable font-use terms before publishing or using it in marketing/customer-facing surfaces. If a product later needs to render arbitrary live text in AERUNO, obtain the specific Webfont/App rights before embedding it.
 
 ## 3. Normal UI typography — OpenAI Sans target
 
@@ -80,6 +77,15 @@ The repository previously used a Poppins CSS alias called **BRɅIN universal fon
 
 ## 6. Current completion status
 
+### AERUNO-derived Owner wordmark production release — 2026-11-20 IST
+
+- PR [#376](https://github.com/ashini-x/parmar-ai/pull/376) merged to `main` as `edaf98fb8d19ff3ac5853e3cc7a5c8bf29c245d8`.
+- Release Validation [#44616326497](https://github.com/ashini-x/parmar-ai/actions/runs/44616326497) passed TypeScript checks, unit tests, Node tests, and all three Worker build validations.
+- Production deployment and acceptance passed. `parmar-ai`: version `300a3056-f4b8-4763-85f2-91dbb0ed6c9b`, deployment `5e5d6c0f-b1de-4ad7-bd68-128196c582da`, 100% traffic. `brvin-service`: version `5af6a338-3668-4f7b-a9c2-9f5e1114a3a5`, deployment `c5cfe19f-e0d8-4ef4-88ba-ae71e9b9775a`, 100% traffic.
+- Root/health smoke passed on first attempt; BRVIN service binding and Fatman retrieval acceptance passed. Acceptance artifact `14575955229`.
+- The standalone public BRɅIN website was unchanged. Visual confirmation in the authenticated Owner browser remains a separate manual check.
+
+
 ### Production typography-removal release — 2026-11-20 IST
 
 - PR [#374](https://github.com/ashini-x/parmar-ai/pull/374) merged to `main` as `45bdc5a8f48ad57f360e4340ff1d6216845a8b5a`.
@@ -98,6 +104,7 @@ The repository previously used a Poppins CSS alias called **BRɅIN universal fon
 - [ ] Obtain AERUNO full-family or written permission covering the intended private/company wordmark use, including a usable `Ʌ` glyph or permission for a custom glyph.
 - [ ] Obtain official OpenAI Sans files from the signed-in design-guidelines portal and verify the applicable product-use/hosting terms.
 - [x] Generate and apply outlined AERUNO-derived BRɅIN SVG wordmark/monogram in the authenticated Owner Intelligence panel only; the angular A glyph is intentionally mapped to `Ʌ` because the trial font lacks U+0245.
+- [x] Merge and production-deploy the Owner-only AERUNO outline treatment through PR #376; the OTF itself remains unbundled.
 - [x] Remove Poppins WOFF2 assets, OFL/readme files, preloads and Owner-page `@font-face` rules from the repository/runtime source.
 - [x] Change Owner UI typography to an OpenAI Sans-first, platform-native system stack. Actual OpenAI Sans is not bundled yet; the current browser rendering uses its system fallback.
 - [x] Verify the change through CI and production deployment/release acceptance.
