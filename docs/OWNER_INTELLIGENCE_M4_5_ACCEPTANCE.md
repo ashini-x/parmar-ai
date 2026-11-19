@@ -1,6 +1,6 @@
 # M4.5 — Automatic rollover and handoff acceptance
 
-**Status at creation:** implementation under review; production deployment and authenticated Owner verification are pending.  
+**Current status (2026-11-20 IST):** M4.5 is merged and production deployed. Automated CI, production release acceptance and read-only D1 schema verification passed. Authenticated Owner browser verification remains pending; do not close M4.5 until it passes.  
 **Milestone:** M4.5 — Automatic rollover and handoff  
 **Repository:** `ashini-x/parmar-ai`  
 **Implementation PR:** [#375](https://github.com/ashini-x/parmar-ai/pull/375)  
@@ -38,15 +38,15 @@
 
 Fill these fields only from the final current PR head and corresponding workflow records.
 
-- Final PR head SHA: pending
-- PR validation workflow: pending
-- TypeScript / Vitest / Node tests / three Worker dry runs: pending
-- Merge commit: pending
-- Production release workflow: pending
-- `parmar-ai` Worker version/deployment: pending
-- `brvin-service` Worker version/deployment: pending
-- Production smoke/release acceptance artifact: pending
-- Read-only D1 schema confirmation: pending
+- Final reconciled PR head SHA: `f481d0141969d59dd562efe303d43c85d13d964b`.
+- PR validation: [Release validation #44620484798](https://github.com/ashini-x/parmar-ai/actions/runs/44620484798) succeeded on the reconciled head.
+- Post-merge main commit: `a712a69cc46b5d9c4d249871a89e4084edd95b36`; PR [#375](https://github.com/ashini-x/parmar-ai/pull/375) merged.
+- Production workflow: [Release validation #44620959101](https://github.com/ashini-x/parmar-ai/actions/runs/44620959101) succeeded.
+- Automated validation: TypeScript passed; **522 Vitest tests / 76 files** passed; **62 Node tests / 9 files** passed; dry-run builds for `brvin-service`, `parmar-ai` and isolated `brvin-web` passed.
+- `parmar-ai`: version `d3ce5347-b00d-45d7-88eb-7ef69322eedf`, deployment `5a19528f-83c6-4a68-83ed-14e531d8ad31`, **100% traffic**.
+- `brvin-service`: version `feb592eb-7356-486f-a746-4116a1d7d182`, deployment `923dea74-a28c-4125-8ed9-b630bdd0e42f`, **100% traffic**.
+- Production release smoke: root, health, BRVIN connectivity and Fatman source readiness passed. Release acceptance artifact: [14576848791](https://github.com/ashini-x/parmar-ai/actions/runs/44620959101/artifacts/14576848791). Source release artifact: `14577800205`.
+- Production D1 `parmar-ai-admin-prod` (`1c033fb8-10aa-4bee-a294-4dbc899c09f7)) was inspected read-only. `owner_intelligence_conversations`, `owner_intelligence_handoffs` and `owner_intelligence_memory_jobs` exist. Both new owner-scoped lookup indexes and uniqueness autoindexes exist. The two schema queries reported 154 and 158 rows read respectively, **0 rows written**, and `changed_db=false`.
 
 ## Authenticated Owner acceptance — pending
 
@@ -71,4 +71,6 @@ Do not repeat M4.3 stale-preview conflict acceptance or M4.4 Project Memory atta
 
 ## Closure criteria
 
-M4.5 can be closed only when current-head CI passes, PR #375 is merged, the paired Worker production release and acceptance checks pass, production D1 handoff/outbox schema is confirmed, and the authenticated Owner confirms the visible successor/read-only continuity journey. Until then, M4.5 remains in progress.
+**Automated closure gates:** current-head CI, PR merge, paired Worker production deployment/smoke, and read-only production D1 schema/index verification have all passed on 2026-11-20 IST.
+
+**Remaining closure gate:** authenticated Owner browser acceptance is still pending. The Owner must hard-refresh `/admin/intelligence`, confirm the deployed welcome/sidebar appearance, then verify a safe eligible rollover journey if a conversation already meets the threshold without altering production usage to manufacture one. Confirm the original chat is read-only and intact, the linked successor begins at 0 / 200,000, the pinned snapshot and source provenance are retained, and the handoff appears in the new chat. Do not confirm the GitHub Save preview on the Owner's behalf. M4.5 remains deployed but in progress until this walkthrough is recorded.
