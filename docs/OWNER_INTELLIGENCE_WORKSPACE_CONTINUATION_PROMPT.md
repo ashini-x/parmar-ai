@@ -1,6 +1,6 @@
 # New-chat continuation prompt — Owner Gemini Intelligence
 
-Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**. M4.3 is fully accepted. **M4.4 Project Memory implementation is merged and production deployed; its authenticated Owner attach-and-read walkthrough remains pending.** Current main includes Owner UI/response PRs #360–#365 and adaptive response PR #367; latest runtime commit is `38731a71b4c8252d11524f3c8d15cc5d30119c5c`. M4.5 — Automatic rollover and handoff — begins only after M4.4 Owner acceptance. Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
+Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/parmar-ai`. This handoff is current as of **2026-11-19 IST**. M4.3 is fully accepted. **M4.4 Project Memory implementation is merged and production deployed; its authenticated Owner attach-and-read walkthrough remains pending.** Current main includes Owner UI/response PRs #360–#365, adaptive response PR #367 and the dark-canvas/instant-send UI PR #368; latest runtime commit is `e5382a38a9eceba4d83cc9d5c5c3397f8531efb8`. M4.5 — Automatic rollover and handoff — begins only after M4.4 Owner acceptance. Re-read GitHub before acting; this prompt is a navigation aid, not a substitute for current repository, D1 or Cloudflare evidence.
 
 
 ### Owner Intelligence sidebar UI maintenance — 2026-11-19 IST
@@ -69,6 +69,17 @@ Continue the Owner-only **Owner Gemini Intelligence** workspace in `ashini-x/par
 - PR CI [44576001581](https://github.com/ashini-x/parmar-ai/actions/runs/44576001581) passed TypeScript, Vitest, Node tests and all three dry-run Worker builds. Production release [44576276901](https://github.com/ashini-x/parmar-ai/actions/runs/44576276901) passed paired deployments and root/health/BRVIN/Fatman acceptance.
 - Production versions at 100% traffic: parmar-ai 83639d71-ae95-4c59-9661-4ffc0a601305 (deployment ed08b76f-5693-478c-b7e4-34c144904f3f); brvin-service 95321210-5ac5-4ad6-8f76-5b6e570ac561 (deployment 14bba055-4a0c-447b-a91b-7974263829ed). Acceptance artifact: 14556142262.
 - Browser confirmation: hard-refresh /admin/intelligence and ask a normal open-ended question; verify Gemini selects structure on its own and that the PR #365 renderer displays it. Automated release checks validate Workers and bindings, not the visual answer screenshot.
+### Owner Intelligence black canvas and instant user-message send — 2026-11-19 IST
+
+- [PR #368](https://github.com/ashini-x/parmar-ai/pull/368) merged as `e5382a38a9eceba4d83cc9d5c5c3397f8531efb8`.
+- Workspace base surfaces are now black (`#000`), sidebar near-black (`#050505`), with darker project/history panels, composer, token meter and activity card.
+- Like/dislike response controls removed; Copy and Regenerate retained.
+- On normal send, append an optimistic user-message bubble immediately and clear the composer before awaiting fetch/model. Once accepted, `openConversation` replaces the temporary item with the persisted transcript.
+- On pre-acceptance rejection, roll back the optimistic item and restore the text into the composer; restore edit mode for a failed edit. After server acceptance, streaming failure does not return the user prompt to the composer.
+- User bubble fixed width: `min(78%, 660px)` with a 240px minimum where viewport width allows, so one-word messages do not collapse.
+- PR CI [44580306903](https://github.com/ashini-x/parmar-ai/actions/runs/44580306903) passed TypeScript, 521 tests, Node tests and all three Worker dry-run builds. Production release [44580570767](https://github.com/ashini-x/parmar-ai/actions/runs/44580570767) passed deploy, root/health, BRVIN binding, Fatman retrieval and release acceptance.
+- Production versions at 100% traffic: `parmar-ai` `297e1ec3-d98f-47a7-aa07-ab7add0b30e3` (deployment `0620ba05-39fc-441d-9ca6-245c5bb1cb26`); `brvin-service` `7fbe0a53-9892-4ef9-b9df-cabe7d34230f` (deployment `aa0b89d8-58a8-4cbb-a3ea-7865b374ab8e`). Acceptance artifact: `14559300763`.
+- Frontend only; selected Gemini model/thinking, adaptive response instruction, renderer, CountTokens path, 200K budget, 300K message cap, Project Memory and student Telegram behavior remain unchanged.
 ## First action: recover the source of truth
 
 Read these files from the latest `main` branch in this order:
@@ -82,7 +93,7 @@ Read these files from the latest `main` branch in this order:
 7. `docs/TEST_PLAN.md` and `docs/README.md`.
 8. Inspect relevant source, current D1 records (read-only), latest `owner-memory-hub` commit and Cloudflare deployment state before choosing the next action.
 
-Runtime-code baseline at handoff: `38731a71b4c8252d11524f3c8d15cc5d30119c5c` (Owner Intelligence UI refinements, M4.4 Project Memory implementation, rich response rendering and adaptive response decision instructions). M4.3 backend behavior remains based on `3ae456188fb7535db47bcab2a7909cf333b59285`; PR #360 changed sidebar presentation, PR #362 changed the fixed composer/token dock and long-prompt size guard, PR #363 repaired the malformed browser try/catch and cleaned the surface, PR #364 moved model/thinking controls into the composer footer, PR #361 shipped pinned Project Memory loading, PR #365 added rich response rendering, and PR #367 taught the selected Gemini model to choose response presentation while including the exact instruction in CountTokens and streaming. Verify latest `main`, production D1 and Cloudflare state before implementation.
+Runtime-code baseline at handoff: `e5382a38a9eceba4d83cc9d5c5c3397f8531efb8` (Owner Intelligence UI refinements, M4.4 Project Memory implementation, rich response rendering, adaptive response decision instructions, near-black surfaces and immediate optimistic message send). M4.3 backend behavior remains based on `3ae456188fb7535db47bcab2a7909cf333b59285`; PR #360 changed sidebar presentation, PR #362 changed the fixed composer/token dock and long-prompt size guard, PR #363 repaired the malformed browser try/catch and cleaned the surface, PR #364 moved model/thinking controls into the composer footer, PR #361 shipped pinned Project Memory loading, PR #365 added rich response rendering, PR #367 taught the selected Gemini model to choose response presentation while including the exact instruction in CountTokens and streaming, and PR #368 changed the Owner canvas to near-black, removed response feedback buttons and added immediate optimistic sends with failure rollback plus fixed-width user bubbles. Verify latest `main`, production D1 and Cloudflare state before implementation.
 
 ## Product and security boundary — immutable
 
