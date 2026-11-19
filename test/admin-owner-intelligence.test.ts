@@ -955,15 +955,20 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
       countedHandoffPrompt = input.contents[0]?.text || "";
       return 5;
     });
-    vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async () => (async function* () {
-      yield { type: "done" as const, usage: { promptTokens: 5, outputTokens: 5, totalTokens: 10 }, elapsedMs: 5 };
-    })());
+    let requestedSuccessorOutputLimit = 0;
+    vi.mocked(openOwnerGeminiStream).mockClear().mockImplementationOnce(async (_env, input) => {
+      requestedSuccessorOutputLimit = input.maxOutputTokens ?? 0;
+      return (async function* () {
+        yield { type: "done" as const, usage: { promptTokens: 5, outputTokens: 5, totalTokens: 10 }, elapsedMs: 5 };
+      })();
+    });
     const continued = await call(env, "/admin/api/intelligence/conversations/" + rolledBody.conversation.id + "/generate", ownerCookie, {
       method: "POST", origin,
       body: { content: "Continue from the handoff now.", modelId: "gemini-4-hydrogen", thinkingLevel: "HIGH" },
     });
     expect(continued.status).toBe(200);
     await continued.text();
+    expect(requestedSuccessorOutputLimit).toBe(65_536);
     expect(countedHandoffPrompt).toContain("ROLLOVER HANDOFF REFERENCE DATA");
     expect(countedHandoffPrompt).toContain(commitSha);
     expect(countedHandoffPrompt).toContain(userMessageId);
