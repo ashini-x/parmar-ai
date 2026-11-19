@@ -348,9 +348,8 @@ async function expireOwnerSessionReservations(env: Env, usage: OwnerSessionUsage
       `UPDATE owner_intelligence_token_reservations
        SET status = 'expired', actual_tokens = reserved_tokens, usage_is_estimated = 1, settled_at = ?
        WHERE conversation_id = ? AND owner_id = ? AND status = 'reserved' AND created_at <= ?
-         AND EXISTS (SELECT 1 FROM owner_intelligence_session_usage
-           WHERE conversation_id = ? AND owner_id = ? AND updated_at <= ?)`,
-    ).bind(settledAt, usage.conversation_id, usage.owner_id, cutoff, usage.conversation_id, usage.owner_id, cutoff),
+         AND changes() > 0`,
+    ).bind(settledAt, usage.conversation_id, usage.owner_id, cutoff),
   ]);
 }
 
