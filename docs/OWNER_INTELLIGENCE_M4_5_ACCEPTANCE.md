@@ -52,13 +52,20 @@ Fill these fields only from the final current PR head and corresponding workflow
 
 Before the authenticated rollover walkthrough, the Owner separately reported a Gemini stream ending with "Vertex AI completed without a text response." The code audit found an 8,192-token application chat-output reservation and an 8-minute application streaming timeout. The selected Gemini 4 Hydrogen model supports a 65,536-token single foreground output segment, and XHIGH reasoning tokens count against the output allowance. The generic parser error did not preserve `finishReason` or usage metadata.
 
-A dedicated correction is being validated on branch `fix/owner-intelligence-response-limits-final2`:
-- Ordinary chat reserves the selected model's single-request maximum, bounded by the unchanged 200,000-token session balance.
-- Application-owned 8-minute streaming and 90-second non-stream generation deadlines are removed. Stop/disconnect cancellation and bounded preflight checks remain. The D1 lease refreshes every 60 seconds while generation is active; the 10-minute recovery expires only after heartbeats stop.
-- Empty-response errors retain `finishReason` and actual usage metadata; `MAX_TOKENS` is diagnosed explicitly and the D1 ledger settles reported usage when available.
-- Provider ceilings remain. Gemini 4 Hydrogen's foreground segment is 65,536 tokens; the adapter supports the documented `v1beta1` continuation-token loop, but D1 reserves repeated prompt cost plus total output inside the same unchanged 200,000-token conversation budget. The model's 1,048,576-token context ceiling, provider/network failures and client disconnects still apply.
+The correction is merged and deployed by PR [#386](https://github.com/ashini-x/parmar-ai/pull/386), merge commit `4301e897c7cec83baffc46d89fd0eab1ebc46369`.
 
-Update this section with PR, CI, merge, production worker versions and release acceptance only after verified completion. The M4.5 200K per-conversation meter, 180K warning, 190K rollover threshold and rollover data invariants are unchanged.
+- Ordinary chat reserves the selected model's output allowance, bounded by the remaining 200,000-token session balance. Hydrogen uses the documented `v1beta1` continuation-token loop across 65,536-token foreground segments. D1 reserves the repeated prompt cost plus total output before generation, so aggregate usage remains within 200K.
+- Application-owned 8-minute streaming and 90-second non-stream generation deadlines are removed. Stop/disconnect cancellation and bounded preflight checks remain. The D1 lease refreshes every 60 seconds while generation is active; ten-minute stale recovery runs only after heartbeats stop.
+- Empty-response errors retain `finishReason` and usage metadata; `MAX_TOKENS` is diagnosed explicitly and D1 settles reported usage when available.
+- **PR validation:** [#44633594780](https://github.com/ashini-x/parmar-ai/actions/runs/44633594780) passed TypeScript, 76 Vitest files / 525 tests, 9 Node test files / 62 tests, and all three Worker dry-run builds.
+- **Production release:** [#44633961543](https://github.com/ashini-x/parmar-ai/actions/runs/44633961543) completed successfully. Root/health smoke, BRVIN service binding and Fatman retrieval readiness passed. The public website deployment was skipped because no website files changed.
+- `parmar-ai`: version `be331408-b293-47f7-9687-d95e9fd60ded`, deployment `4a2ac2b5-ec46-4e00-a947-9472d609f0a1`, **100% traffic**.
+- `brvin-service`: version `f7736eb2-7692-4d3b-b030-51d519feec45`, deployment `5cc0c8a2-45e4-4139-a7e9-2df95d651a99`, **100% traffic**.
+- Release acceptance artifact: [14581423939](https://github.com/ashini-x/parmar-ai/actions/runs/44633961543/artifacts/14581423939). Source artifact: [14583087495](https://github.com/ashini-x/parmar-ai/actions/runs/44633961543/artifacts/14583087495).
+- Cloudflare's read-only deployment and version endpoints independently confirmed the two deployment IDs and 100% version allocations.
+- The separate student/bot path's `VERTEX_TIMEOUT_MS=25000` and `MAX_OUTPUT_TOKENS=1200` bindings remain unchanged; Owner Intelligence does not read them.
+
+The M4.5 200K per-conversation meter, 180K warning, 190K rollover threshold and rollover data invariants are unchanged. M4.5 authenticated Owner browser acceptance remains pending.
 
 ## Authenticated Owner acceptance — pending
 
