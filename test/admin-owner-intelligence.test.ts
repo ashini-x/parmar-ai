@@ -479,10 +479,13 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(response.headers.get("content-security-policy")).toContain("font-src 'self'");
     expect(html).toContain('Welcome back Sir.</h1>');
     expect(html).toContain('<div class="welcome"><div class="welcome-brand" aria-label="BRɅIN"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7197 1446"');
-    expect(html).toContain('viewBox="0 0 3470 1446"');
-    expect(html).toContain('class="brand-mark"><svg xmlns="http://www.w3.org/2000/svg"');
+    expect(html).not.toContain('viewBox="0 0 3470 1446"');
+    expect(html).toContain('<div class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7197 1446"');
+    expect(html).not.toContain('class="brand-mark"');
+    expect(html).not.toContain('class="brand-sub"');
+    expect(html).not.toContain("INTELLIGENCE · PRIVATE");
     expect(html).toContain('.welcome-brand svg{display:block;width:clamp(230px,34vw,320px);height:auto');
-    expect(html).toContain('.brand-name svg{display:block;width:86px;height:auto}');
+    expect(html).toContain('.brand svg{display:block;width:120px;height:auto}');
     expect(html).toContain('font-size:clamp(16px,2vw,20px);letter-spacing:.025em;font-weight:300');
     expect(html).not.toContain(".welcome-brand::after");
     expect(html).toContain('linearGradient id="owner-intelligence-wordmark-fill"');
