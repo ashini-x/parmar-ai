@@ -56,7 +56,7 @@ A dedicated correction is being validated on branch `fix/owner-intelligence-resp
 - Ordinary chat reserves the selected model's single-request maximum, bounded by the unchanged 200,000-token session balance.
 - Application-owned 8-minute streaming and 90-second non-stream generation deadlines are removed. Stop/disconnect cancellation and bounded preflight checks remain. The D1 lease refreshes every 60 seconds while generation is active; the 10-minute recovery expires only after heartbeats stop.
 - Empty-response errors retain `finishReason` and actual usage metadata; `MAX_TOKENS` is diagnosed explicitly and the D1 ledger settles reported usage when available.
-- Provider ceilings remain. Gemini 4 Hydrogen's current streaming single-segment output ceiling is 65,536 tokens; the app does not claim infinite output or implement long-decode continuation.
+- Provider ceilings remain. Gemini 4 Hydrogen's foreground segment is 65,536 tokens; the adapter supports the documented `v1beta1` continuation-token loop, but D1 reserves repeated prompt cost plus total output inside the same unchanged 200,000-token conversation budget. The model's 1,048,576-token context ceiling, provider/network failures and client disconnects still apply.
 
 Update this section with PR, CI, merge, production worker versions and release acceptance only after verified completion. The M4.5 200K per-conversation meter, 180K warning, 190K rollover threshold and rollover data invariants are unchanged.
 
