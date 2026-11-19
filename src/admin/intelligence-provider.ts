@@ -351,12 +351,28 @@ export class OwnerGeminiProviderError extends Error {
   readonly status?: number;
   readonly retryable: boolean;
   readonly stage?: OwnerGeminiProviderStage;
-  constructor(message: string, status?: number, retryable = false, stage?: OwnerGeminiProviderStage) {
+  readonly usage?: { promptTokens: number; outputTokens: number; totalTokens: number };
+  readonly elapsedMs?: number;
+  readonly finishReason?: string;
+  constructor(
+    message: string,
+    status?: number,
+    retryable = false,
+    stage?: OwnerGeminiProviderStage,
+    details: {
+      usage?: { promptTokens: number; outputTokens: number; totalTokens: number };
+      elapsedMs?: number;
+      finishReason?: string;
+    } = {},
+  ) {
     super(message);
     this.name = "OwnerGeminiProviderError";
     this.status = status;
     this.retryable = retryable;
     this.stage = stage;
+    this.usage = details.usage;
+    this.elapsedMs = details.elapsedMs;
+    this.finishReason = details.finishReason;
   }
 }
 
@@ -522,20 +538,30 @@ export async function generateOwnerGeminiContent(
         const responseContent = candidate && typeof candidate.content === "object" && candidate.content !== null
           ? candidate.content as Record<string, unknown> : null;
         const parts = responseContent && Array.isArray(responseContent.parts) ? responseContent.parts as Array<Record<string, unknown>> : [];
-        const text = parts.map((part) => typeof part.text === "string" ? part.text : "").join("").trim();
-        if (!text) throw new OwnerGeminiProviderError("Vertex AI completed without a text response.");
+        const text = parts.map((part) => typeof part.text === "string" && part.thought !== true ? part.text : "").join("").trim();
         const usage = typeof parsed.usageMetadata === "object" && parsed.usageMetadata !== null
           ? parsed.usageMetadata as Record<string, unknown> : {};
+        const usageSummary = {
+          promptTokens: Number(usage.promptTokenCount ?? 0),
+          outputTokens: Number(usage.candidatesTokenCount ?? 0),
+          totalTokens: Number(usage.totalTokenCount ?? 0),
+        };
+        const elapsedMs = Date.now() - startedAt;
+        const finishReason = typeof candidate?.finishReason === "string" ? candidate.finishReason : undefined;
+        if (!text) {
+          const message = finishReason === "MAX_TOKENS"
+            ? "Gemini reached the selected model's single-response output limit before producing visible text. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level."
+            : `Vertex AI completed without a text response${finishReason ? " (finish reason: " + finishReason + ")" : ""}.`;
+          throw new OwnerGeminiProviderError(message, undefined, false, "generate_content", {
+            usage: usageSummary, elapsedMs, finishReason,
+          });
+        }
         return {
           modelId: definition.id,
           thinkingLevel,
           text,
-          usage: {
-            promptTokens: Number(usage.promptTokenCount ?? 0),
-            outputTokens: Number(usage.candidatesTokenCount ?? 0),
-            totalTokens: Number(usage.totalTokenCount ?? 0),
-          },
-          elapsedMs: Date.now() - startedAt,
+          usage: usageSummary,
+          elapsedMs,
           rawResponse: parsed,
         };
       }
@@ -797,6 +823,7 @@ export async function openOwnerGeminiStream(
     let buffer = "";
     let fullText = "";
     let usage = { promptTokens: 0, outputTokens: 0, totalTokens: 0 };
+    let finishReason: string | undefined;
     let finished = false;
 
     async function* parseBlock(block: string): AsyncGenerator<OwnerGeminiStreamEvent> {
@@ -819,6 +846,7 @@ export async function openOwnerGeminiStream(
       }
       const candidates = Array.isArray(parsed.candidates) ? parsed.candidates as Array<Record<string, unknown>> : [];
       const candidate = candidates[0];
+      if (typeof candidate?.finishReason === "string") finishReason = candidate.finishReason;
       const content = candidate && typeof candidate.content === "object" && candidate.content !== null
         ? candidate.content as Record<string, unknown> : null;
       const parts = content && Array.isArray(content.parts) ? content.parts as Array<Record<string, unknown>> : [];
@@ -843,7 +871,14 @@ export async function openOwnerGeminiStream(
         if (next.done) break;
       }
       if (buffer.trim()) yield* parseBlock(buffer);
-      if (!fullText.trim()) throw new OwnerGeminiProviderError("Vertex AI completed without a text response.");
+      if (!fullText.trim()) {
+        const message = finishReason === "MAX_TOKENS"
+          ? "Gemini reached the selected model's single-response output limit before producing visible text. Thinking tokens count toward this limit; retry with the same model or choose a lower thinking level."
+          : `Vertex AI completed without a text response${finishReason ? " (finish reason: " + finishReason + ")" : ""}.`;
+        throw new OwnerGeminiProviderError(message, undefined, false, "stream_generate_content", {
+          usage, elapsedMs: Date.now() - startedAt, finishReason,
+        });
+      }
       finished = true;
       yield { type: "done", usage, elapsedMs: Date.now() - startedAt };
     } catch (error) {
