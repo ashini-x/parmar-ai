@@ -504,7 +504,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).not.toContain('id="sessionBudget" hidden');
     expect(html).toContain('id="messageInput" disabled rows="1" placeholder="Write a message…"');
     expect(html).not.toContain('maxlength="50000"');
-    expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto");
+    expect(html).toContain(".messages{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;overflow-anchor:none");
     expect(html).toContain(".bottom-dock{flex:0 0 auto;width:min(820px,calc(100% - 44px));margin:0 auto;padding:4px 0 10px;background:transparent}");
     expect(html).toContain("background:#000;color:#ededed");
     expect(html).toContain(":root{background:#000;color:#ededed}");
@@ -613,7 +613,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("var shouldFollowBottom=Boolean(forceBottom)||sending||wasAtBottom");
     expect(script).toContain("restoreMessagesScroll(shouldFollowBottom,previousScrollTop)");
     expect(script).toContain("renderMessages(state.messages,true)");
-    expect(script).toContain("overflow-anchor:none");
+
     expect(script).toContain("function renderMarkdownTable(lines,start)");
     expect(script).toContain("function renderRichList(lines,start)");
     expect(script).toContain('"md-callout md-callout-"+type');
