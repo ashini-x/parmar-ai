@@ -1,3 +1,11 @@
+## 2026-11-20 IST: Owner chat bottom-follow and streaming scroll fix
+
+- PR [#387](https://github.com/ashini-x/parmar-ai/pull/387) merged as `398e02ea78f470c92d86adda80febe42fd79fd31`.
+- Fixed chat scroll jumps caused by `renderMessages()` rebuilding the messages viewport. The renderer now restores the previous scroll position after re-rendering, or follows `scrollHeight` when the user is at the bottom, when opening a conversation, and throughout active generation/streaming.
+- During a live send, each streamed chunk keeps the newest content visible instead of jumping back to the top. Idle re-renders preserve the Owner's existing position. Native scroll anchoring is disabled on the message viewport.
+- PR validation [#44634185100](https://github.com/ashini-x/parmar-ai/actions/runs/44634185100) and main production release [#44634414785](https://github.com/ashini-x/parmar-ai/actions/runs/44634414785) passed. Production smoke and release acceptance passed; artifact `14582474145`.
+- `parmar-ai` version `521f1ed9-0ccd-41f3-9e67-bf3930e3f56c` / deployment `0d4f0461-1b71-4f69-bac7-c28cff7bbb9c` and `brvin-service` version `b1806c28-52b7-4c47-9d8e-8a20a78939c9` / deployment `48d8b765-3a21-4aa0-93aa-f3c14163aad2` are each at 100% traffic.
+- Owner-only front-end change. No API, D1, Gemini/provider, token-budget, Project Memory, retrieval or student-facing behavior changed.
 ## 2026-11-20 IST: Owner central canvas welcome wordmark alignment correction
 
 - PR [#383](https://github.com/ashini-x/parmar-ai/pull/383) merged as `512e4ca984cbabb11fb50bbb16067720946b185e`.
