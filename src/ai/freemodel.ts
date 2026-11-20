@@ -377,15 +377,15 @@ function requiredAnswerPacketKeysPresent(value: unknown): value is Record<string
     typeof record.timeSensitive === "boolean";
 }
 
-function parseStrictAnswerPacket(content: string): Record<string, unknown> {
+function parseStrictAnswerPacket(content: string, modelId: string, status: number): Record<string, unknown> {
   let decoded: unknown;
   try {
     decoded = JSON.parse(content);
   } catch {
-    throw new FreeModelError("malformed_json", "FreeModel returned malformed AnswerPacket JSON.");
+    throw new FreeModelError("malformed_json", "FreeModel returned malformed AnswerPacket JSON.", status, modelId);
   }
   if (!requiredAnswerPacketKeysPresent(decoded)) {
-    throw new FreeModelError("malformed_json", "FreeModel returned an incomplete AnswerPacket.");
+    throw new FreeModelError("malformed_json", "FreeModel returned an incomplete AnswerPacket.", status, modelId);
   }
   return decoded;
 }
@@ -487,7 +487,7 @@ async function completeModel(
       throw new FreeModelError("malformed_json", "FreeModel returned no AnswerPacket content.", response.status, model.id);
     }
 
-    const decoded = parseStrictAnswerPacket(content);
+    const decoded = parseStrictAnswerPacket(content, model.id, response.status);
     const parsed = parseAnswerPacket(JSON.stringify(decoded));
     const packet = sanitizeAnswerPacket(
       parsed,
