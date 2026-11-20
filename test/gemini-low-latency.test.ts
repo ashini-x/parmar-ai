@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isBotIdentityQuestion, selectThinkingLevel, type ThinkingLevel } from "../src/ai/gemini";
+import { isBotIdentityQuestion, normalizeSscTakeaway, selectThinkingLevel, type ThinkingLevel } from "../src/ai/gemini";
 
 describe("Gemini low-latency thinking policy", () => {
   const cap: ThinkingLevel = "HIGH";
@@ -49,5 +49,13 @@ describe("Parmar AI and BRɅIN identity intent detection", () => {
   it("does not misclassify ordinary SSC creator questions as bot identity", () => {
     expect(isBotIdentityQuestion("Who founded the Indian National Congress?")).toBe(false);
     expect(isBotIdentityQuestion("Who created the Constitution of India?")).toBe(false);
+  });
+});
+
+describe("SSC Focus label normalization", () => {
+  it("strips a model-generated pin and repeated focus labels", () => {
+    expect(normalizeSscTakeaway("📌 SSC Focus: Mysore High Court, 1973.")).toBe("Mysore High Court, 1973.");
+    expect(normalizeSscTakeaway("📌 SSC Focus: SSC Focus: Article 17.")).toBe("Article 17.");
+    expect(normalizeSscTakeaway("**SSC Focus:** Article 17.")).toBe("Article 17.");
   });
 });
