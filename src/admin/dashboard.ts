@@ -838,6 +838,8 @@ const HTML = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewp
  .arena-judge-row:not(.header) .arena-judge-comparison{grid-column:1/-1;padding-top:2px}
  .arena-judge-section-title{margin-top:14px}
 }
+
+.arena-judge-actions{display:flex;justify-content:center;margin-top:14px}.arena-judge-actions .btn{min-width:150px}
 /* ARENA CSS END */
 </style></head><body><header class="top"><div class="topin"><div><div class="brand">परमार्थAI: Admin Control Center</div><div class="small" id="stamp">Loading admin snapshot…</div></div><div style="display:flex;gap:7px"><button class="btn alt" onclick="refreshAll()">Refresh</button><button class="btn alt" onclick="openTelegramTab()">Telegram</button><button class="btn alt" onclick="window.location.assign(&quot;/admin/brvin&quot;)">BRVIN</button><button class="btn alt" onclick="window.location.assign(&quot;/admin/fatman&quot;)">Fatman index</button><button class="btn alt" onclick="logout()">Sign out</button></div></div><nav class="nav"><button class="tab active" data-page="overview">Overview</button><button class="tab" data-page="users">Students</button><button class="tab" data-page="ai">AI & Costs</button><button class="tab" data-page="learning">Learning</button><button class="tab" data-page="activity">Activity</button><button class="tab" data-page="system">System</button><button class="tab" data-page="access">Access</button><button class="tab" data-page="audit">Audit</button><button class="tab" data-page="reports">Reports</button><button class="tab" data-page="telegram">Telegram</button><button class="tab" data-page="settings">Settings</button><button class="tab" data-page="arena">Model Arena</button></nav></header><main class="wrap">
 <section id="page-overview" class="page active"><div id="alerts"></div><div id="overviewCards" class="cards"></div><div class="grid2"><div class="card section"><h2>AI economics: today</h2><div id="aiSummary"></div></div><div class="card section"><h2>System status</h2><div id="statusSummary"></div></div></div><div class="grid2"><div class="card section"><h2>Top subjects: 30 days</h2><div id="topSubjects"></div></div><div class="card section"><h2>Top topics: 30 days</h2><div id="topTopics"></div></div></div><div class="grid3"><div class="card section"><h2>Daily quota usage</h2><div id="quotaDistribution"></div><p class="muted">Accepted questions per student today. Unlimited users are included in the 20+ bucket when they pass it.</p></div><div class="card section"><h2>Most active students today</h2><div id="topUsersToday"></div></div><div class="card section"><h2>Retention snapshot</h2><div id="retentionView"></div><p class="muted">D+N means students who joined on the cohort day and were active again today at that interval.</p></div></div><div class="card section"><h2>Live / recent activity</h2><div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Student</th><th>Question</th><th>Topic</th><th>Status</th><th>Tokens</th><th>Est. cost</th></tr></thead><tbody id="overviewActivity"></tbody></table></div></div></section>
@@ -853,7 +855,7 @@ const HTML = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewp
 <!-- ARENA HTML START -->\n<section id="page-arena" class="page">
 <div class="card section arena-panel">
   <div class="arena-header">
-    <div><h2>Standard SSC Model Arena</h2><p class="muted">Staging-only side-by-side evaluation using the production SSC prompt, AnswerPacket validation and an anonymous Gemini 3.8 blind judge. Telegram traffic and production D1 are not used.</p></div>
+    <div><h2>Standard SSC Model Arena</h2><p class="muted">Generate both candidate answers first. Request the anonymous Gemini 3.8 blind judgement only when you press “Judge Result”. Telegram traffic and production D1 are not used.</p></div>
     <div class="arena-header-actions"><button class="btn alt" id="arenaNewSession" type="button">New Session</button><button class="btn alt" id="arenaRefreshModels" type="button">Refresh Models</button><button class="btn alt" id="arenaResetCooldowns" type="button">Reset Cooldowns</button><button class="btn alt" id="arenaExport" type="button">Download Result JSON</button></div>
   </div>
   <div class="arena-config">
@@ -892,10 +894,10 @@ const HTML = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewp
   </div>
   <section class="arena-judge-card" id="arenaJudgeCard" aria-live="polite">
     <div id="arenaJudgeContent">
-      <div class="arena-judge-empty"><div class="arena-judge-eyebrow">INDEPENDENT BLIND REVIEW</div><h3>Gemini 3.8 judge is ready</h3><p>After both generations finish, Gemini will compare the anonymized AnswerPackets and Telegram previews, then explain the winner and every scoring dimension.</p></div>
+      <div class="arena-judge-empty"><div class="arena-judge-eyebrow">ON-DEMAND BLIND REVIEW</div><h3>Review both generations first</h3><p>The judge is not called automatically. Once both candidate cards appear, press Judge Result to request a randomized, anonymous comparison.</p><button class="btn" id="arenaJudgeButton" type="button" disabled>Judge Result</button></div>
     </div>
   </section>
-  <p class="small arena-parity-note">Prompt parity: both candidates receive the same production-built student prompt. The Arena uses a neutral “SSC (not specified)” profile plus browser-session turns; it does not load a real student's saved profile. The judge receives the question, shared prompt, conversation and both full outputs, but never provider/model identity, latency, token usage or cost. Candidate A/B order is randomized. Current-fact prompts may additionally invoke Vertex Google Search grounding for the Gemini candidate; FreeModel has no equivalent tool attached. The judge is a separate Gemini 3.8 Flash call, from the same model family as the Left baseline. Anonymity reduces explicit identity and position bias but cannot rule out same-family preference; each judge call also uses additional Vertex AI credits.</p>
+  <p class="small arena-parity-note">Prompt parity: both candidates receive the same production-built student prompt. The Arena uses a neutral “SSC (not specified)” profile plus browser-session turns; it does not load a real student's saved profile. When you press Judge Result, the judge receives the question, shared production prompts, conversation and both AnswerPackets, but never provider/model identity, latency, token usage or cost. Candidate A/B order is randomized. No judging request is made when you only generate answers. Current-fact prompts may additionally invoke Vertex Google Search grounding for the Gemini candidate; FreeModel has no equivalent tool attached. The judge is a separate Gemini 3.8 Flash call, from the same model family as the Left baseline. Anonymity reduces explicit identity and position bias but cannot rule out same-family preference; each judge call also uses additional Vertex AI credits.</p>
 </div>
 </section>
 <!-- ARENA HTML END -->
@@ -1123,14 +1125,25 @@ function arenaRenderQuiz(preview){const items=Array.isArray(preview.quizItems)?p
 function arenaRenderSide(sideName,side){const metricsId=sideName==='left'?'arenaLeftMetrics':'arenaRightMetrics';const previewId=sideName==='left'?'arenaLeftPreview':'arenaRightPreview';const rawId=sideName==='left'?'arenaLeftRaw':'arenaRightRaw';if(!side||!side.ok){document.getElementById(metricsId).innerHTML=arenaMetric('Latency',side&&side.latencyMs!==null?String(side.latencyMs)+' ms':'N/A')+arenaMetric('Tokens','N/A')+arenaMetric('Est. cost','N/A')+arenaMetric('Model',side&&side.modelUsed?side.modelUsed:'Unavailable');document.getElementById(previewId).innerHTML='<div class="arena-side-error"><b>Generation failed</b><p>'+arenaEscapeText(side&&side.message?side.message:'Provider did not return a validated AnswerPacket.')+'</p><p class="small">Error: '+arenaEscapeText(side&&side.code?side.code:'unknown')+'</p></div>';document.getElementById(rawId).textContent='No validated AnswerPacket returned.';return;}const packet=side.packet||{};const preview=side.telegramPreview||{};const tokens=side.tokens||{};document.getElementById(metricsId).innerHTML=arenaMetric('Latency',Number(side.latencyMs||0).toFixed(0)+' ms')+arenaMetric('Tokens',fmtNum(tokens.totalTokens||0))+arenaMetric('Est. cost',arenaFormatMoney(side.estimatedCostUsd))+arenaMetric('Model',side.modelUsed||'Unknown');let html='<div>'+(preview.answerHtml||'')+'</div>';if(preview.takeawayHtml){html+='<div class="arena-takeaway">'+preview.takeawayHtml+'</div>';}html+=arenaRenderQuiz(preview);const thoughts=tokens.thoughtsReported===false?'Not reported':fmtNum(tokens.thoughtsTokens||0);if(side.modelLatencyMs!==undefined)html+='<div class="small" style="margin-top:10px;color:#a3a3a3">Winning model generation: '+fmtNum(side.modelLatencyMs)+' ms · Earlier attempts, catalogue and routing: '+fmtNum(side.routerAndFailoverLatencyMs||0)+' ms</div>';html+='<div class="small" style="margin-top:12px;color:#a3a3a3">Thinking: '+arenaEscapeText(side.thinkingEffort||packet.thinkingLevelUsed||'Not reported')+' · Input: '+fmtNum(tokens.promptTokens||0)+' · Output: '+fmtNum(tokens.candidatesTokens||0)+' · Thinking tokens: '+thoughts+'</div>';if(side.jsonMode!==undefined)html+='<div class="small" style="color:#a3a3a3">JSON mode: '+(side.jsonMode?'supported and requested':'not advertised; schema instruction used')+'</div>';if(Array.isArray(side.failoverModels)&&side.failoverModels.length)html+='<div class="arena-failover">Auto-router skipped: '+arenaEscapeText(side.failoverModels.join(', '))+'</div>';document.getElementById(previewId).innerHTML=html;document.getElementById(rawId).textContent=JSON.stringify(packet,null,2);}
 
 function arenaJudgeList(items,emptyText){const values=Array.isArray(items)?items:[];return values.length?'<ul>'+values.map(function(item){return '<li>'+arenaEscapeText(item)+'</li>';}).join('')+'</ul>':'<div class="small muted">'+arenaEscapeText(emptyText||'No specific points reported.')+'</div>';}
-function arenaRenderJudge(judge,pending){
+function arenaJudgeButtonMarkup(label,disabled){return '<div class="arena-judge-actions"><button class="btn" type="button" id="arenaJudgeButton" '+(disabled?'disabled':'')+'>'+arenaEscapeText(label||'Judge Result')+'</button></div>';}
+function arenaAttachJudgeButton(){const button=document.getElementById('arenaJudgeButton');if(button)button.addEventListener('click',arenaJudgeResult);}
+function arenaRenderJudge(judge,pending,canJudge){
  const node=document.getElementById('arenaJudgeContent');
  const leftCard=document.getElementById('arenaLeftCard');
  const rightCard=document.getElementById('arenaRightCard');
  [leftCard,rightCard].forEach(function(card){card.classList.remove('winner','loser');});
- if(pending){node.innerHTML='<div class="arena-judge-empty"><div class="arena-judge-eyebrow">INDEPENDENT BLIND REVIEW</div><h3>Gemini 3.8 is evaluating both generations…</h3><p>Candidate labels are randomized and model/provider identities are withheld. The scorecard appears here when judging is complete.</p></div>';return;}
- if(!judge){node.innerHTML='<div class="arena-judge-empty"><div class="arena-judge-eyebrow">INDEPENDENT BLIND REVIEW</div><h3>Gemini 3.8 judge is ready</h3><p>Run a comparison to receive a blind verdict and detailed scorecard.</p></div>';return;}
- if(judge.mode==='unavailable'||judge.ok!==true){node.innerHTML='<div class="arena-judge-error"><b>Blind judge unavailable.</b><div>'+arenaEscapeText(judge.errorMessage||judge.summary||'Gemini did not return a valid scorecard.')+'</div><div class="small" style="margin-top:6px">Both generated responses remain available above. No automatic winner was assigned.</div></div>';return;}
+ if(pending){node.innerHTML='<div class="arena-judge-empty"><div class="arena-judge-eyebrow">ON-DEMAND BLIND REVIEW</div><h3>Gemini 3.8 is judging both answers…</h3><p>The anonymous candidates are being evaluated against the original question, production prompt and conversation context.</p></div>';return;}
+ if(!judge){
+  const ready=Boolean(canJudge);
+  node.innerHTML='<div class="arena-judge-empty"><div class="arena-judge-eyebrow">ON-DEMAND BLIND REVIEW</div><h3>'+(ready?'Both generations are ready':'Gemini 3.8 judge is ready')+'</h3><p>'+(ready?'Review the two answers above, then press Judge Result. This makes a separate Vertex AI request and does not change either generation.':'Generate the two candidates first. Gemini will not be called until you press Judge Result.')+'</p>'+arenaJudgeButtonMarkup('Judge Result',!ready)+'</div>';
+  arenaAttachJudgeButton();
+  return;
+ }
+ if(judge.mode==='unavailable'||judge.ok!==true){
+  node.innerHTML='<div class="arena-judge-error"><b>Blind judge unavailable.</b><div>'+arenaEscapeText(judge.errorMessage||judge.summary||'Gemini did not return a valid scorecard.')+'</div><div class="small" style="margin-top:6px">Both generated responses remain available above. No automatic winner was assigned.</div>'+arenaJudgeButtonMarkup('Try Judge Again',!canJudge)+'</div>';
+  if(canJudge)arenaAttachJudgeButton();
+  return;
+ }
  const winner=judge.winner||null;
  if(winner==='left')leftCard.classList.add('winner');
  if(winner==='right')rightCard.classList.add('winner');
@@ -1187,9 +1200,57 @@ async function arenaResetCooldowns(){
     button.disabled=false;
   }
 }
-async function arenaRun(){const question=document.getElementById('arenaQuestion').value.trim();if(!question){arenaSetStatus('Enter an SSC question first.','error');return;}const button=document.getElementById('arenaRun');button.disabled=true;button.textContent='Generating + judging…';arenaRenderJudge(null,true);arenaSetStatus('Running both candidate generations. Gemini 3.8 will then judge the anonymized outputs. The backend does not persist this run.');try{const targetModel=document.getElementById('arenaModel').value||'auto';const data=await api('/admin/api/arena/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({question:question,recentConversation:arenaConversation,targetModel:targetModel})});arenaCurrentRun={createdAt:new Date().toISOString(),question:question,targetModel:targetModel,prompt:data.prompt,left:data.left,right:data.right,judge:data.judge};arenaRenderSide('left',data.left);arenaRenderSide('right',data.right);arenaRenderJudge(data.judge,false);const preferred=data.left&&data.left.ok&&data.left.packet?data.left.packet.answer:(data.right&&data.right.ok&&data.right.packet?data.right.packet.answer:'');if(preferred){arenaConversation.push({question:question,answer:preferred});arenaConversation=arenaConversation.slice(-8);}arenaUpdateSessionInfo();const leftOk=Boolean(data.left&&data.left.ok),rightOk=Boolean(data.right&&data.right.ok);const judgeStatus=data.judge&&data.judge.mode==='blind'?'Gemini completed a blind scorecard.':data.judge&&data.judge.mode==='availability_only'?'Only one valid generation was available; this is not a content-quality verdict.':data.judge&&data.judge.mode==='not_needed'?'Both sides shared the same clarification; no model was called.':'The judge did not return a verdict.';arenaSetStatus((leftOk&&rightOk?'Both candidates returned validated AnswerPackets.':leftOk||rightOk?'One candidate returned a validated AnswerPacket.':'Both candidate generations failed.')+' '+judgeStatus+' '+(data.prompt&&data.prompt.requiresVertexGoogleSearchGrounding?'Vertex Google Search grounding may be active for the Gemini candidate; FreeModel has no equivalent tool attached.':'Both candidates received the same production prompt text.'),leftOk&&rightOk&&data.judge&&data.judge.ok&&data.judge.mode!=='unavailable'?'good':'error');}catch(error){arenaSetStatus('Arena run failed: '+error.message,'error');arenaRenderJudge({ok:false,mode:'unavailable',errorMessage:error.message},false);}finally{button.disabled=false;button.textContent='Compare + Judge';}}
-function arenaExport(){if(!arenaCurrentRun){arenaSetStatus('Run a comparison before exporting its result.','error');return;}const payload={schemaVersion:2,exportedAt:new Date().toISOString(),scope:'Staging-only Standard SSC Model Arena run; blind Gemini judge; no backend/D1 persistence',run:arenaCurrentRun};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='parmar-ai-model-arena-result.json';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);}
-function arenaNewSession(){arenaConversation=[];arenaCurrentRun=null;arenaUpdateSessionInfo();document.getElementById('arenaQuestion').value='';document.getElementById('arenaLeftMetrics').innerHTML='';document.getElementById('arenaRightMetrics').innerHTML='';document.getElementById('arenaLeftPreview').innerHTML='<span class="muted">Run a question to see the Vertex response.</span>';document.getElementById('arenaRightPreview').innerHTML='<span class="muted">Run a question to see the FreeModel response.</span>';document.getElementById('arenaLeftRaw').textContent='No response yet.';document.getElementById('arenaRightRaw').textContent='No response yet.';document.getElementById('arenaLeftCard').classList.remove('winner','loser');document.getElementById('arenaRightCard').classList.remove('winner','loser');arenaRenderJudge(null,false);arenaSetStatus('New browser session started. Previous conversation turns were cleared.');}
+async function arenaRun(){
+ const question=document.getElementById('arenaQuestion').value.trim();
+ if(!question){arenaSetStatus('Enter an SSC question first.','error');return;}
+ const button=document.getElementById('arenaRun');
+ const recentConversation=arenaConversation.slice();
+ button.disabled=true;button.textContent='Generating…';
+ arenaRenderJudge(null,false,false);
+ arenaSetStatus('Generating Left and Right candidates in parallel. No judge request will run automatically.');
+ try{
+  const targetModel=document.getElementById('arenaModel').value||'auto';
+  const data=await api('/admin/api/arena/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({question:question,recentConversation:recentConversation,targetModel:targetModel})});
+  arenaCurrentRun={createdAt:new Date().toISOString(),question:question,targetModel:targetModel,recentConversation:recentConversation,prompt:data.prompt,left:data.left,right:data.right,judge:null};
+  arenaRenderSide('left',data.left);arenaRenderSide('right',data.right);
+  const leftOk=Boolean(data.left&&data.left.ok),rightOk=Boolean(data.right&&data.right.ok);
+  arenaRenderJudge(null,false,leftOk||rightOk);
+  const preferred=data.left&&data.left.ok&&data.left.packet?data.left.packet.answer:(data.right&&data.right.ok&&data.right.packet?data.right.packet.answer:'');
+  if(preferred){arenaConversation.push({question:question,answer:preferred});arenaConversation=arenaConversation.slice(-8);}
+  arenaUpdateSessionInfo();
+  const summary=leftOk&&rightOk?'Both candidates returned validated AnswerPackets.':leftOk||rightOk?'One candidate returned a validated AnswerPacket.':'Both candidate generations failed.';
+  arenaSetStatus(summary+' Review the two cards, then press Judge Result when you want Gemini to evaluate them. '+(data.prompt&&data.prompt.requiresVertexGoogleSearchGrounding?'Vertex Google Search grounding may be active for the Gemini candidate; FreeModel has no equivalent tool attached.':'Both candidates received the same production prompt text.'),leftOk||rightOk?'good':'error');
+ }catch(error){
+  arenaSetStatus('Arena generation failed: '+error.message,'error');
+  arenaRenderJudge(null,false,false);
+ }finally{
+  button.disabled=false;button.textContent='Compare Models';
+ }
+}
+async function arenaJudgeResult(){
+ if(!arenaCurrentRun){arenaSetStatus('Generate both candidates before requesting a judge result.','error');return;}
+ const run=arenaCurrentRun;
+ const button=document.getElementById('arenaJudgeButton');
+ if(button){button.disabled=true;button.textContent='Judging…';}
+ arenaRenderJudge(null,true,true);
+ arenaSetStatus('Sending the saved AnswerPackets to the protected Gemini 3.8 blind judge. No candidate generation will be repeated.');
+ try{
+  const data=await api('/admin/api/arena/judge',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({
+   question:run.question,
+   recentConversation:run.recentConversation||[],
+   leftPacket:run.left&&run.left.ok?run.left.packet:null,
+   rightPacket:run.right&&run.right.ok?run.right.packet:null
+  })});
+  arenaCurrentRun.judge=data.judge||null;
+  arenaRenderJudge(data.judge,false,false);
+  arenaSetStatus(data.judge&&data.judge.mode==='blind'?'Gemini completed the requested blind scorecard.':data.judge&&data.judge.mode==='availability_only'?'Only one generation was available; this is an availability result, not a content-quality comparison.':data.judge&&data.judge.mode==='not_needed'?'Both candidates used the shared topic clarification; no model call was needed.':'The blind judge did not return a verdict.',data.ok?'good':'error');
+ }catch(error){
+  arenaSetStatus('Blind judge request failed: '+error.message,'error');
+  arenaRenderJudge({ok:false,mode:'unavailable',errorMessage:error.message},false,true);
+ }
+}
+function arenaExport(){if(!arenaCurrentRun){arenaSetStatus('Run a comparison before exporting its result.','error');return;}const payload={schemaVersion:2,exportedAt:new Date().toISOString(),scope:'Staging-only Standard SSC Model Arena run; on-demand blind Gemini judge; no backend/D1 persistence',run:arenaCurrentRun};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='parmar-ai-model-arena-result.json';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);}
+function arenaNewSession(){arenaConversation=[];arenaCurrentRun=null;arenaUpdateSessionInfo();document.getElementById('arenaQuestion').value='';document.getElementById('arenaLeftMetrics').innerHTML='';document.getElementById('arenaRightMetrics').innerHTML='';document.getElementById('arenaLeftPreview').innerHTML='<span class="muted">Run a question to see the Vertex response.</span>';document.getElementById('arenaRightPreview').innerHTML='<span class="muted">Run a question to see the FreeModel response.</span>';document.getElementById('arenaLeftRaw').textContent='No response yet.';document.getElementById('arenaRightRaw').textContent='No response yet.';document.getElementById('arenaLeftCard').classList.remove('winner','loser');document.getElementById('arenaRightCard').classList.remove('winner','loser');arenaRenderJudge(null,false,false);arenaSetStatus('New browser session started. Previous conversation turns were cleared.');}
 document.querySelectorAll('.arena-preset').forEach(function(button){button.addEventListener('click',function(){const presets={fact:'Which river is known as the Sorrow of Bihar?',comparison:'Differentiate between Fundamental Rights and Directive Principles of State Policy.',followup:'isko simple mein samjhao',quiz:'Generate 3 independent SSC MCQs on the Indian Constitution.',identity:'Who are you?',scope:'Write a Python program to sort a list of numbers.'};const value=presets[button.dataset.arenaPreset];if(value)document.getElementById('arenaQuestion').value=value;document.getElementById('arenaQuestion').focus();});});
 document.getElementById('arenaRun').addEventListener('click',arenaRun);
 document.getElementById('arenaNewSession').addEventListener('click',arenaNewSession);
