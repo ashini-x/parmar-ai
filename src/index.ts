@@ -7,6 +7,7 @@ import type {
 
 import { generateGeminiAnswer, GeminiError, isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount, type PartialAnswerHandler } from "./ai/gemini";
 import { handleArenaModels, handleArenaRun } from "./ai/arena";
+import { resetFreeModelCooldowns } from "./ai/freemodel";
 import { getGoogleAccessToken } from "./auth/google";
 import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, ConversationTurn, QuizItem } from "./config/env";
 import { DEFAULT_PHOTO_QUESTION, MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "./config/env";
@@ -3304,6 +3305,17 @@ const worker = {
             return withRequestId(json({ ok: false, error: "arena_staging_only" }, 404), requestId);
           }
           return withRequestId(await handleArenaModels(env, url.searchParams.get("refresh") === "1"), requestId);
+        }
+        if (adminApiPath === "/admin/api/arena/reset-breakers" && request.method === "POST") {
+          // The enclosing /admin/api block has already validated the admin session.
+          if (env.ENVIRONMENT !== "staging") {
+            return withRequestId(json({ ok: false, error: "arena_staging_only" }, 404), requestId);
+          }
+          if (!isSameOriginAdminRequest(request, url.origin)) {
+            return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          }
+          const clearedCount = resetFreeModelCooldowns(env);
+          return withRequestId(json({ ok: true, clearedCount }), requestId);
         }
         if (adminApiPath === "/admin/api/arena/run" && request.method === "POST") {
           if (env.ENVIRONMENT !== "staging") {
