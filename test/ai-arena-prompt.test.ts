@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Env, ProfileContext } from "../src/config/env";
 import { invalidateGoogleAccessToken } from "../src/auth/google";
-import { handleArenaRun } from "../src/ai/arena";
+import { handleArenaRun, handleArenaJudge } from "../src/ai/arena";
 import { resetFreeModelStateForTests } from "../src/ai/freemodel";
 import { buildStandardArenaPrompt, buildUserPrompt } from "../src/ai/gemini";
 
@@ -285,6 +285,29 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       const body = await response.json() as {
         left: { ok: boolean; packet?: { answer?: string } };
         right: { ok: boolean; packet?: { answer?: string } };
+        judge?: unknown;
+      };
+
+      expect(body.left.ok).toBe(true);
+      expect(body.right.ok).toBe(true);
+      expect(body).not.toHaveProperty("judge");
+      expect(judgeRequest).toBeNull();
+
+      const judgeResponse = await handleArenaJudge(
+        env,
+        new Request("https://arena-staging.example.workers.dev/admin/api/arena/judge", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            question: "What does Article 17 of the Constitution abolish?",
+            recentConversation: profileContext.recentConversation,
+            leftPacket: body.left.packet,
+            rightPacket: body.right.packet,
+          }),
+        }),
+      );
+      const judged = await judgeResponse.json() as {
+        ok: boolean;
         judge: {
           ok: boolean;
           mode: string;
@@ -296,11 +319,12 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
           tokens: { totalTokens: number };
           estimatedCostUsd: number;
         };
+        persistence: string;
       };
-
-      expect(body.left.ok).toBe(true);
-      expect(body.right.ok).toBe(true);
+      expect(judgeResponse.status).toBe(200);
+      expect(judged.persistence).toBe("stateless");
       expect(judgeRequest).not.toBeNull();
+      const judge = judged.judge;
       const judgeBody = judgeRequest as unknown as Record<string, unknown>;
       const judgeText = String((((judgeBody.contents as Array<{ parts: Array<{ text: string }> }>)[0]).parts)[0].text);
       expect(judgeText).toContain("What does Article 17 of the Constitution abolish?");
@@ -329,20 +353,20 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       expect(candidateAIsLeft || candidateAIsRight).toBe(true);
       expect(candidateAIsLeft && candidateAIsRight).toBe(false);
       const expectedWinner = candidateAIsLeft ? "left" : "right";
-      expect(body.judge.ok).toBe(true);
-      expect(body.judge.mode).toBe("blind");
-      expect(body.judge.model).toBe("gemini-3.8-flash");
-      expect(body.judge.winner).toBe(expectedWinner);
+      expect(judge.ok).toBe(true);
+      expect(judge.mode).toBe("blind");
+      expect(judge.model).toBe("gemini-3.8-flash");
+      expect(judge.winner).toBe(expectedWinner);
       const expectedWinnerLabel = expectedWinner === "left" ? "Left" : "Right";
       const expectedLoserLabel = expectedWinner === "left" ? "Right" : "Left";
-      expect(body.judge.summary).toContain(expectedWinnerLabel + " wins");
-      expect(body.judge.summary).toContain(expectedLoserLabel);
-      expect(body.judge.criteria[0].comparison).toContain(expectedWinnerLabel);
-      expect(body.judge.criteria[0].comparison).toContain(expectedLoserLabel);
-      expect(body.judge.overallScores[expectedWinner]).toBeGreaterThan(body.judge.overallScores[expectedWinner === "left" ? "right" : "left"]);
-      expect(body.judge.criteria).toHaveLength(6);
-      expect(body.judge.tokens.totalTokens).toBe(2_050);
-      expect(body.judge.estimatedCostUsd).toBeCloseTo(0.0031875, 8);
+      expect(judge.summary).toContain(expectedWinnerLabel + " wins");
+      expect(judge.summary).toContain(expectedLoserLabel);
+      expect(judge.criteria[0].comparison).toContain(expectedWinnerLabel);
+      expect(judge.criteria[0].comparison).toContain(expectedLoserLabel);
+      expect(judge.overallScores[expectedWinner]).toBeGreaterThan(judge.overallScores[expectedWinner === "left" ? "right" : "left"]);
+      expect(judge.criteria).toHaveLength(6);
+      expect(judge.tokens.totalTokens).toBe(2_050);
+      expect(judge.estimatedCostUsd).toBeCloseTo(0.0031875, 8);
     } finally {
       invalidateGoogleAccessToken("arena-judge-access-token");
     }
