@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "parmar-ai-arena-staging",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-05",
+  "workers_dev": true,
+  "keep_vars": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "vars": {
+    "APP_VERSION": "arena-staging-1",
+    "ENVIRONMENT": "staging",
+    "GCP_PROJECT_ID": "project-90db7be4-619f-4ed7-89b",
+    "GEMINI_MODEL": "gemini-3.8-flash",
+    "GEMINI_LOCATION": "global",
+    "GEMINI_THINKING_LEVEL": "HIGH",
+    "ENABLE_GOOGLE_SEARCH_GROUNDING": "true",
+    "MAX_OUTPUT_TOKENS": "1200",
+    "MAX_QUESTION_LENGTH": "4000",
+    "VERTEX_TIMEOUT_MS": "25000",
+    "AI_INPUT_USD_PER_MILLION": "0.75",
+    "AI_CACHED_INPUT_USD_PER_MILLION": "0.075",
+    "AI_OUTPUT_USD_PER_MILLION": "3.75",
+    "ADMIN_DASHBOARD_USER": "arena-admin",
+    "FREEMODEL_PRIMARY_MODEL": "claude-sonnet-5-5"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "parmar-ai-arena-staging",
+      "database_id": "30df9bf6-e852-4f15-8fd7-43bd96cb1cdf"
+    }
+  ]
+}
