@@ -1242,7 +1242,7 @@ async function arenaJudgeResult(){
    rightPacket:run.right&&run.right.ok?run.right.packet:null
   })});
   arenaCurrentRun.judge=data.judge||null;
-  arenaRenderJudge(data.judge,false,false);
+  arenaRenderJudge(data.judge,false,!data.ok);
   arenaSetStatus(data.judge&&data.judge.mode==='blind'?'Gemini completed the requested blind scorecard.':data.judge&&data.judge.mode==='availability_only'?'Only one generation was available; this is an availability result, not a content-quality comparison.':data.judge&&data.judge.mode==='not_needed'?'Both candidates used the shared topic clarification; no model call was needed.':'The blind judge did not return a verdict.',data.ok?'good':'error');
  }catch(error){
   arenaSetStatus('Blind judge request failed: '+error.message,'error');
