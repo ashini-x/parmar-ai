@@ -17,7 +17,11 @@ import {
 export async function adminDashboard(env: Env): Promise<Response> {
   if (!env.DB) return new Response("D1 analytics database is not configured.", { status: 503 });
   await ensureAnalyticsSchema(env);
-  return new Response(HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+  // Keep the live production admin UI unchanged while the isolated Arena is validated.
+  const dashboardHtml = env.ENVIRONMENT === "staging"
+    ? HTML
+    : HTML.replace('<button class="tab" data-page="arena">Model Arena</button>', "");
+  return new Response(dashboardHtml, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 }
 
 export async function adminOverview(env: Env): Promise<Response> {
