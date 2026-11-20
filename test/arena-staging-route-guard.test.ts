@@ -149,8 +149,8 @@ describe("Arena staging Worker route isolation", () => {
     );
     expect(accepted.status).toBe(200);
     expect(await accepted.json()).toMatchObject({
-      ok: false,
-      judge: { mode: "unavailable", error: "judge_not_configured" },
+      ok: true,
+      judge: { mode: "availability_only", winner: "left" },
       persistence: "stateless",
     });
     expect(env.DB).toBeUndefined();
