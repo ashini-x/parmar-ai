@@ -308,6 +308,7 @@ export async function generateGeminiAnswer(
   onPartialAnswer?: PartialAnswerHandler,
   bookContext?: FatmanBookContext,
   sourceContext?: GroundedGeminiSourceContext,
+  userPromptOverride?: string,
 ): Promise<GeminiGenerationResult> {
   const projectId = env.GCP_PROJECT_ID?.trim();
   const normalizedQuestion = question.trim();
@@ -387,6 +388,7 @@ export async function generateGeminiAnswer(
         attemptPartialAnswer,
         effectiveBookContext,
         effectiveSourceContext,
+        userPromptOverride,
       );
       logger.info("gemini_generation_attempt_completed", {
         attempt,
@@ -444,6 +446,7 @@ async function requestVertexGemini(
   onPartialAnswer?: PartialAnswerHandler,
   bookContext?: FatmanBookContext,
   sourceContext?: GroundedGeminiSourceContext,
+  userPromptOverride?: string,
 ): Promise<{ packet: AnswerPacket; usage: AiUsageRecord }> {
   let accessToken: string;
 
@@ -467,7 +470,7 @@ async function requestVertexGemini(
 
   try {
     const userParts: Record<string, unknown>[] = [
-      { text: buildUserPrompt(question, profileContext, requiresGrounding, attempt > 1, requestedQuizCount, bookContext, sourceContext) },
+      { text: userPromptOverride ?? buildUserPrompt(question, profileContext, requiresGrounding, attempt > 1, requestedQuizCount, bookContext, sourceContext) },
     ];
     images.forEach((image, index) => {
       userParts.push({ text: `Student image ${index + 1} of ${images.length} (sent in Telegram message order).` });
