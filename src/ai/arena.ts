@@ -216,6 +216,7 @@ async function runFreeModelSide(
   requestedQuizCount: number,
   targetModel: string,
 ): Promise<Record<string, unknown>> {
+  const startedAt = performance.now();
   try {
     const result = await generateFreeModelAnswer(env, {
       question,
@@ -229,7 +230,7 @@ async function runFreeModelSide(
       packet: result.packet,
       telegramPreview: createTelegramPreview(result.packet),
       latencyMs: result.latencyMs,
-      catalogueAndRouterOverheadMs: null,
+      catalogueAndRouterOverheadMs: Math.max(0, Math.round((performance.now() - startedAt - result.latencyMs) * 100) / 100),
       tokens: result.tokens,
       modelUsed: result.modelUsed,
       thinkingEffort: result.thinkingEffort,
