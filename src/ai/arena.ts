@@ -745,11 +745,6 @@ export async function handleArenaRun(env: Env, request: Request): Promise<Respon
       ok: true,
       left: { ...noModelCall, topicClarification: true },
       right: { ...noModelCall, topicClarification: true },
-      judge: noCallArenaJudge(
-        "not_needed",
-        "Both sides used the same pre-generation topic clarification. No model generated an answer, so this is a tie.",
-        "tie",
-      ),
       prompt: {
         builder: "production buildUserPrompt()",
         conversationTurns: recentConversation.length,
@@ -797,25 +792,12 @@ export async function handleArenaRun(env: Env, request: Request): Promise<Respon
       estimatedCostUsd: null,
     };
 
-  // The judge runs only after both candidate generations have settled. Its
-  // prompt contains anonymous A/B packets, never provider or model metadata.
-  const judge = await runGeminiArenaJudge(
-    env,
-    question,
-    SYSTEM_INSTRUCTION,
-    standardPrompt.prompt,
-    recentConversation,
-    left,
-    right,
-  );
-
-  // The production prompt builder is reused once for the candidate request.
-  // The Vertex generator computes the same production conditions internally.
+  // Return both candidate generations immediately. Blind evaluation is a
+  // separate, explicit POST /admin/api/arena/judge action.
   return json({
     ok: true,
     left,
     right,
-    judge,
     prompt: {
       builder: "production buildUserPrompt()",
       conversationTurns: recentConversation.length,
@@ -825,6 +807,108 @@ export async function handleArenaRun(env: Env, request: Request): Promise<Respon
         ? "Both models receive identical prompt text. Vertex may additionally invoke its configured Google Search grounding; no equivalent FreeModel search tool is attached."
         : "Both models receive identical production-built prompt text.",
     },
+    persistence: "stateless",
+  });
+}
+
+
+const MAX_ARENA_PACKET_CHARS = 80_000;
+
+function isArenaJudgePacket(value: unknown): value is AnswerPacket {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    return false;
+  }
+  if (!serialized || serialized.length > MAX_ARENA_PACKET_CHARS) return false;
+  const packet = value as Record<string, unknown>;
+  return (
+    typeof packet.answer === "string" &&
+    packet.answer.length <= 20_000 &&
+    (packet.responseMode === "text" || packet.responseMode === "quiz") &&
+    typeof packet.sscTakeaway === "string" &&
+    typeof packet.answerScope === "string"
+  );
+}
+
+/**
+ * On-demand, stateless blind adjudication of two packets produced by
+ * handleArenaRun. Rebuilds the trusted shared prompt on the server; accepts no
+ * provider names, model metadata, latency, token usage or cost from the client.
+ */
+export async function handleArenaJudge(env: Env, request: Request): Promise<Response> {
+  let body: {
+    question?: unknown;
+    recentConversation?: unknown;
+    leftPacket?: unknown;
+    rightPacket?: unknown;
+  };
+  try {
+    body = await request.json() as typeof body;
+  } catch {
+    return json({ ok: false, error: "invalid_json", message: "Request body must be valid JSON." }, 400);
+  }
+
+  const question = typeof body.question === "string" ? body.question.trim() : "";
+  if (!question) {
+    return json({ ok: false, error: "question_required", message: "The original Arena question is required for judging." }, 400);
+  }
+  const maxQuestionLength = Math.max(1, Number.parseInt(env.MAX_QUESTION_LENGTH ?? "", 10) || MAX_ARENA_QUESTION_CHARS);
+  if (question.length > Math.min(maxQuestionLength, MAX_ARENA_QUESTION_CHARS)) {
+    return json({ ok: false, error: "question_too_long", message: "The original question exceeds the supported 4,000-character limit." }, 400);
+  }
+
+  const leftPacket = body.leftPacket === null || body.leftPacket === undefined
+    ? null
+    : isArenaJudgePacket(body.leftPacket) ? body.leftPacket : undefined;
+  const rightPacket = body.rightPacket === null || body.rightPacket === undefined
+    ? null
+    : isArenaJudgePacket(body.rightPacket) ? body.rightPacket : undefined;
+  if (leftPacket === undefined || rightPacket === undefined) {
+    return json({
+      ok: false,
+      error: "invalid_answer_packet",
+      message: "Each candidate must be a valid generated AnswerPacket (or null when that generation failed).",
+    }, 400);
+  }
+  if (!leftPacket && !rightPacket) {
+    return json({
+      ok: false,
+      error: "no_candidate_packets",
+      message: "At least one generated AnswerPacket is required for judging.",
+    }, 400);
+  }
+
+  const recentConversation = normalizeRecentConversation(body.recentConversation);
+  const profileContext = createArenaProfileContext(recentConversation);
+  const standardPrompt = buildStandardArenaPrompt(env, question, profileContext);
+
+  const left = {
+    ok: Boolean(leftPacket),
+    ...(leftPacket ? { packet: leftPacket } : {}),
+    ...(standardPrompt.clarificationPacket ? { topicClarification: true } : {}),
+  };
+  const right = {
+    ok: Boolean(rightPacket),
+    ...(rightPacket ? { packet: rightPacket } : {}),
+    ...(standardPrompt.clarificationPacket ? { topicClarification: true } : {}),
+  };
+
+  const judge = await runGeminiArenaJudge(
+    env,
+    question,
+    SYSTEM_INSTRUCTION,
+    standardPrompt.prompt,
+    recentConversation,
+    left,
+    right,
+  );
+  const judgeOk = judge.ok !== false;
+  return json({
+    ok: judgeOk,
+    judge,
     persistence: "stateless",
   });
 }
