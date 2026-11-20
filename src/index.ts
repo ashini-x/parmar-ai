@@ -6,6 +6,7 @@ import type {
 } from "@cloudflare/workers-types";
 
 import { generateGeminiAnswer, GeminiError, isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount, type PartialAnswerHandler } from "./ai/gemini";
+import { handleArenaModels, handleArenaRun } from "./ai/arena";
 import { getGoogleAccessToken } from "./auth/google";
 import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, ConversationTurn, QuizItem } from "./config/env";
 import { DEFAULT_PHOTO_QUESTION, MAX_PHOTO_COUNT, MAX_QUIZ_BATCH_SIZE } from "./config/env";
@@ -3288,6 +3289,23 @@ const worker = {
             const pageNumber = Number(adminApiPath.slice(pagePrefix.length));
             return uploadFatmanPage(env, request, pageNumber);
           }
+        }
+        // Model Arena is a staging-only, stateless shadow evaluator. The
+        // main production Worker must never invoke external candidate models.
+        if (adminApiPath === "/admin/api/arena/models" && request.method === "GET") {
+          if (env.ENVIRONMENT !== "staging") {
+            return withRequestId(json({ ok: false, error: "arena_staging_only" }, 404), requestId);
+          }
+          return withRequestId(await handleArenaModels(env), requestId);
+        }
+        if (adminApiPath === "/admin/api/arena/run" && request.method === "POST") {
+          if (env.ENVIRONMENT !== "staging") {
+            return withRequestId(json({ ok: false, error: "arena_staging_only" }, 404), requestId);
+          }
+          if (!isSameOriginAdminRequest(request, url.origin)) {
+            return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          }
+          return withRequestId(await handleArenaRun(env, request), requestId);
         }
         if (adminApiPath === "/admin/api/telegram" && request.method === "GET") return adminTelegram(env);
         if (adminApiPath === "/admin/api/overview" && request.method === "GET") return adminOverview(env);
