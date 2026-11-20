@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Env, ProfileContext } from "../src/config/env";
+import { normalizeSscTakeaway } from "../src/ai/gemini";
 import {
   ANSWER_PACKET_REQUIRED_KEYS,
   FREE_MODEL_ANSWER_PACKET_SCHEMA,
@@ -382,5 +383,13 @@ describe("FreeModel Model Arena adapter", () => {
 
     expect(result.packet.answer).toContain("sirf SSC");
     expect(result.packet.answerScope).toBe("out_of_scope");
+  });
+});
+
+describe("SSC Focus label normalization", () => {
+  it("strips a model-generated pin and repeated focus labels", () => {
+    expect(normalizeSscTakeaway("📌 SSC Focus: Mysore High Court, 1973.")).toBe("Mysore High Court, 1973.");
+    expect(normalizeSscTakeaway("📌 SSC Focus: SSC Focus: Article 17.")).toBe("Article 17.");
+    expect(normalizeSscTakeaway("**SSC Focus:** Article 17.")).toBe("Article 17.");
   });
 });
