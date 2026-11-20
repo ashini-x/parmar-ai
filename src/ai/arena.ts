@@ -353,9 +353,20 @@ function judgeCandidate(side: Record<string, unknown>): ArenaJudgeCandidate {
       failure: "No validated AnswerPacket was returned.",
     };
   }
+  const packet = side.packet as Record<string, unknown>;
+  // These fields are attached by the provider adapters after validation.
+  // They are operational metadata, not student-facing content, and could
+  // reveal which generation came from the Gemini candidate.
+  const {
+    thinkingLevelUsed: _thinkingLevelUsed,
+    grounded: _grounded,
+    modelUsed: _modelUsed,
+    provider: _provider,
+    ...studentFacingPacket
+  } = packet;
   return {
     generationStatus: "completed",
-    answerPacket: side.packet,
+    answerPacket: studentFacingPacket,
     telegramPreview: side.telegramPreview ?? null,
   };
 }
@@ -392,7 +403,7 @@ function weightedJudgeScore(
 
 function noCallArenaJudge(mode: string, summary: string, winner: "left" | "right" | "tie" | null) {
   return {
-    ok: true,
+    ok: mode !== "unavailable",
     mode,
     blind: true,
     model: null,
