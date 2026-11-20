@@ -685,7 +685,9 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).not.toContain(".innerHTML");
     expect(script).toContain("Gemini is working");
     expect(script).toContain("Response is streaming");
-    expect(script).toContain("✓ Completed");
+    expect(script).not.toContain("status-pill done");
+    expect(script).not.toContain("status-pill partial");
+    expect(script).not.toContain("status-pill failed");
     expect(script).toContain("The model is sending response text.");
     expect(script).toContain("Vertex AI has accepted the request");
     expect(script).toContain("function formatGeneratedTimeIST(timestamp)");
