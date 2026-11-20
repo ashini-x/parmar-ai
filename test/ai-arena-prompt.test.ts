@@ -186,7 +186,7 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
     };
     const judgeOutput = {
       criteria: {
-        accuracy: { a: 10, b: 2, comparison: "A correctly identifies Article 17; B confuses it with Article 19." },
+        accuracy: { a: 10, b: 2, comparison: "Candidate A correctly identifies Article 17; Candidate B confuses it with Article 19." },
         relevance: { a: 10, b: 7, comparison: "A directly answers the question." },
         completeness: { a: 9, b: 7, comparison: "Both are concise; A supplies the required fact." },
         sscFit: { a: 10, b: 8, comparison: "A is a reliable SSC polity fact." },
@@ -291,7 +291,8 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
           winner: string;
           model: string;
           overallScores: { left: number; right: number };
-          criteria: Array<{ key: string; leftScore: number; rightScore: number }>;
+          summary: string;
+          criteria: Array<{ key: string; leftScore: number; rightScore: number; comparison: string }>;
           tokens: { totalTokens: number };
           estimatedCostUsd: number;
         };
@@ -300,7 +301,7 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       expect(body.left.ok).toBe(true);
       expect(body.right.ok).toBe(true);
       expect(judgeRequest).not.toBeNull();
-      const judgeBody = judgeRequest as Record<string, unknown>;
+      const judgeBody = judgeRequest as unknown as Record<string, unknown>;
       const judgeText = String((((judgeBody.contents as Array<{ parts: Array<{ text: string }> }>)[0]).parts)[0].text);
       expect(judgeText).toContain("What does Article 17 of the Constitution abolish?");
       expect(judgeText).toContain("sharedStudentPrompt");
@@ -326,6 +327,12 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       expect(body.judge.mode).toBe("blind");
       expect(body.judge.model).toBe("gemini-3.8-flash");
       expect(body.judge.winner).toBe(expectedWinner);
+      const expectedWinnerLabel = expectedWinner === "left" ? "Left" : "Right";
+      const expectedLoserLabel = expectedWinner === "left" ? "Right" : "Left";
+      expect(body.judge.summary).toContain(expectedWinnerLabel + " wins");
+      expect(body.judge.summary).toContain(expectedLoserLabel);
+      expect(body.judge.criteria[0].comparison).toContain(expectedWinnerLabel);
+      expect(body.judge.criteria[0].comparison).toContain(expectedLoserLabel);
       expect(body.judge.overallScores[expectedWinner]).toBeGreaterThan(body.judge.overallScores[expectedWinner === "left" ? "right" : "left"]);
       expect(body.judge.criteria).toHaveLength(6);
       expect(body.judge.tokens.totalTokens).toBe(2_050);
