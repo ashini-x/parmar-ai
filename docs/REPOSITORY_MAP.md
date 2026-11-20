@@ -36,6 +36,24 @@ Read [TELEGRAM_BOT_ARCHITECTURE.md](TELEGRAM_BOT_ARCHITECTURE.md) before changin
 - `src/ai/gemini.ts`: Vertex AI structured generation, adaptive thinking, SSE parsing and internal retry policy.
 - `test/telegram-bot-store-schema.test.ts` and `test/telegram-progress.test.ts`: regressions for the fast schema boundary and bounded progress recovery.
 
+## Standard SSC Model Arena source map
+
+The Arena is a staging-only evaluation surface, not part of the student Telegram request path:
+
+- **src/ai/arena.ts**: parallel Gemini/FreeModel orchestration, shared prompt parity, AnswerPacket response formatting and stateless run handler.
+- **src/ai/freemodel.ts**: FreeModel credential access, model catalogue discovery, primary-model routing, candidate generation and failover.
+- **src/auth/google.ts**: service-account JWT assertion and Vertex access-token authentication.
+- **src/admin/dashboard.ts**: admin dashboard Arena UI, model selector, metrics, preview, raw AnswerPacket display, browser-session turns, local votes and export.
+- **src/config/env.ts**: runtime environment bindings, including staging FreeModel and GCP secrets.
+- **src/index.ts**: staging-only admin route guard and protected Arena endpoints.
+- **wrangler.arena-staging.jsonc**: isolated staging Worker and dedicated D1 binding.
+- **.github/workflows/arena-staging-deploy.yml**: manual-only staging deployment and admin-login smoke test.
+- **test/arena-staging-route-guard.test.ts**: regression test for the staging admin-only path boundary.
+- **docs/STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md**: implementation, infrastructure, deployment and provider-acceptance handoff.
+- **docs/STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md**: copyable new-chat continuation instructions.
+
+Read the Arena staging handoff before changing provider integration or staging resources. Preserve the production Telegram and production-resource boundaries.
+
 ## BRVIN-specific source map
 
 BRVIN is implemented across both generic BRVIN modules and legacy Fatman-named ingestion modules:

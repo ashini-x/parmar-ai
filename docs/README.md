@@ -37,6 +37,12 @@ The current source baseline is **v2.8.0**.
 
 The generic Telegram runtime should be copied independently from Parmar's SSC/Fatman/BRVIN business logic. Every new bot gets isolated Cloudflare resources, secrets and application data.
 
+## Standard SSC Model Arena — isolated staging
+
+**Current handoff:** [STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md](STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md). The Standard SSC Model Arena is implemented and deployed to the isolated **parmar-ai-arena-staging** Worker. The staging deployment and admin-login page smoke test passed on GitHub Actions run [#44806050579](https://github.com/ashini-x/parmar-ai/actions/runs/44806050579), attempt 2. Provider credentials and authenticated two-model acceptance remain the next task; see the handoff for exact confirmed/pending state.
+
+**New-chat prompt:** [STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md](STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md). The Arena is admin-path-only in staging, uses a dedicated D1 database, and must remain isolated from production Telegram and production data.
+
 ## BRVIN — current source of truth
 
 **For every new BRVIN chat, start with [BRVIN_2_MASTER_PLAN.md](BRVIN_2_MASTER_PLAN.md).** It is the current continuation handoff, not an archive or aspirational plan. It points to the only active product-scope, architecture, contract and operator references.
