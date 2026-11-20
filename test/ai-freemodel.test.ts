@@ -6,6 +6,7 @@ import {
   generateFreeModelAnswer,
   getFreeModelCooldownStateForTests,
   rankActiveFreeModelModels,
+  resetFreeModelCooldowns,
   resetFreeModelStateForTests,
   supportsFreeModelJsonMode,
   type FreeModelModel,
@@ -77,7 +78,7 @@ const modelA: FreeModelModel = {
   pricing: { input_per_1k: 0.001, output_per_1k: 0.002 },
 };
 const modelB: FreeModelModel = {
-  id: "claude-fable-5-2",
+  id: "claude-opus-5-5",
   type: "chat",
   capabilities: [],
   pricing: { input_per_1k: 0.002, output_per_1k: 0.004 },
@@ -88,6 +89,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -115,6 +117,37 @@ describe("FreeModel Model Arena adapter", () => {
     expect(properties.answerScope.enum).toEqual(["ssc_ga_gs", "ssc_support", "out_of_scope"]);
     expect(properties.subject.enum).toContain("current_affairs");
     expect(properties.examRelevance.enum).toEqual(["A", "B", "C", "D"]);
+  });
+
+  it("uses the 15-second timeout for an individual model inference request", async () => {
+    let inferenceSignal: AbortSignal | undefined;
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/models")) return Promise.resolve(catalog([modelA]));
+      inferenceSignal = init?.signal as AbortSignal;
+      return new Promise<Response>((_resolve, reject) => {
+        inferenceSignal?.addEventListener("abort", () => {
+          const error = new Error("Aborted");
+          error.name = "AbortError";
+          reject(error);
+        }, { once: true });
+      });
+    }));
+
+    const pending = generateFreeModelAnswer(baseEnv, {
+      question: "Explain Article 17 and its significance.",
+      userPrompt: "Production-built user prompt.",
+      profileContext,
+      requestedQuizCount: 1,
+      targetModel: modelA.id,
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(inferenceSignal).toBeDefined();
+    await vi.advanceTimersByTimeAsync(14_999);
+    expect(inferenceSignal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(pending).rejects.toMatchObject({ code: "timeout", modelId: modelA.id });
   });
 
   it("detects json_mode only when the active model advertises it", () => {
@@ -178,6 +211,39 @@ describe("FreeModel Model Arena adapter", () => {
     expect(cooldown.until).toBeGreaterThan(Date.now());
   });
 
+  it("limits Auto-Router to four curated active models in their declared order", async () => {
+    const candidates = [
+      { id: "gpt-5.5", type: "chat", capabilities: [] },
+      { id: "matilda-cerulean-i", type: "chat", capabilities: [] },
+      { id: "claude-sonnet-5-5", type: "chat", capabilities: [] },
+      { id: "kimi-k3", type: "chat", capabilities: [] },
+      { id: "deepseek-v3.2", type: "chat", capabilities: [] },
+      { id: "claude-opus-5-5", type: "chat", capabilities: [] },
+    ] as FreeModelModel[];
+    const attempted: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/models")) return catalog(candidates);
+      const body = JSON.parse(String(init?.body)) as { model: string };
+      attempted.push(body.model);
+      return new Response(JSON.stringify({ error: { message: "temporary" } }), { status: 503 });
+    }));
+
+    await expect(generateFreeModelAnswer(baseEnv, {
+      question: "Explain Fundamental Rights.",
+      userPrompt: "Production-built user prompt.",
+      profileContext,
+      requestedQuizCount: 1,
+      targetModel: "auto",
+    })).rejects.toMatchObject({ code: "all_models_unavailable" });
+
+    expect(attempted).toEqual([
+      "claude-sonnet-5-5",
+      "claude-opus-5-5",
+      "deepseek-v3.2",
+      "kimi-k3",
+    ]);
+  });
+
   it("stops immediately on HTTP 402 without trying the next model", async () => {
     let inferenceCalls = 0;
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
@@ -200,7 +266,7 @@ describe("FreeModel Model Arena adapter", () => {
   it("runs the shared AnswerPacket parser and sanitizer before returning a packet", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       if (String(input).endsWith("/models")) return catalog([modelA]);
-      return completion(modelA.id, answerPacket());
+      return completion(modelA.id, answerPacket({ sscTakeaway: "📌 SSC Focus: 26 January is observed as Republic Day." }));
     }));
 
     const result = await generateFreeModelAnswer(baseEnv, {
@@ -213,6 +279,7 @@ describe("FreeModel Model Arena adapter", () => {
 
     expect(result.packet.answer).toContain("📌 SSC Focus:");
     expect(result.packet.sscTakeaway).toBe("26 January is observed as Republic Day.");
+    expect((result.packet.answer.match(/📌 SSC Focus:/gu) ?? []).length).toBe(1);
     expect(result.tokens).toEqual({
       promptTokens: 100,
       candidatesTokens: 30,
@@ -221,6 +288,39 @@ describe("FreeModel Model Arena adapter", () => {
       totalTokens: 130,
     });
     expect(result.estimatedCostUsd).toBe(0.00016);
+  });
+
+  it("normalizes an empty answer on a valid multi-item quiz before shared parsing", async () => {
+    const quizItems = [
+      { question: "Which Article guarantees equality before law?", options: ["Article 14", "Article 19", "Article 21", "Article 32"], correctOptionIds: [0], explanation: "Article 14 guarantees equality before law." },
+      { question: "Which Article abolishes untouchability?", options: ["Article 15", "Article 16", "Article 17", "Article 18"], correctOptionIds: [2], explanation: "Article 17 abolishes untouchability." },
+      { question: "Which Article protects freedom of speech?", options: ["Article 14", "Article 19", "Article 20", "Article 22"], correctOptionIds: [1], explanation: "Article 19(1)(a) protects freedom of speech and expression." },
+    ];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/models")) return catalog([modelA]);
+      return completion(modelA.id, answerPacket({
+        responseMode: "quiz",
+        answer: "",
+        questionMode: "mcq",
+        quizQuestion: "",
+        quizOptions: [],
+        quizCorrectOptionIds: [],
+        quizExplanation: "",
+        quizItems,
+      }));
+    }));
+
+    const result = await generateFreeModelAnswer(baseEnv, {
+      question: "Generate 3 MCQs on Fundamental Rights.",
+      userPrompt: "Production-built user prompt.",
+      profileContext,
+      requestedQuizCount: 3,
+      targetModel: modelA.id,
+    });
+
+    expect(result.packet.responseMode).toBe("quiz");
+    expect(result.packet.quizItems).toHaveLength(3);
+    expect(result.packet.answer).toContain("Generated 3 SSC MCQs.");
   });
 
   it("cools a model for malformed AnswerPacket JSON and fails over", async () => {
@@ -245,6 +345,25 @@ describe("FreeModel Model Arena adapter", () => {
     expect(result.modelUsed).toBe(modelB.id);
     expect(result.failoverModels[0]).toContain("malformed_json");
     expect(getFreeModelCooldownStateForTests().size).toBe(1);
+  });
+
+  it("clears only cooldowns for the configured FreeModel endpoint", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/models")) return catalog([modelA]);
+      return new Response(JSON.stringify({ error: { message: "temporary" } }), { status: 503 });
+    }));
+
+    await expect(generateFreeModelAnswer(baseEnv, {
+      question: "When did the Constitution of India come into force?",
+      userPrompt: "Production-built user prompt.",
+      profileContext,
+      requestedQuizCount: 1,
+      targetModel: modelA.id,
+    })).rejects.toMatchObject({ code: "upstream_error" });
+
+    expect(getFreeModelCooldownStateForTests().size).toBe(1);
+    expect(resetFreeModelCooldowns(baseEnv)).toBe(1);
+    expect(getFreeModelCooldownStateForTests().size).toBe(0);
   });
 
   it("keeps out-of-scope normalization in the shared sanitizer", async () => {
