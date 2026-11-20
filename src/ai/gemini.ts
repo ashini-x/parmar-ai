@@ -11,7 +11,7 @@ const DEFAULT_TIMEOUT_MS = 25_000;
 const MAX_INTERNAL_ATTEMPTS = 3;
 const MAX_ANSWER_CHARS = 3_900;
 
-const SYSTEM_INSTRUCTION = `You are परमार्थAI, an SSC-focused exam mentor.
+export const SYSTEM_INSTRUCTION = `You are परमार्थAI, an SSC-focused exam mentor.
 
 BOT AND BRɅIN IDENTITY
 - Product identity: You are परमार्थAI, the student-facing SSC General Awareness / General Studies study companion by BRɅIN.
@@ -171,7 +171,7 @@ export type PartialAnswerHandler = ((answer: string) => void) & {
   flush(): Promise<void>;
 };
 
-const RESPONSE_SCHEMA = {
+export const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
     responseMode: { type: "STRING", enum: ["text", "quiz"] },
@@ -256,7 +256,7 @@ const RESPONSE_SCHEMA = {
     "detectedExam",
     "timeSensitive",
   ],
-};
+} as const;
 
 export class GeminiError extends Error {
   status?: number;
@@ -444,6 +444,7 @@ async function requestVertexGemini(
   onPartialAnswer?: PartialAnswerHandler,
   bookContext?: FatmanBookContext,
   sourceContext?: GroundedGeminiSourceContext,
+  userPromptOverride?: string,
 ): Promise<{ packet: AnswerPacket; usage: AiUsageRecord }> {
   let accessToken: string;
 
@@ -467,7 +468,7 @@ async function requestVertexGemini(
 
   try {
     const userParts: Record<string, unknown>[] = [
-      { text: buildUserPrompt(question, profileContext, requiresGrounding, attempt > 1, requestedQuizCount, bookContext, sourceContext) },
+      { text: userPromptOverride ?? buildUserPrompt(question, profileContext, requiresGrounding, attempt > 1, requestedQuizCount, bookContext, sourceContext) },
     ];
     images.forEach((image, index) => {
       userParts.push({ text: `Student image ${index + 1} of ${images.length} (sent in Telegram message order).` });
@@ -706,7 +707,7 @@ function buildBotIdentityUserPrompt(question: string, isCompletionRetry: boolean
   ].filter(Boolean).join("\n");
 }
 
-function buildUserPrompt(question: string, context: ProfileContext, requiresGrounding: boolean, isCompletionRetry: boolean, requestedQuizCount: number, bookContext?: FatmanBookContext, sourceContext?: GroundedGeminiSourceContext): string {
+export function buildUserPrompt(question: string, context: ProfileContext, requiresGrounding: boolean, isCompletionRetry: boolean, requestedQuizCount: number, bookContext?: FatmanBookContext, sourceContext?: GroundedGeminiSourceContext): string {
   if (isBotIdentityQuestion(question)) {
     return buildBotIdentityUserPrompt(question, isCompletionRetry);
   }
@@ -757,6 +758,105 @@ function buildUserPrompt(question: string, context: ProfileContext, requiresGrou
     "",
     "Before answering, decide whether this is genuinely useful for SSC GA/GS unless the message asks about the bot's identity or creation. Keep the final answer proportional to the question. Avoid peripheral numbers, coverage percentages, questionable historical minutiae, and unnecessary lists unless the student asks for them. If the student is confused, teach the specific confusion. Only make a learning-profile update when there is meaningful evidence.",
   ].filter(Boolean).join("\n");
+}
+
+
+/**
+ * Arena-only Vertex entrypoint over the same low-level request and validator.
+ * The production generateGeminiAnswer() signature and Telegram call path remain unchanged.
+ */
+export async function generateGeminiArenaAnswer(
+  env: Env,
+  question: string,
+  profile: ProfileContext,
+  sharedUserPrompt: string,
+): Promise<GeminiGenerationResult> {
+  const projectId = env.GCP_PROJECT_ID?.trim();
+  const normalizedQuestion = question.trim();
+  if (!projectId) throw new GeminiError("Google Cloud project ID is not configured.");
+  if (!env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim()) {
+    throw new GeminiError("Google Cloud service account credentials are not configured.");
+  }
+  if (!normalizedQuestion) throw new GeminiError("Question is empty.");
+  const maxQuestionLength = positiveInt(env.MAX_QUESTION_LENGTH, 4_000);
+  if (normalizedQuestion.length > maxQuestionLength) {
+    throw new GeminiError("Question is too long. Maximum supported length is " + maxQuestionLength + " characters.");
+  }
+
+  const location = env.GEMINI_LOCATION?.trim() || DEFAULT_LOCATION;
+  const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+  const endpoint = "https://aiplatform.googleapis.com/v1/projects/" +
+    encodeURIComponent(projectId) + "/locations/" + encodeURIComponent(location) +
+    "/publishers/google/models/" + encodeURIComponent(model) + ":generateContent";
+  const identityQuestion = isBotIdentityQuestion(normalizedQuestion);
+  const thinkingLevel = selectThinkingLevel(normalizedQuestion, getConfig(env).maxThinkingLevel);
+  const requiresGrounding = !identityQuestion &&
+    requiresFreshData(normalizedQuestion) &&
+    isGroundingEnabled(env);
+  const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, profile);
+  if (requiresMcqTopicClarification(normalizedQuestion, profile)) {
+    return { packet: makeMcqTopicClarificationPacket(requestedQuizCount), usage: [] };
+  }
+
+  const usageRecords: AiUsageRecord[] = [];
+  let lastError: GeminiError | null = null;
+  for (let attempt = 1; attempt <= MAX_INTERNAL_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await requestVertexGemini(
+        env,
+        endpoint,
+        normalizedQuestion,
+        profile,
+        thinkingLevel,
+        requiresGrounding,
+        attempt,
+        requestedQuizCount,
+        [],
+        undefined,
+        undefined,
+        undefined,
+        sharedUserPrompt,
+      );
+      return { packet: result.packet, usage: [...usageRecords, result.usage] };
+    } catch (error) {
+      const geminiError = toGeminiError(error);
+      usageRecords.push(...geminiError.usageRecords);
+      lastError = geminiError;
+      if (!geminiError.retryable || attempt >= MAX_INTERNAL_ATTEMPTS) {
+        geminiError.usageRecords = usageRecords.slice();
+        throw geminiError;
+      }
+      await sleep(800 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
+    }
+  }
+  throw lastError ?? new GeminiError("Vertex AI Arena generation failed.", undefined, true, usageRecords);
+}
+
+/** Builds the normal production SSC user prompt once for both Arena providers. */
+export function buildStandardArenaPrompt(
+  env: Env,
+  question: string,
+  context: ProfileContext,
+): { prompt: string; requestedQuizCount: number; requiresGrounding: boolean; clarificationPacket?: AnswerPacket } {
+  const normalizedQuestion = question.trim();
+  const identityQuestion = isBotIdentityQuestion(normalizedQuestion);
+  const requiresGrounding = !identityQuestion &&
+    requiresFreshData(normalizedQuestion) &&
+    isGroundingEnabled(env);
+  const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, context);
+  const needsTopicClarification = requiresMcqTopicClarification(normalizedQuestion, context);
+  return {
+    prompt: buildUserPrompt(
+      normalizedQuestion,
+      context,
+      requiresGrounding,
+      false,
+      requestedQuizCount,
+    ),
+    requestedQuizCount,
+    requiresGrounding,
+    ...(needsTopicClarification ? { clarificationPacket: makeMcqTopicClarificationPacket(requestedQuizCount) } : {}),
+  };
 }
 
 function buildGroundedSourceUserPrompt(
@@ -856,7 +956,7 @@ function buildFatmanFallbackUserPrompt(
   ].filter(Boolean).join("\n");
 }
 
-function parseAnswerPacket(rawText: string): AnswerPacket {
+export function parseAnswerPacket(rawText: string): AnswerPacket {
   const cleaned = stripCodeFence(rawText);
 
   let parsed: Partial<AnswerPacket> | null = null;
@@ -1033,7 +1133,7 @@ function makeFallbackPacket(answer: string): AnswerPacket {
   };
 }
 
-function sanitizeAnswerPacket(
+export function sanitizeAnswerPacket(
   packet: AnswerPacket,
   currentFactTrusted: boolean,
   requiresGrounding: boolean,

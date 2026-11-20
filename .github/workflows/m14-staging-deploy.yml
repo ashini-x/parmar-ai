@@ -97,7 +97,9 @@ jobs:
 
   deploy-staging:
     name: Deploy isolated M14 staging Worker
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    # Keep validation active for shared Gemini changes, but do not redeploy
+    # the existing M14 Worker for a reviewed Arena-only squash release.
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, '[staging-only]')) || github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10

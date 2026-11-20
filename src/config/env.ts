@@ -235,6 +235,12 @@ export interface Env {
   GCP_PRIVATE_KEY_ID?: string;
 
   GEMINI_MODEL?: string;
+  /** FreeModel API key: set only as a Worker secret on the isolated Arena staging Worker. */
+  FREEMODEL_API_KEY?: string;
+  /** OpenAI-compatible FreeModel API base URL. Defaults to https://freemodel.in/v1. */
+  FREEMODEL_BASE_URL?: string;
+  /** Default first choice for FreeModel auto-routing. Defaults to claude-sonnet-5-5. */
+  FREEMODEL_PRIMARY_MODEL?: string;
   GEMINI_LOCATION?: string;
   /** Maximum allowed thinking level. Code selects LOW/MEDIUM/HIGH adaptively. */
   GEMINI_THINKING_LEVEL?: string;
