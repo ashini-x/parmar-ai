@@ -160,8 +160,8 @@ async function runVertexSide(
 ): Promise<Record<string, unknown>> {
   const startedAt = performance.now();
   try {
-    // This is the unchanged production generator, called directly by the
-    // isolated admin endpoint. It is not called from the Telegram queue.
+    // Arena-only wrapper over the same Vertex request and AnswerPacket
+    // validator; the Telegram production generator and queue are not changed.
     const generation = await generateGeminiArenaAnswer(
       env,
       question,
@@ -216,7 +216,6 @@ async function runFreeModelSide(
   requestedQuizCount: number,
   targetModel: string,
 ): Promise<Record<string, unknown>> {
-  const startedAt = performance.now();
   try {
     const result = await generateFreeModelAnswer(env, {
       question,
@@ -229,7 +228,8 @@ async function runFreeModelSide(
       ok: true,
       packet: result.packet,
       telegramPreview: createTelegramPreview(result.packet),
-      latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
+      latencyMs: result.latencyMs,
+      catalogueAndRouterOverheadMs: null,
       tokens: result.tokens,
       modelUsed: result.modelUsed,
       thinkingEffort: result.thinkingEffort,
@@ -253,14 +253,15 @@ async function runFreeModelSide(
   }
 }
 
-export async function handleArenaModels(env: Env): Promise<Response> {
+export async function handleArenaModels(env: Env, forceRefresh = false): Promise<Response> {
   try {
-    const result = await getFreeModelModels(env);
+    const result = await getFreeModelModels(env, { forceRefresh });
     return json({
       ok: true,
       ...result,
       cacheTtlMs: 5 * 60_000,
       rankingNote: "Configured priority order, with the configured primary model first; remaining active chat models are ordered alphabetically.",
+      forcedRefresh: forceRefresh,
     });
   } catch (error) {
     const failure = safeFreeModelFailure(error);
