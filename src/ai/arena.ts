@@ -229,8 +229,10 @@ async function runFreeModelSide(
       ok: true,
       packet: result.packet,
       telegramPreview: createTelegramPreview(result.packet),
-      latencyMs: result.latencyMs,
-      catalogueAndRouterOverheadMs: Math.max(0, Math.round((performance.now() - startedAt - result.latencyMs) * 100) / 100),
+      // Headline latency includes catalogue lookup, failed candidates, cooldown skips and the winner.
+      latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
+      modelLatencyMs: result.latencyMs,
+      routerAndFailoverLatencyMs: Math.max(0, Math.round((performance.now() - startedAt - result.latencyMs) * 100) / 100),
       tokens: result.tokens,
       modelUsed: result.modelUsed,
       thinkingEffort: result.thinkingEffort,
