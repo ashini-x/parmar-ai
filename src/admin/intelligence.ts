@@ -2524,7 +2524,7 @@ export function ownerIntelligenceClientScript(): Response {
     if(!Number.isFinite(value)||value<=0)return "Time unavailable";
     try{
       var formatted=new Intl.DateTimeFormat("en-IN",{
-        day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:true,timeZone:"Asia/Kolkata"
+        month:"short",day:"numeric"
       }).format(new Date(value));
       return formatted.replace(/\b(am|pm)\b/gi,function(period){return period.toUpperCase();});
     }catch(_error){return "Time unavailable";}
@@ -2532,7 +2532,7 @@ export function ownerIntelligenceClientScript(): Response {
   function getResponseMetaState(item){
     var status=String(item.status||"");
     var hasResponse=String(item.content||"").trim().length>0;
-    if(status==="complete")return {label:"Success",tone:"success"};
+    if(status==="complete")return {label:"Completed",tone:"success"};
     if(status==="partial"||(status==="error"&&hasResponse))return {label:"Partial",tone:"partial"};
     if(status==="error")return {label:"Failed",tone:"failed"};
     return {label:"Generating",tone:"neutral"};
