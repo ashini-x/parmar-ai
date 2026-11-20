@@ -113,6 +113,7 @@ export interface FreeModelTokenMetrics {
   promptTokens: number;
   candidatesTokens: number;
   thoughtsTokens: number;
+  thoughtsReported: boolean;
   totalTokens: number;
 }
 
@@ -398,6 +399,7 @@ function usageTokens(usage: FreeModelUsage | undefined): FreeModelTokenMetrics {
     promptTokens,
     candidatesTokens,
     thoughtsTokens: 0,
+    thoughtsReported: false,
     totalTokens,
   };
 }
