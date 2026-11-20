@@ -18,13 +18,28 @@ export async function adminDashboard(env: Env): Promise<Response> {
   if (!env.DB) return new Response("D1 analytics database is not configured.", { status: 503 });
   await ensureAnalyticsSchema(env);
   // Keep the live production admin UI unchanged while the isolated Arena is validated.
+  const removeArenaBlock = (source: string, start: string, end: string): string => {
+    const startAt = source.indexOf(start);
+    if (startAt < 0) return source;
+    const endAt = source.indexOf(end, startAt + start.length);
+    if (endAt < 0) return source;
+    return source.slice(0, startAt) + source.slice(endAt + end.length);
+  };
   const dashboardHtml = env.ENVIRONMENT === "staging"
     ? HTML
-    : HTML
-      .replace('<button class="tab" data-page="arena">Model Arena</button>', "")
-      .replace(/<!-- ARENA HTML START -->[\\s\\S]*?<!-- ARENA HTML END -->/u, "")
-      .replace(/\\/\\* ARENA CSS START \\*\\/[\\s\\S]*?\\/\\* ARENA CSS END \\*\\//u, "")
-      .replace(/\\/\\* ARENA JS START \\*\\/[\\s\\S]*?\\/\\* ARENA JS END \\*\\//u, "");
+    : removeArenaBlock(
+      removeArenaBlock(
+        removeArenaBlock(
+          HTML.replace('<button class="tab" data-page="arena">Model Arena</button>', ""),
+          "<!-- ARENA HTML START -->",
+          "<!-- ARENA HTML END -->",
+        ),
+        "/* ARENA CSS START */",
+        "/* ARENA CSS END */",
+      ),
+      "/* ARENA JS START */",
+      "/* ARENA JS END */",
+    );
   return new Response(dashboardHtml, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 }
 
