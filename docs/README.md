@@ -39,7 +39,7 @@ The generic Telegram runtime should be copied independently from Parmar's SSC/Fa
 
 ## Standard SSC Model Arena — isolated staging
 
-**Current handoff:** [STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md](STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md). The Standard SSC Model Arena is implemented and deployed to the isolated **parmar-ai-arena-staging** Worker. The staging deployment and admin-login page smoke test passed on GitHub Actions run [#44806050579](https://github.com/ashini-x/parmar-ai/actions/runs/44806050579), attempt 2. Provider credentials and authenticated two-model acceptance remain the next task; see the handoff for exact confirmed/pending state.
+**Current handoff:** [STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md](STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md). The Standard SSC Model Arena is implemented and deployed to the isolated **parmar-ai-arena-staging** Worker. Deployment and the login-page smoke test passed on GitHub Actions run [#44806050579](https://github.com/ashini-x/parmar-ai/actions/runs/44806050579), attempt 2. A 2026-11-21 live inspection confirmed all six secret binding names; the user's browser showed the signed-in dashboard and FreeModel catalogue. The user reports seven self-authored Auto-Router comparisons, but the results have not yet been uploaded or reviewed. Overall acceptance remains pending.
 
 **New-chat prompt:** [STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md](STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md). The Arena is admin-path-only in staging, uses a dedicated D1 database, and must remain isolated from production Telegram and production data.
 

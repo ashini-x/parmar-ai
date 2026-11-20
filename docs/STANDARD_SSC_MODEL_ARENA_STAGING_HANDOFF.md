@@ -9,7 +9,7 @@ This is the authoritative handoff for continuing Standard SSC Model Arena work i
 
 ## 1. Current status
 
-The Model Arena implementation and its manual staging deployment workflow are merged into main. The isolated Worker is live, its workers.dev route is enabled, and the deployment workflow's admin-login page smoke test passed on retry.
+The Model Arena implementation and its manual staging deployment workflow are merged into main. The isolated Worker is live, its workers.dev route is enabled, the admin dashboard is reachable in the user's browser, and the FreeModel model catalogue has loaded in that dashboard.
 
 **Live admin URL:** https://parmar-ai-arena-staging.thenewtongs.workers.dev/admin/login
 
@@ -19,18 +19,55 @@ The Model Arena implementation and its manual staging deployment workflow are me
 | Staging route guard | Merged and tested | PR #401 and route-guard test |
 | Dedicated staging D1 | Created and bound | ID below |
 | Staging Worker | Deployed | GitHub Actions run #44806050579, attempt 2 |
-| workers.dev route | Enabled | Cloudflare API read-back confirmed enabled=true |
+| workers.dev route | Enabled | Latest Cloudflare API read-back confirmed enabled=true |
 | Login page smoke test | Passed | Deployment workflow attempt 2 |
+| Authenticated dashboard | User-browser access observed | User screenshot shows the staging admin dashboard with the Arena model selector |
+| FreeModel catalogue | Loaded in user browser | Screenshot shows catalogue entries including Claude Sonnet 5.5, Claude Opus 5.5, GPT-6 Astra, Kimi K3 and others |
 | Admin username | Configured | arena-admin |
-| Admin password/session secrets | Present by name | Cloudflare settings lists both as Secret; values are not inspected |
-| Google credential secrets | Present by name | Cloudflare settings lists all three GCP secrets; values and provider auth are unverified |
-| FreeModel API key | Missing at last live inspection | FREEMODEL_API_KEY was absent from Cloudflare settings |
-| Successful interactive login | Not yet accepted | Page smoke test is not an authenticated login test |
-| Vertex AI generation | Not yet accepted | Needs a real generation request |
-| FreeModel catalogue/generation | Not yet accepted | Needs key and real API requests |
-| Two-provider comparison | Pending | Both must return valid AnswerPackets |
+| Admin password/session secrets | Present by name | Cloudflare settings lists both as Secret; values are not inspectable |
+| Google credential secrets | Present by name | Cloudflare settings lists all three GCP secrets; values and Vertex authentication remain unverified |
+| FreeModel API key | Present by name | Cloudflare settings lists FREEMODEL_API_KEY as secret; key value and account-key label are not inspectable |
+| Initial user-run comparisons | 7 questions submitted with Auto-Router | User-reported; result screenshots/exports have not yet been uploaded or reviewed |
+| Vertex AI generation acceptance | Pending evidence review | Inspect seven runs to establish response success and valid AnswerPackets |
+| FreeModel inference acceptance | Pending evidence review | Catalogue load succeeded; inspect seven runs to establish inference/model IDs and valid AnswerPackets |
+| Overall Arena acceptance | Pending | Do not mark complete until uploaded evidence has been reviewed and remaining coverage gaps tested |
 
-A listed secret binding proves only that the name exists. It does not reveal, validate or prove the correctness of its value.
+A listed secret binding proves only that a secret with that name is configured. It does not reveal, validate or prove the correctness of its value.
+
+### 2026-11-21 — browser and initial-test checkpoint
+
+A fresh live Cloudflare settings inspection confirmed all six required runtime secret binding names are present and each has type `secret_text`:
+
+- `ADMIN_DASHBOARD_PASSWORD`
+- `ADMIN_SESSION_SECRET`
+- `GCP_CLIENT_EMAIL`
+- `GCP_PRIVATE_KEY`
+- `GCP_PRIVATE_KEY_ID`
+- `FREEMODEL_API_KEY`
+
+The same live inspection confirmed:
+- Worker: `parmar-ai-arena-staging`
+- workers.dev route: enabled
+- `ENVIRONMENT`: present as plain-text configuration
+- `ADMIN_DASHBOARD_USER`: present as plain-text configuration
+- `DB`: bound to the dedicated staging D1 ID `30df9bf6-e852-4f15-8fd7-43bd96cb1cdf`
+
+No secret values were retrieved or printed. The currently configured FreeModel API key's actual value or dashboard label cannot be determined from Cloudflare's binding metadata. In the prior chat, the user was advised to use the FreeModel **Default API Key**; treat that as the recommendation, not verified proof of which key value was stored.
+
+**User-browser evidence:** the user supplied a screenshot of the staging admin dashboard with the FreeModel candidate selector open. The screenshot showed catalogue entries such as Claude Sonnet 5.5, Claude Opus 5.5, GPT-6 Astra, Claude Fable 5.1, Kimi K3 and other entries. This supports that the user reached the dashboard and that FreeModel catalogue discovery was working in the browser at that time. It does not establish that every listed model can successfully perform inference.
+
+**User-reported preliminary exercise:** the user reports that they submitted **seven of their own questions** with **Auto-Router** selected. These seven questions were not the 31-question matrix proposed in the prior assistant response. The user has not uploaded the seven result screenshots or benchmark export in this conversation, and their outputs have not yet been reviewed. Therefore:
+
+- Do not label any of the seven runs PASS, REVIEW or FAIL yet.
+- Do not assume both Gemini and FreeModel succeeded in every run.
+- Do not infer which FreeModel model actually answered from the Auto-Router default label; inspect each result's reported `modelUsed` and any failover details.
+- Do not infer AnswerPacket validity, factual accuracy, latency, token count or cost if the relevant output/metric is not visible.
+- No test result artifact has been uploaded to GitHub at this checkpoint.
+
+The 31-item acceptance matrix suggested earlier remains a future coverage plan, not completed testing. The seven user-authored Auto-Router runs are the only user-reported initial comparison exercise at this point. No pinned individual-model test, current-fact grounding review, deliberate failure-path test, vote/export verification or mobile layout acceptance has been confirmed.
+
+**New-chat instruction:** the user will start a new chat and upload the seven-run evidence there. Review those exact screenshots or benchmark export first. Assess the left Vertex AI/Gemini output and right FreeModel output separately for each run. Capture the question, actual model name/ID, any failover information, success/error state, raw AnswerPacket validity, factual/content quality, latency, token metrics and estimated cost only where shown. Mark absent evidence as unverified. Do not ask the user to repeat a run until its uploaded evidence has been inspected. After that review, identify only the additional tests needed to close the real gaps.
+
 
 ## 2. GitHub implementation and release history
 
@@ -211,7 +248,7 @@ The recommendation changed during the conversation: an earlier answer suggested 
 The current Worker requires:
 - FREEMODEL_API_KEY — Cloudflare Secret
 
-A Cloudflare settings read at this handoff did **not** show this binding. The user was last instructed to copy the Default API Key into this secret; addition was not confirmed. Treat it as pending until Cloudflare read-back or user confirmation proves it exists.
+A Cloudflare settings read on 2026-11-21 confirms this binding is present as `secret_text`. The user's browser also displayed the FreeModel model catalogue. This confirms model-catalogue access, not successful inference for every listed model. The key's actual value and whether it is the dashboard's Default API Key are not visible through the settings inspection. The user was last advised to use the Default API Key; this remains a recommendation unless the user confirms which key was copied.
 
 Current code behavior:
 - src/ai/freemodel.ts reads one credential from env.FREEMODEL_API_KEY.
@@ -259,84 +296,70 @@ For current-fact prompts, Vertex may additionally invoke configured Google Searc
 
 Continue in this order. Do not deploy production and do not change the production Worker.
 
-### Step 1 — Add the missing FreeModel secret
+### Step 1 — Review the seven user-run Auto-Router comparisons
 
-In Cloudflare:
-1. Open Workers & Pages.
-2. Select parmar-ai-arena-staging.
-3. Open Settings → Variables and Secrets.
-4. Add a new binding with type Secret.
-5. Name it FREEMODEL_API_KEY.
-6. Paste the selected FreeModel Default API Key directly from the provider dashboard.
-7. Do not paste the key into chat or GitHub.
-8. Keep both provider keys active; do not revoke either.
+The user's next chat will contain the seven result screenshots or an Arena benchmark JSON export. **Inspect the uploaded evidence before asking the user to perform more tests.**
 
-### Step 2 — Verify Google configuration
+For each of the seven questions:
 
-In Google Cloud Console select project project-90db7be4-619f-4ed7-89b and verify:
+1. Capture the exact user question.
+2. Inspect the left Vertex AI/Gemini result and right FreeModel result independently.
+3. Record success/failure status and safe error code, if shown.
+4. Record the actual FreeModel model ID used by Auto-Router (`modelUsed`) and any failover information.
+5. Inspect the raw AnswerPacket and determine whether required fields/quiz structures are valid.
+6. Review factual correctness, completeness, SSC relevance, language and Telegram-style formatting.
+7. Record latency, tokens and displayed estimated cost only when visible.
+8. Assign PASS, REVIEW or FAIL with a short reason. Use UNVERIFIED where the screenshot/export does not show enough evidence.
+
+Do not conclude that both providers passed merely because the catalogue loaded. Do not fabricate a benchmark artifact or infer missing outputs.
+
+No result screenshots, exports or test-result artifacts have been uploaded to GitHub as of this handoff.
+
+### Step 2 — Identify the remaining test coverage gaps
+
+The 31-item test plan previously proposed is a future coverage plan, not a completed test record. The seven user-authored Auto-Router comparisons are the only reported initial exercise. After reviewing their evidence, choose only the necessary remaining tests. Likely gaps to consider include:
+- SSC subject breadth and statement traps;
+- genuine supplied-MCQ solving and independent multi-item quiz generation;
+- generic MCQ topic clarification and the topic follow-up;
+- multi-turn follow-up and New Session isolation;
+- current-fact grounding;
+- out-of-scope handling and assistant identity;
+- pinned individual FreeModel models versus Auto-Router;
+- cooldown/failover behavior if safely testable without deliberately exhausting provider limits;
+- vote persistence, JSON export and mobile responsiveness.
+
+Do not ask the user to repeat any of the seven completed runs unless the uploaded evidence is missing or unusable.
+
+### Step 3 — Verify Google configuration only if evidence requires it
+
+The three GCP secret names are present, but their values are not inspectable. Use the seven-run evidence to determine whether Vertex authentication or generation actually failed. If a run shows an authentication/permission error, verify in Google Cloud project `project-90db7be4-619f-4ed7-89b`:
 - Vertex AI API is enabled.
 - Billing is active.
-- Service account parmar-ai-arena-staging exists.
-- It has Vertex AI User (roles/aiplatform.user).
-- The email and private key represented by the current Cloudflare secrets match that service account's JSON key.
+- Service account `parmar-ai-arena-staging` exists.
+- It has Vertex AI User (`roles/aiplatform.user`).
+- The Cloudflare secret values correspond to this service account.
 
-If already completed, do not create another account or key. Verify first.
+Do not create duplicate service accounts or private keys if the existing setup already works.
 
-### Step 3 — Deploy the pending Cloudflare secret
+### Step 4 — Configuration/deployment changes only when justified
 
-After FREEMODEL_API_KEY is present and Google settings are verified:
-1. Review all six runtime secret names.
-2. Confirm every one has type Secret.
-3. Click Deploy in the Cloudflare dashboard.
-4. Wait for deployment success.
+At the current checkpoint all six required secret names are present and the user can reach the dashboard and catalogue. Do not add secrets again or redeploy simply because a new chat starts. If evidence identifies a real configuration defect, change only the staging Worker. Apply updated secrets through the Cloudflare Dashboard Deploy action; use the manual staging-only GitHub Actions workflow for code/config changes. Never deploy production for Arena acceptance.
 
-Six secrets:
-- ADMIN_DASHBOARD_PASSWORD
-- ADMIN_SESSION_SECRET
-- GCP_CLIENT_EMAIL
-- GCP_PRIVATE_KEY
-- GCP_PRIVATE_KEY_ID
-- FREEMODEL_API_KEY
+### Step 5 — Continue browser acceptance
 
-ADMIN_DASHBOARD_USER is already a plain config variable with value arena-admin. Do not add it as a secret.
+Use the staging URL:
+https://parmar-ai-arena-staging.thenewtongs.workers.dev/admin/login
 
-### Step 4 — Verify authenticated admin access
+Configured username: `arena-admin`. The user has already shown the signed-in dashboard in their browser. Revisit login only if needed.
 
-Open https://parmar-ai-arena-staging.thenewtongs.workers.dev/admin/login and sign in with:
-- Username: arena-admin
-- Password: the staging-only ADMIN_DASHBOARD_PASSWORD value
+After the initial seven-run evidence is reviewed, complete only the remaining tests selected from the coverage-gap review. Compare actual output quality and AnswerPacket validity, not just whether a request returned HTTP success.
 
-If login fails, inspect secret presence/type and the exact error or Cloudflare logs. Do not rotate production credentials.
+### Step 6 — Record the acceptance evidence
 
-### Step 5 — Verify the FreeModel catalogue
+Record test date/time, question, actual provider/model ID, success/error, safe AnswerPacket validation outcome, factual review, latency, token counts, displayed estimate and vote where shown. Never record passwords, private keys, API keys, cookies or authorization headers.
 
-1. Open the Model Arena dashboard tab.
-2. Click Refresh Models.
-3. Confirm the catalogue loads.
-4. Confirm the primary model appears.
-5. Confirm individual available model choices appear.
+Do not mark the Arena fully accepted until both provider outputs and the required SSC/prompt behaviors are demonstrated. If a provider fails, preserve safe error codes and sanitized messages, correct the staging issue only, and rerun the smallest relevant test. Production remains untouched.
 
-If catalogue discovery fails, inspect the provider status and sanitized error code. Do not assume the UI is faulty without checking the API result.
-
-### Step 6 — Run the first two-provider comparison
-
-Use a stable SSC GA/GS question, for example: “Which Article of the Indian Constitution deals with the abolition of untouchability?”
-
-1. Enter the question.
-2. Keep Auto-Router selected for the first run unless the UI requires another choice.
-3. Click Compare Models.
-4. Confirm the left Vertex AI/Gemini side returns a valid AnswerPacket.
-5. Confirm the right FreeModel side returns a valid AnswerPacket.
-6. Inspect model IDs, formatted previews, latency, tokens, estimated costs and raw AnswerPackets.
-7. Save a browser-local vote or export JSON only if useful.
-
-Do not call provider acceptance complete if only one side succeeds. A successful login-page smoke test is not successful sign-in or successful model generation.
-
-### Step 7 — Record acceptance evidence
-
-Record date/time, test question, selected FreeModel model, safe provider success/failure codes, returned model IDs, latency/token metrics and whether both AnswerPackets validated. Never record credentials, private keys, passwords, cookies or authorization headers.
-
-If a provider fails, keep only safe error codes and sanitized messages. Fix staging configuration/code and rerun acceptance. Production remains untouched.
 
 ## 7. Deployment and operational safety
 
