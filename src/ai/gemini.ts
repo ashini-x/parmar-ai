@@ -843,7 +843,7 @@ export function buildStandardArenaPrompt(
   const requiresGrounding = !identityQuestion &&
     requiresFreshData(normalizedQuestion) &&
     isGroundingEnabled(env);
-  const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, context.profile);
+  const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, context);
   const needsTopicClarification = requiresMcqTopicClarification(normalizedQuestion, context);
   return {
     prompt: buildUserPrompt(
