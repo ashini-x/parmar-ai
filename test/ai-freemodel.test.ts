@@ -204,6 +204,7 @@ describe("FreeModel Model Arena adapter", () => {
       promptTokens: 100,
       candidatesTokens: 30,
       thoughtsTokens: 0,
+      thoughtsReported: false,
       totalTokens: 130,
     });
     expect(result.estimatedCostUsd).toBe(0.00016);
