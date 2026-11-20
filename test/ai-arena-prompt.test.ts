@@ -304,6 +304,8 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       const judgeBody = judgeRequest as unknown as Record<string, unknown>;
       const judgeText = String((((judgeBody.contents as Array<{ parts: Array<{ text: string }> }>)[0]).parts)[0].text);
       expect(judgeText).toContain("What does Article 17 of the Constitution abolish?");
+      expect(judgeText).toContain("studentFacingSystemInstruction");
+      expect(judgeText).toContain("BOT AND BRɅIN IDENTITY");
       expect(judgeText).toContain("sharedStudentPrompt");
       expect(judgeText).toContain("recentConversation");
       expect(judgeText).toContain("answerPacket");
