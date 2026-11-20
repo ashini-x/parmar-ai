@@ -1,3 +1,9 @@
+## 2026-11-20 IST: Owner response metadata date and completion label
+
+- Owner completion date pill now shows month/day only (e.g. `Nov 20`); the year, time, and timezone suffix are hidden.
+- Successful generation label changed from `Success` to `Completed`. Partial, failed and generating labels are unchanged.
+- Owner-only front-end presentation. No API, D1 schema, model/provider, token-budget, retrieval or student-facing behavior changed.
+
 ## 2026-11-20 IST: Owner response metadata outcome colours
 
 - PR [#395](https://github.com/ashini-x/parmar-ai/pull/395) merged as `7fb462a8cca70a4240b7c3aa1a37a31ff7fe7ccf`.
