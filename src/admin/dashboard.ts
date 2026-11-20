@@ -1143,7 +1143,7 @@ function arenaRenderJudge(judge,pending){
  const overall=judge.overallScores||{};
  const hasScores=typeof overall.left==='number'&&Number.isFinite(overall.left)&&typeof overall.right==='number'&&Number.isFinite(overall.right);
  const confidence=String(judge.confidence||'unknown').toUpperCase();
- const meta=modeNote+' · '+modelLabel+(judge.latencyMs?' · '+fmtNum(judge.latencyMs)+' ms':'')+(judge.tokens&&judge.tokens.totalTokens?' · '+fmtNum(judge.tokens.totalTokens)+' judge tokens':'')+(judge.estimatedCostUsd===null||judge.estimatedCostUsd===undefined?' · judge cost unknown':' · ~
+ const meta=modeNote+' · '+modelLabel+(judge.latencyMs?' · '+fmtNum(judge.latencyMs)+' ms':'')+(judge.tokens&&judge.tokens.totalTokens?' · '+fmtNum(judge.tokens.totalTokens)+' judge tokens':'')+(judge.estimatedCostUsd===null||judge.estimatedCostUsd===undefined?' · judge cost unknown':' · cost est. '+Number(judge.estimatedCostUsd).toFixed(6));
  let html='<div class="arena-judge-head"><div><div class="arena-judge-eyebrow">GEMINI BLIND VERDICT</div><h3>'+arenaEscapeText(winnerText)+'</h3><div class="arena-judge-meta">'+arenaEscapeText(meta)+' · Confidence: '+arenaEscapeText(confidence)+'</div></div><span class="arena-judge-verdict '+verdictClass+'">'+(winner==='tie'?'TIE':winner? 'WINNER · '+(winner==='left'?'LEFT':'RIGHT'):'NO VERDICT')+'</span></div>';
  html+='<div class="arena-judge-summary">'+arenaEscapeText(judge.summary||'The judge has completed its evaluation.')+'</div>';
  if(hasScores){
@@ -1169,65 +1169,6 @@ function arenaRenderJudge(judge,pending){
  }
  if(Array.isArray(judge.decisiveFactors)&&judge.decisiveFactors.length)html+='<div class="arena-judge-section-title">Decisive factors</div><div class="arena-judge-note">'+arenaJudgeList(judge.decisiveFactors)+'</div>';
  if(judge.mode==='blind')html+='<div class="arena-judge-foot">Scoring weights: factual accuracy 30% · relevance 20% · completeness 15% · SSC fit 15% · clarity/language 10% · AnswerPacket and Telegram format 10%. A weighted gap of 4 points or less is recorded as a tie. Quiz answer keys and explanations are checked under accuracy and format. Judge token use and estimated additional Vertex cost are shown above; the estimate is not a Google Cloud invoice amount.</div>';
- node.innerHTML=html;
-}
-
-function arenaUpdateSessionInfo(){document.getElementById('arenaSessionInfo').textContent=arenaConversation.length+' previous turn'+(arenaConversation.length===1?'':'s')+' in this browser session';const follow=document.querySelector('[data-arena-preset="followup"]');if(follow)follow.disabled=arenaConversation.length===0;}
-async function arenaLoadModels(force){if(arenaModelsLoaded&&!force)return;const select=document.getElementById('arenaModel');const old=select.value||'auto';try{const data=await api('/admin/api/arena/models'+(force?'?refresh=1':''));select.innerHTML='<option value="auto">Auto-Router (Sonnet 5.5 Default)</option>';const models=data.models||[];models.forEach(function(model){const option=document.createElement('option');option.value=model.id;option.textContent=(model.name||model.id)+' · '+model.id+(model.coolingDown?' · cooling down':'');option.disabled=Boolean(model.coolingDown);select.appendChild(option);});if(Array.from(select.options).some(function(option){return option.value===old&&!option.disabled;}))select.value=old;const primary=data.primaryModel||'claude-sonnet-5-5';document.getElementById('arenaModelInfo').textContent=models.length+' active chat models · primary: '+primary+' · catalogue cache: 5 min';arenaModelsLoaded=true;arenaSetStatus('FreeModel active catalogue loaded. Auto-Router is capped at the curated four-model pool beginning with '+primary+'.','good');}catch(error){arenaModelsLoaded=false;document.getElementById('arenaModelInfo').textContent='FreeModel catalogue unavailable';arenaSetStatus(error.message==='arena_staging_only'?'Model Arena is disabled on the production Worker. Open the isolated staging admin Worker to run comparisons.':'Model catalogue could not be loaded: '+error.message,'error');}}
-async function arenaResetCooldowns(){
-  const button=document.getElementById('arenaResetCooldowns');
-  button.disabled=true;
-  try{
-    const result=await api('/admin/api/arena/reset-breakers',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
-    await arenaLoadModels(true);
-    arenaSetStatus('Cleared '+Number(result.clearedCount||0)+' cooldown(s) in this Worker isolate. Cloudflare may route another request to a different isolate, so this reset is best-effort.','good');
-  }catch(error){
-    arenaSetStatus('Cooldown reset failed: '+error.message,'error');
-  }finally{
-    button.disabled=false;
-  }
-}
-async function arenaRun(){const question=document.getElementById('arenaQuestion').value.trim();if(!question){arenaSetStatus('Enter an SSC question first.','error');return;}const button=document.getElementById('arenaRun');button.disabled=true;button.textContent='Generating + judging…';arenaRenderJudge(null,true);arenaSetStatus('Running both candidate generations. Gemini 3.8 will then judge the anonymized outputs. The backend does not persist this run.');try{const targetModel=document.getElementById('arenaModel').value||'auto';const data=await api('/admin/api/arena/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({question:question,recentConversation:arenaConversation,targetModel:targetModel})});arenaCurrentRun={createdAt:new Date().toISOString(),question:question,targetModel:targetModel,prompt:data.prompt,left:data.left,right:data.right,judge:data.judge};arenaRenderSide('left',data.left);arenaRenderSide('right',data.right);arenaRenderJudge(data.judge,false);const preferred=data.left&&data.left.ok&&data.left.packet?data.left.packet.answer:(data.right&&data.right.ok&&data.right.packet?data.right.packet.answer:'');if(preferred){arenaConversation.push({question:question,answer:preferred});arenaConversation=arenaConversation.slice(-8);}arenaUpdateSessionInfo();const leftOk=Boolean(data.left&&data.left.ok),rightOk=Boolean(data.right&&data.right.ok);const judgeStatus=data.judge&&data.judge.mode==='blind'?'Gemini completed a blind scorecard.':data.judge&&data.judge.mode==='availability_only'?'Only one valid generation was available; this is not a content-quality verdict.':data.judge&&data.judge.mode==='not_needed'?'Both sides shared the same clarification; no model was called.':'The judge did not return a verdict.';arenaSetStatus((leftOk&&rightOk?'Both candidates returned validated AnswerPackets.':leftOk||rightOk?'One candidate returned a validated AnswerPacket.':'Both candidate generations failed.')+' '+judgeStatus+' '+(data.prompt&&data.prompt.requiresVertexGoogleSearchGrounding?'Vertex Google Search grounding may be active for the Gemini candidate; FreeModel has no equivalent tool attached.':'Both candidates received the same production prompt text.'),leftOk&&rightOk&&data.judge&&data.judge.ok&&data.judge.mode!=='unavailable'?'good':'error');}catch(error){arenaSetStatus('Arena run failed: '+error.message,'error');arenaRenderJudge({ok:false,mode:'unavailable',errorMessage:error.message},false);}finally{button.disabled=false;button.textContent='Compare + Judge';}}
-function arenaExport(){if(!arenaCurrentRun){arenaSetStatus('Run a comparison before exporting its result.','error');return;}const payload={schemaVersion:2,exportedAt:new Date().toISOString(),scope:'Staging-only Standard SSC Model Arena run; blind Gemini judge; no backend/D1 persistence',run:arenaCurrentRun};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='parmar-ai-model-arena-result.json';document.body.appendChild(link);link.click();link.remove();URL.revokeObjectURL(url);}
-function arenaNewSession(){arenaConversation=[];arenaCurrentRun=null;arenaUpdateSessionInfo();document.getElementById('arenaQuestion').value='';document.getElementById('arenaLeftMetrics').innerHTML='';document.getElementById('arenaRightMetrics').innerHTML='';document.getElementById('arenaLeftPreview').innerHTML='<span class="muted">Run a question to see the Vertex response.</span>';document.getElementById('arenaRightPreview').innerHTML='<span class="muted">Run a question to see the FreeModel response.</span>';document.getElementById('arenaLeftRaw').textContent='No response yet.';document.getElementById('arenaRightRaw').textContent='No response yet.';document.getElementById('arenaLeftCard').classList.remove('winner','loser');document.getElementById('arenaRightCard').classList.remove('winner','loser');arenaRenderJudge(null,false);arenaSetStatus('New browser session started. Previous conversation turns were cleared.');}
-document.querySelectorAll('.arena-preset').forEach(function(button){button.addEventListener('click',function(){const presets={fact:'Which river is known as the Sorrow of Bihar?',comparison:'Differentiate between Fundamental Rights and Directive Principles of State Policy.',followup:'isko simple mein samjhao',quiz:'Generate 3 independent SSC MCQs on the Indian Constitution.',identity:'Who are you?',scope:'Write a Python program to sort a list of numbers.'};const value=presets[button.dataset.arenaPreset];if(value)document.getElementById('arenaQuestion').value=value;document.getElementById('arenaQuestion').focus();});});
-document.getElementById('arenaRun').addEventListener('click',arenaRun);
-document.getElementById('arenaNewSession').addEventListener('click',arenaNewSession);
-document.getElementById('arenaRefreshModels').addEventListener('click',function(){arenaLoadModels(true);});
-document.getElementById('arenaResetCooldowns').addEventListener('click',arenaResetCooldowns);
-document.getElementById('arenaExport').addEventListener('click',arenaExport);
-arenaUpdateSessionInfo();
-/* ARENA JS END */
-
-document.querySelectorAll('.tab').forEach(t=>t.onclick=async()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById('page-'+t.dataset.page).classList.add('active');const p=t.dataset.page;if(p==='users')await loadUsers();if(p==='ai')await loadAi();if(p==='learning')await loadLearning();if(p==='activity')await loadActivity();if(p==='system')await loadSystem();if(p==='access')await loadAccess();if(p==='audit')await loadAudit();if(p==='telegram')await loadTelegram();if(p==='settings')await loadSystem();if(p==='arena')await arenaLoadModels(false);});
-refreshAll();
-</script></body></html>`;
-+Number(judge.estimatedCostUsd).toFixed(6)+' judge cost estimate');
- let html='<div class="arena-judge-head"><div><div class="arena-judge-eyebrow">GEMINI BLIND VERDICT</div><h3>'+arenaEscapeText(winnerText)+'</h3><div class="arena-judge-meta">'+arenaEscapeText(meta)+' · Confidence: '+arenaEscapeText(confidence)+'</div></div><span class="arena-judge-verdict '+verdictClass+'">'+(winner==='tie'?'TIE':winner? 'WINNER · '+(winner==='left'?'LEFT':'RIGHT'):'NO VERDICT')+'</span></div>';
- html+='<div class="arena-judge-summary">'+arenaEscapeText(judge.summary||'The judge has completed its evaluation.')+'</div>';
- if(hasScores){
-  const leftClass=winner==='left'?'left-win':winner==='right'?'right-win':'';
-  const rightClass=winner==='right'?'right-win':winner==='left'?'left-win':'';
-  html+='<div class="arena-judge-scores"><div class="arena-judge-scorebox '+leftClass+'"><div class="arena-judge-scorelabel">LEFT · CURRENT PRODUCTION</div><div class="arena-judge-scorevalue">'+arenaEscapeText(overall.left)+'<small>/ 100</small></div></div><div class="arena-judge-scorebox '+rightClass+'"><div class="arena-judge-scorelabel">RIGHT · FREEMODEL</div><div class="arena-judge-scorevalue">'+arenaEscapeText(overall.right)+'<small>/ 100</small></div></div></div>';
- }
- if(judge.mode==='availability_only'){
-  html+='<div class="arena-judge-foot">No quality score was fabricated. Only the available validated generation is marked as the availability winner; rerun after the failed candidate is healthy for a content-quality comparison.</div>';
- }else if(Array.isArray(judge.criteria)&&judge.criteria.length){
-  html+='<div class="arena-judge-section-title">Detailed scorecard · Left vs Right</div><div class="arena-judge-matrix"><div class="arena-judge-row header"><div>Evaluation dimension</div><div>Left</div><div>Right</div><div>Judge’s evidence</div></div>';
-  html+=judge.criteria.map(function(item){
-   const ls=Number(item.leftScore||0),rs=Number(item.rightScore||0);
-   const lc=winner==='tie'?'':ls>rs?'winner-score':ls<rs?'loser-score':'';
-   const rc=winner==='tie'?'':rs>ls?'winner-score':rs<ls?'loser-score':'';
-   return '<div class="arena-judge-row"><div class="arena-judge-dimension">'+arenaEscapeText(item.label)+'<span class="arena-judge-weight">'+arenaEscapeText(item.weight)+'% weight</span></div><div class="arena-judge-cell '+lc+'">'+ls+'/10</div><div class="arena-judge-cell '+rc+'">'+rs+'/10</div><div class="arena-judge-comparison">'+arenaEscapeText(item.comparison||'No additional note.')+'</div></div>';
-  }).join('')+'</div>';
- }
- const strengths=judge.strengths||{},weaknesses=judge.weaknesses||{};
- if(judge.mode==='blind'){
-  html+='<div class="arena-judge-section-title">What each generation did well</div><div class="arena-judge-notes"><div class="arena-judge-note"><h4 class="good">Left · strengths</h4>'+arenaJudgeList(strengths.left,'No distinct strength reported.')+'</div><div class="arena-judge-note"><h4 class="good">Right · strengths</h4>'+arenaJudgeList(strengths.right,'No distinct strength reported.')+'</div></div>';
-  html+='<div class="arena-judge-section-title">Weaknesses and corrections</div><div class="arena-judge-notes"><div class="arena-judge-note"><h4 class="bad">Left · weaknesses</h4>'+arenaJudgeList(weaknesses.left,'No material weakness reported.')+'</div><div class="arena-judge-note"><h4 class="bad">Right · weaknesses</h4>'+arenaJudgeList(weaknesses.right,'No material weakness reported.')+'</div></div>';
- }
- if(Array.isArray(judge.decisiveFactors)&&judge.decisiveFactors.length)html+='<div class="arena-judge-section-title">Decisive factors</div><div class="arena-judge-note">'+arenaJudgeList(judge.decisiveFactors)+'</div>';
- if(judge.mode==='blind')html+='<div class="arena-judge-foot">Scoring weights: factual accuracy 30% · relevance 20% · completeness 15% · SSC fit 15% · clarity/language 10% · AnswerPacket and Telegram format 10%. A weighted gap of 4 points or less is recorded as a tie. Quiz answer keys and explanations are checked under accuracy and format.</div>';
  node.innerHTML=html;
 }
 
