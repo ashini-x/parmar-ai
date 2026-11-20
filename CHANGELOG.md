@@ -1,3 +1,12 @@
+## 2026-11-20 IST: Owner response generation metadata pills
+
+- PR [#392](https://github.com/ashini-x/parmar-ai/pull/392) merged as `e2b5087c248d16de55f132f202e13b9d62e4c534`.
+- Added a compact three-pill row at the top of model-generated assistant responses: persisted generation timestamp in India Standard Time, human-readable model name, and selected thinking level.
+- Time is formatted using `en-IN` with `Asia/Kolkata` and an explicit `IST` suffix. It uses the assistant message's persisted `created_at`, so previous responses retain their original generation time when reopened.
+- All three pills share one neutral-grey style: 28px minimum height, 5px × 11px padding, 8px gap, wrapping layout, and 15px separation before response content. The row is visible during generation and after completion; colored completion badges are removed from this header.
+- PR validation [#44647841953](https://github.com/ashini-x/parmar-ai/actions/runs/44647841953) and main production release [#44648015235](https://github.com/ashini-x/parmar-ai/actions/runs/44648015235) passed. Production smoke and release acceptance passed; artifact `14589303424`.
+- `brvin-service` version `a4b19673-5ff0-4464-89ce-4d4c9c9abde3` / deployment `634277d6-2c18-4b3f-b9df-627430909293` and `parmar-ai` version `36a66f0b-e16b-4866-9d0e-188a1ecfca1f` / deployment `f8cddea1-68d5-4365-9721-72aecfca2b8e` are each at 100% traffic.
+- Owner-only presentation change. No API, D1 schema, Gemini/provider, token-budget, Project Memory, retrieval or student-facing behavior changed.
 ## 2026-11-20 IST: Owner chat bottom-follow and streaming scroll fix
 
 - PR [#387](https://github.com/ashini-x/parmar-ai/pull/387) merged as `398e02ea78f470c92d86adda80febe42fd79fd31`.
