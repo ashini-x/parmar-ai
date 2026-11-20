@@ -1,7 +1,7 @@
 import type { AnswerPacket, ConversationTurn, Env, ProfileContext, StudentProfile } from "../config/env";
 import { getGoogleAccessToken, invalidateGoogleAccessToken } from "../auth/google";
 import { formatTelegramHtml, stripTelegramMarkdownMarkers } from "../telegram/formatting";
-import { GeminiError, generateGeminiArenaAnswer, buildStandardArenaPrompt } from "./gemini";
+import { GeminiError, generateGeminiArenaAnswer, buildStandardArenaPrompt, estimateAiCostUsd } from "./gemini";
 import {
   FreeModelError,
   generateFreeModelAnswer,
@@ -342,6 +342,8 @@ interface ArenaJudgeApiResponse {
     candidatesTokenCount?: number;
     thoughtsTokenCount?: number;
     totalTokenCount?: number;
+    toolUsePromptTokenCount?: number;
+    cachedContentTokenCount?: number;
   };
   error?: { message?: string };
 }
@@ -417,6 +419,8 @@ function noCallArenaJudge(mode: string, summary: string, winner: "left" | "right
     decisiveFactors: [],
     latencyMs: 0,
     tokens: { promptTokens: 0, candidatesTokens: 0, thoughtsTokens: 0, totalTokens: 0 },
+    estimatedCostUsd: 0,
+    estimateBasis: "No judge call was made.",
   };
 }
 
@@ -589,6 +593,22 @@ export async function runGeminiArenaJudge(
     const strengthsB = judgeStringArray(parsed.strengthsB);
     const weaknessesB = judgeStringArray(parsed.weaknessesB);
     const usage = data.usageMetadata ?? {};
+    const judgeTokens = {
+      promptTokens: Number(usage.promptTokenCount ?? 0),
+      candidatesTokens: Number(usage.candidatesTokenCount ?? 0),
+      thoughtsTokens: Number(usage.thoughtsTokenCount ?? 0),
+      totalTokens: Number(usage.totalTokenCount ?? 0),
+    };
+    const estimatedCostUsd = estimateAiCostUsd({
+      promptTokens: judgeTokens.promptTokens,
+      candidatesTokens: judgeTokens.candidatesTokens,
+      thoughtsTokens: judgeTokens.thoughtsTokens,
+      toolUsePromptTokens: Number(usage.toolUsePromptTokenCount ?? 0),
+      cachedContentTokens: Math.min(Number(usage.cachedContentTokenCount ?? 0), judgeTokens.promptTokens),
+      inputUsdPerMillion: Number(env.AI_INPUT_USD_PER_MILLION ?? 0.75),
+      cachedInputUsdPerMillion: Number(env.AI_CACHED_INPUT_USD_PER_MILLION ?? 0.075),
+      outputUsdPerMillion: Number(env.AI_OUTPUT_USD_PER_MILLION ?? 3.75),
+    });
 
     return {
       ok: true,
@@ -615,12 +635,9 @@ export async function runGeminiArenaJudge(
       },
       decisiveFactors: judgeStringArray(parsed.decisiveFactors, 6),
       latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
-      tokens: {
-        promptTokens: Number(usage.promptTokenCount ?? 0),
-        candidatesTokens: Number(usage.candidatesTokenCount ?? 0),
-        thoughtsTokens: Number(usage.thoughtsTokenCount ?? 0),
-        totalTokens: Number(usage.totalTokenCount ?? 0),
-      },
+      tokens: judgeTokens,
+      estimatedCostUsd,
+      estimateBasis: "Estimate using the configured Vertex AI input/cache/output rates; not a Google Cloud invoice amount.",
       scoringWeights: Object.fromEntries(ARENA_JUDGE_DIMENSIONS.map((dimension) => [dimension.key, dimension.weight])),
       tieRule: "Weighted overall scores within 4 points are reported as a tie.",
     };
