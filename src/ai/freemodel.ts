@@ -11,8 +11,16 @@ const DEFAULT_PRIMARY_MODEL = "claude-sonnet-5-5";
 const CATALOG_TTL_MS = 5 * 60_000;
 const MODEL_MAINTENANCE_COOLDOWN_MS = 10 * 60_000;
 const TRANSIENT_COOLDOWN_MS = 3 * 60_000;
-const REQUEST_TIMEOUT_MS = 8_000;
+const CATALOG_TIMEOUT_MS = 8_000;
+const MODEL_REQUEST_TIMEOUT_MS = 15_000;
 const MAX_COMPLETION_TOKENS = 2_048;
+
+export const AUTO_ROUTER_MODEL_IDS = [
+  "claude-sonnet-5-5",
+  "claude-opus-5-5",
+  "deepseek-v3.2",
+  "kimi-k3",
+] as const;
 
 export const PREFERRED_MODEL_ORDER = [
   "claude-fable-5-2",
@@ -62,8 +70,8 @@ export const FREE_MODEL_ANSWER_PACKET_SCHEMA =
   toOpenAiJsonSchema(RESPONSE_SCHEMA as unknown as GoogleResponseSchema);
 
 const ANSWER_PACKET_SCHEMA_INSTRUCTION =
-  "Return exactly one unfenced JSON object matching this required AnswerPacket JSON Schema. " +
-  "Every listed key is required. Do not add commentary, markdown, code fences, or extra properties. " +
+  "JSON only. Include every required key, obey its types and enums, and add no extra keys. " +
+  "Match sscTakeaway to the question language. Schema: " +
   JSON.stringify(FREE_MODEL_ANSWER_PACKET_SCHEMA);
 
 export interface FreeModelPricing {
@@ -268,6 +276,18 @@ function rankModels(models: FreeModelModel[], primaryModel: string): FreeModelMo
   return [...ranked, ...remaining].map((model, index) => ({ ...model, rank: index + 1 }));
 }
 
+function autoRouterModels(models: FreeModelModel[], primaryModel: string): FreeModelModel[] {
+  const byId = new Map(models.filter((model) => model.type === "chat").map((model) => [model.id, model]));
+  const primaryIsCurated = AUTO_ROUTER_MODEL_IDS.some((id) => id === primaryModel);
+  const orderedIds: readonly string[] = primaryIsCurated
+    ? [primaryModel, ...AUTO_ROUTER_MODEL_IDS.filter((id) => id !== primaryModel)]
+    : AUTO_ROUTER_MODEL_IDS;
+  return orderedIds.flatMap((id) => {
+    const model = byId.get(id);
+    return model ? [model] : [];
+  });
+}
+
 export function rankActiveFreeModelModels(
   models: FreeModelModel[],
   primaryModel = DEFAULT_PRIMARY_MODEL,
@@ -291,7 +311,7 @@ export async function getFreeModelCatalog(
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), CATALOG_TIMEOUT_MS);
   try {
     let response: Response;
     try {
@@ -390,6 +410,29 @@ function parseStrictAnswerPacket(content: string, modelId: string, status: numbe
   return decoded;
 }
 
+function normalizeEmptyQuizAnswer(decoded: Record<string, unknown>): Record<string, unknown> {
+  if (
+    decoded.responseMode !== "quiz" ||
+    (typeof decoded.answer === "string" && decoded.answer.trim()) ||
+    !Array.isArray(decoded.quizItems) ||
+    decoded.quizItems.length === 0
+  ) {
+    return decoded;
+  }
+
+  const firstQuestion = decoded.quizItems
+    .map((item) => item && typeof item === "object"
+      ? (item as Record<string, unknown>).question
+      : undefined)
+    .find((question): question is string => typeof question === "string" && Boolean(question.trim()));
+
+  if (!firstQuestion) return decoded;
+
+  const count = decoded.quizItems.length;
+  const summary = `Generated ${count} SSC MCQ${count === 1 ? "" : "s"}. First: ${firstQuestion.replace(/\s+/gu, " ").trim()}`;
+  return { ...decoded, answer: summary.slice(0, 400) };
+}
+
 function usageTokens(usage: FreeModelUsage | undefined): FreeModelTokenMetrics {
   const promptTokens = Math.floor(finiteNonNegative(usage?.prompt_tokens) ?? 0);
   const candidatesTokens = Math.floor(finiteNonNegative(usage?.completion_tokens) ?? 0);
@@ -433,7 +476,7 @@ async function completeModel(
 ): Promise<FreeModelGenerationResult> {
   const startedAt = performance.now();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), MODEL_REQUEST_TIMEOUT_MS);
   const jsonMode = supportsFreeModelJsonMode(model);
   try {
     let response: Response;
@@ -488,7 +531,8 @@ async function completeModel(
     }
 
     const decoded = parseStrictAnswerPacket(content, model.id, response.status);
-    const parsed = parseAnswerPacket(JSON.stringify(decoded));
+    const normalized = normalizeEmptyQuizAnswer(decoded);
+    const parsed = parseAnswerPacket(JSON.stringify(normalized));
     const packet = sanitizeAnswerPacket(
       parsed,
       false,
@@ -551,7 +595,7 @@ export async function generateFreeModelAnswer(
   const targetModel = input.targetModel?.trim();
   const autoMode = !targetModel || targetModel === "auto";
   const candidates = autoMode
-    ? rankModels(catalog.models, primaryModel)
+    ? autoRouterModels(catalog.models, primaryModel)
     : catalog.models.filter((model) => model.id === targetModel);
 
   if (!candidates.length) {
@@ -629,6 +673,23 @@ export async function generateFreeModelAnswer(
     lastFailure?.modelId,
     lastFailure?.cooldownUntil,
   );
+}
+
+/**
+ * Clear cooldowns held by this Worker isolate for this FreeModel endpoint.
+ * Worker module memory is isolate-local, so this is best-effort rather than a
+ * globally durable circuit-breaker reset.
+ */
+export function resetFreeModelCooldowns(env: Env): number {
+  const prefix = baseUrlFor(env) + "|";
+  let cleared = 0;
+  for (const key of modelCooldowns.keys()) {
+    if (key.startsWith(prefix)) {
+      modelCooldowns.delete(key);
+      cleared += 1;
+    }
+  }
+  return cleared;
 }
 
 export function resetFreeModelStateForTests(): void {
