@@ -1,4 +1,4 @@
-import type { AnswerPacket, ConversationTurn, Env, ProfileContext, StudentProfile } from "../config/env";
+import type { ConversationTurn, Env, ProfileContext, StudentProfile } from "../config/env";
 import { GeminiError, generateGeminiAnswer, buildStandardArenaPrompt } from "./gemini";
 import {
   FreeModelError,
@@ -115,6 +115,7 @@ async function runVertexSide(
   env: Env,
   question: string,
   profileContext: ProfileContext,
+  sharedUserPrompt: string,
 ): Promise<Record<string, unknown>> {
   const startedAt = performance.now();
   try {
@@ -124,6 +125,11 @@ async function runVertexSide(
       env,
       question,
       profileContext,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      sharedUserPrompt,
     );
     const usage = generation.usage;
     const tokens = usage.reduce<ArenaTokenMetrics>((total, record) => ({
@@ -207,10 +213,6 @@ async function runFreeModelSide(
   }
 }
 
-function isAnswerPacket(value: unknown): value is AnswerPacket {
-  return Boolean(value && typeof value === "object" && typeof (value as AnswerPacket).answer === "string");
-}
-
 export async function handleArenaModels(env: Env): Promise<Response> {
   try {
     const result = await getFreeModelModels(env);
@@ -255,7 +257,7 @@ export async function handleArenaRun(env: Env, request: Request): Promise<Respon
   const standardPrompt = buildStandardArenaPrompt(env, question, profileContext);
 
   const [leftResult, rightResult] = await Promise.allSettled([
-    runVertexSide(env, question, profileContext),
+    runVertexSide(env, question, profileContext, standardPrompt.prompt),
     runFreeModelSide(
       env,
       question,
@@ -293,8 +295,8 @@ export async function handleArenaRun(env: Env, request: Request): Promise<Respon
   // The Vertex generator computes the same production conditions internally.
   return json({
     ok: true,
-    left: isAnswerPacket((left as Record<string, unknown>).packet) ? left : left,
-    right: isAnswerPacket((right as Record<string, unknown>).packet) ? right : right,
+    left,
+    right,
     prompt: {
       builder: "production buildUserPrompt()",
       conversationTurns: recentConversation.length,
