@@ -6,7 +6,7 @@ import type {
 } from "@cloudflare/workers-types";
 
 import { generateGeminiAnswer, GeminiError, isLikelyMcqTopicReply, isMcqRequest, parseRequestedMcqCount, type PartialAnswerHandler } from "./ai/gemini";
-import { handleArenaModels, handleArenaRun } from "./ai/arena";
+import { handleArenaModels, handleArenaRun, handleArenaJudge } from "./ai/arena";
 import { resetFreeModelCooldowns } from "./ai/freemodel";
 import { getGoogleAccessToken } from "./auth/google";
 import type { AnswerPacket, Env, ProfileContext, QuestionJob, StudentProfile, ConversationTurn, QuizItem } from "./config/env";
@@ -3316,6 +3316,17 @@ const worker = {
           }
           const clearedCount = resetFreeModelCooldowns(env);
           return withRequestId(json({ ok: true, clearedCount }), requestId);
+        }
+        if (adminApiPath === "/admin/api/arena/judge" && request.method === "POST") {
+          // The enclosing /admin/api block has already enforced requireAdmin.
+          // This is a stateless adjudication call: no D1 or other storage writes.
+          if (env.ENVIRONMENT !== "staging") {
+            return withRequestId(json({ ok: false, error: "arena_staging_only" }, 404), requestId);
+          }
+          if (!isSameOriginAdminRequest(request, url.origin)) {
+            return withRequestId(json({ ok: false, error: "csrf_origin_rejected" }, 403), requestId);
+          }
+          return withRequestId(await handleArenaJudge(env, request), requestId);
         }
         if (adminApiPath === "/admin/api/arena/run" && request.method === "POST") {
           if (env.ENVIRONMENT !== "staging") {
