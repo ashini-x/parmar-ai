@@ -2519,14 +2519,14 @@ export function ownerIntelligenceClientScript(): Response {
     var seconds=Math.max(1,Math.round(ms/1000));
     return seconds<60?seconds+"s":Math.floor(seconds/60)+"m "+(seconds%60)+"s";
   }
-  function formatGeneratedTimeIST(timestamp){
+  function formatResponseTime(timestamp){
     var value=Number(timestamp);
     if(!Number.isFinite(value)||value<=0)return "Time unavailable";
     try{
       var formatted=new Intl.DateTimeFormat("en-IN",{
-        day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:true,timeZone:"Asia/Kolkata"
+        day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:true,timeZone:"Asia/Kolkata"
       }).format(new Date(value));
-      return formatted.replace(/\b(am|pm)\b/gi,function(period){return period.toUpperCase();})+" IST";
+      return formatted.replace(/\b(am|pm)\b/gi,function(period){return period.toUpperCase();});
     }catch(_error){return "Time unavailable";}
   }
   function appendRichInline(parent,value){
@@ -2766,10 +2766,10 @@ export function ownerIntelligenceClientScript(): Response {
       if(item.role==="assistant"&&item.model_id)roleLabel=model?model.label:item.model_id;
       if(item.role==="assistant"&&!isHandoff){
         var meta=node("div","message-meta response-meta");
-        var generatedAt= formatGeneratedTimeIST(item.created_at);
-        var generatedPill=node("span","response-meta-pill","Generated · "+generatedAt);
-        generatedPill.title="Generation time in India Standard Time";
-        generatedPill.setAttribute("aria-label","Generated at "+generatedAt);
+        var responseTime=formatResponseTime(item.created_at);
+        var generatedPill=node("span","response-meta-pill","Success · "+responseTime);
+        generatedPill.title="Success time shown in India Standard Time";
+        generatedPill.setAttribute("aria-label","Success at "+responseTime);
         meta.appendChild(generatedPill);
         if(item.model_id){
           var modelPill=node("span","response-meta-pill",model?model.label:item.model_id);
