@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Env, ProfileContext } from "../src/config/env";
 import {
+  ANSWER_PACKET_REQUIRED_KEYS,
+  FREE_MODEL_ANSWER_PACKET_SCHEMA,
   generateFreeModelAnswer,
   getFreeModelCooldownStateForTests,
   rankActiveFreeModelModels,
@@ -105,6 +107,16 @@ describe("FreeModel Model Arena adapter", () => {
     ]);
   });
 
+  it("derives the exact 17 required keys and enum values from the production schema", () => {
+    expect(ANSWER_PACKET_REQUIRED_KEYS).toHaveLength(17);
+    expect((FREE_MODEL_ANSWER_PACKET_SCHEMA.required as string[])).toEqual([...ANSWER_PACKET_REQUIRED_KEYS]);
+    const properties = FREE_MODEL_ANSWER_PACKET_SCHEMA.properties as Record<string, { enum?: string[] }>;
+    expect(properties.responseMode.enum).toEqual(["text", "quiz"]);
+    expect(properties.answerScope.enum).toEqual(["ssc_ga_gs", "ssc_support", "out_of_scope"]);
+    expect(properties.subject.enum).toContain("current_affairs");
+    expect(properties.examRelevance.enum).toEqual(["A", "B", "C", "D"]);
+  });
+
   it("detects json_mode only when the active model advertises it", () => {
     expect(supportsFreeModelJsonMode(modelA)).toBe(true);
     expect(supportsFreeModelJsonMode(modelB)).toBe(false);
@@ -137,6 +149,7 @@ describe("FreeModel Model Arena adapter", () => {
     expect(requests[1]).not.toHaveProperty("response_format");
     expect(requests[0].temperature).toBe(0.1);
     expect(requests[0].max_tokens).toBe(2048);
+    expect(requests[0]).not.toHaveProperty("reasoning_effort");
     expect((requests[0].messages as Array<{ content: string }>)[0].content).toContain("You are परमार्थAI");
   });
 
