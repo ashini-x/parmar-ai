@@ -1,0 +1,81 @@
+name: Arena staging deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_deploy:
+        description: Confirm that only the isolated Arena staging Worker should be deployed
+        required: true
+        type: choice
+        default: do-not-deploy
+        options:
+          - do-not-deploy
+          - deploy-arena-staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parmar-ai-arena-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-arena-staging:
+    name: Deploy isolated Model Arena Worker
+    if: inputs.confirm_deploy == 'deploy-arena-staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Verify Cloudflare deployment credentials
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}" || { echo "::error::Missing repository secret CLOUDFLARE_API_TOKEN."; exit 1; }
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}" || { echo "::error::Missing CLOUDFLARE_ACCOUNT_ID repository secret or variable."; exit 1; }
+          echo "Cloudflare deployment credentials are present."
+
+      - name: Validate isolated Arena Worker bundle
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config wrangler.arena-staging.jsonc --dry-run
+
+      - name: Deploy only the isolated Arena Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --config wrangler.arena-staging.jsonc
+
+      - name: Verify the Arena admin login page
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://parmar-ai-arena-staging.thenewtongs.workers.dev/admin/login"
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          passed=false
+          for attempt in $(seq 1 18); do
+            http_code="$(curl --silent --show-error --max-time 15 --output "$response_file" --write-out '%{http_code}' "$url" || true)"
+            if [[ "$http_code" == "200" ]] && grep -Fq "Private operations dashboard" "$response_file"; then
+              passed=true
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$passed" != "true" ]]; then
+            echo "::error::Arena Worker deployed, but the admin login smoke test did not pass."
+            exit 1
+          fi
+          echo "Arena admin login is responding at $url"
