@@ -393,8 +393,8 @@ function mapBlindCandidateLabels(value: string, candidateAIsLeft: boolean): stri
   const candidateA = candidateAIsLeft ? "Left" : "Right";
   const candidateB = candidateAIsLeft ? "Right" : "Left";
   return value
-    .replace(/\\bCandidate\\s+A\\b/gi, () => candidateA)
-    .replace(/\\bCandidate\\s+B\\b/gi, () => candidateB);
+    .replace(/\bCandidate\s+A\b/gi, () => candidateA)
+    .replace(/\bCandidate\s+B\b/gi, () => candidateB);
 }
 
 function judgeMappedStringArray(value: unknown, candidateAIsLeft: boolean, limit = 5): string[] {
@@ -583,7 +583,7 @@ export async function runGeminiArenaJudge(
       criteria[dimension.key] = {
         a: judgeScore(entry.a),
         b: judgeScore(entry.b),
-        comparison: judgeText(entry.comparison),
+        comparison: mapBlindCandidateLabels(judgeText(entry.comparison), candidateAIsLeft),
       };
     }
 
