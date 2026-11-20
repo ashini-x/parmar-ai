@@ -690,11 +690,14 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).not.toContain("status-pill failed");
     expect(script).toContain("The model is sending response text.");
     expect(script).toContain("Vertex AI has accepted the request");
-    expect(script).toContain("function formatGeneratedTimeIST(timestamp)");
+    expect(script).toContain("function formatResponseTime(timestamp)");
     expect(script).toContain('new Intl.DateTimeFormat("en-IN"');
-    expect(script).toContain('timeZone:"Asia/Kolkata"');
+    expect(script).toContain('day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:true,timeZone:"Asia/Kolkata"');
+    expect(script).not.toContain('year:"numeric"');
     expect(script).toContain('node("div","message-meta response-meta")');
-    expect(script).toContain('"Generated · "+generatedAt');
+    expect(script).toContain('"Success · "+responseTime');
+    expect(script).not.toContain('"Generated · "+generatedAt');
+    expect(script).not.toContain('+" IST"');
     expect(script).toContain('model?model.label:item.model_id');
     expect(script).toContain('String(item.thinking_level).toUpperCase()+" thinking"');
     expect(script).toContain('node("span","response-meta-pill"');
