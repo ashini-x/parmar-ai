@@ -376,3 +376,14 @@ M4.4 does not implement rollover, compaction, fork, historical D1 recall, semant
 - Before committing a new/edit/regenerate operation, the Worker counts the exact selected-model prompt and selects the largest recent suffix that fits. The latest user message and attached pinned/handoff context are never silently truncated. The exact contents measured are passed to GenerateContent.
 - An 8 MiB JSON request-body safety bound remains solely to protect Worker buffering/parsing; it is not a model input limit. The selected model's context ceiling, Google request constraints, temporary provider failures and real transport/runtime boundaries still apply.
 - Preserve the 200,000-token cumulative per-conversation budget, exact D1 reservation/settlement, output ceilings/continuation logic and actual Stop/disconnect cancellation boundaries. The full transcript remains in D1 even when older turns are not included in one generation request.
+
+
+### Owner Gemini token-aware input/context selector — deployed 2026-11-20
+- PR [#391](https://github.com/ashini-x/parmar-ai/pull/391) merged as `8423b27527629900f1fa4e799b5dd64e6e26f291`.
+- Removed the former 300,000-character message/context app cap, 50,000-character provider part cap, 300,000-character aggregate provider cap and fixed 49/50-turn limits.
+- The server now normalizes the complete D1 transcript, keeps the latest user turn and attached pinned/handoff context whole, and selects the largest recent history suffix using exact selected-model Vertex CountTokens results. The exact counted contents are sent to GenerateContent. All omitted older turns remain in D1.
+- An 8 MiB JSON-body guard remains solely for Worker request buffering/parsing; it is not a model input token limit. Google/API model-context constraints and transport/runtime boundaries remain.
+- Preserve the exact **200,000 cumulative tokens per conversation** and all reservation/settlement/output/continuation rules.
+- Validation [#44641902154](https://github.com/ashini-x/parmar-ai/actions/runs/44641902154): TypeScript passed, 543 Vitest tests / 76 files, 62 Node tests / 9 files, and all three Worker dry-run builds passed.
+- Production [#44642076989](https://github.com/ashini-x/parmar-ai/actions/runs/44642076989) passed release checks. Cloudflare's final deployment history confirms `parmar-ai` version `36a66f0b-e16b-4866-9d0e-188a1ecfca1f` at 100% traffic and `brvin-service` version `a4b19673-5ff0-4464-89ce-4d4c9c9abde3` at 100% traffic.
+- Next manual acceptance: in Owner Intelligence, test each registered model with a large prompt, verify CountTokens preflight selects a fitting recent suffix and verify that the latest prompt is retained whole. Do not change the 200K meter or student Telegram path.
