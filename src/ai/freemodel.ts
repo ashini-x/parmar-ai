@@ -169,7 +169,7 @@ interface ModelCooldown {
   status: number | null;
 }
 
-class FreeModelError extends Error {
+export class FreeModelError extends Error {
   readonly code: string;
   readonly status: number | null;
   readonly modelId?: string;
