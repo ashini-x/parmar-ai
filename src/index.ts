@@ -3065,6 +3065,13 @@ const worker = {
     const url = new URL(request.url);
 
     try {
+      // The isolated Model Arena Worker reuses the Core entrypoint, but it is
+      // not a second Telegram/student runtime. Expose only the admin surface.
+      if (env.ENVIRONMENT === "staging" &&
+          !(url.pathname === "/admin" || url.pathname.startsWith("/admin/"))) {
+        return withRequestId(notFound(), requestId);
+      }
+
       if (url.pathname === "/brvin/connection-probe") {
         return withRequestId(await handleBrvinConnectionProbe(request, env), requestId);
       }
