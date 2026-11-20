@@ -1,5 +1,5 @@
 import type { ConversationTurn, Env, ProfileContext, StudentProfile } from "../config/env";
-import { GeminiError, generateGeminiAnswer, buildStandardArenaPrompt } from "./gemini";
+import { GeminiError, generateGeminiArenaAnswer, buildStandardArenaPrompt } from "./gemini";
 import {
   FreeModelError,
   generateFreeModelAnswer,
@@ -21,6 +21,7 @@ interface ArenaTokenMetrics {
   candidatesTokens: number;
   thoughtsTokens: number;
   totalTokens: number;
+  thoughtsReported: boolean;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -78,7 +79,7 @@ function normalizeRecentConversation(value: unknown): ConversationTurn[] {
 }
 
 function emptyTokens(): ArenaTokenMetrics {
-  return { promptTokens: 0, candidatesTokens: 0, thoughtsTokens: 0, totalTokens: 0 };
+  return { promptTokens: 0, candidatesTokens: 0, thoughtsTokens: 0, totalTokens: 0, thoughtsReported: true };
 }
 
 function safeVertexFailure(error: unknown): { code: string; message: string; status: number | null } {
@@ -121,14 +122,10 @@ async function runVertexSide(
   try {
     // This is the unchanged production generator, called directly by the
     // isolated admin endpoint. It is not called from the Telegram queue.
-    const generation = await generateGeminiAnswer(
+    const generation = await generateGeminiArenaAnswer(
       env,
       question,
       profileContext,
-      [],
-      undefined,
-      undefined,
-      undefined,
       sharedUserPrompt,
     );
     const usage = generation.usage;
@@ -137,6 +134,7 @@ async function runVertexSide(
       candidatesTokens: total.candidatesTokens + record.candidatesTokens,
       thoughtsTokens: total.thoughtsTokens + record.thoughtsTokens,
       totalTokens: total.totalTokens + record.totalTokens,
+      thoughtsReported: true,
     }), emptyTokens());
     const estimatedCostUsd = usage.reduce(
       (total, record) => total + record.estimatedCostMicrousd / 1_000_000,
@@ -255,6 +253,36 @@ export async function handleArenaRun(env: Env, request: Request): Promise<Respon
   const recentConversation = normalizeRecentConversation(body.recentConversation);
   const profileContext = createArenaProfileContext(recentConversation);
   const standardPrompt = buildStandardArenaPrompt(env, question, profileContext);
+
+  // Match Telegram's built-in clarification response for generic MCQ requests
+  // with no subject anchor. Neither provider is called for this case.
+  if (standardPrompt.clarificationPacket) {
+    const packet = standardPrompt.clarificationPacket;
+    const noModelCall = {
+      ok: true,
+      packet,
+      latencyMs: 0,
+      tokens: emptyTokens(),
+      modelUsed: "Not called (Telegram topic clarification)",
+      thinkingEffort: "Not applicable",
+      estimatedCostUsd: 0,
+      estimateBasis: "No LLM call: same topic-clarification short circuit used by Telegram.",
+    };
+    return json({
+      ok: true,
+      left: noModelCall,
+      right: noModelCall,
+      prompt: {
+        builder: "production buildUserPrompt()",
+        conversationTurns: recentConversation.length,
+        requestedQuizCount: standardPrompt.requestedQuizCount,
+        requiresVertexGoogleSearchGrounding: false,
+        topicClarification: true,
+        note: "Both sides use the same pre-generation topic clarification. No model was called.",
+      },
+      persistence: "stateless",
+    });
+  }
 
   const [leftResult, rightResult] = await Promise.allSettled([
     runVertexSide(env, question, profileContext, standardPrompt.prompt),
