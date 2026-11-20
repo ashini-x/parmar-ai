@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Env, ProfileContext } from "../src/config/env";
+import { invalidateGoogleAccessToken } from "../src/auth/google";
 import { handleArenaRun } from "../src/ai/arena";
 import { resetFreeModelStateForTests } from "../src/ai/freemodel";
 import { buildStandardArenaPrompt, buildUserPrompt } from "../src/ai/gemini";
@@ -131,5 +132,197 @@ describe("Standard SSC Model Arena end-to-end timing", () => {
     expect(body.right.latencyMs).toBeGreaterThanOrEqual(body.right.modelLatencyMs);
     expect(body.right.routerAndFailoverLatencyMs).toBeGreaterThan(10);
     expect(body.right.latencyMs - body.right.modelLatencyMs).toBeCloseTo(body.right.routerAndFailoverLatencyMs, 0);
+  });
+});
+
+
+describe("Standard SSC Model Arena blind Gemini judge", () => {
+  async function createPrivateKeyPem(): Promise<string> {
+    const keyPair = await crypto.subtle.generateKey(
+      {
+        name: "RSASSA-PKCS1-v1_5",
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: "SHA-256",
+      },
+      true,
+      ["sign", "verify"],
+    );
+    const der = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
+    let binary = "";
+    for (const byte of new Uint8Array(der)) binary += String.fromCharCode(byte);
+    return [
+      "-----BEGIN PRIVATE KEY-----",
+      btoa(binary),
+      "-----END PRIVATE KEY-----",
+    ].join("\n");
+  }
+
+  it("judges anonymized full AnswerPackets and maps the blind winner back to the correct side", async () => {
+    const privateKey = await createPrivateKeyPem();
+    const vertexPacket = {
+      responseMode: "text",
+      answer: "Article 17 of the Constitution abolishes untouchability.",
+      quizQuestion: "",
+      quizOptions: [],
+      quizCorrectOptionIds: [],
+      quizExplanation: "",
+      quizItems: [],
+      sscTakeaway: "Article 17 abolishes untouchability.",
+      answerScope: "ssc_ga_gs",
+      subject: "polity",
+      topic: "Fundamental Rights",
+      questionMode: "fact",
+      examRelevance: "A",
+      profileSignal: "neutral",
+      nextRevisionTopic: "",
+      detectedExam: null,
+      timeSensitive: false,
+    };
+    const freeModelPacket = {
+      ...vertexPacket,
+      answer: "Article 17 protects the right to freedom of speech.",
+      sscTakeaway: "Article 17 is about freedom of speech.",
+    };
+    const judgeOutput = {
+      criteria: {
+        accuracy: { a: 10, b: 2, comparison: "A correctly identifies Article 17; B confuses it with Article 19." },
+        relevance: { a: 10, b: 7, comparison: "A directly answers the question." },
+        completeness: { a: 9, b: 7, comparison: "Both are concise; A supplies the required fact." },
+        sscFit: { a: 10, b: 8, comparison: "A is a reliable SSC polity fact." },
+        clarity: { a: 9, b: 9, comparison: "Both are clear one-line answers." },
+        format: { a: 10, b: 10, comparison: "Both packets satisfy the expected structure." },
+      },
+      summary: "Candidate A wins because it gives the correct constitutional provision; Candidate B states a different right.",
+      confidence: "high",
+      strengthsA: ["Correctly identifies the constitutional provision."],
+      weaknessesA: [],
+      strengthsB: ["Concise and readable."],
+      weaknessesB: ["Attributes freedom of speech to the wrong article."],
+      decisiveFactors: ["Factual accuracy is the highest-weight category and Candidate B confuses Articles 17 and 19."],
+    };
+
+    let judgeRequest: Record<string, unknown> | null = null;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "https://oauth2.googleapis.com/token") {
+        return Response.json({ access_token: "arena-judge-access-token", expires_in: 3600 });
+      }
+      if (url.endsWith("/models")) {
+        return Response.json({
+          object: "list",
+          data: [{ id: "claude-sonnet-5-5", type: "chat", capabilities: ["json_mode"] }],
+        });
+      }
+      if (url.endsWith("/chat/completions")) {
+        return Response.json({
+          object: "chat.completion",
+          model: "claude-sonnet-5-5",
+          choices: [{ message: { role: "assistant", content: JSON.stringify(freeModelPacket) }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 100, completion_tokens: 35, total_tokens: 135 },
+        });
+      }
+      if (url.includes(":generateContent")) {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        const instruction = String(((body.systemInstruction as { parts?: Array<{ text?: string }> }).parts ?? [])[0]?.text ?? "");
+        if (instruction.includes("independent blind evaluator")) {
+          judgeRequest = body;
+          return Response.json({
+            candidates: [{
+              content: { parts: [{ text: JSON.stringify(judgeOutput) }] },
+              finishReason: "STOP",
+            }],
+            usageMetadata: {
+              promptTokenCount: 1_500,
+              candidatesTokenCount: 350,
+              thoughtsTokenCount: 200,
+              totalTokenCount: 2_050,
+            },
+          });
+        }
+        return Response.json({
+          candidates: [{
+            content: { parts: [{ text: JSON.stringify(vertexPacket) }] },
+            finishReason: "STOP",
+          }],
+          usageMetadata: {
+            promptTokenCount: 1_200,
+            candidatesTokenCount: 55,
+            thoughtsTokenCount: 40,
+            totalTokenCount: 1_295,
+          },
+        });
+      }
+      throw new Error("Unexpected request in blind judge test: " + url);
+    }));
+
+    const env = {
+      ENVIRONMENT: "staging",
+      ENABLE_GOOGLE_SEARCH_GROUNDING: "false",
+      GCP_PROJECT_ID: "arena-test-project",
+      GCP_CLIENT_EMAIL: "arena-test@example.iam.gserviceaccount.com",
+      GCP_PRIVATE_KEY: privateKey,
+      GEMINI_MODEL: "gemini-3.8-flash",
+      GEMINI_LOCATION: "global",
+      FREEMODEL_API_KEY: "test-key",
+      FREEMODEL_BASE_URL: "https://freemodel.test/v1",
+      FREEMODEL_PRIMARY_MODEL: "claude-sonnet-5-5",
+    } as unknown as Env;
+
+    try {
+      const response = await handleArenaRun(
+        env,
+        new Request("https://arena-staging.example.workers.dev/admin/api/arena/run", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            question: "What does Article 17 of the Constitution abolish?",
+            recentConversation: profileContext.recentConversation,
+            targetModel: "claude-sonnet-5-5",
+          }),
+        }),
+      );
+      const body = await response.json() as {
+        left: { ok: boolean; packet?: { answer?: string } };
+        right: { ok: boolean; packet?: { answer?: string } };
+        judge: {
+          ok: boolean;
+          mode: string;
+          winner: string;
+          model: string;
+          overallScores: { left: number; right: number };
+          criteria: Array<{ key: string; leftScore: number; rightScore: number }>;
+          tokens: { totalTokens: number };
+        };
+      };
+
+      expect(body.left.ok).toBe(true);
+      expect(body.right.ok).toBe(true);
+      expect(judgeRequest).not.toBeNull();
+      const judgeBody = judgeRequest as Record<string, unknown>;
+      const judgeText = String((((judgeBody.contents as Array<{ parts: Array<{ text: string }> }>)[0]).parts)[0].text);
+      expect(judgeText).toContain("What does Article 17 of the Constitution abolish?");
+      expect(judgeText).toContain("sharedStudentPrompt");
+      expect(judgeText).toContain("recentConversation");
+      expect(judgeText).toContain("answerPacket");
+      expect(judgeText).not.toContain("claude-sonnet-5-5");
+      expect(judgeText).not.toContain("modelUsed");
+      expect(judgeText).not.toContain("latencyMs");
+      expect(judgeText).not.toContain("estimatedCostUsd");
+
+      const inputJson = JSON.parse(judgeText.slice(judgeText.indexOf("{"))) as {
+        candidateA: { answerPacket: { answer: string } };
+      };
+      const expectedWinner = inputJson.candidateA.answerPacket.answer === vertexPacket.answer ? "left" : "right";
+      expect(body.judge.ok).toBe(true);
+      expect(body.judge.mode).toBe("blind");
+      expect(body.judge.model).toBe("gemini-3.8-flash");
+      expect(body.judge.winner).toBe(expectedWinner);
+      expect(body.judge.overallScores[expectedWinner]).toBeGreaterThan(body.judge.overallScores[expectedWinner === "left" ? "right" : "left"]);
+      expect(body.judge.criteria).toHaveLength(6);
+      expect(body.judge.tokens.totalTokens).toBe(2_050);
+    } finally {
+      invalidateGoogleAccessToken("arena-judge-access-token");
+    }
   });
 });
