@@ -612,6 +612,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html.indexOf('<header class="topbar">')).toBe(-1);
     expect(html).toContain("Responses stream from your selected model.");
     expect(html).toContain(".message-assistant .message-body{background:transparent;border:0;border-radius:0;padding:0;box-shadow:none}");
+    expect(html).toContain(".message-assistant .response-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 15px;padding:0 0 2px}");
+    expect(html).toContain(".response-meta-pill{display:inline-flex;align-items:center;min-height:28px;padding:5px 11px;border:1px solid #383838;border-radius:999px;background:#1d1d1d;color:#c3c3c3;font-size:11px;font-weight:500;line-height:1.35;white-space:nowrap;font-variant-numeric:tabular-nums}");
     expect(html).toContain(".md-table-card");
     expect(html).toContain(".md-callout-success");
     expect(html).toContain(".md-callout-danger");
@@ -686,7 +688,15 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("✓ Completed");
     expect(script).toContain("The model is sending response text.");
     expect(script).toContain("Vertex AI has accepted the request");
-    expect(script).toContain("meta-pill level");
+    expect(script).toContain("function formatGeneratedTimeIST(timestamp)");
+    expect(script).toContain('new Intl.DateTimeFormat("en-IN"');
+    expect(script).toContain('timeZone:"Asia/Kolkata"');
+    expect(script).toContain('node("div","message-meta response-meta")');
+    expect(script).toContain('"Generated · "+generatedAt');
+    expect(script).toContain('model?model.label:item.model_id');
+    expect(script).toContain('String(item.thinking_level).toUpperCase()+" thinking"');
+    expect(script).toContain('node("span","response-meta-pill"');
+    expect(script).not.toContain("meta-pill level");
     expect(script).not.toContain("composerHint");
     expect(script).toContain('document.getElementById("mobileMenu").addEventListener');
     expect(script).toContain("function resizeComposerInput()");
