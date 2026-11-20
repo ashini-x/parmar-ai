@@ -142,13 +142,14 @@ describe("FreeModel Model Arena adapter", () => {
       requestedQuizCount: 1,
       targetModel: modelA.id,
     });
+    const expectedTimeout = expect(pending).rejects.toMatchObject({ code: "timeout", modelId: modelA.id });
 
     await vi.advanceTimersByTimeAsync(0);
     expect(inferenceSignal).toBeDefined();
     await vi.advanceTimersByTimeAsync(14_999);
     expect(inferenceSignal?.aborted).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    await expect(pending).rejects.toMatchObject({ code: "timeout", modelId: modelA.id });
+    await expectedTimeout;
   });
 
   it("detects json_mode only when the active model advertises it", () => {
