@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.4 acceptance closed. M4.5 rollover/handoff (PR [#375](https://github.com/ashini-x/parmar-ai/pull/375)) and the Owner Gemini response-reliability correction (PR [#386](https://github.com/ashini-x/parmar-ai/pull/386)) are merged and production deployed. The latest paired Worker release passed; authenticated Owner M4.5 browser acceptance remains pending. M4.6-P0 is required before M4.6 only; automatic in-place stream reconnect after a dropped connection remains deferred.
-**Last updated:** 2026-11-20 IST — M4.5 PR #375 and Owner response-reliability PR #386 are merged and production deployed. Owner sidebar fixed wordmark header PR #378, central `INTELLIGENCE · WELCOME BACK` wordmark PR #383, chat bottom-follow streaming scroll fix PR #387, response metadata pills PR #392, and outcome-based pill colours PR #395 are all merged and production deployed. Authenticated Owner rollover walkthrough remains pending.  
+**Last updated:** 2026-11-20 IST — M4.5 PR #375 and Owner response-reliability PR #386 are merged and production deployed. Owner sidebar fixed wordmark header PR #378, central `INTELLIGENCE · WELCOME BACK` wordmark PR #383, chat bottom-follow streaming scroll fix PR #387, response metadata pills PR #392, outcome-based pill colours PR #395, and metadata date/label PR #397 are all merged and production deployed. Authenticated Owner rollover walkthrough remains pending.  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -70,7 +70,7 @@ All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN
 ### Owner response generation metadata pills — 2026-11-20 IST
 
 - PR [#392](https://github.com/ashini-x/parmar-ai/pull/392) merged as `e2b5087c248d16de55f132f202e13b9d62e4c534`.
-- Every model-generated assistant response starts with three matching pills for its persisted generation timestamp, the model's human-readable display name, and the selected thinking level. The timestamp uses saved `created_at` and displays month/day only (e.g. `Nov 20`); year, time, and timezone suffix are hidden. PR #395 colours all three pills by outcome: complete/success = green matching the supplied badge, partial = amber, error with no response text = red, and pending = neutral. An error that retained text is treated as partial/amber.
+- Every model-generated assistant response starts with three matching pills for its persisted generation timestamp, the model's human-readable display name, and the selected thinking level. The timestamp uses saved `created_at` and displays month/day only (e.g. `Nov 20`); year, time, and timezone suffix are hidden. Successful generations display `Completed` (replacing `Success`). PR #395 colours all three pills by outcome: complete/success = green matching the supplied badge, partial = amber, error with no response text = red, and pending = neutral. An error that retained text is treated as partial/amber.
 - The timestamp comes from the assistant message's persisted `created_at`, not the browser's current time. Model ID/display label and thinking level come from the existing persisted generation metadata. The row is visible during pending/streaming and after completion, and historical responses retain their original metadata when reopened.
 - Styling: shared pill geometry with 28px minimum height, 5px × 11px padding, 8px row gap, flexible wrapping, and 15px separation before response content. The status tone is applied uniformly to the whole three-pill row.
 - PR validation [#44647841953](https://github.com/ashini-x/parmar-ai/actions/runs/44647841953) passed TypeScript, Vitest, Node tests and all three Worker bundle validations. Main Release Validation [#44648015235](https://github.com/ashini-x/parmar-ai/actions/runs/44648015235) passed all checks, paired production deployment, root/BRVIN-backed health smoke on the first attempt and production release acceptance. Acceptance artifact: `14589303424`.
@@ -85,6 +85,15 @@ All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN
 - PR validation [#44659145870](https://github.com/ashini-x/parmar-ai/actions/runs/44659145870) passed TypeScript, 543 Vitest tests across 76 files, Node tests and all three Worker dry-run builds. Main Release Validation [#44659344520](https://github.com/ashini-x/parmar-ai/actions/runs/44659344520) passed checks, paired production deployment, root/BRVIN-backed health smoke on the first attempt and production release acceptance. Acceptance artifact: `14595375359`.
 - Production `brvin-service`: version `2a6d3165-15b1-4664-be29-754c1e824790`, deployment `3a760d51-1900-49ca-9eec-3541b6241958`, 100% traffic. `parmar-ai`: version `028b34cd-504f-4846-9aea-333e848cb2a7`, deployment `eb7485a8-3393-4f43-9914-b21bb2308f59`, 100% traffic.
 - Owner-only presentation change. No API, D1 schema, model/provider, token budget, Project Memory, retrieval or student-facing behavior changed.
+
+### Owner response metadata date and completion label — 2026-11-20 IST
+
+- PR [#397](https://github.com/ashini-x/parmar-ai/pull/397) merged as `efe28c878c8731b26ff5522e671d634abc60de50`.
+- The first pill now shows month/day only (e.g. `Nov 20`); no year, time or timezone suffix.
+- Successful outcome label is `Completed`; other outcome labels and the shared status colours are unchanged.
+- PR validation [#44675561270](https://github.com/ashini-x/parmar-ai/actions/runs/44675561270) passed typecheck, tests, Node tests and all three Worker bundle validations. Main release [#44675713134](https://github.com/ashini-x/parmar-ai/actions/runs/44675713134) passed checks, paired production deployment, root/BRVIN-backed smoke on attempt 1 and release acceptance. Acceptance artifact `14596115270`.
+- Production `brvin-service`: version `cd9fb7df-d405-4fd8-af68-398f42c7efa1`, deployment `abc6feca-dbab-47c9-9e79-651925677251`, 100% traffic. `parmar-ai`: version `b5ce4eca-0205-4f3c-90e3-d7b61061a5c7`, deployment `de8c7af5-01d9-4967-b132-e2e02d6cd4ca`, 100% traffic.
+- Owner-only presentation change; no backend/model/token budget or student-facing behavior changes.
 
 ## 1. Product goal
 
