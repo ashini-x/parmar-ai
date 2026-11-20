@@ -706,7 +706,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain('"message-meta response-meta response-meta--"+responseState.tone');
     expect(script).toContain('responseState.label+" · "+responseTime');
     expect(script).not.toContain('"Success · "+responseTime');
-    expect(script).toContain('"Completed · "+responseTime');
+    expect(script).not.toContain('"Completed · "+responseTime');
     expect(script).not.toContain('"Generated · "+generatedAt');
     expect(script).not.toContain('+" IST"');
     expect(script).toContain('model?model.label:item.model_id');
