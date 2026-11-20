@@ -2526,7 +2526,7 @@ export function ownerIntelligenceClientScript(): Response {
       var formatted=new Intl.DateTimeFormat("en-IN",{
         day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:true,timeZone:"Asia/Kolkata"
       }).format(new Date(value));
-      return formatted.replace(/\\b(am|pm)\\b/gi,function(period){return period.toUpperCase();})+" IST";
+      return formatted.replace(/\b(am|pm)\b/gi,function(period){return period.toUpperCase();})+" IST";
     }catch(_error){return "Time unavailable";}
   }
   function appendRichInline(parent,value){
