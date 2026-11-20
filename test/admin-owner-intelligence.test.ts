@@ -614,6 +614,9 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html).toContain(".message-assistant .message-body{background:transparent;border:0;border-radius:0;padding:0;box-shadow:none}");
     expect(html).toContain(".message-assistant .response-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 15px;padding:0 0 2px}");
     expect(html).toContain(".response-meta-pill{display:inline-flex;align-items:center;min-height:28px;padding:5px 11px;border:1px solid #383838;border-radius:999px;background:#1d1d1d;color:#c3c3c3;font-size:11px;font-weight:500;line-height:1.35;white-space:nowrap;font-variant-numeric:tabular-nums}");
+    expect(html).toContain(".response-meta--success .response-meta-pill{color:#04b84c;border-color:#07532a;background:#011b0b}");
+    expect(html).toContain(".response-meta--partial .response-meta-pill{color:#e4b65a;border-color:#73521d;background:#241908}");
+    expect(html).toContain(".response-meta--failed .response-meta-pill{color:#e77b7b;border-color:#743232;background:#250d0d}");
     expect(html).toContain(".md-table-card");
     expect(html).toContain(".md-callout-success");
     expect(html).toContain(".md-callout-danger");
@@ -695,7 +698,14 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain('day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:true,timeZone:"Asia/Kolkata"');
     expect(script).not.toContain('year:"numeric"');
     expect(script).toContain('node("div","message-meta response-meta")');
-    expect(script).toContain('"Success · "+responseTime');
+    expect(script).toContain("function getResponseMetaState(item){");
+    expect(script).toContain('if(status==="complete")return {label:"Success",tone:"success"}');
+    expect(script).toContain('if(status==="partial"||(status==="error"&&hasResponse))return {label:"Partial",tone:"partial"}');
+    expect(script).toContain('if(status==="error")return {label:"Failed",tone:"failed"}');
+    expect(script).toContain('var responseState=getResponseMetaState(item)');
+    expect(script).toContain('"message-meta response-meta response-meta--"+responseState.tone');
+    expect(script).toContain('responseState.label+" · "+responseTime');
+    expect(script).not.toContain('"Success · "+responseTime');
     expect(script).not.toContain('"Generated · "+generatedAt');
     expect(script).not.toContain('+" IST"');
     expect(script).toContain('model?model.label:item.model_id');
