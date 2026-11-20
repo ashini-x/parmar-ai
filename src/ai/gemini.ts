@@ -762,11 +762,9 @@ export function buildUserPrompt(question: string, context: ProfileContext, requi
 
 
 /**
- * Builds the exact standard SSC user prompt for an isolated Model Arena run.
- * Arena callers supply browser-session turns and a neutral, non-persisted profile.
- * No Telegram runtime path calls this helper.
+ * Arena-only Vertex entrypoint over the same low-level request and validator.
+ * The production generateGeminiAnswer() signature and Telegram call path remain unchanged.
  */
-
 export async function generateGeminiArenaAnswer(
   env: Env,
   question: string,
@@ -834,6 +832,7 @@ export async function generateGeminiArenaAnswer(
   throw lastError ?? new GeminiError("Vertex AI Arena generation failed.", undefined, true, usageRecords);
 }
 
+/** Builds the normal production SSC user prompt once for both Arena providers. */
 export function buildStandardArenaPrompt(
   env: Env,
   question: string,
