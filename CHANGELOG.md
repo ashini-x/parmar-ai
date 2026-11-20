@@ -1,5 +1,13 @@
 ## 2026-11-20 IST: Owner response metadata date and completion label
 
+- PR [#397](https://github.com/ashini-x/parmar-ai/pull/397) merged as `efe28c878c8731b26ff5522e671d634abc60de50`.
+- Date pill is month/day only (e.g. `Nov 20`), without year, time, or timezone suffix. Successful generations display `Completed`.
+- PR checks [#44675561270](https://github.com/ashini-x/parmar-ai/actions/runs/44675561270) and production release [#44675713134](https://github.com/ashini-x/parmar-ai/actions/runs/44675713134) passed; production acceptance artifact `14596115270`.
+- Production `brvin-service` version `cd9fb7df-d405-4fd8-af68-398f42c7efa1` / deployment `abc6feca-dbab-47c9-9e79-651925677251` and `parmar-ai` version `b5ce4eca-0205-4f3c-90e3-d7b61061a5c7` / deployment `de8c7af5-01d9-4967-b132-e2e02d6cd4ca`, each at 100% traffic.
+- Owner-only front-end change; no backend/model/token-budget or student-facing behavior changes.
+
+## 2026-11-20 IST: Owner response metadata date and completion label
+
 - Owner completion date pill now shows month/day only (e.g. `Nov 20`); the year, time, and timezone suffix are hidden.
 - Successful generation label changed from `Success` to `Completed`. Partial, failed and generating labels are unchanged.
 - Owner-only front-end presentation. No API, D1 schema, model/provider, token-budget, retrieval or student-facing behavior changed.
