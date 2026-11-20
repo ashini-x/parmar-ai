@@ -3296,7 +3296,7 @@ const worker = {
           if (env.ENVIRONMENT !== "staging") {
             return withRequestId(json({ ok: false, error: "arena_staging_only" }, 404), requestId);
           }
-          return withRequestId(await handleArenaModels(env), requestId);
+          return withRequestId(await handleArenaModels(env, url.searchParams.get("refresh") === "1"), requestId);
         }
         if (adminApiPath === "/admin/api/arena/run" && request.method === "POST") {
           if (env.ENVIRONMENT !== "staging") {
