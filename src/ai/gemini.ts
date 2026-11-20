@@ -256,7 +256,7 @@ export const RESPONSE_SCHEMA = {
     "detectedExam",
     "timeSensitive",
   ],
-};
+} as const;
 
 export class GeminiError extends Error {
   status?: number;
