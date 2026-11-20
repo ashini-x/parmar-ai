@@ -293,6 +293,7 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
           overallScores: { left: number; right: number };
           criteria: Array<{ key: string; leftScore: number; rightScore: number }>;
           tokens: { totalTokens: number };
+          estimatedCostUsd: number;
         };
       };
 
@@ -311,8 +312,15 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       expect(judgeText).not.toContain("estimatedCostUsd");
 
       const inputJson = JSON.parse(judgeText.slice(judgeText.indexOf("{"))) as {
-        candidateA: { answerPacket: { answer: string } };
+        candidateA: { answerPacket: Record<string, unknown> & { answer: string } };
+        candidateB: { answerPacket: Record<string, unknown> & { answer: string } };
       };
+      for (const candidate of [inputJson.candidateA, inputJson.candidateB]) {
+        expect(candidate.answerPacket).not.toHaveProperty("thinkingLevelUsed");
+        expect(candidate.answerPacket).not.toHaveProperty("grounded");
+        expect(candidate.answerPacket).not.toHaveProperty("modelUsed");
+        expect(candidate.answerPacket).not.toHaveProperty("provider");
+      }
       const expectedWinner = inputJson.candidateA.answerPacket.answer === vertexPacket.answer ? "left" : "right";
       expect(body.judge.ok).toBe(true);
       expect(body.judge.mode).toBe("blind");
@@ -321,6 +329,7 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       expect(body.judge.overallScores[expectedWinner]).toBeGreaterThan(body.judge.overallScores[expectedWinner === "left" ? "right" : "left"]);
       expect(body.judge.criteria).toHaveLength(6);
       expect(body.judge.tokens.totalTokens).toBe(2_050);
+      expect(body.judge.estimatedCostUsd).toBeCloseTo(0.0031875, 8);
     } finally {
       invalidateGoogleAccessToken("arena-judge-access-token");
     }
