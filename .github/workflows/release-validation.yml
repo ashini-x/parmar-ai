@@ -200,7 +200,7 @@ jobs:
               # only when every changed path belongs to this reviewed Arena change.
               # Any additional/unexpected file restores the normal production gate.
               case "$path" in
-                .github/workflows/release-validation.yml|.github/workflows/m14-staging-deploy.yml|src/admin/dashboard.ts|src/ai/arena.ts|src/ai/freemodel.ts|src/ai/gemini.ts|src/config/env.ts|src/index.ts|test/ai-arena-prompt.test.ts|test/ai-freemodel.test.ts|wrangler.arena-staging.jsonc)
+                .github/workflows/release-validation.yml|.github/workflows/m14-staging-deploy.yml|.github/workflows/arena-staging-deploy.yml|src/admin/dashboard.ts|src/ai/arena.ts|src/ai/freemodel.ts|src/ai/gemini.ts|src/config/env.ts|src/index.ts|test/ai-arena-prompt.test.ts|test/ai-freemodel.test.ts|test/arena-staging-route-guard.test.ts|wrangler.arena-staging.jsonc)
                   ;;
                 *)
                   deploy=true
