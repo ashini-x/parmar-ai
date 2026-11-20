@@ -324,7 +324,11 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
         expect(candidate.answerPacket).not.toHaveProperty("modelUsed");
         expect(candidate.answerPacket).not.toHaveProperty("provider");
       }
-      const expectedWinner = inputJson.candidateA.answerPacket.answer === vertexPacket.answer ? "left" : "right";
+      const candidateAIsLeft = inputJson.candidateA.answerPacket.answer === body.left.packet?.answer;
+      const candidateAIsRight = inputJson.candidateA.answerPacket.answer === body.right.packet?.answer;
+      expect(candidateAIsLeft || candidateAIsRight).toBe(true);
+      expect(candidateAIsLeft && candidateAIsRight).toBe(false);
+      const expectedWinner = candidateAIsLeft ? "left" : "right";
       expect(body.judge.ok).toBe(true);
       expect(body.judge.mode).toBe("blind");
       expect(body.judge.model).toBe("gemini-3.8-flash");
