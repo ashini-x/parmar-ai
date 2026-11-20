@@ -11,7 +11,7 @@ const DEFAULT_TIMEOUT_MS = 25_000;
 const MAX_INTERNAL_ATTEMPTS = 3;
 const MAX_ANSWER_CHARS = 3_900;
 
-const SYSTEM_INSTRUCTION = `You are परमार्थAI, an SSC-focused exam mentor.
+export const SYSTEM_INSTRUCTION = `You are परमार्थAI, an SSC-focused exam mentor.
 
 BOT AND BRɅIN IDENTITY
 - Product identity: You are परमार्थAI, the student-facing SSC General Awareness / General Studies study companion by BRɅIN.
@@ -171,7 +171,7 @@ export type PartialAnswerHandler = ((answer: string) => void) & {
   flush(): Promise<void>;
 };
 
-const RESPONSE_SCHEMA = {
+export const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
     responseMode: { type: "STRING", enum: ["text", "quiz"] },
@@ -706,7 +706,7 @@ function buildBotIdentityUserPrompt(question: string, isCompletionRetry: boolean
   ].filter(Boolean).join("\n");
 }
 
-function buildUserPrompt(question: string, context: ProfileContext, requiresGrounding: boolean, isCompletionRetry: boolean, requestedQuizCount: number, bookContext?: FatmanBookContext, sourceContext?: GroundedGeminiSourceContext): string {
+export function buildUserPrompt(question: string, context: ProfileContext, requiresGrounding: boolean, isCompletionRetry: boolean, requestedQuizCount: number, bookContext?: FatmanBookContext, sourceContext?: GroundedGeminiSourceContext): string {
   if (isBotIdentityQuestion(question)) {
     return buildBotIdentityUserPrompt(question, isCompletionRetry);
   }
@@ -757,6 +757,36 @@ function buildUserPrompt(question: string, context: ProfileContext, requiresGrou
     "",
     "Before answering, decide whether this is genuinely useful for SSC GA/GS unless the message asks about the bot's identity or creation. Keep the final answer proportional to the question. Avoid peripheral numbers, coverage percentages, questionable historical minutiae, and unnecessary lists unless the student asks for them. If the student is confused, teach the specific confusion. Only make a learning-profile update when there is meaningful evidence.",
   ].filter(Boolean).join("\n");
+}
+
+
+/**
+ * Builds the exact standard SSC user prompt for an isolated Model Arena run.
+ * Arena callers supply browser-session turns and a neutral, non-persisted profile.
+ * No Telegram runtime path calls this helper.
+ */
+export function buildStandardArenaPrompt(
+  env: Env,
+  question: string,
+  context: ProfileContext,
+): { prompt: string; requestedQuizCount: number; requiresGrounding: boolean } {
+  const normalizedQuestion = question.trim();
+  const identityQuestion = isBotIdentityQuestion(normalizedQuestion);
+  const requiresGrounding = !identityQuestion &&
+    requiresFreshData(normalizedQuestion) &&
+    isGroundingEnabled(env);
+  const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, context.profile);
+  return {
+    prompt: buildUserPrompt(
+      normalizedQuestion,
+      context,
+      requiresGrounding,
+      false,
+      requestedQuizCount,
+    ),
+    requestedQuizCount,
+    requiresGrounding,
+  };
 }
 
 function buildGroundedSourceUserPrompt(
@@ -856,7 +886,7 @@ function buildFatmanFallbackUserPrompt(
   ].filter(Boolean).join("\n");
 }
 
-function parseAnswerPacket(rawText: string): AnswerPacket {
+export function parseAnswerPacket(rawText: string): AnswerPacket {
   const cleaned = stripCodeFence(rawText);
 
   let parsed: Partial<AnswerPacket> | null = null;
@@ -1033,7 +1063,7 @@ function makeFallbackPacket(answer: string): AnswerPacket {
   };
 }
 
-function sanitizeAnswerPacket(
+export function sanitizeAnswerPacket(
   packet: AnswerPacket,
   currentFactTrusted: boolean,
   requiresGrounding: boolean,
