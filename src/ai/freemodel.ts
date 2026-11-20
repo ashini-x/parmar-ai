@@ -339,10 +339,11 @@ export async function getFreeModelCatalog(
 
 export async function getFreeModelModels(
   env: Env,
+  options: { forceRefresh?: boolean } = {},
 ): Promise<{ models: FreeModelModel[]; fetchedAt: number; primaryModel: string }> {
   const baseUrl = baseUrlFor(env);
   const primaryModel = primaryModelFor(env);
-  const catalog = await getFreeModelCatalog(env);
+  const catalog = await getFreeModelCatalog(env, options);
   const models = rankModels(catalog.models, primaryModel).map((model) => {
     const cooldown = currentCooldown(baseUrl, model.id);
     return {
