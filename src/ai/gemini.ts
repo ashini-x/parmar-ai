@@ -308,7 +308,6 @@ export async function generateGeminiAnswer(
   onPartialAnswer?: PartialAnswerHandler,
   bookContext?: FatmanBookContext,
   sourceContext?: GroundedGeminiSourceContext,
-  userPromptOverride?: string,
 ): Promise<GeminiGenerationResult> {
   const projectId = env.GCP_PROJECT_ID?.trim();
   const normalizedQuestion = question.trim();
@@ -388,7 +387,6 @@ export async function generateGeminiAnswer(
         attemptPartialAnswer,
         effectiveBookContext,
         effectiveSourceContext,
-        userPromptOverride,
       );
       logger.info("gemini_generation_attempt_completed", {
         attempt,
@@ -768,17 +766,86 @@ export function buildUserPrompt(question: string, context: ProfileContext, requi
  * Arena callers supply browser-session turns and a neutral, non-persisted profile.
  * No Telegram runtime path calls this helper.
  */
+
+export async function generateGeminiArenaAnswer(
+  env: Env,
+  question: string,
+  profile: ProfileContext,
+  sharedUserPrompt: string,
+): Promise<GeminiGenerationResult> {
+  const projectId = env.GCP_PROJECT_ID?.trim();
+  const normalizedQuestion = question.trim();
+  if (!projectId) throw new GeminiError("Google Cloud project ID is not configured.");
+  if (!env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim()) {
+    throw new GeminiError("Google Cloud service account credentials are not configured.");
+  }
+  if (!normalizedQuestion) throw new GeminiError("Question is empty.");
+  const maxQuestionLength = positiveInt(env.MAX_QUESTION_LENGTH, 4_000);
+  if (normalizedQuestion.length > maxQuestionLength) {
+    throw new GeminiError("Question is too long. Maximum supported length is " + maxQuestionLength + " characters.");
+  }
+
+  const location = env.GEMINI_LOCATION?.trim() || DEFAULT_LOCATION;
+  const model = env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+  const endpoint = "https://aiplatform.googleapis.com/v1/projects/" +
+    encodeURIComponent(projectId) + "/locations/" + encodeURIComponent(location) +
+    "/publishers/google/models/" + encodeURIComponent(model) + ":generateContent";
+  const identityQuestion = isBotIdentityQuestion(normalizedQuestion);
+  const thinkingLevel = selectThinkingLevel(normalizedQuestion, getConfig(env).maxThinkingLevel);
+  const requiresGrounding = !identityQuestion &&
+    requiresFreshData(normalizedQuestion) &&
+    isGroundingEnabled(env);
+  const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, profile);
+  if (requiresMcqTopicClarification(normalizedQuestion, profile)) {
+    return { packet: makeMcqTopicClarificationPacket(requestedQuizCount), usage: [] };
+  }
+
+  const usageRecords: AiUsageRecord[] = [];
+  let lastError: GeminiError | null = null;
+  for (let attempt = 1; attempt <= MAX_INTERNAL_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await requestVertexGemini(
+        env,
+        endpoint,
+        normalizedQuestion,
+        profile,
+        thinkingLevel,
+        requiresGrounding,
+        attempt,
+        requestedQuizCount,
+        [],
+        undefined,
+        undefined,
+        undefined,
+        sharedUserPrompt,
+      );
+      return { packet: result.packet, usage: [...usageRecords, result.usage] };
+    } catch (error) {
+      const geminiError = toGeminiError(error);
+      usageRecords.push(...geminiError.usageRecords);
+      lastError = geminiError;
+      if (!geminiError.retryable || attempt >= MAX_INTERNAL_ATTEMPTS) {
+        geminiError.usageRecords = usageRecords.slice();
+        throw geminiError;
+      }
+      await sleep(800 * 2 ** (attempt - 1) + Math.floor(Math.random() * 250));
+    }
+  }
+  throw lastError ?? new GeminiError("Vertex AI Arena generation failed.", undefined, true, usageRecords);
+}
+
 export function buildStandardArenaPrompt(
   env: Env,
   question: string,
   context: ProfileContext,
-): { prompt: string; requestedQuizCount: number; requiresGrounding: boolean } {
+): { prompt: string; requestedQuizCount: number; requiresGrounding: boolean; clarificationPacket?: AnswerPacket } {
   const normalizedQuestion = question.trim();
   const identityQuestion = isBotIdentityQuestion(normalizedQuestion);
   const requiresGrounding = !identityQuestion &&
     requiresFreshData(normalizedQuestion) &&
     isGroundingEnabled(env);
   const requestedQuizCount = resolveRequestedQuizCount(normalizedQuestion, context.profile);
+  const needsTopicClarification = requiresMcqTopicClarification(normalizedQuestion, context);
   return {
     prompt: buildUserPrompt(
       normalizedQuestion,
@@ -789,6 +856,7 @@ export function buildStandardArenaPrompt(
     ),
     requestedQuizCount,
     requiresGrounding,
+    ...(needsTopicClarification ? { clarificationPacket: makeMcqTopicClarificationPacket(requestedQuizCount) } : {}),
   };
 }
 
