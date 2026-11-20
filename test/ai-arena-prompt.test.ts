@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Env, ProfileContext } from "../src/config/env";
 import { handleArenaRun } from "../src/ai/arena";
 import { resetFreeModelStateForTests } from "../src/ai/freemodel";
 import { buildStandardArenaPrompt, buildUserPrompt } from "../src/ai/gemini";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  resetFreeModelStateForTests();
+});
 
 const profileContext: ProfileContext = {
   profile: {
@@ -126,7 +131,5 @@ describe("Standard SSC Model Arena end-to-end timing", () => {
     expect(body.right.latencyMs).toBeGreaterThanOrEqual(body.right.modelLatencyMs);
     expect(body.right.routerAndFailoverLatencyMs).toBeGreaterThan(10);
     expect(body.right.latencyMs - body.right.modelLatencyMs).toBeCloseTo(body.right.routerAndFailoverLatencyMs, 0);
-    vi.unstubAllGlobals();
-    resetFreeModelStateForTests();
   });
 });
