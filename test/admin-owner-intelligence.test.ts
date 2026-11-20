@@ -697,7 +697,7 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain('new Intl.DateTimeFormat("en-IN"');
     expect(script).toContain('day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:true,timeZone:"Asia/Kolkata"');
     expect(script).not.toContain('year:"numeric"');
-    expect(script).toContain('node("div","message-meta response-meta")');
+    expect(script).toContain('node("div","message-meta response-meta response-meta--"+responseState.tone)');
     expect(script).toContain("function getResponseMetaState(item){");
     expect(script).toContain('if(status==="complete")return {label:"Success",tone:"success"}');
     expect(script).toContain('if(status==="partial"||(status==="error"&&hasResponse))return {label:"Partial",tone:"partial"}');
