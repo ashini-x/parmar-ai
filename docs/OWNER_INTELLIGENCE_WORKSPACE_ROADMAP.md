@@ -1,7 +1,7 @@
 # Owner Gemini Intelligence — Product Roadmap
 
 **Status:** M0–M4.4 acceptance closed. M4.5 rollover/handoff (PR [#375](https://github.com/ashini-x/parmar-ai/pull/375)) and the Owner Gemini response-reliability correction (PR [#386](https://github.com/ashini-x/parmar-ai/pull/386)) are merged and production deployed. The latest paired Worker release passed; authenticated Owner M4.5 browser acceptance remains pending. M4.6-P0 is required before M4.6 only; automatic in-place stream reconnect after a dropped connection remains deferred.
-**Last updated:** 2026-11-20 IST — M4.5 PR #375 and Owner response-reliability PR #386 are merged and production deployed. Owner sidebar fixed wordmark header PR #378, central `INTELLIGENCE · WELCOME BACK` wordmark PR #383, chat bottom-follow streaming scroll fix PR #387, and response metadata pills PR #392 are all merged and production deployed. Authenticated Owner rollover walkthrough remains pending.  
+**Last updated:** 2026-11-20 IST — M4.5 PR #375 and Owner response-reliability PR #386 are merged and production deployed. Owner sidebar fixed wordmark header PR #378, central `INTELLIGENCE · WELCOME BACK` wordmark PR #383, chat bottom-follow streaming scroll fix PR #387, response metadata pills PR #392, and outcome-based pill colours PR #395 are all merged and production deployed. Authenticated Owner rollover walkthrough remains pending.  
 **Repository:** `ashini-x/parmar-ai`  
 **Product surface:** Existing protected Admin Control Center  
 **Working name:** Owner Gemini Intelligence
@@ -70,12 +70,21 @@ All Owner Intelligence UI and brand work follows the Core authority [`docs/BRVIN
 ### Owner response generation metadata pills — 2026-11-20 IST
 
 - PR [#392](https://github.com/ashini-x/parmar-ai/pull/392) merged as `e2b5087c248d16de55f132f202e13b9d62e4c534`.
-- Every model-generated assistant response now starts with three matching neutral-grey pills: `Generated · [date/time] IST`, the model's human-readable display name, and the selected thinking level. The timestamp is formatted with `en-IN` and the explicit `Asia/Kolkata` timezone, including an `IST` suffix.
+- Every model-generated assistant response starts with three matching pills for its persisted generation timestamp, the model's human-readable display name, and the selected thinking level. The timestamp is formatted with `en-IN` and `Asia/Kolkata` using the saved `created_at`; the visible label omits the year and timezone suffix. PR #395 colours all three pills by outcome: complete/success = green matching the supplied badge, partial = amber, error with no response text = red, and pending = neutral. An error that retained text is treated as partial/amber.
 - The timestamp comes from the assistant message's persisted `created_at`, not the browser's current time. Model ID/display label and thinking level come from the existing persisted generation metadata. The row is visible during pending/streaming and after completion, and historical responses retain their original metadata when reopened.
-- Styling: one shared pill class/color, 28px minimum height, 5px × 11px padding, 8px row gap, flexible wrapping, and 15px separation before response content. Existing colored completion-state pills are no longer part of the assistant header.
+- Styling: shared pill geometry with 28px minimum height, 5px × 11px padding, 8px row gap, flexible wrapping, and 15px separation before response content. The status tone is applied uniformly to the whole three-pill row.
 - PR validation [#44647841953](https://github.com/ashini-x/parmar-ai/actions/runs/44647841953) passed TypeScript, Vitest, Node tests and all three Worker bundle validations. Main Release Validation [#44648015235](https://github.com/ashini-x/parmar-ai/actions/runs/44648015235) passed all checks, paired production deployment, root/BRVIN-backed health smoke on the first attempt and production release acceptance. Acceptance artifact: `14589303424`.
 - Production `brvin-service`: version `a4b19673-5ff0-4464-89ce-4d4c9c9abde3`, deployment `634277d6-2c18-4b3f-b9df-627430909293`, 100% traffic. `parmar-ai`: version `36a66f0b-e16b-4866-9d0e-188a1ecfca1f`, deployment `f8cddea1-68d5-4365-9721-72aecfca2b8e`, 100% traffic.
 - Owner-only presentation change. No API, D1 schema, Gemini/provider, token budget, Project Memory, retrieval or student-facing behavior changed.
+
+### Owner response metadata outcome colours — 2026-11-20 IST
+
+- PR [#395](https://github.com/ashini-x/parmar-ai/pull/395) merged as `7fb462a8cca70a4240b7c3aa1a37a31ff7fe7ccf`.
+- All three response metadata pills share one outcome tone. `complete` → success green matching the uploaded badge (background `#011b0b`, text `#04b84c`); `partial` → amber; `error` with no response text → red; `pending` → neutral while generation is in progress.
+- If an error retained response text, it is treated as partial/amber. The timestamp pill label follows the state: `Success`, `Partial`, `Failed`, or `Generating`.
+- PR validation [#44659145870](https://github.com/ashini-x/parmar-ai/actions/runs/44659145870) passed TypeScript, 543 Vitest tests across 76 files, Node tests and all three Worker dry-run builds. Main Release Validation [#44659344520](https://github.com/ashini-x/parmar-ai/actions/runs/44659344520) passed checks, paired production deployment, root/BRVIN-backed health smoke on the first attempt and production release acceptance. Acceptance artifact: `14595375359`.
+- Production `brvin-service`: version `2a6d3165-15b1-4664-be29-754c1e824790`, deployment `3a760d51-1900-49ca-9eec-3541b6241958`, 100% traffic. `parmar-ai`: version `028b34cd-504f-4846-9aea-333e848cb2a7`, deployment `eb7485a8-3393-4f43-9914-b21bb2308f59`, 100% traffic.
+- Owner-only presentation change. No API, D1 schema, model/provider, token budget, Project Memory, retrieval or student-facing behavior changed.
 
 ## 1. Product goal
 

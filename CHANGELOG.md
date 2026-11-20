@@ -1,3 +1,11 @@
+## 2026-11-20 IST: Owner response metadata outcome colours
+
+- PR [#395](https://github.com/ashini-x/parmar-ai/pull/395) merged as `7fb462a8cca70a4240b7c3aa1a37a31ff7fe7ccf`.
+- All three response metadata pills now share their generation-outcome colour: success/complete = dark green matching the uploaded badge (`#011b0b` background, `#04b84c` text); partial = amber; failed with no response text = red; pending = neutral.
+- Failed responses that retained text are treated as partial/amber. The timestamp pill label follows the outcome (`Success`, `Partial`, `Failed`, `Generating`).
+- PR validation [#44659145870](https://github.com/ashini-x/parmar-ai/actions/runs/44659145870) and main production release [#44659344520](https://github.com/ashini-x/parmar-ai/actions/runs/44659344520) passed. Production smoke and release acceptance passed; artifact `14595375359`.
+- `brvin-service` version `2a6d3165-15b1-4664-be29-754c1e824790` / deployment `3a760d51-1900-49ca-9eec-3541b6241958` and `parmar-ai` version `028b34cd-504f-4846-9aea-333e848cb2a7` / deployment `eb7485a8-3393-4f43-9914-b21bb2308f59` are each at 100% traffic.
+- Owner-only front-end change. No API, D1, model/provider, token-budget, Project Memory, retrieval or student-facing behavior changed.
 ## 2026-11-20 IST: Owner response generation metadata pills
 
 - PR [#392](https://github.com/ashini-x/parmar-ai/pull/392) merged as `e2b5087c248d16de55f132f202e13b9d62e4c534`.
