@@ -612,8 +612,10 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(html.indexOf('<header class="topbar">')).toBe(-1);
     expect(html).toContain("Responses stream from your selected model.");
     expect(html).toContain(".message-assistant .message-body{background:transparent;border:0;border-radius:0;padding:0;box-shadow:none}");
-    expect(html).toContain(".message-assistant .response-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 15px;padding:0 0 2px}");
-    expect(html).toContain(".response-meta-pill{display:inline-flex;align-items:center;min-height:28px;padding:5px 11px;border:1px solid #383838;border-radius:999px;background:#1d1d1d;color:#c3c3c3;font-size:11px;font-weight:500;line-height:1.35;white-space:nowrap;font-variant-numeric:tabular-nums}");
+    expect(html).toContain(".message-assistant .response-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;max-width:100%;margin:0 0 15px;padding:0 0 2px}");
+    expect(html).toContain(".response-meta-pill-text{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}");
+    expect(html).toContain("@media(max-width:760px){.message-assistant .response-meta{display:flex;align-items:center;flex-wrap:nowrap;gap:clamp(3px,1vw,5px);width:100%;min-width:0;max-width:100%;overflow:hidden}.response-meta-pill{min-width:0;max-width:100%;flex:0 1 auto;min-height:26px;padding:4px clamp(4px,1.6vw,7px);font-size:clamp(8px,2.7vw,10px)}.response-meta-pill-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}");
+    expect(html).toContain(".response-meta-pill{display:inline-flex;align-items:center;min-width:0;max-width:100%;flex:0 1 auto;overflow:hidden;min-height:28px;padding:5px 11px;border:1px solid #383838;border-radius:999px;background:#1d1d1d;color:#c3c3c3;font-size:11px;font-weight:500;line-height:1.35;white-space:nowrap;font-variant-numeric:tabular-nums}");
     expect(html).toContain(".response-meta--success .response-meta-pill{color:#04b84c;border-color:#07532a;background:#011b0b}");
     expect(html).toContain(".response-meta--partial .response-meta-pill{color:#e4b65a;border-color:#73521d;background:#241908}");
     expect(html).toContain(".response-meta--failed .response-meta-pill{color:#e77b7b;border-color:#743232;background:#250d0d}");
@@ -694,8 +696,8 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain("The model is sending response text.");
     expect(script).toContain("Vertex AI has accepted the request");
     expect(script).toContain("function formatResponseTime(timestamp)");
-    expect(script).toContain('new Intl.DateTimeFormat("en-IN"');
-    expect(script).toContain('month:"short",day:"numeric"');
+    expect(script).toContain('new Intl.DateTimeFormat("en-US"');
+    expect(script).toContain('month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:true,timeZone:"Asia/Kolkata"');
     expect(script).not.toContain('year:"numeric"');
     expect(script).toContain('node("div","message-meta response-meta response-meta--"+responseState.tone)');
     expect(script).toContain("function getResponseMetaState(item){");
@@ -712,6 +714,9 @@ describe("Owner Intelligence workspace and conversation persistence", () => {
     expect(script).toContain('model?model.label:item.model_id');
     expect(script).toContain('String(item.thinking_level).toUpperCase()+" thinking"');
     expect(script).toContain('node("span","response-meta-pill"');
+    expect(script).toContain('node("span","response-meta-pill-text",generatedText)');
+    expect(script).toContain('node("span","response-meta-pill-text",modelName)');
+    expect(script).toContain('node("span","response-meta-pill-text",thinkingLabel)');
     expect(script).not.toContain("meta-pill level");
     expect(script).not.toContain("composerHint");
     expect(script).toContain('document.getElementById("mobileMenu").addEventListener');

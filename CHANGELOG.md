@@ -1,3 +1,10 @@
+## 2026-11-20 IST: Owner response metadata date/time and mobile single-row layout
+
+- The first pill now displays the requested month/day/time format, e.g. `Completed · Nov 20, 06:04 AM`, using the persisted creation timestamp formatted for `Asia/Kolkata`; the year and visible timezone suffix remain omitted.
+- On mobile, all three metadata pills stay on one row. Responsive gaps/padding and ellipsis for long model labels prevent wrapping and horizontal overflow while preserving full values in each pill's title.
+- The Completed/Partial/Failed labels and green/amber/red outcome colours remain unchanged.
+- Owner-only front-end update; no API, D1, model/provider or student-facing behavior changes.
+
 ## 2026-11-20 IST: Owner response metadata date and completion label
 
 - PR [#397](https://github.com/ashini-x/parmar-ai/pull/397) merged as `efe28c878c8731b26ff5522e671d634abc60de50`.
