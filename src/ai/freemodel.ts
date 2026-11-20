@@ -2,6 +2,7 @@ import type { AnswerPacket, Env, ProfileContext } from "../config/env";
 import {
   parseAnswerPacket,
   sanitizeAnswerPacket,
+  RESPONSE_SCHEMA,
   SYSTEM_INSTRUCTION,
 } from "./gemini";
 
@@ -25,68 +26,40 @@ export const PREFERRED_MODEL_ORDER = [
   "qwen-3-max",
 ] as const;
 
-export const ANSWER_PACKET_REQUIRED_KEYS = [
-  "responseMode",
-  "answer",
-  "quizQuestion",
-  "quizOptions",
-  "quizCorrectOptionIds",
-  "quizExplanation",
-  "quizItems",
-  "sscTakeaway",
-  "answerScope",
-  "subject",
-  "topic",
-  "questionMode",
-  "examRelevance",
-  "profileSignal",
-  "nextRevisionTopic",
-  "detectedExam",
-  "timeSensitive",
-] as const;
+export const ANSWER_PACKET_REQUIRED_KEYS = RESPONSE_SCHEMA.required;
+
+type GoogleResponseSchema = Record<string, unknown>;
+
+function toOpenAiJsonSchema(schema: GoogleResponseSchema): Record<string, unknown> {
+  const rawType = typeof schema.type === "string" ? schema.type.toLowerCase() : undefined;
+  const output: Record<string, unknown> = {};
+  if (rawType) {
+    output.type = schema.nullable === true ? [rawType, "null"] : rawType;
+  }
+  if (Array.isArray(schema.enum)) output.enum = schema.enum;
+  if (Array.isArray(schema.required)) output.required = schema.required;
+  if (schema.properties && typeof schema.properties === "object") {
+    const properties: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(schema.properties as Record<string, unknown>)) {
+      if (value && typeof value === "object") {
+        properties[key] = toOpenAiJsonSchema(value as GoogleResponseSchema);
+      }
+    }
+    output.properties = properties;
+    output.additionalProperties = false;
+  }
+  if (schema.items && typeof schema.items === "object") {
+    output.items = toOpenAiJsonSchema(schema.items as GoogleResponseSchema);
+  }
+  return output;
+}
 
 /**
- * FreeModel's JSON mode is object-only, not JSON-Schema constrained. Keep the
- * complete AnswerPacket contract in this provider adapter rather than changing
- * Gemini's production system instruction or Vertex response schema.
+ * Derive the OpenAI-compatible JSON Schema from the production Gemini response
+ * schema so required keys and enum values cannot drift between providers.
  */
-export const FREE_MODEL_ANSWER_PACKET_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: [...ANSWER_PACKET_REQUIRED_KEYS],
-  properties: {
-    responseMode: { type: "string", enum: ["text", "quiz"] },
-    answer: { type: "string" },
-    quizQuestion: { type: "string" },
-    quizOptions: { type: "array", items: { type: "string" } },
-    quizCorrectOptionIds: { type: "array", items: { type: "integer" } },
-    quizExplanation: { type: "string" },
-    quizItems: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["question", "options", "correctOptionIds", "explanation"],
-        properties: {
-          question: { type: "string" },
-          options: { type: "array", items: { type: "string" } },
-          correctOptionIds: { type: "array", items: { type: "integer" } },
-          explanation: { type: "string" },
-        },
-      },
-    },
-    sscTakeaway: { type: "string" },
-    answerScope: { type: "string", enum: ["ssc_ga_gs", "ssc_support", "out_of_scope"] },
-    subject: { type: "string", enum: ["history", "polity", "geography", "economy", "science", "static_gk", "current_affairs", "art_culture", "other"] },
-    topic: { type: "string" },
-    questionMode: { type: "string", enum: ["fact", "concept", "comparison", "statement_trap", "revision", "study_plan", "mcq"] },
-    examRelevance: { type: "string", enum: ["A", "B", "C", "D"] },
-    profileSignal: { type: "string", enum: ["neutral", "weak", "confusion", "strength"] },
-    nextRevisionTopic: { type: "string" },
-    detectedExam: { type: ["string", "null"] },
-    timeSensitive: { type: "boolean" },
-  },
-} as const;
+export const FREE_MODEL_ANSWER_PACKET_SCHEMA =
+  toOpenAiJsonSchema(RESPONSE_SCHEMA as unknown as GoogleResponseSchema);
 
 const ANSWER_PACKET_SCHEMA_INSTRUCTION =
   "Return exactly one unfenced JSON object matching this required AnswerPacket JSON Schema. " +
