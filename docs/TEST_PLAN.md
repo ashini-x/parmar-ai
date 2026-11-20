@@ -518,3 +518,10 @@ These checks become mandatory as M4.4–M4.8 implement the approved architecture
 - Exercise Hydrogen, Carbon, Argon and every registered Gemini 3.x model; verify actual context-window fit comes from the selected model registry/provider response, not a fixed character or turn threshold.
 - Keep the 200,000-token cumulative conversation budget, repeated Gemini 4 continuation prompt reservations, output ceilings, usage settlement and hard lock unchanged.
 - Keep the 8 MiB JSON request-buffer safety guard and verify it is reported as transport protection rather than a token/input-character cap.
+
+
+### Owner Gemini token-aware input/context selection — release evidence (2026-11-20)
+- PR [#391](https://github.com/ashini-x/parmar-ai/pull/391), merge commit `8423b27527629900f1fa4e799b5dd64e6e26f291`.
+- PR CI [#44641902154](https://github.com/ashini-x/parmar-ai/actions/runs/44641902154): 543 Vitest tests / 76 files and 62 Node tests / 9 files passed; TypeScript and all three Worker dry-run builds passed.
+- Production release [#44642076989](https://github.com/ashini-x/parmar-ai/actions/runs/44642076989) passed. Cloudflare final deployment history: `parmar-ai` version `36a66f0b-e16b-4866-9d0e-188a1ecfca1f` at 100%; `brvin-service` version `a4b19673-5ff0-4464-89ce-4d4c9c9abde3` at 100%.
+- Automated test evidence does not replace authenticated Owner UI acceptance with real Vertex CountTokens calls for each selected model. Verify one long-prompt trial for Hydrogen, Carbon, Argon and each available Gemini 3.x model; do not consume or alter production history as a release probe without the Owner's explicit choice.
