@@ -83,7 +83,7 @@ function createTelegramPreview(packet: AnswerPacket) {
   let answer = packet.answer;
   const takeaway = packet.sscTakeaway.trim();
   if (takeaway) {
-    const exactBlock = "\\n\\n📌 SSC Focus: " + takeaway;
+    const exactBlock = "\n\n📌 SSC Focus: " + takeaway;
     if (answer.endsWith(exactBlock)) {
       answer = answer.slice(0, -exactBlock.length).trimEnd();
     } else {
