@@ -1,4 +1,5 @@
-import type { ConversationTurn, Env, ProfileContext, StudentProfile } from "../config/env";
+import type { AnswerPacket, ConversationTurn, Env, ProfileContext, StudentProfile } from "../config/env";
+import { formatTelegramHtml, stripTelegramMarkdownMarkers } from "../telegram/formatting";
 import { GeminiError, generateGeminiArenaAnswer, buildStandardArenaPrompt } from "./gemini";
 import {
   FreeModelError,
@@ -78,6 +79,45 @@ function normalizeRecentConversation(value: unknown): ConversationTurn[] {
     .filter((turn): turn is ConversationTurn => Boolean(turn));
 }
 
+function createTelegramPreview(packet: AnswerPacket) {
+  let answer = packet.answer;
+  const takeaway = packet.sscTakeaway.trim();
+  if (takeaway) {
+    const exactBlock = "\\n\\n📌 SSC Focus: " + takeaway;
+    if (answer.endsWith(exactBlock)) {
+      answer = answer.slice(0, -exactBlock.length).trimEnd();
+    } else {
+      const marker = "📌 SSC Focus:";
+      const markerAt = answer.lastIndexOf(marker);
+      if (markerAt >= 0 && answer.slice(markerAt).includes(takeaway)) {
+        answer = answer.slice(0, markerAt).trimEnd();
+      } else if (answer.toLowerCase().endsWith(takeaway.toLowerCase())) {
+        answer = answer.slice(0, -takeaway.length).trimEnd();
+      }
+    }
+  }
+
+  const quizItems = packet.quizItems?.length
+    ? packet.quizItems
+    : (packet.quizQuestion ? [{
+      question: packet.quizQuestion,
+      options: packet.quizOptions,
+      correctOptionIds: packet.quizCorrectOptionIds,
+      explanation: packet.quizExplanation,
+    }] : []);
+
+  return {
+    answerHtml: formatTelegramHtml(answer),
+    takeawayHtml: takeaway ? formatTelegramHtml("📌 SSC Focus: " + takeaway) : "",
+    quizItems: packet.responseMode === "quiz" ? quizItems.map((item) => ({
+      question: stripTelegramMarkdownMarkers(item.question).trim().slice(0, 300),
+      options: item.options.map((option) => stripTelegramMarkdownMarkers(option).trim().slice(0, 100)),
+      correctOptionIds: item.correctOptionIds,
+      explanationHtml: formatTelegramHtml(item.explanation),
+    })) : [],
+  };
+}
+
 function emptyTokens(): ArenaTokenMetrics {
   return { promptTokens: 0, candidatesTokens: 0, thoughtsTokens: 0, totalTokens: 0, thoughtsReported: true };
 }
@@ -144,6 +184,7 @@ async function runVertexSide(
     return {
       ok: true,
       packet: generation.packet,
+      telegramPreview: createTelegramPreview(generation.packet),
       latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
       tokens,
       modelUsed: lastUsage?.model || env.GEMINI_MODEL?.trim() || "gemini-3.8-flash",
@@ -187,6 +228,7 @@ async function runFreeModelSide(
     return {
       ok: true,
       packet: result.packet,
+      telegramPreview: createTelegramPreview(result.packet),
       latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
       tokens: result.tokens,
       modelUsed: result.modelUsed,
@@ -261,6 +303,7 @@ export async function handleArenaRun(env: Env, request: Request): Promise<Respon
     const noModelCall = {
       ok: true,
       packet,
+      telegramPreview: createTelegramPreview(packet),
       latencyMs: 0,
       tokens: emptyTokens(),
       modelUsed: "Not called (Telegram topic clarification)",
