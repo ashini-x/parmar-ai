@@ -259,7 +259,7 @@ async function runFreeModelSide(
 
 
 const ARENA_JUDGE_MODEL = "gemini-3.8-flash";
-const ARENA_JUDGE_TIMEOUT_MS = 35_000;
+const ARENA_JUDGE_TIMEOUT_MS = 60_000;
 
 const ARENA_JUDGE_DIMENSIONS = [
   { key: "accuracy", label: "Factual accuracy", weight: 30 },
@@ -502,8 +502,20 @@ export async function runGeminiArenaJudge(
   };
 
   const startedAt = performance.now();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ARENA_JUDGE_TIMEOUT_MS);
+  const authenticationStartedAt = performance.now();
+  let authenticationLatencyMs = 0;
+  let inferenceStartedAt: number | null = null;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const getTimings = () => {
+    const now = performance.now();
+    return {
+      authenticationMs: Math.round(authenticationLatencyMs * 100) / 100,
+      inferenceMs: inferenceStartedAt === null
+        ? 0
+        : Math.round((now - inferenceStartedAt) * 100) / 100,
+      totalMs: Math.round((now - startedAt) * 100) / 100,
+    };
+  };
   try {
     const projectId = env.GCP_PROJECT_ID?.trim();
     if (!projectId || !env.GCP_CLIENT_EMAIL?.trim() || !env.GCP_PRIVATE_KEY?.trim()) {
@@ -520,7 +532,17 @@ export async function runGeminiArenaJudge(
     const endpoint = "https://aiplatform.googleapis.com/v1/projects/" +
       encodeURIComponent(projectId) + "/locations/" + encodeURIComponent(location) +
       "/publishers/google/models/" + encodeURIComponent(ARENA_JUDGE_MODEL) + ":generateContent";
-    const accessToken = await getGoogleAccessToken(env);
+    let accessToken: string;
+    try {
+      accessToken = await getGoogleAccessToken(env);
+    } finally {
+      // Keep OAuth latency separate so authentication retries do not consume
+      // the Gemini inference budget or hide where a slow request occurred.
+      authenticationLatencyMs = performance.now() - authenticationStartedAt;
+    }
+    inferenceStartedAt = performance.now();
+    const controller = new AbortController();
+    timeout = setTimeout(() => controller.abort(), ARENA_JUDGE_TIMEOUT_MS);
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -631,6 +653,7 @@ export async function runGeminiArenaJudge(
       outputUsdPerMillion: arenaJudgeRate(env.AI_OUTPUT_USD_PER_MILLION, 3.75),
     });
 
+    const timingDetails = getTimings();
     return {
       ok: true,
       mode: "blind",
@@ -655,7 +678,8 @@ export async function runGeminiArenaJudge(
         right: candidateAIsLeft ? weaknessesB : weaknessesA,
       },
       decisiveFactors: judgeMappedStringArray(parsed.decisiveFactors, candidateAIsLeft, 6),
-      latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
+      latencyMs: timingDetails.totalMs,
+      timings: timingDetails,
       tokens: judgeTokens,
       estimatedCostUsd,
       estimateBasis: "Estimate using the configured Vertex AI input/cache/output rates; not a Google Cloud invoice amount.",
@@ -664,20 +688,25 @@ export async function runGeminiArenaJudge(
     };
   } catch (error) {
     const message = error instanceof Error && error.name === "AbortError"
-      ? "Gemini 3.8 blind judge timed out after 35 seconds."
-      : error instanceof Error
-        ? error.message.slice(0, 240)
-        : "Gemini 3.8 blind judge failed.";
+      ? "Gemini 3.8 blind judge inference timed out after 60 seconds. Google authentication completed in " +
+        Math.round(authenticationLatencyMs) + "ms."
+      : inferenceStartedAt === null && error instanceof Error
+        ? "Google authentication failed before Gemini judge inference: " + error.message.slice(0, 180)
+        : error instanceof Error
+          ? error.message.slice(0, 240)
+          : "Gemini 3.8 blind judge failed.";
+    const timingDetails = getTimings();
     return {
       ...noCallArenaJudge("unavailable", "Both generations completed, but the blind judge could not produce a valid comparison.", null),
       estimatedCostUsd: null,
       estimateBasis: "Unknown because the judge request failed or returned an unusable scorecard.",
       error: "judge_failed",
       errorMessage: message,
-      latencyMs: Math.round((performance.now() - startedAt) * 100) / 100,
+      latencyMs: timingDetails.totalMs,
+      timings: timingDetails,
     };
   } finally {
-    clearTimeout(timeout);
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 }
 

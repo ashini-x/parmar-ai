@@ -1,6 +1,16 @@
 name: Arena staging deployment
 
 on:
+  # Arena source changes automatically redeploy only the isolated staging Worker.
+  # This keeps the Arena acceptance loop hands-off without ever deploying production.
+  push:
+    branches:
+      - main
+    paths:
+      - "src/ai/arena.ts"
+      - "src/admin/dashboard.ts"
+      - "wrangler.arena-staging.jsonc"
+      - ".github/workflows/arena-staging-deploy.yml"
   workflow_dispatch:
     inputs:
       confirm_deploy:
@@ -22,7 +32,7 @@ concurrency:
 jobs:
   deploy-arena-staging:
     name: Deploy isolated Model Arena Worker
-    if: inputs.confirm_deploy == 'deploy-arena-staging'
+    if: github.event_name == 'push' || inputs.confirm_deploy == 'deploy-arena-staging'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

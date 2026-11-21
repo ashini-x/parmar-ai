@@ -206,6 +206,7 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "https://oauth2.googleapis.com/token") {
+        await new Promise((resolve) => setTimeout(resolve, 15));
         return Response.json({ access_token: "arena-judge-access-token", expires_in: 3600 });
       }
       if (url.endsWith("/models")) {
@@ -227,6 +228,7 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
         const instruction = String(((body.systemInstruction as { parts?: Array<{ text?: string }> }).parts ?? [])[0]?.text ?? "");
         if (instruction.includes("independent blind evaluator")) {
           judgeRequest = body;
+          await new Promise((resolve) => setTimeout(resolve, 20));
           return Response.json({
             candidates: [{
               content: { parts: [{ text: JSON.stringify(judgeOutput) }] },
@@ -293,6 +295,9 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       expect(body).not.toHaveProperty("judge");
       expect(judgeRequest).toBeNull();
 
+      // The generation call above warms the module token cache. Clear it to
+      // exercise the judge's cold OAuth path and its separate timing budget.
+      invalidateGoogleAccessToken("arena-judge-access-token");
       const judgeResponse = await handleArenaJudge(
         env,
         new Request("https://arena-staging.example.workers.dev/admin/api/arena/judge", {
@@ -318,6 +323,8 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
           criteria: Array<{ key: string; leftScore: number; rightScore: number; comparison: string }>;
           tokens: { totalTokens: number };
           estimatedCostUsd: number;
+          latencyMs: number;
+          timings: { authenticationMs: number; inferenceMs: number; totalMs: number };
         };
         persistence: string;
       };
@@ -367,6 +374,11 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       expect(judge.criteria).toHaveLength(6);
       expect(judge.tokens.totalTokens).toBe(2_050);
       expect(judge.estimatedCostUsd).toBeCloseTo(0.0031875, 8);
+      expect(judge.timings.authenticationMs).toBeGreaterThan(0);
+      expect(judge.timings.inferenceMs).toBeGreaterThan(0);
+      expect(judge.timings.totalMs).toBeGreaterThanOrEqual(judge.timings.authenticationMs);
+      expect(judge.timings.totalMs).toBeGreaterThanOrEqual(judge.timings.inferenceMs);
+      expect(judge.latencyMs).toBeCloseTo(judge.timings.totalMs, 0);
     } finally {
       invalidateGoogleAccessToken("arena-judge-access-token");
     }
