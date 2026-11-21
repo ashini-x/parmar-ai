@@ -1,6 +1,6 @@
 # Standard SSC Model Arena — Staging Handoff
 
-**Status:** Staging Worker deployed; provider configuration and live model acceptance remain in progress  
+**Status:** Blind judge implementation merged and deployed; post-PR #407 authenticated scorecard remains unverified; Arena Engineer is documented and ready for implementation  
 **Checkpoint:** 2026-11-21 IST  
 **Repository:** https://github.com/ashini-x/parmar-ai  
 **Environment:** Isolated Cloudflare staging Worker only
@@ -9,7 +9,7 @@ This is the authoritative handoff for continuing Standard SSC Model Arena work i
 
 ## 1. Current status
 
-The Model Arena implementation and its manual staging deployment workflow are merged into main. The isolated Worker is live, its workers.dev route is enabled, the admin dashboard is reachable in the user's browser, and the FreeModel model catalogue has loaded in that dashboard.
+The Model Arena implementation, blind judge, judge diagnostics, timeout correction, output-token correction and isolated staging deployment workflow are merged into main. The isolated Worker was verified at version 14 with 100% traffic on 2026-11-21. The admin dashboard and FreeModel catalogue were previously observed in the user's browser. The latest judge deployment passed CI, staging deployment and login smoke checks; however, a successful authenticated scorecard after the PR #407 token-budget fix is not yet recorded. Arena Engineer is fully specified in docs/STANDARD_SSC_MODEL_ARENA_ENGINEER_SPEC.md but has not been implemented.
 
 **Live admin URL:** https://parmar-ai-arena-staging.thenewtongs.workers.dev/admin/login
 
@@ -391,3 +391,83 @@ Do not mark the Arena fully accepted until both provider outputs and the require
 ## 9. New-chat continuation
 
 Use STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md as the copyable instruction for the next chat. Start by reading this handoff and re-checking live GitHub and Cloudflare state. The immediate task is to verify/add FREEMODEL_API_KEY, verify the existing Google credentials without creating duplicates, deploy the secrets once, and complete authenticated two-provider acceptance.
+
+
+## 10. Current checkpoint — blind judge corrections and Arena Engineer next work (2026-11-21)
+
+This section supersedes earlier “immediate next step” wording in this historical handoff. The next chat should start by implementing Arena Engineer, after revalidating the latest source and live staging state. The earlier seven-question Auto-Router evidence remains historical and is not a reason to postpone the approved feature unless a current acceptance gate requires it.
+
+### Latest Arena implementation PRs
+
+- **PR #404 — Blind judge:** merged commit 51a58cc9fcef81ff2f737570aba04e57c3e72c7b. Added the separate on-demand Gemini 3.8 Flash blind judge, randomized Candidate A/B order, existing weighted rubric and no automatic judging during generation.
+- **PR #405 — Judge diagnostics:** merged commit 49c417a6589ea9bd2cef51c98458edc21cc8957b. Surfaced nested judge errors in the dashboard.
+- **PR #406 — Timeout and staging deployment:** merged commit d688213d9b01778b0a194fd809b3642b51cb1b7e. Token acquisition now occurs outside the 60-second inference timer, auth/inference/total timings are separate, and the Arena staging workflow automatically deploys only when Arena-specific source/config/workflow paths change on main. Manual dispatch remains available with explicit confirmation.
+- **PR #407 — Judge output budget:** merged commit f6b59c96f2fd7938277c81ca3be4319c679a1d0a. Increased judge maxOutputTokens from 2,500 to 8,192, retained Gemini 3.8 Flash and HIGH thinking, and constrained scorecard prose for a complete response.
+
+### PR #407 verification and deployed staging state
+
+- PR #407 CI: https://github.com/ashini-x/parmar-ai/actions/runs/44894288949 — success.
+- Staging deployment: https://github.com/ashini-x/parmar-ai/actions/runs/44894387927 — success.
+- Post-merge release validation: https://github.com/ashini-x/parmar-ai/actions/runs/44894387886 — success.
+- Cloudflare Worker: parmar-ai-arena-staging.
+- Version at this checkpoint: **14**, version ID c8154ec7-a1e3-4993-8ea2-636d85d6efbd, 100% traffic.
+- Deployment smoke test verified the admin login page, not a complete authenticated model comparison or judge result.
+- Production runtime classification passed; production deployment jobs were skipped. No production change was made.
+
+### Blind judge technical state
+
+- Model: Gemini 3.8 Flash.
+- Thinking: HIGH.
+- Inference timeout: 60,000 ms, started only after Google access-token acquisition.
+- Timings: authenticationMs, inferenceMs and totalMs.
+- Max output tokens: 8,192.
+- Rubric weights remain accuracy 30%, relevance 20%, completeness 15%, SSC fit 15%, clarity 10%, format 10%.
+- Candidate order remains randomized; model/provider labels and operational metrics remain excluded from the judge prompt.
+- Actual authenticated post-PR #407 scorecard acceptance: **not yet confirmed in this handoff**. Do not describe the judge as fully proven until a real scorecard is observed.
+
+### Critical implementation fact: Arena is currently stateless
+
+The existing POST /admin/api/arena/run and POST /admin/api/arena/judge both return persistence: stateless. The generation route returns the two candidate outcomes to the browser; the judge route accepts question/context and candidate packets from the browser. Neither writes the run or scorecard to D1.
+
+The staging Worker does have a dedicated D1 binding named DB:
+- Database: parmar-ai-arena-staging
+- ID: 30df9bf6-e852-4f15-8fd7-43bd96cb1cdf
+
+That binding does not mean Arena benchmark rows are persisted. The Engineer feature must add an explicitly isolated migration path and write only to this database. Do not mistake existing admin/other tables or a successful Worker deployment for Arena run persistence.
+
+### Arena Engineer — approved next feature
+
+Read **docs/STANDARD_SSC_MODEL_ARENA_ENGINEER_SPEC.md** as the canonical detailed product and technical specification.
+
+The feature adds:
+- Server-side persistence of benchmark inputs, both candidate outputs, safe telemetry and the final blind judge scorecard.
+- Durable run IDs and saved-run history.
+- A separate, on-demand Gemini agent named Arena Engineer.
+- An **Engineer** button enabled only after a valid judge result is saved and Vertex beats FreeModel by weighted score, or when FreeModel fails and Vertex supplies usable judgeable evidence.
+- A saved evidence-based engineering diagnosis across answer quality, speed, router/failover, model selection, reliability and architecture.
+- A prioritized improvement roadmap with confidence, trade-offs, effort and acceptance tests.
+- A detailed, copyable Coding-Agent Implementation Prompt.
+- Persisted reports that can be reopened after reload/new session.
+
+The Engineer is advisory and read-only. It does not inspect the complete GitHub repository by assumption, change code, create PRs, access production resources or deploy. The generated coding-agent prompt instructs the actual repository-aware coding agent to inspect AGENTS.md and current source before implementation.
+
+### Required implementation sequence
+
+1. **E0 — Revalidate:** latest main, PRs, CI, staging Worker version, D1 binding and secret binding names. Never retrieve secret values.
+2. **E1 — Persistence:** create the Arena-only D1 migration path, save generated runs and add list/load/delete/history.
+3. **E2 — Durable judge:** load canonical saved packets by run ID, preserve the blind judge exactly, persist the scorecard and gate Engineer on confirmed D1 writes.
+4. **E3 — Engineer backend:** select a supported Gemini reasoning model after verification; add its own prompt, schema, limits, telemetry, safe error handling and persisted reports.
+5. **E4 — UI:** Engineer/View Report states, progress/retry, history, report view and copy-prompt controls, responsive layout.
+6. **E5 — Acceptance:** test win/loss/tie, generation and judge failures, save failures, duplicate calls, prompt injection, history, deletion and strict staging-only persistence.
+7. **E6 — Close:** record implementation, CI, merge, staging deploy, live verification and authenticated acceptance separately.
+
+### Documentation maintenance rule for this workstream
+
+After every material implementation, design, schema, endpoint, prompt, test, PR, merge, deployment or acceptance update:
+- Update this Engineer specification with decisions, status and a dated change-log entry.
+- Update this staging handoff with verified current state and exact remaining work.
+- Update the continuation prompt with the latest checkpoint and next task.
+- Update docs/README.md when the entrypoint or status changes.
+- Keep all three documents synchronized. Distinguish proposed, implemented, merged, deployed and authenticated behavior.
+
+No Arena Engineer feature code has been written at this checkpoint.
