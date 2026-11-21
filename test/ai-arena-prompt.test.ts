@@ -206,6 +206,7 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "https://oauth2.googleapis.com/token") {
+        await new Promise((resolve) => setTimeout(resolve, 15));
         return Response.json({ access_token: "arena-judge-access-token", expires_in: 3600 });
       }
       if (url.endsWith("/models")) {
@@ -227,6 +228,7 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
         const instruction = String(((body.systemInstruction as { parts?: Array<{ text?: string }> }).parts ?? [])[0]?.text ?? "");
         if (instruction.includes("independent blind evaluator")) {
           judgeRequest = body;
+          await new Promise((resolve) => setTimeout(resolve, 20));
           return Response.json({
             candidates: [{
               content: { parts: [{ text: JSON.stringify(judgeOutput) }] },
