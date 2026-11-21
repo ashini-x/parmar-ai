@@ -18,9 +18,9 @@ The Model Arena implementation, blind judge, judge diagnostics, timeout correcti
 | Arena implementation | Merged | PR #400 |
 | Staging route guard | Merged and tested | PR #401 and route-guard test |
 | Dedicated staging D1 | Created and bound | ID below |
-| Staging Worker | Deployed | GitHub Actions run #44806050579, attempt 2 |
+| Staging Worker | Deployed | Latest verified run #44894387927; version 14, 100% traffic at checkpoint |
 | workers.dev route | Enabled | Latest Cloudflare API read-back confirmed enabled=true |
-| Login page smoke test | Passed | Deployment workflow attempt 2 |
+| Login page smoke test | Passed | Latest staging deployment run #44894387927 |
 | Authenticated dashboard | User-browser access observed | User screenshot shows the staging admin dashboard with the Arena model selector |
 | FreeModel catalogue | Loaded in user browser | Screenshot shows catalogue entries including Claude Sonnet 5.5, Claude Opus 5.5, GPT-6 Astra, Kimi K3 and others |
 | Admin username | Configured | arena-admin |
@@ -85,13 +85,13 @@ The UI includes side-by-side outputs, model catalogue refresh, Auto-Router and i
 
 An Arena comparison is stateless on the backend. It does not write the request, model responses or votes to D1, KV, Durable Objects or Queues. Temporary conversation turns and votes remain in the browser; votes are stored in localStorage and can be exported as JSON. The shared admin application has a dedicated D1 binding, but Arena comparisons do not persist into it.
 
-### PR #401 — Manual staging deploy and route isolation
+### PR #401 — Initial manual staging deploy and route isolation
 
 - PR: https://github.com/ashini-x/parmar-ai/pull/401
 - Merged commit: 2262bb93b00fbb83942667dfd452d91ef70abac0
 - Commit title: [staging-only] Add safe manual deployment for Model Arena
 
-Added .github/workflows/arena-staging-deploy.yml. It is workflow_dispatch only. It does not automatically deploy on push, merge or PR. The confirmation input defaults to do-not-deploy and requires selecting deploy-arena-staging.
+At the time PR #401 was merged, .github/workflows/arena-staging-deploy.yml used workflow_dispatch only, with a confirmation input defaulting to do-not-deploy. This is historical: PR #406 later added a narrowly path-filtered push-to-main trigger for Arena source/config/workflow changes. Manual workflow_dispatch remains as a fallback and still requires selecting deploy-arena-staging.
 
 The workflow checks out the selected branch, installs dependencies, verifies the existing GitHub Cloudflare deployment credentials, performs an Arena-config dry-run, deploys only the isolated Arena Worker and smoke-tests its admin login page.
 
@@ -379,7 +379,7 @@ Do not mark the Arena fully accepted until both provider outputs and the require
 | File | Purpose |
 |---|---|
 | wrangler.arena-staging.jsonc | Isolated Worker config and dedicated D1 |
-| .github/workflows/arena-staging-deploy.yml | Manual staging deploy and login smoke test |
+| .github/workflows/arena-staging-deploy.yml | Path-filtered automatic Arena staging deploy plus confirmed manual fallback and login smoke test |
 | src/index.ts | Staging route guard and protected Arena API endpoints |
 | src/ai/arena.ts | Parallel provider execution, prompt parity and response formatting |
 | src/ai/freemodel.ts | FreeModel auth, catalogue, routing and generation |
