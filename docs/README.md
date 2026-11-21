@@ -39,9 +39,11 @@ The generic Telegram runtime should be copied independently from Parmar's SSC/Fa
 
 ## Standard SSC Model Arena — isolated staging
 
-**Current handoff:** [STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md](STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md). The Standard SSC Model Arena is implemented and deployed to the isolated **parmar-ai-arena-staging** Worker. Deployment and the login-page smoke test passed on GitHub Actions run [#44806050579](https://github.com/ashini-x/parmar-ai/actions/runs/44806050579), attempt 2. A 2026-11-21 live inspection confirmed all six secret binding names; the user's browser showed the signed-in dashboard and FreeModel catalogue. The user reports seven self-authored Auto-Router comparisons, but the results have not yet been uploaded or reviewed. Overall acceptance remains pending.
+**Current handoff:** [STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md](STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md). The Arena and blind Gemini judge are merged. PR #407 raised the judge output budget to 8,192 tokens while retaining Gemini 3.8 Flash + HIGH thinking. Its CI, staging deployment [#44894387927](https://github.com/ashini-x/parmar-ai/actions/runs/44894387927), and post-merge validation [#44894387886](https://github.com/ashini-x/parmar-ai/actions/runs/44894387886) passed. The isolated Worker was verified at version 14 with 100% traffic. A real authenticated post-fix scorecard remains unconfirmed.
 
-**New-chat prompt:** [STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md](STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md). The Arena is admin-path-only in staging, uses a dedicated D1 database, and must remain isolated from production Telegram and production data.
+**Next feature:** [STANDARD_SSC_MODEL_ARENA_ENGINEER_SPEC.md](STANDARD_SSC_MODEL_ARENA_ENGINEER_SPEC.md) is the canonical detailed specification for the separate on-demand Gemini Arena Engineer. It is documented but not implemented. The spec requires persisted staging-only benchmark runs and judge scorecards before the owner can click **Engineer** to generate a saved engineering diagnosis and copyable coding-agent implementation prompt.
+
+**New-chat prompt:** [STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md](STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md). Start with Arena Engineer implementation after revalidating current GitHub and Cloudflare state. The Arena is admin-path-only, uses dedicated staging D1, and must remain isolated from production Telegram and production data.
 
 ## BRVIN — current source of truth
 

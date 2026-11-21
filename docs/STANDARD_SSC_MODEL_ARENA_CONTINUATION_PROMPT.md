@@ -1,81 +1,155 @@
-# New-chat continuation prompt — Standard SSC Model Arena
+# New-chat continuation prompt — Standard SSC Model Arena + Arena Engineer
 
-Continue the Standard SSC Model Arena work in `ashini-x/parmar-ai`.
+Continue work in the Standard SSC Model Arena in ashini-x/parmar-ai. The immediate goal is to implement the approved **Arena Engineer** feature described in docs/STANDARD_SSC_MODEL_ARENA_ENGINEER_SPEC.md. This is the implementation session; the prior chat completed design documentation only.
 
-## First: read the source of truth
+## Mandatory first steps
 
-1. Read `docs/STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md` completely.
-2. Read `docs/README.md` and inspect the current implementation before changing anything.
-3. Inspect the latest `main` branch, relevant PRs and GitHub Actions runs. Do not rely on an old chat summary as proof of current deployment state.
-4. Inspect live Cloudflare settings for `parmar-ai-arena-staging`, its workers.dev route, D1 binding and secret binding names. Never retrieve, print or expose secret values.
-5. Reconcile differences between the handoff and live state. Treat current GitHub/Cloudflare state as authoritative.
+1. Read AGENTS.md.
+2. Read docs/STANDARD_SSC_MODEL_ARENA_ENGINEER_SPEC.md completely.
+3. Read docs/STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md completely.
+4. Read docs/README.md and this continuation prompt.
+5. Inspect latest main, branches, PRs, commit history, CI/workflow runs and current source. Do not assume historical SHAs or deployment versions below are still current.
+6. Re-check the live Cloudflare Worker parmar-ai-arena-staging: environment, workers.dev route, dedicated D1 binding, latest deployed version and secret binding names. Never retrieve, print or expose secret values.
+7. Reconcile repository, GitHub Actions and Cloudflare facts. Record discrepancies in the handoff before coding.
 
-## Exact environment
+## Current verified baseline at the documentation checkpoint — 2026-11-21
 
-- Repository: `ashini-x/parmar-ai`
-- Arena Worker: `parmar-ai-arena-staging`
-- URL: https://parmar-ai-arena-staging.thenewtongs.workers.dev/admin/login
-- Config: `wrangler.arena-staging.jsonc`
-- Environment: `staging`
-- Dedicated D1: `parmar-ai-arena-staging`
-- D1 ID: `30df9bf6-e852-4f15-8fd7-43bd96cb1cdf`
-- Configured admin username: `arena-admin`
-- Google project: `project-90db7be4-619f-4ed7-89b`
-- Gemini baseline: `gemini-3.8-flash`, location `global`, thinking `HIGH`
-- FreeModel primary candidate: `claude-sonnet-5-5`
+Repository: ashini-x/parmar-ai  
+Latest main at checkpoint: f6b59c96f2fd7938277c81ca3be4319c679a1d0a (PR #407)  
+Arena Worker: parmar-ai-arena-staging  
+URL: https://parmar-ai-arena-staging.thenewtongs.workers.dev/admin/login  
+Config: wrangler.arena-staging.jsonc  
+Environment: staging  
+Dedicated D1: parmar-ai-arena-staging  
+D1 ID: 30df9bf6-e852-4f15-8fd7-43bd96cb1cdf  
+Google project: project-90db7be4-619f-4ed7-89b  
+Blind judge: gemini-3.8-flash, HIGH thinking  
+FreeModel configured primary candidate: claude-sonnet-5-5
 
-Implementation PR #400 and staging deployment workflow PR #401 are merged. The staging Worker is deployed. GitHub Actions run #44806050579 succeeded on attempt 2 after enabling the Worker-level workers.dev route. Do not redeploy production.
+### Merged Arena PRs at this checkpoint
 
-## Exact current user checkpoint — 2026-11-21
+- #404 added the on-demand randomized blind Gemini judge and kept judging separate from candidate generation.
+- #405 surfaced nested judge failure diagnostics.
+- #406 fixed auth/inference timeout accounting, set a 60-second actual inference timeout and added path-filtered automatic staging deployment.
+- #407 raised judge maxOutputTokens to 8,192 while preserving Gemini 3.8 Flash + HIGH thinking.
 
-- A fresh Cloudflare settings inspection confirmed all six secret binding names are present as `secret_text`: `ADMIN_DASHBOARD_PASSWORD`, `ADMIN_SESSION_SECRET`, `GCP_CLIENT_EMAIL`, `GCP_PRIVATE_KEY`, `GCP_PRIVATE_KEY_ID` and `FREEMODEL_API_KEY`. Never read or expose their values.
-- The staging Worker remains bound to the dedicated D1 ID `30df9bf6-e852-4f15-8fd7-43bd96cb1cdf`.
-- The user supplied a screenshot of the signed-in staging admin dashboard with the FreeModel model selector open. The catalogue was visible, including Claude and other candidate entries. Dashboard access and FreeModel model discovery were working in the user's browser at that time.
-- The user reports that they submitted **seven of their own questions with Auto-Router selected**.
-- **The seven result screenshots or benchmark JSON export have not yet been uploaded to the assistant or reviewed.** There are no recorded PASS/REVIEW/FAIL outcomes for the seven comparisons.
-- Do not assume Gemini and FreeModel both succeeded in all seven runs. Do not infer the actual model chosen by Auto-Router; inspect `modelUsed` and failover details in each result.
-- The 31-item acceptance checklist previously proposed in chat is a future coverage plan, not completed testing.
-- Individual pinned-model tests have not been confirmed.
-- The user intentionally wants to begin a new chat and upload the seven-run evidence there. Do not start more tests in this chat or ask for a rerun before reviewing those uploads.
+PR #407 merge commit: f6b59c96f2fd7938277c81ca3be4319c679a1d0a.  
+Staging deploy run: #44894387927, success.  
+Post-merge release validation: #44894387886, success.  
+Cloudflare staging Worker version at checkpoint: 14, version ID c8154ec7-a1e3-4993-8ea2-636d85d6efbd, 100% traffic. Re-verify before relying on these historical facts.
 
-## Immediate task in the new chat — inspect the seven uploaded results first
+**Important qualification:** CI, staging deployment and login smoke test passed. A successful authenticated scorecard after the PR #407 8,192-token fix has not yet been confirmed in the recorded checkpoint. Do not claim end-to-end judge acceptance until a real scorecard is observed.
 
-1. Receive and inspect the seven-run screenshots or an Arena benchmark JSON export the user uploads. If not attached, ask the user to upload them; do not ask them to rerun the seven tests.
-2. For each question, inspect the left Vertex AI/Gemini and right FreeModel result independently.
-3. Record the exact question, provider success/failure, safe error code, actual model ID, Auto-Router failover information, raw AnswerPacket validity, factual correctness, SSC relevance, language/formatting, latency, token counts and displayed estimated cost where the evidence shows them.
-4. Mark each provider/run PASS, REVIEW, FAIL or UNVERIFIED. Never infer missing data.
-5. Check whether the results actually prove Vertex inference and FreeModel inference both work, rather than relying on the fact that FreeModel catalogue discovery succeeded.
-6. Produce a concise review of the seven results and identify the smallest remaining test set needed to cover genuine gaps. Avoid repeating tests that the evidence already covers.
-7. Continue testing with clear, beginner-friendly browser instructions. The user wants the questions, expected checks and where to inspect each outcome.
-8. Update the handoff and continuation prompt with real outcomes after reviewing the evidence. Do not mark overall Arena acceptance complete until both providers and required SSC/prompt behavior are demonstrated.
+## Exact product goal
 
-## Technical and product boundaries
+Build a separate on-demand Gemini engineering-analysis agent named **Arena Engineer**, launched by an **Engineer** button after a completed blind-judged run has been durably saved.
 
-- Arena compares Google Vertex AI/Gemini on the left with FreeModel on the right.
-- It reuses the production Standard SSC prompt builder and shared AnswerPacket validation. Both providers receive the same production-built user prompt.
-- Vertex may additionally use configured Google Search grounding for current-fact prompts; FreeModel does not have an equivalent search tool attached. Account for this asymmetry when judging answers.
-- An Arena run is stateless on the backend: no D1, KV, Durable Object or Queue write is made for the comparison. Browser conversation turns and localStorage votes remain client-side.
-- Staging route guard permits only `/admin` and `/admin/*`; non-admin routes return 404.
-- Dedicated staging D1 only. No production D1, Telegram Queue, Durable Object, BRVIN service or AI Search binding.
-- The dropdown selects Auto-Router or an individual FreeModel model. It does not currently select among multiple FreeModel API keys/accounts.
-- The user wants a future named API-connection selector. Treat it as a future enhancement, not existing functionality. Never expose secret values in the browser.
-- The user has two active FreeModel dashboard keys. Both showed the same visible permissions and 60 rpm in their screenshot. The latest recommendation was Default API Key as the Arena credential; the actual configured secret value/label cannot be inferred from Cloudflare metadata. Do not claim which key was copied unless confirmed. Do not revoke either.
-- The FreeModel plan-upgrade inheritance behavior for differently labelled keys was not conclusively verified. Do not promise it; verify after an actual upgrade.
-- Arena cost figures are estimates, not provider invoices.
+The Engineer is not another judge. It must not alter winner, rubric, scores, randomization or candidate responses. The judge remains blind; Engineer runs afterwards and may know which side is Vertex and which side is FreeModel.
 
-## Security and deployment rules
+When Vertex beats FreeModel under the saved weighted score, or FreeModel fails while Vertex provides judgeable evidence, the owner can click Engineer. Do not enable it if judging failed, the scorecard was not durably saved, required evidence is missing, or FreeModel won/tied under the current judge policy.
 
-- Never ask the user to share service-account JSON, private keys, API keys, passwords, cookies or authorization headers in chat.
-- Never commit credentials or full service-account JSON.
-- Do not reuse production provider credentials.
-- Do not modify production Telegram behavior, production admin configuration or production Worker for this staging task.
-- Do not add production bindings to the Arena Worker.
-- Use the manual Arena deployment workflow only if staging code/config needs a new Worker deployment; it has an explicit confirmation input.
-- For Cloudflare secret updates, use Cloudflare Dashboard → Variables and Secrets → Deploy.
-- Do not give terminal/CLI instructions to the user. Give beginner-friendly dashboard navigation.
-- Do not repeat completed configuration steps or ask for facts already confirmed.
-- Do not claim provider acceptance based only on a login page or catalogue dropdown.
+Engineer uses a separate Gemini call, dedicated system instruction, response schema, model setting, timeout and output budget. It reads a canonical saved run from D1 and generates:
+- Evidence-based diagnosis of why FreeModel underperformed.
+- Speed/latency and router/failover analysis using actual telemetry only.
+- Answer quality, accuracy, completeness, SSC fit and AnswerPacket analysis.
+- Model selection and routing recommendations.
+- Reliability and architecture improvements.
+- A prioritized P0/P1/P2/P3 roadmap with confidence, trade-offs, effort and acceptance tests.
+- A complete copyable Coding-Agent Implementation Prompt for Codex, Claude Code or another repository-aware coding agent.
 
-## First response in the new chat
+Engineer is advisory and read-only. It must not edit repository files, access production infrastructure, create PRs, change secrets or deploy. The generated coding-agent prompt must require the coding agent to inspect the actual repository and verify recommendations before implementing them. One run is not proof of general superiority; use repeatable multi-question benchmark evidence before claiming FreeModel is better overall.
 
-Acknowledge that the staging dashboard and FreeModel catalogue were already observed working, and that the user has seven Auto-Router question runs awaiting review. Ask them to attach the seven screenshots or benchmark JSON export if not already present, then inspect the actual evidence before suggesting more tests. Continue from that exact checkpoint.
+## Critical architectural fact: current Arena is stateless
+
+At the documentation checkpoint, POST /admin/api/arena/run and POST /admin/api/arena/judge both explicitly return persistence: stateless.
+
+The run handler generates both sides and returns candidate outputs to the browser. The judge handler receives the question/context and candidate packets from the browser. Neither handler stores the run or scorecard in D1.
+
+Do not build Engineer on browser localStorage or trust client-supplied scores/answer packets. E1 and E2 must establish canonical persistence before Engineer is implemented.
+
+## Required staging-only boundaries
+
+- All Arena code, D1 records, migration scripts, tests, history and reports belong to parmar-ai-arena-staging.
+- Use only dedicated Arena D1 ID 30df9bf6-e852-4f15-8fd7-43bd96cb1cdf.
+- Add a separately configured Arena-only migration directory and make the deployment workflow apply migrations only to that staging database after inspecting current Wrangler conventions.
+- The staging route guard allows only /admin and /admin/* when ENVIRONMENT is staging.
+- Preserve admin-session authorization and same-origin/CSRF checks on every state-changing endpoint.
+- Never add production D1, Telegram Queue, Durable Object namespace, BRVIN service, AI Search or any production binding to the Arena Worker.
+- Never change live Telegram/student routes, production prompts, profiles, quotas, production D1, production secrets or production deployments.
+- The Arena deployment workflow automatically deploys only when these Arena-specific paths change on main: src/ai/arena.ts, src/admin/dashboard.ts, wrangler.arena-staging.jsonc, .github/workflows/arena-staging-deploy.yml. Manual workflow_dispatch remains as a fallback with explicit confirmation. Documentation-only changes do not trigger a Worker deployment.
+- Merge and deployment are distinct. After a relevant merge verify the isolated staging deploy and that production deployment jobs were skipped.
+
+## Implementation order — follow the specification
+
+### E0 — Revalidate
+Inspect all current source and live state. Start with:
+- AGENTS.md
+- docs/STANDARD_SSC_MODEL_ARENA_ENGINEER_SPEC.md
+- docs/STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md
+- docs/STANDARD_SSC_MODEL_ARENA_CONTINUATION_PROMPT.md
+- src/ai/arena.ts
+- src/admin/dashboard.ts
+- src/index.ts
+- src/config/env.ts
+- wrangler.arena-staging.jsonc
+- .github/workflows/arena-staging-deploy.yml
+- existing D1 migrations and tests
+
+Verify whether the real blind judge completes an authenticated scorecard with the deployed 8,192-token budget. If not observed, keep that qualification explicit. Do not infer success from deployment alone.
+
+### E1 — Persist Arena runs
+Design the staging-only D1 schema/migrations. Persist question, bounded recent conversation, both candidate outputs, safe model/failure metadata, actual timing/token/cost estimates and prompt provenance under an opaque run ID. Add paginated list/load/delete support and saved-run UI. Bound input/row sizes and add retention/deletion rules. Never store credentials or arbitrary environment values.
+
+### E2 — Persist judge results
+Refactor judging to accept a saved run ID, load canonical candidate packets on the server, preserve blind randomization and the current rubric exactly, and persist the result/weighted scores before reporting the run as judged. Implement safe idempotency/recovery. If the judge succeeds but persistence fails, clearly report the unsaved state and never enable Engineer.
+
+### E3 — Implement independent Gemini Engineer
+Inspect model availability and project/location support before choosing a distinct strong Gemini model. Do not invent a model ID or silently switch providers. Use separate Engineer prompt/schema/timeout/output budget. Assemble input from the saved run, judge result and a small versioned architecture context. Use actual metrics only and label missing metrics unavailable. Treat every candidate/question field as untrusted data. Save the report and full coding-agent prompt before returning success.
+
+### E4 — UI and report history
+Add Engineer eligibility logic, button, in-progress state, safe error/retry, View Report state, report view, prompt copy and reopenable saved history. Include deletion with confirmation. Ensure responsive mobile UI. Do not add code-edit or deployment buttons.
+
+### E5 — Acceptance
+At minimum test:
+- Vertex wins → persisted result → Engineer enabled.
+- FreeModel wins or tie → Engineer unavailable by default.
+- Judge failed or save failed → Engineer unavailable.
+- FreeModel generation failure with a valid Vertex candidate → diagnosis path.
+- Missing run, corrupted/oversized record, stale schema and unauthorized/cross-origin request → fail closed.
+- Repeated/concurrent clicks → no duplicate uncontrolled Gemini calls.
+- Gemini malformed output, timeout, auth failure and D1 report-save failure → safe state and retry.
+- Candidate prompt injection → treated as untrusted data.
+- Report/prompt reopen after page reload.
+- Delete run → report and access removed.
+- Only staging D1 receives writes.
+
+Review real report quality: diagnosis must cite evidence, separate facts from hypotheses, avoid made-up latency/cost/percentages and produce a practical coding-agent prompt. Use multiple questions for claims of general performance improvement.
+
+### E6 — close
+Update the spec, staging handoff, continuation prompt and docs/README.md after every material update. Record exact PR, merge SHA, test workflow IDs, staging deployment/version, live verification and next task. Distinguish CI, merge, deploy, smoke test and authenticated acceptance.
+
+## Documentation maintenance is mandatory
+
+After each material implementation/design/test/deployment/acceptance update:
+1. Update docs/STANDARD_SSC_MODEL_ARENA_ENGINEER_SPEC.md with status, decisions and a dated change-log entry.
+2. Update docs/STANDARD_SSC_MODEL_ARENA_STAGING_HANDOFF.md with verified current state and exact next action.
+3. Update this continuation prompt with the latest exact checkpoint and next task.
+4. Update docs/README.md when the index/status/starting point changes.
+5. Update tests, comments, migration/runbook documentation and release notes where behavior requires it.
+
+Do not let these documents contradict one another. State precisely what is proposed, implemented, merged, deployed and authenticated.
+
+## Working instructions
+
+- The user wants the assistant to carry out repository work autonomously: inspect, implement, test, open PR, merge and verify isolated staging deployment without asking the user to run GitHub workflows or do routine engineering steps.
+- Do not ask for approval again for staging-safe implementation, tests, PR, merge or staging-only deploy already authorized.
+- Never make production changes.
+- Never expose secrets or request that the user paste credentials.
+- Do not give CLI steps to the user; any owner acceptance should use beginner-friendly browser instructions.
+- Keep changes small, reversible and test-led.
+- Do not repeat questions already answered in this prompt or repository docs.
+- If an external blocker exists, complete safe independent work and state exactly what remains.
+
+## First response in this new chat
+
+Acknowledge that the design documentation is in main and begin E0 repository/live-state revalidation. Do not ask the user to restate the feature. Continue autonomously.
