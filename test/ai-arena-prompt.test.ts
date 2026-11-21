@@ -333,12 +333,20 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       expect(judgeRequest).not.toBeNull();
       const judge = judged.judge;
       const judgeBody = judgeRequest as unknown as Record<string, unknown>;
+      const generationConfig = judgeBody.generationConfig as {
+        maxOutputTokens: number;
+        thinkingConfig: { thinkingLevel: string };
+      };
+      expect(generationConfig.maxOutputTokens).toBe(8_192);
+      expect(generationConfig.thinkingConfig.thinkingLevel).toBe("HIGH");
       const judgeText = String((((judgeBody.contents as Array<{ parts: Array<{ text: string }> }>)[0]).parts)[0].text);
       expect(judgeText).toContain("What does Article 17 of the Constitution abolish?");
       expect(judgeText).toContain("studentFacingSystemInstruction");
       expect(judgeText).toContain("BOT AND BRɅIN IDENTITY");
       expect(judgeText).toContain("sharedStudentPrompt");
       expect(judgeText).toContain("recentConversation");
+      expect(String(((judgeBody.systemInstruction as { parts: Array<{ text: string }> }).parts)[0].text))
+        .toContain("at most two strengths and two weaknesses");
       expect(judgeText).toContain("answerPacket");
       expect(judgeText).not.toContain("claude-sonnet-5-5");
       expect(judgeText).not.toContain("modelUsed");
