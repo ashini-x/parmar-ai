@@ -260,6 +260,7 @@ async function runFreeModelSide(
 
 const ARENA_JUDGE_MODEL = "gemini-3.8-flash";
 const ARENA_JUDGE_TIMEOUT_MS = 60_000;
+const ARENA_JUDGE_MAX_OUTPUT_TOKENS = 8_192;
 
 const ARENA_JUDGE_DIMENSIONS = [
   { key: "accuracy", label: "Factual accuracy", weight: 30 },
@@ -325,6 +326,8 @@ const ARENA_JUDGE_SYSTEM_INSTRUCTION = [
   "When writing summaries, criterion comparisons or decisive factors, refer to the anonymous outputs only as Candidate A and Candidate B. Do not use bare A/B labels. The application maps those exact labels back to Left/Right after scoring. The application reports an overall tie when the computed weighted scores differ by 4 points or less; do not describe a close score as a decisive win.",
   "Be discerning and evidence-led. Do not assume the longer answer is better. Do not break ties merely to name a winner. A meaningful factual or usability defect outweighs stylistic preference.",
   "Return only JSON matching the supplied schema. Give concise, specific comparisons for each criterion; mention concrete facts or defects rather than generic praise. Strengths and weaknesses should be distinct for each candidate.",
+  "Keep the scorecard compact without omitting evidence: each criterion comparison is one sentence of at most 25 words; the overall summary is at most two sentences; give at most two strengths and two weaknesses per candidate, each at most 16 words; give at most three decisive factors, each at most 20 words.",
+  "Do not repeat the same evidence across the summary, criterion comparisons and decisive factors. Prefer the single most important concrete defect or advantage for each category. Never add an introductory preamble or markdown fences."
 ].join("\n");
 
 interface ArenaJudgeCandidate {
@@ -402,7 +405,7 @@ function judgeMappedStringArray(value: unknown, candidateAIsLeft: boolean, limit
   return judgeStringArray(value, limit).map((item) => mapBlindCandidateLabels(item, candidateAIsLeft));
 }
 
-function judgeStringArray(value: unknown, limit = 5): string[] {
+function judgeStringArray(value: unknown, limit = 3): string[] {
   if (!Array.isArray(value)) return [];
   return value
     .filter((item): item is string => typeof item === "string")
@@ -560,7 +563,9 @@ export async function runGeminiArenaJudge(
         }],
         generationConfig: {
           thinkingConfig: { thinkingLevel: "HIGH" },
-          maxOutputTokens: 2_500,
+          // Gemini 3.8 counts internal thinking and visible JSON against this one budget.
+          // Keep HIGH reasoning; 8,192 leaves room for both the reasoning and full scorecard.
+          maxOutputTokens: ARENA_JUDGE_MAX_OUTPUT_TOKENS,
           responseMimeType: "application/json",
           responseSchema: ARENA_JUDGE_RESPONSE_SCHEMA,
         },
@@ -677,7 +682,7 @@ export async function runGeminiArenaJudge(
         left: candidateAIsLeft ? weaknessesA : weaknessesB,
         right: candidateAIsLeft ? weaknessesB : weaknessesA,
       },
-      decisiveFactors: judgeMappedStringArray(parsed.decisiveFactors, candidateAIsLeft, 6),
+      decisiveFactors: judgeMappedStringArray(parsed.decisiveFactors, candidateAIsLeft, 3),
       latencyMs: timingDetails.totalMs,
       timings: timingDetails,
       tokens: judgeTokens,
