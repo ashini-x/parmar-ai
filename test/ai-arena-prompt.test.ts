@@ -295,6 +295,9 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       expect(body).not.toHaveProperty("judge");
       expect(judgeRequest).toBeNull();
 
+      // The generation call above warms the module token cache. Clear it to
+      // exercise the judge's cold OAuth path and its separate timing budget.
+      invalidateGoogleAccessToken("arena-judge-access-token");
       const judgeResponse = await handleArenaJudge(
         env,
         new Request("https://arena-staging.example.workers.dev/admin/api/arena/judge", {
