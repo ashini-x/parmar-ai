@@ -653,6 +653,7 @@ export async function runGeminiArenaJudge(
       outputUsdPerMillion: arenaJudgeRate(env.AI_OUTPUT_USD_PER_MILLION, 3.75),
     });
 
+    const timingDetails = getTimings();
     return {
       ok: true,
       mode: "blind",
@@ -677,8 +678,8 @@ export async function runGeminiArenaJudge(
         right: candidateAIsLeft ? weaknessesB : weaknessesA,
       },
       decisiveFactors: judgeMappedStringArray(parsed.decisiveFactors, candidateAIsLeft, 6),
-      latencyMs: getTimings().totalMs,
-      timings: getTimings(),
+      latencyMs: timingDetails.totalMs,
+      timings: timingDetails,
       tokens: judgeTokens,
       estimatedCostUsd,
       estimateBasis: "Estimate using the configured Vertex AI input/cache/output rates; not a Google Cloud invoice amount.",
