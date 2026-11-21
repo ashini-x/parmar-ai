@@ -318,6 +318,8 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
           criteria: Array<{ key: string; leftScore: number; rightScore: number; comparison: string }>;
           tokens: { totalTokens: number };
           estimatedCostUsd: number;
+          latencyMs: number;
+          timings: { authenticationMs: number; inferenceMs: number; totalMs: number };
         };
         persistence: string;
       };
@@ -367,6 +369,11 @@ describe("Standard SSC Model Arena blind Gemini judge", () => {
       expect(judge.criteria).toHaveLength(6);
       expect(judge.tokens.totalTokens).toBe(2_050);
       expect(judge.estimatedCostUsd).toBeCloseTo(0.0031875, 8);
+      expect(judge.timings.authenticationMs).toBeGreaterThan(0);
+      expect(judge.timings.inferenceMs).toBeGreaterThan(0);
+      expect(judge.timings.totalMs).toBeGreaterThanOrEqual(judge.timings.authenticationMs);
+      expect(judge.timings.totalMs).toBeGreaterThanOrEqual(judge.timings.inferenceMs);
+      expect(judge.latencyMs).toBeCloseTo(judge.timings.totalMs, 0);
     } finally {
       invalidateGoogleAccessToken("arena-judge-access-token");
     }
